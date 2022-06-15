@@ -54,20 +54,20 @@ jobs:
           conda list
 
       - name: Test with pytest
-        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+        if: ${{ !startsWith(matrix.os, 'ubuntu') && matrix.python != 3.9 }}
         shell: bash -l {0}
         run: |
           pytest
 
       - name: Test with pytest (with coverage)
-        if: startsWith(matrix.os, 'ubuntu')
+        if: ${{ startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9 }}
         shell: bash -l {0}
         run: |
           pytest --cov=sleap_io --cov-report=xml tests/
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3.1.0
-        if: startsWith(matrix.os, 'ubuntu')
+        if: ${{ startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9 }}
         with:
           fail_ci_if_error: true
           verbose: false
