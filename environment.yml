@@ -1,0 +1,8 @@
+name: sleap-io
+
+dependencies:
+  - python>=3.7,<=3.9
+  - ffmpeg
+  - pip
+  - pip:
+    - "--editable=.[dev]"
