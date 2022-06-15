@@ -5,6 +5,7 @@ with a pose model. The edges represent the connections between them and may be u
 differently depending on the underlying pose model.
 """
 
+from __future__ import annotations
 from attrs import define
 from typing import Optional
 

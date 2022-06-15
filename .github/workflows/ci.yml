@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-22.04", "windows-2022", "macos-12"]
+        os: ["ubuntu-22.04", "windows-2022", "macos-11"]
         python: [3.7, 3.9]
 
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
@@ -54,7 +54,7 @@ jobs:
           conda list
 
       - name: Test with pytest
-        if: ${{ !startsWith(matrix.os, 'ubuntu') && matrix.python != 3.9 }}
+        if: ${{ !(startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9) }}
         shell: bash -l {0}
         run: |
           pytest
