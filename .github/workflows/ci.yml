@@ -54,7 +54,7 @@ jobs:
           conda list
 
       - name: Test with pytest
-        if: !startsWith(matrix.os, 'ubuntu')
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         shell: bash -l {0}
         run: |
           pytest

@@ -8,7 +8,7 @@ have any functionality related to labeling, training, or inference.
 
 ## Installation
 ```
-pip install sleap-io`
+pip install sleap-io
 ```
 
 For development, use one of the following syntaxes:
