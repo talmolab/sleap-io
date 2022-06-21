@@ -125,11 +125,11 @@ class HDF5Video:
 
     #             self._source_video = Video.cattr().structure(d, Video)
 
-    @property
-    def __dataset_h5(self) -> h5.Dataset:
-        if self.__loaded_dataset is None and not self.__tried_to_load:
-            self._load()
-        return self.__loaded_dataset
+    # @property
+    # def __dataset_h5(self) -> h5.Dataset:
+    #     if self.__loaded_dataset is None and not self.__tried_to_load:
+    #         self._load()
+    #     return self.__loaded_dataset
 
     @__dataset_h5.setter
     def __dataset_h5(self, val):
@@ -187,22 +187,22 @@ class HDF5Video:
         """See :class:`Video`."""
         return self.test_frame.dtype
 
-    @property
-    def last_frame_idx(self) -> int:
-        """
-        The idx number of the last frame.
+    # @property
+    # def last_frame_idx(self) -> int:
+    #     """
+    #     The idx number of the last frame.
 
-        Overrides method of base :class:`Video` class for videos with
-        select frames indexed by number from original video, since the last
-        frame index here will not match the number of frames in video.
-        """
-        # Ensure that video is loaded since we'll need data from loading
-        self._load()
+    #     Overrides method of base :class:`Video` class for videos with
+    #     select frames indexed by number from original video, since the last
+    #     frame index here will not match the number of frames in video.
+    #     """
+    #     # Ensure that video is loaded since we'll need data from loading
+    #     self._load()
 
-        if self.__original_to_current_frame_idx:
-            last_key = sorted(self.__original_to_current_frame_idx.keys())[-1]
-            return last_key
-        return self.frames - 1
+    #     if self.__original_to_current_frame_idx:
+    #         last_key = sorted(self.__original_to_current_frame_idx.keys())[-1]
+    #         return last_key
+    #     return self.frames - 1
 
 
 @define
@@ -479,18 +479,19 @@ class SingleImageVideo:
     #         img = img[:, :, ::-1]
     #     return img
 
-    def _get_filename(self, idx: int) -> str:
-        f = self.filenames[idx]
-        if os.path.exists(f):
-            return f
+    # def _get_filename(self, idx: int) -> str:
 
-        # Try the directory from the "video" file (this works if all the images
-        # are in the same directory with distinctive filenames).
-        f = os.path.join(os.path.dirname(self.filename), os.path.basename(f))
-        if os.path.exists(f):
-            return f
+    #     f = self.filenames[idx]
+    #     if os.path.exists(f):
+    #         return f
 
-        raise FileNotFoundError(f"Unable to locate file {idx}: {self.filenames[idx]}")
+    #     # Try the directory from the "video" file (this works if all the images
+    #     # are in the same directory with distinctive filenames).
+    #     f = os.path.join(os.path.dirname(self.filename), os.path.basename(f))
+    #     if os.path.exists(f):
+    #         return f
+
+    #     raise FileNotFoundError(f"Unable to locate file {idx}: {self.filenames[idx]}")
 
     # def _load_test_frame(self):
     #     if self.test_frame_ is None:
@@ -503,10 +504,10 @@ class SingleImageVideo:
     #         if self.channels_ is None:
     #             self.channels_ = self.test_frame.shape[2]
 
-    @property
-    def test_frame(self) -> np.ndarray:
-        self._load_test_frame()
-        return self.test_frame_
+    # @property
+    # def test_frame(self) -> np.ndarray:
+    #     self._load_test_frame()
+    #     return self.test_frame_
 
     @property
     def frames(self):
@@ -602,12 +603,12 @@ class Video:
         """Return the number of frames in the video."""
         return self.frames
 
-    @property
-    def last_frame_idx(self) -> int:
-        """Return the index number of the last frame. Usually `num_frames - 1`."""
-        if hasattr(self.backend, "last_frame_idx"):
-            return self.backend.last_frame_idx
-        return self.frames - 1
+    # @property
+    # def last_frame_idx(self) -> int:
+    #     """Return the index number of the last frame. Usually `num_frames - 1`."""
+    #     if hasattr(self.backend, "last_frame_idx"):
+    #         return self.backend.last_frame_idx
+    #     return self.frames - 1
 
     @property
     def shape(
