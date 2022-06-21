@@ -1,5 +1,5 @@
 from __future__ import annotations
-from attrs import define
+from attrs import define, field
 from typing import List, Optional, Tuple, Union
 from typing import Optional
 from video import Video
@@ -28,8 +28,8 @@ class Point(np.record):
         cls,
         x: float = math.nan,
         y: float = math.nan,
-        visible: bool = True,
-        complete: bool = False,
+        visible: bool = field(default=True),
+        complete: bool = field(default=False),
     ) -> "Point":
 
         # HACK: This is a crazy way to instantiate at new Point but I can't figure
@@ -47,9 +47,11 @@ class Point(np.record):
 
         return val
 
+
 # This turns Point into an attrs class. Defines comparators for
 # us and generaly makes it behave better. Crazy that this works!
 # Point = define(these={name for name in Point.dtype.names}, init=False)(Point)
+
 
 class PredictedPoint(Point):
     """
@@ -76,8 +78,8 @@ class PredictedPoint(Point):
         cls,
         x: float = math.nan,
         y: float = math.nan,
-        visible: bool = True,
-        complete: bool = False,
+        visible: bool = field(default=True),
+        complete: bool = field(default=False),
         score: float = 0.0,
     ) -> "PredictedPoint":
 
@@ -225,6 +227,7 @@ class PointArray(np.recarray):
 
         return v
 
+
 class PredictedPointArray(PointArray):
     """
     PredictedPointArray is analogous to PointArray except for predicted
@@ -285,6 +288,7 @@ class Track:
 # attributes _frame and _point_array_cache after init. These are private variables
 # that are created in post init so they are not serialized.
 
+
 @define
 class Instance:
     """This class represents a labeled instance.
@@ -305,11 +309,11 @@ class Instance:
     """
 
     skeleton: Skeleton
-    track: Track = None
-    from_predicted: Optional["PredictedInstance"] = None
-    _points: PointArray = None
-    _nodes: List = None
-    frame: Union["LabeledFrame", None] = None
+    track: Track = field(default=None)
+    from_predicted: Optional["PredictedInstance"] = field(default=None)
+    _points: PointArray = field(default=None)
+    _nodes: List = field(default=None)
+    frame: Union["LabeledFrame", None] = field(default=None)
 
     # The underlying Point array type that this instances point array should be.
     _point_array_type = PointArray
@@ -593,6 +597,7 @@ class Instance:
         """
         return cls.from_pointsarray(points, skeleton, track=track)
 
+
 @define
 class PredictedInstance(Instance):
     """
@@ -603,8 +608,8 @@ class PredictedInstance(Instance):
         tracking_score: The instance-level track matching score.
     """
 
-    score: float = attr.ib(default=0.0, converter=float)
-    tracking_score: float = attr.ib(default=0.0, converter=float)
+    score: float = field(default=0.0, converter=float)
+    tracking_score: float = field(default=0.0, converter=float)
 
     # The underlying Point array type that this instances point array should be.
     _point_array_type = PredictedPointArray
@@ -759,6 +764,7 @@ class PredictedInstance(Instance):
         return cls.from_arrays(
             points, point_confidences, instance_score, skeleton, track=track
         )
+
 
 @define
 class LabeledFrame:

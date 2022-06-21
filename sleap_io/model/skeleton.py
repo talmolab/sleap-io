@@ -6,7 +6,7 @@ differently depending on the underlying pose model.
 """
 
 from __future__ import annotations
-from attrs import define
+from attrs import define, field
 from typing import Optional
 
 
@@ -54,4 +54,4 @@ class Skeleton:
 
     nodes: list[Node]
     edges: list[Edge]
-    name: Optional[str] = None
+    name: Optional[str] = field(default=None)

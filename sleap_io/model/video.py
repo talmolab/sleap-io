@@ -5,7 +5,7 @@ components used in SLEAP.
 """
 
 from __future__ import annotations
-from attrs import define
+from attrs import define, field, Factory
 from typing import List, Optional, Tuple, Union
 import h5py as h5
 import numpy as np
@@ -21,12 +21,12 @@ class DummyVideo:
     have access to the real video.
     """
 
-    filename: str = ""
-    height: int = 2000
-    width: int = 2000
-    frames: int = 10000
-    channels: int = 1
-    dummy: bool = True
+    filename: str = field(default="")
+    height: int = field(default=2000)
+    width: int = field(default=2000)
+    frames: int = field(default=10000)
+    channels: int = field(default=1)
+    dummy: bool = field(default=True)
 
     @property
     def test_frame(self):
@@ -56,8 +56,8 @@ class HDF5Video:
         convert_range: Whether we should convert data to [0, 255]-range
     """
 
-    filename: str = None
-    dataset: str = None
+    filename: str = field(default=None)
+    dataset: str = field(default=None)
     input_format: str = "channels_last"
     convert_range: bool = True
 
@@ -144,8 +144,8 @@ class MediaVideo:
     input_format: str = ""
 
     _detect_grayscale = False
-    _reader_ = None
-    _test_frame_ = None
+    _reader_ = field(default=None)
+    _test_frame_ = field(default=None)
 
     @property
     def __lock(self):
@@ -298,10 +298,10 @@ class ImgStoreVideo:
             indices on :class:`LabeledFrame` objects in the dataset.
     """
 
-    filename: str = None
+    filename: str = field(default=None)
     index_by_original: bool = True
-    _store_ = None
-    _img_ = None
+    _store_ = field(default=None)
+    _img_ = field(default=None)
 
     @property
     def __store(self):
@@ -380,11 +380,11 @@ class SingleImageVideo:
         filenames: Files to load as video.
     """
 
-    filename: Optional[str] = None
-    filenames: Optional[List[str]] = []
-    height_: Optional[int] = None
-    width_: Optional[int] = None
-    channels_: Optional[int] = None
+    filename: Optional[str] = field(default=None)
+    filenames: Optional[List[str]] = Factory(list)
+    height_: Optional[int] = field(default=None)
+    width_: Optional[int] = field(default=None)
+    channels_: Optional[int] = field(default=None)
 
     @property
     def test_frame(self) -> np.ndarray:
@@ -581,8 +581,8 @@ class Video:
     def from_image_filenames(
         cls,
         filenames: List[str],
-        height: Optional[int] = None,
-        width: Optional[int] = None,
+        height: Optional[int] = field(default=None),
+        width: Optional[int] = field(default=None),
         *args,
         **kwargs,
     ) -> "Video":
@@ -766,9 +766,9 @@ class Video:
 
 def load_video(
     filename: str,
-    grayscale: Optional[bool] = None,
+    grayscale: Optional[bool] = field(default=None),
     dataset=Optional[None],
-    channels_first: bool = False,
+    channels_first: bool = field(default=False),
 ) -> Video:
     """Open a video from disk.
 
