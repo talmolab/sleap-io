@@ -125,7 +125,6 @@ class HDF5Video:
 
                 self._source_video = Video.cattr().structure(d, Video)
 
-
     @property
     def __dataset_h5(self) -> h5.Dataset:
         if self.__loaded_dataset is None and not self.__tried_to_load:
@@ -619,6 +618,7 @@ class Video:
             return (self.frames, self.height, self.width, self.channels)
         except:
             return (None, None, None, None)
+
     '''
     @property
     def is_missing(self) -> bool:
@@ -630,6 +630,7 @@ class Video:
         else:
             return not os.path.exists(self.backend.filename)
     '''
+
     @classmethod
     def from_hdf5(
         cls,
@@ -787,6 +788,7 @@ class Video:
         # Return an ImgStoreVideo object referencing this new imgstore.
         return cls(backend=ImgStoreVideo(filename=output_filename))
     '''
+
     @staticmethod
     def make_specific_backend(backend_class, kwargs):
         # Only pass through the kwargs that match attributes for the backend
@@ -824,7 +826,7 @@ class Video:
             vid_cattr.register_structure_hook(t, fixup_video)
 
         return vid_cattr
-    
+
     '''
     @staticmethod
     def fixup_path(
@@ -887,6 +889,8 @@ class Video:
             return path
 
     '''
+
+
 def load_video(
     filename: str,
     grayscale: Optional[bool] = field(default=None),
