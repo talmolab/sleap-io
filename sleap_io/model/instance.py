@@ -1,16 +1,17 @@
 from __future__ import annotations
-from attrs import define
-from typing import List, Optional, Tuple, Union
-from typing import Optional
+from attrs import define, validators
+import attrs
+import attr
+from typing import List, Optional, Tuple, Union, Dict
 from video import Video
 from skeleton import Skeleton, Node, Edge
 import numpy as np
 import math
 
 
-class Point(np.record):
-    """
-    A labelled point and any metadata associated with it.
+@define
+class Point:
+    """A labeled point and any metadata associated with it.
 
     Args:
         x: The horizontal pixel location of point within image frame.
@@ -19,86 +20,26 @@ class Point(np.record):
         complete: Has the point been verified by the user labeler.
     """
 
-    # Define the dtype from the point class attributes plus some
-    # additional fields we will use to relate point to instances and
-    # nodes.
-    dtype = np.dtype([("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?")])
+    x: float = math.nan
+    y: float = math.nan
+    visible: bool = attr.ib(default=True, kw_only=True)
+    complete: bool = attr.ib(default=False, kw_only=True)
 
-    def __new__(
-        cls,
-        x: float = math.nan,
-        y: float = math.nan,
-        visible: bool = True,
-        complete: bool = False,
-    ) -> "Point":
 
-        # HACK: This is a crazy way to instantiate at new Point but I can't figure
-        # out how recarray does it. So I just use it to make matrix of size 1 and
-        # index in to get the np.record/Point
-        # All of this is a giant hack so that Point(x=2,y=3) works like expected.
-        val = PointArray(1)
-        val[0] = (x, y, visible, complete)
-        val = val[0]
-
-        # val.x = x
-        # val.y = y
-        # val.visible = visible
-        # val.complete = complete
-
-        return val
-
-# This turns Point into an attrs class. Defines comparators for
-# us and generaly makes it behave better. Crazy that this works!
-# Point = define(these={name for name in Point.dtype.names}, init=False)(Point)
-
+@define
 class PredictedPoint(Point):
-    """
-    A predicted point is an output of the inference procedure.
+    """A predicted point is an output of the inference procedure.
 
     It has all the properties of a labeled point, plus a score.
 
     Args:
-        x: The horizontal pixel location of point within image frame.
-        y: The vertical pixel location of point within image frame.
-        visible: Whether point is visible in the labelled image or not.
-        complete: Has the point been verified by the user labeler.
         score: The point-level prediction score.
     """
 
-    # Define the dtype from the point class attributes plus some
-    # additional fields we will use to relate point to instances and
-    # nodes.
-    dtype = np.dtype(
-        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?"), ("score", "f8")]
-    )
-
-    def __new__(
-        cls,
-        x: float = math.nan,
-        y: float = math.nan,
-        visible: bool = True,
-        complete: bool = False,
-        score: float = 0.0,
-    ) -> "PredictedPoint":
-
-        # HACK: This is a crazy way to instantiate at new Point but I can't figure
-        # out how recarray does it. So I just use it to make matrix of size 1 and
-        # index in to get the np.record/Point
-        # All of this is a giant hack so that Point(x=2,y=3) works like expected.
-        val = PredictedPointArray(1)
-        val[0] = (x, y, visible, complete, score)
-        val = val[0]
-
-        # val.x = x
-        # val.y = y
-        # val.visible = visible
-        # val.complete = complete
-        # val.score = score
-
-        return val
+    score: float = 0.0
 
     @classmethod
-    def from_point(cls, point: Point, score: float = 0.0) -> "PredictedPoint":
+    def from_point(cls, point: Point, score: float = 0.0) -> PredictedPoint:
         """
         Create a PredictedPoint from a Point
 
@@ -112,147 +53,8 @@ class PredictedPoint(Point):
         return cls(**{**Point.asdict(point), "score": score})
 
 
-# This turns PredictedPoint into an attrs class. Defines comparators for
-# us and generaly makes it behave better. Crazy that this works!
-# PredictedPoint = define(
-#     these={name for name in PredictedPoint.dtype.names}, init=False
-# )(PredictedPoint)
-
-
-class PointArray(np.recarray):
-    """
-    PointArray is a sub-class of numpy recarray which stores
-    Point objects as records.
-    """
-
-    _record_type = Point
-
-    def __new__(
-        subtype,
-        shape,
-        buf=None,
-        offset=0,
-        strides=None,
-        formats=None,
-        names=None,
-        titles=None,
-        byteorder=None,
-        aligned=False,
-        order="C",
-    ) -> "PointArray":
-
-        dtype = subtype._record_type.dtype
-
-        if dtype is not None:
-            descr = np.dtype(dtype)
-        else:
-            descr = np.format_parser(formats, names, titles, aligned, byteorder)._descr
-
-        if buf is None:
-            self = np.ndarray.__new__(
-                subtype, shape, (subtype._record_type, descr), order=order
-            )
-        else:
-            self = np.ndarray.__new__(
-                subtype,
-                shape,
-                (subtype._record_type, descr),
-                buffer=buf,
-                offset=offset,
-                strides=strides,
-                order=order,
-            )
-        return self
-
-    @classmethod
-    def make_default(cls, size: int) -> "PointArray":
-        """
-        Construct a point array where points are all set to default.
-
-        The constructed :class:`PointArray` will have specified size
-        and each value in the array is assigned the default values for
-        a :class:`Point``.
-
-        Args:
-            size: The number of points to allocate.
-
-        Returns:
-            A point array with all elements set to Point()
-        """
-        p = cls(size)
-        p[:] = cls._record_type()
-        return p
-
-    def __getitem__(self, indx: int) -> "Point":
-        """Get point by its index in the array."""
-        obj = super(np.recarray, self).__getitem__(indx)
-
-        # copy behavior of getattr, except that here
-        # we might also be returning a single element
-        if isinstance(obj, np.ndarray):
-            if obj.dtype.fields:
-                obj = obj.view(type(self))
-                # if issubclass(obj.dtype.type, numpy.void):
-                #    return obj.view(dtype=(self.dtype.type, obj.dtype))
-                return obj
-            else:
-                return obj.view(type=np.ndarray)
-        else:
-            # return a single element
-            return obj
-
-    @classmethod
-    def from_array(cls, a: "PointArray") -> "PointArray":
-        """
-        Converts a :class:`PointArray` (or child) to a new instance.
-
-        This will convert an object to the same type as itself,
-        so a :class:`PredictedPointArray` will result in the same.
-
-        Uses the default attribute values for new array.
-
-        Args:
-            a: The array to convert.
-
-        Returns:
-            A :class:`PointArray` or :class:`PredictedPointArray` with
-            the same points as a.
-        """
-        v = cls.make_default(len(a))
-
-        for field in Point.dtype.names:
-            v[field] = a[field]
-
-        return v
-
-class PredictedPointArray(PointArray):
-    """
-    PredictedPointArray is analogous to PointArray except for predicted
-    points.
-    """
-
-    _record_type = PredictedPoint
-
-    @classmethod
-    def to_array(cls, a: "PredictedPointArray") -> "PointArray":
-        """
-        Convert a PredictedPointArray to a normal PointArray.
-
-        Args:
-            a: The array to convert.
-
-        Returns:
-            The converted array.
-        """
-        v = PointArray.make_default(len(a))
-
-        for field in Point.dtype.names:
-            v[field] = a[field]
-
-        return v
-
-
-@define
+# "By default, two instances of attrs classes are equal if all their fields are equal."
+@define(eq=True)
 class Track:
     """
     A track object is associated with a set of animal/object instances
@@ -264,26 +66,14 @@ class Track:
         name: A name given to this track for identifying purposes.
     """
 
-    spawned_on: int = 0
     name: str = ""
-
-    def matches(self, other: "Track"):
-        """
-        Check if two tracks match by value.
-
-        Args:
-            other: The other track to check
-
-        Returns:
-            True if they match, False otherwise.
-        """
-        return attr.asdict(self) == attr.asdict(other)
 
 
 # NOTE:
 # Instance cannot be a slotted class at the moment. This is because it creates
 # attributes _frame and _point_array_cache after init. These are private variables
 # that are created in post init so they are not serialized.
+
 
 @define
 class Instance:
@@ -304,41 +94,17 @@ class Instance:
             instances are added to :class:`LabeledFrame` objects.
     """
 
-    skeleton: Skeleton
-    track: Track = None
-    from_predicted: Optional["PredictedInstance"] = None
-    _points: PointArray = None
-    _nodes: List = None
-    frame: Union["LabeledFrame", None] = None
+    skeleton: Skeleton = attr.ib(validator=validators.instance_of(Skeleton))
+    points: Dict[Node, Point] = attr.ib(default=None)
+    track: Optional[Track] = None
+    frame: Union[LabeledFrame, None] = None
+    from_predicted: Optional[PredictedInstance] = attr.ib(
+        default=None,
+        validator=validators.optional(validators.instance_of(PredictedInstance)),
+    )
 
-    # The underlying Point array type that this instances point array should be.
-    _point_array_type = PointArray
-
-    @from_predicted.validator
-    def _validate_from_predicted_(
-        self, attribute, from_predicted: Optional["PredictedInstance"]
-    ):
-        """Validation method called by attrs.
-
-        Checks that from_predicted is None or :class:`PredictedInstance`
-
-        Args:
-            attribute: Attribute being validated; not used.
-            from_predicted: Value being validated.
-
-        Raises:
-            TypeError: If from_predicted is anything other than None
-                or a `PredictedInstance`.
-
-        """
-        if from_predicted is not None and type(from_predicted) != PredictedInstance:
-            raise TypeError(
-                f"Instance.from_predicted type must be PredictedInstance (not "
-                "{type(from_predicted)})"
-            )
-
-    @_points.validator
-    def _validate_all_points(self, attribute, points: Union[dict, PointArray]):
+    @points.validator
+    def _validate_all_points(self, attribute, points: Dict[Node, Point]):
         """Validation method called by attrs.
 
         Checks that all the _points defined for the skeleton are found
@@ -352,203 +118,33 @@ class Instance:
         Raises:
             ValueError: If a point is associated with a skeleton node
                 name that doesn't exist.
-
-        Returns:
-            None
+            TypeError: With a human readable error message, the attribute (of type
+                attrs.Attribute), the expected type, and the value it got.
         """
-        if type(points) is dict:
-            is_string_dict = set(map(type, points)) == {str}
-            if is_string_dict:
-                for node_name in points.keys():
-                    if not self.skeleton.has_node(node_name):
-                        raise KeyError(
-                            f"There is no node named {node_name} in {self.skeleton}"
-                        )
-        elif isinstance(points, PointArray):
-            if len(points) != len(self.skeleton.nodes):
-                raise ValueError(
-                    "PointArray does not have the same number of rows as skeleton "
-                    "nodes."
-                )
-
-    def __attrs_post_init__(self):
-        """Method called by attrs after __init__().
-
-        Initializes points if none were specified when creating object,
-        caches list of nodes so what we can still find points in array
-        if the `Skeleton` changes.
-
-        Args:
-            None
-
-        Raises:
-            ValueError: If object has no `Skeleton`.
-        """
-        if self.skeleton is None:
-            raise ValueError("No skeleton set for Instance")
-
-        # If the user did not pass a points list initialize a point array for future
-        # points.
-        if self._points is None or len(self._points) == 0:
-
-            # Initialize an empty point array that is the size of the skeleton.
-            self._points = self._point_array_type.make_default(len(self.skeleton.nodes))
-
-        else:
-
-            if type(self._points) is dict:
-                parray = self._point_array_type.make_default(len(self.skeleton.nodes))
-                Instance._points_dict_to_array(self._points, parray, self.skeleton)
-                self._points = parray
-
-        # Now that we've validated the points, cache the list of nodes
-        # in the skeleton since the PointArray indexing will be linked
-        # to this list even if nodes are removed from the skeleton.
-        self._nodes = self.skeleton.nodes
-
-    @staticmethod
-    def _points_dict_to_array(
-        points: Dict[Union[str, Node], Point], parray: PointArray, skeleton: Skeleton
-    ):
-        """Set values in given :class:`PointsArray` from dictionary.
-
-        Args:
-            points: The dictionary of points. Keys can be either node
-                names or :class:`Node`s, values are :class:`Point`s.
-            parray: The :class:`PointsArray` which is being updated.
-            skeleton: The :class:`Skeleton` which contains the nodes
-                referenced in the dictionary of points.
-
-        Raises:
-            ValueError: If dictionary keys are not either all strings
-                or all :class:`Node`s.
-        """
-        # Check if the dict contains all strings
-        is_string_dict = set(map(type, points)) == {str}
-
-        # Check if the dict contains all Node objects
-        is_node_dict = set(map(type, points)) == {Node}
-
-        # If the user fed in a dict whose keys are strings, these are node names,
-        # convert to node indices so we don't break references to skeleton nodes
-        # if the node name is relabeled.
-        if points and is_string_dict:
-            points = {skeleton.find_node(name): point for name, point in points.items()}
-
-        if not is_string_dict and not is_node_dict:
-            raise ValueError(
-                "points dictionary must be keyed by either strings "
-                + "(node names) or Nodes."
+        try:
+            for node_name in points.keys():
+                if node_name not in self.skeleton.nodes:
+                    raise KeyError(
+                        f"There is no node named {node_name} in {self.skeleton}"
+                    )
+        except AttributeError:
+            raise TypeError(
+                "'{name}' must be {type!r} (got {value!r} that is a "
+                "{actual!r}).".format(
+                    name=attribute.name,
+                    type=dict,
+                    actual=points.__class__,
+                    value=points,
+                ),
+                attribute,
+                dict,
+                points,
             )
-
-        # Get rid of the points dict and replace with equivalent point array.
-        for node, point in points.items():
-            # Convert PredictedPoint to Point if Instance
-            if type(parray) == PointArray and type(point) == PredictedPoint:
-                point = Point(
-                    x=point.x, y=point.y, visible=point.visible, complete=point.complete
-                )
-            try:
-                parray[skeleton.node_to_index(node)] = point
-                # parray[skeleton.node_to_index(node.name)] = point
-            except:
-                pass
-
-    @property
-    def nodes(self) -> Tuple[Node, ...]:
-        """Return nodes that have been labelled for this instance."""
-        self._fix_array()
-        return tuple(
-            self._nodes[i]
-            for i, point in enumerate(self._points)
-            if not point.isnan() and self._nodes[i] in self.skeleton.nodes
-        )
-
-    @property
-    def nodes_points(self) -> List[Tuple[Node, Point]]:
-        """Return a list of (node, point) tuples for all labeled points."""
-        names_to_points = dict(zip(self.nodes, self.points))
-        return names_to_points.items()
-
-    @property
-    def points(self) -> Tuple[Point, ...]:
-        """Return a tuple of labelled points, in the order they were labelled."""
-        self._fix_array()
-        return tuple(point for point in self._points if not point.isnan())
-
-    @property
-    def points_array(self) -> np.ndarray:
-        """Return array of x and y coordinates for visible points.
-
-        Row in array corresponds to order of points in skeleton. Invisible points will
-        be denoted by NaNs.
-
-        Returns:
-            A numpy array of of shape `(n_nodes, 2)` point coordinates.
-        """
-        return self.get_points_array(invisible_as_nan=True)
-
-    @property
-    def centroid(self) -> np.ndarray:
-        """Return instance centroid as an array of `(x, y)` coordinates
-
-        Notes:
-            This computes the centroid as the median of the visible points.
-        """
-        points = self.points_array
-        centroid = np.nanmedian(points, axis=0)
-        return centroid
-
-    @property
-    def bounding_box(self) -> np.ndarray:
-        """Return bounding box containing all points in `[y1, x1, y2, x2]` format."""
-        points = self.points_array
-        if np.isnan(points).all():
-            return np.array([np.nan, np.nan, np.nan, np.nan])
-        bbox = np.concatenate(
-            [np.nanmin(points, axis=0)[::-1], np.nanmax(points, axis=0)[::-1]]
-        )
-        return bbox
-
-    @property
-    def midpoint(self) -> np.ndarray:
-        """Return the center of the bounding box of the instance points."""
-        y1, x1, y2, x2 = self.bounding_box
-        return np.array([(x2 - x1) / 2, (y2 - y1) / 2])
-
-    @property
-    def n_visible_points(self) -> int:
-        """Return the number of visible points in this instance."""
-        n = 0
-        for p in self.points:
-            if p.visible:
-                n += 1
-        return n
-
-    def __len__(self) -> int:
-        """Return the number of visible points in this instance."""
-        return self.n_visible_points
-
-    @property
-    def video(self) -> Optional[Video]:
-        """Return the video of the labeled frame this instance is associated with."""
-        if self.frame is None:
-            return None
-        else:
-            return self.frame.video
-
-    @property
-    def frame_idx(self) -> Optional[int]:
-        """Return the index of the labeled frame this instance is associated with."""
-        if self.frame is None:
-            return None
-        else:
-            return self.frame.frame_idx
 
     @classmethod
     def from_pointsarray(
         cls, points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
-    ) -> "Instance":
+    ) -> Instance:
         """Create an instance from an array of points.
 
         Args:
@@ -563,7 +159,9 @@ class Instance:
             A new `Instance` object.
         """
         predicted_points = dict()
-        for point, node_name in zip(points, skeleton.node_names):
+        node_names: List[str] = [node.name for node in skeleton.nodes]
+        # TODO(LM): Ensure ordering of nodes and points match up.
+        for point, node_name in zip(points, node_names):
             if np.isnan(point).any():
                 continue
 
@@ -571,27 +169,6 @@ class Instance:
 
         return cls(points=predicted_points, skeleton=skeleton, track=track)
 
-    @classmethod
-    def from_numpy(
-        cls, points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
-    ) -> "Instance":
-        """Create an instance from a numpy array.
-
-        Args:
-            points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-                contains the points in (x, y) coordinates of each node. Missing nodes
-                should be represented as `NaN`.
-            skeleton: A `sleap.Skeleton` instance with `n_nodes` nodes to associate with
-                the instance.
-            track: Optional `sleap.Track` object to associate with the instance.
-
-        Returns:
-            A new `Instance` object.
-
-        Notes:
-            This is an alias for `Instance.from_pointsarray()`.
-        """
-        return cls.from_pointsarray(points, skeleton, track=track)
 
 @define
 class PredictedInstance(Instance):
@@ -605,32 +182,9 @@ class PredictedInstance(Instance):
 
     score: float = attr.ib(default=0.0, converter=float)
     tracking_score: float = attr.ib(default=0.0, converter=float)
-
-    # The underlying Point array type that this instances point array should be.
-    _point_array_type = PredictedPointArray
-
-    def __attrs_post_init__(self):
-        super(PredictedInstance, self).__attrs_post_init__()
-
-        if self.from_predicted is not None:
-            raise ValueError("PredictedInstance should not have from_predicted.")
-
-    @property
-    def points_and_scores_array(self) -> np.ndarray:
-        """Return the instance points and scores as an array.
-
-        This will be a `(n_nodes, 3)` array of `(x, y, score)` for each predicted point.
-
-        Rows in the array correspond to the order of points in skeleton. Invisible
-        points will be represented as NaNs.
-        """
-        pts = self.get_points_array(full=True, copy=True, invisible_as_nan=True)
-        return pts[:, (0, 1, 4)]  # (x, y, score)
-
-    @property
-    def scores(self) -> np.ndarray:
-        """Return point scores for each predicted node."""
-        return self.points_and_scores_array[:, 2]
+    from_predicted: Optional[PredictedInstance] = attr.ib(
+        validator=validators.instance_of(type(None))
+    )
 
     @classmethod
     def from_instance(cls, instance: Instance, score: float) -> "PredictedInstance":
@@ -650,9 +204,7 @@ class PredictedInstance(Instance):
         kw_args = attr.asdict(
             instance,
             recurse=False,
-            filter=lambda attr, value: attr.name not in ("_points", "_nodes"),
         )
-        kw_args["points"] = PredictedPointArray.from_array(instance._points)
         kw_args["score"] = score
         return cls(**kw_args)
 
@@ -683,9 +235,8 @@ class PredictedInstance(Instance):
             A new `PredictedInstance`.
         """
         predicted_points = dict()
-        for point, confidence, node_name in zip(
-            points, point_confidences, skeleton.node_names
-        ):
+        node_names = [node.name for node in skeleton.nodes]
+        for point, confidence, node_name in zip(points, point_confidences, node_names):
             if np.isnan(point).any():
                 continue
 
@@ -700,65 +251,6 @@ class PredictedInstance(Instance):
             track=track,
         )
 
-    @classmethod
-    def from_pointsarray(
-        cls,
-        points: np.ndarray,
-        point_confidences: np.ndarray,
-        instance_score: float,
-        skeleton: Skeleton,
-        track: Optional[Track] = None,
-    ) -> "PredictedInstance":
-        """Create a predicted instance from data arrays.
-
-        Args:
-            points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-                contains the points in `(x, y)` coordinates of each node. Missing nodes
-                should be represented as `NaN`.
-            point_confidences: A numpy array of shape `(n_nodes,)` and dtype `float32`
-                that contains the confidence/score of the points.
-            instance_score: Scalar float representing the overall instance score, e.g.,
-                the PAF grouping score.
-            skeleton: A sleap.Skeleton instance with n_nodes nodes to associate with the
-                predicted instance.
-            track: Optional `sleap.Track` to associate with the instance.
-
-        Returns:
-            A new `PredictedInstance`.
-        """
-        return cls.from_arrays(
-            points, point_confidences, instance_score, skeleton, track=track
-        )
-
-    @classmethod
-    def from_numpy(
-        cls,
-        points: np.ndarray,
-        point_confidences: np.ndarray,
-        instance_score: float,
-        skeleton: Skeleton,
-        track: Optional[Track] = None,
-    ) -> "PredictedInstance":
-        """Create a predicted instance from data arrays.
-
-        Args:
-            points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-                contains the points in `(x, y)` coordinates of each node. Missing nodes
-                should be represented as `NaN`.
-            point_confidences: A numpy array of shape `(n_nodes,)` and dtype `float32`
-                that contains the confidence/score of the points.
-            instance_score: Scalar float representing the overall instance score, e.g.,
-                the PAF grouping score.
-            skeleton: A sleap.Skeleton instance with n_nodes nodes to associate with the
-                predicted instance.
-            track: Optional `sleap.Track` to associate with the instance.
-
-        Returns:
-            A new `PredictedInstance`.
-        """
-        return cls.from_arrays(
-            points, point_confidences, instance_score, skeleton, track=track
-        )
 
 @define
 class LabeledFrame:
@@ -772,12 +264,7 @@ class LabeledFrame:
 
     video: Video
     frame_idx: int
-    _instances: Union[List[Instance], List[PredictedInstance]] = list()
-
-    @property
-    def instances(self) -> List[Instance]:
-        """Return list of all instances associated with this frame."""
-        return self._instances
+    instances: Union[List[Instance], List[PredictedInstance]] = attr.Factory(list)
 
     @instances.setter
     def instances(self, instances: List[Instance]):
@@ -799,346 +286,4 @@ class LabeledFrame:
         for instance in instances:
             instance.frame = self
 
-        self._instances = instances
-
-    @property
-    def user_instances(self) -> List[Instance]:
-        """Return list of user instances associated with this frame."""
-        return [inst for inst in self._instances if type(inst) == Instance]
-
-    @property
-    def training_instances(self) -> List[Instance]:
-        """Return list of user instances with points for training."""
-        return [
-            inst
-            for inst in self._instances
-            if not isinstance(inst, PredictedInstance) and inst.n_visible_points
-        ]
-
-    @property
-    def predicted_instances(self) -> List[PredictedInstance]:
-        """Return list of predicted instances associated with frame."""
-        return [inst for inst in self._instances if type(inst) == PredictedInstance]
-
-    @property
-    def tracked_instances(self) -> List[PredictedInstance]:
-        """Return list of predicted instances with tracks associated with frame."""
-        return [
-            inst
-            for inst in self._instances
-            if type(inst) == PredictedInstance and inst.track is not None
-        ]
-
-    @property
-    def has_user_instances(self) -> bool:
-        """Return whether the frame contains any user instances."""
-        for inst in self._instances:
-            if type(inst) == Instance:
-                return True
-        return False
-
-    @property
-    def has_predicted_instances(self) -> bool:
-        """Return whether the frame contains any predicted instances."""
-        for inst in self._instances:
-            if type(inst) == PredictedInstance:
-                return True
-        return False
-
-    @property
-    def has_tracked_instances(self) -> bool:
-        """Return whether the frame contains any predicted instances with tracks."""
-        for inst in self._instances:
-            if type(inst) == PredictedInstance and inst.track is not None:
-                return True
-        return False
-
-    @property
-    def n_user_instances(self) -> int:
-        """Return the number of user instances in the frame."""
-        n = 0
-        for inst in self._instances:
-            if type(inst) == Instance:
-                n += 1
-        return n
-
-    @property
-    def n_predicted_instances(self) -> int:
-        """Return the number of predicted instances in the frame."""
-        n = 0
-        for inst in self._instances:
-            if type(inst) == PredictedInstance:
-                n += 1
-        return n
-
-    @property
-    def n_tracked_instances(self) -> int:
-        """Return the number of predicted instances with tracks in the frame."""
-        n = 0
-        for inst in self._instances:
-            if type(inst) == PredictedInstance and inst.track is not None:
-                n += 1
-        return n
-
-    @property
-    def unused_predictions(self) -> List[Instance]:
-        """Return a list of "unused" :class:`PredictedInstance` objects in frame.
-
-        This is all the :class:`PredictedInstance` objects which do not have
-        a corresponding :class:`Instance` in the same track in frame.
-        """
-        unused_predictions = []
-        any_tracks = [inst.track for inst in self._instances if inst.track is not None]
-        if len(any_tracks):
-            # use tracks to determine which predicted instances have been used
-            used_tracks = [
-                inst.track
-                for inst in self._instances
-                if type(inst) == Instance and inst.track is not None
-            ]
-            unused_predictions = [
-                inst
-                for inst in self._instances
-                if inst.track not in used_tracks and type(inst) == PredictedInstance
-            ]
-
-        else:
-            # use from_predicted to determine which predicted instances have been used
-            # TODO: should we always do this instead of using tracks?
-            used_instances = [
-                inst.from_predicted
-                for inst in self._instances
-                if inst.from_predicted is not None
-            ]
-            unused_predictions = [
-                inst
-                for inst in self._instances
-                if type(inst) == PredictedInstance and inst not in used_instances
-            ]
-
-        return unused_predictions
-
-    @property
-    def instances_to_show(self) -> List[Instance]:
-        """Return a list of instances to show in GUI for this frame.
-
-        This list will not include any predicted instances for which
-        there's a corresponding regular instance.
-
-        Returns:
-            List of instances to show in GUI.
-        """
-        unused_predictions = self.unused_predictions
-        inst_to_show = [
-            inst
-            for inst in self._instances
-            if type(inst) == Instance or inst in unused_predictions
-        ]
-        inst_to_show.sort(
-            key=lambda inst: inst.track.spawned_on
-            if inst.track is not None
-            else math.inf
-        )
-        return inst_to_show
-
-    @staticmethod
-    def merge_frames(
-        labeled_frames: List["LabeledFrame"], video: "Video", remove_redundant=True
-    ) -> List["LabeledFrame"]:
-        """Return merged LabeledFrames for same video and frame index.
-
-        Args:
-            labeled_frames: List of :class:`LabeledFrame` objects to merge.
-            video: The :class:`Video` for which to merge.
-                This is specified so we don't have to check all frames when we
-                already know which video has new labeled frames.
-            remove_redundant: Whether to drop instances in the merged frames
-                where there's a perfect match.
-
-        Returns:
-            The merged list of :class:`LabeledFrame`s.
-        """
-        redundant_count = 0
-        frames_found = dict()
-        # move instances into first frame with matching frame_idx
-        for idx, lf in enumerate(labeled_frames):
-            if lf.video == video:
-                if lf.frame_idx in frames_found.keys():
-                    # move instances
-                    dst_idx = frames_found[lf.frame_idx]
-                    if remove_redundant:
-                        for new_inst in lf.instances:
-                            redundant = False
-                            for old_inst in labeled_frames[dst_idx].instances:
-                                if new_inst.matches(old_inst):
-                                    redundant = True
-                                    if not hasattr(new_inst, "score"):
-                                        redundant_count += 1
-                                    break
-                            if not redundant:
-                                labeled_frames[dst_idx].instances.append(new_inst)
-                    else:
-                        labeled_frames[dst_idx].instances.extend(lf.instances)
-                    lf.instances = []
-                else:
-                    # note first lf with this frame_idx
-                    frames_found[lf.frame_idx] = idx
-        # remove labeled frames with no instances
-        labeled_frames = list(filter(lambda lf: len(lf.instances), labeled_frames))
-        if redundant_count:
-            print(f"skipped {redundant_count} redundant instances")
-        return labeled_frames
-
-    @classmethod
-    def complex_merge_between(
-        cls, base_labels: "Labels", new_frames: List["LabeledFrame"]
-    ) -> Tuple[Dict[Video, Dict[int, List[Instance]]], List[Instance], List[Instance]]:
-        """Merge data from new frames into a :class:`Labels` object.
-
-        Everything that can be merged cleanly is merged, any conflicts
-        are returned.
-
-        Args:
-            base_labels: The :class:`Labels` into which we are merging.
-            new_frames: The list of :class:`LabeledFrame` objects from
-                which we are merging.
-        Returns:
-            tuple of three items:
-            * Dictionary, keys are :class:`Video`, values are
-                dictionary in which keys are frame index (int)
-                and value is list of :class:`Instance`s
-            * list of conflicting :class:`Instance` objects from base
-            * list of conflicting :class:`Instance` objects from new frames
-        """
-        merged = dict()
-        extra_base = []
-        extra_new = []
-
-        for new_frame in new_frames:
-            base_lfs = base_labels.find(new_frame.video, new_frame.frame_idx)
-            merged_instances = None
-
-            # If the base doesn't have a frame corresponding this new
-            # frame, then it can be merged cleanly.
-            if not base_lfs:
-                base_labels.labeled_frames.append(new_frame)
-                merged_instances = new_frame.instances
-            else:
-                # There's a corresponding frame in the base labels,
-                # so try merging the data.
-                (
-                    merged_instances,
-                    extra_base_frame,
-                    extra_new_frame,
-                ) = cls.complex_frame_merge(base_lfs[0], new_frame)
-                if extra_base_frame:
-                    extra_base.append(extra_base_frame)
-                if extra_new_frame:
-                    extra_new.append(extra_new_frame)
-
-            if merged_instances:
-                if new_frame.video not in merged:
-                    merged[new_frame.video] = dict()
-                merged[new_frame.video][new_frame.frame_idx] = merged_instances
-        return merged, extra_base, extra_new
-
-    @classmethod
-    def complex_frame_merge(
-        cls, base_frame: "LabeledFrame", new_frame: "LabeledFrame"
-    ) -> Tuple[List[Instance], List[Instance], List[Instance]]:
-        """Merge two frames, return conflicts if any.
-
-        A conflict occurs when
-        * each frame has Instances which don't perfectly match those
-          in the other frame, or
-        * each frame has PredictedInstances which don't perfectly match
-          those in the other frame.
-
-        Args:
-            base_frame: The `LabeledFrame` into which we want to merge.
-            new_frame: The `LabeledFrame` from which we want to merge.
-
-        Returns:
-            tuple of three items:
-            * list of instances that were merged
-            * list of conflicting instances from base
-            * list of conflicting instances from new
-        """
-        merged_instances = []
-        redundant_instances = []
-        extra_base_instances = copy(base_frame.instances)
-        extra_new_instances = []
-
-        for new_inst in new_frame:
-            redundant = False
-            for base_inst in base_frame.instances:
-                if new_inst.matches(base_inst):
-                    base_inst.frame = None
-                    extra_base_instances.remove(base_inst)
-                    redundant_instances.append(base_inst)
-                    redundant = True
-                    continue
-            if not redundant:
-                new_inst.frame = None
-                extra_new_instances.append(new_inst)
-
-        conflict = False
-        if extra_base_instances and extra_new_instances:
-            base_predictions = list(
-                filter(lambda inst: hasattr(inst, "score"), extra_base_instances)
-            )
-            new_predictions = list(
-                filter(lambda inst: hasattr(inst, "score"), extra_new_instances)
-            )
-
-            base_has_nonpred = len(extra_base_instances) - len(base_predictions)
-            new_has_nonpred = len(extra_new_instances) - len(new_predictions)
-
-            # If they both have some predictions or they both have some
-            # non-predictions, then there is a conflict.
-            # (Otherwise it's not a conflict since we can cleanly merge
-            # all the predicted instances with all the non-predicted.)
-            if base_predictions and new_predictions:
-                conflict = True
-            elif base_has_nonpred and new_has_nonpred:
-                conflict = True
-
-        if conflict:
-            # Conflict, so update base to just include non-conflicting
-            # instances (perfect matches)
-            base_frame.instances.clear()
-            base_frame.instances.extend(redundant_instances)
-        else:
-            # No conflict, so include all instances in base
-            base_frame.instances.extend(extra_new_instances)
-            merged_instances = copy(extra_new_instances)
-            extra_base_instances = []
-            extra_new_instances = []
-
-        # Construct frames to hold any conflicting instances
-        extra_base = (
-            cls(
-                video=base_frame.video,
-                frame_idx=base_frame.frame_idx,
-                instances=extra_base_instances,
-            )
-            if extra_base_instances
-            else None
-        )
-
-        extra_new = (
-            cls(
-                video=new_frame.video,
-                frame_idx=new_frame.frame_idx,
-                instances=extra_new_instances,
-            )
-            if extra_new_instances
-            else None
-        )
-
-        return merged_instances, extra_base, extra_new
-
-    @property
-    def image(self) -> np.ndarray:
-        """Return the image for this frame of shape (height, width, channels)."""
-        return self.video.get_frame(self.frame_idx)
+        self.instances = instances
