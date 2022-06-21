@@ -1,4 +1,5 @@
 from __future__ import annotations
+from lib2to3.pytree import convert
 from attrs import define, field, asdict, Factory
 from typing import List, Optional, Tuple, Union, Dict
 from typing import Optional
@@ -824,8 +825,8 @@ class LabeledFrame:
         instances: List of instances associated with the frame.
     """
 
-    video: Video
-    frame_idx: int
+    video: Video = field()
+    frame_idx: int = field(converter=int)
     _instances: Union[List[Instance], List[PredictedInstance]] = field(default=Factory(list))
 
     @property
