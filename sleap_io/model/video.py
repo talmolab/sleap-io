@@ -10,6 +10,7 @@ from typing import List, Optional, Tuple, Union
 import h5py as h5
 import numpy as np
 import os
+import cv2
 
 
 @define
@@ -36,7 +37,7 @@ class DummyVideo:
         return np.zeros((self.height, self.width, self.channels))
 
 
-@define
+@define(auto_attribs=True, eq=False)
 class HDF5Video:
     """
     Video data stored as 4D datasets in HDF5 files.
@@ -59,7 +60,7 @@ class HDF5Video:
     filename: str = field(default=None)
     dataset: str = field(default=None)
     input_format: str = "channels_last"
-    convert_range: bool = True
+    convert_range: bool = field(default=True)
 
     @property
     def __dataset_h5(self) -> h5.Dataset:
@@ -87,6 +88,10 @@ class HDF5Video:
         """If set to `True`, will attempt to read from original video for frames not
         saved in the file."""
         return self._enable_source_video
+
+    @enable_source_video.setter
+    def enable_source_video(self, val: bool):
+        self._enable_source_video = val
 
     @property
     def frames(self):
@@ -118,6 +123,23 @@ class HDF5Video:
     def dtype(self):
         """See :class:`Video`."""
         return self.test_frame.dtype
+
+    @property
+    def last_frame_idx(self) -> int:
+        """
+        The idx number of the last frame.
+
+        Overrides method of base :class:`Video` class for videos with
+        select frames indexed by number from original video, since the last
+        frame index here will not match the number of frames in video.
+        """
+        # Ensure that video is loaded since we'll need data from loading
+        self._load()
+
+        if self.__original_to_current_frame_idx:
+            last_key = sorted(self.__original_to_current_frame_idx.keys())[-1]
+            return last_key
+        return self.frames - 1
 
 
 @define
@@ -386,6 +408,38 @@ class SingleImageVideo:
     width_: Optional[int] = field(default=None)
     channels_: Optional[int] = field(default=None)
 
+    def _load_idx(self, idx):
+        img = cv2.imread(self._get_filename(idx))
+
+        if img.shape[2] == 3:
+            # OpenCV channels are in BGR order, so we should convert to RGB
+            img = img[:, :, ::-1]
+        return img
+
+    def _get_filename(self, idx: int) -> str:
+        f = self.filenames[idx]
+        if os.path.exists(f):
+            return f
+
+        # Try the directory from the "video" file (this works if all the images
+        # are in the same directory with distinctive filenames).
+        f = os.path.join(os.path.dirname(self.filename), os.path.basename(f))
+        if os.path.exists(f):
+            return f
+
+        raise FileNotFoundError(f"Unable to locate file {idx}: {self.filenames[idx]}")
+
+    def _load_test_frame(self):
+        if self.test_frame_ is None:
+            self.test_frame_ = self._load_idx(0)
+
+            if self.height_ is None:
+                self.height_ = self.test_frame.shape[0]
+            if self.width_ is None:
+                self.width_ = self.test_frame.shape[1]
+            if self.channels_ is None:
+                self.channels_ = self.test_frame.shape[2]
+
     @property
     def test_frame(self) -> np.ndarray:
         self._load_test_frame()
@@ -476,6 +530,9 @@ class Video:
     backend: Union[
         HDF5Video, NumpyVideo, MediaVideo, ImgStoreVideo, SingleImageVideo, DummyVideo
     ]
+
+    def __getattr__(self, item):
+        return getattr(self.backend, item)
 
     @property
     def num_frames(self) -> int:
