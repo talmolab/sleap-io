@@ -1172,7 +1172,7 @@ class LabeledFrame:
 
         # Construct frames to hold any conflicting instances
         extra_base = (
-            cls(
+            LabeledFrame(
                 video=base_frame.video,
                 frame_idx=base_frame.frame_idx,
                 instances=extra_base_instances,
@@ -1182,7 +1182,7 @@ class LabeledFrame:
         )
 
         extra_new = (
-            cls(
+            LabeledFrame(
                 video=new_frame.video,
                 frame_idx=new_frame.frame_idx,
                 instances=extra_new_instances,
