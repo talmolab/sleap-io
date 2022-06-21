@@ -53,7 +53,7 @@ class Point(np.record):
 
 # This turns Point into an attrs class. Defines comparators for
 # us and generaly makes it behave better. Crazy that this works!
-# Point = define(these={name for name in Point.dtype.names}, init=False)(Point)
+Point = define(these={name for name in Point.dtype.names}, init=False)(Point)
 
 
 class PredictedPoint(Point):
@@ -119,9 +119,9 @@ class PredictedPoint(Point):
 
 # This turns PredictedPoint into an attrs class. Defines comparators for
 # us and generaly makes it behave better. Crazy that this works!
-# PredictedPoint = define(
-#     these={name for name in PredictedPoint.dtype.names}, init=False
-# )(PredictedPoint)
+PredictedPoint = define(
+    these={name for name in PredictedPoint.dtype.names}, init=False
+)(PredictedPoint)
 
 
 class PointArray(np.recarray):
@@ -460,7 +460,7 @@ class Instance:
                 # parray[skeleton.node_to_index(node.name)] = point
             except:
                 pass
-    
+
     def matches(self, other: "Instance") -> bool:
         """Whether two instances match by value.
 
@@ -491,7 +491,8 @@ class Instance:
         if not self.frame_idx == other.frame_idx:
             return False
 
-        return True        
+        return True
+
     @property
     def nodes(self) -> Tuple[Node, ...]:
         """Return nodes that have been labelled for this instance."""
