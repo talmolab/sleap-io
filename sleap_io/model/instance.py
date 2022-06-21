@@ -1,5 +1,5 @@
 from __future__ import annotations
-from attrs import define, field
+from attrs import define, field, asdict, Factory
 from typing import List, Optional, Tuple, Union
 from typing import Optional
 from video import Video
@@ -280,7 +280,7 @@ class Track:
         Returns:
             True if they match, False otherwise.
         """
-        return attr.asdict(self) == attr.asdict(other)
+        return asdict(self) == asdict(other)
 
 
 # NOTE:
@@ -652,7 +652,7 @@ class PredictedInstance(Instance):
         Returns:
             A `PredictedInstance` for the given `Instance`.
         """
-        kw_args = attr.asdict(
+        kw_args = asdict(
             instance,
             recurse=False,
             filter=lambda attr, value: attr.name not in ("_points", "_nodes"),
@@ -778,7 +778,7 @@ class LabeledFrame:
 
     video: Video
     frame_idx: int
-    _instances: Union[List[Instance], List[PredictedInstance]] = list()
+    _instances: Union[List[Instance], List[PredictedInstance]] = field(default=Factory(list))
 
     @property
     def instances(self) -> List[Instance]:
