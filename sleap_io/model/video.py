@@ -62,6 +62,70 @@ class HDF5Video:
     input_format: str = "channels_last"
     convert_range: bool = field(default=True)
 
+    def __attrs_post_init__(self):
+        """Called by attrs after __init__()."""
+
+        self.enable_source_video = True
+        self._test_frame_ = None
+        self.__original_to_current_frame_idx = dict()
+        self.__dataset_h5 = None
+        self.__tried_to_load = False
+
+    def _load(self):
+        if self.__tried_to_load:
+            return
+
+        self.__tried_to_load = True
+
+        # Handle cases where the user feeds in h5.File objects instead of filename
+        if isinstance(self.filename, h5.File):
+            self.__file_h5 = self.filename
+            self.filename = self.__file_h5.filename
+        elif type(self.filename) is str:
+            try:
+                self.__file_h5 = h5.File(self.filename, "r")
+            except OSError as ex:
+                raise FileNotFoundError(
+                    f"Could not find HDF5 file {self.filename}"
+                ) from ex
+        else:
+            self.__file_h5 = None
+
+        # Handle the case when h5.Dataset is passed in
+        if isinstance(self.dataset, h5.Dataset):
+            self.__dataset_h5 = self.dataset
+            self.__file_h5 = self.__dataset_h5.file
+            self.dataset = self.__dataset_h5.name
+
+        # File loaded and dataset name given, so load dataset
+        elif isinstance(self.dataset, str) and (self.__file_h5 is not None):
+            # dataset = "video0" passed:
+            if self.dataset + "/video" in self.__file_h5:
+                self.__dataset_h5 = self.__file_h5[self.dataset + "/video"]
+                base_dataset_path = self.dataset
+            else:
+                # dataset = "video0/video" passed:
+                self.__dataset_h5 = self.__file_h5[self.dataset]
+                base_dataset_path = "/".join(self.dataset.split("/")[:-1])
+
+            # Check for frame_numbers dataset corresponding to video
+            framenum_dataset = f"{base_dataset_path}/frame_numbers"
+            if framenum_dataset in self.__file_h5:
+                original_idx_lists = self.__file_h5[framenum_dataset]
+                # Create map from idx in original video to idx in current
+                for current_idx in range(len(original_idx_lists)):
+                    original_idx = original_idx_lists[current_idx]
+                    self.__original_to_current_frame_idx[original_idx] = current_idx
+
+            source_video_group = f"{base_dataset_path}/source_video"
+            if source_video_group in self.__file_h5:
+                d = json_loads(
+                    self.__file_h5.require_group(source_video_group).attrs["json"]
+                )
+
+                self._source_video = Video.cattr().structure(d, Video)
+
+
     @property
     def __dataset_h5(self) -> h5.Dataset:
         if self.__loaded_dataset is None and not self.__tried_to_load:
@@ -403,7 +467,7 @@ class SingleImageVideo:
     """
 
     filename: Optional[str] = field(default=None)
-    filenames: Optional[List[str]] = Factory(list)
+    filenames: Optional[List[str]] = field(factory=list)
     height_: Optional[int] = field(default=None)
     width_: Optional[int] = field(default=None)
     channels_: Optional[int] = field(default=None)
