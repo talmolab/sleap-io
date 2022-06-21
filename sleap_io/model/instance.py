@@ -503,18 +503,42 @@ class Instance:
             # Update points and nodes for this instance
             self._points = new_array
             self._nodes = self.skeleton.nodes
+    def get_points_array(
+        self, copy: bool = True, invisible_as_nan: bool = False, full: bool = False
+    ) -> Union[np.ndarray, np.recarray]:
+        """Return the instance's points in array form.
 
-    # @property
-    # def points_array(self) -> np.ndarray:
-    #     """Return array of x and y coordinates for visible points.
+        Args:
+            copy: If True, the return a copy of the points array as an ndarray.
+                If False, return a view of the underlying recarray.
+            invisible_as_nan: Should invisible points be marked as NaN.
+                If copy is False, then invisible_as_nan is ignored since we
+                don't want to set invisible points to NaNs in original data.
+            full: If True, return all data for points. Otherwise, return just
+                the x and y coordinates.
 
-    #     Row in array corresponds to order of points in skeleton. Invisible points will
-    #     be denoted by NaNs.
+        Returns:
+            Either a recarray (if copy is False) or an ndarray (if copy True).
 
-    #     Returns:
-    #         A numpy array of of shape `(n_nodes, 2)` point coordinates.
-    #     """
-    #     return self.get_points_array(invisible_as_nan=True)
+            The order of the rows corresponds to the ordering of the skeleton
+            nodes. Any skeleton node not defined will have NaNs present.
+
+            Columns in recarray are accessed by name, e.g., ["x"], ["y"].
+
+            Columns in ndarray are accessed by number. The order matches
+            the order in `Point.dtype` or `PredictedPoint.dtype`.
+        """
+    @property
+    def points_array(self) -> np.ndarray:
+        """Return array of x and y coordinates for visible points.
+
+        Row in array corresponds to order of points in skeleton. Invisible points will
+        be denoted by NaNs.
+
+        Returns:
+            A numpy array of of shape `(n_nodes, 2)` point coordinates.
+        """
+        return self.get_points_array(invisible_as_nan=True)
 
     @property
     def centroid(self) -> np.ndarray:
@@ -644,17 +668,17 @@ class PredictedInstance(Instance):
         if self.from_predicted is not None:
             raise ValueError("PredictedInstance should not have from_predicted.")
 
-    # @property
-    # def points_and_scores_array(self) -> np.ndarray:
-    #     """Return the instance points and scores as an array.
+    @property
+    def points_and_scores_array(self) -> np.ndarray:
+        """Return the instance points and scores as an array.
 
-    #     This will be a `(n_nodes, 3)` array of `(x, y, score)` for each predicted point.
+        This will be a `(n_nodes, 3)` array of `(x, y, score)` for each predicted point.
 
-    #     Rows in the array correspond to the order of points in skeleton. Invisible
-    #     points will be represented as NaNs.
-    #     """
-    #     pts = self.get_points_array(full=True, copy=True, invisible_as_nan=True)
-    #     return pts[:, (0, 1, 4)]  # (x, y, score)
+        Rows in the array correspond to the order of points in skeleton. Invisible
+        points will be represented as NaNs.
+        """
+        pts = self.get_points_array(full=True, copy=True, invisible_as_nan=True)
+        return pts[:, (0, 1, 4)]  # (x, y, score)
 
     @property
     def scores(self) -> np.ndarray:
