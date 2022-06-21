@@ -1,9 +1,11 @@
 from __future__ import annotations
 from attrs import define, field, asdict, Factory
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Dict
 from typing import Optional
 from video import Video
 from skeleton import Skeleton, Node, Edge
+from copy import copy
+
 import numpy as np
 import math
 
@@ -318,62 +320,62 @@ class Instance:
     # The underlying Point array type that this instances point array should be.
     _point_array_type = PointArray
 
-    @from_predicted.validator
-    def _validate_from_predicted_(
-        self, attribute, from_predicted: Optional["PredictedInstance"]
-    ):
-        """Validation method called by attrs.
+    # @from_predicted.validator
+    # def _validate_from_predicted_(
+    #     self, attribute, from_predicted: Optional["PredictedInstance"]
+    # ):
+    #     """Validation method called by attrs.
 
-        Checks that from_predicted is None or :class:`PredictedInstance`
+    #     Checks that from_predicted is None or :class:`PredictedInstance`
 
-        Args:
-            attribute: Attribute being validated; not used.
-            from_predicted: Value being validated.
+    #     Args:
+    #         attribute: Attribute being validated; not used.
+    #         from_predicted: Value being validated.
 
-        Raises:
-            TypeError: If from_predicted is anything other than None
-                or a `PredictedInstance`.
+    #     Raises:
+    #         TypeError: If from_predicted is anything other than None
+    #             or a `PredictedInstance`.
 
-        """
-        if from_predicted is not None and type(from_predicted) != PredictedInstance:
-            raise TypeError(
-                f"Instance.from_predicted type must be PredictedInstance (not "
-                "{type(from_predicted)})"
-            )
+    #     """
+    #     if from_predicted is not None and type(from_predicted) != PredictedInstance:
+    #         raise TypeError(
+    #             f"Instance.from_predicted type must be PredictedInstance (not "
+    #             "{type(from_predicted)})"
+    #         )
 
-    @_points.validator
-    def _validate_all_points(self, attribute, points: Union[dict, PointArray]):
-        """Validation method called by attrs.
+    # @_points.validator
+    # def _validate_all_points(self, attribute, points: Union[dict, PointArray]):
+    #     """Validation method called by attrs.
 
-        Checks that all the _points defined for the skeleton are found
-        in the skeleton.
+    #     Checks that all the _points defined for the skeleton are found
+    #     in the skeleton.
 
-        Args:
-            attribute: Attribute being validated; not used.
-            points: Either dict of points or PointArray
-                If dict, keys should be node names.
+    #     Args:
+    #         attribute: Attribute being validated; not used.
+    #         points: Either dict of points or PointArray
+    #             If dict, keys should be node names.
 
-        Raises:
-            ValueError: If a point is associated with a skeleton node
-                name that doesn't exist.
+    #     Raises:
+    #         ValueError: If a point is associated with a skeleton node
+    #             name that doesn't exist.
 
-        Returns:
-            None
-        """
-        if type(points) is dict:
-            is_string_dict = set(map(type, points)) == {str}
-            if is_string_dict:
-                for node_name in points.keys():
-                    if not self.skeleton.has_node(node_name):
-                        raise KeyError(
-                            f"There is no node named {node_name} in {self.skeleton}"
-                        )
-        elif isinstance(points, PointArray):
-            if len(points) != len(self.skeleton.nodes):
-                raise ValueError(
-                    "PointArray does not have the same number of rows as skeleton "
-                    "nodes."
-                )
+    #     Returns:
+    #         None
+    #     """
+    #     if type(points) is dict:
+    #         is_string_dict = set(map(type, points)) == {str}
+    #         if is_string_dict:
+    #             for node_name in points.keys():
+    #                 if not self.skeleton.has_node(node_name):
+    #                     raise KeyError(
+    #                         f"There is no node named {node_name} in {self.skeleton}"
+    #                     )
+    #     elif isinstance(points, PointArray):
+    #         if len(points) != len(self.skeleton.nodes):
+    #             raise ValueError(
+    #                 "PointArray does not have the same number of rows as skeleton "
+    #                 "nodes."
+    #             )
 
     def __attrs_post_init__(self):
         """Method called by attrs after __init__().
@@ -479,6 +481,28 @@ class Instance:
         """Return a tuple of labelled points, in the order they were labelled."""
         self._fix_array()
         return tuple(point for point in self._points if not point.isnan())
+
+    def _fix_array(self):
+        """Fix PointArray after nodes have been added or removed.
+
+        This updates the PointArray as required by comparing the cached
+        list of nodes to the nodes in the `Skeleton` object (which may
+        have changed).
+        """
+        # Check if cached skeleton nodes are different than current nodes
+        if self._nodes != self.skeleton.nodes:
+            # Create new PointArray (or PredictedPointArray)
+            cls = type(self._points)
+            new_array = cls.make_default(len(self.skeleton.nodes))
+
+            # Add points into new array
+            for i, node in enumerate(self._nodes):
+                if node in self.skeleton.nodes:
+                    new_array[self.skeleton.nodes.index(node)] = self._points[i]
+
+            # Update points and nodes for this instance
+            self._points = new_array
+            self._nodes = self.skeleton.nodes
 
     @property
     def points_array(self) -> np.ndarray:
@@ -655,7 +679,7 @@ class PredictedInstance(Instance):
         kw_args = asdict(
             instance,
             recurse=False,
-            filter=lambda attr, value: attr.name not in ("_points", "_nodes"),
+            filter=lambda c, value: c.name not in ("_points", "_nodes"),
         )
         kw_args["points"] = PredictedPointArray.from_array(instance._points)
         kw_args["score"] = score
