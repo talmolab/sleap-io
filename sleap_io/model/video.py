@@ -71,59 +71,59 @@ class HDF5Video:
         self.__dataset_h5 = None
         self.__tried_to_load = False
 
-    def _load(self):
-        if self.__tried_to_load:
-            return
+    # def _load(self):
+    #     if self.__tried_to_load:
+    #         return
 
-        self.__tried_to_load = True
+    #     self.__tried_to_load = True
 
-        # Handle cases where the user feeds in h5.File objects instead of filename
-        if isinstance(self.filename, h5.File):
-            self.__file_h5 = self.filename
-            self.filename = self.__file_h5.filename
-        elif type(self.filename) is str:
-            try:
-                self.__file_h5 = h5.File(self.filename, "r")
-            except OSError as ex:
-                raise FileNotFoundError(
-                    f"Could not find HDF5 file {self.filename}"
-                ) from ex
-        else:
-            self.__file_h5 = None
+    #     # Handle cases where the user feeds in h5.File objects instead of filename
+    #     if isinstance(self.filename, h5.File):
+    #         self.__file_h5 = self.filename
+    #         self.filename = self.__file_h5.filename
+    #     elif type(self.filename) is str:
+    #         try:
+    #             self.__file_h5 = h5.File(self.filename, "r")
+    #         except OSError as ex:
+    #             raise FileNotFoundError(
+    #                 f"Could not find HDF5 file {self.filename}"
+    #             ) from ex
+    #     else:
+    #         self.__file_h5 = None
 
-        # Handle the case when h5.Dataset is passed in
-        if isinstance(self.dataset, h5.Dataset):
-            self.__dataset_h5 = self.dataset
-            self.__file_h5 = self.__dataset_h5.file
-            self.dataset = self.__dataset_h5.name
+    #     # Handle the case when h5.Dataset is passed in
+    #     if isinstance(self.dataset, h5.Dataset):
+    #         self.__dataset_h5 = self.dataset
+    #         self.__file_h5 = self.__dataset_h5.file
+    #         self.dataset = self.__dataset_h5.name
 
-        # File loaded and dataset name given, so load dataset
-        elif isinstance(self.dataset, str) and (self.__file_h5 is not None):
-            # dataset = "video0" passed:
-            if self.dataset + "/video" in self.__file_h5:
-                self.__dataset_h5 = self.__file_h5[self.dataset + "/video"]
-                base_dataset_path = self.dataset
-            else:
-                # dataset = "video0/video" passed:
-                self.__dataset_h5 = self.__file_h5[self.dataset]
-                base_dataset_path = "/".join(self.dataset.split("/")[:-1])
+    #     # File loaded and dataset name given, so load dataset
+    #     elif isinstance(self.dataset, str) and (self.__file_h5 is not None):
+    #         # dataset = "video0" passed:
+    #         if self.dataset + "/video" in self.__file_h5:
+    #             self.__dataset_h5 = self.__file_h5[self.dataset + "/video"]
+    #             base_dataset_path = self.dataset
+    #         else:
+    #             # dataset = "video0/video" passed:
+    #             self.__dataset_h5 = self.__file_h5[self.dataset]
+    #             base_dataset_path = "/".join(self.dataset.split("/")[:-1])
 
-            # Check for frame_numbers dataset corresponding to video
-            framenum_dataset = f"{base_dataset_path}/frame_numbers"
-            if framenum_dataset in self.__file_h5:
-                original_idx_lists = self.__file_h5[framenum_dataset]
-                # Create map from idx in original video to idx in current
-                for current_idx in range(len(original_idx_lists)):
-                    original_idx = original_idx_lists[current_idx]
-                    self.__original_to_current_frame_idx[original_idx] = current_idx
+    #         # Check for frame_numbers dataset corresponding to video
+    #         framenum_dataset = f"{base_dataset_path}/frame_numbers"
+    #         if framenum_dataset in self.__file_h5:
+    #             original_idx_lists = self.__file_h5[framenum_dataset]
+    #             # Create map from idx in original video to idx in current
+    #             for current_idx in range(len(original_idx_lists)):
+    #                 original_idx = original_idx_lists[current_idx]
+    #                 self.__original_to_current_frame_idx[original_idx] = current_idx
 
-            source_video_group = f"{base_dataset_path}/source_video"
-            if source_video_group in self.__file_h5:
-                d = json_loads(
-                    self.__file_h5.require_group(source_video_group).attrs["json"]
-                )
+    #         source_video_group = f"{base_dataset_path}/source_video"
+    #         if source_video_group in self.__file_h5:
+    #             d = json_loads(
+    #                 self.__file_h5.require_group(source_video_group).attrs["json"]
+    #             )
 
-                self._source_video = Video.cattr().structure(d, Video)
+    #             self._source_video = Video.cattr().structure(d, Video)
 
     @property
     def __dataset_h5(self) -> h5.Dataset:
@@ -471,13 +471,13 @@ class SingleImageVideo:
     width_: Optional[int] = field(default=None)
     channels_: Optional[int] = field(default=None)
 
-    def _load_idx(self, idx):
-        img = cv2.imread(self._get_filename(idx))
+    # def _load_idx(self, idx):
+    #     img = cv2.imread(self._get_filename(idx))
 
-        if img.shape[2] == 3:
-            # OpenCV channels are in BGR order, so we should convert to RGB
-            img = img[:, :, ::-1]
-        return img
+    #     if img.shape[2] == 3:
+    #         # OpenCV channels are in BGR order, so we should convert to RGB
+    #         img = img[:, :, ::-1]
+    #     return img
 
     def _get_filename(self, idx: int) -> str:
         f = self.filenames[idx]
@@ -492,16 +492,16 @@ class SingleImageVideo:
 
         raise FileNotFoundError(f"Unable to locate file {idx}: {self.filenames[idx]}")
 
-    def _load_test_frame(self):
-        if self.test_frame_ is None:
-            self.test_frame_ = self._load_idx(0)
+    # def _load_test_frame(self):
+    #     if self.test_frame_ is None:
+    #         self.test_frame_ = self._load_idx(0)
 
-            if self.height_ is None:
-                self.height_ = self.test_frame.shape[0]
-            if self.width_ is None:
-                self.width_ = self.test_frame.shape[1]
-            if self.channels_ is None:
-                self.channels_ = self.test_frame.shape[2]
+    #         if self.height_ is None:
+    #             self.height_ = self.test_frame.shape[0]
+    #         if self.width_ is None:
+    #             self.width_ = self.test_frame.shape[1]
+    #         if self.channels_ is None:
+    #             self.channels_ = self.test_frame.shape[2]
 
     @property
     def test_frame(self) -> np.ndarray:
@@ -619,7 +619,6 @@ class Video:
         except:
             return (None, None, None, None)
 
-
     # @property
     # def is_missing(self) -> bool:
     #     """Return True if the video is a file and is not present."""
@@ -629,7 +628,6 @@ class Video:
     #         return self.backend.is_missing
     #     else:
     #         return not os.path.exists(self.backend.filename)
-
 
     # @classmethod
     # def from_hdf5(
@@ -754,7 +752,6 @@ class Video:
 
     #     return cls(backend=cls.make_specific_backend(backend_class, kwargs))
 
-
     # @classmethod
     # def imgstore_from_filenames(
     #     cls, filenames: list, output_filename: str, *args, **kwargs
@@ -787,7 +784,6 @@ class Video:
 
     #     # Return an ImgStoreVideo object referencing this new imgstore.
     #     return cls(backend=ImgStoreVideo(filename=output_filename))
-    
 
     @staticmethod
     def make_specific_backend(backend_class, kwargs):
@@ -799,7 +795,7 @@ class Video:
         }
 
         return backend_class(**attribute_kwargs)
-    
+
     # @staticmethod
     # def cattr():
     #     """Return a cattr converter for serialiazing/deserializing Video objects.
@@ -827,7 +823,6 @@ class Video:
 
     #     return vid_cattr
 
-    
     # @staticmethod
     # def fixup_path(
     #     path: str, raise_error: bool = False, raise_warning: bool = False
@@ -887,8 +882,6 @@ class Video:
     #         if raise_warning:
     #             logger.warning(f"Cannot find a video file: {path}")
     #         return path
-
-    
 
 
 def load_video(
