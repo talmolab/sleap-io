@@ -619,7 +619,7 @@ class Video:
             return (self.frames, self.height, self.width, self.channels)
         except:
             return (None, None, None, None)
-
+    '''
     @property
     def is_missing(self) -> bool:
         """Return True if the video is a file and is not present."""
@@ -629,7 +629,7 @@ class Video:
             return self.backend.is_missing
         else:
             return not os.path.exists(self.backend.filename)
-
+    '''
     @classmethod
     def from_hdf5(
         cls,
@@ -753,6 +753,7 @@ class Video:
 
         return cls(backend=cls.make_specific_backend(backend_class, kwargs))
 
+    '''
     @classmethod
     def imgstore_from_filenames(
         cls, filenames: list, output_filename: str, *args, **kwargs
@@ -785,7 +786,7 @@ class Video:
 
         # Return an ImgStoreVideo object referencing this new imgstore.
         return cls(backend=ImgStoreVideo(filename=output_filename))
-
+    '''
     @staticmethod
     def make_specific_backend(backend_class, kwargs):
         # Only pass through the kwargs that match attributes for the backend
@@ -823,7 +824,8 @@ class Video:
             vid_cattr.register_structure_hook(t, fixup_video)
 
         return vid_cattr
-
+    
+    '''
     @staticmethod
     def fixup_path(
         path: str, raise_error: bool = False, raise_warning: bool = False
@@ -884,7 +886,7 @@ class Video:
                 logger.warning(f"Cannot find a video file: {path}")
             return path
 
-
+    '''
 def load_video(
     filename: str,
     grayscale: Optional[bool] = field(default=None),
