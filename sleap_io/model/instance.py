@@ -460,7 +460,38 @@ class Instance:
                 # parray[skeleton.node_to_index(node.name)] = point
             except:
                 pass
+    
+    def matches(self, other: "Instance") -> bool:
+        """Whether two instances match by value.
 
+        Checks the types, points, track, and frame index.
+
+        Args:
+            other: The other :class:`Instance`.
+
+        Returns:
+            True if match, False otherwise.
+        """
+        if type(self) is not type(other):
+            return False
+
+        if list(self.points) != list(other.points):
+            return False
+
+        if not self.skeleton.matches(other.skeleton):
+            return False
+
+        if self.track and other.track and not self.track.matches(other.track):
+            return False
+
+        if self.track and not other.track or not self.track and other.track:
+            return False
+
+        # Make sure the frame indices match
+        if not self.frame_idx == other.frame_idx:
+            return False
+
+        return True        
     @property
     def nodes(self) -> Tuple[Node, ...]:
         """Return nodes that have been labelled for this instance."""
@@ -504,6 +535,7 @@ class Instance:
             # Update points and nodes for this instance
             self._points = new_array
             self._nodes = self.skeleton.nodes
+
     def get_points_array(
         self, copy: bool = True, invisible_as_nan: bool = False, full: bool = False
     ) -> Union[np.ndarray, np.recarray]:
@@ -529,6 +561,7 @@ class Instance:
             Columns in ndarray are accessed by number. The order matches
             the order in `Point.dtype` or `PredictedPoint.dtype`.
         """
+
     @property
     def points_array(self) -> np.ndarray:
         """Return array of x and y coordinates for visible points.
@@ -815,7 +848,7 @@ class PredictedInstance(Instance):
         )
 
 
-@define
+@define(auto_attribs=True, eq=False, repr=False, str=False)
 class LabeledFrame:
     """Holds labeled data for a single frame of a video.
 
@@ -827,7 +860,9 @@ class LabeledFrame:
 
     video: Video = field()
     frame_idx: int = field(converter=int)
-    _instances: Union[List[Instance], List[PredictedInstance]] = field(default=Factory(list))
+    _instances: Union[List[Instance], List[PredictedInstance]] = field(
+        default=Factory(list)
+    )
 
     @property
     def instances(self) -> List[Instance]:
@@ -1172,7 +1207,7 @@ class LabeledFrame:
 
         # Construct frames to hold any conflicting instances
         extra_base = (
-            LabeledFrame(
+            cls(
                 video=base_frame.video,
                 frame_idx=base_frame.frame_idx,
                 instances=extra_base_instances,
@@ -1182,7 +1217,7 @@ class LabeledFrame:
         )
 
         extra_new = (
-            LabeledFrame(
+            cls(
                 video=new_frame.video,
                 frame_idx=new_frame.frame_idx,
                 instances=extra_new_instances,
