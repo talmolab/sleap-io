@@ -619,175 +619,175 @@ class Video:
         except:
             return (None, None, None, None)
 
-    '''
-    @property
-    def is_missing(self) -> bool:
-        """Return True if the video is a file and is not present."""
-        if not hasattr(self.backend, "filename"):
-            return True
-        elif hasattr(self.backend, "is_missing"):
-            return self.backend.is_missing
-        else:
-            return not os.path.exists(self.backend.filename)
-    '''
 
-    @classmethod
-    def from_hdf5(
-        cls,
-        dataset: Union[str, h5.Dataset],
-        filename: Union[str, h5.File] = None,
-        input_format: str = "channels_last",
-        convert_range: bool = True,
-    ) -> "Video":
-        """
-        Create an instance of a video object from an HDF5 file and dataset.
+    # @property
+    # def is_missing(self) -> bool:
+    #     """Return True if the video is a file and is not present."""
+    #     if not hasattr(self.backend, "filename"):
+    #         return True
+    #     elif hasattr(self.backend, "is_missing"):
+    #         return self.backend.is_missing
+    #     else:
+    #         return not os.path.exists(self.backend.filename)
 
-        This is a helper method that invokes the HDF5Video backend.
 
-        Args:
-            dataset: The name of the dataset or and h5.Dataset object. If
-                filename is h5.File, dataset must be a str of the dataset name.
-            filename: The name of the HDF5 file or and open h5.File object.
-            input_format: Whether the data is oriented with "channels_first"
-                or "channels_last"
-            convert_range: Whether we should convert data to [0, 255]-range
+    # @classmethod
+    # def from_hdf5(
+    #     cls,
+    #     dataset: Union[str, h5.Dataset],
+    #     filename: Union[str, h5.File] = None,
+    #     input_format: str = "channels_last",
+    #     convert_range: bool = True,
+    # ) -> "Video":
+    #     """
+    #     Create an instance of a video object from an HDF5 file and dataset.
 
-        Returns:
-            A Video object with HDF5Video backend.
-        """
-        filename = Video.fixup_path(filename)
-        backend = HDF5Video(
-            filename=filename,
-            dataset=dataset,
-            input_format=input_format,
-            convert_range=convert_range,
-        )
-        return cls(backend=backend)
+    #     This is a helper method that invokes the HDF5Video backend.
 
-    @classmethod
-    def from_numpy(cls, filename: Union[str, np.ndarray], *args, **kwargs) -> "Video":
-        """
-        Create an instance of a video object from a numpy array.
+    #     Args:
+    #         dataset: The name of the dataset or and h5.Dataset object. If
+    #             filename is h5.File, dataset must be a str of the dataset name.
+    #         filename: The name of the HDF5 file or and open h5.File object.
+    #         input_format: Whether the data is oriented with "channels_first"
+    #             or "channels_last"
+    #         convert_range: Whether we should convert data to [0, 255]-range
 
-        Args:
-            filename: The numpy array or the name of the file
-            args: Arguments to pass to :class:`NumpyVideo`
-            kwargs: Arguments to pass to :class:`NumpyVideo`
+    #     Returns:
+    #         A Video object with HDF5Video backend.
+    #     """
+    #     filename = Video.fixup_path(filename)
+    #     backend = HDF5Video(
+    #         filename=filename,
+    #         dataset=dataset,
+    #         input_format=input_format,
+    #         convert_range=convert_range,
+    #     )
+    #     return cls(backend=backend)
 
-        Returns:
-            A Video object with a NumpyVideo backend
-        """
-        filename = Video.fixup_path(filename)
-        backend = NumpyVideo(filename=filename, *args, **kwargs)
-        return cls(backend=backend)
+    # @classmethod
+    # def from_numpy(cls, filename: Union[str, np.ndarray], *args, **kwargs) -> "Video":
+    #     """
+    #     Create an instance of a video object from a numpy array.
 
-    @classmethod
-    def from_media(cls, filename: str, *args, **kwargs) -> "Video":
-        """Create an instance of a video object from a typical media file.
+    #     Args:
+    #         filename: The numpy array or the name of the file
+    #         args: Arguments to pass to :class:`NumpyVideo`
+    #         kwargs: Arguments to pass to :class:`NumpyVideo`
 
-        For example, mp4, avi, or other types readable by FFMPEG.
+    #     Returns:
+    #         A Video object with a NumpyVideo backend
+    #     """
+    #     filename = Video.fixup_path(filename)
+    #     backend = NumpyVideo(filename=filename, *args, **kwargs)
+    #     return cls(backend=backend)
 
-        Args:
-            filename: The name of the file
-            args: Arguments to pass to :class:`MediaVideo`
-            kwargs: Arguments to pass to :class:`MediaVideo`
+    # @classmethod
+    # def from_media(cls, filename: str, *args, **kwargs) -> "Video":
+    #     """Create an instance of a video object from a typical media file.
 
-        Returns:
-            A Video object with a MediaVideo backend
-        """
-        filename = Video.fixup_path(filename)
-        backend = MediaVideo(filename=filename, *args, **kwargs)
-        return cls(backend=backend)
+    #     For example, mp4, avi, or other types readable by FFMPEG.
 
-    @classmethod
-    def from_image_filenames(
-        cls,
-        filenames: List[str],
-        height: Optional[int] = field(default=None),
-        width: Optional[int] = field(default=None),
-        *args,
-        **kwargs,
-    ) -> "Video":
-        """Create an instance of a SingleImageVideo from individual image file(s)."""
-        backend = SingleImageVideo(filenames=filenames)
-        if height:
-            backend.height = height
-        if width:
-            backend.width = width
-        return cls(backend=backend)
+    #     Args:
+    #         filename: The name of the file
+    #         args: Arguments to pass to :class:`MediaVideo`
+    #         kwargs: Arguments to pass to :class:`MediaVideo`
 
-    @classmethod
-    def from_filename(cls, filename: str, *args, **kwargs) -> "Video":
-        """Create an instance of a video object, auto-detecting the backend.
+    #     Returns:
+    #         A Video object with a MediaVideo backend
+    #     """
+    #     filename = Video.fixup_path(filename)
+    #     backend = MediaVideo(filename=filename, *args, **kwargs)
+    #     return cls(backend=backend)
 
-        Args:
-            filename: The path to the video filename.
-                Currently supported types are:
+    # @classmethod
+    # def from_image_filenames(
+    #     cls,
+    #     filenames: List[str],
+    #     height: Optional[int] = field(default=None),
+    #     width: Optional[int] = field(default=None),
+    #     *args,
+    #     **kwargs,
+    # ) -> "Video":
+    #     """Create an instance of a SingleImageVideo from individual image file(s)."""
+    #     backend = SingleImageVideo(filenames=filenames)
+    #     if height:
+    #         backend.height = height
+    #     if width:
+    #         backend.width = width
+    #     return cls(backend=backend)
 
-                * Media Videos - AVI, MP4, etc. handled by OpenCV directly
-                * HDF5 Datasets - .h5 files
-                * Numpy Arrays - npy files
-                * imgstore datasets - produced by loopbio's Motif recording
-                    system. See: https://github.com/loopbio/imgstore.
+    # @classmethod
+    # def from_filename(cls, filename: str, *args, **kwargs) -> "Video":
+    #     """Create an instance of a video object, auto-detecting the backend.
 
-            args: Arguments to pass to :class:`NumpyVideo`
-            kwargs: Arguments to pass to :class:`NumpyVideo`
+    #     Args:
+    #         filename: The path to the video filename.
+    #             Currently supported types are:
 
-        Returns:
-            A Video object with the detected backend.
-        """
-        filename = Video.fixup_path(filename)
+    #             * Media Videos - AVI, MP4, etc. handled by OpenCV directly
+    #             * HDF5 Datasets - .h5 files
+    #             * Numpy Arrays - npy files
+    #             * imgstore datasets - produced by loopbio's Motif recording
+    #                 system. See: https://github.com/loopbio/imgstore.
 
-        if filename.lower().endswith(("h5", "hdf5", "slp")):
-            backend_class = HDF5Video
-        elif filename.endswith(("npy")):
-            backend_class = NumpyVideo
-        elif filename.lower().endswith(("mp4", "avi", "mov")):
-            backend_class = MediaVideo
-            kwargs["dataset"] = ""  # prevent serialization from breaking
-        elif os.path.isdir(filename) or "metadata.yaml" in filename:
-            backend_class = ImgStoreVideo
-        else:
-            raise ValueError("Could not detect backend for specified filename.")
+    #         args: Arguments to pass to :class:`NumpyVideo`
+    #         kwargs: Arguments to pass to :class:`NumpyVideo`
 
-        kwargs["filename"] = filename
+    #     Returns:
+    #         A Video object with the detected backend.
+    #     """
+    #     filename = Video.fixup_path(filename)
 
-        return cls(backend=cls.make_specific_backend(backend_class, kwargs))
+    #     if filename.lower().endswith(("h5", "hdf5", "slp")):
+    #         backend_class = HDF5Video
+    #     elif filename.endswith(("npy")):
+    #         backend_class = NumpyVideo
+    #     elif filename.lower().endswith(("mp4", "avi", "mov")):
+    #         backend_class = MediaVideo
+    #         kwargs["dataset"] = ""  # prevent serialization from breaking
+    #     elif os.path.isdir(filename) or "metadata.yaml" in filename:
+    #         backend_class = ImgStoreVideo
+    #     else:
+    #         raise ValueError("Could not detect backend for specified filename.")
 
-    '''
-    @classmethod
-    def imgstore_from_filenames(
-        cls, filenames: list, output_filename: str, *args, **kwargs
-    ) -> "Video":
-        """Create an imgstore from a list of image files.
+    #     kwargs["filename"] = filename
 
-        Args:
-            filenames: List of filenames for the image files.
-            output_filename: Filename for the imgstore to create.
+    #     return cls(backend=cls.make_specific_backend(backend_class, kwargs))
 
-        Returns:
-            A `Video` object for the new imgstore.
-        """
-        # get the image size from the first file
-        first_img = cv2.imread(filenames[0], flags=cv2.IMREAD_COLOR)
-        img_shape = first_img.shape
 
-        # create the imgstore
-        store = imgstore.new_for_format(
-            "png", mode="w", basedir=output_filename, imgshape=img_shape
-        )
+    # @classmethod
+    # def imgstore_from_filenames(
+    #     cls, filenames: list, output_filename: str, *args, **kwargs
+    # ) -> "Video":
+    #     """Create an imgstore from a list of image files.
 
-        # read each frame and write it to the imgstore
-        # unfortunately imgstore doesn't let us just add the file
-        for i, img_filename in enumerate(filenames):
-            img = cv2.imread(img_filename, flags=cv2.IMREAD_COLOR)
-            store.add_image(img, i, i)
+    #     Args:
+    #         filenames: List of filenames for the image files.
+    #         output_filename: Filename for the imgstore to create.
 
-        store.close()
+    #     Returns:
+    #         A `Video` object for the new imgstore.
+    #     """
+    #     # get the image size from the first file
+    #     first_img = cv2.imread(filenames[0], flags=cv2.IMREAD_COLOR)
+    #     img_shape = first_img.shape
 
-        # Return an ImgStoreVideo object referencing this new imgstore.
-        return cls(backend=ImgStoreVideo(filename=output_filename))
-    '''
+    #     # create the imgstore
+    #     store = imgstore.new_for_format(
+    #         "png", mode="w", basedir=output_filename, imgshape=img_shape
+    #     )
+
+    #     # read each frame and write it to the imgstore
+    #     # unfortunately imgstore doesn't let us just add the file
+    #     for i, img_filename in enumerate(filenames):
+    #         img = cv2.imread(img_filename, flags=cv2.IMREAD_COLOR)
+    #         store.add_image(img, i, i)
+
+    #     store.close()
+
+    #     # Return an ImgStoreVideo object referencing this new imgstore.
+    #     return cls(backend=ImgStoreVideo(filename=output_filename))
+    
 
     @staticmethod
     def make_specific_backend(backend_class, kwargs):
@@ -799,96 +799,96 @@ class Video:
         }
 
         return backend_class(**attribute_kwargs)
+    
+    # @staticmethod
+    # def cattr():
+    #     """Return a cattr converter for serialiazing/deserializing Video objects.
 
-    @staticmethod
-    def cattr():
-        """Return a cattr converter for serialiazing/deserializing Video objects.
+    #     Returns:
+    #         A cattr converter.
+    #     """
 
-        Returns:
-            A cattr converter.
-        """
+    #     # When we are structuring video backends, try to fixup the video file paths
+    #     # in case they are coming from a different computer or the file has been moved.
+    #     def fixup_video(x, cl):
+    #         if "filename" in x:
+    #             x["filename"] = Video.fixup_path(x["filename"])
+    #         if "file" in x:
+    #             x["file"] = Video.fixup_path(x["file"])
 
-        # When we are structuring video backends, try to fixup the video file paths
-        # in case they are coming from a different computer or the file has been moved.
-        def fixup_video(x, cl):
-            if "filename" in x:
-                x["filename"] = Video.fixup_path(x["filename"])
-            if "file" in x:
-                x["file"] = Video.fixup_path(x["file"])
+    #         return Video.make_specific_backend(cl, x)
 
-            return Video.make_specific_backend(cl, x)
+    #     vid_cattr = cattr.Converter()
 
-        vid_cattr = cattr.Converter()
+    #     # Check the type hint for backend and register the video path
+    #     # fixup hook for each type in the Union.
+    #     for t in attr.fields(Video).backend.type.__args__:
+    #         vid_cattr.register_structure_hook(t, fixup_video)
 
-        # Check the type hint for backend and register the video path
-        # fixup hook for each type in the Union.
-        for t in attr.fields(Video).backend.type.__args__:
-            vid_cattr.register_structure_hook(t, fixup_video)
+    #     return vid_cattr
 
-        return vid_cattr
+    
+    # @staticmethod
+    # def fixup_path(
+    #     path: str, raise_error: bool = False, raise_warning: bool = False
+    # ) -> str:
+    #     """Try to locate video if the given path doesn't work.
 
-    '''
-    @staticmethod
-    def fixup_path(
-        path: str, raise_error: bool = False, raise_warning: bool = False
-    ) -> str:
-        """Try to locate video if the given path doesn't work.
+    #     Given a path to a video try to find it. This is attempt to make the
+    #     paths serialized for different video objects portable across multiple
+    #     computers. The default behavior is to store whatever path is stored
+    #     on the backend object. If this is an absolute path it is almost
+    #     certainly wrong when transferred when the object is created on
+    #     another computer. We try to find the video by looking in the current
+    #     working directory as well.
 
-        Given a path to a video try to find it. This is attempt to make the
-        paths serialized for different video objects portable across multiple
-        computers. The default behavior is to store whatever path is stored
-        on the backend object. If this is an absolute path it is almost
-        certainly wrong when transferred when the object is created on
-        another computer. We try to find the video by looking in the current
-        working directory as well.
+    #     Note that when loading videos during the process of deserializing a
+    #     saved :class:`Labels` dataset, it's usually preferable to fix video
+    #     paths using a `video_search` callback or path list.
 
-        Note that when loading videos during the process of deserializing a
-        saved :class:`Labels` dataset, it's usually preferable to fix video
-        paths using a `video_search` callback or path list.
+    #     Args:
+    #         path: The path the video asset.
+    #         raise_error: Whether to raise error if we cannot find video.
+    #         raise_warning: Whether to raise warning if we cannot find video.
 
-        Args:
-            path: The path the video asset.
-            raise_error: Whether to raise error if we cannot find video.
-            raise_warning: Whether to raise warning if we cannot find video.
+    #     Raises:
+    #         FileNotFoundError: If file still cannot be found and raise_error
+    #             is True.
 
-        Raises:
-            FileNotFoundError: If file still cannot be found and raise_error
-                is True.
+    #     Returns:
+    #         The fixed up path
+    #     """
+    #     # If path is not a string then just return it and assume the backend
+    #     # knows what to do with it.
+    #     if type(path) is not str:
+    #         return path
 
-        Returns:
-            The fixed up path
-        """
-        # If path is not a string then just return it and assume the backend
-        # knows what to do with it.
-        if type(path) is not str:
-            return path
+    #     if os.path.exists(path):
+    #         return path
 
-        if os.path.exists(path):
-            return path
+    #     # Strip the directory and lets see if the file is in the current working
+    #     # directory.
+    #     elif os.path.exists(os.path.basename(path)):
+    #         return os.path.basename(path)
 
-        # Strip the directory and lets see if the file is in the current working
-        # directory.
-        elif os.path.exists(os.path.basename(path)):
-            return os.path.basename(path)
+    #     # Special case: this is an ImgStore path! We cant use
+    #     # basename because it will strip the directory name off
+    #     elif path.endswith("metadata.yaml"):
 
-        # Special case: this is an ImgStore path! We cant use
-        # basename because it will strip the directory name off
-        elif path.endswith("metadata.yaml"):
+    #         # Get the parent dir of the YAML file.
+    #         img_store_dir = os.path.basename(os.path.split(path)[0])
 
-            # Get the parent dir of the YAML file.
-            img_store_dir = os.path.basename(os.path.split(path)[0])
+    #         if os.path.exists(img_store_dir):
+    #             return img_store_dir
 
-            if os.path.exists(img_store_dir):
-                return img_store_dir
+    #     if raise_error:
+    #         raise FileNotFoundError(f"Cannot find a video file: {path}")
+    #     else:
+    #         if raise_warning:
+    #             logger.warning(f"Cannot find a video file: {path}")
+    #         return path
 
-        if raise_error:
-            raise FileNotFoundError(f"Cannot find a video file: {path}")
-        else:
-            if raise_warning:
-                logger.warning(f"Cannot find a video file: {path}")
-            return path
-
-    '''
+    
 
 
 def load_video(
