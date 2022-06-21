@@ -53,7 +53,7 @@ class Point(np.record):
 
 # This turns Point into an attrs class. Defines comparators for
 # us and generaly makes it behave better. Crazy that this works!
-Point = define(these={name for name in Point.dtype.names}, init=False)(Point)
+# Point = define(these={name for name in Point.dtype.names}, init=False)(Point)
 
 
 class PredictedPoint(Point):
@@ -119,9 +119,9 @@ class PredictedPoint(Point):
 
 # This turns PredictedPoint into an attrs class. Defines comparators for
 # us and generaly makes it behave better. Crazy that this works!
-PredictedPoint = define(
-    these={name for name in PredictedPoint.dtype.names}, init=False
-)(PredictedPoint)
+# PredictedPoint = define(
+#     these={name for name in PredictedPoint.dtype.names}, init=False
+# )(PredictedPoint)
 
 
 class PointArray(np.recarray):
@@ -972,7 +972,7 @@ class LabeledFrame:
         return n
 
     @property
-    def unused_predictions(self) -> List[Instance]:
+    def unused_predictions(self) -> List[Instance] or List[PredictedInstance]:
         """Return a list of "unused" :class:`PredictedInstance` objects in frame.
 
         This is all the :class:`PredictedInstance` objects which do not have
@@ -1050,7 +1050,7 @@ class LabeledFrame:
             The merged list of :class:`LabeledFrame`s.
         """
         redundant_count = 0
-        frames_found = dict()
+        frames_found: dict = dict()
         # move instances into first frame with matching frame_idx
         for idx, lf in enumerate(labeled_frames):
             if lf.video == video:
