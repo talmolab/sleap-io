@@ -1,19 +1,25 @@
-"""Data model for Videos.
+""" Video reading and writing interfaces for different formats. """
 
-Videos are SLEAP data structures that store information regarding a video and its
-components used in SLEAP.
-"""
-
-from __future__ import annotations
-from attrs import define, field, Factory
-from typing import List, Optional, Tuple, Union
-import h5py as h5
-import numpy as np
 import os
+import shutil
+
+import h5py as h5
 import cv2
+import imgstore
+import numpy as np
+import attr
+import cattr
+import logging
+import multiprocessing
+
+from typing import Iterable, List, Optional, Tuple, Union, Text
+
+from sleap.util import json_loads, json_dumps
+
+logger = logging.getLogger(__name__)
 
 
-@define
+@attr.s(auto_attribs=True, eq=False, order=False)
 class DummyVideo:
     """
     Fake video backend,returns frames with all zeros.
@@ -22,12 +28,12 @@ class DummyVideo:
     have access to the real video.
     """
 
-    filename: str = field(default="")
-    height: int = field(default=2000)
-    width: int = field(default=2000)
-    frames: int = field(default=10000)
-    channels: int = field(default=1)
-    dummy: bool = field(default=True)
+    filename: str = ""
+    height: int = 2000
+    width: int = 2000
+    frames: int = 10000
+    channels: int = 1
+    dummy: bool = True
 
     @property
     def test_frame(self):
@@ -37,7 +43,7 @@ class DummyVideo:
         return np.zeros((self.height, self.width, self.channels))
 
 
-@define(auto_attribs=True, eq=False)
+@attr.s(auto_attribs=True, eq=False, order=False)
 class HDF5Video:
     """
     Video data stored as 4D datasets in HDF5 files.
@@ -57,10 +63,88 @@ class HDF5Video:
         convert_range: Whether we should convert data to [0, 255]-range
     """
 
-    filename: str = field(default=None)
-    dataset: str = field(default=None)
-    input_format: str = "channels_last"
-    convert_range: bool = field(default=True)
+    filename: str = attr.ib(default=None)
+    dataset: str = attr.ib(default=None)
+    input_format: str = attr.ib(default="channels_last")
+    convert_range: bool = attr.ib(default=True)
+
+    def __attrs_post_init__(self):
+        """Called by attrs after __init__()."""
+
+        self.enable_source_video = True
+        self._test_frame_ = None
+        self.__original_to_current_frame_idx = dict()
+        self.__dataset_h5 = None
+        self.__tried_to_load = False
+
+    @input_format.validator
+    def check(self, attribute, value):
+        """Called by attrs to validates input format."""
+        if value not in ["channels_first", "channels_last"]:
+            raise ValueError(f"HDF5Video input_format={value} invalid.")
+
+        if value == "channels_first":
+            self.__channel_idx = 1
+            self.__width_idx = 2
+            self.__height_idx = 3
+        else:
+            self.__channel_idx = 3
+            self.__width_idx = 2
+            self.__height_idx = 1
+
+    def _load(self):
+        if self.__tried_to_load:
+            return
+
+        self.__tried_to_load = True
+
+        # Handle cases where the user feeds in h5.File objects instead of filename
+        if isinstance(self.filename, h5.File):
+            self.__file_h5 = self.filename
+            self.filename = self.__file_h5.filename
+        elif type(self.filename) is str:
+            try:
+                self.__file_h5 = h5.File(self.filename, "r")
+            except OSError as ex:
+                raise FileNotFoundError(
+                    f"Could not find HDF5 file {self.filename}"
+                ) from ex
+        else:
+            self.__file_h5 = None
+
+        # Handle the case when h5.Dataset is passed in
+        if isinstance(self.dataset, h5.Dataset):
+            self.__dataset_h5 = self.dataset
+            self.__file_h5 = self.__dataset_h5.file
+            self.dataset = self.__dataset_h5.name
+
+        # File loaded and dataset name given, so load dataset
+        elif isinstance(self.dataset, str) and (self.__file_h5 is not None):
+            # dataset = "video0" passed:
+            if self.dataset + "/video" in self.__file_h5:
+                self.__dataset_h5 = self.__file_h5[self.dataset + "/video"]
+                base_dataset_path = self.dataset
+            else:
+                # dataset = "video0/video" passed:
+                self.__dataset_h5 = self.__file_h5[self.dataset]
+                base_dataset_path = "/".join(self.dataset.split("/")[:-1])
+
+            # Check for frame_numbers dataset corresponding to video
+            framenum_dataset = f"{base_dataset_path}/frame_numbers"
+            if framenum_dataset in self.__file_h5:
+                original_idx_lists = self.__file_h5[framenum_dataset]
+                # Create map from idx in original video to idx in current
+                for current_idx in range(len(original_idx_lists)):
+                    original_idx = original_idx_lists[current_idx]
+                    self.__original_to_current_frame_idx[original_idx] = current_idx
+
+            source_video_group = f"{base_dataset_path}/source_video"
+            if source_video_group in self.__file_h5:
+                d = json_loads(
+                    self.__file_h5.require_group(source_video_group).attrs["json"]
+                )
+
+                self._source_video = Video.cattr().structure(d, Video)
 
     @property
     def __dataset_h5(self) -> h5.Dataset:
@@ -84,7 +168,6 @@ class HDF5Video:
 
     @property
     def enable_source_video(self) -> bool:
-
         """If set to `True`, will attempt to read from original video for frames not
         saved in the file."""
         return self._enable_source_video
@@ -92,6 +175,73 @@ class HDF5Video:
     @enable_source_video.setter
     def enable_source_video(self, val: bool):
         self._enable_source_video = val
+
+    @property
+    def has_embedded_images(self) -> bool:
+        """Return `True` if the file was saved with cached frame images."""
+        self._load()
+        return len(self.__original_to_current_frame_idx) > 0
+
+    @property
+    def embedded_frame_inds(self) -> List[int]:
+        """Return list of frame indices with embedded images."""
+        self._load()
+        return list(self.__original_to_current_frame_idx.keys())
+
+    @property
+    def source_video_available(self) -> bool:
+        """Return `True` if the source file is available for reading uncached frames."""
+        self._load()
+        return (
+            self.enable_source_video
+            and hasattr(self, "_source_video")
+            and self._source_video
+        )
+
+    @property
+    def source_video(self) -> "Video":
+        """Return the source video if available, otherwise return `None`."""
+        if self.source_video_available:
+            return self._source_video
+        return None
+
+    def matches(self, other: "HDF5Video") -> bool:
+        """
+        Check if attributes match those of another video.
+
+        Args:
+            other: The other video to compare with.
+
+        Returns:
+            True if attributes match, False otherwise.
+        """
+        return (
+            self.filename == other.filename
+            and self.dataset == other.dataset
+            and self.convert_range == other.convert_range
+            and self.input_format == other.input_format
+        )
+
+    def close(self):
+        """Close the HDF5 file object (if it's open)."""
+        try:
+            self.__file_h5.close()
+        except:
+            pass
+        self.__file_h5 = None
+
+    def __del__(self):
+        """Releases file object."""
+        self.close()
+
+    def _try_frame_from_source_video(self, idx) -> np.ndarray:
+        try:
+            return self.source_video.get_frame(idx)
+        except:
+            raise IndexError(f"Frame index {idx} not in original index.")
+
+    # The properties and methods below complete our contract with the higher level
+    # Video interface.
 
     @property
     def frames(self):
@@ -141,8 +291,50 @@ class HDF5Video:
             return last_key
         return self.frames - 1
 
+    def reset(self):
+        """Reloads the video."""
+        # TODO
+        pass
 
-@define
+    def get_frame(self, idx) -> np.ndarray:
+        """
+        Get a frame from the underlying HDF5 video data.
+
+        Args:
+            idx: The index of the frame to get.
+
+        Returns:
+            The numpy.ndarray representing the video frame data.
+        """
+        # Ensure that video is loaded since we'll need data from loading
+        self._load()
+
+        # If we only saved some frames from a video, map to idx in dataset.
+        if self.__original_to_current_frame_idx:
+            if idx in self.__original_to_current_frame_idx:
+                idx = self.__original_to_current_frame_idx[idx]
+            else:
+                return self._try_frame_from_source_video(idx)
+
+        frame = self.__dataset_h5[idx]
+
+        if self.__dataset_h5.attrs.get("format", ""):
+            frame = cv2.imdecode(frame, cv2.IMREAD_UNCHANGED)
+
+            # Add dimension for single channel (dropped by opencv).
+            if frame.ndim == 2:
+                frame = frame[..., np.newaxis]
+
+        if self.input_format == "channels_first":
+            frame = np.transpose(frame, (2, 1, 0))
+
+        if self.convert_range and np.max(frame) <= 1.0:
+            frame = (frame * 255).astype(int)
+
+        return frame
+
+
+@attr.s(auto_attribs=True, eq=False, order=False)
 class MediaVideo:
     """
     Video data stored in traditional media formats readable by FFMPEG
@@ -157,23 +349,28 @@ class MediaVideo:
         bgr: Whether color channels ordered as (blue, green, red).
     """
 
-    filename: str
-    grayscale: bool
-    bgr: bool = True
+    filename: str = attr.ib()
+    grayscale: bool = attr.ib()
+    bgr: bool = attr.ib(default=True)
 
     # Unused attributes still here so we don't break deserialization
-    dataset: str = ""
-    input_format: str = ""
+    dataset: str = attr.ib(default="")
+    input_format: str = attr.ib(default="")
 
     _detect_grayscale = False
-    _reader_ = field(default=None)
-    _test_frame_ = field(default=None)
+    _reader_ = None
+    _test_frame_ = None
 
     @property
     def __lock(self):
         if not hasattr(self, "_lock"):
             self._lock = multiprocessing.RLock()
         return self._lock
+
+    @grayscale.default
+    def __grayscale_default__(self):
+        self._detect_grayscale = True
+        return False
 
     @property
     def __reader(self):
@@ -212,6 +409,22 @@ class MediaVideo:
         # Return stored test frame
         return self._test_frame_
 
+    def matches(self, other: "MediaVideo") -> bool:
+        """
+        Check if attributes match those of another video.
+
+        Args:
+            other: The other video to compare with.
+
+        Returns:
+            True if attributes match, False otherwise.
+        """
+        return (
+            self.filename == other.filename
+            and self.grayscale == other.grayscale
+            and self.bgr == other.bgr
+        )
+
     @property
     def fps(self) -> float:
         """Returns frames per second of video."""
@@ -248,8 +461,49 @@ class MediaVideo:
         """See :class:`Video`."""
         return self.test_frame.dtype
 
+    def reset(self, filename: str = None, grayscale: bool = None, bgr: bool = None):
+        """Reloads the video."""
+        if filename is not None:
+            self.filename = filename
+            self._test_frame_ = None  # Test frame does not depend on num channels
 
-@define
+        if grayscale is not None:
+            self.grayscale = grayscale
+            self._detect_grayscale = False
+        else:
+            self._detect_grayscale = True
+
+        if bgr is not None:
+            self.bgr = bgr
+
+        if (filename is not None) or (grayscale is not None):
+            self._reader_ = None  # Reader depends on both filename and grayscale
+
+    def get_frame(self, idx: int, grayscale: bool = None) -> np.ndarray:
+        """See :class:`Video`."""
+
+        with self.__lock:
+            if self.__reader.get(cv2.CAP_PROP_POS_FRAMES) != idx:
+                self.__reader.set(cv2.CAP_PROP_POS_FRAMES, idx)
+
+            success, frame = self.__reader.read()
+
+        if not success or frame is None:
+            raise KeyError(f"Unable to load frame {idx} from {self}.")
+
+        if grayscale is None:
+            grayscale = self.grayscale
+
+        if grayscale:
+            frame = frame[..., 0][..., None]
+
+        if self.bgr:
+            frame = frame[..., ::-1]
+
+        return frame
+
+
+@attr.s(auto_attribs=True, eq=False, order=False)
 class NumpyVideo:
     """
     Video data stored as Numpy array.
@@ -260,11 +514,50 @@ class NumpyVideo:
         * numpy data shape: (frames, height, width, channels)
     """
 
-    filename: Union[str, np.ndarray]
+    filename: Union[str, np.ndarray] = attr.ib()
+
+    def __attrs_post_init__(self):
+
+        self.__frame_idx = 0
+        self.__height_idx = 1
+        self.__width_idx = 2
+        self.__channel_idx = 3
+
+        # Handle cases where the user feeds in np.array instead of filename
+        if isinstance(self.filename, np.ndarray):
+            self.__data = self.filename
+            self.filename = "Raw Video Data"
+        elif type(self.filename) is str:
+            try:
+                self.__data = np.load(self.filename)
+            except OSError as ex:
+                raise FileNotFoundError(
+                    f"Could not find filename {self.filename}"
+                ) from ex
+        else:
+            self.__data = None
+
+    def set_video_ndarray(self, data: np.ndarray):
+        self.__data = data
+
+    # The properties and methods below complete our contract with the
+    # higher level Video interface.
 
     @property
     def test_frame(self):
         return self.get_frame(0)
+
+    def matches(self, other: "NumpyVideo") -> np.ndarray:
+        """
+        Check if attributes match those of another video.
+
+        Args:
+            other: The other video to compare with.
+
+        Returns:
+            True if attributes match, False otherwise.
+        """
+        return np.all(self.__data == other.__data)
 
     @property
     def frames(self):
@@ -291,6 +584,15 @@ class NumpyVideo:
         """See :class:`Video`."""
         return self.__data.dtype
 
+    def reset(self):
+        """Reload the video."""
+        # TODO
+        pass
+
+    def get_frame(self, idx):
+        """See :class:`Video`."""
+        return self.__data[idx]
+
     @property
     def is_missing(self) -> bool:
         """Return True if the video comes from a file and is missing."""
@@ -299,7 +601,7 @@ class NumpyVideo:
         return not os.path.exists(self.filename)
 
 
-@define
+@attr.s(auto_attribs=True, eq=False, order=False)
 class ImgStoreVideo:
     """
     Video data stored as an ImgStore dataset.
@@ -320,10 +622,43 @@ class ImgStoreVideo:
             indices on :class:`LabeledFrame` objects in the dataset.
     """
 
-    filename: str = field(default=None)
-    index_by_original: bool = True
-    _store_ = field(default=None)
-    _img_ = field(default=None)
+    filename: str = attr.ib(default=None)
+    index_by_original: bool = attr.ib(default=True)
+    _store_ = None
+    _img_ = None
+
+    def __attrs_post_init__(self):
+
+        # If the filename does not contain metadata.yaml, append it to the filename
+        # assuming that this is a directory that contains the imgstore.
+        if "metadata.yaml" not in self.filename:
+            # Use "/" since this works on Windows and posix
+            self.filename = self.filename + "/metadata.yaml"
+
+        # Make relative path into absolute, ImgStores don't work properly it seems
+        # without full paths if we change working directories. Video.fixup_path will
+        # fix this later when loading these datasets.
+        self.filename = os.path.abspath(self.filename)
+
+        self.__store = None
+
+    # The properties and methods below complete our contract with the
+    # higher level Video interface.
+
+    def matches(self, other):
+        """
+        Check if attributes match.
+
+        Args:
+            other: The instance to comapare with.
+
+        Returns:
+            True if attributes match, False otherwise
+        """
+        return (
+            self.filename == other.filename
+            and self.index_by_original == other.index_by_original
+        )
 
     @property
     def __store(self):
@@ -382,6 +717,44 @@ class ImgStoreVideo:
             return self.__store.frame_max
         return self.frames - 1
 
+    def reset(self):
+        """Reloads the video."""
+        # TODO
+        pass
+
+    def get_frame(self, frame_number: int) -> np.ndarray:
+        """
+        Get a frame from the underlying ImgStore video data.
+
+        Args:
+            frame_number: The number of the frame to get. If
+                index_by_original is set to True, then this number should
+                actually be a frame index within the imgstore. That is,
+                if there are 4 frames in the imgstore, this number should be
+                be from 0 to 3.
+
+        Returns:
+            The numpy.ndarray representing the video frame data.
+        """
+
+        # Check if we need to open the imgstore and do it if needed
+        if not self._store_:
+            self.open()
+
+        if self.index_by_original:
+            img, (frame_number, frame_timestamp) = self.__store.get_image(frame_number)
+        else:
+            img, (frame_number, frame_timestamp) = self.__store.get_image(
+                frame_number=None, frame_index=frame_number
+            )
+
+        # If the frame has one channel, add a singleton channel as it seems other
+        # video implementations do this.
+        if img.ndim == 2:
+            img = img[:, :, None]
+
+        return img
+
     @property
     def imgstore(self):
         """
@@ -392,8 +765,34 @@ class ImgStoreVideo:
         """
         return self.__store
 
+    def open(self):
+        """
+        Open the image store if it isn't already open.
 
-@define
+        Returns:
+            None
+        """
+        if not self._store_:
+            # Open the imgstore
+            self._store_ = imgstore.new_for_filename(self.filename)
+
+            # Read a frame so we can compute shape an such
+            self._img_, (frame_number, frame_timestamp) = self._store_.get_next_image()
+
+    def close(self):
+        """
+        Close the imgstore if it isn't already closed.
+
+        Returns:
+            None
+        """
+        if self.imgstore:
+            # Open the imgstore
+            self.__store.close()
+            self.__store = None
+
+
+@attr.s(auto_attribs=True, eq=False, order=False)
 class SingleImageVideo:
     """
     Video wrapper for individual image files.
@@ -402,11 +801,20 @@ class SingleImageVideo:
         filenames: Files to load as video.
     """
 
-    filename: Optional[str] = field(default=None)
-    filenames: Optional[List[str]] = Factory(list)
-    height_: Optional[int] = field(default=None)
-    width_: Optional[int] = field(default=None)
-    channels_: Optional[int] = field(default=None)
+    filename: Optional[str] = attr.ib(default=None)
+    filenames: Optional[List[str]] = attr.ib(factory=list)
+    height_: Optional[int] = attr.ib(default=None)
+    width_: Optional[int] = attr.ib(default=None)
+    channels_: Optional[int] = attr.ib(default=None)
+
+    def __attrs_post_init__(self):
+        if not self.filename and self.filenames:
+            self.filename = self.filenames[0]
+        elif self.filename and not self.filenames:
+            self.filenames = [self.filename]
+
+        self.__data = dict()
+        self.test_frame_ = None
 
     def _load_idx(self, idx):
         img = cv2.imread(self._get_filename(idx))
@@ -440,10 +848,31 @@ class SingleImageVideo:
             if self.channels_ is None:
                 self.channels_ = self.test_frame.shape[2]
 
+    def get_idx_from_filename(self, filename: str) -> int:
+        try:
+            return self.filenames.index(filename)
+        except IndexError:
+            return None
+
+    # The properties and methods below complete our contract with the
+    # higher level Video interface.
+
     @property
     def test_frame(self) -> np.ndarray:
         self._load_test_frame()
         return self.test_frame_
+
+    def matches(self, other: "SingleImageVideo") -> bool:
+        """
+        Check if attributes match those of another video.
+
+        Args:
+            other: The other video to compare with.
+
+        Returns:
+            True if attributes match, False otherwise.
+        """
+        return self.filenames == other.filenames
 
     @property
     def frames(self):
@@ -487,7 +916,20 @@ class SingleImageVideo:
         """See :class:`Video`."""
         return self.__data.dtype
 
+    def reset(self):
+        """Reloads the video."""
+        # TODO
+        pass
 
+    def get_frame(self, idx):
+        """See :class:`Video`."""
+        if idx not in self.__data:
+            self.__data[idx] = self._load_idx(idx)
+
+        return self.__data[idx]
+
+
+@attr.s(auto_attribs=True, eq=False, order=False)
 class Video:
     """
     The top-level interface to any Video data used by SLEAP.
@@ -529,8 +971,9 @@ class Video:
 
     backend: Union[
         HDF5Video, NumpyVideo, MediaVideo, ImgStoreVideo, SingleImageVideo, DummyVideo
-    ]
+    ] = attr.ib()
 
+    # Delegate to the backend
     def __getattr__(self, item):
         return getattr(self.backend, item)
 
@@ -556,6 +999,20 @@ class Video:
         except:
             return (None, None, None, None)
 
+    def __str__(self) -> str:
+        """Informal string representation (for print or format)."""
+        return (
+            "Video("
+            f"filename={self.filename}, "
+            f"shape={self.shape}, "
+            f"backend={type(self.backend).__name__}"
+            ")"
+        )
+
+    def __len__(self) -> int:
+        """Return the length of the video as the number of frames."""
+        return self.frames
+
     @property
     def is_missing(self) -> bool:
         """Return True if the video is a file and is not present."""
@@ -565,6 +1022,69 @@ class Video:
             return self.backend.is_missing
         else:
             return not os.path.exists(self.backend.filename)
+
+    def get_frame(self, idx: int) -> np.ndarray:
+        """
+        Return a single frame of video from the underlying video data.
+
+        Args:
+            idx: The index of the video frame
+
+        Returns:
+            The video frame with shape (height, width, channels)
+        """
+        return self.backend.get_frame(idx)
+
+    def get_frames(self, idxs: Union[int, Iterable[int]]) -> np.ndarray:
+        """Return a collection of video frames from the underlying video data.
+
+        Args:
+            idxs: An iterable object that contains the indices of frames.
+
+        Returns:
+            The requested video frames with shape (len(idxs), height, width, channels).
+        """
+        if np.isscalar(idxs):
+            idxs = [idxs]
+        return np.stack([self.get_frame(idx) for idx in idxs], axis=0)
+
+    def get_frames_safely(self, idxs: Iterable[int]) -> Tuple[List[int], np.ndarray]:
+        """Return list of frame indices and frames which were successfully loaded.
+
+        idxs: An iterable object that contains the indices of frames.
+
+        Returns: A tuple of (frame indices, frames), where
+            * frame indices is a subset of the specified idxs, and
+            * frames has shape (len(frame indices), height, width, channels).
+            If zero frames were loaded successfully, then frames is None.
+        """
+        frames = []
+        idxs_found = []
+
+        for idx in idxs:
+            try:
+                frame = self.get_frame(idx)
+            except Exception as e:
+                print(e)
+                # ignore frames which we couldn't load
+                frame = None
+
+            if frame is not None:
+                frames.append(frame)
+                idxs_found.append(idx)
+
+        if frames:
+            frames = np.stack(frames, axis=0)
+        else:
+            frames = None
+
+        return idxs_found, frames
+
+    def __getitem__(self, idxs):
+        if isinstance(idxs, slice):
+            start, stop, step = idxs.indices(self.num_frames)
+            idxs = range(start, stop, step)
+        return self.get_frames(idxs)
 
     @classmethod
     def from_hdf5(
@@ -638,8 +1158,8 @@ class Video:
     def from_image_filenames(
         cls,
         filenames: List[str],
-        height: Optional[int] = field(default=None),
-        width: Optional[int] = field(default=None),
+        height: Optional[int] = None,
+        width: Optional[int] = None,
         *args,
         **kwargs,
     ) -> "Video":
@@ -721,6 +1241,205 @@ class Video:
 
         # Return an ImgStoreVideo object referencing this new imgstore.
         return cls(backend=ImgStoreVideo(filename=output_filename))
+
+    def to_imgstore(
+        self,
+        path: str,
+        frame_numbers: List[int] = None,
+        format: str = "png",
+        index_by_original: bool = True,
+    ) -> "Video":
+        """Convert frames from arbitrary video backend to ImgStoreVideo.
+
+        This should facilitate conversion of any video to a loopbio imgstore.
+
+        Args:
+            path: Filename or directory name to store imgstore.
+            frame_numbers: A list of frame numbers from the video to save.
+                If None save the entire video.
+            format: By default it will create a DirectoryImgStore with lossless
+                PNG format unless the frame_indices = None, in which case,
+                it will default to 'mjpeg/avi' format for video.
+            index_by_original: ImgStores are great for storing a collection of
+                selected frames from an larger video. If the index_by_original
+                is set to True then the get_frame function will accept the
+                original frame numbers of from original video. If False,
+                then it will accept the frame index from the store directly.
+                Default to True so that we can use an ImgStoreVideo in a
+                dataset to replace another video without having to update
+                all the frame indices on :class:`LabeledFrame` objects in the dataset.
+
+        Returns:
+            A new Video object that references the imgstore.
+        """
+        # If the user has not provided a list of frames to store, store them all.
+        if frame_numbers is None:
+            frame_numbers = range(self.num_frames)
+
+            # We probably don't want to store all the frames as the PNG default,
+            # lets use MJPEG by default.
+            format = "mjpeg/avi"
+
+        # Delete the imgstore if it already exists.
+        if os.path.exists(path):
+            if os.path.isfile(path):
+                os.remove(path)
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+
+        # If the video is already an imgstore, we just need to copy it
+        # if type(self) is ImgStoreVideo:
+        #     new_backend = self.backend.copy_to(path)
+        #     return self.__class__(backend=new_backend)
+
+        store = imgstore.new_for_format(
+            format,
+            mode="w",
+            basedir=path,
+            imgshape=(self.height, self.width, self.channels),
+            chunksize=1000,
+        )
+
+        # Write the JSON for the original video object to the metadata
+        # of the imgstore for posterity
+        store.add_extra_data(source_sleap_video_obj=Video.cattr().unstructure(self))
+
+        import time
+
+        for frame_num in frame_numbers:
+            store.add_image(self.get_frame(frame_num), frame_num, time.time())
+
+        # If there are no frames to save for this video, add a dummy frame
+        # since we can't save an empty imgstore.
+        if len(frame_numbers) == 0:
+            store.add_image(
+                np.zeros((self.height, self.width, self.channels)), 0, time.time()
+            )
+
+        store.close()
+
+        # Return an ImgStoreVideo object referencing this new imgstore.
+        return self.__class__(
+            backend=ImgStoreVideo(filename=path, index_by_original=index_by_original)
+        )
+
+    def to_hdf5(
+        self,
+        path: str,
+        dataset: str,
+        frame_numbers: List[int] = None,
+        format: str = "",
+        index_by_original: bool = True,
+    ):
+        """Convert frames from arbitrary video backend to HDF5Video.
+
+        Used for building an HDF5 that holds all data needed for training.
+
+        Args:
+            path: Filename to HDF5 (which could already exist).
+            dataset: The HDF5 dataset in which to store video frames.
+            frame_numbers: A list of frame numbers from the video to save.
+                If None save the entire video.
+            format: If non-empty, then encode images in format before saving.
+                Otherwise, save numpy matrix of frames.
+            index_by_original: If the index_by_original is set to True then
+                the get_frame function will accept the original frame
+                numbers of from original video.
+                If False, then it will accept the frame index directly.
+                Default to True so that we can use resulting video in a
+                dataset to replace another video without having to update
+                all the frame indices in the dataset.
+
+        Returns:
+            A new Video object that references the HDF5 dataset.
+        """
+        # If the user has not provided a list of frames to store, store them all.
+        if frame_numbers is None:
+            frame_numbers = range(self.num_frames)
+
+        if frame_numbers:
+            frame_data = self.get_frames(frame_numbers)
+        else:
+            frame_data = np.zeros((1, 1, 1, 1))
+
+        frame_numbers_data = np.array(list(frame_numbers), dtype=int)
+
+        with h5.File(path, "a") as f:
+
+            if format:
+
+                def encode(img):
+                    _, encoded = cv2.imencode("." + format, img)
+                    return np.squeeze(encoded)
+
+                dtype = h5.special_dtype(vlen=np.dtype("int8"))
+                dset = f.create_dataset(
+                    dataset + "/video", (len(frame_numbers),), dtype=dtype
+                )
+                dset.attrs["format"] = format
+                dset.attrs["channels"] = self.channels
+                dset.attrs["height"] = self.height
+                dset.attrs["width"] = self.width
+
+                for i in range(len(frame_numbers)):
+                    dset[i] = encode(frame_data[i])
+            else:
+                f.create_dataset(
+                    dataset + "/video",
+                    data=frame_data,
+                    compression="gzip",
+                    compression_opts=9,
+                )
+
+            if index_by_original:
+                f.create_dataset(dataset + "/frame_numbers", data=frame_numbers_data)
+
+            source_video_group = f.require_group(dataset + "/source_video")
+            source_video_dict = Video.cattr().unstructure(self)
+            source_video_group.attrs["json"] = json_dumps(source_video_dict)
+
+        return self.__class__(
+            backend=HDF5Video(
+                filename=path,
+                dataset=dataset + "/video",
+                input_format="channels_last",
+                convert_range=False,
+            )
+        )
+
+    def to_pipeline(
+        self,
+        batch_size: Optional[int] = None,
+        prefetch: bool = True,
+        frame_indices: Optional[List[int]] = None,
+    ) -> "sleap.pipelines.Pipeline":
+        """Create a pipeline for reading the video.
+
+        Args:
+            batch_size: If not `None`, the video frames will be batched into rank-4
+                tensors. Otherwise, single rank-3 images will be returned.
+            prefetch: If `True`, pipeline will include prefetching.
+            frame_indices: Frame indices to limit the pipeline reader to. If not
+                specified (default), pipeline will read the entire video.
+
+        Returns:
+            A `sleap.pipelines.Pipeline` that builds `tf.data.Dataset` for high
+            throughput I/O during inference.
+
+        See also: sleap.pipelines.VideoReader
+        """
+        from sleap.nn.data import pipelines
+
+        pipeline = pipelines.Pipeline(
+            pipelines.VideoReader(self, example_indices=frame_indices)
+        )
+        if batch_size is not None:
+            pipeline += pipelines.Batcher(
+                batch_size=batch_size, drop_remainder=False, unrag=False
+            )
+
+        pipeline += pipelines.Prefetcher()
+        return pipeline
 
     @staticmethod
     def make_specific_backend(backend_class, kwargs):
@@ -823,9 +1542,9 @@ class Video:
 
 def load_video(
     filename: str,
-    grayscale: Optional[bool] = field(default=None),
+    grayscale: Optional[bool] = None,
     dataset=Optional[None],
-    channels_first: bool = field(default=False),
+    channels_first: bool = False,
 ) -> Video:
     """Open a video from disk.
 
