@@ -9,11 +9,13 @@ from __future__ import annotations
 from attrs import define, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, Text
 from itertools import count
-import networkx as nx
+
+# import networkx as nx
 import numpy as np
 
 NodeRef = Union[str, "Node"]
 skeleton_idx = count(0)
+
 
 @define
 class Node:
@@ -59,6 +61,13 @@ class Edge:
             edges.append(Edge(source=edge[0], destination=edge[1]))
         return edges
 
+@define 
+class Symmetry:
+    """SYMMETRY - these edges represent symmetrical relationships
+    between parts (e.g. left and right arms)
+    """
+
+    pair: Tuple(Node, Node)
 
 @define
 class Skeleton:
@@ -77,6 +86,7 @@ class Skeleton:
 
     nodes: list[Node]
     edges: list[Edge]
+    symmetries: list[Symmetry]
     name: Optional[str] = field(default=None)
 
     @staticmethod
@@ -87,15 +97,15 @@ class Skeleton:
             edges=Edge.from_names(edges),
             name="Skeleton-" + str(next(skeleton_idx)),
         )
-    
-    def graph (self):
-        graph = nx.MultiDiGraph()
-        for Node in self.nodes:
-            graph.add_node(Node.name)
-        for Edge in self.edges:
-            graph.add_edge(Edge.source.name, Edge.destination.name)
-        graph.name = self.name
-        return graph
+
+    # def graph(self):
+    #     graph = nx.MultiDiGraph()
+    #     for Node in self.nodes:
+    #         graph.add_node(Node.name)
+    #     for Edge in self.edges:
+    #         graph.add_edge(Edge.source.name, Edge.destination.name)
+    #     graph.name = self.name
+    #     return graph
 
 
 # e.g.
