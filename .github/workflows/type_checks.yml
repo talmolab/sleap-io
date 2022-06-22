@@ -29,8 +29,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install mypy
-          pip install types-attrs
+          pip install .[type_check]
 
       - name: Run MyPy
         run: |
