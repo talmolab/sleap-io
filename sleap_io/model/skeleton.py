@@ -62,15 +62,6 @@ class Edge:
 
 
 @define
-class Symmetry:
-    """SYMMETRY - these edges represent symmetrical relationships
-    between parts (e.g. left and right arms)
-    """
-
-    pair: Tuple[Node, Node] = field()
-
-
-@define
 class Skeleton:
     """A description of a set of landmark types and connections between them.
 
@@ -87,7 +78,7 @@ class Skeleton:
 
     nodes: list[Node] = field()
     edges: list[Edge] = field()
-    symmetries: Optional[list[Symmetry]] = field(default=None)
+    symmetries: Optional[list[Tuple[Node, Node]]] = field(default=None)
     name: Optional[str] = field(default=None)
 
     @staticmethod
@@ -113,7 +104,7 @@ class Skeleton:
 
 skeleton = Skeleton.from_names(
     nodes=["head", "thorax", "abdomen"],
-    edges=[("head", "thorax"), ("thorax", "abdomen")]
+    edges=[("head", "thorax"), ("thorax", "abdomen")],
 )
 
 print(skeleton)

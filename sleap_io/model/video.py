@@ -71,7 +71,6 @@ class HDF5Video:
         self.__dataset_h5 = None
         self.__tried_to_load = False
 
-
     @property
     def test_frame(self):
         # Load if not already loaded
@@ -123,7 +122,6 @@ class HDF5Video:
     def dtype(self):
         """See :class:`Video`."""
         return self.test_frame.dtype
-
 
 
 @define
@@ -274,7 +272,6 @@ class NumpyVideo:
     def dtype(self):
         """See :class:`Video`."""
         return self.__data.dtype
-
 
 
 @define
@@ -479,7 +476,6 @@ class Video:
     def num_frames(self) -> int:
         """Return the number of frames in the video."""
         return self.frames
-
 
     @property
     def shape(
