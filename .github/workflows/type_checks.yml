@@ -29,8 +29,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install mypy
-          pip install attrs>=21.2.0
+          pip install .[type_check]
 
       - name: Run MyPy
         run: |
