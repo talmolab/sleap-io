@@ -28,7 +28,7 @@ class Node:
         name: Descriptive label for the landmark.
     """
 
-    name: str
+    name: str = field()
 
     @staticmethod
     def from_names(name_list: List[str]) -> List["Node"]:
@@ -50,8 +50,8 @@ class Edge:
         destination: The destination `Node`.
     """
 
-    source: Node
-    destination: Node
+    source: Node = field()
+    destination: Node = field()
 
     @staticmethod
     def from_names(edge_list: List[Tuple[str]]) -> List["Edge"]:
@@ -67,7 +67,7 @@ class Symmetry:
     between parts (e.g. left and right arms)
     """
 
-    pair: Tuple[Node, Node]
+    pair: Tuple[Node, Node] = field()
 
 
 @define
@@ -85,8 +85,8 @@ class Skeleton:
 
     _skeleton_idx = count(0)
 
-    nodes: list[Node]
-    edges: list[Edge]
+    nodes: list[Node] = field()
+    edges: list[Edge] = field()
     symmetries: Optional[list[Symmetry]] = field(default=None)
     name: Optional[str] = field(default=None)
 
