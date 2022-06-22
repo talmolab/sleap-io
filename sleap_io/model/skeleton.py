@@ -31,7 +31,7 @@ class Node:
     name: str
 
     @staticmethod
-    def from_names(name_list: list) -> List["Node"]:
+    def from_names(name_list: List[str]) -> List["Node"]:
         """Convert list of node names to list of nodes objects."""
         nodes = []
         for name in name_list:
@@ -55,19 +55,20 @@ class Edge:
 
     @staticmethod
     def from_names(edge_list: List[Tuple[str]]) -> List["Edge"]:
-        edges = []
+        edges = list()
         for edge in edge_list:
-            edge = Node.from_names(edge)
-            edges.append(Edge(source=edge[0], destination=edge[1]))
+            edges.append(Edge(source=Node(edge[0]), destination=Node(edge[1])))
         return edges
 
-@define 
+
+@define
 class Symmetry:
     """SYMMETRY - these edges represent symmetrical relationships
     between parts (e.g. left and right arms)
     """
 
-    pair: Tuple(Node, Node)
+    pair: Tuple[Node, Node]
+
 
 @define
 class Skeleton:
@@ -86,7 +87,7 @@ class Skeleton:
 
     nodes: list[Node]
     edges: list[Edge]
-    symmetries: list[Symmetry]
+    symmetries: Optional[list[Symmetry]] = field(default=None)
     name: Optional[str] = field(default=None)
 
     @staticmethod
@@ -115,4 +116,4 @@ class Skeleton:
 #     edges=[("head", "thorax"), ("thorax", "abdomen")]
 # )
 
-# print(skeleton.graph())
+# print(skeleton)
