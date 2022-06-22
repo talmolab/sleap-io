@@ -33,7 +33,7 @@ class Node:
     @staticmethod
     def from_names(name_list: List[str]) -> List["Node"]:
         """Convert list of node names to list of nodes objects."""
-        nodes = []
+        nodes = list()
         for name in name_list:
             nodes.append(Node(name))
         return nodes
@@ -54,7 +54,7 @@ class Edge:
     destination: Node = field()
 
     @staticmethod
-    def from_names(edge_list: List[Tuple[str]]) -> List["Edge"]:
+    def from_names(edge_list: List[Tuple[str, str]]) -> List["Edge"]:
         edges = list()
         for edge in edge_list:
             edges.append(Edge(source=Node(edge[0]), destination=Node(edge[1])))
@@ -91,7 +91,7 @@ class Skeleton:
     name: Optional[str] = field(default=None)
 
     @staticmethod
-    def from_names(nodes: List[str], edges: List[Tuple[str]]):
+    def from_names(nodes: List[str], edges: List[Tuple[str, str]]):
 
         return Skeleton(
             nodes=Node.from_names(nodes),
@@ -111,9 +111,9 @@ class Skeleton:
 
 # e.g.
 
-# skeleton = Skeleton.from_names(
-#     nodes=["head", "thorax", "abdomen"],
-#     edges=[("head", "thorax"), ("thorax", "abdomen")]
-# )
+skeleton = Skeleton.from_names(
+    nodes=["head", "thorax", "abdomen"],
+    edges=[("head", "thorax"), ("thorax", "abdomen")]
+)
 
-# print(skeleton)
+print(skeleton)
