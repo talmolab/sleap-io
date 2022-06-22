@@ -1,10 +1,9 @@
 from __future__ import annotations
 from attrs import define, validators
-import attrs
 import attr
 from typing import List, Optional, Tuple, Union, Dict
 from video import Video
-from skeleton import Skeleton, Node, Edge
+from skeleton import Skeleton, Node
 import numpy as np
 import math
 
@@ -50,7 +49,13 @@ class PredictedPoint(Point):
         Returns:
             A scored point based on the point passed in.
         """
-        return cls(**{**Point.asdict(point), "score": score})
+        return cls(
+            x=point.x,
+            y=point.y,
+            visible=point.visible,
+            complete=point.complete,
+            score=score,
+        )
 
 
 # "By default, two instances of attrs classes are equal if all their fields are equal."
@@ -95,13 +100,10 @@ class Instance:
     """
 
     skeleton: Skeleton = attr.ib(validator=validators.instance_of(Skeleton))
-    points: Dict[Node, Point] = attr.ib(default=None)
+    points: Union[Dict[Node, Point], Dict[Node, PredictedPoint]] = attr.ib(default=None)
     track: Optional[Track] = None
     frame: Union[LabeledFrame, None] = None
-    from_predicted: Optional[PredictedInstance] = attr.ib(
-        default=None,
-        validator=validators.optional(validators.instance_of(PredictedInstance)),
-    )
+    from_predicted: Optional[PredictedInstance] = attr.ib(default=None)
 
     @points.validator
     def _validate_all_points(self, attribute, points: Dict[Node, Point]):
@@ -139,6 +141,22 @@ class Instance:
                 attribute,
                 dict,
                 points,
+            )
+
+    @from_predicted.validator
+    def _validate_type_is_PredictedInstance(self, attribute, value):
+        if (value is not None) and (not isinstance(value, PredictedInstance)):
+            raise TypeError(
+                "'{name}' must be {type!r} (got {value!r} that is a "
+                "{actual!r}).".format(
+                    name=attribute.name,
+                    type=self.type,
+                    actual=value.__class__,
+                    value=value,
+                ),
+                attribute,
+                self.type,
+                value,
             )
 
     @classmethod
@@ -180,14 +198,14 @@ class PredictedInstance(Instance):
         tracking_score: The instance-level track matching score.
     """
 
+    from_predicted: Optional[PredictedInstance] = attr.ib(
+        default=None, validator=validators.instance_of(type(None))
+    )
     score: float = attr.ib(default=0.0, converter=float)
     tracking_score: float = attr.ib(default=0.0, converter=float)
-    from_predicted: Optional[PredictedInstance] = attr.ib(
-        validator=validators.instance_of(type(None))
-    )
 
     @classmethod
-    def from_instance(cls, instance: Instance, score: float) -> "PredictedInstance":
+    def from_instance(cls, instance: Instance, score: float) -> PredictedInstance:
         """Create a `PredictedInstance` from an `Instance`.
 
         The fields are copied in a shallow manner with the exception of points. For each
@@ -262,12 +280,7 @@ class LabeledFrame:
         instances: List of instances associated with the frame.
     """
 
-    video: Video
-    frame_idx: int
-    instances: Union[List[Instance], List[PredictedInstance]] = attr.Factory(list)
-
-    @instances.setter
-    def instances(self, instances: List[Instance]):
+    def _set_instance_frame(self, attribute, new_instances: List[Instance]):
         """Set the list of instances associated with this frame.
 
         Updates the `frame` attribute on each instance to the
@@ -283,7 +296,13 @@ class LabeledFrame:
         """
 
         # Make sure to set the frame for each instance to this LabeledFrame
-        for instance in instances:
+        for instance in new_instances:
             instance.frame = self
 
-        self.instances = instances
+        self.instances = new_instances
+
+    video: Video
+    frame_idx: int
+    instances: Union[List[Instance], List[PredictedInstance]] = attr.ib(
+        factory=List[Instance], on_setattr=_set_instance_frame
+    )
