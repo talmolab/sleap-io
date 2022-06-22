@@ -30,7 +30,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install mypy
-          pip install types-attrs
           pip install attrs>=21.2.0
 
       - name: Run MyPy
