@@ -79,10 +79,6 @@ class Skeleton:
     edges: list[Edge]
     name: Optional[str] = field(default=None)
 
-
-    
-
-
     @staticmethod
     def from_names(nodes: List[str], edges: List[Tuple[str]]):
 
