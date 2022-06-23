@@ -100,13 +100,13 @@ class Instance:
     """
 
     skeleton: Skeleton = attr.ib(validator=validators.instance_of(Skeleton))
-    points: Union[Dict[Node, Point], Dict[Node, PredictedPoint]] = attr.ib(default=None)
+    points: Union[Dict[str, Point], Dict[str, PredictedPoint]] = attr.ib(default=None)
     track: Optional[Track] = None
     frame: Union[LabeledFrame, None] = None
     from_predicted: Optional[PredictedInstance] = attr.ib(default=None)
 
     @points.validator
-    def _validate_all_points(self, attribute, points: Dict[Node, Point]):
+    def _validate_all_points(self, attribute, points: Dict[str, Point]):
         """Validation method called by attrs.
 
         Checks that all the _points defined for the skeleton are found
@@ -126,7 +126,7 @@ class Instance:
         if points is not None:
             try:
                 for node_name in points.keys():
-                    if node_name not in self.skeleton.nodes:
+                    if Node(node_name) not in self.skeleton.nodes:
                         raise KeyError(
                             f"There is no node named {node_name} in {self.skeleton}"
                         )
@@ -178,9 +178,9 @@ class Instance:
             A new `Instance` object.
         """
         predicted_points = dict()
-        node_list: List[Node] = list(skeleton.nodes)
+        node_names: List[str] = [node.name for node in skeleton.nodes]
         # TODO(LM): Ensure ordering of nodes and points match up.
-        for point, node_name in zip(points, node_list):
+        for point, node_name in zip(points, node_names):
             if np.isnan(point).any():
                 continue
 
@@ -254,8 +254,8 @@ class PredictedInstance(Instance):
             A new `PredictedInstance`.
         """
         predicted_points = dict()
-        node_list: List[Node] = list(skeleton.nodes)
-        for point, confidence, node_name in zip(points, point_confidences, node_list):
+        node_names: List[str] = [node.name for node in skeleton.nodes]
+        for point, confidence, node_name in zip(points, point_confidences, node_names):
             if np.isnan(point).any():
                 continue
 
@@ -295,12 +295,13 @@ class LabeledFrame:
         Returns:
             None
         """
-
         # Make sure to set the frame for each instance to this LabeledFrame
         for instance in new_instances:
             instance.frame = self
 
-        self.instances = new_instances
+        print(f"{attribute}")
+
+        # attribute.value = new_instances
 
     video: Video
     frame_idx: int
