@@ -2,8 +2,8 @@ from __future__ import annotations
 from attrs import define, validators
 import attr
 from typing import List, Optional, Tuple, Union, Dict
-from video import Video
-from skeleton import Skeleton, Node
+from sleap_io.model.video import Video
+from sleap_io.model.skeleton import Skeleton, Node
 import numpy as np
 import math
 

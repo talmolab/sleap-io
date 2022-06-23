@@ -13,10 +13,9 @@ from sleap_io.model.video import (
 
 
 def test_defaults():
+
     dummy_ = DummyVideo()
-    hdf5_ = HDF5Video()
-    numpy_ = NumpyVideo()
-    median_ = MediaVideo()
+    media_ = MediaVideo()
     imgstore_ = ImgStoreVideo()
     single_ = SingleImageVideo()
 
@@ -29,15 +28,6 @@ def test_defaults():
     assert dummy_.channels == 1
     assert dummy_.dummy == True
 
-    # Hdf5
-
-    assert hdf5_.filename == None
-    assert hdf5_.dataset == None
-    assert hdf5_.input_format == "channels_last"
-    assert hdf5_.convert_range == True
-
-    # Numpy
-
     # Imgstore
 
     assert imgstore_.filename == None
@@ -47,11 +37,11 @@ def test_defaults():
 
     # SingleImageVideo
 
-    assert single_.filenamestr == None
-    assert type(single_.filenameslist) == list
-    assert single_.height_int == None
-    assert single_.width_int == None
-    assert single_.channels_int == None
+    assert single_.filename == None
+    assert type(single_.filenames) == list
+    assert single_.height_ == None
+    assert single_.width_ == None
+    assert single_.channels_ == None
 
     # class: Video
 
