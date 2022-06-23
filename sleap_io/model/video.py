@@ -11,7 +11,8 @@ from typing import Any, List, Optional, Tuple, Union, Dict
 import h5py as h5
 import numpy as np
 import os
-import cv2
+
+# import cv2
 
 
 @define
@@ -212,32 +213,32 @@ class MediaVideo:
             self._lock = multiprocessing.RLock()
         return self._lock
 
-    @property
-    def __reader(self):
-        # Load if not already loaded
-        if self._reader_ is None:
-            if not os.path.isfile(self.filename):
-                raise FileNotFoundError(
-                    f"Could not find filename video filename named {self.filename}"
-                )
+    # @property
+    # def __reader(self):
+    #     # Load if not already loaded
+    #     if self._reader_ is None:
+    #         if not os.path.isfile(self.filename):
+    #             raise FileNotFoundError(
+    #                 f"Could not find filename video filename named {self.filename}"
+    #             )
 
-            # Try and open the file either locally in current directory or with full
-            # path
-            self._reader_ = cv2.VideoCapture(self.filename)
+    #         # Try and open the file either locally in current directory or with full
+    #         # path
+    #         self._reader_ = cv2.VideoCapture(self.filename)
 
-            # If the user specified None for grayscale bool, figure it out based on the
-            # the first frame of data.
-            if self._detect_grayscale is True:
-                self.grayscale = bool(
-                    np.alltrue(self.test_frame[..., 0] == self.test_frame[..., -1])
-                )
+    #         # If the user specified None for grayscale bool, figure it out based on the
+    #         # the first frame of data.
+    #         if self._detect_grayscale is True:
+    #             self.grayscale = bool(
+    #                 np.alltrue(self.test_frame[..., 0] == self.test_frame[..., -1])
+    #             )
 
-        # Return cached reader
-        return self._reader_
+    #     # Return cached reader
+    #     return self._reader_
 
-    @property
-    def __frames_float(self):
-        return self.__reader.get(cv2.CAP_PROP_FRAME_COUNT)
+    # @property
+    # def __frames_float(self):
+    #     return self.__reader.get(cv2.CAP_PROP_FRAME_COUNT)
 
     @property
     def test_frame(self):
@@ -249,10 +250,10 @@ class MediaVideo:
         # Return stored test frame
         return self._test_frame_
 
-    @property
-    def fps(self) -> float:
-        """Returns frames per second of video."""
-        return self.__reader.get(cv2.CAP_PROP_FPS)
+    # @property
+    # def fps(self) -> float:
+    #     """Returns frames per second of video."""
+    #     return self.__reader.get(cv2.CAP_PROP_FPS)
 
     # The properties and methods below complete our contract with the
     # higher level Video interface.
