@@ -123,25 +123,26 @@ class Instance:
             TypeError: With a human readable error message, the attribute (of type
                 attrs.Attribute), the expected type, and the value it got.
         """
-        try:
-            for node_name in points.keys():
-                if node_name not in self.skeleton.nodes:
-                    raise KeyError(
-                        f"There is no node named {node_name} in {self.skeleton}"
-                    )
-        except AttributeError:
-            raise TypeError(
-                "'{name}' must be {type!r} (got {value!r} that is a "
-                "{actual!r}).".format(
-                    name=attribute.name,
-                    type=dict,
-                    actual=points.__class__,
-                    value=points,
-                ),
-                attribute,
-                dict,
-                points,
-            )
+        if points is not None:
+            try:
+                for node_name in points.keys():
+                    if node_name not in self.skeleton.nodes:
+                        raise KeyError(
+                            f"There is no node named {node_name} in {self.skeleton}"
+                        )
+            except AttributeError:
+                raise TypeError(
+                    "'{name}' must be {type!r} (got {value!r} that is a "
+                    "{actual!r}).".format(
+                        name=attribute.name,
+                        type=dict,
+                        actual=points.__class__,
+                        value=points,
+                    ),
+                    attribute,
+                    dict,
+                    points,
+                )
 
     @from_predicted.validator
     def _validate_type_is_PredictedInstance(self, attribute, value):
@@ -177,9 +178,9 @@ class Instance:
             A new `Instance` object.
         """
         predicted_points = dict()
-        node_names: List[str] = [node.name for node in skeleton.nodes]
+        node_list: List[Node] = list(skeleton.nodes)
         # TODO(LM): Ensure ordering of nodes and points match up.
-        for point, node_name in zip(points, node_names):
+        for point, node_name in zip(points, node_list):
             if np.isnan(point).any():
                 continue
 
@@ -253,8 +254,8 @@ class PredictedInstance(Instance):
             A new `PredictedInstance`.
         """
         predicted_points = dict()
-        node_names = [node.name for node in skeleton.nodes]
-        for point, confidence, node_name in zip(points, point_confidences, node_names):
+        node_list: List[Node] = list(skeleton.nodes)
+        for point, confidence, node_name in zip(points, point_confidences, node_list):
             if np.isnan(point).any():
                 continue
 
