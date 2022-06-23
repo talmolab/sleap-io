@@ -126,7 +126,6 @@ class HDF5Video:
 
                 self._source_video = Video.cattr().structure(d, Video)
 
-
     @property
     def test_frame(self):
         # Load if not already loaded
@@ -500,6 +499,7 @@ class SingleImageVideo:
         """See :class:`Video`."""
         return self.__data.dtype
 
+
 @define
 class Video:
     """
@@ -671,7 +671,6 @@ class Video:
 
         return cls(backend=cls.make_specific_backend(backend_class, kwargs))
 
-
     @classmethod
     def from_hdf5(
         cls,
@@ -704,6 +703,7 @@ class Video:
             convert_range=convert_range,
         )
         return cls(backend=backend)
+
 
 def load_video(
     filename: str,
@@ -745,7 +745,7 @@ def load_video(
     See also:
         sleap.io.video.Video
     """
-    kwargs = {} # type: Dict[str, Any]
+    kwargs = {}  # type: Dict[str, Any]
     if grayscale is not None:
         kwargs["grayscale"] = grayscale
     if dataset is not None:
