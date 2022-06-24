@@ -14,7 +14,7 @@ import numpy as np
 skeleton_idx = count(0)
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class Node:
     """A landmark type within a `Skeleton`.
 
@@ -36,7 +36,7 @@ class Node:
         return nodes
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class Edge:
     """A connection between two nodes within a `Skeleton`.
 
@@ -58,7 +58,7 @@ class Edge:
         return edges
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class Skeleton:
     """A description of a set of landmark types and connections between them.
 

@@ -8,7 +8,7 @@ import numpy as np
 import math
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class Point:
     """A labeled point and any metadata associated with it.
 
@@ -25,7 +25,7 @@ class Point:
     complete: bool = attr.ib(default=False, kw_only=True)
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class PredictedPoint(Point):
     """A predicted point is an output of the inference procedure.
 
@@ -58,7 +58,7 @@ class PredictedPoint(Point):
 
 
 # "By default, two instances of attrs classes are equal if all their fields are equal."
-@define(auto_atrribs=True, eq=True)
+@define(auto_attribs=True, eq=True)
 class Track:
     """A track object is associated with a set of animal/object instances
     across multiple frames of video. This allows tracking of unique
@@ -78,7 +78,7 @@ class Track:
 # that are created in post init so they are not serialized.
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class Instance:
     """This class represents a labeled instance.
 
@@ -187,7 +187,7 @@ class Instance:
         return cls(points=predicted_points, skeleton=skeleton, track=track)
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class PredictedInstance(Instance):
     """A predicted instance is an output of the inference procedure.
 
@@ -268,7 +268,7 @@ class PredictedInstance(Instance):
         )
 
 
-@define(auto_atrribs=True)
+@define(auto_attribs=True)
 class LabeledFrame:
     """Holds labeled data for a single frame of a video.
 

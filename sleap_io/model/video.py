@@ -304,10 +304,9 @@ class Video:
     @classmethod
     def from_hdf5(
         cls,
-        dataset: Union[str, h5.Dataset],
         filename: str,
-        input_format: str = "channels_last",
-        convert_range: bool = True,
+        shape: Tuple[int, int, int, int],
+        backend: Any,
     ) -> Video:
         """
         Create an instance of a video object from an HDF5 file and dataset.
@@ -328,8 +327,7 @@ class Video:
         filename = Video.fixup_path(filename)
         backend = HDF5Video(
             filename=filename,
-            dataset=dataset,
-            input_format=input_format,
-            convert_range=convert_range,
+            shape=shape,
+            backend=backend,
         )
         return cls(backend=backend)
