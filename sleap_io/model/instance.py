@@ -8,7 +8,7 @@ import numpy as np
 import math
 
 
-@define
+@define(auto_atrribs=True)
 class Point:
     """A labeled point and any metadata associated with it.
 
@@ -25,7 +25,7 @@ class Point:
     complete: bool = attr.ib(default=False, kw_only=True)
 
 
-@define
+@define(auto_atrribs=True)
 class PredictedPoint(Point):
     """A predicted point is an output of the inference procedure.
 
@@ -39,8 +39,7 @@ class PredictedPoint(Point):
 
     @classmethod
     def from_point(cls, point: Point, score: float = 0.0) -> PredictedPoint:
-        """
-        Create a PredictedPoint from a Point
+        """Create a PredictedPoint from a Point
 
         Args:
             point: The point to copy all data from.
@@ -59,10 +58,9 @@ class PredictedPoint(Point):
 
 
 # "By default, two instances of attrs classes are equal if all their fields are equal."
-@define(eq=True)
+@define(auto_atrribs=True, eq=True)
 class Track:
-    """
-    A track object is associated with a set of animal/object instances
+    """A track object is associated with a set of animal/object instances
     across multiple frames of video. This allows tracking of unique
     entities in the video over time and space.
 
@@ -80,7 +78,7 @@ class Track:
 # that are created in post init so they are not serialized.
 
 
-@define
+@define(auto_atrribs=True)
 class Instance:
     """This class represents a labeled instance.
 
@@ -189,10 +187,9 @@ class Instance:
         return cls(points=predicted_points, skeleton=skeleton, track=track)
 
 
-@define
+@define(auto_atrribs=True)
 class PredictedInstance(Instance):
-    """
-    A predicted instance is an output of the inference procedure.
+    """A predicted instance is an output of the inference procedure.
 
     Args:
         score: The instance-level grouping prediction score.
@@ -271,7 +268,7 @@ class PredictedInstance(Instance):
         )
 
 
-@define
+@define(auto_atrribs=True)
 class LabeledFrame:
     """Holds labeled data for a single frame of a video.
 

@@ -12,31 +12,21 @@ import h5py as h5
 import numpy as np
 import os
 
-# import cv2
-
 
 @define
 class DummyVideo:
-    """
-    Fake video backend,returns frames with all zeros.
+    """Fake video backend,returns frames with all zeros.
 
     This can be useful when you want to look at labels for a dataset but don't
     have access to the real video.
     """
 
-    filename: str = field(default="")
-    height: int = field(default=2000)
-    width: int = field(default=2000)
-    frames: int = field(default=10000)
-    channels: int = field(default=1)
-    dummy: bool = field(default=True)
-
-    @property
-    def test_frame(self):
-        return self.get_frame(0)
-
-    def get_frame(self, idx) -> np.ndarray:
-        return np.zeros((self.height, self.width, self.channels))
+    filename: str = ""
+    height: int = 2000
+    width: int = 2000
+    frames: int = 10000
+    channels: int = 1
+    dummy: bool = True
 
 
 @define(auto_attribs=True, eq=False)
@@ -59,125 +49,9 @@ class HDF5Video:
         convert_range: Whether we should convert data to [0, 255]-range
     """
 
-    filename: str = field(default=None)
-    dataset: str = field(default=None)
-    input_format: str = "channels_last"
-    convert_range: bool = field(default=True)
-
-    def __attrs_post_init__(self):
-        """Called by attrs after __init__()."""
-
-        self.enable_source_video = True
-        self._test_frame_ = None
-        self.__original_to_current_frame_idx = dict()
-        self.__dataset_h5 = None
-        self.__tried_to_load = False
-
-    def _load(self):
-        if self.__tried_to_load:
-            return
-
-        self.__tried_to_load = True
-
-        # Handle cases where the user feeds in h5.File objects instead of filename
-        if isinstance(self.filename, h5.File):
-            self.__file_h5 = self.filename
-            self.filename = self.__file_h5.filename
-        elif type(self.filename) is str:
-            try:
-                self.__file_h5 = h5.File(self.filename, "r")
-            except OSError as ex:
-                raise FileNotFoundError(
-                    f"Could not find HDF5 file {self.filename}"
-                ) from ex
-        else:
-            self.__file_h5 = None
-
-        # Handle the case when h5.Dataset is passed in
-        if isinstance(self.dataset, h5.Dataset):
-            self.__dataset_h5 = self.dataset
-            self.__file_h5 = self.__dataset_h5.file
-            self.dataset = self.__dataset_h5.name
-
-        # File loaded and dataset name given, so load dataset
-        elif isinstance(self.dataset, str) and (self.__file_h5 is not None):
-            # dataset = "video0" passed:
-            if self.dataset + "/video" in self.__file_h5:
-                self.__dataset_h5 = self.__file_h5[self.dataset + "/video"]
-                base_dataset_path = self.dataset
-            else:
-                # dataset = "video0/video" passed:
-                self.__dataset_h5 = self.__file_h5[self.dataset]
-                base_dataset_path = "/".join(self.dataset.split("/")[:-1])
-
-            # Check for frame_numbers dataset corresponding to video
-            framenum_dataset = f"{base_dataset_path}/frame_numbers"
-            if framenum_dataset in self.__file_h5:
-                original_idx_lists = self.__file_h5[framenum_dataset]
-                # Create map from idx in original video to idx in current
-                for current_idx in range(len(original_idx_lists)):
-                    original_idx = original_idx_lists[current_idx]
-                    self.__original_to_current_frame_idx[original_idx] = current_idx
-
-            source_video_group = f"{base_dataset_path}/source_video"
-            if source_video_group in self.__file_h5:
-                d = json_loads(
-                    self.__file_h5.require_group(source_video_group).attrs["json"]
-                )
-
-                self._source_video = Video.cattr().structure(d, Video)
-
-    @property
-    def test_frame(self):
-        # Load if not already loaded
-        if self._test_frame_ is None:
-            # Lets grab a test frame to help us figure things out about the video
-            self._test_frame_ = self.get_frame(self.last_frame_idx)
-
-        # Return stored test frame
-        return self._test_frame_
-
-    @property
-    def enable_source_video(self) -> bool:
-
-        """If set to `True`, will attempt to read from original video for frames not
-        saved in the file."""
-        return self._enable_source_video
-
-    @enable_source_video.setter
-    def enable_source_video(self, val: bool):
-        self._enable_source_video = val
-
-    @property
-    def frames(self):
-        """See :class:`Video`."""
-        return self.__dataset_h5.shape[0]
-
-    @property
-    def channels(self):
-        """See :class:`Video`."""
-        if "channels" in self.__dataset_h5.attrs:
-            return int(self.__dataset_h5.attrs["channels"])
-        return self.__dataset_h5.shape[self.__channel_idx]
-
-    @property
-    def width(self):
-        """See :class:`Video`."""
-        if "width" in self.__dataset_h5.attrs:
-            return int(self.__dataset_h5.attrs["width"])
-        return self.__dataset_h5.shape[self.__width_idx]
-
-    @property
-    def height(self):
-        """See :class:`Video`."""
-        if "height" in self.__dataset_h5.attrs:
-            return int(self.__dataset_h5.attrs["height"])
-        return self.__dataset_h5.shape[self.__height_idx]
-
-    @property
-    def dtype(self):
-        """See :class:`Video`."""
-        return self.test_frame.dtype
+    filename: str
+    shape: Tuple[int, int, int, int]
+    backend: Any
 
 
 @define
@@ -196,95 +70,8 @@ class MediaVideo:
     """
 
     filename: str
-    grayscale: bool
-    bgr: bool = True
-
-    # Unused attributes still here so we don't break deserialization
-    dataset: str = ""
-    input_format: str = ""
-
-    _detect_grayscale = False
-    _reader_ = field(default=None)
-    _test_frame_ = field(default=None)
-
-    @property
-    def __lock(self):
-        if not hasattr(self, "_lock"):
-            self._lock = multiprocessing.RLock()
-        return self._lock
-
-    # @property
-    # def __reader(self):
-    #     # Load if not already loaded
-    #     if self._reader_ is None:
-    #         if not os.path.isfile(self.filename):
-    #             raise FileNotFoundError(
-    #                 f"Could not find filename video filename named {self.filename}"
-    #             )
-
-    #         # Try and open the file either locally in current directory or with full
-    #         # path
-    #         self._reader_ = cv2.VideoCapture(self.filename)
-
-    #         # If the user specified None for grayscale bool, figure it out based on the
-    #         # the first frame of data.
-    #         if self._detect_grayscale is True:
-    #             self.grayscale = bool(
-    #                 np.alltrue(self.test_frame[..., 0] == self.test_frame[..., -1])
-    #             )
-
-    #     # Return cached reader
-    #     return self._reader_
-
-    # @property
-    # def __frames_float(self):
-    #     return self.__reader.get(cv2.CAP_PROP_FRAME_COUNT)
-
-    @property
-    def test_frame(self):
-        # Load if not already loaded
-        if self._test_frame_ is None:
-            # Lets grab a test frame to help us figure things out about the video
-            self._test_frame_ = self.get_frame(0, grayscale=False)
-
-        # Return stored test frame
-        return self._test_frame_
-
-    # @property
-    # def fps(self) -> float:
-    #     """Returns frames per second of video."""
-    #     return self.__reader.get(cv2.CAP_PROP_FPS)
-
-    # The properties and methods below complete our contract with the
-    # higher level Video interface.
-
-    @property
-    def frames(self):
-        """See :class:`Video`."""
-        return int(self.__frames_float)
-
-    @property
-    def channels(self):
-        """See :class:`Video`."""
-        if self.grayscale:
-            return 1
-        else:
-            return self.test_frame.shape[2]
-
-    @property
-    def width(self):
-        """See :class:`Video`."""
-        return self.test_frame.shape[1]
-
-    @property
-    def height(self):
-        """See :class:`Video`."""
-        return self.test_frame.shape[0]
-
-    @property
-    def dtype(self):
-        """See :class:`Video`."""
-        return self.test_frame.dtype
+    shape: Tuple[int, int, int, int]
+    backend: Any
 
 
 @define
@@ -298,36 +85,9 @@ class NumpyVideo:
         * numpy data shape: (frames, height, width, channels)
     """
 
-    filename: Union[str, np.ndarray]
-
-    @property
-    def test_frame(self):
-        return self.get_frame(0)
-
-    @property
-    def frames(self):
-        """See :class:`Video`."""
-        return self.__data.shape[self.__frame_idx]
-
-    @property
-    def channels(self):
-        """See :class:`Video`."""
-        return self.__data.shape[self.__channel_idx]
-
-    @property
-    def width(self):
-        """See :class:`Video`."""
-        return self.__data.shape[self.__width_idx]
-
-    @property
-    def height(self):
-        """See :class:`Video`."""
-        return self.__data.shape[self.__height_idx]
-
-    @property
-    def dtype(self):
-        """See :class:`Video`."""
-        return self.__data.dtype
+    filename: str
+    shape: Tuple[int, int, int, int]
+    backend: Any
 
 
 @define
@@ -351,77 +111,9 @@ class ImgStoreVideo:
             indices on :class:`LabeledFrame` objects in the dataset.
     """
 
-    filename: str = field(default=None)
-    index_by_original: bool = True
-    _store_ = field(default=None)
-    _img_ = field(default=None)
-
-    @property
-    def __store(self):
-        if self._store_ is None:
-            self.open()
-        return self._store_
-
-    @__store.setter
-    def __store(self, val):
-        self._store_ = val
-
-    @property
-    def __img(self):
-        if self._img_ is None:
-            self.open()
-        return self._img_
-
-    @property
-    def frames(self):
-        """See :class:`Video`."""
-        return self.__store.frame_count
-
-    @property
-    def channels(self):
-        """See :class:`Video`."""
-        if len(self.__img.shape) < 3:
-            return 1
-        else:
-            return self.__img.shape[2]
-
-    @property
-    def width(self):
-        """See :class:`Video`."""
-        return self.__img.shape[1]
-
-    @property
-    def height(self):
-        """See :class:`Video`."""
-        return self.__img.shape[0]
-
-    @property
-    def dtype(self):
-        """See :class:`Video`."""
-        return self.__img.dtype
-
-    @property
-    def last_frame_idx(self) -> int:
-        """
-        The idx number of the last frame.
-
-        Overrides method of base :class:`Video` class for videos with
-        select frames indexed by number from original video, since the last
-        frame index here will not match the number of frames in video.
-        """
-        if self.index_by_original:
-            return self.__store.frame_max
-        return self.frames - 1
-
-    @property
-    def imgstore(self):
-        """
-        Get the underlying ImgStore object for this Video.
-
-        Returns:
-            The imgstore that is backing this video object.
-        """
-        return self.__store
+    filename: str
+    shape: Tuple[int, int, int, int]
+    backend: Any
 
 
 @define
@@ -433,72 +125,9 @@ class SingleImageVideo:
         filenames: Files to load as video.
     """
 
-    filename: Optional[str] = field(default=None)
-    filenames: Optional[list] = field(default=Factory(list))
-    height_: Optional[int] = field(default=None)
-    width_: Optional[int] = field(default=None)
-    channels_: Optional[int] = field(default=None)
-
-    def _load_idx(self, idx):
-        img = cv2.imread(self._get_filename(idx))
-
-        if img.shape[2] == 3:
-            # OpenCV channels are in BGR order, so we should convert to RGB
-            img = img[:, :, ::-1]
-        return img
-
-    def _load_test_frame(self):
-        if self.test_frame_ is None:
-            self.test_frame_ = self._load_idx(0)
-
-            if self.height_ is None:
-                self.height_ = self.test_frame.shape[0]
-            if self.width_ is None:
-                self.width_ = self.test_frame.shape[1]
-            if self.channels_ is None:
-                self.channels_ = self.test_frame.shape[2]
-
-    @property
-    def frames(self):
-        """See :class:`Video`."""
-        return len(self.filenames)
-
-    @property
-    def channels(self):
-        """See :class:`Video`."""
-        if self.channels_ is None:
-            self._load_test_frame()
-
-        return self.channels_
-
-    @property
-    def width(self):
-        """See :class:`Video`."""
-        if self.width_ is None:
-            self._load_test_frame()
-
-        return self.width_
-
-    @width.setter
-    def width(self, val):
-        self.width_ = val
-
-    @property
-    def height(self):
-        """See :class:`Video`."""
-        if self.height_ is None:
-            self._load_test_frame()
-
-        return self.height_
-
-    @height.setter
-    def height(self, val):
-        self.height_ = val
-
-    @property
-    def dtype(self):
-        """See :class:`Video`."""
-        return self.__data.dtype
+    filename: str
+    shape: Tuple[int, int, int, int]
+    backend: Any
 
 
 @define

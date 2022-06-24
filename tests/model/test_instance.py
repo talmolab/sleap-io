@@ -79,5 +79,7 @@ def test_classes():
 
     assert labeledframe_.video == dummy_
     assert labeledframe_.instances == [instance1]
-    # labeledframe_.instances = [instance2]
+    print(labeledframe_.instances)
+    labeledframe_.instances = [instance2]
+    print(labeledframe_.instances)
     # assert labeledframe_.instances == [instance2]

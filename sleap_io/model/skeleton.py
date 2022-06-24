@@ -9,15 +9,12 @@ from __future__ import annotations
 from attrs import define, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, Text
 from itertools import count
-
-# import networkx as nx
 import numpy as np
 
-NodeRef = Union[str, "Node"]
 skeleton_idx = count(0)
 
 
-@define
+@define(auto_atrribs=True)
 class Node:
     """A landmark type within a `Skeleton`.
 
@@ -28,7 +25,7 @@ class Node:
         name: Descriptive label for the landmark.
     """
 
-    name: str = field()
+    name: str
 
     @staticmethod
     def from_names(name_list: List[str]) -> List["Node"]:
@@ -39,7 +36,7 @@ class Node:
         return nodes
 
 
-@define
+@define(auto_atrribs=True)
 class Edge:
     """A connection between two nodes within a `Skeleton`.
 
@@ -50,8 +47,8 @@ class Edge:
         destination: The destination `Node`.
     """
 
-    source: Node = field()
-    destination: Node = field()
+    source: Node
+    destination: Node
 
     @staticmethod
     def from_names(edge_list: List[Tuple[str, str]]) -> List["Edge"]:
@@ -61,7 +58,7 @@ class Edge:
         return edges
 
 
-@define
+@define(auto_atrribs=True)
 class Skeleton:
     """A description of a set of landmark types and connections between them.
 
