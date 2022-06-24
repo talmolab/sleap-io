@@ -14,123 +14,6 @@ import os
 
 
 @define
-class DummyVideo:
-    """Fake video backend,returns frames with all zeros.
-
-    This can be useful when you want to look at labels for a dataset but don't
-    have access to the real video.
-    """
-
-    filename: str = ""
-    height: int = 2000
-    width: int = 2000
-    frames: int = 10000
-    channels: int = 1
-    dummy: bool = True
-
-
-@define(auto_attribs=True, eq=False)
-class HDF5Video:
-    """
-    Video data stored as 4D datasets in HDF5 files.
-
-    Args:
-        filename: The name of the HDF5 file where the dataset with video data
-            is stored.
-        dataset: The name of the HDF5 dataset where the video data is stored.
-        file_h5: The h5.File object that the underlying dataset is stored.
-        dataset_h5: The h5.Dataset object that the underlying data is stored.
-        input_format: A string value equal to either "channels_last" or
-            "channels_first".
-            This specifies whether the underlying video data is stored as:
-
-                * "channels_first": shape = (frames, channels, height, width)
-                * "channels_last": shape = (frames, height, width, channels)
-        convert_range: Whether we should convert data to [0, 255]-range
-    """
-
-    filename: str
-    shape: Tuple[int, int, int, int]
-    backend: Any
-
-
-@define
-class MediaVideo:
-    """
-    Video data stored in traditional media formats readable by FFMPEG
-
-    This class provides bare minimum read only interface on top of
-    OpenCV's VideoCapture class.
-
-    Args:
-        filename: The name of the file (.mp4, .avi, etc)
-        grayscale: Whether the video is grayscale or not. "auto" means detect
-            based on first frame.
-        bgr: Whether color channels ordered as (blue, green, red).
-    """
-
-    filename: str
-    shape: Tuple[int, int, int, int]
-    backend: Any
-
-
-@define
-class NumpyVideo:
-    """
-    Video data stored as Numpy array.
-
-    Args:
-        filename: Either a file to load or a numpy array of the data.
-
-        * numpy data shape: (frames, height, width, channels)
-    """
-
-    filename: str
-    shape: Tuple[int, int, int, int]
-    backend: Any
-
-
-@define
-class ImgStoreVideo:
-    """
-    Video data stored as an ImgStore dataset.
-
-    See: https://github.com/loopbio/imgstore
-    This class is just a lightweight wrapper for reading such datasets as
-    video sources for SLEAP.
-
-    Args:
-        filename: The name of the file or directory to the imgstore.
-        index_by_original: ImgStores are great for storing a collection of
-            selected frames from an larger video. If the index_by_original is
-            set to True then the get_frame function will accept the original
-            frame numbers of from original video. If False, then it will
-            accept the frame index from the store directly.
-            Default to True so that we can use an ImgStoreVideo in a dataset
-            to replace another video without having to update all the frame
-            indices on :class:`LabeledFrame` objects in the dataset.
-    """
-
-    filename: str
-    shape: Tuple[int, int, int, int]
-    backend: Any
-
-
-@define
-class SingleImageVideo:
-    """
-    Video wrapper for individual image files.
-
-    Args:
-        filenames: Files to load as video.
-    """
-
-    filename: str
-    shape: Tuple[int, int, int, int]
-    backend: Any
-
-
-@define
 class Video:
     """
     The top-level interface to any Video data used by SLEAP.
@@ -170,27 +53,12 @@ class Video:
 
     """
 
-    backend: Union[
-        HDF5Video, NumpyVideo, MediaVideo, ImgStoreVideo, SingleImageVideo, DummyVideo
-    ]
+    filename: str
+    shape: Tuple[int, int, int, int]
+    backend: Any
 
     def __getattr__(self, item):
         return getattr(self.backend, item)
-
-    @property
-    def num_frames(self) -> int:
-        """Return the number of frames in the video."""
-        return self.frames
-
-    @property
-    def shape(
-        self,
-    ) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[int]]:
-        """Return tuple of (frame count, height, width, channels)."""
-        try:
-            return (self.frames, self.height, self.width, self.channels)
-        except:
-            return (None, None, None, None)
 
     @staticmethod
     def make_specific_backend(backend_class, kwargs):
@@ -263,71 +131,70 @@ class Video:
                 print(f"Cannot find a video file: {path}")
             return path
 
-    @classmethod
-    def from_filename(cls, filename: str, *args, **kwargs) -> Video:
-        """Create an instance of a video object, auto-detecting the backend.
+    # @classmethod
+    # def from_filename(cls, filename: str, *args, **kwargs) -> Video:
+    #     """Create an instance of a video object, auto-detecting the backend.
 
-        Args:
-            filename: The path to the video filename.
-                Currently supported types are:
+    #     Args:
+    #         filename: The path to the video filename.
+    #             Currently supported types are:
 
-                * Media Videos - AVI, MP4, etc. handled by OpenCV directly
-                * HDF5 Datasets - .h5 files
-                * Numpy Arrays - npy files
-                * imgstore datasets - produced by loopbio's Motif recording
-                    system. See: https://github.com/loopbio/imgstore.
+    #             * Media Videos - AVI, MP4, etc. handled by OpenCV directly
+    #             * HDF5 Datasets - .h5 files
+    #             * Numpy Arrays - npy files
+    #             * imgstore datasets - produced by loopbio's Motif recording
+    #                 system. See: https://github.com/loopbio/imgstore.
 
-            args: Arguments to pass to :class:`NumpyVideo`
-            kwargs: Arguments to pass to :class:`NumpyVideo`
+    #         args: Arguments to pass to :class:`NumpyVideo`
+    #         kwargs: Arguments to pass to :class:`NumpyVideo`
 
-        Returns:
-            A Video object with the detected backend.
-        """
-        filename = Video.fixup_path(filename)
-        backend_class: Any
-        if filename.lower().endswith(("h5", "hdf5", "slp")):
-            backend_class = HDF5Video
-        elif filename.endswith(("npy")):
-            backend_class = NumpyVideo
-        elif filename.lower().endswith(("mp4", "avi", "mov")):
-            backend_class = MediaVideo
-            kwargs["dataset"] = ""  # prevent serialization from breaking
-        elif os.path.isdir(filename) or "metadata.yaml" in filename:
-            backend_class = ImgStoreVideo
-        else:
-            raise ValueError("Could not detect backend for specified filename.")
+    #     Returns:
+    #         A Video object with the detected backend.
+    #     """
+    #     filename = Video.fixup_path(filename)
+    #     backend_class: Any
+    #     if filename.lower().endswith(("h5", "hdf5", "slp")):
+    #         backend_class = HDF5Video
+    #     elif filename.endswith(("npy")):
+    #         backend_class = NumpyVideo
+    #     elif filename.lower().endswith(("mp4", "avi", "mov")):
+    #         backend_class = MediaVideo
+    #         kwargs["dataset"] = ""  # prevent serialization from breaking
+    #     elif os.path.isdir(filename) or "metadata.yaml" in filename:
+    #         backend_class = ImgStoreVideo
+    #     else:
+    #         raise ValueError("Could not detect backend for specified filename.")
 
-        kwargs["filename"] = filename
+    #     kwargs["filename"] = filename
 
-        return cls(backend=cls.make_specific_backend(backend_class, kwargs))
+    #     return cls(backend=cls.make_specific_backend(backend_class, kwargs))
 
-    @classmethod
-    def from_hdf5(
-        cls,
-        filename: str,
-        shape: Tuple[int, int, int, int],
-        backend: Any,
-    ) -> Video:
-        """
-        Create an instance of a video object from an HDF5 file and dataset.
+    # @classmethod
+    # def from_hdf5(
+    #     cls,
+    #     filename: str,
+    #     shape: Tuple[int, int, int, int],
+    # ) -> Video:
+    #     """
+    #     Create an instance of a video object from an HDF5 file and dataset.
 
-        This is a helper method that invokes the HDF5Video backend.
+    #     This is a helper method that invokes the HDF5Video backend.
 
-        Args:
-            dataset: The name of the dataset or and h5.Dataset object. If
-                filename is h5.File, dataset must be a str of the dataset name.
-            filename: The name of the HDF5 file or and open h5.File object.
-            input_format: Whether the data is oriented with "channels_first"
-                or "channels_last"
-            convert_range: Whether we should convert data to [0, 255]-range
+    #     Args:
+    #         dataset: The name of the dataset or and h5.Dataset object. If
+    #             filename is h5.File, dataset must be a str of the dataset name.
+    #         filename: The name of the HDF5 file or and open h5.File object.
+    #         input_format: Whether the data is oriented with "channels_first"
+    #             or "channels_last"
+    #         convert_range: Whether we should convert data to [0, 255]-range
 
-        Returns:
-            A Video object with HDF5Video backend.
-        """
-        filename = Video.fixup_path(filename)
-        backend = HDF5Video(
-            filename=filename,
-            shape=shape,
-            backend=backend,
-        )
-        return cls(backend=backend)
+    #     Returns:
+    #         A Video object with HDF5Video backend.
+    #     """
+    #     filename = Video.fixup_path(filename)
+    #     backend = HDF5Video(
+    #         filename=filename,
+    #         shape=shape,
+    #         backend=backend,
+    #     )
+    #     return cls(backend=backend)
