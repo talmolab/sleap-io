@@ -126,7 +126,6 @@ def read_instances(labels_path):
     instances = read_hdf5(labels_path, "instances")
     default_points = read_points(labels_path)
     pred_points = read_pred_points(labels_path)
-    # print(pd.DataFrame(instances))
     instance_objects = []
     for idx, instance in enumerate(instances):
         if instance["instance_type"] == 0:  # Normal Instance
@@ -156,18 +155,5 @@ def read_instances(labels_path):
                     score=instance["score"],
                     tracking_score=instance["tracking_score"],
                 )
-                # PredictedInstance(
-                #     skeleton=skeleton,
-                #     instance_score=instance["score"],
-                #     track=tracks[instance["track"]],
-                #     points=np.array(
-                #         pred_points[
-                #             instance["point_id_start"] : instance["point_id_end"]
-                #         ]
-                #     ),
-                # )
             )
     return instance_objects
-
-
-print((read_hdf5("predict.slp", "points")))
