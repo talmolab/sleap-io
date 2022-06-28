@@ -22,13 +22,18 @@ def test_classes(getDummyVideo):
         edges=[("head", "thorax"), ("thorax", "abdomen")],
     )
     instance1 = Instance(skeleton=skeleton_, points={"head": point_})
-    pointsarray = np.array([[1, 1], [2, 2], [3, 3]], dtype="float32")
+    pointsarray1 = np.array([[1, 1], [2, 2], [3, 3]], dtype="float32")
+    pointsarray2 = np.array(
+        [[1, 1, True, False], [2, 2, True, False], [3, 3, True, False]], dtype="float32"
+    )
     pointsconfidence = np.array([1, 2, 3], dtype="float32")
-    instance2 = Instance.from_pointsarray(points=pointsarray, skeleton=skeleton_)
+    instance2 = Instance.from_pointsarray(points=pointsarray1, skeleton=skeleton_)
+    instance3 = Instance.from_pointsarray(points=pointsarray2, skeleton=skeleton_)
+
     predinstance1 = PredictedInstance(skeleton_)
     predinstance2 = PredictedInstance.from_instance(instance1, 0.0)
     predinstance3 = PredictedInstance.from_arrays(
-        points=pointsarray,
+        points=pointsarray1,
         point_confidences=pointsconfidence,
         instance_score=0.0,
         skeleton=skeleton_,
@@ -68,8 +73,13 @@ def test_classes(getDummyVideo):
     assert instance1.track == None
     assert instance1.frame == None
     assert instance1.from_predicted == None
-    assert len(instance2.points) == 3  # Instance from_pointsarray
+    assert len(instance2.points) == 3  # Instance2 from_pointsarray
     assert instance2.skeleton == skeleton_
+    assert (
+        list(instance3.points.values())[0].visible == True
+        and list(instance3.points.values())[0].complete == False
+    )
+
     with pytest.raises(TypeError):
         Instance(skeleton=skeleton_, from_predicted="foo")
     with pytest.raises(KeyError):

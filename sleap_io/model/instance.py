@@ -178,10 +178,12 @@ class Instance:
         node_names: List[str] = [node.name for node in skeleton.nodes]
         # TODO(LM): Ensure ordering of nodes and points match up.
         for point, node_name in zip(points, node_names):
-
             if (len(point)) == 4:
                 predicted_points[node_name] = Point(
-                    x=point[0], y=point[1], visible=point[2], complete=point[3]
+                    x=point[0],
+                    y=point[1],
+                    visible=bool(point[2]),
+                    complete=bool(point[3]),
                 )
             else:
                 predicted_points[node_name] = Point(x=point[0], y=point[1])
