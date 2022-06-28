@@ -54,8 +54,8 @@ class Video:
     """
 
     filename: str
-    shape: Tuple[int, int, int, int]
-    backend: Any
+    shape: Tuple[int, int, int, int] = field(default=None)
+    backend: Any = None
 
     def __getattr__(self, item):
         return getattr(self.backend, item)

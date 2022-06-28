@@ -52,11 +52,6 @@ def read_videos(labels_path):
     return video_objects
 
 
-def read_points(labels_path):
-    points = read_hdf5(labels_path, "points")
-    return points
-
-
 def read_tracks(labels_path):
     """Read tracks dataset in a SLEAP labels file."""
     tracks = [json.loads(x) for x in read_hdf5(labels_path, "tracks_json")]
