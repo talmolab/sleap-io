@@ -182,7 +182,12 @@ class Instance:
             if np.isnan(point).any():
                 continue
 
-            predicted_points[node_name] = Point(x=point[0], y=point[1])
+            if (len(point)) == 4:
+                predicted_points[node_name] = Point(x=point[0], y=point[1])
+            else:
+                predicted_points[node_name] = Point(
+                    x=point[0], y=point[1], visible=point[2], complete=point[3]
+                )
 
         return cls(points=predicted_points, skeleton=skeleton, track=track)
 
@@ -203,7 +208,9 @@ class PredictedInstance(Instance):
     tracking_score: float = attr.ib(default=0.0, converter=float)
 
     @classmethod
-    def from_instance(cls, instance: Instance, score: float) -> PredictedInstance:
+    def from_instance(
+        cls, instance: Instance, score: float, tracking_score: float = 0.0
+    ) -> PredictedInstance:
         """Create a `PredictedInstance` from an `Instance`.
 
         The fields are copied in a shallow manner with the exception of points. For each
@@ -222,6 +229,7 @@ class PredictedInstance(Instance):
             recurse=False,
         )
         kw_args["score"] = score
+        kw_args["tracking_score"] = tracking_score
         return cls(**kw_args)
 
     @classmethod
