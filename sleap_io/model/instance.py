@@ -205,7 +205,9 @@ class PredictedInstance(Instance):
     tracking_score: float = attr.ib(default=0.0, converter=float)
 
     @classmethod
-    def from_instance(cls, instance: Instance, score: float) -> PredictedInstance:
+    def from_instance(
+        cls, instance: Instance, score: float, tracking_score: float = 0.0
+    ) -> PredictedInstance:
         """Create a `PredictedInstance` from an `Instance`.
 
         The fields are copied in a shallow manner with the exception of points. For each
@@ -224,6 +226,7 @@ class PredictedInstance(Instance):
             recurse=False,
         )
         kw_args["score"] = score
+        kw_args["tracking_score"] = tracking_score
         return cls(**kw_args)
 
     @classmethod
