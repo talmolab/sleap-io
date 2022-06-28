@@ -9,7 +9,6 @@ from sleap_io.model.instance import (
     PredictedInstance,
 )
 from sleap_io.model.skeleton import Skeleton, Node
-from attrs import define
 from tests.fixture.fixtures import getDummyVideo
 
 
