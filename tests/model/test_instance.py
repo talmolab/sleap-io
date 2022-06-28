@@ -9,88 +9,98 @@ from sleap_io.model.instance import (
     PredictedInstance,
 )
 from sleap_io.model.skeleton import Skeleton, Node
-from tests.fixture.fixtures import getDummyVideo
+from tests.fixture.fixtures import test_video
 
 
-def test_classes(getDummyVideo):
+def test_classes(test_video):
 
-    point_ = Point(x=0, y=0)
-    predpoint_ = PredictedPoint.from_point(point_)
-    track_ = Track()
-    skeleton_ = Skeleton.from_names(
+    point = Point(x=0, y=0)
+    pred_point = PredictedPoint.from_point(point)
+    track = Track()
+    skeleton = Skeleton.from_names(
         nodes=["head", "thorax", "abdomen"],
         edges=[("head", "thorax"), ("thorax", "abdomen")],
     )
-    instance1 = Instance(skeleton=skeleton_, points={"head": point_})
-    pointsarray = np.array([[1, 1], [2, 2], [3, 3]], dtype="float32")
+    instance1 = Instance(skeleton=skeleton, points={"head": point})
+    pointsarray1 = np.array([[1, 1], [2, 2], [3, 3]], dtype="float32")
+    pointsarray2 = np.array(
+        [[1, 1, True, False], [2, 2, True, False], [3, 3, True, False]], dtype="float32"
+    )
     pointsconfidence = np.array([1, 2, 3], dtype="float32")
-    instance2 = Instance.from_pointsarray(points=pointsarray, skeleton=skeleton_)
-    predinstance1 = PredictedInstance(skeleton_)
-    predinstance2 = PredictedInstance.from_instance(instance1, 0.0)
-    predinstance3 = PredictedInstance.from_arrays(
-        points=pointsarray,
+    instance2 = Instance.from_pointsarray(points=pointsarray1, skeleton=skeleton)
+    instance3 = Instance.from_pointsarray(points=pointsarray2, skeleton=skeleton)
+
+    pred_instance1 = PredictedInstance(skeleton)
+    pred_instance2 = PredictedInstance.from_instance(instance1, 0.0)
+    pred_instance3 = PredictedInstance.from_arrays(
+        points=pointsarray1,
         point_confidences=pointsconfidence,
         instance_score=0.0,
-        skeleton=skeleton_,
+        skeleton=skeleton,
     )
-    predinstance4 = PredictedInstance.from_arrays(
+    pred_instance4 = PredictedInstance.from_arrays(
         points=[np.nan],
         point_confidences=pointsconfidence,
         instance_score=0.0,
-        skeleton=skeleton_,
+        skeleton=skeleton,
     )
-    dummy_ = getDummyVideo
-    labeledframe_ = LabeledFrame(video=dummy_, frame_idx=1, instances=[instance1])
+    dummy = test_video
+    labeledframe_ = LabeledFrame(video=dummy, frame_idx=1, instances=[instance1])
 
     # Point
 
-    assert point_.x == 0
-    assert point_.y == 0
-    assert point_.visible == True
-    assert point_.complete == False
+    assert point.x == 0
+    assert point.y == 0
+    assert point.visible == True
+    assert point.complete == False
 
     # PredictedPoint
 
-    assert predpoint_.x == 0
-    assert predpoint_.y == 0
-    assert predpoint_.visible == True
-    assert predpoint_.complete == False
-    assert predpoint_.score == 0
+    assert pred_point.x == 0
+    assert pred_point.y == 0
+    assert pred_point.visible == True
+    assert pred_point.complete == False
+    assert pred_point.score == 0
 
     # Track
 
-    assert track_.name == ""
+    assert track.name == ""
 
     # Instance
 
-    assert instance1.skeleton == skeleton_
-    assert instance1.points == {"head": point_}
+    assert instance1.skeleton == skeleton
+    assert instance1.points == {"head": point}
     assert instance1.track == None
     assert instance1.frame == None
     assert instance1.from_predicted == None
-    assert len(instance2.points) == 3  # Instance from_pointsarray
-    assert instance2.skeleton == skeleton_
+    assert len(instance2.points) == 3  # Instance2 from_pointsarray
+    assert instance2.skeleton == skeleton
+    assert (
+        list(instance3.points.values())[0].visible == True
+        and list(instance3.points.values())[0].complete == False
+    )
+
     with pytest.raises(TypeError):
-        Instance(skeleton=skeleton_, from_predicted="foo")
+        Instance(skeleton=skeleton, from_predicted="foo")
     with pytest.raises(KeyError):
-        Instance(skeleton=skeleton_, points={"foo": "bar"})
+        Instance(skeleton=skeleton, points={"foo": "bar"})
     with pytest.raises(TypeError):
-        Instance(skeleton=skeleton_, points="foo")
+        Instance(skeleton=skeleton, points="foo")
 
     # PredictedInstance
 
-    assert predinstance1.from_predicted == None
-    assert predinstance1.score == 0.0
-    assert predinstance1.tracking_score == 0.0
-    assert predinstance2.score == 0.0
-    assert len(predinstance3.points) == 3
-    assert predinstance3.score == 0.0
-    assert predinstance3.track == None
-    assert predinstance4.points == {}
+    assert pred_instance1.from_predicted == None
+    assert pred_instance1.score == 0.0
+    assert pred_instance1.tracking_score == 0.0
+    assert pred_instance2.score == 0.0
+    assert len(pred_instance3.points) == 3
+    assert pred_instance3.score == 0.0
+    assert pred_instance3.track == None
+    assert pred_instance4.points == {}
 
     # LabeledFrame
 
-    assert labeledframe_.video == dummy_
+    assert labeledframe_.video == dummy
     assert labeledframe_.instances == [instance1]
     assert labeledframe_.instances
     labeledframe_.instances = [instance1]

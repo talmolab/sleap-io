@@ -7,6 +7,7 @@ from sleap_io.model.video import (
 
 class DummyVideo:
     """Fake video backend,returns frames with all zeros.
+
     This can be useful when you want to look at labels for a dataset but don't
     have access to the real video.
     """
@@ -20,5 +21,5 @@ class DummyVideo:
 
 
 @pytest.fixture
-def getDummyVideo():
+def test_video():
     return DummyVideo()
