@@ -7,10 +7,6 @@ def test_skeleton_node_edge():
         nodes=["head", "thorax", "abdomen"],
         edges=[("head", "thorax"), ("thorax", "abdomen")],
     )
-    assert (
-        skeleton.name
-        is not None  # name should be "Skeleton-n" nth skeleton to be created
-    )
     assert skeleton.nodes == [Node("head"), Node("thorax"), Node("abdomen")]
     assert skeleton.edges == [
         Edge(source=Node("head"), destination=Node("thorax")),

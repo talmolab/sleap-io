@@ -8,10 +8,7 @@ differently depending on the underlying pose model.
 from __future__ import annotations
 from attrs import define, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, Text
-from itertools import count
 import numpy as np
-
-skeleton_idx = count(0)
 
 
 @define(auto_attribs=True)
@@ -71,12 +68,10 @@ class Skeleton:
         name: A descriptive name for the skeleton.
     """
 
-    _skeleton_idx = count(0)
-
-    nodes: list[Node] = field()
-    edges: list[Edge] = field()
-    symmetries: Optional[list[Tuple[Node, Node]]] = field(default=None)
-    name: Optional[str] = field(default=None)
+    nodes: list[Node]
+    edges: list[Edge]
+    name: Optional[str]
+    symmetries: Optional[List[Tuple[Node, Node]]] = field(default=None)
 
     @staticmethod
     def from_names(nodes: List[str], edges: List[Tuple[str, str]]):
@@ -84,24 +79,5 @@ class Skeleton:
         return Skeleton(
             nodes=Node.from_names(nodes),
             edges=Edge.from_names(edges),
-            name="Skeleton-" + str(next(skeleton_idx)),
+            name=None,
         )
-
-    # def graph(self):
-    #     graph = nx.MultiDiGraph()
-    #     for Node in self.nodes:
-    #         graph.add_node(Node.name)
-    #     for Edge in self.edges:
-    #         graph.add_edge(Edge.source.name, Edge.destination.name)
-    #     graph.name = self.name
-    #     return graph
-
-
-# e.g.
-
-skeleton = Skeleton.from_names(
-    nodes=["head", "thorax", "abdomen"],
-    edges=[("head", "thorax"), ("thorax", "abdomen")],
-)
-
-print(skeleton)
