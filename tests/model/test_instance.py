@@ -1,4 +1,5 @@
-from multiprocessing import dummy
+import numpy as np
+import pytest
 from sleap_io.model.instance import (
     Point,
     PredictedPoint,
@@ -8,27 +9,11 @@ from sleap_io.model.instance import (
     PredictedInstance,
 )
 from sleap_io.model.skeleton import Skeleton, Node
-import numpy as np
 from attrs import define
+from tests.fixture.fixtures import getDummyVideo
 
 
-@define
-class DummyVideo:
-    """Fake video backend,returns frames with all zeros.
-
-    This can be useful when you want to look at labels for a dataset but don't
-    have access to the real video.
-    """
-
-    filename: str = ""
-    height: int = 2000
-    width: int = 2000
-    frames: int = 10000
-    channels: int = 1
-    dummy: bool = True
-
-
-def test_classes():
+def test_classes(getDummyVideo):
 
     point_ = Point(x=0, y=0)
     predpoint_ = PredictedPoint.from_point(point_)
@@ -49,7 +34,13 @@ def test_classes():
         instance_score=0.0,
         skeleton=skeleton_,
     )
-    dummy_ = DummyVideo()
+    predinstance4 = PredictedInstance.from_arrays(
+        points=[np.nan],
+        point_confidences=pointsconfidence,
+        instance_score=0.0,
+        skeleton=skeleton_,
+    )
+    dummy_ = getDummyVideo
     labeledframe_ = LabeledFrame(video=dummy_, frame_idx=1, instances=[instance1])
 
     # Point
@@ -80,6 +71,12 @@ def test_classes():
     assert instance1.from_predicted == None
     assert len(instance2.points) == 3  # Instance from_pointsarray
     assert instance2.skeleton == skeleton_
+    with pytest.raises(TypeError):
+        Instance(skeleton=skeleton_, from_predicted="foo")
+    with pytest.raises(KeyError):
+        Instance(skeleton=skeleton_, points={"foo": "bar"})
+    with pytest.raises(TypeError):
+        Instance(skeleton=skeleton_, points="foo")
 
     # PredictedInstance
 
@@ -90,9 +87,12 @@ def test_classes():
     assert len(predinstance3.points) == 3
     assert predinstance3.score == 0.0
     assert predinstance3.track == None
+    assert predinstance4.points == {}
 
     # LabeledFrame
 
     assert labeledframe_.video == dummy_
     assert labeledframe_.instances == [instance1]
     assert labeledframe_.instances
+    labeledframe_.instances = [instance1]
+    assert labeledframe_.instances == [instance1]

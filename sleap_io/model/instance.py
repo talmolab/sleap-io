@@ -5,7 +5,6 @@ from typing import List, Optional, Tuple, Union, Dict
 from sleap_io.model.video import Video
 from sleap_io.model.skeleton import Skeleton, Node
 import numpy as np
-import math
 
 
 @define(auto_attribs=True)
@@ -19,8 +18,8 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
-    x: float = math.nan
-    y: float = math.nan
+    x: float = np.nan
+    y: float = np.nan
     visible: bool = attr.ib(default=True, kw_only=True)
     complete: bool = attr.ib(default=False, kw_only=True)
 
@@ -149,12 +148,12 @@ class Instance:
                 "'{name}' must be {type!r} (got {value!r} that is a "
                 "{actual!r}).".format(
                     name=attribute.name,
-                    type=self.type,
+                    type="Predicted Instance",
                     actual=value.__class__,
                     value=value,
                 ),
                 attribute,
-                self.type,
+                "Predicted Instance",
                 value,
             )
 
@@ -179,10 +178,13 @@ class Instance:
         node_names: List[str] = [node.name for node in skeleton.nodes]
         # TODO(LM): Ensure ordering of nodes and points match up.
         for point, node_name in zip(points, node_names):
-            if np.isnan(point).any():
-                continue
 
-            predicted_points[node_name] = Point(x=point[0], y=point[1])
+            if (len(point)) == 4:
+                predicted_points[node_name] = Point(
+                    x=point[0], y=point[1], visible=point[2], complete=point[3]
+                )
+            else:
+                predicted_points[node_name] = Point(x=point[0], y=point[1])
 
         return cls(points=predicted_points, skeleton=skeleton, track=track)
 
@@ -296,7 +298,7 @@ class LabeledFrame:
         for instance in new_instances:
             instance.frame = self
 
-        print(f"{attribute}")
+        # print(f"{attribute}")
 
         # attribute.value = new_instances
 
