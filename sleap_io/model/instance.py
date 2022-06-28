@@ -298,9 +298,7 @@ class LabeledFrame:
         for instance in new_instances:
             instance.frame = self
 
-        # print(f"{attribute}")
-
-        # attribute.value = new_instances
+        return new_instances
 
     video: Video
     frame_idx: int
