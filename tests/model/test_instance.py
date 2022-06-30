@@ -8,7 +8,7 @@ from sleap_io.model.instance import (
     LabeledFrame,
     PredictedInstance,
 )
-from sleap_io.model.skeleton import Skeleton, Node
+from sleap_io.model.skeleton import Skeleton, Node, Edge
 from tests.fixture.video import test_video
 
 
@@ -19,7 +19,10 @@ def test_classes(test_video):
     track = Track()
     skeleton = Skeleton(
         nodes=[Node("head"), Node("thorax"), Node("abdomen")],
-        edges=[(Node("head"), Node("thorax")), (Node("thorax"), Node("abdomen"))],
+        edges=[
+            Edge(source=Node("head"), destination=Node("thorax")),
+            Edge(source=Node("thorax"), destination=Node("abdomen")),
+        ],
     )
     instance1 = Instance(skeleton=skeleton, points={"head": point})
 
