@@ -43,6 +43,14 @@ def read_hdf5(filename, dataset="/"):
 
 
 def read_videos(labels_path):
+    """Read Videos dataset in a SLEAP labels file.
+
+    Args:
+        labels_path: A string that contains the path to the labels file
+
+    Returns:
+        A list of `Video` objects.
+    """
     videos = [json.loads(x) for x in read_hdf5(labels_path, "videos_json")]
     video_objects = []
     for video in videos:
@@ -51,7 +59,14 @@ def read_videos(labels_path):
 
 
 def read_tracks(labels_path):
-    """Read tracks dataset in a SLEAP labels file."""
+    """Read tracks dataset in a SLEAP labels file.
+
+    Args:
+        labels_path: A string that contains the path to the labels file
+
+    Returns:
+        A list of `Track` objects.
+    """
     tracks = [json.loads(x) for x in read_hdf5(labels_path, "tracks_json")]
     track_objects = []
     for track in tracks:
@@ -60,6 +75,14 @@ def read_tracks(labels_path):
 
 
 def read_metadata(labels_path):
+    """Read metadata from a SLEAP labels file.
+
+    Args:
+        labels_path: A string that contains the path to the labels file
+
+    Returns:
+        A dict containing the metadata from a SLEAP labels file.
+    """
     with h5py.File(labels_path, "r") as f:
         attrs = dict(f["metadata"].attrs)
     metadata = json.loads(attrs["json"].decode())
@@ -67,6 +90,14 @@ def read_metadata(labels_path):
 
 
 def read_skeleton(labels_path):
+    """Read skeleton dataset from a SLEAP labels file.
+
+    Args:
+        labels_path: A string that contains the path to the labels file
+
+    Returns:
+        A `Skeleton` object.
+    """
     metadata = read_metadata(labels_path)
 
     # Get node names. This is a superset of all nodes across all skeletons. Note that
@@ -103,17 +134,40 @@ def read_skeleton(labels_path):
 
 
 def read_points(labels_path):
+    """Read points dataset from a SLEAP labels file.
+
+    Args:
+        labels_path: A string that contains the path to the labels file
+
+    Returns:
+        A list of `Point` objects.
+    """
     points = read_hdf5(labels_path, "points")
     return points
 
 
 def read_pred_points(labels_path):
+    """Read predicted points dataset from a SLEAP labels file.
+
+    Args:
+        labels_path: A string that contains the path to the labels file
+
+    Returns:
+        A list of `PredictedPoint` objects.
+    """
     pred_points = read_hdf5(labels_path, "pred_points")
     return pred_points
 
 
 def read_instances(labels_path):
-    """Read instances dataset in a SLEAP labels file."""
+    """Read instances dataset in a SLEAP labels file.
+
+    Args:
+        labels_path: A string that contains the path to the labels file
+
+    Returns:
+        A list of `Instance` objects.
+    """
     skeleton = read_skeleton(labels_path)
     tracks = read_tracks(labels_path)
     instances = read_hdf5(labels_path, "instances")
