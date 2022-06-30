@@ -37,7 +37,6 @@ class PredictedPoint(Point):
     score: float = 0.0
 
 
-# "By default, two `instance` s of attrs classes are equal if all their fields are equal."
 @define(auto_attribs=True, eq=True)
 class Track:
     """A track object is associated with a set of animal/object instances
@@ -59,13 +58,13 @@ class Instance:
 
     Args:
         skeleton: The `Skeleton` that this `Instance` is associated with.
-        points: A dictionary where keys are skeleton node names and
+        points: A dictionary where keys are `Skeleton` node names and
             values are `Point` objects. Alternatively, a numpy array whose
             length and order matches `skeleton.nodes`.
         track: An optional multi-frame object track associated with
             this instance. This allows individual animals/objects to be
             tracked across frames.
-        from_predicted: The predicted instance (if any) that this was
+        from_predicted: The `PredictedInstance` (if any) that this was
             copied from.
         frame: A back reference to the :class:`LabeledFrame` that this
             :class:`Instance` belongs to. This field is set when
@@ -82,8 +81,7 @@ class Instance:
     def _validate_all_points(self, attribute, points: Dict[str, Point]):
         """Validation method called by attrs.
 
-        Checks that all the points defined for the `Skeleton` are found
-        in the skeleton.
+        Checks that all the points defined for the `Skeleton` are found.
 
         Args:
             attribute: Attribute being validated; not used.
@@ -136,7 +134,7 @@ class Instance:
 
 @define(auto_attribs=True)
 class PredictedInstance(Instance):
-    """A `predicted instance` is an output of the inference procedure.
+    """A `PredictedInstance` is an output of the inference procedure.
 
     Args:
         score: The instance-level grouping prediction score.
@@ -157,7 +155,7 @@ class LabeledFrame:
     Args:
         video: The :class:`Video` associated with this `LabeledFrame`.
         frame_idx: The index of the `LabeledFrame` in the video.
-        instances: List of `Instance` objects associated with the frame.
+        instances: List of `Instance` objects associated with this `LabeledFrame`.
     """
 
     def _set_instance_frame(

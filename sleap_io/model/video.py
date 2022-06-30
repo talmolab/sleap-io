@@ -18,7 +18,7 @@ class Video:
     """`Video` class used by sleap to represent videos and data associated with them.
 
     This class is used to store information regarding a video and its components.
-    It is used to store the video's filename, shape, and the video's backend.
+    It is used to store the video's `filename`, `shape`, and the video's `backend`.
 
     Args:
         filename: The filename of the video.

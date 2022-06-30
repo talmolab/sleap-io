@@ -29,7 +29,7 @@ class Node:
 class Edge:
     """A connection between two `Node` objects within a `Skeleton`.
 
-    This is a directed edge, representing which node comes first in the skeleton tree.
+    This is a directed edge, representing which `Node` comes first in the `Skeleton` tree.
 
     Attributes:
         source: The origin `Node`.
@@ -55,5 +55,5 @@ class Skeleton:
 
     nodes: list[Node]
     edges: list[Edge]
-    # name: Optional[str] = field(default=None)
+    name: Optional[str] = field(default=None)
     symmetries: Optional[List[Tuple[Node, Node]]] = field(default=None)
