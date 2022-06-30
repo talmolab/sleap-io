@@ -3,8 +3,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import json
-from attrs import define, Factory
-from traitlets import default
 from sleap_io.model.video import Video
 from sleap_io.model.skeleton import Skeleton, Edge, Node
 from typing import List
@@ -110,7 +108,7 @@ def read_points(labels_path):
 
 
 def read_pred_points(labels_path):
-    pred_points = read_hdf5(labels_path, "points")
+    pred_points = read_hdf5(labels_path, "pred_points")
     return pred_points
 
 
