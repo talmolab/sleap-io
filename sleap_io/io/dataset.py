@@ -1,11 +1,11 @@
-from attr import Factory
+from attr import Factory, asdict
 import h5py
 import numpy as np
 import pandas as pd
 import json
 from sleap_io.model.video import Video
 from sleap_io.model.skeleton import Skeleton, Edge, Node
-from typing import List
+from typing import List, Optional
 from sleap_io.model.instance import (
     Instance,
     LabeledFrame,
@@ -15,66 +15,62 @@ from sleap_io.model.instance import (
 )
 
 
-class Instance:
-    @classmethod
-    def from_pointsarray(
-        cls, points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
-    ) -> Instance:
-        """Create an instance from an array of points.
+def from_pointsarray(
+    points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
+) -> Instance:
+    """Create an `Instance` from an array of points.
 
-        Args:
-            points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-                contains the points in (x, y) coordinates of each node. Missing nodes
-                should be represented as `NaN`.
-            skeleton: A `sleap.Skeleton` instance with `n_nodes` nodes to associate with
-                the instance.
-            track: Optional `sleap.Track` object to associate with the instance.
+    Args:
+        points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
+            contains the points in (x, y) coordinates of each node. Missing nodes
+            should be represented as `NaN`.
+        skeleton: A `sleap.Skeleton` instance with `n_nodes` nodes to associate with
+            the instance.
+        track: Optional `sleap.Track` object to associate with the instance.
 
-        Returns:
-            A new `Instance` object.
-        """
-        predicted_points = dict()
-        node_names: List[str] = [node.name for node in skeleton.nodes]
-        # TODO(LM): Ensure ordering of nodes and points match up.
-        for point, node_name in zip(points, node_names):
-            if (len(point)) == 4:
-                predicted_points[node_name] = Point(
-                    x=point[0],
-                    y=point[1],
-                    visible=bool(point[2]),
-                    complete=bool(point[3]),
-                )
-            else:
-                predicted_points[node_name] = Point(x=point[0], y=point[1])
+    Returns:
+        A new `Instance` object.
+    """
+    predicted_points = dict()
+    node_names: List[str] = [node.name for node in skeleton.nodes]
+    # TODO(LM): Ensure ordering of nodes and points match up.
+    for point, node_name in zip(points, node_names):
+        if (len(point)) == 4:
+            predicted_points[node_name] = Point(
+                x=point[0],
+                y=point[1],
+                visible=bool(point[2]),
+                complete=bool(point[3]),
+            )
+        else:
+            predicted_points[node_name] = Point(x=point[0], y=point[1])
 
-        return cls(points=predicted_points, skeleton=skeleton, track=track)
+    return Instance(points=predicted_points, skeleton=skeleton, track=track)
 
 
-class PredictedInstace(Instance):
-    @classmethod
-    def from_instance(
-        cls, instance: Instance, score: float, tracking_score: float = 0.0
-    ) -> PredictedInstance:
-        """Create a `PredictedInstance` from an `Instance`.
+def from_instance(
+    instance: Instance, score: float, tracking_score: float = 0.0
+) -> PredictedInstance:
+    """Create a `PredictedInstance` from an `Instance`.
 
-        The fields are copied in a shallow manner with the exception of points. For each
-        point in the instance a `PredictedPoint` is created with score set to default
-        value.
+    The fields are copied in a shallow manner with the exception of points. For each
+    point in the instance a `PredictedPoint` is created with score set to default
+    value.
 
-        Args:
-            instance: The `Instance` object to shallow copy data from.
-            score: The score for this instance.
+    Args:
+        instance: The `Instance` object to shallow copy data from.
+        score: The score for this instance.
 
-        Returns:
-            A `PredictedInstance` for the given `Instance`.
-        """
-        kw_args = attr.asdict(
-            instance,
-            recurse=False,
-        )
-        kw_args["score"] = score
-        kw_args["tracking_score"] = tracking_score
-        return cls(**kw_args)
+    Returns:
+        A `PredictedInstance` for the given `Instance`.
+    """
+    kw_args = asdict(
+        instance,
+        recurse=False,
+    )
+    kw_args["score"] = score
+    kw_args["tracking_score"] = tracking_score
+    return PredictedInstance(**kw_args)
 
 
 def read_hdf5(filename, dataset="/"):
@@ -105,7 +101,7 @@ def read_hdf5(filename, dataset="/"):
 
 
 def read_videos(labels_path):
-    """Read Videos dataset in a SLEAP labels file.
+    """Read `Video` dataset in a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file
@@ -121,7 +117,7 @@ def read_videos(labels_path):
 
 
 def read_tracks(labels_path):
-    """Read tracks dataset in a SLEAP labels file.
+    """Read `Track` dataset in a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file
@@ -152,7 +148,7 @@ def read_metadata(labels_path):
 
 
 def read_skeleton(labels_path):
-    """Read skeleton dataset from a SLEAP labels file.
+    """Read `Skeleton` dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file
@@ -196,7 +192,7 @@ def read_skeleton(labels_path):
 
 
 def read_points(labels_path):
-    """Read points dataset from a SLEAP labels file.
+    """Read `Point` dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file
@@ -209,7 +205,7 @@ def read_points(labels_path):
 
 
 def read_pred_points(labels_path):
-    """Read predicted points dataset from a SLEAP labels file.
+    """Read `PredictedPoint` dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file
@@ -222,7 +218,7 @@ def read_pred_points(labels_path):
 
 
 def read_instances(labels_path):
-    """Read instances dataset in a SLEAP labels file.
+    """Read `Instance` dataset in a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file
@@ -239,7 +235,7 @@ def read_instances(labels_path):
     for idx, instance in enumerate(instances):
         if instance["instance_type"] == 0:  # Normal Instance
             instance_objects.append(
-                Instance.from_pointsarray(
+                from_pointsarray(
                     skeleton=skeleton,
                     track=tracks[instance["track"]],
                     points=np.array(
@@ -251,8 +247,8 @@ def read_instances(labels_path):
             )
         if instance["instance_type"] == 1:  # Predicted Instance
             instance_objects.append(
-                PredictedInstance.from_instance(
-                    instance=Instance.from_pointsarray(
+                from_instance(
+                    instance=from_pointsarray(
                         skeleton=skeleton,
                         track=tracks[instance["track"]],
                         points=np.array(
