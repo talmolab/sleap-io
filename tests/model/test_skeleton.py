@@ -2,7 +2,7 @@ from sleap_io.model.skeleton import Node, Edge, Skeleton
 
 
 def test_skeleton_node_edge():
-    # creates a test skeleton with nodes & edges
+    # Creates a test skeleton with nodes & edges.
     skeleton = Skeleton.from_names(
         nodes=["head", "thorax", "abdomen"],
         edges=[("head", "thorax"), ("thorax", "abdomen")],

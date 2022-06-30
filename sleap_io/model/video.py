@@ -23,8 +23,8 @@ class Video:
     Args:
         filename: The filename of the video.
         shape: The shape of the video.
-        backend: A backend is an object that implements the following basic
-            required methods and properties
+        backend: An object that implements the basic methods for reading and
+            manipulating frames of a specific video type.
 
     """
 

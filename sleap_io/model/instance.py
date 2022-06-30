@@ -38,14 +38,14 @@ class PredictedPoint(Point):
 
     @classmethod
     def from_point(cls, point: Point, score: float = 0.0) -> PredictedPoint:
-        """Create a PredictedPoint from a Point
+        """Create a `PredictedPoint` from a `Point`
 
         Args:
             point: The point to copy all data from.
             score: The score for this predicted point.
 
         Returns:
-            A scored point based on the point passed in.
+            A scored `point` based on the `point` passed in.
         """
         return cls(
             x=point.x,
@@ -56,12 +56,13 @@ class PredictedPoint(Point):
         )
 
 
-# "By default, two instances of attrs classes are equal if all their fields are equal."
+# "By default, two `instance` s of attrs classes are equal if all their fields are equal."
 @define(auto_attribs=True, eq=True)
 class Track:
     """A track object is associated with a set of animal/object instances
-    across multiple frames of video. This allows tracking of unique
-    entities in the video over time and space.
+    across multiple frames of video.
+
+    This allows tracking of unique entities in the video over time and space.
 
     Args:
         spawned_on: The video frame that this track was spawned on.
@@ -71,12 +72,6 @@ class Track:
     name: str = ""
 
 
-# NOTE:
-# Instance cannot be a slotted class at the moment. This is because it creates
-# attributes _frame and _point_array_cache after init. These are private variables
-# that are created in post init so they are not serialized.
-
-
 @define(auto_attribs=True)
 class Instance:
     """This class represents a labeled instance.
@@ -84,7 +79,7 @@ class Instance:
     Args:
         skeleton: The skeleton that this instance is associated with.
         points: A dictionary where keys are skeleton node names and
-            values are Point objects. Alternatively, a point array whose
+            values are `Point` objects. Alternatively, a point array whose
             length and order matches skeleton.nodes.
         track: An optional multi-frame object track associated with
             this instance. This allows individual animals/objects to be
@@ -106,7 +101,7 @@ class Instance:
     def _validate_all_points(self, attribute, points: Dict[str, Point]):
         """Validation method called by attrs.
 
-        Checks that all the _points defined for the skeleton are found
+        Checks that all the points defined for the skeleton are found
         in the skeleton.
 
         Args:
@@ -148,17 +143,17 @@ class Instance:
                 "'{name}' must be {type!r} (got {value!r} that is a "
                 "{actual!r}).".format(
                     name=attribute.name,
-                    type="Predicted Instance",
+                    type="PredictedInstance",
                     actual=value.__class__,
                     value=value,
                 ),
                 attribute,
-                "Predicted Instance",
+                "PredictedInstance",
                 value,
             )
 
     @classmethod
-    def from_pointsarray(
+    def from_numpy(
         cls, points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
     ) -> Instance:
         """Create an instance from an array of points.
@@ -167,9 +162,9 @@ class Instance:
             points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
                 contains the points in (x, y) coordinates of each node. Missing nodes
                 should be represented as `NaN`.
-            skeleton: A `sleap.Skeleton` instance with `n_nodes` nodes to associate with
+            skeleton: A `Skeleton` instance with `n_nodes` nodes to associate with
                 the instance.
-            track: Optional `sleap.Track` object to associate with the instance.
+            track: Optional `Track` object to associate with the instance.
 
         Returns:
             A new `Instance` object.
@@ -232,7 +227,7 @@ class PredictedInstance(Instance):
         return cls(**kw_args)
 
     @classmethod
-    def from_arrays(
+    def from_numpyarray(
         cls,
         points: np.ndarray,
         point_confidences: np.ndarray,
@@ -250,9 +245,9 @@ class PredictedInstance(Instance):
                 that contains the confidence/score of the points.
             instance_score: Scalar float representing the overall instance score, e.g.,
                 the PAF grouping score.
-            skeleton: A sleap.Skeleton instance with n_nodes nodes to associate with the
+            skeleton: A `Skeleton` instance with n_nodes nodes to associate with the
                 predicted instance.
-            track: Optional `sleap.Track` to associate with the instance.
+            track: Optional `Track` to associate with the instance.
 
         Returns:
             A new `PredictedInstance`.
@@ -285,7 +280,9 @@ class LabeledFrame:
         instances: List of instances associated with the frame.
     """
 
-    def _set_instance_frame(self, attribute, new_instances: List[Instance]):
+    def _set_instance_frame(
+        self, attribute, new_instances: List[Instance]
+    ) -> List[Instance]:
         """Set the list of instances associated with this frame.
 
         Updates the `frame` attribute on each instance to the
