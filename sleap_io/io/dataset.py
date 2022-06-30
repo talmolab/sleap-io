@@ -15,6 +15,68 @@ from sleap_io.model.instance import (
 )
 
 
+class Instance:
+    @classmethod
+    def from_pointsarray(
+        cls, points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
+    ) -> Instance:
+        """Create an instance from an array of points.
+
+        Args:
+            points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
+                contains the points in (x, y) coordinates of each node. Missing nodes
+                should be represented as `NaN`.
+            skeleton: A `sleap.Skeleton` instance with `n_nodes` nodes to associate with
+                the instance.
+            track: Optional `sleap.Track` object to associate with the instance.
+
+        Returns:
+            A new `Instance` object.
+        """
+        predicted_points = dict()
+        node_names: List[str] = [node.name for node in skeleton.nodes]
+        # TODO(LM): Ensure ordering of nodes and points match up.
+        for point, node_name in zip(points, node_names):
+            if (len(point)) == 4:
+                predicted_points[node_name] = Point(
+                    x=point[0],
+                    y=point[1],
+                    visible=bool(point[2]),
+                    complete=bool(point[3]),
+                )
+            else:
+                predicted_points[node_name] = Point(x=point[0], y=point[1])
+
+        return cls(points=predicted_points, skeleton=skeleton, track=track)
+
+
+class PredictedInstace(Instance):
+    @classmethod
+    def from_instance(
+        cls, instance: Instance, score: float, tracking_score: float = 0.0
+    ) -> PredictedInstance:
+        """Create a `PredictedInstance` from an `Instance`.
+
+        The fields are copied in a shallow manner with the exception of points. For each
+        point in the instance a `PredictedPoint` is created with score set to default
+        value.
+
+        Args:
+            instance: The `Instance` object to shallow copy data from.
+            score: The score for this instance.
+
+        Returns:
+            A `PredictedInstance` for the given `Instance`.
+        """
+        kw_args = attr.asdict(
+            instance,
+            recurse=False,
+        )
+        kw_args["score"] = score
+        kw_args["tracking_score"] = tracking_score
+        return cls(**kw_args)
+
+
 def read_hdf5(filename, dataset="/"):
     """Read data from an HDF5 file.
 
