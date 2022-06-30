@@ -1,8 +1,7 @@
-import pytest
-
 from sleap_io.model.video import (
     Video,
 )
+import pytest
 
 
 class DummyVideo:
@@ -21,5 +20,5 @@ class DummyVideo:
 
 
 @pytest.fixture
-def test_video():
+def dummy_video():
     return DummyVideo()

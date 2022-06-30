@@ -55,5 +55,5 @@ class Skeleton:
 
     nodes: list[Node]
     edges: list[Edge]
-    name: Optional[str] = field(default=None)
+    # name: Optional[str] = field(default=None)
     symmetries: Optional[List[Tuple[Node, Node]]] = field(default=None)

@@ -9,13 +9,12 @@ from sleap_io.model.instance import (
     PredictedInstance,
 )
 from sleap_io.model.skeleton import Skeleton, Node, Edge
-from tests.fixture.video import test_video
 
 
-def test_classes(test_video):
+def test_classes(dummy_video):
 
     point = Point(x=0, y=0)
-    pred_point = PredictedPoint.from_point(point)
+    pred_point = PredictedPoint(x=0, y=0)
     track = Track()
     skeleton = Skeleton(
         nodes=[Node("head"), Node("thorax"), Node("abdomen")],
@@ -28,7 +27,7 @@ def test_classes(test_video):
 
     pred_instance1 = PredictedInstance(skeleton)
 
-    dummy = test_video
+    dummy = dummy_video
     labeled_frame = LabeledFrame(video=dummy, frame_idx=1, instances=[instance1])
 
     # Point
