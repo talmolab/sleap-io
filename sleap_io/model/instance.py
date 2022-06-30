@@ -36,25 +36,6 @@ class PredictedPoint(Point):
 
     score: float = 0.0
 
-    @classmethod
-    def from_point(cls, point: Point, score: float = 0.0) -> PredictedPoint:
-        """Create a `PredictedPoint` from a `Point`
-
-        Args:
-            point: The point to copy all data from.
-            score: The score for this predicted point.
-
-        Returns:
-            A scored `point` based on the `point` passed in.
-        """
-        return cls(
-            x=point.x,
-            y=point.y,
-            visible=point.visible,
-            complete=point.complete,
-            score=score,
-        )
-
 
 # "By default, two `instance` s of attrs classes are equal if all their fields are equal."
 @define(auto_attribs=True, eq=True)
@@ -77,10 +58,10 @@ class Instance:
     """This class represents a labeled instance.
 
     Args:
-        skeleton: The skeleton that this instance is associated with.
+        skeleton: The `Skeleton` that this `Instance` is associated with.
         points: A dictionary where keys are skeleton node names and
-            values are `Point` objects. Alternatively, a point array whose
-            length and order matches skeleton.nodes.
+            values are `Point` objects. Alternatively, a numpy array whose
+            length and order matches `skeleton.nodes`.
         track: An optional multi-frame object track associated with
             this instance. This allows individual animals/objects to be
             tracked across frames.
@@ -101,12 +82,12 @@ class Instance:
     def _validate_all_points(self, attribute, points: Dict[str, Point]):
         """Validation method called by attrs.
 
-        Checks that all the points defined for the skeleton are found
+        Checks that all the points defined for the `Skeleton` are found
         in the skeleton.
 
         Args:
             attribute: Attribute being validated; not used.
-            points: Either dict of points or PointArray
+            points: Dict of `points`
                 If dict, keys should be node names.
 
         Raises:
@@ -152,43 +133,10 @@ class Instance:
                 value,
             )
 
-    @classmethod
-    def from_numpy(
-        cls, points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
-    ) -> Instance:
-        """Create an instance from an array of points.
-
-        Args:
-            points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-                contains the points in (x, y) coordinates of each node. Missing nodes
-                should be represented as `NaN`.
-            skeleton: A `Skeleton` instance with `n_nodes` nodes to associate with
-                the instance.
-            track: Optional `Track` object to associate with the instance.
-
-        Returns:
-            A new `Instance` object.
-        """
-        predicted_points = dict()
-        node_names: List[str] = [node.name for node in skeleton.nodes]
-        # TODO(LM): Ensure ordering of nodes and points match up.
-        for point, node_name in zip(points, node_names):
-            if (len(point)) == 4:
-                predicted_points[node_name] = Point(
-                    x=point[0],
-                    y=point[1],
-                    visible=bool(point[2]),
-                    complete=bool(point[3]),
-                )
-            else:
-                predicted_points[node_name] = Point(x=point[0], y=point[1])
-
-        return cls(points=predicted_points, skeleton=skeleton, track=track)
-
 
 @define(auto_attribs=True)
 class PredictedInstance(Instance):
-    """A predicted instance is an output of the inference procedure.
+    """A `predicted instance` is an output of the inference procedure.
 
     Args:
         score: The instance-level grouping prediction score.
@@ -201,97 +149,29 @@ class PredictedInstance(Instance):
     score: float = attr.ib(default=0.0, converter=float)
     tracking_score: float = attr.ib(default=0.0, converter=float)
 
-    @classmethod
-    def from_instance(
-        cls, instance: Instance, score: float, tracking_score: float = 0.0
-    ) -> PredictedInstance:
-        """Create a `PredictedInstance` from an `Instance`.
-
-        The fields are copied in a shallow manner with the exception of points. For each
-        point in the instance a `PredictedPoint` is created with score set to default
-        value.
-
-        Args:
-            instance: The `Instance` object to shallow copy data from.
-            score: The score for this instance.
-
-        Returns:
-            A `PredictedInstance` for the given `Instance`.
-        """
-        kw_args = attr.asdict(
-            instance,
-            recurse=False,
-        )
-        kw_args["score"] = score
-        kw_args["tracking_score"] = tracking_score
-        return cls(**kw_args)
-
-    @classmethod
-    def from_numpyarray(
-        cls,
-        points: np.ndarray,
-        point_confidences: np.ndarray,
-        instance_score: float,
-        skeleton: Skeleton,
-        track: Optional[Track] = None,
-    ) -> "PredictedInstance":
-        """Create a predicted instance from data arrays.
-
-        Args:
-            points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-                contains the points in `(x, y)` coordinates of each node. Missing nodes
-                should be represented as `NaN`.
-            point_confidences: A numpy array of shape `(n_nodes,)` and dtype `float32`
-                that contains the confidence/score of the points.
-            instance_score: Scalar float representing the overall instance score, e.g.,
-                the PAF grouping score.
-            skeleton: A `Skeleton` instance with n_nodes nodes to associate with the
-                predicted instance.
-            track: Optional `Track` to associate with the instance.
-
-        Returns:
-            A new `PredictedInstance`.
-        """
-        predicted_points = dict()
-        node_names: List[str] = [node.name for node in skeleton.nodes]
-        for point, confidence, node_name in zip(points, point_confidences, node_names):
-            if np.isnan(point).any():
-                continue
-
-            predicted_points[node_name] = PredictedPoint(
-                x=point[0], y=point[1], score=confidence
-            )
-
-        return cls(
-            points=predicted_points,
-            skeleton=skeleton,
-            score=instance_score,
-            track=track,
-        )
-
 
 @define(auto_attribs=True)
 class LabeledFrame:
     """Holds labeled data for a single frame of a video.
 
     Args:
-        video: The :class:`Video` associated with this frame.
-        frame_idx: The index of frame in video.
-        instances: List of instances associated with the frame.
+        video: The :class:`Video` associated with this `LabeledFrame`.
+        frame_idx: The index of the `LabeledFrame` in the video.
+        instances: List of `Instance` objects associated with the frame.
     """
 
     def _set_instance_frame(
         self, attribute, new_instances: List[Instance]
     ) -> List[Instance]:
-        """Set the list of instances associated with this frame.
+        """Set the list of `Instance` objects associated with this `LabeledFrame`.
 
-        Updates the `frame` attribute on each instance to the
-        :class:`LabeledFrame` which will contain the instance.
-        The list of instances replaces instances that were previously
-        associated with frame.
+        Updates the `frame` attribute on each `Instance` to the
+        :class:`LabeledFrame` which will contain the `Instance`.
+        The list of `Instance` objects replaces `Instance` objects that were previously
+        associated with `LabeledFrame`.
 
         Args:
-            instances: A list of instances associated with this frame.
+            instances: A list of `Instance` objects associated with this `LabeledFrame`.
 
         Returns:
             None

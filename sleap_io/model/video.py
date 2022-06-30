@@ -1,7 +1,7 @@
-"""Data model for Videos.
+"""Data model for videos.
 
-Videos are SLEAP data structures that store information regarding a video and its
-components used in SLEAP.
+The `Video` class is a SLEAP data structure that stores information regarding
+a video and its components used in SLEAP.
 """
 
 from __future__ import annotations
@@ -13,12 +13,12 @@ import numpy as np
 import os
 
 
-@define
+@define(auto_attribs=True)
 class Video:
-    """Video class used by sleap to represent videos and data associated with them.
+    """`Video` class used by sleap to represent videos and data associated with them.
 
     This class is used to store information regarding a video and its components.
-    It is used to store the video's filename, shape, and the video's skeleton.
+    It is used to store the video's filename, shape, and the video's backend.
 
     Args:
         filename: The filename of the video.
