@@ -1,3 +1,9 @@
+"""Data structures for all labeled data contained with a SLEAP project.
+
+The `Instance` class is a SLEAP data structure that contains all the data regarding a 
+labeled project. Including `Point`, `Track`, and `LabeledFrame` Objects.
+"""
+
 from __future__ import annotations
 from attrs import define, validators
 import attr
@@ -38,8 +44,7 @@ class PredictedPoint(Point):
 
 @define(auto_attribs=True, eq=True)
 class Track:
-    """A track object is associated with a set of animal/object `Instance` objects
-    across multiple frames of video.
+    """A track object is associated with a set of animal/object `Instance` objects across multiple frames of video.
 
     This allows tracking of unique entities in the video over time and space.
 
