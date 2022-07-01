@@ -27,7 +27,7 @@ class Node:
 class Edge:
     """A connection between two `Node` objects within a `Skeleton`.
 
-    This is a directed edge, representing which `Node` comes first in the Skeleton tree.
+    This is a directed edge, representing which `Node` comes first in the `Skeleton` tree.
 
     Attributes:
         source: The origin `Node`.
@@ -48,8 +48,8 @@ class Skeleton:
     Attributes:
         nodes: A list of `Node`s.
         edges: A list of `Edge`s.
-        name: A descriptive name for the skeleton.
-        symmetries: A list of `Node` pairs corresponding to symmetries in the skeleton.
+        name: A descriptive name for the `Skeleton`.
+        symmetries: A list of `Node` pairs corresponding to symmetries in the `Skeleton`.
     """
 
     nodes: List[Node]

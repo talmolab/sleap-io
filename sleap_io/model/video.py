@@ -19,7 +19,7 @@ class Video:
 
     Args:
         filename: The filename of the video.
-        shape: The shape of the video.
+        shape: The shape of the video. In the format: (frames, height, width, channels).
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
 
