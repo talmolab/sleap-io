@@ -1,9 +1,22 @@
+<<<<<<< HEAD
+=======
+"""Data structures for all labeled data contained with a SLEAP project.
+
+The `Instance` class is a SLEAP data structure that contains all the data regarding a 
+labeled project. Including `Point`, `Track`, and `LabeledFrame` Objects.
+"""
+
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
 from __future__ import annotations
 from attrs import define, validators
 import attr
 from typing import List, Optional, Tuple, Union, Dict
+<<<<<<< HEAD
 from sleap_io.model.video import Video
 from sleap_io.model.skeleton import Skeleton, Node
+=======
+from sleap_io import Video, Skeleton, Node
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
 import numpy as np
 
 
@@ -28,7 +41,11 @@ class Point:
 class PredictedPoint(Point):
     """A predicted point is an output of the inference procedure.
 
+<<<<<<< HEAD
     It has all the properties of a labeled point, plus a score.
+=======
+    It has all the properties of a labeled `Point`, plus a `score`.
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
 
     Args:
         score: The point-level prediction score.
@@ -36,6 +53,7 @@ class PredictedPoint(Point):
 
     score: float = 0.0
 
+<<<<<<< HEAD
     @classmethod
     def from_point(cls, point: Point, score: float = 0.0) -> PredictedPoint:
         """Create a PredictedPoint from a Point
@@ -65,23 +83,37 @@ class Track:
 
     Args:
         spawned_on: The video frame that this track was spawned on.
+=======
+
+@define(auto_attribs=True, eq=True)
+class Track:
+    """A track object is associated with a set of animal/object `Instance` objects across multiple frames of video.
+
+    This allows tracking of unique entities in the video over time and space.
+
+    Args:
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
         name: A name given to this track for identifying purposes.
     """
 
     name: str = ""
 
 
+<<<<<<< HEAD
 # NOTE:
 # Instance cannot be a slotted class at the moment. This is because it creates
 # attributes _frame and _point_array_cache after init. These are private variables
 # that are created in post init so they are not serialized.
 
 
+=======
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
 @define(auto_attribs=True)
 class Instance:
     """This class represents a labeled instance.
 
     Args:
+<<<<<<< HEAD
         skeleton: The skeleton that this instance is associated with.
         points: A dictionary where keys are skeleton node names and
             values are Point objects. Alternatively, a point array whose
@@ -94,6 +126,20 @@ class Instance:
         frame: A back reference to the :class:`LabeledFrame` that this
             :class:`Instance` belongs to. This field is set when
             instances are added to :class:`LabeledFrame` objects.
+=======
+        skeleton: The `Skeleton` that this `Instance` is associated with.
+        points: A dictionary where keys are `Skeleton` node names and
+            values are `Point` objects. Alternatively, a numpy array whose
+            length and order matches `skeleton.nodes`.
+        track: An optional multi-frame object track associated with
+            this instance. This allows individual animals/objects to be
+            tracked across frames.
+        frame: A back reference to the :class:`LabeledFrame` that this
+            :class:`Instance` belongs to. This field is set when
+            instances are added to :class:`LabeledFrame` objects.
+        from_predicted: The `PredictedInstance` (if any) that this was
+            copied from.
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
     """
 
     skeleton: Skeleton = attr.ib(validator=validators.instance_of(Skeleton))
@@ -106,12 +152,20 @@ class Instance:
     def _validate_all_points(self, attribute, points: Dict[str, Point]):
         """Validation method called by attrs.
 
+<<<<<<< HEAD
         Checks that all the _points defined for the skeleton are found
         in the skeleton.
 
         Args:
             attribute: Attribute being validated; not used.
             points: Either dict of points or PointArray
+=======
+        Checks that all the points defined for the `Skeleton` are found.
+
+        Args:
+            attribute: Attribute being validated; not used.
+            points: Dict of `points`
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
                 If dict, keys should be node names.
 
         Raises:
@@ -148,11 +202,16 @@ class Instance:
                 "'{name}' must be {type!r} (got {value!r} that is a "
                 "{actual!r}).".format(
                     name=attribute.name,
+<<<<<<< HEAD
                     type="Predicted Instance",
+=======
+                    type="PredictedInstance",
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
                     actual=value.__class__,
                     value=value,
                 ),
                 attribute,
+<<<<<<< HEAD
                 "Predicted Instance",
                 value,
             )
@@ -198,6 +257,20 @@ class PredictedInstance(Instance):
     Args:
         score: The instance-level grouping prediction score.
         tracking_score: The instance-level track matching score.
+=======
+                "PredictedInstance",
+                value,
+            )
+
+
+@define(auto_attribs=True)
+class PredictedInstance(Instance):
+    """A `PredictedInstance` is an output of the inference procedure.
+
+    Args:
+        score: The `Instance` level grouping prediction score.
+        tracking_score: The `Instance` level `Track` matching score.
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
     """
 
     from_predicted: Optional[PredictedInstance] = attr.ib(
@@ -206,6 +279,7 @@ class PredictedInstance(Instance):
     score: float = attr.ib(default=0.0, converter=float)
     tracking_score: float = attr.ib(default=0.0, converter=float)
 
+<<<<<<< HEAD
     @classmethod
     def from_instance(
         cls, instance: Instance, score: float, tracking_score: float = 0.0
@@ -274,12 +348,15 @@ class PredictedInstance(Instance):
             track=track,
         )
 
+=======
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
 
 @define(auto_attribs=True)
 class LabeledFrame:
     """Holds labeled data for a single frame of a video.
 
     Args:
+<<<<<<< HEAD
         video: The :class:`Video` associated with this frame.
         frame_idx: The index of frame in video.
         instances: List of instances associated with the frame.
@@ -295,6 +372,25 @@ class LabeledFrame:
 
         Args:
             instances: A list of instances associated with this frame.
+=======
+        video: The :class:`Video` associated with this `LabeledFrame`.
+        frame_idx: The index of the `LabeledFrame` in the `Video`.
+        instances: List of `Instance` objects associated with this `LabeledFrame`.
+    """
+
+    def _set_instance_frame(
+        self, attribute, new_instances: List[Instance]
+    ) -> List[Instance]:
+        """Set the list of `Instance` objects associated with this `LabeledFrame`.
+
+        Updates the `frame` attribute on each `Instance` to the
+        :class:`LabeledFrame` which will contain the `Instance`.
+        The list of `Instance` objects replaces `Instance` objects that were previously
+        associated with `LabeledFrame`.
+
+        Args:
+            instances: A list of `Instance` objects associated with this `LabeledFrame`.
+>>>>>>> 1adc7affdfb67d755252e1d54de1ecab3ac4f472
 
         Returns:
             None
