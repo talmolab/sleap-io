@@ -52,7 +52,7 @@ class Skeleton:
         symmetries: A list of `Node` pairs corresponding to symmetries in the skeleton.
     """
 
-    nodes: list[Node]
-    edges: list[Edge]
+    nodes: List[Node]
+    edges: List[Edge]
     name: Optional[str] = None
     symmetries: Optional[List[Tuple[Node, Node]]] = None
