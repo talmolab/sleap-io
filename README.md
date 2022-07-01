@@ -1,5 +1,10 @@
 # sleap-io
-Standalone utilities for SLEAP pose tracking data.
+
+[![CI](https://github.com/talmolab/sleap-io/actions/workflows/ci.yml/badge.svg)](https://github.com/talmolab/sleap-io/actions/workflows/ci.yml)
+[![Lint](https://github.com/talmolab/sleap-io/actions/workflows/lint.yml/badge.svg)](https://github.com/talmolab/sleap-io/actions/workflows/lint.yml)
+[![codecov](https://codecov.io/gh/talmolab/sleap-io/branch/main/graph/badge.svg?token=Sj8kIFl3pi)](https://codecov.io/gh/talmolab/sleap-io)
+
+Standalone utilities for working with animal pose tracking data.
 
 This is intended to be a complement to the core [SLEAP](https://github.com/talmolab/sleap)
 package that aims to provide functionality for interacting with pose tracking-related
@@ -16,11 +21,9 @@ For development, use one of the following syntaxes:
 conda env create -f environment.yml
 ```
 ```
-pip install sleap-io[dev]
-```
-```
 pip install -e .[dev]
 ```
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information on development.
 
 ## Usage
 ```
