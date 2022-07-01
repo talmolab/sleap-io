@@ -5,12 +5,11 @@ with a pose model. The edges represent the connections between them and may be u
 differently depending on the underlying pose model.
 """
 
-from __future__ import annotations
 from attrs import define
-from typing import Optional
+from typing import Optional, Tuple, List
 
 
-@define
+@define(auto_attribs=True)
 class Node:
     """A landmark type within a `Skeleton`.
 
@@ -24,11 +23,11 @@ class Node:
     name: str
 
 
-@define
+@define(auto_attribs=True)
 class Edge:
-    """A connection between two nodes within a `Skeleton`.
+    """A connection between two `Node` objects within a `Skeleton`.
 
-    This is a directed edge, representing which node comes first in the skeleton tree.
+    This is a directed edge, representing which `Node` comes first in the `Skeleton` tree.
 
     Attributes:
         source: The origin `Node`.
@@ -39,7 +38,7 @@ class Edge:
     destination: Node
 
 
-@define
+@define(auto_attribs=True)
 class Skeleton:
     """A description of a set of landmark types and connections between them.
 
@@ -49,9 +48,11 @@ class Skeleton:
     Attributes:
         nodes: A list of `Node`s.
         edges: A list of `Edge`s.
-        name: A descriptive name for the skeleton.
+        name: A descriptive name for the `Skeleton`.
+        symmetries: A list of `Node` pairs corresponding to symmetries in the `Skeleton`.
     """
 
-    nodes: list[Node]
-    edges: list[Edge]
+    nodes: List[Node]
+    edges: List[Edge]
     name: Optional[str] = None
+    symmetries: Optional[List[Tuple[Node, Node]]] = None
