@@ -1,6 +1,4 @@
-from sleap_io.model.video import (
-    Video,
-)
+from sleap_io import Video
 
 
 def test_video_class():

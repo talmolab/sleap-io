@@ -2,8 +2,7 @@ from __future__ import annotations
 from attrs import define, validators
 import attr
 from typing import List, Optional, Tuple, Union, Dict
-from sleap_io.model.video import Video
-from sleap_io.model.skeleton import Skeleton, Node
+from sleap_io import Video, Skeleton, Node
 import numpy as np
 
 
@@ -28,7 +27,7 @@ class Point:
 class PredictedPoint(Point):
     """A predicted point is an output of the inference procedure.
 
-    It has all the properties of a labeled point, plus a score.
+    It has all the properties of a labeled `Point`, plus a `score`.
 
     Args:
         score: The point-level prediction score.
@@ -39,13 +38,12 @@ class PredictedPoint(Point):
 
 @define(auto_attribs=True, eq=True)
 class Track:
-    """A track object is associated with a set of animal/object instances
+    """A track object is associated with a set of animal/object `Instance` objects
     across multiple frames of video.
 
     This allows tracking of unique entities in the video over time and space.
 
     Args:
-        spawned_on: The video frame that this track was spawned on.
         name: A name given to this track for identifying purposes.
     """
 
@@ -64,11 +62,11 @@ class Instance:
         track: An optional multi-frame object track associated with
             this instance. This allows individual animals/objects to be
             tracked across frames.
-        from_predicted: The `PredictedInstance` (if any) that this was
-            copied from.
         frame: A back reference to the :class:`LabeledFrame` that this
             :class:`Instance` belongs to. This field is set when
             instances are added to :class:`LabeledFrame` objects.
+        from_predicted: The `PredictedInstance` (if any) that this was
+            copied from.
     """
 
     skeleton: Skeleton = attr.ib(validator=validators.instance_of(Skeleton))
@@ -137,8 +135,8 @@ class PredictedInstance(Instance):
     """A `PredictedInstance` is an output of the inference procedure.
 
     Args:
-        score: The instance-level grouping prediction score.
-        tracking_score: The instance-level track matching score.
+        score: The `Instance` level grouping prediction score.
+        tracking_score: The `Instance` level `Track` matching score.
     """
 
     from_predicted: Optional[PredictedInstance] = attr.ib(
@@ -154,7 +152,7 @@ class LabeledFrame:
 
     Args:
         video: The :class:`Video` associated with this `LabeledFrame`.
-        frame_idx: The index of the `LabeledFrame` in the video.
+        frame_idx: The index of the `LabeledFrame` in the `Video`.
         instances: List of `Instance` objects associated with this `LabeledFrame`.
     """
 

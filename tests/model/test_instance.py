@@ -1,14 +1,15 @@
-import numpy as np
 import pytest
-from sleap_io.model.instance import (
+from sleap_io import (
     Point,
     PredictedPoint,
     Track,
     Instance,
     LabeledFrame,
     PredictedInstance,
+    Skeleton,
+    Node,
+    Edge,
 )
-from sleap_io.model.skeleton import Skeleton, Node, Edge
 
 
 def test_classes(dummy_video):

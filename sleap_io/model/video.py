@@ -6,11 +6,8 @@ a video and its components used in SLEAP.
 
 from __future__ import annotations
 from attr import attrs
-from attrs import define, field, Factory
-from typing import Any, List, Optional, Tuple, Union, Dict
-import h5py as h5
-import numpy as np
-import os
+from attrs import define
+from typing import Any, Tuple
 
 
 @define(auto_attribs=True)
@@ -29,5 +26,5 @@ class Video:
     """
 
     filename: str
-    shape: Tuple[int, int, int, int] = field(default=None)
+    shape: Tuple[int, int, int, int]
     backend: Any = None

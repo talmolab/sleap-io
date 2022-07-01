@@ -5,10 +5,8 @@ with a pose model. The edges represent the connections between them and may be u
 differently depending on the underlying pose model.
 """
 
-from __future__ import annotations
-from attrs import define, field
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, Text
-import numpy as np
+from attrs import define
+from typing import Optional, Tuple, List
 
 
 @define(auto_attribs=True)
@@ -29,7 +27,7 @@ class Node:
 class Edge:
     """A connection between two `Node` objects within a `Skeleton`.
 
-    This is a directed edge, representing which `Node` comes first in the `Skeleton` tree.
+    This is a directed edge, representing which `Node` comes first in the Skeleton tree.
 
     Attributes:
         source: The origin `Node`.
@@ -51,9 +49,10 @@ class Skeleton:
         nodes: A list of `Node`s.
         edges: A list of `Edge`s.
         name: A descriptive name for the skeleton.
+        symmetries: A list of `Node` pairs corresponding to symmetries in the skeleton.
     """
 
     nodes: list[Node]
     edges: list[Edge]
-    name: Optional[str] = field(default=None)
-    symmetries: Optional[List[Tuple[Node, Node]]] = field(default=None)
+    name: Optional[str] = None
+    symmetries: Optional[List[Tuple[Node, Node]]] = None

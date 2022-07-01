@@ -1,4 +1,4 @@
-from sleap_io.model.skeleton import Node, Edge, Skeleton
+from sleap_io import Node, Edge, Skeleton
 
 
 def test_skeleton_node_edge():
