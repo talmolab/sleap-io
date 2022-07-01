@@ -20,3 +20,8 @@ class DummyVideo:
 @pytest.fixture
 def dummy_video():
     return DummyVideo()
+
+
+@pytest.fixture
+def slp_file():
+    return "test_file.slp"

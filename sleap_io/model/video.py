@@ -25,5 +25,5 @@ class Video:
     """
 
     filename: str
-    shape: Tuple[int, int, int, int]
+    shape: Tuple[int, int, int, int] = None
     backend: Any = None

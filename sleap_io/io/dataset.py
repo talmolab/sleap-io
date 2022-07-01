@@ -3,10 +3,12 @@ import h5py
 import numpy as np
 import pandas as pd
 import json
-from sleap_io.model.video import Video
-from sleap_io.model.skeleton import Skeleton, Edge, Node
 from typing import List, Optional
-from sleap_io.model.instance import (
+from sleap_io import (
+    Video,
+    Skeleton,
+    Edge,
+    Node,
     Instance,
     LabeledFrame,
     Track,
@@ -109,6 +111,9 @@ def read_videos(labels_path):
     Returns:
         A list of `Video` objects.
     """
+
+    # TODO (DS) - Find shape of video
+
     videos = [json.loads(x) for x in read_hdf5(labels_path, "videos_json")]
     video_objects = []
     for video in videos:
@@ -234,10 +239,11 @@ def read_instances(labels_path):
     instance_objects = []
     for idx, instance in enumerate(instances):
         if instance["instance_type"] == 0:  # Normal Instance
+            tracks_default = tracks[instance["track"]] if len(tracks) > 0 else None
             instance_objects.append(
                 from_pointsarray(
                     skeleton=skeleton,
-                    track=tracks[instance["track"]],
+                    track=tracks_default,
                     points=np.array(
                         default_points[
                             instance["point_id_start"] : instance["point_id_end"]
