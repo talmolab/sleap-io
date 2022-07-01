@@ -60,7 +60,7 @@ This package uses [`setuptools`](https://setuptools.pypa.io/en/latest/) as a [pa
 
 Our [build system](https://setuptools.pypa.io/en/latest/build_meta.html) is configured in two places:
 - [`pyproject.toml`](pyproject.toml) which defines the basic build system configuration. This probably won't need to be changed.
-- [`setup.cfg`] which contains the [declarative configuration](https://setuptools.pypa.io/en/latest/userguide/declarative_config.html#declarative-config) of the package and its dependencies.
+- [`setup.cfg`](setup.cfg) which contains the [declarative configuration](https://setuptools.pypa.io/en/latest/userguide/declarative_config.html#declarative-config) of the package and its dependencies.
 
 If new dependencies need to be introduced (or if versions need to be fenced), specify these in [`setup.cfg`](setup.cfg) in the `install_requires` section. For development-only dependencies (i.e., packages that are not needed for distribution), add them to the `[options.extras_require]` → `dev` section. These dependencies will only be installed when specifying the `dev` extras like: `pip install -e .[dev]` or `pip install sleap-io[dev]`.
 
