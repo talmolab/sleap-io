@@ -6,7 +6,7 @@ a video and its components used in SLEAP.
 
 from __future__ import annotations
 from attrs import define
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 
 
 @define(auto_attribs=True)
@@ -25,5 +25,5 @@ class Video:
     """
 
     filename: str
-    shape: Tuple[int, int, int, int] = None
+    shape: Optional[Tuple[int, int, int, int]] = None
     backend: Any = None
