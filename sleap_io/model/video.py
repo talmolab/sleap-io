@@ -5,7 +5,6 @@ a video and its components used in SLEAP.
 """
 
 from __future__ import annotations
-from attr import attrs
 from attrs import define
 from typing import Any, Tuple
 
