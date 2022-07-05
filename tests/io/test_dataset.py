@@ -22,23 +22,9 @@ from sleap_io import (
     PredictedInstance,
 )
 import numpy as np
+import h5py
 from typing import List
-
-
-skeleton = Skeleton(
-    nodes=[Node("head"), Node("thorax"), Node("abdomen")],
-    edges=[
-        Edge(source=Node("head"), destination=Node("thorax")),
-        Edge(source=Node("thorax"), destination=Node("abdomen")),
-    ],
-)
-instance1 = Instance(skeleton=skeleton, points={"head": Point(x=0, y=0)})
-numpy_array1 = np.array([[1, 1], [2, 2], [3, 3]], dtype="float32")
-numpy_array2 = np.array(
-    [[1, 1, True, False], [2, 2, True, False], [3, 3, True, False]], dtype="float32"
-)
-instance2 = instance_from_numpy(points=numpy_array1, skeleton=skeleton)
-instance3 = instance_from_numpy(points=numpy_array2, skeleton=skeleton)
+import json
 
 
 def test_read(slp_file1):
@@ -57,6 +43,14 @@ def test_read(slp_file1):
     )
     instance2 = instance_from_numpy(points=numpy_array1, skeleton=skeleton)
     instance3 = instance_from_numpy(points=numpy_array2, skeleton=skeleton)
+
+    with h5py.File(slp_file1, "r") as f:
+        attrs = dict(f["metadata"].attrs)
+    data = json.loads(attrs["json"].decode())
+    data["skeletons"][0]["links"][0]["type"] = {}
+    f.create_dataset("test", data=data)  # implant new-shaped dataset "X1"
+
+    print(data["skeletons"][0]["links"][0]["type"])
 
     # Instances & HDF5
     assert type(predicted_from_instance(instance1, 0.0)) == PredictedInstance

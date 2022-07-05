@@ -1,7 +1,6 @@
-from attr import Factory, asdict
+from attr import asdict
 import h5py
 import numpy as np
-import pandas as pd
 import json
 from typing import List, Optional
 from sleap_io import (
@@ -241,9 +240,12 @@ def read_instances(labels_path):
     pred_points = read_pred_points(labels_path)
     instance_objects = []
     for idx, instance in enumerate(instances):
-        if instance["instance_type"] == 0:  # Normal Instance
+
+        # Normal Instance
+        if instance["instance_type"] == 0:
             tracks_default = tracks[instance["track"]] if len(tracks) > 0 else None
             instance_objects.append(
+                # Params for creating `Instance` from `numpy.array`
                 instance_from_numpy(
                     skeleton=skeleton,
                     track=tracks_default,
@@ -254,9 +256,12 @@ def read_instances(labels_path):
                     ),
                 )
             )
-        if instance["instance_type"] == 1:  # Predicted Instance
+
+        # Predicted Instance
+        if instance["instance_type"] == 1:
             instance_objects.append(
                 predicted_from_instance(
+                    # Params for creating `PredictedInstance` from `Instance`
                     instance=instance_from_numpy(
                         skeleton=skeleton,
                         track=tracks[instance["track"]],
@@ -270,4 +275,5 @@ def read_instances(labels_path):
                     tracking_score=instance["tracking_score"],
                 )
             )
+
     return instance_objects
