@@ -44,14 +44,6 @@ def test_read(slp_file1):
     instance2 = instance_from_numpy(points=numpy_array1, skeleton=skeleton)
     instance3 = instance_from_numpy(points=numpy_array2, skeleton=skeleton)
 
-    with h5py.File(slp_file1, "r") as f:
-        attrs = dict(f["metadata"].attrs)
-    data = json.loads(attrs["json"].decode())
-    data["skeletons"][0]["links"][0]["type"] = {}
-    f.create_dataset("test", data=data)  # implant new-shaped dataset "X1"
-
-    print(data["skeletons"][0]["links"][0]["type"])
-
     # Instances & HDF5
     assert type(predicted_from_instance(instance1, 0.0)) == PredictedInstance
     assert type(instance2) == Instance
