@@ -1,7 +1,7 @@
 from pandas import read_hdf
 from sleap_io import (
-    from_pointsarray,
-    from_instance,
+    instance_from_numpy,
+    predicted_from_instance,
     read_hdf5,
     read_videos,
     read_skeleton,
@@ -37,8 +37,8 @@ numpy_array1 = np.array([[1, 1], [2, 2], [3, 3]], dtype="float32")
 numpy_array2 = np.array(
     [[1, 1, True, False], [2, 2, True, False], [3, 3, True, False]], dtype="float32"
 )
-instance2 = from_pointsarray(points=numpy_array1, skeleton=skeleton)
-instance3 = from_pointsarray(points=numpy_array2, skeleton=skeleton)
+instance2 = instance_from_numpy(points=numpy_array1, skeleton=skeleton)
+instance3 = instance_from_numpy(points=numpy_array2, skeleton=skeleton)
 
 
 def test_read(slp_file1):
@@ -55,11 +55,11 @@ def test_read(slp_file1):
     numpy_array2 = np.array(
         [[1, 1, True, False], [2, 2, True, False], [3, 3, True, False]], dtype="float32"
     )
-    instance2 = from_pointsarray(points=numpy_array1, skeleton=skeleton)
-    instance3 = from_pointsarray(points=numpy_array2, skeleton=skeleton)
+    instance2 = instance_from_numpy(points=numpy_array1, skeleton=skeleton)
+    instance3 = instance_from_numpy(points=numpy_array2, skeleton=skeleton)
 
     # Instances & HDF5
-    assert type(from_instance(instance1, 0.0)) == PredictedInstance
+    assert type(predicted_from_instance(instance1, 0.0)) == PredictedInstance
     assert type(instance2) == Instance
     assert type(instance3) == Instance
     assert type(read_hdf5(slp_file1)) == dict

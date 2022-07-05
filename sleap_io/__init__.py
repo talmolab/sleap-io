@@ -11,8 +11,8 @@ from sleap_io.model.instance import (
     PredictedInstance,
 )
 from sleap_io.io.dataset import (
-    from_pointsarray,
-    from_instance,
+    instance_from_numpy,
+    predicted_from_instance,
     read_hdf5,
     read_videos,
     read_skeleton,
