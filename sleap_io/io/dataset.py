@@ -17,25 +17,25 @@ from sleap_io import (
 )
 
 
-def from_pointsarray(
+def instance_from_numpy(
     points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
 ) -> Instance:
     """Create an `Instance` from an array of points.
 
     Args:
         points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-            contains the points in (x, y) coordinates of each node. Missing nodes
+            contains the points in (x, y) coordinates of each `Node`. Missing nodes
             should be represented as `NaN`.
-        skeleton: A `sleap.Skeleton` instance with `n_nodes` nodes to associate with
-            the instance.
-        track: Optional `sleap.Track` object to associate with the instance.
+        skeleton: A `Skeleton` instance with `n_nodes` nodes to associate with
+            the `Instance`.
+        track: Optional `Track` object to associate with the `Instance`.
 
     Returns:
         A new `Instance` object.
     """
     predicted_points = dict()
     node_names: List[str] = [node.name for node in skeleton.nodes]
-    # TODO(LM): Ensure ordering of nodes and points match up.
+
     for point, node_name in zip(points, node_names):
         if (len(point)) == 4:
             predicted_points[node_name] = Point(
@@ -50,18 +50,18 @@ def from_pointsarray(
     return Instance(points=predicted_points, skeleton=skeleton, track=track)
 
 
-def from_instance(
+def predicted_from_instance(
     instance: Instance, score: float, tracking_score: float = 0.0
 ) -> PredictedInstance:
     """Create a `PredictedInstance` from an `Instance`.
 
     The fields are copied in a shallow manner with the exception of points. For each
-    point in the instance a `PredictedPoint` is created with score set to default
+    `Point` in the `Instance` a `PredictedPoint` is created with score set to default
     value.
 
     Args:
         instance: The `Instance` object to shallow copy data from.
-        score: The score for this instance.
+        score: The score for this `Instance`.
 
     Returns:
         A `PredictedInstance` for the given `Instance`.
@@ -167,33 +167,35 @@ def read_skeleton(labels_path):
     # node ordering is specific to each skeleton, so we'll need to fix this afterwards.
     node_names = [x["name"] for x in metadata["nodes"]]
 
-    # TODO: Support multi-skeleton?
-    skeleton = metadata["skeletons"][0]
-    # Parse out the cattr-based serialization stuff from the skeleton links.
-    edge_inds = []
-    for link in skeleton["links"]:
-        if "py/reduce" in link["type"]:
-            edge_type = link["type"]["py/reduce"][1]["py/tuple"][0]
-        else:
-            edge_type = link["type"]["py/id"]
+    skeleton_objects = []
+    for skel in metadata["skeletons"]:
+        # Parse out the cattr-based serialization stuff from the skeleton links.
+        edge_inds = []
+        for link in skel["links"]:
+            if "py/reduce" in link["type"]:
+                edge_type = link["type"]["py/reduce"][1]["py/tuple"][0]
+            else:
+                edge_type = link["type"]["py/id"]
 
-        if edge_type == 1:  # 1 -> real edge, 2 -> symmetry edge
-            edge_inds.append((link["source"], link["target"]))
+            if edge_type == 1:  # 1 -> real edge, 2 -> symmetry edge
+                edge_inds.append((link["source"], link["target"]))
 
-    # Re-index correctly.
-    skeleton_node_inds = [node["id"] for node in skeleton["nodes"]]
-    node_names = [node_names[i] for i in skeleton_node_inds]
-    edge_inds = [
-        (skeleton_node_inds.index(s), skeleton_node_inds.index(d)) for s, d in edge_inds
-    ]
-    nodes = []
-    for name in node_names:
-        nodes.append(Node(name=name))
-    edges = []
-    for edge in edge_inds:
-        edges.append(Edge(source=nodes[edge[0]], destination=nodes[edge[1]]))
-    skeleton = Skeleton(nodes=nodes, edges=edges, name=skeleton["graph"]["name"])
-    return skeleton
+        # Re-index correctly.
+        skeleton_node_inds = [node["id"] for node in skel["nodes"]]
+        node_names = [node_names[i] for i in skeleton_node_inds]
+        edge_inds = [
+            (skeleton_node_inds.index(s), skeleton_node_inds.index(d))
+            for s, d in edge_inds
+        ]
+        nodes = []
+        for name in node_names:
+            nodes.append(Node(name=name))
+        edges = []
+        for edge in edge_inds:
+            edges.append(Edge(source=nodes[edge[0]], destination=nodes[edge[1]]))
+        skel = Skeleton(nodes=nodes, edges=edges, name=skel["graph"]["name"])
+        skeleton_objects.append(skel)
+    return skeleton_objects
 
 
 def read_points(labels_path):
@@ -231,7 +233,8 @@ def read_instances(labels_path):
     Returns:
         A list of `Instance` objects.
     """
-    skeleton = read_skeleton(labels_path)
+    skeleton = read_skeleton(labels_path)[0]
+    # TODO (DS) - Support multi-skeleton
     tracks = read_tracks(labels_path)
     instances = read_hdf5(labels_path, "instances")
     default_points = read_points(labels_path)
@@ -241,7 +244,7 @@ def read_instances(labels_path):
         if instance["instance_type"] == 0:  # Normal Instance
             tracks_default = tracks[instance["track"]] if len(tracks) > 0 else None
             instance_objects.append(
-                from_pointsarray(
+                instance_from_numpy(
                     skeleton=skeleton,
                     track=tracks_default,
                     points=np.array(
@@ -253,8 +256,8 @@ def read_instances(labels_path):
             )
         if instance["instance_type"] == 1:  # Predicted Instance
             instance_objects.append(
-                from_instance(
-                    instance=from_pointsarray(
+                predicted_from_instance(
+                    instance=instance_from_numpy(
                         skeleton=skeleton,
                         track=tracks[instance["track"]],
                         points=np.array(
