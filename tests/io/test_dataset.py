@@ -27,7 +27,7 @@ from typing import List
 import json
 
 
-def test_read(slp_file1):
+def test_read(slp_file1, slp_file2):
 
     skeleton = Skeleton(
         nodes=[Node("head"), Node("thorax"), Node("abdomen")],
@@ -81,3 +81,5 @@ def test_read(slp_file1):
     if len(read_instances(slp_file1)) >= 1:
         assert type(read_instances(slp_file1)[0]) == Instance
         assert type(read_instances(slp_file1)[2]) == PredictedInstance
+
+    assert read_skeleton(slp_file2)
