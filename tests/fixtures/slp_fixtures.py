@@ -7,7 +7,7 @@ def slp_file1():
 
     Returns: filepath to SLP file
     """
-    return "typical.slp"
+    return "tests/data/slp/typical.slp"
 
 
 @pytest.fixture
@@ -16,4 +16,4 @@ def slp_file2():
 
     Returns: filepath to SLP file
     """
-    return "reduce.slp"
+    return "tests/data/slp/reduce.slp"
