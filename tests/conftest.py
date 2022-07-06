@@ -1,2 +1,2 @@
 from tests.fixture.video import *
-from tests.fixture.slp import *
+from tests.fixture.slp_fixtures import *
