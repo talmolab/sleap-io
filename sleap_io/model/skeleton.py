@@ -80,14 +80,16 @@ class Skeleton:
     """
 
     def _update_node_map(self, attr, nodes):
-        """Callback for maintaining node name to `Node` map."""
+        """Callback for maintaining node name/index to `Node` map."""
         self._node_name_map = {node.name: node for node in nodes}
+        self._node_ind_map = {node: i for i, node in enumerate(nodes)}
 
     nodes: list[Node] = field(on_setattr=_update_node_map)
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
     name: Optional[str] = None
     _node_name_map: dict[str, Node] = field(init=False, repr=False)
+    _node_ind_map: dict[Node, int] = field(init=False, repr=False)
 
     def __attrs_post_init__(self):
         self._convert_nodes()
@@ -151,7 +153,7 @@ class Skeleton:
         if type(node) == str:
             return self.index(self._node_name_map[node])
 
-        return self.nodes.index(node)
+        return self._node_ind_map[node]
 
     def __getitem__(self, idx: Union[int, str]) -> Node:
         """Return a `Node` when indexing by name or integer."""
