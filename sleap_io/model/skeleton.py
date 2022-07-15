@@ -7,7 +7,7 @@ differently depending on the underlying pose model.
 
 from __future__ import annotations
 from attrs import define, field
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 
 @define(frozen=True)
@@ -79,14 +79,20 @@ class Skeleton:
         name: A descriptive name for the `Skeleton`.
     """
 
-    nodes: list[Node]
+    def _update_node_map(self, attr, nodes):
+        """Callback for maintaining node name to `Node` map."""
+        self._node_name_map = {node.name: node for node in nodes}
+
+    nodes: list[Node] = field(on_setattr=_update_node_map)
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
     name: Optional[str] = None
+    _node_name_map: dict[str, Node] = field(init=False, repr=False)
 
     def __attrs_post_init__(self):
         self._convert_nodes()
         self._convert_edges()
+        self._update_node_map(None, self.nodes)
 
     def _convert_nodes(self):
         """Convert nodes to `Node` objects if needed."""
@@ -135,3 +141,21 @@ class Skeleton:
             (self.nodes.index(edge.source), self.nodes.index(edge.destination))
             for edge in self.edges
         ]
+
+    def __len__(self) -> int:
+        """Return the number of nodes in the skeleton."""
+        return len(self.nodes)
+
+    def index(self, node: Union[Node, str]) -> int:
+        """Return the index of a node specified as a `Node` or string name."""
+        if type(node) == str:
+            return self.index(self._node_name_map[node])
+
+        return self.nodes.index(node)
+
+    def __getitem__(self, idx: Union[int, str]) -> Node:
+        """Return a `Node` when indexing by name or integer."""
+        if type(idx) == int:
+            return self.nodes[idx]
+        elif type(idx) == str:
+            return self._node_name_map[idx]

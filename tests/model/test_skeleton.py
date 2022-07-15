@@ -13,6 +13,7 @@ def test_symmetry():
 def test_skeleton():
     skel = Skeleton([Node("A"), Node("B")])
     assert skel.node_names == ["A", "B"]
+    assert len(skel) == 2
 
     skel = Skeleton(["A", "B"])
     assert skel.node_names == ["A", "B"]
@@ -24,3 +25,18 @@ def test_skeleton():
     assert skel.edges[0].destination == skel.nodes[1]
     assert skel.edges[0] == Edge(skel.nodes[0], skel.nodes[1])
     assert skel.edge_inds == [(0, 1)]
+
+
+def test_skeleton_node_map():
+    A = Node("A")
+    B = Node("B")
+    skel = Skeleton([A, B])
+
+    assert skel.index("A") == 0
+    assert skel.index("B") == 1
+
+    assert skel.index(A) == 0
+    assert skel.index(B) == 1
+
+    assert skel["A"] == A
+    assert skel["B"] == B
