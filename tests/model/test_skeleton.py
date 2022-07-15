@@ -1,18 +1,26 @@
-from sleap_io import Node, Edge, Skeleton
+from sleap_io.model.skeleton import Node, Edge, Symmetry, Skeleton
 
 
-def test_skeleton_node_edge():
-    # Creates a test skeleton with nodes and edges.
-    skeleton = Skeleton(
-        nodes=[Node("head"), Node("thorax"), Node("abdomen")],
-        edges=[
-            Edge(source=Node("head"), destination=Node("thorax")),
-            Edge(source=Node("thorax"), destination=Node("abdomen")),
-        ],
-    )
-    # Asserts that the skeleton has the matching Node and Edge objects.
-    assert skeleton.nodes == [Node("head"), Node("thorax"), Node("abdomen")]
-    assert skeleton.edges == [
-        Edge(source=Node("head"), destination=Node("thorax")),
-        Edge(source=Node("thorax"), destination=Node("abdomen")),
-    ]
+def test_symmetry():
+    A = Node("A")
+    B = Node("B")
+
+    s1 = Symmetry([A, B])
+    s2 = Symmetry([B, A])
+    assert s1 == s2
+
+
+def test_skeleton():
+    skel = Skeleton([Node("A"), Node("B")])
+    assert skel.node_names == ["A", "B"]
+
+    skel = Skeleton(["A", "B"])
+    assert skel.node_names == ["A", "B"]
+    for node in skel.nodes:
+        assert type(node) == Node
+
+    skel = Skeleton(["A", "B"], edges=[("A", "B")])
+    assert skel.edges[0].source == skel.nodes[0]
+    assert skel.edges[0].destination == skel.nodes[1]
+    assert skel.edges[0] == Edge(skel.nodes[0], skel.nodes[1])
+    assert skel.edge_inds == [(0, 1)]
