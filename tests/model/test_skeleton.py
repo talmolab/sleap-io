@@ -40,3 +40,7 @@ def test_skeleton_node_map():
 
     assert skel["A"] == A
     assert skel["B"] == B
+
+    skel.nodes = [B, A]
+    assert skel.index("A") == 1
+    assert skel.index("B") == 0
