@@ -7,9 +7,9 @@ from sleap_io.model.instance import (
     PredictedPoint,
     Track,
     Instance,
-    LabeledFrame,
     PredictedInstance,
 )
+from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.io.slp import (
     instance_from_numpy,
     predicted_from_instance,

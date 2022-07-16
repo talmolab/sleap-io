@@ -1,2 +1,2 @@
-from tests.fixtures.video import *
-from tests.fixtures.slp_fixtures import *
+from tests.fixtures.generic import *
+from tests.fixtures.data import *

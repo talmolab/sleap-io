@@ -1,73 +1,58 @@
-import pytest
-from sleap_io import (
+import numpy as np
+from numpy.testing import assert_equal
+from sleap_io.model.instance import (
     Point,
     PredictedPoint,
     Track,
     Instance,
-    LabeledFrame,
     PredictedInstance,
-    Skeleton,
-    Node,
-    Edge,
 )
+from sleap_io import Skeleton, Node, Edge
 
 
-def test_classes(dummy_video):
+def test_point():
+    pt = Point(x=1.2, y=3.4, visible=True, complete=True)
+    assert_equal(pt.numpy(), np.array([1.2, 3.4]))
 
-    point = Point(x=0, y=0)
-    pred_point = PredictedPoint(x=0, y=0)
-    track = Track()
-    skeleton = Skeleton(
-        nodes=[Node("head"), Node("thorax"), Node("abdomen")],
-        edges=[
-            Edge(source=Node("head"), destination=Node("thorax")),
-            Edge(source=Node("thorax"), destination=Node("abdomen")),
-        ],
-    )
-    instance1 = Instance(skeleton=skeleton, points={"head": point})
+    pt.visible = False
+    assert_equal(pt.numpy(), np.array([np.nan, np.nan]))
 
-    pred_instance1 = PredictedInstance(skeleton)
+    pt = Point(x=np.nan, y=np.nan, visible=True)
+    assert not pt.visible
+    pt.visible = True
+    assert not pt.visible
+    pt.x = 1
+    pt.y = 2
+    assert not pt.visible
+    pt.visible = True
+    assert pt.visible
 
-    dummy = dummy_video
-    labeled_frame = LabeledFrame(video=dummy, frame_idx=1, instances=[instance1])
 
-    # Point
-    assert point.x == 0
-    assert point.y == 0
-    assert point.visible == True
-    assert point.complete == False
+def test_predicted_point():
+    pt = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
+    assert pt.score == 0.9
+    assert_equal(pt.numpy(), np.array([1.2, 3.4]))
 
-    # PredictedPoint
-    assert pred_point.x == 0
-    assert pred_point.y == 0
-    assert pred_point.visible == True
-    assert pred_point.complete == False
-    assert pred_point.score == 0
 
-    # Track
-    assert track.name == ""
+def test_track():
+    # Test hashing by ID
+    assert Track("A") != Track("A")
 
-    # Instance
-    assert instance1.skeleton == skeleton
-    assert instance1.points == {"head": point}
-    assert instance1.track == None
-    assert instance1.frame == None
-    assert instance1.from_predicted == None
-    with pytest.raises(TypeError):
-        Instance(skeleton=skeleton, from_predicted="foo")
-    with pytest.raises(KeyError):
-        Instance(skeleton=skeleton, points={"foo": "bar"})
-    with pytest.raises(TypeError):
-        Instance(skeleton=skeleton, points="foo")
 
-    # PredictedInstance
-    assert pred_instance1.from_predicted == None
-    assert pred_instance1.score == 0.0
-    assert pred_instance1.tracking_score == 0.0
+def test_instance():
+    inst = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
+    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
 
-    # LabeledFrame
-    assert labeled_frame.video == dummy
-    assert labeled_frame.instances == [instance1]
-    assert labeled_frame.instances
-    labeled_frame.instances = [instance1]
-    assert labeled_frame.instances == [instance1]
+    inst = Instance([[1, 2], [3, 4]], skeleton=Skeleton(["A", "B"]))
+    assert_equal(inst.numpy(), [[1, 2], [3, 4]])
+    assert len(inst) == 2
+    assert_equal(inst[0].numpy(), [1, 2])
+    assert_equal(inst[1].numpy(), [3, 4])
+    assert_equal(inst["A"].numpy(), [1, 2])
+    assert_equal(inst["B"].numpy(), [3, 4])
+    assert_equal(inst[inst.skeleton.nodes[0]].numpy(), [1, 2])
+    assert_equal(inst[inst.skeleton.nodes[1]].numpy(), [3, 4])
+
+    inst = Instance([[np.nan, np.nan], [3, 4]], skeleton=Skeleton(["A", "B"]))
+    assert not inst[0].visible
+    assert inst[1].visible
