@@ -47,6 +47,7 @@ def test_instance():
     inst = Instance([[1, 2], [3, 4]], skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[1, 2], [3, 4]])
     assert len(inst) == 2
+    assert inst.n_visible == 2
     assert_equal(inst[0].numpy(), [1, 2])
     assert_equal(inst[1].numpy(), [3, 4])
     assert_equal(inst["A"].numpy(), [1, 2])
@@ -57,6 +58,12 @@ def test_instance():
     inst = Instance([[np.nan, np.nan], [3, 4]], skeleton=Skeleton(["A", "B"]))
     assert not inst[0].visible
     assert inst[1].visible
+    assert inst.n_visible == 1
+    assert not inst.is_empty
+
+    inst = Instance([[np.nan, np.nan], [np.nan, np.nan]], skeleton=Skeleton(["A", "B"]))
+    assert inst.n_visible == 0
+    assert inst.is_empty
 
 
 def test_predicted_instance():

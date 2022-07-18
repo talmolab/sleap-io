@@ -9,7 +9,7 @@ estimated, such as confidence scores.
 
 from __future__ import annotations
 from attrs import define, validators, field
-from typing import Optional, Union, Dict
+from typing import Optional, Union
 from sleap_io import Skeleton, Node
 import numpy as np
 
@@ -39,7 +39,6 @@ class Point:
     x: float = field(on_setattr=_maintain_visibility)
     y: float = field(on_setattr=_maintain_visibility)
     visible: bool = field(default=True, on_setattr=_maintain_visibility)
-    # visible: bool = True
     complete: bool = False
 
     def __attrs_post_init__(self):
@@ -138,7 +137,7 @@ class Instance:
             vals = [
                 point
                 if type(point) == self._POINT_TYPE
-                else self._make_default_point(x=point[0], y=point[1])
+                else self._make_default_point(*point)
                 for point in points.values()
             ]
             points = {k: v for k, v in zip(keys, vals)}
@@ -168,6 +167,16 @@ class Instance:
     def __len__(self) -> int:
         """Return the number of points in the instance."""
         return len(self.points)
+
+    @property
+    def n_visible(self) -> int:
+        """Return the number of visible points in the instance."""
+        return sum(pt.visible for pt in self.points.values())
+
+    @property
+    def is_empty(self) -> bool:
+        """Return `True` if no points are visible on the instance."""
+        return self.n_visible == 0
 
     @classmethod
     def from_numpy(
