@@ -13,7 +13,7 @@ import numpy as np
 
 @define(auto_attribs=True)
 class LabeledFrame:
-    """Holds labeled data for a single frame of a video.
+    """Labeled data for a single frame of a video.
 
     Args:
         video: The :class:`Video` associated with this `LabeledFrame`.
