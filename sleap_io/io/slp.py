@@ -1,8 +1,8 @@
-from attr import asdict
-import h5py
 import numpy as np
+import h5py
 import json
-from typing import List, Optional
+from typing import Optional, Union
+import attrs
 from sleap_io import (
     Video,
     Skeleton,
@@ -10,10 +10,12 @@ from sleap_io import (
     Node,
     Instance,
     LabeledFrame,
+    Labels,
     Track,
     Point,
     PredictedInstance,
 )
+from sleap_io.io.utils import read_hdf5
 
 
 def instance_from_numpy(
@@ -33,7 +35,7 @@ def instance_from_numpy(
         A new `Instance` object.
     """
     predicted_points = dict()
-    node_names: List[str] = [node.name for node in skeleton.nodes]
+    node_names: list[str] = [node.name for node in skeleton.nodes]
 
     for point, node_name in zip(points, node_names):
         if (len(point)) == 4:
@@ -65,7 +67,7 @@ def predicted_from_instance(
     Returns:
         A `PredictedInstance` for the given `Instance`.
     """
-    kw_args = asdict(
+    kw_args = attrs.asdict(
         instance,
         recurse=False,
     )
@@ -74,34 +76,7 @@ def predicted_from_instance(
     return PredictedInstance(**kw_args)
 
 
-def read_hdf5(filename, dataset="/"):
-    """Read data from an HDF5 file.
-
-    Args:
-        filename: Path to an HDF5 file.
-        dataset: Path to a dataset or group. If a dataset, return the entire
-            dataset as an array. If group, all datasets contained within the
-            group will be recursively loaded and returned in a dict keyed by
-            their full path. Defaults to "/" (load everything).
-
-    Returns:
-        The data as an array (for datasets) or dictionary (for groups).
-    """
-    data = {}
-
-    def read_datasets(k, v):
-        if type(v) == h5py.Dataset:
-            data[v.name] = v[()]
-
-    with h5py.File(filename, "r") as f:
-        if type(f[dataset]) == h5py.Group:
-            f.visititems(read_datasets)
-        elif type(f[dataset]) == h5py.Dataset:
-            data = f[dataset][()]
-    return data
-
-
-def read_videos(labels_path):
+def read_videos(labels_path: str) -> list[Video]:
     """Read `Video` dataset in a SLEAP labels file.
 
     Args:
@@ -120,7 +95,7 @@ def read_videos(labels_path):
     return video_objects
 
 
-def read_tracks(labels_path):
+def read_tracks(labels_path: str) -> list[Track]:
     """Read `Track` dataset in a SLEAP labels file.
 
     Args:
@@ -136,7 +111,7 @@ def read_tracks(labels_path):
     return track_objects
 
 
-def read_metadata(labels_path):
+def read_metadata(labels_path: str) -> dict:
     """Read metadata from a SLEAP labels file.
 
     Args:
@@ -151,11 +126,11 @@ def read_metadata(labels_path):
     return metadata
 
 
-def read_skeleton(labels_path):
+def read_skeleton(labels_path: str) -> list[Skeleton]:
     """Read `Skeleton` dataset from a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string that contains the path to the labels file.
 
     Returns:
         A `Skeleton` object.
@@ -197,11 +172,11 @@ def read_skeleton(labels_path):
     return skeleton_objects
 
 
-def read_points(labels_path):
+def read_points(labels_path: str) -> np.ndarray:
     """Read `Point` dataset from a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string that contains the path to the labels file.
 
     Returns:
         A list of `Point` objects.
@@ -210,7 +185,7 @@ def read_points(labels_path):
     return points
 
 
-def read_pred_points(labels_path):
+def read_pred_points(labels_path: str) -> np.ndarray:
     """Read `PredictedPoint` dataset from a SLEAP labels file.
 
     Args:
@@ -223,7 +198,7 @@ def read_pred_points(labels_path):
     return pred_points
 
 
-def read_instances(labels_path):
+def read_instances(labels_path: str) -> list[Union[Instance, PredictedInstance]]:
     """Read `Instance` dataset in a SLEAP labels file.
 
     Args:
@@ -277,3 +252,15 @@ def read_instances(labels_path):
             )
 
     return instance_objects
+
+
+def read_labels(filepath: str) -> Labels:
+    """Read a SLEAP labels file.
+
+    Args:
+        filepath: Path to a SLEAP-formatted labels file (.slp).
+
+    Returns:
+        The processed `Labels` object.
+    """
+    pass

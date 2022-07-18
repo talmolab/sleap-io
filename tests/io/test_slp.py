@@ -1,15 +1,4 @@
-from pandas import read_hdf
 from sleap_io import (
-    instance_from_numpy,
-    predicted_from_instance,
-    read_hdf5,
-    read_videos,
-    read_skeleton,
-    read_tracks,
-    read_instances,
-    read_metadata,
-    read_points,
-    read_pred_points,
     Video,
     Skeleton,
     Edge,
@@ -21,10 +10,20 @@ from sleap_io import (
     PredictedPoint,
     PredictedInstance,
 )
+from sleap_io.io.slp import (
+    instance_from_numpy,
+    predicted_from_instance,
+    read_hdf5,
+    read_videos,
+    read_skeleton,
+    read_tracks,
+    read_instances,
+    read_metadata,
+    read_points,
+    read_pred_points,
+    read_labels,
+)
 import numpy as np
-import h5py
-from typing import List
-import json
 
 
 def test_read(slp_file1, slp_file2):
