@@ -42,6 +42,7 @@ def test_track():
 def test_instance():
     inst = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert type(inst["A"]) == Point
 
     inst = Instance([[1, 2], [3, 4]], skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[1, 2], [3, 4]])
@@ -56,3 +57,17 @@ def test_instance():
     inst = Instance([[np.nan, np.nan], [3, 4]], skeleton=Skeleton(["A", "B"]))
     assert not inst[0].visible
     assert inst[1].visible
+
+
+def test_predicted_instance():
+    inst = PredictedInstance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
+    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert type(inst["A"]) == PredictedPoint
+
+    inst = PredictedInstance.from_numpy(
+        [[0, 1], [2, 3]], [0.4, 0.5], instance_score=0.6, skeleton=Skeleton(["A", "B"])
+    )
+    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert inst[0].score == 0.4
+    assert inst[1].score == 0.5
+    assert inst.score == 0.6

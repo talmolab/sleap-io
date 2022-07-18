@@ -115,7 +115,7 @@ class Instance:
     _POINT_TYPE = Point
 
     def _make_default_point(self, x, y):
-        return Point(x, y)
+        return self._POINT_TYPE(x, y)
 
     def _convert_points(self, attr, points):
         """Callback for maintaining points mappings between nodes and points."""
@@ -138,14 +138,14 @@ class Instance:
             vals = [
                 point
                 if type(point) == self._POINT_TYPE
-                else self._make_default_point(point[0], point[1])
+                else self._make_default_point(x=point[0], y=point[1])
                 for point in points.values()
             ]
             points = {k: v for k, v in zip(keys, vals)}
 
         missing_nodes = list(set(self.skeleton.nodes) - set(points.keys()))
         for node in missing_nodes:
-            points[node] = self._make_default_point(np.nan, np.nan)
+            points[node] = self._make_default_point(x=np.nan, y=np.nan)
 
         return points
 
@@ -211,8 +211,42 @@ class PredictedInstance(Instance):
             typically the value from the score matrix used in an identity assignment.
     """
 
+    _POINT_TYPE = PredictedPoint
+
     from_predicted: Optional[PredictedInstance] = field(
         default=None, validator=validators.instance_of(type(None))
     )
     score: float = 0.0
     tracking_score: float = 0
+
+    @classmethod
+    def from_numpy(
+        cls,
+        points: np.ndarray,
+        point_scores: np.ndarray,
+        instance_score: float,
+        skeleton: Skeleton,
+        tracking_score: Optional[float] = None,
+        track: Optional[Track] = None,
+    ) -> "Instance":
+        """Create an instance object from a numpy array.
+
+        Args:
+            points: A numpy array of shape `(n_nodes, 2)` corresponding to the points of
+                the skeleton. Values of `np.nan` indicate "missing" nodes.
+            skeleton: The `Skeleton` that this `Instance` is associated with. It should
+                have `n_nodes` nodes.
+            track: An optional `Track` associated with a unique animal/object across
+                frames or videos.
+        """
+        points = {
+            node: PredictedPoint(pt[0], pt[1], score=score)
+            for node, pt, score in zip(skeleton.nodes, points, point_scores)
+        }
+        return cls(
+            points=points,
+            skeleton=skeleton,
+            score=instance_score,
+            tracking_score=tracking_score,
+            track=track,
+        )
