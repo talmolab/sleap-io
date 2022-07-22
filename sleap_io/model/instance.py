@@ -148,7 +148,7 @@ class Instance:
 
         return points
 
-    points: Union[dict[Node, Point], dict[Node, PredictedPoint]] = field(
+    points: Union[dict[Node, Point], dict[Node, PredictedPoint], np.ndarray] = field(
         on_setattr=_convert_points
     )
     skeleton: Skeleton
@@ -158,10 +158,12 @@ class Instance:
     def __attrs_post_init__(self):
         super().__setattr__("points", self._convert_points(None, self.points))
 
-    def __getitem__(self, node: Union[int, str, Node]) -> Point:
+    def __getitem__(self, node: Union[int, str, Node]) -> Optional[Point]:
         """Return the point associated with a node or `None` if not set."""
-        if type(node) != Node:
+        if (type(node) == int) or (type(node) == str):
             node = self.skeleton[node]
+        else:
+            raise IndexError(f"Invalid indexing argument for skeleton: {node}")
         return self.points.get(node, None)
 
     def __len__(self) -> int:
@@ -237,7 +239,7 @@ class PredictedInstance(Instance):
         skeleton: Skeleton,
         tracking_score: Optional[float] = None,
         track: Optional[Track] = None,
-    ) -> "Instance":
+    ) -> "PredictedInstance":
         """Create an instance object from a numpy array.
 
         Args:

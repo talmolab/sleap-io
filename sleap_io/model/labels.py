@@ -50,6 +50,8 @@ class Labels:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:
             return self.labeled_frames[key]
+        else:
+            raise IndexError(f"Invalid indexing argument for labels: {key}")
 
     def __len__(self) -> int:
         """Return number of labeled frames."""

@@ -1,5 +1,6 @@
 """This module contains high-level wrappers for utilizing different I/O backends."""
 
+from __future__ import annotations
 from sleap_io.io import slp
 from sleap_io import Labels
 from pathlib import Path

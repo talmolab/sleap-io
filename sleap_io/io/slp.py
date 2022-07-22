@@ -1,5 +1,6 @@
 """This module handles direct I/O operations for working with .slp files."""
 
+from __future__ import annotations
 import numpy as np
 import json
 from typing import Union

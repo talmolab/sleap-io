@@ -152,8 +152,10 @@ class Skeleton:
         """Return the index of a node specified as a `Node` or string name."""
         if type(node) == str:
             return self.index(self._node_name_map[node])
-
-        return self._node_ind_map[node]
+        elif type(node) == Node:
+            return self._node_ind_map[node]
+        else:
+            raise IndexError(f"Invalid indexing argument for skeleton: {node}")
 
     def __getitem__(self, idx: Union[int, str]) -> Node:
         """Return a `Node` when indexing by name or integer."""
@@ -161,3 +163,5 @@ class Skeleton:
             return self.nodes[idx]
         elif type(idx) == str:
             return self._node_name_map[idx]
+        else:
+            raise IndexError(f"Invalid indexing argument for skeleton: {idx}")
