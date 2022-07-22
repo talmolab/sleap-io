@@ -70,7 +70,7 @@ def read_metadata(labels_path: str) -> dict:
     Returns:
         A dict containing the metadata from a SLEAP labels file.
     """
-    md: str = read_hdf5_attrs(labels_path, "metadata", "json")
+    md: np.bytes_ = read_hdf5_attrs(labels_path, "metadata", "json")
     return json.loads(md.decode())
 
 
