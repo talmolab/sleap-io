@@ -228,7 +228,7 @@ class PredictedInstance(Instance):
         default=None, validator=validators.instance_of(type(None))
     )
     score: float = 0.0
-    tracking_score: float = 0
+    tracking_score: Optional[float] = 0
 
     @classmethod
     def from_numpy(
@@ -250,12 +250,12 @@ class PredictedInstance(Instance):
             track: An optional `Track` associated with a unique animal/object across
                 frames or videos.
         """
-        points = {
+        node_points = {
             node: PredictedPoint(pt[0], pt[1], score=score)
             for node, pt, score in zip(skeleton.nodes, points, point_scores)
         }
         return cls(
-            points=points,
+            points=node_points,
             skeleton=skeleton,
             score=instance_score,
             tracking_score=tracking_score,

@@ -70,7 +70,8 @@ def read_metadata(labels_path: str) -> dict:
     Returns:
         A dict containing the metadata from a SLEAP labels file.
     """
-    return json.loads(read_hdf5_attrs(labels_path, "metadata", "json").decode())
+    md: str = read_hdf5_attrs(labels_path, "metadata", "json")
+    return json.loads(md.decode())
 
 
 def read_skeletons(labels_path: str) -> list[Skeleton]:
@@ -119,7 +120,7 @@ def read_skeletons(labels_path: str) -> list[Skeleton]:
     return skeleton_objects
 
 
-def read_points(labels_path: str) -> np.ndarray:
+def read_points(labels_path: str) -> list[Point]:
     """Read `Point` dataset from a SLEAP labels file.
 
     Args:
@@ -128,13 +129,14 @@ def read_points(labels_path: str) -> np.ndarray:
     Returns:
         A list of `Point` objects.
     """
+    pts: np.ndarray = read_hdf5(labels_path, "points")
     return [
         Point(x=x, y=y, visible=visible, complete=complete)
-        for x, y, visible, complete in read_hdf5(labels_path, "points")
+        for x, y, visible, complete in pts
     ]
 
 
-def read_pred_points(labels_path: str) -> np.ndarray:
+def read_pred_points(labels_path: str) -> list[PredictedPoint]:
     """Read `PredictedPoint` dataset from a SLEAP labels file.
 
     Args:
@@ -143,9 +145,10 @@ def read_pred_points(labels_path: str) -> np.ndarray:
     Returns:
         A list of `PredictedPoint` objects.
     """
+    pred_pts: np.ndarray = read_hdf5(labels_path, "pred_points")
     return [
         PredictedPoint(x=x, y=y, visible=visible, complete=complete, score=score)
-        for x, y, visible, complete, score in read_hdf5(labels_path, "pred_points")
+        for x, y, visible, complete, score in pred_pts
     ]
 
 
@@ -166,7 +169,7 @@ def read_instances(
     Returns:
         A list of `Instance` and/or `PredictedInstance` objects.
     """
-    instances_data = read_hdf5(labels_path, "instances")
+    instances_data: np.ndarray = read_hdf5(labels_path, "instances")
 
     instances = []
     for instance_data in instances_data:
@@ -232,12 +235,12 @@ def read_labels(labels_path: str) -> Labels:
     skeletons = read_skeletons(labels_path)
     points = read_points(labels_path)
     pred_points = read_pred_points(labels_path)
-    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    format_id: str = read_hdf5_attrs(labels_path, "metadata", "format_id")
     instances = read_instances(
         labels_path, skeletons, tracks, points, pred_points, format_id
     )
 
-    frames = read_hdf5(labels_path, "frames")
+    frames: np.ndarray = read_hdf5(labels_path, "frames")
     lfs = []
     for frame_id, video_id, frame_idx, instance_id_start, instance_id_end in frames:
         lfs.append(
