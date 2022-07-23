@@ -148,7 +148,7 @@ class Instance:
 
         return points
 
-    points: Union[dict[Node, Point], dict[Node, PredictedPoint], np.ndarray] = field(
+    points: Union[dict[Node, Point], dict[Node, PredictedPoint]] = field(
         on_setattr=_convert_points
     )
     skeleton: Skeleton
@@ -162,9 +162,10 @@ class Instance:
         """Return the point associated with a node or `None` if not set."""
         if (type(node) == int) or (type(node) == str):
             node = self.skeleton[node]
+        if isinstance(node, Node):
+            return self.points.get(node, None)
         else:
-            raise IndexError(f"Invalid indexing argument for skeleton: {node}")
-        return self.points.get(node, None)
+            raise IndexError(f"Invalid indexing argument for instance: {node}")
 
     def __len__(self) -> int:
         """Return the number of points in the instance."""
@@ -194,7 +195,9 @@ class Instance:
             track: An optional `Track` associated with a unique animal/object across
                 frames or videos.
         """
-        return cls(points=points, skeleton=skeleton, track=track)
+        return cls(
+            points=points, skeleton=skeleton, track=track  # type: ignore[arg-type]
+        )
 
     def numpy(self) -> np.ndarray:
         """Return the instance points as a numpy array."""
@@ -231,7 +234,7 @@ class PredictedInstance(Instance):
     tracking_score: Optional[float] = 0
 
     @classmethod
-    def from_numpy(
+    def from_numpy(  # type: ignore[override]
         cls,
         points: np.ndarray,
         point_scores: np.ndarray,
