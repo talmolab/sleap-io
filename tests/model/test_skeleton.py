@@ -1,4 +1,13 @@
+import pytest
 from sleap_io.model.skeleton import Node, Edge, Symmetry, Skeleton
+
+
+def test_edge():
+    edge = Edge(Node("A"), Node("B"))
+    assert edge[0].name == "A"
+    assert edge[1].name == "B"
+    with pytest.raises(ValueError):
+        edge[2]
 
 
 def test_symmetry():
@@ -25,6 +34,18 @@ def test_skeleton():
     assert skel.edges[0].destination == skel.nodes[1]
     assert skel.edges[0] == Edge(skel.nodes[0], skel.nodes[1])
     assert skel.edge_inds == [(0, 1)]
+
+    with pytest.raises(IndexError):
+        skel[None]
+
+    with pytest.raises(IndexError):
+        skel.index(None)
+
+    with pytest.raises(ValueError):
+        Skeleton(["A", "B"], edges=[("a", "B")])
+
+    with pytest.raises(ValueError):
+        Skeleton(["A", "B"], edges=[("A", "C")])
 
 
 def test_skeleton_node_map():

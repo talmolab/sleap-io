@@ -1,5 +1,7 @@
+from pickletools import pyset
 import numpy as np
 from numpy.testing import assert_equal
+import pytest
 from sleap_io.model.instance import (
     Point,
     PredictedPoint,
@@ -44,6 +46,9 @@ def test_instance():
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
     assert type(inst["A"]) == Point
 
+    inst = Instance({"A": [0, 1]}, skeleton=Skeleton(["A", "B"]))
+    assert_equal(inst.numpy(), [[0, 1], [np.nan, np.nan]])
+
     inst = Instance([[1, 2], [3, 4]], skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[1, 2], [3, 4]])
     assert len(inst) == 2
@@ -55,6 +60,12 @@ def test_instance():
     assert_equal(inst[inst.skeleton.nodes[0]].numpy(), [1, 2])
     assert_equal(inst[inst.skeleton.nodes[1]].numpy(), [3, 4])
 
+    inst = Instance(np.array([[1, 2], [3, 4]]), skeleton=Skeleton(["A", "B"]))
+    assert_equal(inst.numpy(), [[1, 2], [3, 4]])
+
+    inst = Instance.from_numpy([[1, 2], [3, 4]], skeleton=Skeleton(["A", "B"]))
+    assert_equal(inst.numpy(), [[1, 2], [3, 4]])
+
     inst = Instance([[np.nan, np.nan], [3, 4]], skeleton=Skeleton(["A", "B"]))
     assert not inst[0].visible
     assert inst[1].visible
@@ -64,6 +75,12 @@ def test_instance():
     inst = Instance([[np.nan, np.nan], [np.nan, np.nan]], skeleton=Skeleton(["A", "B"]))
     assert inst.n_visible == 0
     assert inst.is_empty
+
+    with pytest.raises(ValueError):
+        Instance([[1, 2]], skeleton=Skeleton(["A", "B"]))
+
+    with pytest.raises(IndexError):
+        inst[None]
 
 
 def test_predicted_instance():

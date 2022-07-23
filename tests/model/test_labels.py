@@ -1,4 +1,5 @@
 from numpy.testing import assert_equal
+import pytest
 from sleap_io import Video, Skeleton, Instance, PredictedInstance, LabeledFrame
 from sleap_io.model.labels import Labels
 
@@ -20,3 +21,6 @@ def test_labels():
     assert len(labels) == 1
     assert type(labels[0]) == LabeledFrame
     assert labels[0].frame_idx == 0
+
+    with pytest.raises(IndexError):
+        labels[None]

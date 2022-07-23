@@ -25,6 +25,9 @@ from sleap_io.io.slp import (
 import numpy as np
 
 
-def test_read_labels(slp_file1):
+def test_read_labels(slp_file1, slp_file2):
     labels = read_labels(slp_file1)
+    assert type(labels) == Labels
+
+    labels = read_labels(slp_file2)
     assert type(labels) == Labels
