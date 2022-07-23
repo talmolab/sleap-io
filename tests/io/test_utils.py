@@ -1,3 +1,4 @@
+# type: ignore
 import pytest
 import h5py
 import numpy as np
