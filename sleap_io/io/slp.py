@@ -17,7 +17,7 @@ from sleap_io import (
     LabeledFrame,
     Labels,
 )
-from sleap_io.io.utils import read_hdf5, read_hdf5_attrs
+from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from enum import IntEnum
 
 
@@ -38,7 +38,7 @@ def read_videos(labels_path: str) -> list[Video]:
         A list of `Video` objects.
     """
     # TODO (DS) - Find shape of video
-    videos = [json.loads(x) for x in read_hdf5(labels_path, "videos_json")]
+    videos = [json.loads(x) for x in read_hdf5_dataset(labels_path, "videos_json")]
     video_objects = []
     for video in videos:
         video_objects.append(Video(filename=video["backend"]["filename"]))
@@ -54,7 +54,7 @@ def read_tracks(labels_path: str) -> list[Track]:
     Returns:
         A list of `Track` objects.
     """
-    tracks = [json.loads(x) for x in read_hdf5(labels_path, "tracks_json")]
+    tracks = [json.loads(x) for x in read_hdf5_dataset(labels_path, "tracks_json")]
     track_objects = []
     for track in tracks:
         track_objects.append(Track(name=track[1]))
@@ -70,7 +70,8 @@ def read_metadata(labels_path: str) -> dict:
     Returns:
         A dict containing the metadata from a SLEAP labels file.
     """
-    md: np.bytes_ = read_hdf5_attrs(labels_path, "metadata", "json")
+    md = read_hdf5_attrs(labels_path, "metadata", "json")
+    assert type(md) == np.bytes_
     return json.loads(md.decode())
 
 
@@ -129,7 +130,7 @@ def read_points(labels_path: str) -> list[Point]:
     Returns:
         A list of `Point` objects.
     """
-    pts: np.ndarray = read_hdf5(labels_path, "points")
+    pts = read_hdf5_dataset(labels_path, "points")
     return [
         Point(x=x, y=y, visible=visible, complete=complete)
         for x, y, visible, complete in pts
@@ -145,7 +146,7 @@ def read_pred_points(labels_path: str) -> list[PredictedPoint]:
     Returns:
         A list of `PredictedPoint` objects.
     """
-    pred_pts: np.ndarray = read_hdf5(labels_path, "pred_points")
+    pred_pts = read_hdf5_dataset(labels_path, "pred_points")
     return [
         PredictedPoint(x=x, y=y, visible=visible, complete=complete, score=score)
         for x, y, visible, complete, score in pred_pts
@@ -153,7 +154,12 @@ def read_pred_points(labels_path: str) -> list[PredictedPoint]:
 
 
 def read_instances(
-    labels_path: str, skeletons, tracks, points, pred_points, format_id
+    labels_path: str,
+    skeletons: list[Skeleton],
+    tracks: list[Track],
+    points: list[Point],
+    pred_points: list[PredictedPoint],
+    format_id: float,
 ) -> list[Union[Instance, PredictedInstance]]:
     """Read `Instance` dataset in a SLEAP labels file.
 
@@ -169,7 +175,7 @@ def read_instances(
     Returns:
         A list of `Instance` and/or `PredictedInstance` objects.
     """
-    instances_data: np.ndarray = read_hdf5(labels_path, "instances")
+    instances_data = read_hdf5_dataset(labels_path, "instances")
 
     instances = []
     for instance_data in instances_data:
@@ -203,7 +209,7 @@ def read_instances(
         if instance_type == InstanceType.USER:
             instances.append(
                 Instance(
-                    points=points[point_id_start:point_id_end],
+                    points=points[point_id_start:point_id_end],  # type: ignore[arg-type]
                     skeleton=skeletons[skeleton_id],
                     track=tracks[track_id] if track_id >= 0 else None,
                 )
@@ -211,7 +217,7 @@ def read_instances(
         elif instance_type == InstanceType.PREDICTED:
             instances.append(
                 PredictedInstance(
-                    points=pred_points[point_id_start:point_id_end],
+                    points=pred_points[point_id_start:point_id_end],  # type: ignore[arg-type]
                     skeleton=skeletons[skeleton_id],
                     track=tracks[track_id] if track_id >= 0 else None,
                     score=instance_score,
@@ -235,12 +241,13 @@ def read_labels(labels_path: str) -> Labels:
     skeletons = read_skeletons(labels_path)
     points = read_points(labels_path)
     pred_points = read_pred_points(labels_path)
-    format_id: str = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    assert isinstance(format_id, float)
     instances = read_instances(
         labels_path, skeletons, tracks, points, pred_points, format_id
     )
 
-    frames: np.ndarray = read_hdf5(labels_path, "frames")
+    frames = read_hdf5_dataset(labels_path, "frames")
     lfs = []
     for frame_id, video_id, frame_idx, instance_id_start, instance_id_end in frames:
         lfs.append(

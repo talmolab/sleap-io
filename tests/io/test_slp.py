@@ -12,7 +12,6 @@ from sleap_io import (
     Labels,
 )
 from sleap_io.io.slp import (
-    read_hdf5,
     read_videos,
     read_skeletons,
     read_tracks,
