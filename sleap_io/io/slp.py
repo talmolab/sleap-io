@@ -1,107 +1,34 @@
-from attr import asdict
-import h5py
+"""This module handles direct I/O operations for working with .slp files."""
+
+from __future__ import annotations
 import numpy as np
 import json
-from typing import List, Optional
+from typing import Union
 from sleap_io import (
     Video,
     Skeleton,
     Edge,
     Node,
-    Instance,
-    LabeledFrame,
     Track,
     Point,
+    PredictedPoint,
+    Instance,
     PredictedInstance,
+    LabeledFrame,
+    Labels,
 )
+from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
+from enum import IntEnum
 
 
-def instance_from_numpy(
-    points: np.ndarray, skeleton: Skeleton, track: Optional[Track] = None
-) -> Instance:
-    """Create an `Instance` from an array of points.
+class InstanceType(IntEnum):
+    """Enumeration of instance types to integers."""
 
-    Args:
-        points: A numpy array of shape `(n_nodes, 2)` and dtype `float32` that
-            contains the points in (x, y) coordinates of each `Node`. Missing
-            `Node` objects should be represented as `NaN`.
-        skeleton: A `Skeleton` object with `n_nodes` `Node` objects to associate with
-            the `Instance`.
-        track: Optional `Track` object to associate with the `Instance`.
-
-    Returns:
-        A new `Instance` object.
-    """
-    predicted_points = dict()
-    node_names: List[str] = [node.name for node in skeleton.nodes]
-
-    for point, node_name in zip(points, node_names):
-        if (len(point)) == 4:
-            predicted_points[node_name] = Point(
-                x=point[0],
-                y=point[1],
-                visible=bool(point[2]),
-                complete=bool(point[3]),
-            )
-        else:
-            predicted_points[node_name] = Point(x=point[0], y=point[1])
-
-    return Instance(points=predicted_points, skeleton=skeleton, track=track)
+    USER = 0
+    PREDICTED = 1
 
 
-def predicted_from_instance(
-    instance: Instance, score: float, tracking_score: float = 0.0
-) -> PredictedInstance:
-    """Create a `PredictedInstance` from an `Instance`.
-
-    The fields are copied in a shallow manner with the exception of points. For each
-    `Point` in the `Instance` a `PredictedPoint` is created with score set to default
-    value.
-
-    Args:
-        instance: The `Instance` object to shallow copy data from.
-        score: The score for this `Instance`.
-
-    Returns:
-        A `PredictedInstance` for the given `Instance`.
-    """
-    kw_args = asdict(
-        instance,
-        recurse=False,
-    )
-    kw_args["score"] = score
-    kw_args["tracking_score"] = tracking_score
-    return PredictedInstance(**kw_args)
-
-
-def read_hdf5(filename, dataset="/"):
-    """Read data from an HDF5 file.
-
-    Args:
-        filename: Path to an HDF5 file.
-        dataset: Path to a dataset or group. If a dataset, return the entire
-            dataset as an array. If group, all datasets contained within the
-            group will be recursively loaded and returned in a dict keyed by
-            their full path. Defaults to "/" (load everything).
-
-    Returns:
-        The data as an array (for datasets) or dictionary (for groups).
-    """
-    data = {}
-
-    def read_datasets(k, v):
-        if type(v) == h5py.Dataset:
-            data[v.name] = v[()]
-
-    with h5py.File(filename, "r") as f:
-        if type(f[dataset]) == h5py.Group:
-            f.visititems(read_datasets)
-        elif type(f[dataset]) == h5py.Dataset:
-            data = f[dataset][()]
-    return data
-
-
-def read_videos(labels_path):
+def read_videos(labels_path: str) -> list[Video]:
     """Read `Video` dataset in a SLEAP labels file.
 
     Args:
@@ -110,17 +37,15 @@ def read_videos(labels_path):
     Returns:
         A list of `Video` objects.
     """
-
     # TODO (DS) - Find shape of video
-
-    videos = [json.loads(x) for x in read_hdf5(labels_path, "videos_json")]
+    videos = [json.loads(x) for x in read_hdf5_dataset(labels_path, "videos_json")]
     video_objects = []
     for video in videos:
         video_objects.append(Video(filename=video["backend"]["filename"]))
     return video_objects
 
 
-def read_tracks(labels_path):
+def read_tracks(labels_path: str) -> list[Track]:
     """Read `Track` dataset in a SLEAP labels file.
 
     Args:
@@ -129,14 +54,14 @@ def read_tracks(labels_path):
     Returns:
         A list of `Track` objects.
     """
-    tracks = [json.loads(x) for x in read_hdf5(labels_path, "tracks_json")]
+    tracks = [json.loads(x) for x in read_hdf5_dataset(labels_path, "tracks_json")]
     track_objects = []
     for track in tracks:
         track_objects.append(Track(name=track[1]))
     return track_objects
 
 
-def read_metadata(labels_path):
+def read_metadata(labels_path: str) -> dict:
     """Read metadata from a SLEAP labels file.
 
     Args:
@@ -145,20 +70,19 @@ def read_metadata(labels_path):
     Returns:
         A dict containing the metadata from a SLEAP labels file.
     """
-    with h5py.File(labels_path, "r") as f:
-        attrs = dict(f["metadata"].attrs)
-    metadata = json.loads(attrs["json"].decode())
-    return metadata
+    md = read_hdf5_attrs(labels_path, "metadata", "json")
+    assert type(md) == np.bytes_
+    return json.loads(md.decode())
 
 
-def read_skeleton(labels_path):
+def read_skeletons(labels_path: str) -> list[Skeleton]:
     """Read `Skeleton` dataset from a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string that contains the path to the labels file.
 
     Returns:
-        A `Skeleton` object.
+        A list of `Skeleton` objects.
     """
     metadata = read_metadata(labels_path)
 
@@ -197,20 +121,23 @@ def read_skeleton(labels_path):
     return skeleton_objects
 
 
-def read_points(labels_path):
+def read_points(labels_path: str) -> list[Point]:
     """Read `Point` dataset from a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string that contains the path to the labels file.
 
     Returns:
         A list of `Point` objects.
     """
-    points = read_hdf5(labels_path, "points")
-    return points
+    pts = read_hdf5_dataset(labels_path, "points")
+    return [
+        Point(x=x, y=y, visible=visible, complete=complete)
+        for x, y, visible, complete in pts
+    ]
 
 
-def read_pred_points(labels_path):
+def read_pred_points(labels_path: str) -> list[PredictedPoint]:
     """Read `PredictedPoint` dataset from a SLEAP labels file.
 
     Args:
@@ -219,61 +146,118 @@ def read_pred_points(labels_path):
     Returns:
         A list of `PredictedPoint` objects.
     """
-    pred_points = read_hdf5(labels_path, "pred_points")
-    return pred_points
+    pred_pts = read_hdf5_dataset(labels_path, "pred_points")
+    return [
+        PredictedPoint(x=x, y=y, visible=visible, complete=complete, score=score)
+        for x, y, visible, complete, score in pred_pts
+    ]
 
 
-def read_instances(labels_path):
+def read_instances(
+    labels_path: str,
+    skeletons: list[Skeleton],
+    tracks: list[Track],
+    points: list[Point],
+    pred_points: list[PredictedPoint],
+    format_id: float,
+) -> list[Union[Instance, PredictedInstance]]:
     """Read `Instance` dataset in a SLEAP labels file.
 
     Args:
         labels_path: A string that contains the path to the labels file
+        skeletons: A list of `Skeleton` objects (see `read_skeletons`).
+        tracks: A list of `Track` objects (see `read_tracks`).
+        points: A list of `Point` objects (see `read_points`).
+        pred_points: A list of `PredictedPoint` objects (see `read_pred_points`).
+        format_id: The format version identifier used to specify the format of the input
+            file.
 
     Returns:
-        A list of `Instance` objects.
+        A list of `Instance` and/or `PredictedInstance` objects.
     """
-    skeleton = read_skeleton(labels_path)[0]
-    # TODO (DS) - Support multi-skeleton
+    instances_data = read_hdf5_dataset(labels_path, "instances")
+
+    instances = []
+    for instance_data in instances_data:
+        if format_id < 1.2:
+            (
+                instance_id,
+                instance_type,
+                frame_id,
+                skeleton_id,
+                track_id,
+                from_predicted,
+                instance_score,
+                point_id_start,
+                point_id_end,
+            ) = instance_data
+            tracking_score = np.zeros_like(instance_score)
+        else:
+            (
+                instance_id,
+                instance_type,
+                frame_id,
+                skeleton_id,
+                track_id,
+                from_predicted,
+                instance_score,
+                point_id_start,
+                point_id_end,
+                tracking_score,
+            ) = instance_data
+
+        if instance_type == InstanceType.USER:
+            instances.append(
+                Instance(
+                    points=points[point_id_start:point_id_end],  # type: ignore[arg-type]
+                    skeleton=skeletons[skeleton_id],
+                    track=tracks[track_id] if track_id >= 0 else None,
+                )
+            )
+        elif instance_type == InstanceType.PREDICTED:
+            instances.append(
+                PredictedInstance(
+                    points=pred_points[point_id_start:point_id_end],  # type: ignore[arg-type]
+                    skeleton=skeletons[skeleton_id],
+                    track=tracks[track_id] if track_id >= 0 else None,
+                    score=instance_score,
+                    tracking_score=tracking_score,
+                )
+            )
+    return instances
+
+
+def read_labels(labels_path: str) -> Labels:
+    """Read a SLEAP labels file.
+
+    Args:
+        labels_path: Path to a SLEAP-formatted labels file (.slp).
+
+    Returns:
+        The processed `Labels` object.
+    """
     tracks = read_tracks(labels_path)
-    instances = read_hdf5(labels_path, "instances")
-    default_points = read_points(labels_path)
+    videos = read_videos(labels_path)
+    skeletons = read_skeletons(labels_path)
+    points = read_points(labels_path)
     pred_points = read_pred_points(labels_path)
-    instance_objects = []
-    for idx, instance in enumerate(instances):
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    assert isinstance(format_id, float)
+    instances = read_instances(
+        labels_path, skeletons, tracks, points, pred_points, format_id
+    )
 
-        # Normal Instance
-        if instance["instance_type"] == 0:
-            tracks_default = tracks[instance["track"]] if len(tracks) > 0 else None
-            instance_objects.append(
-                # Params for creating `Instance` from `numpy.array`
-                instance_from_numpy(
-                    skeleton=skeleton,
-                    track=tracks_default,
-                    points=np.array(
-                        default_points[
-                            instance["point_id_start"] : instance["point_id_end"]
-                        ]
-                    ),
-                )
+    frames = read_hdf5_dataset(labels_path, "frames")
+    lfs = []
+    for frame_id, video_id, frame_idx, instance_id_start, instance_id_end in frames:
+        lfs.append(
+            LabeledFrame(
+                video=videos[video_id],
+                frame_idx=frame_idx,
+                instances=instances[instance_id_start:instance_id_end],
             )
+        )
 
-        # Predicted Instance
-        if instance["instance_type"] == 1:
-            instance_objects.append(
-                predicted_from_instance(
-                    # Params for creating `PredictedInstance` from `Instance`
-                    instance=instance_from_numpy(
-                        skeleton=skeleton,
-                        track=tracks[instance["track"]],
-                        points=np.array(
-                            pred_points[
-                                instance["point_id_start"] : instance["point_id_end"]
-                            ]
-                        ),
-                    ),
-                    score=instance["score"],
-                    tracking_score=instance["tracking_score"],
-                )
-            )
+    labels = Labels(lfs)
 
-    return instance_objects
+    return labels

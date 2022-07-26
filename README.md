@@ -30,7 +30,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information on development.
 import sleap_io as sio
 import numpy as np
 
-skeleton = sio.Skeleton.from_names(
+skeleton = sio.Skeleton(
     nodes=["head", "thorax", "abdomen"],
     edges=[("head", "thorax"), ("thorax", "abdomen")]
 )
