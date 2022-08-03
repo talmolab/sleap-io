@@ -12,6 +12,7 @@ from attrs import define, validators, field
 from typing import Optional, Union
 from sleap_io import Skeleton, Node
 import numpy as np
+import math
 
 
 @define
@@ -25,25 +26,10 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
-    def _maintain_visibility(self, attr, val):
-        """Sets the visibility attribute according to the coordinates."""
-        visible = val if attr.name == "visible" else self.visible
-        if np.isnan(self.x) or np.isnan(self.y):
-            visible = False
-        if attr.name == "visible":
-            return visible
-        else:
-            super().__setattr__("visible", visible)
-            return val
-
-    x: float = field(on_setattr=_maintain_visibility)
-    y: float = field(on_setattr=_maintain_visibility)
-    visible: bool = field(default=True, on_setattr=_maintain_visibility)
+    x: float
+    y: float
+    visible: bool = True
     complete: bool = False
-
-    def __attrs_post_init__(self):
-        self._maintain_visibility(self.__attrs_attrs__[0], self.x)
-        self._maintain_visibility(self.__attrs_attrs__[1], self.y)
 
     def numpy(self) -> np.ndarray:
         """Return the coordinates as a numpy array of shape `(2,)`."""
@@ -88,7 +74,7 @@ class Track:
     name: str = ""
 
 
-@define(auto_attribs=True)
+@define(auto_attribs=True, slots=True, eq=False)
 class Instance:
     """This class represents a ground truth instance such as an animal.
 
@@ -114,7 +100,7 @@ class Instance:
     _POINT_TYPE = Point
 
     def _make_default_point(self, x, y):
-        return self._POINT_TYPE(x, y)
+        return self._POINT_TYPE(x, y, visible=not (math.isnan(x) or math.isnan(y)))
 
     def _convert_points(self, attr, points):
         """Callback for maintaining points mappings between nodes and points."""

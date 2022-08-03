@@ -46,12 +46,28 @@ class Labels:
     tracks: list[Track] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
+    def __attrs_post_init__(self):
+
+        for lf in self.labeled_frames:
+            if lf.video not in self.videos:
+                self.videos.append(lf.video)
+
+            for inst in lf:
+                if inst.skeleton not in self.skeletons:
+                    self.skeletons.append(inst.skeleton)
+
+                if inst.track is not None and inst.track not in self.tracks:
+                    self.tracks.append(inst.track)
+
     def __getitem__(self, key: int) -> Union[list[LabeledFrame], LabeledFrame]:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:
             return self.labeled_frames[key]
         else:
             raise IndexError(f"Invalid indexing argument for labels: {key}")
+
+    def __iter__(self):
+        return iter(self.labeled_frames)
 
     def __len__(self) -> int:
         """Return number of labeled frames."""
