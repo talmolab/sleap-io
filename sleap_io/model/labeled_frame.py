@@ -29,6 +29,12 @@ class LabeledFrame:
         """Return the number of instances in the frame."""
         return len(self.instances)
 
+    def __getitem__(self, key: int) -> Union[Instance, PredictedInstance]:
+        return self.instances[key]
+
+    def __iter__(self):
+        return iter(self.instances)
+
     @property
     def user_instances(self) -> list[Instance]:
         """Frame instances that are user-labeled (`Instance` objects)."""

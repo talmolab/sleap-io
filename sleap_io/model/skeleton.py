@@ -10,7 +10,7 @@ from attrs import define, field
 from typing import Optional, Tuple, Union
 
 
-@define(frozen=True)
+@define(frozen=True, cache_hash=True)
 class Node:
     """A landmark type within a `Skeleton`.
 
@@ -88,8 +88,8 @@ class Skeleton:
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
     name: Optional[str] = None
-    _node_name_map: dict[str, Node] = field(init=False, repr=False)
-    _node_ind_map: dict[Node, int] = field(init=False, repr=False)
+    _node_name_map: dict[str, Node] = field(init=False, repr=False, eq=False)
+    _node_ind_map: dict[Node, int] = field(init=False, repr=False, eq=False)
 
     def __attrs_post_init__(self):
         self._convert_nodes()

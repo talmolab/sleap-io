@@ -9,7 +9,7 @@ from sleap_io.model.instance import (
     Instance,
     PredictedInstance,
 )
-from sleap_io import Skeleton, Node, Edge
+from sleap_io import Skeleton
 
 
 def test_point():
@@ -18,16 +18,6 @@ def test_point():
 
     pt.visible = False
     assert_equal(pt.numpy(), np.array([np.nan, np.nan]))
-
-    pt = Point(x=np.nan, y=np.nan, visible=True)
-    assert not pt.visible
-    pt.visible = True
-    assert not pt.visible
-    pt.x = 1
-    pt.y = 2
-    assert not pt.visible
-    pt.visible = True
-    assert pt.visible
 
 
 def test_predicted_point():
