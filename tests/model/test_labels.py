@@ -1,3 +1,4 @@
+"""Test methods and functions in the sleap.model.labels file."""
 from numpy.testing import assert_equal
 import pytest
 from sleap_io import Video, Skeleton, Instance, PredictedInstance, LabeledFrame
@@ -5,6 +6,7 @@ from sleap_io.model.labels import Labels
 
 
 def test_labels():
+    """Test methods in the `Labels` data structure."""
     labels = Labels(
         [
             LabeledFrame(

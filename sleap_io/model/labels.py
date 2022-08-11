@@ -47,7 +47,7 @@ class Labels:
     provenance: dict[str, Any] = field(factory=dict)
 
     def __attrs_post_init__(self):
-
+        """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
         for lf in self.labeled_frames:
             if lf.video not in self.videos:
                 self.videos.append(lf.video)
@@ -67,6 +67,7 @@ class Labels:
             raise IndexError(f"Invalid indexing argument for labels: {key}")
 
     def __iter__(self):
+        """Iterate over `labeled_frames` list when calling iter method on `Labels`."""
         return iter(self.labeled_frames)
 
     def __len__(self) -> int:
