@@ -1,8 +1,10 @@
+"""Tests for methods in the sleap_io.model.skeleton file."""
 import pytest
 from sleap_io.model.skeleton import Node, Edge, Symmetry, Skeleton
 
 
 def test_edge():
+    """Test initialization and methods of `Edge` class."""
     edge = Edge(Node("A"), Node("B"))
     assert edge[0].name == "A"
     assert edge[1].name == "B"
@@ -11,6 +13,7 @@ def test_edge():
 
 
 def test_symmetry():
+    """Test `Symmetry` class is initialized as expected."""
     A = Node("A")
     B = Node("B")
 
@@ -20,6 +23,7 @@ def test_symmetry():
 
 
 def test_skeleton():
+    """Test initialization and methods of `Skeleton` object."""
     skel = Skeleton([Node("A"), Node("B")])
     assert skel.node_names == ["A", "B"]
     assert len(skel) == 2
@@ -49,6 +53,7 @@ def test_skeleton():
 
 
 def test_skeleton_node_map():
+    """Test `Skeleton` node map returns correct nodes."""
     A = Node("A")
     B = Node("B")
     skel = Skeleton([A, B])

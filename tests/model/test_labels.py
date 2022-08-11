@@ -1,4 +1,4 @@
-"""Test methods and functions in the sleap.model.labels file."""
+"""Test methods and functions in the sleap_io.model.labels file."""
 from numpy.testing import assert_equal
 import pytest
 from sleap_io import Video, Skeleton, Instance, PredictedInstance, LabeledFrame

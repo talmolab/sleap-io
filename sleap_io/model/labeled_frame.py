@@ -30,9 +30,11 @@ class LabeledFrame:
         return len(self.instances)
 
     def __getitem__(self, key: int) -> Union[Instance, PredictedInstance]:
+        """Return the `Instance` at `key` index in the `instances` list."""
         return self.instances[key]
 
     def __iter__(self):
+        """Iterate over `Instance`s in `instances` list."""
         return iter(self.instances)
 
     @property

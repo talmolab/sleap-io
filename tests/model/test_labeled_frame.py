@@ -1,9 +1,11 @@
+"""Tests for methods in sleap_io.model.labeled_frame file."""
 from numpy.testing import assert_equal
 from sleap_io import Video, Skeleton, Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 
 
 def test_labeled_frame():
+    """Test initialization and methods of `LabeledFrame` class."""
     inst = Instance([[0, 1], [2, 3]], skeleton=Skeleton(["A", "B"]))
     lf = LabeledFrame(
         video=Video(filename="test", shape=(1, 1, 1, 1)),
