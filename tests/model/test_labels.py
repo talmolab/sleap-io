@@ -24,3 +24,7 @@ def test_labels():
 
     with pytest.raises(IndexError):
         labels[None]
+
+    # Test Labels.__iter__ method
+    for lf_idx, lf in enumerate(labels):
+        assert lf == labels[lf_idx]
