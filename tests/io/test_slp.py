@@ -1,3 +1,4 @@
+"""Tests for functions in the sleap_io.io.slp file."""
 from sleap_io import (
     Video,
     Skeleton,
@@ -26,6 +27,7 @@ import numpy as np
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
+    """Test `read_labels` can read different types of .slp files."""
     labels = read_labels(slp_typical)
     assert type(labels) == Labels
 

@@ -10,7 +10,7 @@ from attrs import define, field
 from typing import Optional, Tuple, Union
 
 
-@define(frozen=True)
+@define(frozen=True, cache_hash=True)
 class Node:
     """A landmark type within a `Skeleton`.
 
@@ -40,6 +40,7 @@ class Edge:
     destination: Node
 
     def __getitem__(self, idx):
+        """Return the source `Node` (`idx` is 0) or destination `Node` (`idx` is 1)."""
         if idx == 0:
             return self.source
         elif idx == 1:
@@ -88,10 +89,11 @@ class Skeleton:
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
     name: Optional[str] = None
-    _node_name_map: dict[str, Node] = field(init=False, repr=False)
-    _node_ind_map: dict[Node, int] = field(init=False, repr=False)
+    _node_name_map: dict[str, Node] = field(init=False, repr=False, eq=False)
+    _node_ind_map: dict[Node, int] = field(init=False, repr=False, eq=False)
 
     def __attrs_post_init__(self):
+        """Ensure nodes are `Node`s, edges are `Edge`s, and `Node` map is updated."""
         self._convert_nodes()
         self._convert_edges()
         self._update_node_map(None, self.nodes)

@@ -1,3 +1,4 @@
+"""Tests for methods in the sleap_io.model.instance file."""
 from pickletools import pyset
 import numpy as np
 from numpy.testing import assert_equal
@@ -9,39 +10,32 @@ from sleap_io.model.instance import (
     Instance,
     PredictedInstance,
 )
-from sleap_io import Skeleton, Node, Edge
+from sleap_io import Skeleton
 
 
 def test_point():
+    """Test `Point` object is initialized as expected."""
     pt = Point(x=1.2, y=3.4, visible=True, complete=True)
     assert_equal(pt.numpy(), np.array([1.2, 3.4]))
 
     pt.visible = False
     assert_equal(pt.numpy(), np.array([np.nan, np.nan]))
 
-    pt = Point(x=np.nan, y=np.nan, visible=True)
-    assert not pt.visible
-    pt.visible = True
-    assert not pt.visible
-    pt.x = 1
-    pt.y = 2
-    assert not pt.visible
-    pt.visible = True
-    assert pt.visible
-
 
 def test_predicted_point():
+    """Test `PredictedPoint` is initialized as expected."""
     pt = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
     assert pt.score == 0.9
     assert_equal(pt.numpy(), np.array([1.2, 3.4]))
 
 
 def test_track():
-    # Test hashing by ID
+    """Test `Track` hashing by id."""
     assert Track("A") != Track("A")
 
 
 def test_instance():
+    """Test initialization and methods of `Instance` object."""
     inst = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
     assert type(inst["A"]) == Point
@@ -84,6 +78,7 @@ def test_instance():
 
 
 def test_predicted_instance():
+    """Test initialization and creation of `PredictedInstance` object."""
     inst = PredictedInstance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
     assert type(inst["A"]) == PredictedPoint

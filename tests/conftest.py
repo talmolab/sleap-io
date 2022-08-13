@@ -1,3 +1,3 @@
-# type: ignore
-from tests.fixtures.generic import *
+"""Provide fixtures for the entire parent directory."""
+
 from tests.fixtures.data import *
