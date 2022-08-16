@@ -2,6 +2,14 @@
 name: CI
 
 on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - "sleap_io/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
+      - "environment.yml"
+      - "setup.cfg"
   push:
     paths:
       - "sleap_io/**"
