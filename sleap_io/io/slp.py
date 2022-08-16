@@ -248,9 +248,9 @@ def read_labels(labels_path: str) -> Labels:
     )
 
     frames = read_hdf5_dataset(labels_path, "frames")
-    lfs = []
-    for frame_id, video_id, frame_idx, instance_id_start, instance_id_end in frames:
-        lfs.append(
+    labeled_frames = []
+    for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
+        labeled_frames.append(
             LabeledFrame(
                 video=videos[video_id],
                 frame_idx=frame_idx,
@@ -258,6 +258,8 @@ def read_labels(labels_path: str) -> Labels:
             )
         )
 
-    labels = Labels(lfs)
+    labels = Labels(
+        labeled_frames=labeled_frames, videos=videos, skeletons=skeletons, tracks=tracks
+    )
 
     return labels
