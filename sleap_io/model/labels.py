@@ -59,6 +59,7 @@ class Labels:
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
 
+
     def __getitem__(self, key: int) -> Union[list[LabeledFrame], LabeledFrame]:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:
@@ -73,3 +74,18 @@ class Labels:
     def __len__(self) -> int:
         """Return number of labeled frames."""
         return len(self.labeled_frames)
+
+    def __repr__(self) -> str:
+        """Return a readable representation of the labels."""
+        return (
+            "Labels("
+            f"labeled_frames={len(self.labeled_frames)}, "
+            f"videos={len(self.videos)}, "
+            f"skeletons={len(self.skeletons)}, "
+            f"tracks={len(self.tracks)}"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        """Return a readable representation of the labels."""
+        return self.__repr__()
