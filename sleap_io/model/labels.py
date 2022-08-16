@@ -59,7 +59,6 @@ class Labels:
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
 
-
     def __getitem__(self, key: int) -> Union[list[LabeledFrame], LabeledFrame]:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:

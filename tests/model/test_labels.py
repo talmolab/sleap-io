@@ -30,3 +30,5 @@ def test_labels():
     # Test Labels.__iter__ method
     for lf_idx, lf in enumerate(labels):
         assert lf == labels[lf_idx]
+
+    assert str(labels) == "Labels(labeled_frames=1, videos=1, skeletons=1, tracks=0)"
