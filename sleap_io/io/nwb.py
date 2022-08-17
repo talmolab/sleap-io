@@ -12,44 +12,30 @@ from sleap_io import PredictedInstance
 
 
 def _extract_labels_data(labels):
+    
+    # Extract the data
     data_list = list()
-
     for labeled_frame in labels.labeled_frames:
-
-        frame_idx = labeled_frame.frame_idx
-        video_path = labeled_frame.video.filename
-
         for instance in labeled_frame.instances:
-            predicted_instance = isinstance(instance, PredictedInstance)
-
+            # Traverse the nodes of the instances's skeleton
             skeleton = instance.skeleton
-            skeleton_name = skeleton.name
-            track_name = instance.track.name if instance.track else "untracked"
-
             for node in skeleton.nodes:
-                node_name = node.name
-
-                predicted_points = instance.points[node]
-                x, y, score = (
-                    predicted_points.x,
-                    predicted_points.y,
-                    predicted_points.score,
-                )
-
                 row_dict = dict(
-                    frame_idx=frame_idx,
-                    x=x,
-                    y=y,
-                    score=score,
-                    node_name=node_name,
-                    skeleton_name=skeleton_name,
-                    predicted_instance=predicted_instance,  # True for predicted instance, False for instance.
-                    track_name=track_name,
-                    video_path=video_path,
+                    frame_idx=labeled_frame.frame_idx,
+                    x=instance.points[node].x,
+                    y=instance.points[node].y,
+                    score=instance.points[node].score,
+                    node_name=node.name,
+                    skeleton_name=skeleton.name,
+                    predicted_instance=isinstance(instance, PredictedInstance),  # True for predicted instance, False for instance.
+                    track_name=instance.track.name if instance.track else "untracked",
+                    video_path=labeled_frame.video.filename,
                 )
                 data_list.append(row_dict)
 
     labels_df = pd.DataFrame(data_list)
+    
+    # Reformat the data with columns for dict-like hierarchical data access.
     index = [
         "track_name",
         "skeleton_name",
@@ -58,8 +44,6 @@ def _extract_labels_data(labels):
         "video_path",
         "frame_idx",
     ]
-
-    # Reformat as columns for dict-like hierarchical data access.
     labels_tidy_df = (
         labels_df.set_index(index)
         .unstack(level=[0, 1, 2, 3, 4])
@@ -94,15 +78,15 @@ def append_labels_data_to_nwb(labels, nwbfile):
     labels_data_df = _extract_labels_data(labels)
 
     for video_index, video in enumerate(labels.videos):
+        
         video_path = Path(video.filename)
-
         processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
         nwb_processing_module = get_processing_module_for_video(
             processing_module_name, nwbfile
         )
 
         name_of_tracks_in_video = (
-            labels_data_df[str(video_path)]
+            labels_data_df[video.filename]
             .columns.get_level_values("track_name")
             .unique()
         )
@@ -132,7 +116,7 @@ def build_pose_estimation_container_for_track(
     video_path = Path(video.filename)
 
     all_track_sekletons = (
-        labels_data_df[str(video_path), track_name]
+        labels_data_df[video.filename, track_name]
         .columns.get_level_values("skeleton_name")
         .unique()
     )
@@ -143,7 +127,7 @@ def build_pose_estimation_container_for_track(
     )
 
     track_data_df = labels_data_df[
-        str(video_path),
+        video.filename,
         track_name,
         skeleton.name,
     ]
@@ -159,8 +143,8 @@ def build_pose_estimation_container_for_track(
         name=f"track={track_name}",
         pose_estimation_series=pose_estimation_series_list,
         description=container_description,
-        original_videos=[f"{video_path}"],
-        labeled_videos=[f"{video_path}"],
+        original_videos=[f"{video.filename}"],
+        labeled_videos=[f"{video.filename}"],
         # dimensions=np.array([[video.backend.height, video.backend.width]]),
         # scorer=str(labels.provenance),
         source_software="SLEAP",
