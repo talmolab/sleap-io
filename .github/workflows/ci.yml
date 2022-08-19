@@ -11,6 +11,8 @@ on:
       - "environment.yml"
       - "setup.cfg"
   push:
+    branches:
+      - main
     paths:
       - "sleap_io/**"
       - "tests/**"
@@ -21,7 +23,6 @@ on:
 jobs:
   # Tests with pytest
   tests:
-
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +33,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-
       - name: Checkout repo
         uses: actions/checkout@v3.0.2
 
