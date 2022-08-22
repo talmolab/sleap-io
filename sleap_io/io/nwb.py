@@ -150,7 +150,7 @@ def get_processing_module_for_video(
     processing_module_name: str, nwbfile: NWBFile
 ) -> ProcessingModule:
     """Auxiliary function to create a processing module.
-    
+
     Checks for the processing module existence and creates if not available.
 
     Args:
@@ -184,13 +184,13 @@ def build_pose_estimation_container_for_track(
 
     Returns:
         PoseEstimation: A PoseEstimation multicontainer where the time series
-        of all the node trajectories in the track are stored. One time series per 
+        of all the node trajectories in the track are stored. One time series per
         node.
     """
     video_path = Path(video.filename)
 
     all_track_skeletons = (
-        labels_data_df[video.filename, track_name]
+        labels_data_df[video.filename]
         .columns.get_level_values("skeleton_name")
         .unique()
     )
@@ -202,8 +202,8 @@ def build_pose_estimation_container_for_track(
 
     track_data_df = labels_data_df[
         video.filename,
-        track_name,
         skeleton.name,
+        track_name,
     ]
 
     pose_estimation_series_list = build_track_pose_estimation_list(track_data_df)
@@ -238,7 +238,7 @@ def build_track_pose_estimation_list(
     a Track object.
 
     Args:
-        track_data_df (pd.DataFrame): A pandas DataFrame object containing the 
+        track_data_df (pd.DataFrame): A pandas DataFrame object containing the
         trajectories for all the nodes associated with a specific track.
 
     Returns:
