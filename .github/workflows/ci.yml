@@ -11,6 +11,8 @@ on:
       - "environment.yml"
       - "setup.cfg"
   push:
+    branches:
+      - main
     paths:
       - "sleap_io/**"
       - "tests/**"
@@ -19,9 +21,24 @@ on:
       - "setup.cfg"
 
 jobs:
+  # Lint with black
+  lint:
+    name: Lint
+    runs-on: "ubuntu-22.04"
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.9
+      - name: Install Dependencies
+        run: |
+          pip install black
+      - name: Run Black
+        run: |
+          black --check sleap_io tests
   # Tests with pytest
   tests:
-
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +49,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-
       - name: Checkout repo
         uses: actions/checkout@v3.0.2
 
