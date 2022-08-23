@@ -12,3 +12,4 @@ from sleap_io.model.instance import (
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.io.main import load_slp
+from sleap_io.io.nwb import write_labels_to_nwb, append_labels_data_to_nwb
