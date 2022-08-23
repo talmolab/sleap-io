@@ -160,14 +160,15 @@ def get_processing_module_for_video(
     Returns:
         ProcessingModule: An nwb processing module with the desired name.
     """
-    if processing_module_name in nwbfile.processing:
-        nwb_processing_module = nwbfile.processing[processing_module_name]
-    else:
-        nwb_processing_module = nwbfile.create_processing_module(
-            name=processing_module_name, description=f"Processed SLEAP data"
+    description = "Processed SLEAP data"
+    processing_module = (
+        nwbfile.processing[processing_module_name]
+        if processing_module_name in nwbfile.processing
+        else nwbfile.create_processing_module(
+            name=processing_module_name, description=description
         )
-
-    return nwb_processing_module
+    )
+    return processing_module
 
 
 def build_pose_estimation_container_for_track(
