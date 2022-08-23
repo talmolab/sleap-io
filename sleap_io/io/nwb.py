@@ -1,9 +1,9 @@
 """Functions to write and read from the neurodata without borders (NWB) format. 
 """
-from tkinter import Label
 from typing import List, Optional
 from pathlib import Path
 import datetime
+import uuid
 
 import pandas as pd
 import numpy as np
@@ -15,7 +15,7 @@ from sleap_io import PredictedInstance, Labels, Video
 
 
 def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
-    """Auxiliar function to structure the predicted instances' data for nwb write.
+    """Auxiliary function to structure the predicted instances' data for nwb write.
 
     Args:
         labels (Labels): A general label object.
@@ -84,23 +84,44 @@ def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
     return labels_tidy_df
 
 
-def write_labels_to_nwb(labels: Labels, nwbfile_path: str):
+def write_labels_to_nwb(
+    labels: Labels, nwbfile_path: str, nwb_file_kwargs: Optional[dict] = None
+):
     """Write labels to an nwb file and save it to the nwbfile_path given
 
     Args:
         labels (Labels): A general label object
         nwbfile_path (str): The path where the nwb file is to be written
+        nwb_file_kwargs (Optional[dict], optional): A dict containing metadata to
+        the nwbfile. Example:
+        nwb_file_kwargs = {
+            'session_description: 'your_session_description',
+            'identifier': 'your session_identifier',
+        }
+        For a full list of possible values see:
+        https://pynwb.readthedocs.io/en/stable/pynwb.file.html#pynwb.file.NWBFile
+
+        Defaults to None and default values are used to generate the nwb file.
     """
 
-    session_description: str = "Processed SLEAP pose data"
-    session_start_time = datetime.datetime.now(datetime.timezone.utc)
-    identifier = "identifier"
+    nwb_file_kwargs = nwb_file_kwargs or dict()
 
-    nwbfile = NWBFile(
-        session_description=session_description,
-        identifier=identifier,
-        session_start_time=session_start_time,
+    # Add required values for nwbfile if not present
+    session_description = nwb_file_kwargs.get(
+        "session_description", "Processed SLEAP pose data"
     )
+    session_start_time = nwb_file_kwargs.get(
+        "session_start_time", datetime.datetime.now(datetime.timezone.utc)
+    )
+    identifier = nwb_file_kwargs.get("identifier", str(uuid.uuid1()))
+
+    nwb_file_kwargs.update(
+        session_description=session_description,
+        session_start_time=session_start_time,
+        identifier=identifier,
+    )
+
+    nwbfile = NWBFile(**nwb_file_kwargs)
 
     nwbfile = append_labels_data_to_nwb(labels, nwbfile)
 
@@ -109,7 +130,7 @@ def write_labels_to_nwb(labels: Labels, nwbfile_path: str):
 
 
 def append_labels_data_to_nwb(labels: Labels, nwbfile: NWBFile) -> NWBFile:
-    """
+    """Append data from a Labels object to an in-memory nwb file.
 
     Args:
         labels (Labels): A general labels object

@@ -1,6 +1,5 @@
 import pytest
 from pathlib import Path
-from tempfile import mkdtemp
 import datetime
 
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
@@ -102,10 +101,10 @@ def test_assertion_with_no_predicted_instance(nwbfile, slp_minimal):
         nwbfile = append_labels_data_to_nwb(labels, nwbfile)
 
 
-def test_typical_case_write(slp_typical):
+def test_typical_case_write(slp_typical, tmp_path):
     labels = load_slp(slp_typical)
 
-    nwbfile_path = Path(mkdtemp()) / "write_to_nwb_typical_case.nwb"
+    nwbfile_path = tmp_path / "write_to_nwb_typical_case.nwb"
     write_labels_to_nwb(labels=labels, nwbfile_path=nwbfile_path)
 
     with NWBHDF5IO(str(nwbfile_path), "r") as io:
