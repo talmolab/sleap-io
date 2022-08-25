@@ -53,6 +53,14 @@ class PredictedPoint(Point):
 
     score: float = 0.0
 
+    def numpy(self) -> np.ndarray:
+        """Return the coordinates and score as a numpy array of shape `(3,)`."""
+        return (
+            np.array([self.x, self.y, self.score])
+            if self.visible
+            else np.full((3,), np.nan)
+        )
+
 
 @define(eq=False)
 class Track:
@@ -262,3 +270,11 @@ class PredictedInstance(Instance):
             tracking_score=tracking_score,
             track=track,
         )
+
+    def numpy(self) -> np.ndarray:
+        """Return the instance points as a numpy array."""
+        pts = np.full((len(self.skeleton), 3), np.nan)
+        for node, point in self.points.items():
+            if point.visible:
+                pts[self.skeleton.index(node)] = point.numpy()
+        return pts
