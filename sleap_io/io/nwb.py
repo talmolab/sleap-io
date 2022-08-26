@@ -1,6 +1,6 @@
 """Functions to write and read from the neurodata without borders (NWB) format. 
 """
-from typing import List, Optional
+from typing import List, Optional, Generator
 from pathlib import Path
 import datetime
 import uuid
@@ -36,8 +36,10 @@ def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
 
     # Form pairs of labeled_frames and predicted instances
     labeled_frames = labels.labeled_frames
-    all_frame_instance_tuples: tuple[LabeledFrame, PredictedInstance] = (
-        (label_frame, instance)
+    all_frame_instance_tuples: Generator[
+        tuple[LabeledFrame, PredictedInstance], None, None
+    ] = (
+        (label_frame, instance)  # type: ignore
         for label_frame in labeled_frames
         for instance in label_frame.predicted_instances
     )
@@ -52,7 +54,7 @@ def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
                 frame_idx=labeled_frame.frame_idx,
                 x=instance.points[node].x,
                 y=instance.points[node].y,
-                score=instance.points[node].score,
+                score=instance.points[node].score,  # type: ignore[attr-defined]
                 node_name=node.name,
                 skeleton_name=skeleton.name,
                 track_name=instance.track.name if instance.track else "untracked",
@@ -248,7 +250,6 @@ def build_pose_estimation_container_for_track(
         # dimensions=np.array([[video.backend.height, video.backend.width]]),
         # scorer=str(labels.provenance),
         # source_software_version=f"{sleap.__version__}",
-        # To-discuss this in PR.
     )
 
     return pose_estimation_container
@@ -277,7 +278,6 @@ def build_track_pose_estimation_list(
     for node_name in name_of_nodes_in_track:
         # Add predicted instances only
 
-        # Should nan's be droped?
         data_for_node = track_data_df[
             node_name,
         ]

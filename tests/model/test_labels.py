@@ -38,8 +38,11 @@ def test_labels_numpy(labels_predictions: Labels):
     trx = labels_predictions.numpy(video=None, untracked=False)
     assert trx.shape == (1100, 27, 24, 2)
 
+    trx = labels_predictions.numpy(video=None, untracked=False, return_confidence=True)
+    assert trx.shape == (1100, 27, 24, 3)
+
     labels_single = Labels(
-        [
+        labeled_frames=[
             LabeledFrame(
                 video=lf.video, frame_idx=lf.frame_idx, instances=[lf.instances[0]]
             )
