@@ -175,7 +175,7 @@ class Labels:
                     if type(inst) == PredictedInstance and inst.track is not None
                 ]
                 for inst in tracked_instances:
-                    j = self.tracks.index(inst.track)
+                    j = self.tracks.index(inst.track)  # type: ignore[arg-type]
                     tracks[i, j] = (
                         inst.numpy() if return_confidence else inst.numpy()[:, 0:2]
                     )

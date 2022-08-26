@@ -59,5 +59,5 @@ class LabeledFrame:
         n_nodes = len(self.instances[0]) if n_instances > 0 else 0
         pts = np.full((n_instances, n_nodes, 2), np.nan)
         for i, inst in enumerate(self.instances):
-            pts[i] = inst.numpy()
+            pts[i] = inst.numpy()[:, 0:2]
         return pts

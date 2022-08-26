@@ -12,6 +12,7 @@ from ndx_pose import PoseEstimationSeries, PoseEstimation
 
 
 from sleap_io import PredictedInstance, Labels, Video
+from sleap_io.model.labeled_frame import LabeledFrame
 
 
 def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
@@ -35,7 +36,7 @@ def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
 
     # Form pairs of labeled_frames and predicted instances
     labeled_frames = labels.labeled_frames
-    all_frame_instance_tuples = (
+    all_frame_instance_tuples: tuple[LabeledFrame, PredictedInstance] = (
         (label_frame, instance)
         for label_frame in labeled_frames
         for instance in label_frame.predicted_instances
