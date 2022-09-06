@@ -21,22 +21,49 @@ on:
       - "setup.cfg"
 
 jobs:
-  # Lint with black
+  # Lint with black, docstring check with pydocstyle, static type checking with mypy
   lint:
+    # This job runs:
+    #
+    # 1. Linting with black
+    #
+    # 2. Docstring style checking with pydocstyle 
+    # Note: This uses Google-style docstring convention
+    # Ref: https://google.github.io/styleguide/pyguide.html
+    #
+    # 3. Static type checking with MyPy
+    # Note: We check using Python 3.9 to use the newer conventions for generic types.
+    #
+    # For a workaround on previous versions, simply add this import:
+    #   from __future__ import annotations
+    #
+    # See: https://mypy.readthedocs.io/en/stable/builtin_types.html#generic-types
     name: Lint
     runs-on: "ubuntu-22.04"
     steps:
-      - uses: actions/checkout@v1
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.9
-      - name: Install Dependencies
-        run: |
-          pip install black
-      - name: Run Black
-        run: |
-          black --check sleap_io tests
+
+    - name: Checkout repo
+      uses: actions/checkout@v3.0.2
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9
+
+    - name: Install dependencies
+      run: |
+        pip install --editable .[dev]
+    - name: Run Black
+      run: |
+        black --check sleap_io tests
+    
+    - name: Run pydocstyle
+      run: |
+        pydocstyle --convention=google sleap_io/
+    - name: Run MyPy
+      run: |
+        mypy --follow-imports=skip --ignore-missing-imports sleap_io tests
+
   # Tests with pytest
   tests:
     strategy:

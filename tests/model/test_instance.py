@@ -26,7 +26,7 @@ def test_predicted_point():
     """Test `PredictedPoint` is initialized as expected."""
     pt = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
     assert pt.score == 0.9
-    assert_equal(pt.numpy(), np.array([1.2, 3.4]))
+    assert_equal(pt.numpy(), np.array([1.2, 3.4, 0.9]))
 
 
 def test_track():
@@ -80,13 +80,13 @@ def test_instance():
 def test_predicted_instance():
     """Test initialization and creation of `PredictedInstance` object."""
     inst = PredictedInstance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
-    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert_equal(inst.numpy(), [[0, 1, 0], [2, 3, 0]])
     assert type(inst["A"]) == PredictedPoint
 
     inst = PredictedInstance.from_numpy(
         [[0, 1], [2, 3]], [0.4, 0.5], instance_score=0.6, skeleton=Skeleton(["A", "B"])
     )
-    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert_equal(inst.numpy(), [[0, 1, 0.4], [2, 3, 0.5]])
     assert inst[0].score == 0.4
     assert inst[1].score == 0.5
     assert inst.score == 0.6

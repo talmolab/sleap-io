@@ -23,4 +23,4 @@ def slp_minimal():
 @pytest.fixture
 def slp_predictions():
     """A more complex example containing predicted instances from multiple tracks and a single video"""
-    return "tests/data/hdf5_format_v1/centered_pair_predictions.slp"
+    return "tests/data/slp/centered_pair_predictions.slp"
