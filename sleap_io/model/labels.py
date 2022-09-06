@@ -128,7 +128,6 @@ class Labels:
         if type(video) == int:
             video = self.videos[video]
         lfs = [lf for lf in self.labeled_frames if lf.video == video]
-        print(f"video = {video}")
 
         # Figure out frame index range.
         first_frame, last_frame = 0, 0
