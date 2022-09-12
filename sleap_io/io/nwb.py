@@ -7,6 +7,7 @@ import uuid
 
 import pandas as pd
 import numpy as np
+from numpy.typing import ArrayLike
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
 from ndx_pose import PoseEstimationSeries, PoseEstimation
 
@@ -281,7 +282,7 @@ def build_pose_estimation_container_for_track(
 
 
 def build_track_pose_estimation_list(
-    track_data_df: pd.DataFrame, timestamps: np.array
+    track_data_df: pd.DataFrame, timestamps: ArrayLike
 ) -> List[PoseEstimationSeries]:
     """An auxiliar function to build a list of PoseEstimationSeries associated with
     a Track object.
