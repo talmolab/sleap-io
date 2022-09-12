@@ -56,19 +56,16 @@ def test_typical_case_append(nwbfile, slp_typical):
         assert node_name in pose_estimation_container.pose_estimation_series
 
 
-def test_typical_case_append_with_metadata_sampling_rate(nwbfile, slp_typical):
+def test_typical_case_append_with_metadata_propagation(nwbfile, slp_typical):
     labels = load_slp(slp_typical)
 
-    number_of_frames = 1100 # extracted using ffmpeg probe
-    video_sampling_rate = 15.0 # 15 Hz extracted using ffmpeg probe for the video stream
-    video_timestamps = np.ones(number_of_frames) / video_sampling_rate
-
     pose_estimation_metadata = {
-        "video_timestamps": video_timestamps,
         "source_software": "1.2.3",  # Sleap-version, I chosen a random one for the test
-        "dimensions": [384, 384]  # The dimensions of the video frame extracted using ffmpeg probe
+        "dimensions": [
+            [384, 384]
+        ],  # The dimensions of the video frame extracted using ffmpeg probe
     }
-    
+
     nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
 
     # Test processing module naming
@@ -79,23 +76,16 @@ def test_typical_case_append_with_metadata_sampling_rate(nwbfile, slp_typical):
 
     processing_module = nwbfile.processing[processing_module_name]
     pose_estimation_container = processing_module.data_interfaces["track=untracked"]
-    
+
     # Test pose estimation metadata propagation
     extracted_source_software = pose_estimation_container.source_software
     expected_source_software = pose_estimation_metadata["source_software"]
     assert extracted_source_software == expected_source_software
-    
+
     extracted_dimensions = pose_estimation_container.dimensions
     expected_dimensions = pose_estimation_metadata["dimensions"]
     assert extracted_dimensions == expected_dimensions
 
-    # Test sampling rate propagation. In this case the timestamps are uniform so
-    # The sampling rate should be stored instead of them
-    expected_sampling_rate = video_sampling_rate 
-    for node_name in pose_estimation_container.nodes:
-        pose_estimation_series = pose_estimation_container.pose_estimation_series[node_name]
-        extracted_sampling_rate = pose_estimation_series.rate
-        assert extracted_sampling_rate == expected_sampling_rate
 
 def test_complex_case_append(nwbfile, slp_predictions):
     labels = load_slp(slp_predictions)
@@ -133,6 +123,51 @@ def test_complex_case_append(nwbfile, slp_predictions):
     # Test that each PoseEstimationSeries is named as a node
     for node_name in pose_estimation_container.nodes:
         assert node_name in pose_estimation_container.pose_estimation_series
+
+
+def test_complex_case_append_with_timestamps_metadata(nwbfile, slp_predictions):
+    labels = load_slp(slp_predictions)
+
+    number_of_frames = 1100  # extracted using ffmpeg probe
+    video_sample_rate = 15.0  # 15 Hz extracted using ffmpeg probe for the video stream
+    video_timestamps = np.arange(number_of_frames) / video_sample_rate
+
+    pose_estimation_metadata = {
+        "video_timestamps": video_timestamps,
+    }
+
+    nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
+
+    # Test processing module naming
+    video_index = 0
+    video = labels.videos[video_index]
+    video_path = Path(video.filename)
+    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
+
+    processing_module = nwbfile.processing[processing_module_name]
+    # Test one PoseEstimationContainer
+    container_name = "track=1"
+    pose_estimation_container = processing_module.data_interfaces[container_name]
+
+    # Test sampling rate propagation. In this case the timestamps are uniform so
+    # The sampling rate should be stored instead of them
+    expected_rate = video_sample_rate
+    for node_name in pose_estimation_container.nodes:
+        pose_estimation_series = pose_estimation_container.pose_estimation_series[
+            node_name
+        ]
+
+        # Some store rate and it should be the video_sample_rate
+        if pose_estimation_series.rate:
+            extracted_rate = pose_estimation_series.rate
+            assert extracted_rate == expected_rate, f"{node_name}"
+
+        # Other store timestamps and the timestmaps should be a subset of the videotimestamps
+        else:
+            extracted_timestamps = pose_estimation_series.timestamps
+            assert np.in1d(
+                extracted_timestamps, video_timestamps, assume_unique=True
+            ).all()
 
 
 def test_assertion_with_no_predicted_instance(nwbfile, slp_minimal):

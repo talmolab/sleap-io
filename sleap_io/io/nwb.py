@@ -88,7 +88,10 @@ def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
 
 
 def write_labels_to_nwb(
-    labels: Labels, nwbfile_path: str, nwb_file_kwargs: Optional[dict] = None
+    labels: Labels,
+    nwbfile_path: str,
+    nwb_file_kwargs: Optional[dict] = None,
+    pose_estimation_metadata: Optional[dict] = None,
 ):
     """Write labels to an nwb file and save it to the nwbfile_path given
 
@@ -126,13 +129,15 @@ def write_labels_to_nwb(
 
     nwbfile = NWBFile(**nwb_file_kwargs)
 
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile)
+    nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
         io.write(nwbfile)
 
 
-def append_labels_data_to_nwb(labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: dict) -> NWBFile:
+def append_labels_data_to_nwb(
+    labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict] = None
+) -> NWBFile:
     """Append data from a Labels object to an in-memory nwb file.
 
     Args:
@@ -142,6 +147,8 @@ def append_labels_data_to_nwb(labels: Labels, nwbfile: NWBFile, pose_estimation_
     Returns:
         NWBFile: An in-memory nwbfile with the data from the labels object appended.
     """
+
+    pose_estimation_metadata = pose_estimation_metadata or dict()
 
     labels_data_df = _extract_predicted_instances_data(labels)
 
@@ -163,7 +170,11 @@ def append_labels_data_to_nwb(labels: Labels, nwbfile: NWBFile, pose_estimation_
         # For every track in that video create a PoseEstimation container
         for track_index, track_name in enumerate(name_of_tracks_in_video):
             pose_estimation_container = build_pose_estimation_container_for_track(
-                labels_data_df, labels, track_name, video, pose_estimation_metadata,
+                labels_data_df,
+                labels,
+                track_name,
+                video,
+                pose_estimation_metadata,
             )
             nwb_processing_module.add(pose_estimation_container)
 
@@ -196,7 +207,11 @@ def get_processing_module_for_video(
 
 
 def build_pose_estimation_container_for_track(
-    labels_data_df: pd.DataFrame, labels: Labels, track_name: str, video: Video, pose_estimation_metadata: dict
+    labels_data_df: pd.DataFrame,
+    labels: Labels,
+    track_name: str,
+    video: Video,
+    pose_estimation_metadata: dict,
 ) -> PoseEstimation:
     """Creates a PoseEstimation container for a track.
 
@@ -219,6 +234,7 @@ def build_pose_estimation_container_for_track(
         .columns.get_level_values("skeleton_name")
         .unique()
     )
+
     # Assuming only one skeleton per track
     skeleton_name = all_track_skeletons[0]
     skeleton = next(
@@ -231,35 +247,41 @@ def build_pose_estimation_container_for_track(
         track_name,
     ]
 
-    pose_estimation_series_list = build_track_pose_estimation_list(track_data_df)
-
     # Combine each node's PoseEstimationSeries to create a PoseEstimation container
-    container_description = (
-        f"Estimated positions of {skeleton.name} in video {video_path.name} "
-        f"using SLEAP."
+    timestamps = pose_estimation_metadata.pop("video_timestamps", None)
+    sample_rate = pose_estimation_metadata.pop("video_sample_rate", 1.0)
+    if timestamps is None:
+        # Keeps backward compatbility.
+        timestamps = np.arange(track_data_df.shape[0]) * sample_rate
+
+    pose_estimation_series_list = build_track_pose_estimation_list(
+        track_data_df, timestamps
     )
-    
-    pose_estimation_container_kwargs = dict(name=f"track={track_name}", description=container_description)
-    
-    pose_estimation_container = PoseEstimation(
+
+    # Arrange and mix metadata
+
+    pose_estimation_container_kwargs = dict(
         name=f"track={track_name}",
+        description=f"Estimated positions of {skeleton.name} in video {video_path.name}",
         pose_estimation_series=pose_estimation_series_list,
-        description=container_description,
-        original_videos=[f"{video.filename}"],
-        labeled_videos=[f"{video.filename}"],
-        source_software="SLEAP",
         nodes=skeleton.node_names,
         edges=np.array(skeleton.edge_inds).astype("uint64"),
+        source_software="SLEAP",
+        original_videos=[f"{video.filename}"],
+        labeled_videos=[f"{video.filename}"],
         # dimensions=np.array([[video.backend.height, video.backend.width]]),
         # scorer=str(labels.provenance),
-        # source_software_version=f"{sleap.__version__}",
+        # source_software_version=f"{sleap.__version__}
     )
+
+    pose_estimation_container_kwargs.update(**pose_estimation_metadata)
+    pose_estimation_container = PoseEstimation(**pose_estimation_container_kwargs)
 
     return pose_estimation_container
 
 
 def build_track_pose_estimation_list(
-    track_data_df: pd.DataFrame,
+    track_data_df: pd.DataFrame, timestamps: np.array
 ) -> List[PoseEstimationSeries]:
     """An auxiliar function to build a list of PoseEstimationSeries associated with
     a Track object.
@@ -285,24 +307,38 @@ def build_track_pose_estimation_list(
             node_name,
         ]
 
-        node_trajectory = data_for_node[["x", "y"]].to_numpy()
-        confidence = data_for_node["score"].to_numpy()
+        data_for_node_cleaned = data_for_node.dropna(axis="index", how="any")
+        node_trajectory = data_for_node_cleaned[["x", "y"]].to_numpy()
+        confidence = data_for_node_cleaned["score"].to_numpy()
 
-        # Fake data, should be extracted from video.
-        timestamps = np.arange(data_for_node.shape[0]).astype("float")
+        pose_estimation_kwargs = dict(
+            name=f"{node_name}",
+            description=f"Sequential trajectory of {node_name}.",
+            data=node_trajectory,
+            unit="pixels",
+            reference_frame="No reference.",
+            confidence=confidence,
+            confidence_definition="Point-wise confidence scores.",
+        )
+
+        # Add timestamps or rate if timestamps are uniform
+        frames = data_for_node_cleaned.index.values
+        timestamps_for_data = timestamps[frames]
+        sample_periods = np.diff(timestamps_for_data)
+        if sample_periods.size == 0:
+            rate = None  # This is the case with only one data point
+        else:
+            # Difference below 0.1 ms do not matter for behavior in videos
+            uniform_samples = np.unique(sample_periods.round(5)).size == 1
+            rate = 1 / sample_periods[0] if uniform_samples else None
+
+        if rate:
+            pose_estimation_kwargs.update(rate=rate)
+        else:
+            pose_estimation_kwargs.update(timestamps=timestamps_for_data)
 
         # Build the pose estimation object and attach it to the list
-        pose_estimation_series_list.append(
-            PoseEstimationSeries(
-                name=f"{node_name}",
-                description=f"Sequential trajectory of {node_name}.",
-                data=node_trajectory,
-                unit="pixels",
-                reference_frame="No reference.",
-                timestamps=timestamps,
-                confidence=confidence,
-                confidence_definition="Point-wise confidence scores.",
-            )
-        )
+        pose_estimation_series = PoseEstimationSeries(**pose_estimation_kwargs)
+        pose_estimation_series_list.append(pose_estimation_series)
 
     return pose_estimation_series_list
