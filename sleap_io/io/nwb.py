@@ -132,7 +132,7 @@ def write_labels_to_nwb(
         io.write(nwbfile)
 
 
-def append_labels_data_to_nwb(labels: Labels, nwbfile: NWBFile) -> NWBFile:
+def append_labels_data_to_nwb(labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: dict) -> NWBFile:
     """Append data from a Labels object to an in-memory nwb file.
 
     Args:
@@ -163,7 +163,7 @@ def append_labels_data_to_nwb(labels: Labels, nwbfile: NWBFile) -> NWBFile:
         # For every track in that video create a PoseEstimation container
         for track_index, track_name in enumerate(name_of_tracks_in_video):
             pose_estimation_container = build_pose_estimation_container_for_track(
-                labels_data_df, labels, track_name, video
+                labels_data_df, labels, track_name, video, pose_estimation_metadata,
             )
             nwb_processing_module.add(pose_estimation_container)
 
@@ -196,7 +196,7 @@ def get_processing_module_for_video(
 
 
 def build_pose_estimation_container_for_track(
-    labels_data_df: pd.DataFrame, labels: Labels, track_name: str, video: Video
+    labels_data_df: pd.DataFrame, labels: Labels, track_name: str, video: Video, pose_estimation_metadata: dict
 ) -> PoseEstimation:
     """Creates a PoseEstimation container for a track.
 
@@ -238,6 +238,9 @@ def build_pose_estimation_container_for_track(
         f"Estimated positions of {skeleton.name} in video {video_path.name} "
         f"using SLEAP."
     )
+    
+    pose_estimation_container_kwargs = dict(name=f"track={track_name}", description=container_description)
+    
     pose_estimation_container = PoseEstimation(
         name=f"track={track_name}",
         pose_estimation_series=pose_estimation_series_list,
