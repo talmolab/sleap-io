@@ -24,3 +24,8 @@ def slp_minimal():
 def slp_predictions():
     """A more complex example containing predicted instances from multiple tracks and a single video"""
     return "tests/data/slp/centered_pair_predictions.slp"
+
+@pytest.fixture
+def slp_predictions_with_provenance():
+    """The slp file generated with the collab tutorial and sleap version 1.27"""
+    return "tests/data/slp/tutorial_predictions_version_1.2.7_with_provenance.slp"
