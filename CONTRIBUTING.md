@@ -150,9 +150,31 @@ Adherence to typing requirements is automatically checked on push (see [`.github
 
 
 ## Releases
-**TODO:**
-- [ ] Describe release cycle best practices.
-- [ ] Describe packaging/build/PyPI upload steps.
+### Versioning
+This package follows standard [semver](https://semver.org/) version practices, i.e.:
+```
+{MAJOR}.{MINOR}.{PATCH}
+```
+
+For alpha/pre-releases, append `a{NUM}` to the version.
+
+Valid examples:
+```
+0.0.1
+0.1.10a2
+```
+
+### Build
+The PyPI-compatible package settings are in [setup.cfg].
+
+The version number is set in [sleap_io/__init__.py] in the `__version__` variable. This is read automatically by setuptools during installation and build.
+
+To manually build (e.g., locally):
+```
+python -m build --wheel
+```
+
+To trigger an automated build (via the [.github/workflows/build.yml] action), [publish a Release](https://github.com/talmolab/sleap-io/releases/new).
 
 
 ## Documentation website
