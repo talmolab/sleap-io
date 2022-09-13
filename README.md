@@ -1,7 +1,6 @@
 # sleap-io
 
 [![CI](https://github.com/talmolab/sleap-io/actions/workflows/ci.yml/badge.svg)](https://github.com/talmolab/sleap-io/actions/workflows/ci.yml)
-[![Lint](https://github.com/talmolab/sleap-io/actions/workflows/lint.yml/badge.svg)](https://github.com/talmolab/sleap-io/actions/workflows/lint.yml)
 [![codecov](https://codecov.io/gh/talmolab/sleap-io/branch/main/graph/badge.svg?token=Sj8kIFl3pi)](https://codecov.io/gh/talmolab/sleap-io)
 
 Standalone utilities for working with animal pose tracking data.
