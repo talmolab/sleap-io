@@ -246,6 +246,8 @@ def read_labels(labels_path: str) -> Labels:
     instances = read_instances(
         labels_path, skeletons, tracks, points, pred_points, format_id
     )
+    metadata = read_metadata(labels_path)
+    provenance = metadata.get("provenance", dict())
 
     frames = read_hdf5_dataset(labels_path, "frames")
     labeled_frames = []
@@ -259,7 +261,11 @@ def read_labels(labels_path: str) -> Labels:
         )
 
     labels = Labels(
-        labeled_frames=labeled_frames, videos=videos, skeletons=skeletons, tracks=tracks
+        labeled_frames=labeled_frames,
+        videos=videos,
+        skeletons=skeletons,
+        tracks=tracks,
+        provenance=provenance,
     )
 
     return labels
