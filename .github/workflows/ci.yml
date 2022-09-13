@@ -53,6 +53,7 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --editable .[dev]
+
     - name: Run Black
       run: |
         black --check sleap_io tests
@@ -60,6 +61,7 @@ jobs:
     - name: Run pydocstyle
       run: |
         pydocstyle --convention=google sleap_io/
+
     - name: Run MyPy
       run: |
         mypy --follow-imports=skip --ignore-missing-imports sleap_io tests
