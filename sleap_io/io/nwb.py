@@ -182,9 +182,9 @@ def append_labels_data_to_nwb(
 
     # Extract default metadata
     provenance = labels.provenance
-    default_pose_estimation_metadata = dict(scorer=str(provenance))
+    default_metadata = dict(scorer=str(provenance))
     sleap_version = provenance.get("sleap_version", None)
-    default_pose_estimation_metadata["source_software_version"] = sleap_version
+    default_metadata["source_software_version"] = sleap_version
 
     labels_data_df = _extract_predicted_instances_data(labels)
 
@@ -198,11 +198,11 @@ def append_labels_data_to_nwb(
         )
 
         # Propagate video metadata
-        default_pose_estimation_metadata["original_videos"] = [f"{video.filename}"]
-        default_pose_estimation_metadata["labeled_videos"] = [f"{video.filename}"]
+        default_metadata["original_videos"] = [f"{video.filename}"]  # type: ignore
+        default_metadata["labeled_videos"] = [f"{video.filename}"]  # type: ignore
 
-        # Overwrite default with user provided argument
-        default_pose_estimation_metadata.update(pose_estimation_metadata)
+        # Overwrite default with the user provided metadata
+        default_metadata.update(pose_estimation_metadata)
 
         # For every track in that video create a PoseEstimation container
         name_of_tracks_in_video = (
@@ -217,7 +217,7 @@ def append_labels_data_to_nwb(
                 labels,
                 track_name,
                 video,
-                default_pose_estimation_metadata,
+                default_metadata,
             )
             nwb_processing_module.add(pose_estimation_container)
 
