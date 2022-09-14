@@ -29,4 +29,4 @@ def slp_predictions():
 @pytest.fixture
 def slp_predictions_with_provenance():
     """The slp file generated with the collab tutorial and sleap version 1.27"""
-    return "tests/data/slp/tutorial_predictions_version_1.2.7_with_provenance.slp"
+    return "tests/data/slp/predictions_1.2.7_provenance_and_tracking.slp"

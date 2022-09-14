@@ -87,6 +87,39 @@ def test_typical_case_append_with_metadata_propagation(nwbfile, slp_typical):
     assert extracted_dimensions == expected_dimensions
 
 
+def test_provenance_writing(nwbfile, slp_predictions_with_provenance):
+    labels = load_slp(slp_predictions_with_provenance)
+    nwbfile = append_labels_data_to_nwb(labels, nwbfile)
+
+    # Extract processing module
+    video_index = 0
+    video = labels.videos[video_index]
+    video_path = Path(video.filename)
+    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
+    processing_module = nwbfile.processing[processing_module_name]
+
+    # Test that the provenance information is propagated
+    for pose_estimation_container in processing_module.data_interfaces.values():
+        assert pose_estimation_container.scorer == str(labels.provenance)
+
+
+def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
+    labels = load_slp(slp_predictions_with_provenance)
+    pose_estimation_metadata = {"scorer": "overwritten_value"}
+    nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
+
+    # Extract processing module
+    video_index = 0
+    video = labels.videos[video_index]
+    video_path = Path(video.filename)
+    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
+    processing_module = nwbfile.processing[processing_module_name]
+
+    # Test that the value of scorer was overwritten
+    for pose_estimation_container in processing_module.data_interfaces.values():
+        assert pose_estimation_container.scorer == "overwritten_value"
+
+
 def test_complex_case_append(nwbfile, slp_predictions):
     labels = load_slp(slp_predictions)
     nwbfile = append_labels_data_to_nwb(labels, nwbfile)
