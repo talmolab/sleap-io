@@ -3,6 +3,8 @@ name: sleap-io
 dependencies:
   - python>=3.7,<=3.9
   - ffmpeg
+  - conda-forge::pims
+  - conda-forge::av
   - pip
   - pip:
     - "--editable=.[dev]"
