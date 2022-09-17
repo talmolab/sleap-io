@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/talmolab/sleap-io/branch/main/graph/badge.svg?token=Sj8kIFl3pi)](https://codecov.io/gh/talmolab/sleap-io)
 [![Release](https://img.shields.io/github/v/release/talmolab/sleap-io?label=Latest)](https://github.com/talmolab/sleap-io/releases/)
 [![PyPI](https://img.shields.io/pypi/v/sleap-io?label=PyPI)](https://pypi.org/project/sleap-io)
+<!-- TODO: ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/sleap-io) -->
 
 Standalone utilities for working with animal pose tracking data.
 
