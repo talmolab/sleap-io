@@ -41,7 +41,9 @@ def read_videos(labels_path: str) -> list[Video]:
     videos = [json.loads(x) for x in read_hdf5_dataset(labels_path, "videos_json")]
     video_objects = []
     for video in videos:
-        video_objects.append(Video(filename=video["backend"]["filename"]))
+        video_objects.append(
+            Video(filename=video["backend"]["filename"], backend=video["backend"])
+        )
     return video_objects
 
 
