@@ -20,7 +20,7 @@ def read_labels(labels_path: str) -> Labels:
     with open(labels_path, "r") as task_file:
         tasks = json.load(task_file)
 
-    frames = []
+    frames: List[LabeledFrame] = []
     for entry in tasks:
         # depending version, we have seen keys `annotations` and `completions`
         if "annotations" in entry:
@@ -39,8 +39,13 @@ def write_labels(labels: Labels) -> List[Dict]:
     """Convert a `Labels` object into label-studio annotations"""
 
     for frame in labels.labeled_frames:
-        height = frame.video.shape[1]
-        width = frame.video.shape[2]
+        if frame.video.shape is not None:
+            height = frame.video.shape[1]
+            width = frame.video.shape[2]
+        else:
+            height = 100
+            width = 100
+
         out = []
 
         for instance in frame.instances:
@@ -123,6 +128,8 @@ def write_labels(labels: Labels) -> List[Dict]:
             }
         )
 
+    return out
+
 
 def entry_to_labeled_frame(entry: dict, key: str = "annotations") -> LabeledFrame:
     """Parse annotations from an entry"""
@@ -194,7 +201,7 @@ def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, 
     return indexed
 
 
-def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[dict]]:
+def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[str]]:
     """Build a two-way relationship map between annotations
 
     Parameters:
@@ -204,7 +211,7 @@ def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[dict]]:
     Dict[str, List[Dict]]: a two way map of relations indexed by `from_id` and `to_id` fields
     """
     relations = list(filter(lambda d: d["type"] == "relation", annotations))
-    relmap = {}
+    relmap: Dict[str, List[str]] = {}
     for rel in relations:
         if rel["from_id"] not in relmap:
             relmap[rel["from_id"]] = []
@@ -226,11 +233,13 @@ def get_image_path(entry: dict) -> str:
         return entry["data"]["image"]
     elif "data" in entry and "depth_image" in entry["data"]:
         return entry["data"]["depth_image"]
+    else:
+        raise KeyError("Could not find image path for entry!")
 
 
 def get_image_shape(path: str) -> Tuple[int, int, int, int]:
-    im = cv2.imread(path)
-    return (1, *im.shape)
+    ishape = cv2.imread(path).shape
+    return (1, ishape[0], ishape[1], ishape[2])
 
 
 def video_from_entry(entry: dict) -> Video:
