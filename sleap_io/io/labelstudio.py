@@ -272,9 +272,7 @@ def video_from_task(task: dict) -> Tuple[Video, int]:
         Video and frame index for this task
     """
     if "meta" in task and "video" in task["meta"]:
-        video = Video(
-            task["meta"]["video"]["filename"], task["meta"]["video"]["shape"]
-        )
+        video = Video(task["meta"]["video"]["filename"], task["meta"]["video"]["shape"])
         frame_idx = task["meta"]["video"]["frame_idx"]
         return video, frame_idx
 
