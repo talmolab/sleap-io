@@ -1,3 +1,12 @@
+"""This module handles direct I/O operations for working with .slp files.
+
+Some important nomenclature:
+  - `tasks`: typically maps to a single frame of data to be annotated, closest correspondance is to `LabeledFrame`
+  - `annotations`: collection of points, polygons, relations, etc. corresponds to `Instance`s and `Point`s, but a flattened hierarchy
+
+"""
+
+
 import datetime
 import json
 import uuid
@@ -11,6 +20,7 @@ def read_labels(labels_path: str, skeleton: Skeleton) -> Labels:
 
     Args:
         labels_path: Path to the label-studio annotation file, in json format.
+        skeleton: Skeleton
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -25,7 +35,8 @@ def parse_tasks(tasks: List[Dict], skeleton: Skeleton) -> Labels:
     """Read label-studio style annotations from a file and return a `Labels` object
 
     Args:
-        labels_path: path to the label-studio annotation file, in json format
+        tasks: collection of tasks to be concerted to `Labels`
+        skeleton: Skeleton
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -40,7 +51,7 @@ def parse_tasks(tasks: List[Dict], skeleton: Skeleton) -> Labels:
         else:
             raise ValueError("Cannot find annotation data for entry!")
 
-        frames.append(entry_to_labeled_frame(entry, skeleton, key=key))
+        frames.append(task_to_labeled_frame(entry, skeleton, key=key))
 
     return Labels(frames)
 
@@ -155,21 +166,21 @@ def write_labels(labels: Labels) -> List[dict]:
     return out
 
 
-def entry_to_labeled_frame(
-    entry: dict, skeleton: Skeleton, key: str = "annotations"
+def task_to_labeled_frame(
+    task: dict, skeleton: Skeleton, key: str = "annotations"
 ) -> LabeledFrame:
     """Parse annotations from an entry"""
 
-    if len(entry[key]) > 1:
+    if len(task[key]) > 1:
         print(
             "WARNING: Task {}: Multiple annotations found, only taking the first!".format(
-                entry.get("id", "??")
+                task.get("id", "??")
             )
         )
 
     try:
         # only parse the first entry result
-        to_parse = entry[key][0]["result"]
+        to_parse = task[key][0]["result"]
 
         individuals = filter_and_index(to_parse, "rectanglelabels")
         keypoints = filter_and_index(to_parse, "keypointlabels")
@@ -202,13 +213,13 @@ def entry_to_labeled_frame(
             )
         instances.append(Instance(points, skeleton))
 
-        video, frame_idx = video_from_entry(entry)
+        video, frame_idx = video_from_task(task)
 
         return LabeledFrame(video, frame_idx, instances)
     except Exception as excpt:
         raise RuntimeError(
             "While working on Task #{}, encountered the following error:".format(
-                entry.get("id", "??")
+                task.get("id", "??")
             )
         ) from excpt
 
@@ -217,12 +228,12 @@ def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, 
     """Filter annotations based on the type field and index them by ID
 
     Args:
-    annotation (Iterable[dict]): annotations to filter and index
-    annot_type (str): annotation type to filter e.x. 'keypointlabels' or 'rectanglelabels'
+        annotation: annotations to filter and index
+        annot_type: annotation type to filter e.x. 'keypointlabels' or 'rectanglelabels'
 
     Returns:
-    Dict[str, dict] - indexed and filtered annotations. Only annotations of type `annot_type`
-    will survive, and annotations are indexed by ID
+        Dict[str, dict] - indexed and filtered annotations. Only annotations of type `annot_type`
+        will survive, and annotations are indexed by ID
     """
     filtered = list(filter(lambda d: d["type"] == annot_type, annotations))
     indexed = {item["id"]: item for item in filtered}
@@ -251,21 +262,21 @@ def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[str]]:
     return relmap
 
 
-def video_from_entry(entry: dict) -> Tuple[Video, int]:
-    """Given a label-studio entry, retrieve video information
+def video_from_task(task: dict) -> Tuple[Video, int]:
+    """Given a label-studio task, retrieve video information
 
     Args:
-        entry: label-studio task entry
+        task: label-studio task
 
     Returns:
         Video and frame index for this task
     """
-    if "meta" in entry and "video" in entry["meta"]:
+    if "meta" in task and "video" in task["meta"]:
         video = Video(
-            entry["meta"]["video"]["filename"], entry["meta"]["video"]["shape"]
+            task["meta"]["video"]["filename"], task["meta"]["video"]["shape"]
         )
-        frame_idx = entry["meta"]["video"]["frame_idx"]
+        frame_idx = task["meta"]["video"]["frame_idx"]
         return video, frame_idx
 
     else:
-        raise KeyError("Unable to locate video information for task!", entry)
+        raise KeyError("Unable to locate video information for task!", task)
