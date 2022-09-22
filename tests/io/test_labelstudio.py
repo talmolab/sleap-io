@@ -9,7 +9,7 @@ def round_trip_labels(labels: Labels) -> Labels:
     return ls_labels
 
 
-def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
+def test_labels_round_trip(slp_typical, slp_simple_skel, slp_minimal):
     """Test `read_labels` can read different types of .slp files."""
 
     # first on `slp_typical`
@@ -29,3 +29,11 @@ def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
     assert type(labels) == Labels
     ls_labels = round_trip_labels(labels)
     assert type(ls_labels) == Labels
+
+
+def test_read_labels(ls_multianimal):
+    file_path, skeleton = ls_multianimal
+
+    ls_labels = read_labels(file_path, skeleton)
+    ls_json = write_labels(ls_labels)
+    assert ls_labels == ls_json
