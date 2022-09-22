@@ -3,23 +3,33 @@ import json
 import uuid
 from typing import Dict, Iterable, List, Tuple
 
-import cv2
-from sleap_io import Instance, LabeledFrame, Labels, Node, Point, Video
+from sleap_io import Instance, LabeledFrame, Labels, Node, Point, Video, Skeleton
 
 
-def read_labels(labels_path: str) -> Labels:
-    """Read label-studio style annotations and return a `Labels` object
+def read_labels(labels_path: str, skeleton: Skeleton) -> Labels:
+    """Read label-studio style annotations from a file and return a `Labels` object.
 
-    Parameters:
-    labels_path (str): path to the label-studio annotation file, in json format
+    Args:
+        labels_path: Path to the label-studio annotation file, in json format.
 
     Returns:
-    Labels - parsed labels
+        Parsed labels as a `Labels` instance.
     """
-
     with open(labels_path, "r") as task_file:
         tasks = json.load(task_file)
 
+    return parse_tasks(tasks, skeleton)
+
+
+def parse_tasks(tasks: List[Dict], skeleton: Skeleton) -> Labels:
+    """Read label-studio style annotations from a file and return a `Labels` object
+
+    Args:
+        labels_path: path to the label-studio annotation file, in json format
+
+    Returns:
+        Parsed labels as a `Labels` instance.
+    """
     frames: List[LabeledFrame] = []
     for entry in tasks:
         # depending version, we have seen keys `annotations` and `completions`
@@ -30,14 +40,22 @@ def read_labels(labels_path: str) -> Labels:
         else:
             raise ValueError("Cannot find annotation data for entry!")
 
-        frames.extend(entry_to_labeled_frame(entry, key=key))
+        frames.append(entry_to_labeled_frame(entry, skeleton, key=key))
 
     return Labels(frames)
 
 
-def write_labels(labels: Labels) -> List[Dict]:
-    """Convert a `Labels` object into label-studio annotations"""
+def write_labels(labels: Labels) -> List[dict]:
+    """Convert a `Labels` object into label-studio annotations
 
+    Args:
+        labels: Labels to be converted to label-studio task format
+
+    Returns:
+        label-studio version of `Labels`
+    """
+
+    out = []
     for frame in labels.labeled_frames:
         if frame.video.shape is not None:
             height = frame.video.shape[1]
@@ -46,11 +64,11 @@ def write_labels(labels: Labels) -> List[Dict]:
             height = 100
             width = 100
 
-        out = []
+        frame_annots = []
 
         for instance in frame.instances:
             inst_id = uuid.uuid4()
-            out.append(
+            frame_annots.append(
                 {
                     "original_width": width,
                     "original_height": height,
@@ -76,7 +94,7 @@ def write_labels(labels: Labels) -> List[Dict]:
                 point_id = uuid.uuid4()
 
                 # add this point
-                out.append(
+                frame_annots.append(
                     {
                         "original_width": width,
                         "original_height": height,
@@ -94,7 +112,7 @@ def write_labels(labels: Labels) -> List[Dict]:
                 )
 
                 # add relationship of point to individual
-                out.append(
+                frame_annots.append(
                     {
                         "from_id": point_id,
                         "to_id": inst_id,
@@ -109,35 +127,43 @@ def write_labels(labels: Labels) -> List[Dict]:
                     # 'image': f"/data/{up_deets['file']}"
                 },
                 "meta": {
-                    # 'original_file': up_deets['original_file']
+                    "video": {
+                        "filename": frame.video.filename,
+                        "frame_idx": frame.frame_idx,
+                        "shape": frame.video.shape,
+                    }
                 },
-                "annotations": {
-                    "result": out,
-                    "was_cancelled": False,
-                    "ground_truth": False,
-                    "created_at": datetime.datetime.utcnow().strftime(
-                        "%Y-%m-%dT%H:%M:%S.%fZ"
-                    ),
-                    "updated_at": datetime.datetime.utcnow().strftime(
-                        "%Y-%m-%dT%H:%M:%S.%fZ"
-                    ),
-                    "lead_time": 0,
-                    "result_count": 1,
-                    # "completed_by": user['id']
-                },
+                "annotations": [
+                    {
+                        "result": frame_annots,
+                        "was_cancelled": False,
+                        "ground_truth": False,
+                        "created_at": datetime.datetime.utcnow().strftime(
+                            "%Y-%m-%dT%H:%M:%S.%fZ"
+                        ),
+                        "updated_at": datetime.datetime.utcnow().strftime(
+                            "%Y-%m-%dT%H:%M:%S.%fZ"
+                        ),
+                        "lead_time": 0,
+                        "result_count": 1,
+                        # "completed_by": user['id']
+                    }
+                ],
             }
         )
 
     return out
 
 
-def entry_to_labeled_frame(entry: dict, key: str = "annotations") -> LabeledFrame:
+def entry_to_labeled_frame(
+    entry: dict, skeleton: Skeleton, key: str = "annotations"
+) -> LabeledFrame:
     """Parse annotations from an entry"""
 
     if len(entry[key]) > 1:
         print(
             "WARNING: Task {}: Multiple annotations found, only taking the first!".format(
-                entry["id"]
+                entry.get("id", "??")
             )
         )
 
@@ -162,7 +188,7 @@ def entry_to_labeled_frame(entry: dict, key: str = "annotations") -> LabeledFram
                         (kpt["value"]["y"] * kpt["original_height"]) / 100,
                         visible=True,
                     )
-                instances.append(Instance(points))
+                instances.append(Instance(points, skeleton))
 
         # If this is multi-animal, any leftover keypoints should be unique bodyparts, and will be collected here
         # if single-animal, we only have 'unique bodyparts' [in a way] and the process is identical
@@ -174,13 +200,15 @@ def entry_to_labeled_frame(entry: dict, key: str = "annotations") -> LabeledFram
                 (kpt["value"]["y"] * kpt["original_height"]) / 100,
                 visible=True,
             )
-        instances.append(Instance(points))
+        instances.append(Instance(points, skeleton))
 
-        return LabeledFrame(video_from_entry(entry), 0, instances)
+        video, frame_idx = video_from_entry(entry)
+
+        return LabeledFrame(video, frame_idx, instances)
     except Exception as excpt:
         raise RuntimeError(
             "While working on Task #{}, encountered the following error:".format(
-                entry["id"]
+                entry.get("id", "??")
             )
         ) from excpt
 
@@ -188,7 +216,7 @@ def entry_to_labeled_frame(entry: dict, key: str = "annotations") -> LabeledFram
 def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, dict]:
     """Filter annotations based on the type field and index them by ID
 
-    Parameters:
+    Args:
     annotation (Iterable[dict]): annotations to filter and index
     annot_type (str): annotation type to filter e.x. 'keypointlabels' or 'rectanglelabels'
 
@@ -204,11 +232,11 @@ def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, 
 def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[str]]:
     """Build a two-way relationship map between annotations
 
-    Parameters:
-    annotations (Iterable[dict]): annotations, presumably, containing relation types
+    Args:
+        annotations: annotations, presumably, containing relation types
 
     Returns:
-    Dict[str, List[Dict]]: a two way map of relations indexed by `from_id` and `to_id` fields
+        A two way map of relations indexed by `from_id` and `to_id` fields.
     """
     relations = list(filter(lambda d: d["type"] == "relation", annotations))
     relmap: Dict[str, List[str]] = {}
@@ -223,38 +251,21 @@ def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[str]]:
     return relmap
 
 
-def get_image_path(entry: dict) -> str:
-    """Extract image file path from an annotation entry"""
-    if "meta" in entry and "original_file" in entry["meta"]:
-        return entry["meta"]["original_file"]
-    elif "task_path" in entry:
-        return entry["task_path"]
-    elif "data" in entry and "image" in entry["data"]:
-        return entry["data"]["image"]
-    elif "data" in entry and "depth_image" in entry["data"]:
-        return entry["data"]["depth_image"]
+def video_from_entry(entry: dict) -> Tuple[Video, int]:
+    """Given a label-studio entry, retrieve video information
+
+    Args:
+        entry: label-studio task entry
+
+    Returns:
+        Video and frame index for this task
+    """
+    if "meta" in entry and "video" in entry["meta"]:
+        video = Video(
+            entry["meta"]["video"]["filename"], entry["meta"]["video"]["shape"]
+        )
+        frame_idx = entry["meta"]["video"]["frame_idx"]
+        return video, frame_idx
+
     else:
-        raise KeyError("Could not find image path for entry!")
-
-
-def get_image_shape(path: str) -> Tuple[int, int, int, int]:
-    ishape = cv2.imread(path).shape
-    return (1, ishape[0], ishape[1], ishape[2])
-
-
-def video_from_entry(entry: dict) -> Video:
-    path = get_image_path(entry)
-    return Video(path, get_image_shape(path), backend="image")
-
-
-# def pick_filenames_from_tasks(tasks: List[dict]) -> List[str]:
-#     ''' Given Label Studio task list, pick and return a list of filenames
-
-#     Parameters:
-#     tasks (List[dict]): List of label studio task dicts
-
-#     Returns:
-#     List[str] - List of filenames from tasks
-#     '''
-#     annot = read_annotations(tasks)
-#     return [a['file_name'] for a in annot]
+        raise KeyError("Unable to locate video information for task!", entry)
