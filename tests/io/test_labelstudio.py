@@ -35,5 +35,5 @@ def test_read_labels(ls_multianimal):
     file_path, skeleton = ls_multianimal
 
     ls_labels = read_labels(file_path, skeleton)
-    ls_json = write_labels(ls_labels)
-    assert ls_labels == ls_json
+    rt_labels = round_trip_labels(ls_labels)
+    assert ls_labels == rt_labels

@@ -366,7 +366,11 @@
             "image":"/data/upload/img12600.png"
         },
         "meta":{
-            "original_file":"labeled-data/PrL-3_09072020/img12600.png"
+            "video": {
+                "filename": "labeled-data/PrL-3_09072020/img12600.png",
+                "shape": [1, 720, 1280, 3],
+                "frame_idx": 12600
+            }
         },
         "created_at":"2022-02-18T18:35:17.596790Z",
         "updated_at":"2022-03-17T19:28:07.620302Z",
@@ -728,7 +732,11 @@
             "image":"/data/upload/img47559.png"
         },
         "meta":{
-            "original_file":"labeled-data/compressed_6838b122-6cfa-487d-9f24-d7e2669c20e8_one_pup_PrL-GiC-2_ChR2_2021_10_28_10_14_02/img47559.png"
+            "video": {
+                "filename": "labeled-data/compressed_6838b122-6cfa-487d-9f24-d7e2669c20e8_one_pup_PrL-GiC-2_ChR2_2021_10_28_10_14_02/img47559.png",
+                "shape": [1, 670, 1035, 3],
+                "frame_idx": 47559
+            }
         },
         "created_at":"2022-02-18T18:35:39.946640Z",
         "updated_at":"2022-03-17T18:57:45.468939Z",
