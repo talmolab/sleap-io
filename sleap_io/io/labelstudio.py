@@ -9,6 +9,7 @@ Some important nomenclature:
 
 import datetime
 import json
+import math
 import uuid
 from typing import Dict, Iterable, List, Tuple
 
@@ -194,12 +195,17 @@ def task_to_labeled_frame(
                 for rel in relations[indv_id]:
                     kpt = keypoints.pop(rel)
                     node = Node(kpt["value"]["keypointlabels"][0])
-                    points[node] = Point(
-                        (kpt["value"]["x"] * kpt["original_width"]) / 100,
-                        (kpt["value"]["y"] * kpt["original_height"]) / 100,
-                        visible=True,
-                    )
-                instances.append(Instance(points, skeleton))
+                    x_pos = (kpt["value"]["x"] * kpt["original_width"]) / 100
+                    y_pos = (kpt["value"]["y"] * kpt["original_height"]) / 100
+
+                    # If the value is a NAN, the user did not mark this keypoint
+                    if math.isnan(x_pos) or math.isnan(y_pos):
+                        continue
+
+                    points[node] = Point(x_pos, y_pos)
+
+                if len(points) > 0:
+                    instances.append(Instance(points, skeleton))
 
         # If this is multi-animal, any leftover keypoints should be unique bodyparts, and will be collected here
         # if single-animal, we only have 'unique bodyparts' [in a way] and the process is identical
@@ -211,7 +217,8 @@ def task_to_labeled_frame(
                 (kpt["value"]["y"] * kpt["original_height"]) / 100,
                 visible=True,
             )
-        instances.append(Instance(points, skeleton))
+        if len(points) > 0:
+            instances.append(Instance(points, skeleton))
 
         video, frame_idx = video_from_task(task)
 
