@@ -18,8 +18,22 @@ def test_point():
     pt = Point(x=1.2, y=3.4, visible=True, complete=True)
     assert_equal(pt.numpy(), np.array([1.2, 3.4]))
 
+    pt2 = Point(x=1.2, y=3.4, visible=True, complete=True)
+    assert pt == pt2
+
     pt.visible = False
     assert_equal(pt.numpy(), np.array([np.nan, np.nan]))
+
+
+def test_close_points():
+    """Test equality of two `Point` objects which have a floating point error."""
+    pt1 = Point(x=135.82268970698718, y=213.22842752594835, visible=True, complete=False)
+    pt2 = Point(x=135.82268970698718, y=213.2284275259484, visible=True, complete=False)
+    assert pt1 == pt2
+
+    pt1 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
+    pt2 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
+    assert pt1 == pt2
 
 
 def test_predicted_point():

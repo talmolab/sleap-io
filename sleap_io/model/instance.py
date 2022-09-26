@@ -8,7 +8,8 @@ estimated, such as confidence scores.
 """
 
 from __future__ import annotations
-from attrs import define, validators, field
+from functools import partial
+from attrs import define, validators, field, cmp_using
 from typing import Optional, Union
 from sleap_io import Skeleton, Node
 import numpy as np
@@ -26,8 +27,8 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
-    x: float
-    y: float
+    x: float = field(eq=cmp_using(eq=partial(np.isclose, equal_nan=True)))
+    y: float = field(eq=cmp_using(eq=partial(np.isclose, equal_nan=True)))
     visible: bool = True
     complete: bool = False
 
@@ -82,7 +83,24 @@ class Track:
     name: str = ""
 
 
-@define(auto_attribs=True, slots=True, eq=False)
+def compare_points(a: Union[dict[Node, Point], dict[Node, PredictedPoint]], b: Union[dict[Node, Point], dict[Node, PredictedPoint]]) -> bool:
+    """ Compare this instances points to another set of points
+    """
+    # First check we are speaking the same languague of nodes
+    if not set(a.keys()) == set(b.keys()):
+        return False
+
+    # check each point in self vs other
+    for node, point in a.items():
+        if not point == b[node]:
+            print(node.name)
+            return False
+
+    # otherwise, return True
+    return True
+
+
+@define(auto_attribs=True, slots=True, eq=True)
 class Instance:
     """This class represents a ground truth instance such as an animal.
 
@@ -143,7 +161,7 @@ class Instance:
         return points
 
     points: Union[dict[Node, Point], dict[Node, PredictedPoint]] = field(
-        on_setattr=_convert_points
+        on_setattr=_convert_points, eq=cmp_using(eq=compare_points)
     )
     skeleton: Skeleton
     track: Optional[Track] = None
