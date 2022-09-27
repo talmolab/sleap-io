@@ -8,13 +8,14 @@ estimated, such as confidence scores.
 """
 
 from __future__ import annotations
-from functools import partial
 from attrs import define, validators, field, cmp_using
 from typing import Optional, Union
 from sleap_io import Skeleton, Node
 import numpy as np
 import math
 
+def _point_comparison(a, b) -> bool:
+    return bool(np.isclose(a, b, equal_nan=True))
 
 @define
 class Point:
@@ -27,8 +28,8 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
-    x: float = field(eq=cmp_using(eq=partial(np.isclose, equal_nan=True)))
-    y: float = field(eq=cmp_using(eq=partial(np.isclose, equal_nan=True)))
+    x: float = field(eq=cmp_using(eq=_point_comparison)) # type: ignore
+    y: float = field(eq=cmp_using(eq=_point_comparison)) # type: ignore
     visible: bool = True
     complete: bool = False
 
@@ -83,9 +84,11 @@ class Track:
     name: str = ""
 
 
-def compare_points(a: Union[dict[Node, Point], dict[Node, PredictedPoint]], b: Union[dict[Node, Point], dict[Node, PredictedPoint]]) -> bool:
-    """ Compare this instances points to another set of points
-    """
+def compare_points(
+    a: Union[dict[Node, Point], dict[Node, PredictedPoint]],
+    b: Union[dict[Node, Point], dict[Node, PredictedPoint]],
+) -> bool:
+    """Compare this instances points to another set of points"""
     # First check we are speaking the same languague of nodes
     if not set(a.keys()) == set(b.keys()):
         return False
@@ -161,7 +164,7 @@ class Instance:
         return points
 
     points: Union[dict[Node, Point], dict[Node, PredictedPoint]] = field(
-        on_setattr=_convert_points, eq=cmp_using(eq=compare_points)
+        on_setattr=_convert_points, eq=cmp_using(eq=compare_points) # type: ignore
     )
     skeleton: Skeleton
     track: Optional[Track] = None
