@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -31,37 +31,39 @@ def load_skeletons(dlc_config: dict) -> List[Skeleton]:
 
     out = []
     if is_multianimal(dlc_config):
-        ma_nodes = [Node(mabp) for mabp in dlc_config["multianimalbodyparts"]]
-        ma_skeleton = Skeleton(ma_nodes, name="multi")
-        out.append(ma_skeleton)
+        ma_nodes = [Node(bp) for bp in dlc_config["multianimalbodyparts"]]
+        out.append(Skeleton(ma_nodes, name="multi"))
 
-        uq_nodes = [Node(mabp) for mabp in dlc_config["uniquebodyparts"]]
-        uq_skeleton = Skeleton(uq_nodes, name="unique")
-        out.append(uq_skeleton)
+        uq_nodes = [Node(bp) for bp in dlc_config["uniquebodyparts"]]
+        out.append(Skeleton(uq_nodes, name="unique"))
 
     else:
-        nodes = [Node(mabp) for mabp in dlc_config["bodyparts"]]
-        out.append(Skeleton(nodes))
+        nodes = [Node(bp) for bp in dlc_config["bodyparts"]]
+        out.append(Skeleton(nodes, name="single"))
 
     return out
 
 
-def load_dlc_annotations_for_image(dlc_config: dict, image_path: str) -> LabeledFrame:
-    """Load existing DLC annotations for a given image. If no annotations could be found, None is returned
+def load_dlc(dlc_config: dict) -> Labels:
+    """Given a DLC configuration, load all labels from the training set.
 
     Parameters:
-    dlc_config (dict): DLC project configuration data
-    image_path (str): path to an image file
+    dlc_config: dict with DLC configuration data
 
     Returns:
-    If annotation data can be found, a dictionary of annotation data is returned, otherwise None
+    Labels loaded from the DLC project
     """
-    is_ma = is_multianimal(dlc_config)
-    skeletons = load_skeletons(dlc_config)
-    try:
-        img_rel_path = image_path.replace(dlc_config["project_path"] + os.path.sep, "")
+
+    videos = dlc_config["video_sets"].keys()
+    video_basenames = [os.path.splitext(os.path.basename(v))[0] for v in videos]
+
+    all_annots = []
+    for vb in video_basenames:
         annot_path = os.path.join(
-            os.path.dirname(image_path), f'CollectedData_{dlc_config["scorer"]}.h5'
+            dlc_config["project_path"],
+            "labeled-data",
+            vb,
+            f'CollectedData_{dlc_config["scorer"]}.h5',
         )
         if not os.path.exists(annot_path):
             raise FileExistsError(
@@ -69,64 +71,19 @@ def load_dlc_annotations_for_image(dlc_config: dict, image_path: str) -> Labeled
             )
 
         annots = pd.read_hdf(annot_path)
+        all_annots.append(annots)
 
-        instances: List[Instance] = []
-        if is_ma:
-            # Iterate over individuals
-            for indv in annots.columns.levels[1].values:
-                annots.index.get_loc_level(indv)[1].values
-
-                points = {}
-                # Iterate over this individual's body parts
-                for node in annots.index.get_loc_level(indv)[1].values:
-                    x_pos = annots.loc[
-                        img_rel_path, (dlc_config["scorer"], indv, node, "x")
-                    ]
-                    y_pos = annots.loc[
-                        img_rel_path, (dlc_config["scorer"], indv, node, "y")
-                    ]
-
-                    # If the value is a NAN, the user did not mark this keypoint
-                    if math.isnan(x_pos) or math.isnan(y_pos):
-                        continue
-
-                    points[skeletons[0][node]] = Point(x_pos, y_pos)
-
-                instances.append(Instance(points, skeletons[0]))
-
-        else:
-            points = {}
-            # Iterate over this individual's body parts
-            for node in annots.columns.levels[1].values:
-                x_pos = annots.loc[
-                    img_rel_path, (dlc_config["scorer"], indv, node, "x")
-                ]
-                y_pos = annots.loc[
-                    img_rel_path, (dlc_config["scorer"], indv, node, "y")
-                ]
-
-                # If the value is a NAN, the user did not mark this keypoint
-                if math.isnan(x_pos) or math.isnan(y_pos):
-                    continue
-
-                points[skeletons[0][node]] = Point(x_pos, y_pos)
-
-            instances.append(Instance(points, skeletons[0]))
-
-        video = Video(image_path)  # TODO: find a better way to represent the data
-        frame_idx = 0  # TODO: Just putting zero for now. Maybe we can parse from the filename???
-
-        return LabeledFrame(video, frame_idx, instances=instances)
-
-    except:  # pylint: disable=bare-except
-        raise
+    return dlc_to_labels(pd.concat(all_annots), dlc_config)
 
 
 def make_index_from_dlc_config(dlc_config: dict) -> pd.MultiIndex:
     """Given a DLC configuration, prepare a pandas multi-index
 
     Parameters:
-    dlc_config (dict): DLC project configuration data
+    dlc_config: DLC project configuration data
+
+    Returns:
+    multiindex for dataframe columns
     """
     if is_multianimal(dlc_config):
         cols = []
@@ -171,6 +128,106 @@ def split_labels_by_directory(labels: Labels) -> List[Labels]:
     return [Labels(frames) for group, frames in grouped.items()]
 
 
+def dlc_to_labels(annots: pd.DataFrame, dlc_config: dict) -> Labels:
+    """Convert a dlc-style dataframe to a Labels object"""
+    skeletons = load_skeletons(dlc_config)
+    frames: List[LabeledFrame] = []
+    if is_multianimal(dlc_config):
+        # Iterate over frames
+        for frame in annots.index.values:
+            ma_instances: List[Instance] = []
+
+            # Iterate over individuals
+            for indv in annots.columns.levels[1].values:
+
+                # pick the correct skeleton to use
+                skel: Skeleton
+                if indv == "single":
+                    # `single` is a sentinal for unique bodyparts
+                    skel = next(filter(lambda s: s.name == "unique", skeletons))
+
+                else:
+                    # otherwise we are in a multi-animal context
+                    skel = next(filter(lambda s: s.name == "multi", skeletons))
+
+                points = {}
+                # Iterate over this individual's body parts
+                bodyparts = list(
+                    set(
+                        bp
+                        for _, bp, _ in annots.columns.get_loc_level(
+                            indv, level="individuals"
+                        )[1].values
+                    )
+                )
+                for node in bodyparts:
+                    x_pos = (
+                        annots.loc[frame, (dlc_config["scorer"], indv, node, "x")]
+                        or np.nan
+                    )
+                    y_pos = (
+                        annots.loc[frame, (dlc_config["scorer"], indv, node, "y")]
+                        or np.nan
+                    )
+
+                    # If the value is a NAN, the user did not mark this keypoint
+                    if math.isnan(x_pos) or math.isnan(y_pos):
+                        continue
+
+                    points[skel[node]] = Point(x_pos, y_pos)
+
+                ma_instances.append(Instance(points, skel))
+
+            ma_video, ma_frame_idx = video_from_index(frame, dlc_config)
+            frames.append(LabeledFrame(ma_video, ma_frame_idx, ma_instances))
+
+    else:
+        # fetch the skeleton to use
+        skel = next(filter(lambda s: s.name == "single", skeletons))
+        # Iterate over frames
+        for frame in annots.index.values:
+            uq_instances: List[Instance] = []
+            points = {}
+            # Iterate over this individual's body parts
+            for node in annots.columns.levels[1].values:
+                x_pos = (
+                    annots.loc[frame, (dlc_config["scorer"], indv, node, "x")] or np.nan
+                )
+                y_pos = (
+                    annots.loc[frame, (dlc_config["scorer"], indv, node, "y")] or np.nan
+                )
+
+                # If the value is a NAN, the user did not mark this keypoint
+                if math.isnan(x_pos) or math.isnan(y_pos):
+                    continue
+
+                points[skel[node]] = Point(x_pos, y_pos)
+
+            uq_instances.append(Instance(points, skel))
+
+            uq_video, uq_frame_idx = video_from_index(frame, dlc_config)
+            frames.append(LabeledFrame(uq_video, uq_frame_idx, ma_instances))
+
+    return Labels(frames)
+
+
+def video_from_index(
+    index: Union[str, Tuple[str]], dlc_config: dict
+) -> Tuple[Video, int]:
+    """Given an index from DLC-style dataframe, construct a video instance and the frame number"""
+    vfname: str
+    if isinstance(index, tuple):
+        vfname = "/".join(index)
+    else:
+        vfname = str(index)
+    video = Video(vfname)  # TODO: find a better way to represent the data
+    frame_idx = (
+        0  # TODO: Just putting zero for now. Maybe we can parse from the filename???
+    )
+
+    return video, frame_idx
+
+
 def labels_to_dlc(labels: Labels, dlc_config: dict) -> pd.DataFrame:
     """Convert a `Labels` instance to a DLC-format `pandas.DataFrame`"""
 
@@ -188,25 +245,33 @@ def labels_to_dlc(labels: Labels, dlc_config: dict) -> pd.DataFrame:
         for value in dlc_data.values():
             value.append(np.nan)
 
+        instance_names = list(dlc_config["individuals"]).copy()
+
         for instance in labeled_frame.instances:
+
+            # determine individual type / identity
+            instance_name: Optional[str] = None
+            if is_ma:
+                if instance.skeleton.name == "unique":
+                    instance_name = "single"
+
+                elif instance.skeleton.name == "multi":
+                    instance_name = instance_names.pop(0)
+
+                else:
+                    raise ValueError(
+                        "Type of instance is ambiguous. Skeleton should be named `unique` for unique body parts, or `multi` for multi-animal body parts!"
+                    )
 
             for node, point in instance.points.items():
                 key: Tuple
                 if is_ma:
-                    if instance["individual"] is None:
-                        # unique bodypart
-                        key = (
-                            dlc_config["scorer"],
-                            "single",
-                            node.name,
-                        )  # TODO - need to represent the unique bodyparts somehow!!
-                    else:
-                        # multi animal bodypart
-                        key = (
-                            dlc_config["scorer"],
-                            instance["individual"],
-                            node.name,
-                        )  # TODO - need to represent the individual somehow!!
+                    key = (
+                        dlc_config["scorer"],
+                        instance_name,
+                        node.name,
+                    )  # TODO - need to represent the unique bodyparts somehow!!
+
                 else:
                     key = (dlc_config["scorer"], node.name)
 
