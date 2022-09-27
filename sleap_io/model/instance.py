@@ -14,8 +14,10 @@ from sleap_io import Skeleton, Node
 import numpy as np
 import math
 
+
 def _point_comparison(a, b) -> bool:
     return bool(np.isclose(a, b, equal_nan=True))
+
 
 @define
 class Point:
@@ -28,8 +30,8 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
-    x: float = field(eq=cmp_using(eq=_point_comparison)) # type: ignore
-    y: float = field(eq=cmp_using(eq=_point_comparison)) # type: ignore
+    x: float = field(eq=cmp_using(eq=_point_comparison))  # type: ignore
+    y: float = field(eq=cmp_using(eq=_point_comparison))  # type: ignore
     visible: bool = True
     complete: bool = False
 
@@ -164,7 +166,7 @@ class Instance:
         return points
 
     points: Union[dict[Node, Point], dict[Node, PredictedPoint]] = field(
-        on_setattr=_convert_points, eq=cmp_using(eq=compare_points) # type: ignore
+        on_setattr=_convert_points, eq=cmp_using(eq=compare_points)  # type: ignore
     )
     skeleton: Skeleton
     track: Optional[Track] = None
