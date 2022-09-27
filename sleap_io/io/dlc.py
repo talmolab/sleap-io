@@ -48,7 +48,7 @@ def load_dlc(dlc_config: dict) -> Labels:
     """Given a DLC configuration, load all labels from the training set.
 
     Parameters:
-    dlc_config: dict with DLC configuration data
+    dlc_config: DLC project configuration data
 
     Returns:
     Labels loaded from the DLC project
@@ -74,6 +74,33 @@ def load_dlc(dlc_config: dict) -> Labels:
         all_annots.append(annots)
 
     return dlc_to_labels(pd.concat(all_annots), dlc_config)
+
+
+def write_dlc(dlc_config: dict, labels: Labels):
+    """Write Labels to a DLC project on disk
+        writes both the csv format as well as the HDF5 format
+
+    Parameters:
+    dlc_config: DLC project configuration data
+    labels: Labels to be written to the DLC project
+    """
+
+    split_labels = split_labels_by_directory(labels)
+
+    grouped_dlc: Dict[str, pd.DataFrame] = {}
+    for group, glabels in split_labels.items():
+        grouped_dlc[group] = labels_to_dlc(glabels, dlc_config)
+
+    for group, group_df in grouped_dlc.items():
+        dest = os.path.join(
+            dlc_config["project_path"],
+            "labeled-data",
+            group,
+            f"CollectedData_{dlc_config['scorer']}",
+        )
+
+        group_df.to_csv(f"{dest}.csv")
+        group_df.to_hdf(f"{dest}.h5", key="df_with_missing", mode="w")
 
 
 def make_index_from_dlc_config(dlc_config: dict) -> pd.MultiIndex:
@@ -106,7 +133,7 @@ def make_index_from_dlc_config(dlc_config: dict) -> pd.MultiIndex:
         )
 
 
-def split_labels_by_directory(labels: Labels) -> List[Labels]:
+def split_labels_by_directory(labels: Labels) -> Dict[str, Labels]:
     """Split annotations into groups according to their file name
 
     Parameters:
@@ -125,7 +152,7 @@ def split_labels_by_directory(labels: Labels) -> List[Labels]:
             grouped[group] = []
         grouped[group].append(labeled_frame)
 
-    return [Labels(frames) for group, frames in grouped.items()]
+    return {group: Labels(frames) for group, frames in grouped.items()}
 
 
 def dlc_to_labels(annots: pd.DataFrame, dlc_config: dict) -> Labels:
