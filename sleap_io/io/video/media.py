@@ -8,8 +8,8 @@ from pims import PyAVReaderIndexed
 # img.shape
 
 
-class MediaVideo(PyAVReaderIndexed):
-    """Class for reading and manipulating frames of standard video formats.
+class MediaVideoReader(PyAVReaderIndexed):
+    """Class for reading and manipulating frames of standard video formats (MP4, AVI, etc.).
 
     Attributes:
         file: The path of the video file as a string.
@@ -25,3 +25,6 @@ class MediaVideo(PyAVReaderIndexed):
         self.width = self.frame_shape[1]
         self.channels = self.frame_shape[2]
         self.n_frames = len(self)
+
+def read_media_video(filename: str):
+    return
