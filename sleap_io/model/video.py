@@ -7,6 +7,7 @@ a video and its components used in SLEAP.
 from __future__ import annotations
 from attrs import define
 from typing import Any, Tuple, Optional
+from sleap_io.io.video.media import MediaVideoReader
 
 
 @define(auto_attribs=True)
@@ -26,4 +27,4 @@ class Video:
 
     filename: str
     shape: Optional[Tuple[int, int, int, int]] = None
-    backend: Any = None
+    backend: Optional[MediaVideoReader] = None  # TODO(LM): Add more video backends

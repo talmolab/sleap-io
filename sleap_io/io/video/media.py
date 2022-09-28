@@ -13,18 +13,31 @@ class MediaVideoReader(PyAVReaderIndexed):
 
     Attributes:
         file: The path of the video file as a string.
-        height: The height of the video in pixels.
-        width: The width of the video in pixels.
-        channels: The number of color channels in the video.
-        n_frames: The number of frames in the video.
+        video_shape: The shape of the video as a tuple (height, width, channels, frames)
+
+    Examples:
+        >>> video = Video('video.avi')  # or .mov, etc.
+        >>> imshow(video[0]) # Show the first frame.
+        >>> imshow(video[-1]) # Show the last frame.
+        >>> imshow(video[1][0:10, 0:10]) # Show one corner of the second frame.
+
+        >>> for frame in video[:]:
+        ...    # Do something with every frame.
+
+        >>> for frame in video[10:20]:
+        ...    # Do something with frames 10-20.
+
+        >>> for frame in video[[5, 7, 13]]:
+        ...    # Do something with frames 5, 7, and 13.
+
+        >>> video_shape = video.video_shape  # Dimensions of video (height, width, channels, frames)
+        >>> frame_shape = video.frame_shape  # Pixel dimensions of video (height, width, channels)
     """
 
     def __init__(self, filename):
         super().__init__(file=filename)
-        self.height = self.frame_shape[0]
-        self.width = self.frame_shape[1]
-        self.channels = self.frame_shape[2]
-        self.n_frames = len(self)
+        self.video_shape = self.frame_shape + (len(self),)
 
-def read_media_video(filename: str):
-    return
+    @classmethod
+    def read_media_video(cls, filename: str):
+        return cls(filename)

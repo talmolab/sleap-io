@@ -18,7 +18,9 @@ from sleap_io import (
     Labels,
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
+from sleap_io.io.video.media import MediaVideoReader
 from enum import IntEnum
+from pathlib import Path
 
 
 class InstanceType(IntEnum):
@@ -37,13 +39,23 @@ def read_videos(labels_path: str) -> list[Video]:
     Returns:
         A list of `Video` objects.
     """
-    # TODO (DS) - Find shape of video
     videos = [json.loads(x) for x in read_hdf5_dataset(labels_path, "videos_json")]
     video_objects = []
     for video in videos:
-        video_objects.append(
-            Video(filename=video["backend"]["filename"], backend=video["backend"])
-        )
+        filename = video["backend"]["filename"]
+        backend = video["backend"]
+        shape = None
+
+        # Assign backend based on video extension
+        ext = Path(filename).suffix[1:]
+        if ext in MediaVideoReader.class_exts():
+            backend = MediaVideoReader.read_media_video(filename)
+            shape = backend.video_shape
+        else:
+            # TODO(LM): Implement video reader for non-media video backends
+            print(f"The backend for {ext} is not supported at this moment.")
+
+        video_objects.append(Video(filename=filename, backend=backend, shape=shape))
     return video_objects
 
 
