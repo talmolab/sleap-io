@@ -8,11 +8,24 @@ estimated, such as confidence scores.
 """
 
 from __future__ import annotations
-from attrs import define, validators, field
+from attrs import define, validators, field, cmp_using
 from typing import Optional, Union
 from sleap_io import Skeleton, Node
 import numpy as np
 import math
+
+
+def _safe_float_comparison(a, b) -> bool:
+    """Compare `a` and `b` for equality, but allowing for some wiggle room due to float errors
+
+    Args:
+        a, b: scalar or array types to compare
+
+    Returns:
+        True if `a` and `b` are sufficently close. If `a` and `b` are arrays, all elements must pass equality.
+    """
+
+    return bool(np.all(np.isclose(a, b, equal_nan=True)))
 
 
 @define
@@ -26,8 +39,8 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
-    x: float
-    y: float
+    x: float = field(eq=cmp_using(eq=_safe_float_comparison))  # type: ignore
+    y: float = field(eq=cmp_using(eq=_safe_float_comparison))  # type: ignore
     visible: bool = True
     complete: bool = False
 
@@ -82,7 +95,37 @@ class Track:
     name: str = ""
 
 
-@define(auto_attribs=True, slots=True, eq=False)
+def _compare_points(
+    a: Union[dict[Node, Point], dict[Node, PredictedPoint]],
+    b: Union[dict[Node, Point], dict[Node, PredictedPoint]],
+) -> bool:
+    """Compare two sets of points for equality
+
+    To satisfy equaity, the two set of points must:
+        1) each contain the same set of `Nodes`
+        2) for each node, the two `Point`s must satisfy normal `Point` equality
+
+    Args:
+        a: collection of points
+        b: collection of points
+
+    Returns:
+        True if `a` and `b` are considered equal, otherwise False
+    """
+    # First check we are speaking the same languague of nodes
+    if not set(a.keys()) == set(b.keys()):
+        return False
+
+    # Check each point in self vs other
+    for node, point in a.items():
+        if not point == b[node]:
+            return False
+
+    # Otherwise, return True
+    return True
+
+
+@define(auto_attribs=True, slots=True, eq=True)
 class Instance:
     """This class represents a ground truth instance such as an animal.
 
@@ -143,7 +186,7 @@ class Instance:
         return points
 
     points: Union[dict[Node, Point], dict[Node, PredictedPoint]] = field(
-        on_setattr=_convert_points
+        on_setattr=_convert_points, eq=cmp_using(eq=_compare_points)  # type: ignore
     )
     skeleton: Skeleton
     track: Optional[Track] = None
