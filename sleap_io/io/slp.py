@@ -3,6 +3,7 @@
 from __future__ import annotations
 import numpy as np
 import json
+import warnings
 from typing import Union
 from sleap_io import (
     Video,
@@ -49,8 +50,11 @@ def read_videos(labels_path: str) -> list[Video]:
         # Assign backend based on video extension
         ext = Path(filename).suffix[1:]
         if ext in MediaVideoReader.class_exts():
-            backend = MediaVideoReader.read_media_video(filename)
-            shape = backend.video_shape
+            try:
+                backend = MediaVideoReader.read_media_video(filename)
+                shape = backend.video_shape
+            except FileNotFoundError as e:
+                warnings.warn(str(e))
         else:
             # TODO(LM): Implement video reader for non-media video backends
             print(f"The backend for {ext} is not supported at this moment.")

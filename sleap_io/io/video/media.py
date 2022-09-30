@@ -1,5 +1,6 @@
 """Media video backend reader for standard video formats (MP4, AVI, etc.)."""
 from pims import PyAVReaderIndexed
+from sleap_io.io.utils import resolve_path
 
 # Ref: http://soft-matter.github.io/pims/v0.6.1/video.html
 # vr = pims.Video(labels.videos[0].backend["filename"])
@@ -40,4 +41,5 @@ class MediaVideoReader(PyAVReaderIndexed):
 
     @classmethod
     def read_media_video(cls, filename: str):
+        filename = resolve_path(filename)
         return cls(filename)
