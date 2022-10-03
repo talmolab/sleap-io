@@ -1,4 +1,5 @@
 """Media video backend reader for standard video formats (MP4, AVI, etc.)."""
+from __future__ import annotations
 from pims import PyAVReaderIndexed
 from sleap_io.io.utils import resolve_path
 
@@ -40,6 +41,6 @@ class MediaVideoReader(PyAVReaderIndexed):
         self.video_shape = self.frame_shape + (len(self),)
 
     @classmethod
-    def read_media_video(cls, filename: str):
-        filename = resolve_path(filename)
+    def read_media_video(cls, filename: str, video_dirs: list[str] = []):
+        filename = resolve_path(filename, video_dirs)
         return cls(filename)

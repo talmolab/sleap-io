@@ -177,19 +177,22 @@ def write_hdf5_attrs(filename: str, dataset: str, attributes: dict[str, Any]):
             _overwrite_hdf5_attr(ds, attr_name, attr_value)
 
 
-def resolve_path(old_path_str: str, starting_point_str: Optional[str] = None):
+def resolve_path(old_path_str: str, starting_points_str: List[str] = []):
     """Find a path given an old path and a starting point.
 
     To resolve the path, we assume that the file/directory is uniquely named. First, we
     attempt to find the file/directory at the old_path_str. If the old_path_str no
-    longer exists, then we attemt to modify the old_path_str using hints from the
-    starting_point_str. First, we swap the anchor of the old path with the
-    anchor of the starting point path and search for the item at this new path. Lastly,
-    we search for the item at the starting point (default: current working directory).
+    longer exists, then we search for the item in the list of starting points.
+
+    If no starting points were given, then we set the current working directory as the
+    starting point. First, we swap the anchor of the old path with the anchor of the
+    starting point path and search for the item at this new path. Lastly,
+    we search for the item at the starting point.
 
     Args:
-        old_path: Path to file or directory that may no longer exist.
-        starting_point: Path to file or directory that exists (where the search begins).
+        old_path_str: Path to file or directory that may no longer exist.
+        starting_points_str: List of paths to file or directory to search for
+            file/directorythat exists (where the search begins).
             Initialized to the current working directory if none is given.
 
     Returns:
@@ -214,36 +217,47 @@ def resolve_path(old_path_str: str, starting_point_str: Optional[str] = None):
         return None
 
     # Convert strings to absolute Path objects
+    if len(starting_points_str) == 0:
+        use_cwd = True
+        starting_points_str = ["."]
+    else:
+        use_cwd = False
+    starting_points = [Path(sp_str).resolve() for sp_str in starting_points_str]
     old_path: Path = Path(old_path_str).resolve()
-    starting_point: Path = (
-        Path(".").resolve()
-        if starting_point_str is None
-        else Path(starting_point_str).resolve()
-    )
     item_to_find: Path = Path(old_path.parts[-1])
 
     # Check if file/directory exists at old path
     if old_path.exists():
         return old_path
-    # Get parts of each path
-    old_path_parts = old_path.parts
-    starting_point_parts = starting_point.parts
 
-    # Change anchor of old path with starting point anchor
-    new_path_parts = list(old_path_parts)
-    new_path_parts[0] = starting_point_parts[0]
-    new_path = Path(*new_path_parts).absolute()
-    if new_path.exists():
-        return new_path
+    if not use_cwd:
+        # Use starting point to find item
+        for sp in starting_points:
+            new_path = find_item(sp, item_to_find)
+            if new_path is not None:
+                return new_path
 
-    # TODO(LM): The starting point will likely be the path to the .slp file which is
-    # usually located at the top level project directory. We should be able to find any
-    # similarities in the the .slp path and any other project componenets, then replace
-    # the prefix (prior to the common path) with the .slp path (which is a valid path).
+        # TODO(LM): The starting point will likely be the path to the .slp file which is
+        # usually located at the top level project directory. We should be able to find
+        # any similarities in the the .slp path and any other project componenets, then
+        # replace the prefix (prior to the common path) with the .slp path (which is a
+        # valid path).
+    else:
+        # No starting point given, try to automatically resolve path using cwd
 
-    new_path = find_item(starting_point, item_to_find)
-    if new_path is None:
-        raise FileNotFoundError(
-            errno.ENOENT, os.strerror(errno.ENOENT), str(item_to_find)
-        )
-    return new_path
+        # Get parts of each path
+        old_path_parts = old_path.parts
+        starting_point_parts = starting_points[0].parts
+
+        # Change anchor of old path with starting point anchor
+        new_path_parts = list(old_path_parts)
+        new_path_parts[0] = starting_point_parts[0]
+        new_path = Path(*new_path_parts).absolute()
+        if new_path.exists():
+            return new_path
+
+        new_path = find_item(starting_points[0], item_to_find)
+        if new_path is not None:
+            return new_path
+
+    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(item_to_find))

@@ -31,7 +31,7 @@ class InstanceType(IntEnum):
     PREDICTED = 1
 
 
-def read_videos(labels_path: str) -> list[Video]:
+def read_videos(labels_path: str, video_dirs: list[str] = []) -> list[Video]:
     """Read `Video` dataset in a SLEAP labels file.
 
     Args:
@@ -51,7 +51,8 @@ def read_videos(labels_path: str) -> list[Video]:
         ext = Path(filename).suffix[1:]
         if ext in MediaVideoReader.class_exts():
             try:
-                backend = MediaVideoReader.read_media_video(filename)
+                # TODO(LM): If video_dirs empty, could pass in labels_path
+                backend = MediaVideoReader.read_media_video(filename, video_dirs)
                 shape = backend.video_shape
             except FileNotFoundError as e:
                 warnings.warn(str(e))
@@ -245,17 +246,18 @@ def read_instances(
     return instances
 
 
-def read_labels(labels_path: str) -> Labels:
+def read_labels(labels_path: str, videos_dir: list[str] = []) -> Labels:
     """Read a SLEAP labels file.
 
     Args:
         labels_path: Path to a SLEAP-formatted labels file (.slp).
+        videos_dirs: List of path to folder(s) containing videos used in project.
 
     Returns:
         The processed `Labels` object.
     """
     tracks = read_tracks(labels_path)
-    videos = read_videos(labels_path)
+    videos = read_videos(labels_path, videos_dir)
     skeletons = read_skeletons(labels_path)
     points = read_points(labels_path)
     pred_points = read_pred_points(labels_path)

@@ -1,4 +1,5 @@
 """Tests for the sleap_io.io.test_utils file."""
+from pathlib import Path
 import pytest
 import h5py
 import numpy as np
@@ -6,10 +7,12 @@ from sleap_io.io.utils import (
     read_hdf5_attrs,
     read_hdf5_dataset,
     read_hdf5_group,
+    resolve_path,
     write_hdf5_dataset,
     write_hdf5_group,
     write_hdf5_attrs,
 )
+from sleap_io.io.video.media import MediaVideoReader
 
 
 @pytest.fixture
@@ -137,3 +140,27 @@ def test_write_hdf5_attrs(hdf5_file):
 
     # Append attributes
     write_read_assert_attrs(hdf5_file, dataset="/", attributes={"attr7": 6})
+
+
+def test_resolve_path(video_slp_predictions):
+    # Path to actual video
+    valid_path = video_slp_predictions
+    tp = Path(valid_path).resolve()
+    parent_of_valid_path = tp.parent
+    paths_to_search = [
+        "/points/nowhere",
+        str(parent_of_valid_path),
+        "/points/to/nothing",
+    ]
+
+    # Create invalid path
+    tp_parts = list(tp.parts)
+    tp_parts[1] = "no_way_this_points_anywhere"
+    invalid_path = Path(*tp_parts)
+    tp_resolved = resolve_path(invalid_path, paths_to_search)
+
+    # Check path resolved if supply starting points
+    assert tp_resolved == tp
+
+    # Check path resolved if no starting points supplied (found in cwd subdirectory)
+    assert resolve_path(invalid_path) == tp
