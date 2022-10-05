@@ -2,12 +2,7 @@
 from __future__ import annotations
 from pims import PyAVReaderIndexed
 from sleap_io.io.utils import resolve_path
-
-# Ref: http://soft-matter.github.io/pims/v0.6.1/video.html
-# vr = pims.Video(labels.videos[0].backend["filename"])
-# vr.shape
-# img = vr[0]
-# img.shape
+import numpy as np
 
 
 class MediaVideoReader(PyAVReaderIndexed):
@@ -15,7 +10,9 @@ class MediaVideoReader(PyAVReaderIndexed):
 
     Attributes:
         file: The path of the video file as a string.
-        video_shape: The shape of the video as a tuple (height, width, channels, frames)
+        channels: The number of unique color channels.
+        video_shape: The shape of the video as a tuple (height, width, unique channels, frames)
+        frame_shape: The shape of a single frame in the video (height, width, pixel channels)
 
     Examples:
         >>> video = Video('video.avi')  # or .mov, etc.
@@ -37,10 +34,32 @@ class MediaVideoReader(PyAVReaderIndexed):
     """
 
     def __init__(self, filename):
+        """Initialize attributes of MediaVideoReader by reading a frame from the video.
+
+        Args:
+            filename: path to the video to read
+        """
         super().__init__(file=filename)
-        self.video_shape = self.frame_shape + (len(self),)
+        self.test_frame = self[0]
+        self.grayscale = bool(
+            np.alltrue(self.test_frame[..., 0] == self.test_frame[..., -1])
+        )
+        self.channels = 1 if self.grayscale else self.frame_shape[2]
+        self.video_shape = self.frame_shape[:2] + (
+            self.channels,
+            len(self),
+        )
 
     @classmethod
     def read_media_video(cls, filename: str, video_dirs: list[str] = []):
+        """Read the video at `filename` by creating an instance of `MediaVideoReader`.
+
+        Args:
+            filename: path to the video to read
+            video_dirs: list of paths pointing to folders which might contain the video
+
+        Returns:
+            An instance of `MediaVideoReader`.
+        """
         filename = resolve_path(filename, video_dirs)
         return cls(filename)
