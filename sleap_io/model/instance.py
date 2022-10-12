@@ -44,6 +44,42 @@ class Point:
     visible: bool = True
     complete: bool = False
 
+    def __eq__(self, other: Point, allow_precision_error=False):
+        """Compare `self` and `other` for equality, optionally allowing precision error.
+
+        Args:
+            self, other: instances of `Point` to compare
+
+        Returns:
+            True if all attributes of `self` and `other` are the identical (allowing
+            precision error for `x` and `y` attributes if `allow_precision_error` is 
+            True).
+        """
+        if isinstance(other, list):
+            allow_precision_error = other[1]
+            other = other[0]
+
+        if allow_precision_error:
+            atol = 1e-8
+            rtol = 1e-5
+        else:
+            atol = 0
+            rtol = 0
+
+        return bool(
+            np.all(
+                np.isclose(
+                    [self.x, self.y],
+                    [other.x, other.y],
+                    rtol=rtol,
+                    atol=atol,
+                    equal_nan=True,
+                )
+            )
+            and (self.visible == other.visible)
+            and (self.complete == other.complete)
+        )
+
     def numpy(self) -> np.ndarray:
         """Return the coordinates as a numpy array of shape `(2,)`."""
         return np.array([self.x, self.y]) if self.visible else np.full((2,), np.nan)
