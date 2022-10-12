@@ -15,19 +15,6 @@ import numpy as np
 import math
 
 
-def _safe_float_comparison(a, b) -> bool:
-    """Compare `a` and `b` for equality, but allowing for some wiggle room due to float errors
-
-    Args:
-        a, b: scalar or array types to compare
-
-    Returns:
-        True if `a` and `b` are sufficently close. If `a` and `b` are arrays, all elements must pass equality.
-    """
-
-    return bool(np.all(np.isclose(a, b, equal_nan=True)))
-
-
 @define
 class Point:
     """A 2D spatial landmark and metadata associated with annotation.
@@ -46,8 +33,8 @@ class Point:
     eq_atol: ClassVar[float] = 1e-08
     eq_rtol: ClassVar[float] = 0
 
-    x: float = field(eq=cmp_using(eq=_safe_float_comparison))  # type: ignore
-    y: float = field(eq=cmp_using(eq=_safe_float_comparison))  # type: ignore
+    x: float
+    y: float
     visible: bool = True
     complete: bool = False
 
