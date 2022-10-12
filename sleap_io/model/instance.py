@@ -55,7 +55,7 @@ class Point:
             precision error for `x` and `y` attributes).
         """
         # check that other is a Point
-        if not isinstance(other, Point):
+        if type(other) is not type(self):
             return False
 
         # we know that we have some kind of point at this point

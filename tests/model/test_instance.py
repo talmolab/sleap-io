@@ -43,12 +43,39 @@ def test_close_points():
     Point.eq_rtol = 0
     assert not pt1 == pt2
 
+    # reset tolerance
+    Point.eq_atol = 1e-08
+    Point.eq_rtol = 0
+
+    # test points with NAN for coordinates
+    pt1 = PredictedPoint(x=np.nan, y=np.nan, visible=False, complete=False)
+    pt2 = PredictedPoint(x=np.nan, y=np.nan, visible=False, complete=False)
+    assert pt1 == pt2
+
+    # test floating point error
+    pt1 = PredictedPoint(x=135.82268970698718, y=213.22842752594835)
+    pt2 = PredictedPoint(x=135.82268970698718, y=213.2284275259484)
+    assert pt1 == pt2
+
+    # change allowed tolerance, and check we fail comparison
+    Point.eq_atol = 0
+    Point.eq_rtol = 0
+    assert not pt1 == pt2
+
 
 def test_predicted_point():
     """Test `PredictedPoint` is initialized as expected."""
-    pt = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
-    assert pt.score == 0.9
-    assert_equal(pt.numpy(), np.array([1.2, 3.4, 0.9]))
+    ppt1 = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
+    assert ppt1.score == 0.9
+    assert_equal(ppt1.numpy(), np.array([1.2, 3.4, 0.9]))
+
+    ppt2 = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
+    assert ppt1 == ppt2
+
+    # Test equivelance of Point and PredictedPoint
+    pt3 = Point(x=1.2, y=3.4, visible=True, complete=False)
+    assert not ppt1 == pt3  # PredictedPoint is not equivelant to Point
+    assert not pt3 == ppt1  # Point is not equivelant to PredictedPoint
 
 
 def test_track():
