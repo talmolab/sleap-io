@@ -44,7 +44,6 @@ def test_close_points():
     assert not pt1 == pt2
 
 
-
 def test_predicted_point():
     """Test `PredictedPoint` is initialized as expected."""
     pt = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
