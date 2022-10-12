@@ -9,7 +9,7 @@ estimated, such as confidence scores.
 
 from __future__ import annotations
 from attrs import define, validators, field, cmp_using
-from typing import Optional, Union
+from typing import ClassVar, Optional, Union, cast
 from sleap_io import Skeleton, Node
 import numpy as np
 import math
@@ -32,6 +32,10 @@ def _safe_float_comparison(a, b) -> bool:
 class Point:
     """A 2D spatial landmark and metadata associated with annotation.
 
+    Class Variables:
+    eq_atol: Controls absolute tolerence allowed in `x` and `y` when comparing two `Point`s for equality
+    eq_rtol: Controls relative tolerence allowed in `x` and `y` when comparing two `Point`s for equality
+
     Attributes:
         x: The horizontal pixel location of point in image coordinates.
         y: The vertical pixel location of point in image coordinates.
@@ -39,40 +43,44 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
+    eq_atol: ClassVar[float] = 1e-08
+    eq_rtol: ClassVar[float] = 0
+
     x: float = field(eq=cmp_using(eq=_safe_float_comparison))  # type: ignore
     y: float = field(eq=cmp_using(eq=_safe_float_comparison))  # type: ignore
     visible: bool = True
     complete: bool = False
 
-    def __eq__(self, other: Point, allow_precision_error=False):
-        """Compare `self` and `other` for equality, optionally allowing precision error.
+    def __eq__(self, other: object):
+        """Compare `self` and `other` for equality
+
+        Precision error between the respective `x` and `y` properties of two
+        instances may be allowed or controlled via the `Point.eq_atol` and
+        `Point.eq_rtol` class variables. Set to zero to disable their effect.
+        Internally, `numpy.isclose()` is used for the comparison:
+        https://numpy.org/doc/stable/reference/generated/numpy.isclose.html
 
         Args:
-            self, other: instances of `Point` to compare
+            self, other: instance of `Point` to compare
 
         Returns:
-            True if all attributes of `self` and `other` are the identical (allowing
-            precision error for `x` and `y` attributes if `allow_precision_error` is 
-            True).
+            True if all attributes of `self` and `other` are the identical (possibly allowing
+            precision error for `x` and `y` attributes).
         """
-        if isinstance(other, list):
-            allow_precision_error = other[1]
-            other = other[0]
+        # check that other is a Point
+        if not isinstance(other, Point):
+            return False
 
-        if allow_precision_error:
-            atol = 1e-8
-            rtol = 1e-5
-        else:
-            atol = 0
-            rtol = 0
+        # we know that we have some kind of point at this point
+        other = cast(Point, other)
 
         return bool(
             np.all(
                 np.isclose(
                     [self.x, self.y],
                     [other.x, other.y],
-                    rtol=rtol,
-                    atol=atol,
+                    rtol=Point.eq_rtol,
+                    atol=Point.eq_atol,
                     equal_nan=True,
                 )
             )
@@ -109,6 +117,26 @@ class PredictedPoint(Point):
             if self.visible
             else np.full((3,), np.nan)
         )
+
+    def __eq__(self, other: object):
+        """Compare `self` and `other` for equality
+
+        See `Point.__eq__()` for important notes about point equality semantics!
+
+        Args:
+            self, other: instance of `PredictedPoint` to compare
+
+        Returns:
+            True if all attributes of `self` and `other` are the identical (possibly allowing
+            precision error for `x` and `y` attributes).
+        """
+        if not super().__eq__(other):
+            return False
+
+        # we know that we have a point at this point
+        other = cast(PredictedPoint, other)
+
+        return self.score == other.score
 
 
 @define(eq=False)

@@ -28,15 +28,21 @@ def test_point():
 def test_close_points():
     """Test equality of two `Point` objects which have a floating point error."""
 
+    # test points with NAN for coordinates
+    pt1 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
+    pt2 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
+    assert pt1 == pt2
+
     # test floating point error
     pt1 = Point(x=135.82268970698718, y=213.22842752594835)
     pt2 = Point(x=135.82268970698718, y=213.2284275259484)
     assert pt1 == pt2
 
-    # test points with NAN for coordinates
-    pt1 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
-    pt2 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
-    assert pt1 == pt2
+    # change allowed tolerance, and check we fail comparison
+    Point.eq_atol = 0
+    Point.eq_rtol = 0
+    assert not pt1 == pt2
+
 
 
 def test_predicted_point():
