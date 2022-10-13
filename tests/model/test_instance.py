@@ -18,15 +18,64 @@ def test_point():
     pt = Point(x=1.2, y=3.4, visible=True, complete=True)
     assert_equal(pt.numpy(), np.array([1.2, 3.4]))
 
+    pt2 = Point(x=1.2, y=3.4, visible=True, complete=True)
+    assert pt == pt2
+
     pt.visible = False
     assert_equal(pt.numpy(), np.array([np.nan, np.nan]))
 
 
+def test_close_points():
+    """Test equality of two `Point` objects which have a floating point error."""
+
+    # test points with NAN for coordinates
+    pt1 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
+    pt2 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
+    assert pt1 == pt2
+
+    # test floating point error
+    pt1 = Point(x=135.82268970698718, y=213.22842752594835)
+    pt2 = Point(x=135.82268970698718, y=213.2284275259484)
+    assert pt1 == pt2
+
+    # change allowed tolerance, and check we fail comparison
+    Point.eq_atol = 0
+    Point.eq_rtol = 0
+    assert not pt1 == pt2
+
+    # reset tolerance
+    Point.eq_atol = 1e-08
+    Point.eq_rtol = 0
+
+    # test points with NAN for coordinates
+    pt1 = PredictedPoint(x=np.nan, y=np.nan, visible=False, complete=False)
+    pt2 = PredictedPoint(x=np.nan, y=np.nan, visible=False, complete=False)
+    assert pt1 == pt2
+
+    # test floating point error
+    pt1 = PredictedPoint(x=135.82268970698718, y=213.22842752594835)
+    pt2 = PredictedPoint(x=135.82268970698718, y=213.2284275259484)
+    assert pt1 == pt2
+
+    # change allowed tolerance, and check we fail comparison
+    Point.eq_atol = 0
+    Point.eq_rtol = 0
+    assert not pt1 == pt2
+
+
 def test_predicted_point():
     """Test `PredictedPoint` is initialized as expected."""
-    pt = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
-    assert pt.score == 0.9
-    assert_equal(pt.numpy(), np.array([1.2, 3.4, 0.9]))
+    ppt1 = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
+    assert ppt1.score == 0.9
+    assert_equal(ppt1.numpy(), np.array([1.2, 3.4, 0.9]))
+
+    ppt2 = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
+    assert ppt1 == ppt2
+
+    # Test equivelance of Point and PredictedPoint
+    pt3 = Point(x=1.2, y=3.4, visible=True, complete=False)
+    assert not ppt1 == pt3  # PredictedPoint is not equivelant to Point
+    assert not pt3 == ppt1  # Point is not equivelant to PredictedPoint
 
 
 def test_track():
@@ -75,6 +124,19 @@ def test_instance():
 
     with pytest.raises(IndexError):
         inst[None]
+
+
+def test_instance_comparison():
+    """Test some properties of `Instance` equality semantics"""
+    # test that instances with different skeletons are not considered equal
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
+    inst2 = Instance({"A": [0, 1], "C": [2, 3]}, skeleton=Skeleton(["A", "C"]))
+    assert not inst1 == inst2
+
+    # test that instances with the same skeleton but different point coordinates are not considered equal
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
+    inst2 = Instance({"A": [2, 3], "B": [0, 1]}, skeleton=Skeleton(["A", "B"]))
+    assert not inst1 == inst2
 
 
 def test_predicted_instance():
