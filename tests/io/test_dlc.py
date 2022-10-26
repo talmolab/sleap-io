@@ -1,8 +1,11 @@
 """Tests for functions in the sleap_io.io.labelstudio file."""
 from typing import Optional
+
+import pytest
 from sleap_io import Labels
-from sleap_io.io.dlc import labels_to_dlc, dlc_to_labels, load_dlc
+from sleap_io.io.dlc import get_skeleton_type, labels_to_dlc, dlc_to_labels, load_dlc, load_skeletons
 from sleap_io.io.slp import read_labels as slp_read_labels
+from sleap_io.model.skeleton import Skeleton
 
 
 def round_trip_labels(labels: Labels, dlc_config: Optional[dict] = None) -> Labels:
@@ -69,3 +72,9 @@ def test_read_labels(dlc_project_config):
     labels = load_dlc(dlc_project_config)
     labels2 = round_trip_labels(labels, dlc_project_config)
     assert labels == labels2
+
+
+def test_get_skeleton_type(dlc_project_config):
+    skeletons = load_skeletons(dlc_project_config)
+    for sk in skeletons:
+        assert sk.name == get_skeleton_type(sk, dlc_project_config)

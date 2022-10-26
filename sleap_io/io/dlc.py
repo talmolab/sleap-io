@@ -62,11 +62,11 @@ def get_skeleton_type(skeleton: Skeleton, dlc_config: dict) -> DlcSkeletonType:
         if set(ref_skel.node_names) == set(skeleton.node_names):
             # sanity check: ensure name is not None (appease mypy)
             if ref_skel.name is None:
-                raise ValueError("Unexpected skeleton without a name!")
+                raise ValueError("Unexpected reference skeleton without a name!")
 
             # sanity check: ensure name is one of the set in the annotated return type (appease mypy)
             if ref_skel.name not in ("single", "multi", "unique"):
-                raise ValueError("Unexpected skeleton without a name!")
+                raise ValueError("Unexpected reference skeleton name!")
 
             return cast(DlcSkeletonType, ref_skel.name)
 
