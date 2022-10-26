@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -42,6 +42,35 @@ def load_skeletons(dlc_config: dict) -> List[Skeleton]:
         out.append(Skeleton(nodes, name="single"))
 
     return out
+
+
+DlcSkeletonType = Literal["single", "multi", "unique"]
+
+
+def get_skeleton_type(skeleton: Skeleton, dlc_config: dict) -> DlcSkeletonType:
+    """Infer the type of skeleton, given a dlc configuration
+
+    Parameters:
+    skeleton: skeleton for which to infer type
+    dlc_config (dict): DLC project configuration data
+
+    Returns:
+    one of 'single', 'multi', 'unique'
+    """
+
+    for ref_skel in load_skeletons(dlc_config):
+        if set(ref_skel.node_names) == set(skeleton.node_names):
+            # sanity check: ensure name is not None (appease mypy)
+            if ref_skel.name is None:
+                raise ValueError("Unexpected skeleton without a name!")
+
+            # sanity check: ensure name is one of the set in the annotated return type (appease mypy)
+            if ref_skel.name not in ("single", "multi", "unique"):
+                raise ValueError("Unexpected skeleton without a name!")
+
+            return cast(DlcSkeletonType, ref_skel.name)
+
+    raise ValueError("Unable to infer skeleton type!")
 
 
 def load_dlc(dlc_config: dict) -> Labels:
@@ -143,7 +172,6 @@ def split_labels_by_directory(labels: Labels) -> Dict[str, Labels]:
     list of labels grouped by underlying video source
     """
     grouped: Dict[str, List[LabeledFrame]] = {}
-    labels
 
     for labeled_frame in labels.labeled_frames:
         path, _ = os.path.split(labeled_frame.video.filename)
@@ -274,15 +302,17 @@ def labels_to_dlc(labels: Labels, dlc_config: dict) -> pd.DataFrame:
 
         instance_names = list(dlc_config["individuals"]).copy()
 
-        for instance in labeled_frame.instances:
+        # TODO: I think we can only support user-labeled frames!
+        for instance in labeled_frame.user_instances:
 
             # determine individual type / identity
             instance_name: Optional[str] = None
             if is_ma:
-                if instance.skeleton.name == "unique":
+                skel_type = get_skeleton_type(instance.skeleton, dlc_config)
+                if skel_type == "unique":
                     instance_name = "single"
 
-                elif instance.skeleton.name == "multi":
+                elif skel_type == "multi":
                     instance_name = instance_names.pop(0)
 
                 else:
