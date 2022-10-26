@@ -1,6 +1,7 @@
 import math
 import os
-from typing import Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Tuple, Union, cast
+from typing_extensions import Literal
 
 import numpy as np
 import pandas as pd
