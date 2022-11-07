@@ -1,5 +1,6 @@
 """Functions to write and read from the neurodata without borders (NWB) format. 
 """
+from copy import deepcopy
 from typing import List, Optional, Generator
 from pathlib import Path
 import datetime
@@ -168,7 +169,7 @@ def append_labels_data_to_nwb(
         or the sampling rate with key`video_sample_rate`.
 
         e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
-        or   pose_estimation_metadata["video_sample_rate] = 15  # In Hz
+        or   pose_estimation_metadata["video_sample_rate"] = 15  # In Hz
 
         2) The other use of this dictionary is to ovewrite sleap-io default
         arguments for the PoseEstimation container.
@@ -270,6 +271,8 @@ def build_pose_estimation_container_for_track(
         of all the node trajectories in the track are stored. One time series per
         node.
     """
+    # Copy metadata for local use and modification
+    pose_estimation_metadata_copy = deepcopy(pose_estimation_metadata)
     video_path = Path(video.filename)
 
     all_track_skeletons = (
@@ -291,8 +294,8 @@ def build_pose_estimation_container_for_track(
     ]
 
     # Combine each node's PoseEstimationSeries to create a PoseEstimation container
-    timestamps = pose_estimation_metadata.pop("video_timestamps", None)
-    sample_rate = pose_estimation_metadata.pop("video_sample_rate", 1.0)
+    timestamps = pose_estimation_metadata_copy.pop("video_timestamps", None)
+    sample_rate = pose_estimation_metadata_copy.pop("video_sample_rate", 1.0)
     if timestamps is None:
         # Keeps backward compatbility.
         timestamps = np.arange(track_data_df.shape[0]) * sample_rate
@@ -312,7 +315,7 @@ def build_pose_estimation_container_for_track(
         # dimensions=np.array([[video.backend.height, video.backend.width]]),
     )
 
-    pose_estimation_container_kwargs.update(**pose_estimation_metadata)
+    pose_estimation_container_kwargs.update(**pose_estimation_metadata_copy)
     pose_estimation_container = PoseEstimation(**pose_estimation_container_kwargs)
 
     return pose_estimation_container

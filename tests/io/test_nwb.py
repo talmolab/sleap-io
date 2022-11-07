@@ -105,7 +105,11 @@ def test_provenance_writing(nwbfile, slp_predictions_with_provenance):
 
 def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
     labels = load_slp(slp_predictions_with_provenance)
-    pose_estimation_metadata = {"scorer": "overwritten_value"}
+    expected_sampling_rate = 10.0
+    pose_estimation_metadata = {
+        "scorer": "overwritten_value",
+        "video_sample_rate": expected_sampling_rate,
+    }
     nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
 
     # Extract processing module
@@ -118,6 +122,11 @@ def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
     # Test that the value of scorer was overwritten
     for pose_estimation_container in processing_module.data_interfaces.values():
         assert pose_estimation_container.scorer == "overwritten_value"
+        all_nodes = pose_estimation_container.nodes
+        for node in all_nodes:
+            pose_estimation_series = pose_estimation_container[node]
+            if pose_estimation_series.rate:
+                assert pose_estimation_series.rate == expected_sampling_rate
 
 
 def test_complex_case_append(nwbfile, slp_predictions):
