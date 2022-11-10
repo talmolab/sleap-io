@@ -12,84 +12,11 @@ from numpy.typing import ArrayLike
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
 from ndx_pose import PoseEstimationSeries, PoseEstimation
 
-
-from sleap_io import PredictedInstance, Labels, Video
-from sleap_io.model.labeled_frame import LabeledFrame
-
-
-def _extract_predicted_instances_data(labels: Labels) -> pd.DataFrame:
-    """Auxiliary function to structure the predicted instances' data for nwb write.
-
-    Args:
-        labels (Labels): A general label object.
-
-    Raises:
-        ValueError: If no frames in the label objects contain predicted instances.
-
-    Returns:
-        pd.DataFrame: A pandas data frame with the structured data with
-        hierarchical columns. The column hierarchy is:
-                "video_path",
-                "skeleton_name",
-                "track_name",
-                "node_name",
-        And it is indexed by the frames.
-    """
-
-    # Form pairs of labeled_frames and predicted instances
-    labeled_frames = labels.labeled_frames
-    all_frame_instance_tuples: Generator[
-        tuple[LabeledFrame, PredictedInstance], None, None
-    ] = (
-        (label_frame, instance)  # type: ignore
-        for label_frame in labeled_frames
-        for instance in label_frame.predicted_instances
-    )
-
-    # Extract the data
-    data_list = list()
-    for labeled_frame, instance in all_frame_instance_tuples:
-        # Traverse the nodes of the instances's skeleton
-        skeleton = instance.skeleton
-        for node in skeleton.nodes:
-            row_dict = dict(
-                frame_idx=labeled_frame.frame_idx,
-                x=instance.points[node].x,
-                y=instance.points[node].y,
-                score=instance.points[node].score,  # type: ignore[attr-defined]
-                node_name=node.name,
-                skeleton_name=skeleton.name,
-                track_name=instance.track.name if instance.track else "untracked",
-                video_path=labeled_frame.video.filename,
-            )
-            data_list.append(row_dict)
-
-    if not data_list:
-        raise ValueError("No predicted instances found in labels object")
-
-    labels_df = pd.DataFrame(data_list)
-
-    # Reformat the data with columns for dict-like hierarchical data access.
-    index = [
-        "skeleton_name",
-        "track_name",
-        "node_name",
-        "video_path",
-        "frame_idx",
-    ]
-
-    labels_tidy_df = (
-        labels_df.set_index(index)
-        .unstack(level=[0, 1, 2, 3])
-        .swaplevel(0, -1, axis=1)  # video_path on top while x, y score on bottom
-        .sort_index(axis=1)  # Better format for columns
-        .sort_index(axis=0)  # Sorts by frames
-    )
-
-    return labels_tidy_df
+from sleap_io import PredictedInstance, Labels, Video, LabeledFrame
+from sleap_io.io.utils import convert_predictions_to_dataframe
 
 
-def write_labels_to_nwb(
+def write_nwb(
     labels: Labels,
     nwbfile_path: str,
     nwb_file_kwargs: Optional[dict] = None,
@@ -145,38 +72,37 @@ def write_labels_to_nwb(
     )
 
     nwbfile = NWBFile(**nwb_file_kwargs)
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
+    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
         io.write(nwbfile)
 
 
-def append_labels_data_to_nwb(
+def append_nwb_data(
     labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict] = None
 ) -> NWBFile:
     """Append data from a Labels object to an in-memory nwb file.
 
     Args:
-        labels (Labels): A general labels object
-        nwbfile (NWBFile): And in-memory nwbfile where the data is to be appended.
+        labels: A general labels object
+        nwbfile: And in-memory nwbfile where the data is to be appended.
+        pose_estimation_metadata: This argument has a dual purpose:
 
-        pose_estimation_metadata (dict): This argument has a dual purpose:
+            1) It can be used to pass time information about the video which is
+            necessary for synchronizing frames in pose estimation tracking to other
+            modalities. Either the video timestamps can be passed to
+            This can be used to pass the timestamps with the key `video_timestamps`
+            or the sampling rate with key`video_sample_rate`.
 
-        1) It can be used to pass time information about the video which is
-        necessary for synchronizing frames in pose estimation tracking to other
-        modalities. Either the video timestamps can be passed to
-        This can be used to pass the timestamps with the key `video_timestamps`
-        or the sampling rate with key`video_sample_rate`.
+            e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
+            or   pose_estimation_metadata["video_sample_rate"] = 15  # In Hz
 
-        e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
-        or   pose_estimation_metadata["video_sample_rate"] = 15  # In Hz
-
-        2) The other use of this dictionary is to ovewrite sleap-io default
-        arguments for the PoseEstimation container.
-        see https://github.com/rly/ndx-pose for a full list or arguments.
+            2) The other use of this dictionary is to ovewrite sleap-io default
+            arguments for the PoseEstimation container.
+            see https://github.com/rly/ndx-pose for a full list or arguments.
 
     Returns:
-        NWBFile: An in-memory nwbfile with the data from the labels object appended.
+        An in-memory nwbfile with the data from the labels object appended.
     """
 
     pose_estimation_metadata = pose_estimation_metadata or dict()
@@ -187,7 +113,7 @@ def append_labels_data_to_nwb(
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
 
-    labels_data_df = _extract_predicted_instances_data(labels)
+    labels_data_df = convert_predictions_to_dataframe(labels)
 
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
@@ -223,6 +149,35 @@ def append_labels_data_to_nwb(
             nwb_processing_module.add(pose_estimation_container)
 
     return nwbfile
+
+
+def append_nwb(
+    labels: Labels, filename: str, pose_estimation_metadata: Optional[dict] = None
+):
+    """Append a SLEAP `Labels` object to an existing NWB data file.
+
+    Args:
+        labels: A general `Labels` object.
+        nwbfile: And in-memory nwbfile where the data is to be appended.
+        pose_estimation_metadata: Metadata for pose estimation. See `append_nwb_data`
+            for details.
+
+    See also: append_nwb_data
+    """
+    try:
+        io = NWBHDF5IO(filename, mode="a", load_namespaces=True)
+        nwb_file = io.read()
+        nwb_file = append_nwb_data(
+            labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
+        )
+        io.write(nwb_file)
+
+    except Exception as e:
+        raise e
+
+    finally:
+        if io is not None:
+            io.close()
 
 
 def get_processing_module_for_video(
