@@ -5,7 +5,8 @@ from sleap_io import Skeleton, Node, Edge
 
 @pytest.fixture
 def ls_multianimal():
-    """Typical label studio file from a multi-animal DLC project (mixes mutli-animal bodyparts and unique bodyparts"""
+    """Typical label studio file from a multi-animal DLC project (mixes multi-animal
+    bodyparts and unique bodyparts."""
     nodes = [
         Node("pup_snout"),
         Node("pup_neck"),
