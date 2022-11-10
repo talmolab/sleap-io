@@ -3,7 +3,7 @@ from pathlib import Path
 import datetime
 
 import numpy as np
-from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
+from pynwb import NWBFile, NWBHDF5IO
 
 from sleap_io import load_slp
 from sleap_io.io.nwb import write_nwb, append_nwb_data

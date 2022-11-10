@@ -3,7 +3,7 @@
 from __future__ import annotations
 import h5py  # type: ignore[import]
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import]
 from typing import Any, Union, Optional, Generator
 from sleap_io import Labels, LabeledFrame, PredictedInstance
 

@@ -1,19 +1,133 @@
 """Functions to write and read from the neurodata without borders (NWB) format. 
 """
 from copy import deepcopy
-from typing import List, Optional, Generator
+from typing import List, Optional, Union
 from pathlib import Path
 import datetime
 import uuid
+import re
 
-import pandas as pd
+import pandas as pd  # type: ignore[import]
 import numpy as np
 from numpy.typing import ArrayLike
-from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
-from ndx_pose import PoseEstimationSeries, PoseEstimation
+from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
+from ndx_pose import PoseEstimationSeries, PoseEstimation  # type: ignore[import]
 
-from sleap_io import PredictedInstance, Labels, Video, LabeledFrame
+from sleap_io import (
+    Labels,
+    Video,
+    LabeledFrame,
+    Track,
+    Skeleton,
+    Instance,
+    PredictedInstance,
+)
 from sleap_io.io.utils import convert_predictions_to_dataframe
+
+
+def read_nwb(path: str) -> Labels:
+    """Read an NWB formatted file to a SLEAP `Labels` object.
+
+    Args:
+        path: Path to an NWB file (`.nwb`).
+
+    Returns:
+        A `Labels` object.
+    """
+    io = NWBHDF5IO(path, mode="r", load_namespaces=True)
+    try:
+        read_nwbfile = io.read()
+        nwb_file = read_nwbfile.processing
+
+        # Get list of videos
+        video_keys: List[str] = [key for key in nwb_file.keys() if "SLEAP_VIDEO" in key]
+        video_tracks = dict()
+
+        # Get track keys
+        test_processing_module: ProcessingModule = nwb_file[video_keys[0]]
+        track_keys: List[str] = list(test_processing_module.fields["data_interfaces"])
+
+        # Get track
+        test_pose_estimation: PoseEstimation = test_processing_module[track_keys[0]]
+        node_names = test_pose_estimation.nodes[:]
+        edge_inds = test_pose_estimation.edges[:]
+
+        for processing_module in nwb_file.values():
+
+            # Get track keys
+            _track_keys: List[str] = list(processing_module.fields["data_interfaces"])
+            is_tracked: bool = re.sub("[0-9]+", "", _track_keys[0]) == "track"
+
+            # Extract info needed to create video and tracks_numpy
+            test_pose_estimation = processing_module[_track_keys[0]]
+            test_pose_estimation_series = test_pose_estimation[node_names[0]]
+
+            # Recreate Labels numpy (same as output of Labels.numpy())
+            n_tracks = len(_track_keys)
+            n_frames = test_pose_estimation_series.data[:].shape[0]
+            n_nodes = len(node_names)
+            tracks_numpy = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, np.float32)
+            confidence = np.full((n_frames, n_tracks, n_nodes), np.nan, np.float32)
+            for track_idx, track_key in enumerate(_track_keys):
+                pose_estimation = processing_module[track_key]
+
+                for node_idx, node_name in enumerate(node_names):
+                    pose_estimation_series = pose_estimation[node_name]
+
+                    tracks_numpy[
+                        :, track_idx, node_idx, :
+                    ] = pose_estimation_series.data[:]
+                    confidence[
+                        :, track_idx, node_idx
+                    ] = pose_estimation_series.confidence[:]
+
+            video_tracks[Path(test_pose_estimation.original_videos[0]).as_posix()] = (
+                tracks_numpy,
+                confidence,
+                is_tracked,
+            )
+
+    except Exception as e:
+        raise (e)
+    finally:
+        io.close()
+
+    # Create skeleton
+    skeleton = Skeleton(
+        nodes=node_names,
+        edges=edge_inds,
+    )
+
+    # Add instances to labeled frames
+    lfs = []
+    for video_fn, (tracks_numpy, confidence, is_tracked) in video_tracks.items():
+        video = Video(filename=video_fn)
+        n_frames, n_tracks, n_nodes, _ = tracks_numpy.shape
+        tracks = [Track(name=f"track{track_idx}") for track_idx in range(n_tracks)]
+        for frame_idx, (frame_pts, frame_confs) in enumerate(
+            zip(tracks_numpy, confidence)
+        ):
+            insts: List[Union[Instance, PredictedInstance]] = []
+            for track, (inst_pts, inst_confs) in zip(
+                tracks, zip(frame_pts, frame_confs)
+            ):
+                if np.isnan(inst_pts).all():
+                    continue
+                insts.append(
+                    PredictedInstance.from_numpy(
+                        points=inst_pts,  # (n_nodes, 2)
+                        point_scores=inst_confs,  # (n_nodes,)
+                        instance_score=inst_confs.mean(),  # ()
+                        skeleton=skeleton,
+                        track=track if is_tracked else None,
+                    )
+                )
+            if len(insts) > 0:
+                lfs.append(
+                    LabeledFrame(video=video, frame_idx=frame_idx, instances=insts)
+                )
+    labels = Labels(lfs)
+    return labels
 
 
 def write_nwb(
@@ -323,7 +437,7 @@ def build_track_pose_estimation_list(
 
         # Add timestamps or only rate if the timestamps are uniform
         frames = data_for_node.index.values
-        timestamps_for_data = timestamps[frames]
+        timestamps_for_data = timestamps[frames]  # type: ignore[index]
         sample_periods = np.diff(timestamps_for_data)
         if sample_periods.size == 0:
             rate = None  # This is the case with only one data point
