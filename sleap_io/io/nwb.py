@@ -380,7 +380,9 @@ def build_track_pose_estimation_list(
         if rate:
             # Video sample rates are ints but nwb expect floats
             rate = float(int(rate))
-            pose_estimation_kwargs.update(rate=rate, starting_time=timestamps_for_data[0])
+            pose_estimation_kwargs.update(
+                rate=rate, starting_time=timestamps_for_data[0]
+            )
         else:
             pose_estimation_kwargs.update(timestamps=timestamps_for_data)
 
