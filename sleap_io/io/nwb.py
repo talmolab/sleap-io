@@ -299,6 +299,8 @@ def build_pose_estimation_container_for_track(
     if timestamps is None:
         # Keeps backward compatbility.
         timestamps = np.arange(track_data_df.shape[0]) * sample_rate
+    else:
+        timestamps = np.array(timestamps)
 
     pose_estimation_series_list = build_track_pose_estimation_list(
         track_data_df, timestamps
