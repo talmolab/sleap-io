@@ -278,20 +278,12 @@ def append_nwb(
 
     See also: append_nwb_data
     """
-    try:
-        io = NWBHDF5IO(filename, mode="a", load_namespaces=True)
+    with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
         nwb_file = io.read()
         nwb_file = append_nwb_data(
             labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
         )
         io.write(nwb_file)
-
-    except Exception as e:
-        raise e
-
-    finally:
-        if io is not None:
-            io.close()
 
 
 def get_processing_module_for_video(
