@@ -8,6 +8,7 @@ differently depending on the underlying pose model.
 from __future__ import annotations
 from attrs import define, field
 from typing import Optional, Tuple, Union
+import numpy as np
 
 
 @define(frozen=True, cache_hash=True)
@@ -100,12 +101,16 @@ class Skeleton:
 
     def _convert_nodes(self):
         """Convert nodes to `Node` objects if needed."""
+        if isinstance(self.nodes, np.ndarray):
+            self.nodes = self.nodes.tolist()
         for i, node in enumerate(self.nodes):
             if type(node) == str:
                 self.nodes[i] = Node(node)
 
     def _convert_edges(self):
         """Convert list of edge names or integers to `Edge` objects if needed."""
+        if isinstance(self.edges, np.ndarray):
+            self.edges = self.edges.tolist()
         node_names = self.node_names
         for i, edge in enumerate(self.edges):
             if type(edge) == Edge:
@@ -118,10 +123,14 @@ class Skeleton:
                     raise ValueError(
                         f"Node '{src}' specified in the edge list is not in the nodes."
                     )
-            if type(src) == int:
+            if type(src) == int or (
+                np.isscalar(src) and np.issubdtype(src.dtype, np.integer)
+            ):
                 src = self.nodes[src]
 
-            if type(dst) == str:
+            if type(dst) == int or (
+                np.isscalar(dst) and np.issubdtype(dst.dtype, np.integer)
+            ):
                 try:
                     dst = node_names.index(dst)
                 except ValueError:
