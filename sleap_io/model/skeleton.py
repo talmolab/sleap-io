@@ -102,7 +102,7 @@ class Skeleton:
     def _convert_nodes(self):
         """Convert nodes to `Node` objects if needed."""
         if isinstance(self.nodes, np.ndarray):
-            self.nodes = self.nodes.tolist()
+            object.__setattr__(self, "nodes", self.nodes.tolist())
         for i, node in enumerate(self.nodes):
             if type(node) == str:
                 self.nodes[i] = Node(node)
@@ -128,16 +128,16 @@ class Skeleton:
             ):
                 src = self.nodes[src]
 
-            if type(dst) == int or (
-                np.isscalar(dst) and np.issubdtype(dst.dtype, np.integer)
-            ):
+            if type(dst) == str:
                 try:
                     dst = node_names.index(dst)
                 except ValueError:
                     raise ValueError(
                         f"Node '{dst}' specified in the edge list is not in the nodes."
                     )
-            if type(dst) == int:
+            if type(dst) == int or (
+                np.isscalar(dst) and np.issubdtype(dst.dtype, np.integer)
+            ):
                 dst = self.nodes[dst]
 
             self.edges[i] = Edge(src, dst)
