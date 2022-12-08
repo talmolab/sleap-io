@@ -34,8 +34,7 @@ def read_nwb(path: str) -> Labels:
     Returns:
         A `Labels` object.
     """
-    io = NWBHDF5IO(path, mode="r", load_namespaces=True)
-    try:
+    with NWBHDF5IO(path, mode="r", load_namespaces=True) as io:
         read_nwbfile = io.read()
         nwb_file = read_nwbfile.processing
 
@@ -86,11 +85,6 @@ def read_nwb(path: str) -> Labels:
                 confidence,
                 is_tracked,
             )
-
-    except Exception as e:
-        raise (e)
-    finally:
-        io.close()
 
     # Create skeleton
     skeleton = Skeleton(
