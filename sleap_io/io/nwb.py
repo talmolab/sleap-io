@@ -354,6 +354,8 @@ def build_pose_estimation_container_for_track(
     if timestamps is None:
         # Keeps backward compatbility.
         timestamps = np.arange(track_data_df.shape[0]) * sample_rate
+    else:
+        timestamps = np.asarray(timestamps)
 
     pose_estimation_series_list = build_track_pose_estimation_list(
         track_data_df, timestamps
@@ -435,7 +437,9 @@ def build_track_pose_estimation_list(
         if rate:
             # Video sample rates are ints but nwb expect floats
             rate = float(int(rate))
-            pose_estimation_kwargs.update(rate=rate)
+            pose_estimation_kwargs.update(
+                rate=rate, starting_time=timestamps_for_data[0]
+            )
         else:
             pose_estimation_kwargs.update(timestamps=timestamps_for_data)
 

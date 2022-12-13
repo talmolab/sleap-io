@@ -203,6 +203,8 @@ def test_complex_case_append_with_timestamps_metadata(nwbfile, slp_predictions):
         if pose_estimation_series.rate:
             extracted_rate = pose_estimation_series.rate
             assert extracted_rate == expected_rate, f"{node_name}"
+            extracted_starting_time = pose_estimation_series.starting_time
+            assert extracted_starting_time == 0
 
         # Other store timestamps and the timestmaps should be a subset of the videotimestamps
         else:
