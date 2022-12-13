@@ -96,7 +96,7 @@ def read_nwb(path: str) -> Labels:
                         frame_inds, track_idx, node_idx
                     ] = pose_estimation_series.confidence[:]
 
-            video_tracks[Path(test_pose_estimation.original_videos[0]).as_posix()] = (
+            video_tracks[Path(pose_estimation.original_videos[0]).as_posix()] = (
                 tracks_numpy,
                 confidence,
                 is_tracked,
