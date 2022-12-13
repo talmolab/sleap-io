@@ -8,9 +8,8 @@ Some important nomenclature:
 
 """
 
-
 import datetime
-import json
+import simplejson as json
 import math
 import uuid
 from typing import Dict, Iterable, List, Tuple, Optional, Union
@@ -121,7 +120,7 @@ def convert_labels(labels: Labels) -> List[dict]:
         frame_annots = []
 
         for instance in frame.instances:
-            inst_id = uuid.uuid4()
+            inst_id = str(uuid.uuid4())
             frame_annots.append(
                 {
                     "original_width": width,
@@ -145,7 +144,7 @@ def convert_labels(labels: Labels) -> List[dict]:
             )
 
             for node, point in instance.points.items():
-                point_id = uuid.uuid4()
+                point_id = str(uuid.uuid4())
 
                 # add this point
                 frame_annots.append(
@@ -216,9 +215,14 @@ def write_labels(labels: Labels, filename: str):
         labels: SLEAP `Labels` to be converted to Label Studio task format.
         filename: Path to save Label Studio annotations (`.json`).
     """
+
+    def _encode(obj):
+        if type(obj).__name__ == "uint64":
+            return int(obj)
+
     ls_dicts = convert_labels(labels)
     with open(filename, "w") as f:
-        json.dump(ls_dicts, f, indent=4)
+        json.dump(ls_dicts, f, indent=4, default=_encode)
 
 
 def task_to_labeled_frame(
@@ -233,56 +237,49 @@ def task_to_labeled_frame(
             )
         )
 
-    try:
-        # only parse the first entry result
-        to_parse = task[key][0]["result"]
+    # only parse the first entry result
+    to_parse = task[key][0]["result"]
 
-        individuals = filter_and_index(to_parse, "rectanglelabels")
-        keypoints = filter_and_index(to_parse, "keypointlabels")
-        relations = build_relation_map(to_parse)
-        instances = []
+    individuals = filter_and_index(to_parse, "rectanglelabels")
+    keypoints = filter_and_index(to_parse, "keypointlabels")
+    relations = build_relation_map(to_parse)
+    instances = []
 
-        if len(individuals) > 0:
-            # multi animal case:
-            for indv_id, indv in individuals.items():
-                points = {}
-                for rel in relations[indv_id]:
-                    kpt = keypoints.pop(rel)
-                    node = Node(kpt["value"]["keypointlabels"][0])
-                    x_pos = (kpt["value"]["x"] * kpt["original_width"]) / 100
-                    y_pos = (kpt["value"]["y"] * kpt["original_height"]) / 100
+    if len(individuals) > 0:
+        # multi animal case:
+        for indv_id, indv in individuals.items():
+            points = {}
+            for rel in relations[indv_id]:
+                kpt = keypoints.pop(rel)
+                node = Node(kpt["value"]["keypointlabels"][0])
+                x_pos = (kpt["value"]["x"] * kpt["original_width"]) / 100
+                y_pos = (kpt["value"]["y"] * kpt["original_height"]) / 100
 
-                    # If the value is a NAN, the user did not mark this keypoint
-                    if math.isnan(x_pos) or math.isnan(y_pos):
-                        continue
+                # If the value is a NAN, the user did not mark this keypoint
+                if math.isnan(x_pos) or math.isnan(y_pos):
+                    continue
 
-                    points[node] = Point(x_pos, y_pos)
+                points[node] = Point(x_pos, y_pos)
 
-                if len(points) > 0:
-                    instances.append(Instance(points, skeleton))
+            if len(points) > 0:
+                instances.append(Instance(points, skeleton))
 
-        # If this is multi-animal, any leftover keypoints should be unique bodyparts, and will be collected here
-        # if single-animal, we only have 'unique bodyparts' [in a way] and the process is identical
-        points = {}
-        for _, kpt in keypoints.items():
-            node = Node(kpt["value"]["keypointlabels"][0])
-            points[node] = Point(
-                (kpt["value"]["x"] * kpt["original_width"]) / 100,
-                (kpt["value"]["y"] * kpt["original_height"]) / 100,
-                visible=True,
-            )
-        if len(points) > 0:
-            instances.append(Instance(points, skeleton))
+    # If this is multi-animal, any leftover keypoints should be unique bodyparts, and will be collected here
+    # if single-animal, we only have 'unique bodyparts' [in a way] and the process is identical
+    points = {}
+    for _, kpt in keypoints.items():
+        node = Node(kpt["value"]["keypointlabels"][0])
+        points[node] = Point(
+            (kpt["value"]["x"] * kpt["original_width"]) / 100,
+            (kpt["value"]["y"] * kpt["original_height"]) / 100,
+            visible=True,
+        )
+    if len(points) > 0:
+        instances.append(Instance(points, skeleton))
 
-        video, frame_idx = video_from_task(task)
+    video, frame_idx = video_from_task(task)
 
-        return LabeledFrame(video, frame_idx, instances)
-    except Exception as excpt:
-        raise RuntimeError(
-            "While working on Task #{}, encountered the following error:".format(
-                task.get("id", "??")
-            )
-        ) from excpt
+    return LabeledFrame(video, frame_idx, instances)
 
 
 def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, dict]:
