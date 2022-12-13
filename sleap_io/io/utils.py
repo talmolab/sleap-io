@@ -1,13 +1,11 @@
 """Miscellaneous utilities for working with different I/O formats."""
 
 from __future__ import annotations
-import errno
-import os
-from tracemalloc import start
 import h5py  # type: ignore[import]
 import numpy as np
-from typing import Any, List, Union, Optional
-from pathlib import Path
+import pandas as pd  # type: ignore[import]
+from typing import Any, Union, Optional, Generator
+from sleap_io import Labels, LabeledFrame, PredictedInstance
 
 
 def read_hdf5_dataset(filename: str, dataset: str) -> np.ndarray:
@@ -177,6 +175,76 @@ def write_hdf5_attrs(filename: str, dataset: str, attributes: dict[str, Any]):
             _overwrite_hdf5_attr(ds, attr_name, attr_value)
 
 
+def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
+    """Helper function to convert predictions data to a Pandas dataframe.
+
+    Args:
+        labels (Labels): A general label object.
+
+    Raises:
+        ValueError: If no frames in the label objects contain predicted instances.
+
+    Returns:
+        pd.DataFrame: A pandas data frame with the structured data with
+        hierarchical columns. The column hierarchy is:
+                "video_path",
+                "skeleton_name",
+                "track_name",
+                "node_name",
+        And it is indexed by the frames.
+    """
+
+    # Form pairs of labeled_frames and predicted instances
+    labeled_frames = labels.labeled_frames
+    all_frame_instance_tuples: Generator[
+        tuple[LabeledFrame, PredictedInstance], None, None
+    ] = (
+        (label_frame, instance)  # type: ignore
+        for label_frame in labeled_frames
+        for instance in label_frame.predicted_instances
+    )
+
+    # Extract the data
+    data_list = list()
+    for labeled_frame, instance in all_frame_instance_tuples:
+        # Traverse the nodes of the instances's skeleton
+        skeleton = instance.skeleton
+        for node in skeleton.nodes:
+            row_dict = dict(
+                frame_idx=labeled_frame.frame_idx,
+                x=instance.points[node].x,
+                y=instance.points[node].y,
+                score=instance.points[node].score,  # type: ignore[attr-defined]
+                node_name=node.name,
+                skeleton_name=skeleton.name,
+                track_name=instance.track.name if instance.track else "untracked",
+                video_path=labeled_frame.video.filename,
+            )
+            data_list.append(row_dict)
+
+    if not data_list:
+        raise ValueError("No predicted instances found in labels object")
+
+    labels_df = pd.DataFrame(data_list)
+
+    # Reformat the data with columns for dict-like hierarchical data access.
+    index = [
+        "skeleton_name",
+        "track_name",
+        "node_name",
+        "video_path",
+        "frame_idx",
+    ]
+
+    labels_tidy_df = (
+        labels_df.set_index(index)
+        .unstack(level=[0, 1, 2, 3])
+        .swaplevel(0, -1, axis=1)  # video_path on top while x, y score on bottom
+        .sort_index(axis=1)  # Better format for columns
+        .sort_index(axis=0)  # Sorts by frames
+    )
+
+    return labels_tidy_df
 def resolve_path(old_path_str: str, starting_points_str: List[str] = []):
     """Find a path given an old path and a starting point.
 

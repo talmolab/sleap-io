@@ -8,8 +8,8 @@ estimated, such as confidence scores.
 """
 
 from __future__ import annotations
-from attrs import define, validators, field
-from typing import Optional, Union
+from attrs import define, validators, field, cmp_using
+from typing import ClassVar, Optional, Union, cast
 from sleap_io import Skeleton, Node
 import numpy as np
 import math
@@ -19,6 +19,10 @@ import math
 class Point:
     """A 2D spatial landmark and metadata associated with annotation.
 
+    Class Variables:
+    eq_atol: Controls absolute tolerence allowed in `x` and `y` when comparing two `Point`s for equality
+    eq_rtol: Controls relative tolerence allowed in `x` and `y` when comparing two `Point`s for equality
+
     Attributes:
         x: The horizontal pixel location of point in image coordinates.
         y: The vertical pixel location of point in image coordinates.
@@ -26,10 +30,50 @@ class Point:
         complete: Has the point been verified by the user labeler.
     """
 
+    eq_atol: ClassVar[float] = 1e-08
+    eq_rtol: ClassVar[float] = 0
+
     x: float
     y: float
     visible: bool = True
     complete: bool = False
+
+    def __eq__(self, other: object):
+        """Compare `self` and `other` for equality
+
+        Precision error between the respective `x` and `y` properties of two
+        instances may be allowed or controlled via the `Point.eq_atol` and
+        `Point.eq_rtol` class variables. Set to zero to disable their effect.
+        Internally, `numpy.isclose()` is used for the comparison:
+        https://numpy.org/doc/stable/reference/generated/numpy.isclose.html
+
+        Args:
+            self, other: instance of `Point` to compare
+
+        Returns:
+            True if all attributes of `self` and `other` are the identical (possibly allowing
+            precision error for `x` and `y` attributes).
+        """
+        # check that other is a Point
+        if type(other) is not type(self):
+            return False
+
+        # we know that we have some kind of point at this point
+        other = cast(Point, other)
+
+        return bool(
+            np.all(
+                np.isclose(
+                    [self.x, self.y],
+                    [other.x, other.y],
+                    rtol=Point.eq_rtol,
+                    atol=Point.eq_atol,
+                    equal_nan=True,
+                )
+            )
+            and (self.visible == other.visible)
+            and (self.complete == other.complete)
+        )
 
     def numpy(self) -> np.ndarray:
         """Return the coordinates as a numpy array of shape `(2,)`."""
@@ -61,6 +105,26 @@ class PredictedPoint(Point):
             else np.full((3,), np.nan)
         )
 
+    def __eq__(self, other: object):
+        """Compare `self` and `other` for equality
+
+        See `Point.__eq__()` for important notes about point equality semantics!
+
+        Args:
+            self, other: instance of `PredictedPoint` to compare
+
+        Returns:
+            True if all attributes of `self` and `other` are the identical (possibly allowing
+            precision error for `x` and `y` attributes).
+        """
+        if not super().__eq__(other):
+            return False
+
+        # we know that we have a point at this point
+        other = cast(PredictedPoint, other)
+
+        return self.score == other.score
+
 
 @define(eq=False)
 class Track:
@@ -82,7 +146,37 @@ class Track:
     name: str = ""
 
 
-@define(auto_attribs=True, slots=True, eq=False)
+def _compare_points(
+    a: Union[dict[Node, Point], dict[Node, PredictedPoint]],
+    b: Union[dict[Node, Point], dict[Node, PredictedPoint]],
+) -> bool:
+    """Compare two sets of points for equality
+
+    To satisfy equaity, the two set of points must:
+        1) each contain the same set of `Nodes`
+        2) for each node, the two `Point`s must satisfy normal `Point` equality
+
+    Args:
+        a: collection of points
+        b: collection of points
+
+    Returns:
+        True if `a` and `b` are considered equal, otherwise False
+    """
+    # First check we are speaking the same languague of nodes
+    if not set(a.keys()) == set(b.keys()):
+        return False
+
+    # Check each point in self vs other
+    for node, point in a.items():
+        if not point == b[node]:
+            return False
+
+    # Otherwise, return True
+    return True
+
+
+@define(auto_attribs=True, slots=True, eq=True)
 class Instance:
     """This class represents a ground truth instance such as an animal.
 
@@ -143,7 +237,7 @@ class Instance:
         return points
 
     points: Union[dict[Node, Point], dict[Node, PredictedPoint]] = field(
-        on_setattr=_convert_points
+        on_setattr=_convert_points, eq=cmp_using(eq=_compare_points)  # type: ignore
     )
     skeleton: Skeleton
     track: Optional[Track] = None
