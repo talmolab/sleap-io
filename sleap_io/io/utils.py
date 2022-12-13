@@ -204,6 +204,10 @@ def resolve_path(old_path_str: str, starting_points_str: Optional[list[str]] = N
     if starting_points_str is None:
         starting_points_str = []
 
+    if isinstance(old_path_str, Path):
+        old_path_str = old_path_str.as_posix()
+    old_path_str = old_path_str.replace("\\", "/")
+
     def find_item(starting_point, item_to_find):
         items_found: list[Path] = sorted(starting_point.rglob(str(item_to_find)))
         if len(items_found) > 0:

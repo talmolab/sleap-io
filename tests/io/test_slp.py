@@ -38,7 +38,7 @@ def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
     assert type(labels) == Labels
 
 
-def test_load_lsp_with_provenance(slp_predictions_with_provenance):
+def test_load_slp_with_provenance(slp_predictions_with_provenance):
     labels = read_labels(slp_predictions_with_provenance)
     provenance = labels.provenance
     assert type(provenance) == dict
