@@ -22,7 +22,7 @@ from sleap_io import (
     Instance,
     PredictedInstance,
 )
-from sleap_io.io.utils import convert_predictions_to_dataframe
+from sleap_io.model.labels import convert_predictions_to_dataframe
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
