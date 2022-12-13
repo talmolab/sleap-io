@@ -1,27 +1,33 @@
-"""This module handles direct I/O operations for working with .slp files.
+"""This module handles direct I/O operations for working with Labelstudio files.
 
 Some important nomenclature:
-  - `tasks`: typically maps to a single frame of data to be annotated, closest correspondance is to `LabeledFrame`
-  - `annotations`: collection of points, polygons, relations, etc. corresponds to `Instance`s and `Point`s, but a flattened hierarchy
+  - `tasks`: typically maps to a single frame of data to be annotated, closest
+    correspondance is to `LabeledFrame`
+  - `annotations`: collection of points, polygons, relations, etc. corresponds to
+    `Instance`s and `Point`s, but a flattened hierarchy
 
 """
 
-
 import datetime
-import json
+import simplejson as json
 import math
 import uuid
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple, Optional, Union
 
 from sleap_io import Instance, LabeledFrame, Labels, Node, Point, Video, Skeleton
 
 
-def read_labels(labels_path: str, skeleton: Skeleton) -> Labels:
-    """Read label-studio style annotations from a file and return a `Labels` object.
+def read_labels(
+    labels_path: str, skeleton: Optional[Union[Skeleton, List[str]]] = None
+) -> Labels:
+    """Read Label Studio style annotations from a file and return a `Labels` object.
 
     Args:
-        labels_path: Path to the label-studio annotation file, in json format.
-        skeleton: Skeleton
+        labels_path: Path to the Label Studio annotation file, in json format.
+        skeleton: An optional `Skeleton` object or list of node names. If not provided
+            (the default), skeleton will be inferred from the data. It may be useful to
+            provide this so the keypoint label types can be filtered to just the ones in
+            the skeleton.
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -29,15 +35,50 @@ def read_labels(labels_path: str, skeleton: Skeleton) -> Labels:
     with open(labels_path, "r") as task_file:
         tasks = json.load(task_file)
 
+    if type(skeleton) == list:
+        skeleton = Skeleton(nodes=skeleton)  # type: ignore[arg-type]
+    elif skeleton is None:
+        skeleton = infer_nodes(tasks)
+    else:
+        assert isinstance(skeleton, Skeleton)
+
     return parse_tasks(tasks, skeleton)
 
 
-def parse_tasks(tasks: List[Dict], skeleton: Skeleton) -> Labels:
-    """Read label-studio style annotations from a file and return a `Labels` object
+def infer_nodes(tasks: List[Dict]) -> Skeleton:
+    """Parse the loaded JSON tasks to create a minimal skeleton.
 
     Args:
-        tasks: collection of tasks to be concerted to `Labels`
-        skeleton: Skeleton
+        tasks: Collection of tasks loaded from Label Studio JSON.
+
+    Returns:
+        The inferred `Skeleton`.
+    """
+    node_names = set()
+    for entry in tasks:
+        if "annotations" in entry:
+            key = "annotations"
+        elif "completions" in entry:
+            key = "completions"
+        else:
+            raise ValueError("Cannot find annotation data for entry!")
+
+        for annotation in entry[key]:
+            for datum in annotation["result"]:
+                if datum["type"] == "keypointlabels":
+                    for node_name in datum["value"]["keypointlabels"]:
+                        node_names.add(node_name)
+
+    skeleton = Skeleton(nodes=list(node_names))
+    return skeleton
+
+
+def parse_tasks(tasks: List[Dict], skeleton: Skeleton) -> Labels:
+    """Read Label Studio style annotations from a file and return a `Labels` object
+
+    Args:
+        tasks: Collection of tasks to be converted to `Labels`.
+        skeleton: `Skeleton` with the nodes and edges to be used.
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -57,14 +98,14 @@ def parse_tasks(tasks: List[Dict], skeleton: Skeleton) -> Labels:
     return Labels(frames)
 
 
-def write_labels(labels: Labels) -> List[dict]:
-    """Convert a `Labels` object into label-studio annotations
+def convert_labels(labels: Labels) -> List[dict]:
+    """Convert a `Labels` object into Label Studio-formatted annotations.
 
     Args:
-        labels: Labels to be converted to label-studio task format
+        labels: SLEAP `Labels` to be converted to Label Studio task format.
 
     Returns:
-        label-studio version of `Labels`
+        Label Studio dictionaries of the `Labels` data.
     """
 
     out = []
@@ -79,7 +120,7 @@ def write_labels(labels: Labels) -> List[dict]:
         frame_annots = []
 
         for instance in frame.instances:
-            inst_id = uuid.uuid4()
+            inst_id = str(uuid.uuid4())
             frame_annots.append(
                 {
                     "original_width": width,
@@ -103,7 +144,7 @@ def write_labels(labels: Labels) -> List[dict]:
             )
 
             for node, point in instance.points.items():
-                point_id = uuid.uuid4()
+                point_id = str(uuid.uuid4())
 
                 # add this point
                 frame_annots.append(
@@ -167,6 +208,23 @@ def write_labels(labels: Labels) -> List[dict]:
     return out
 
 
+def write_labels(labels: Labels, filename: str):
+    """Convert and save a SLEAP `Labels` object to a Label Studio `.json` file.
+
+    Args:
+        labels: SLEAP `Labels` to be converted to Label Studio task format.
+        filename: Path to save Label Studio annotations (`.json`).
+    """
+
+    def _encode(obj):
+        if type(obj).__name__ == "uint64":
+            return int(obj)
+
+    ls_dicts = convert_labels(labels)
+    with open(filename, "w") as f:
+        json.dump(ls_dicts, f, indent=4, default=_encode)
+
+
 def task_to_labeled_frame(
     task: dict, skeleton: Skeleton, key: str = "annotations"
 ) -> LabeledFrame:
@@ -179,56 +237,49 @@ def task_to_labeled_frame(
             )
         )
 
-    try:
-        # only parse the first entry result
-        to_parse = task[key][0]["result"]
+    # only parse the first entry result
+    to_parse = task[key][0]["result"]
 
-        individuals = filter_and_index(to_parse, "rectanglelabels")
-        keypoints = filter_and_index(to_parse, "keypointlabels")
-        relations = build_relation_map(to_parse)
-        instances = []
+    individuals = filter_and_index(to_parse, "rectanglelabels")
+    keypoints = filter_and_index(to_parse, "keypointlabels")
+    relations = build_relation_map(to_parse)
+    instances = []
 
-        if len(individuals) > 0:
-            # multi animal case:
-            for indv_id, indv in individuals.items():
-                points = {}
-                for rel in relations[indv_id]:
-                    kpt = keypoints.pop(rel)
-                    node = Node(kpt["value"]["keypointlabels"][0])
-                    x_pos = (kpt["value"]["x"] * kpt["original_width"]) / 100
-                    y_pos = (kpt["value"]["y"] * kpt["original_height"]) / 100
+    if len(individuals) > 0:
+        # multi animal case:
+        for indv_id, indv in individuals.items():
+            points = {}
+            for rel in relations[indv_id]:
+                kpt = keypoints.pop(rel)
+                node = Node(kpt["value"]["keypointlabels"][0])
+                x_pos = (kpt["value"]["x"] * kpt["original_width"]) / 100
+                y_pos = (kpt["value"]["y"] * kpt["original_height"]) / 100
 
-                    # If the value is a NAN, the user did not mark this keypoint
-                    if math.isnan(x_pos) or math.isnan(y_pos):
-                        continue
+                # If the value is a NAN, the user did not mark this keypoint
+                if math.isnan(x_pos) or math.isnan(y_pos):
+                    continue
 
-                    points[node] = Point(x_pos, y_pos)
+                points[node] = Point(x_pos, y_pos)
 
-                if len(points) > 0:
-                    instances.append(Instance(points, skeleton))
+            if len(points) > 0:
+                instances.append(Instance(points, skeleton))
 
-        # If this is multi-animal, any leftover keypoints should be unique bodyparts, and will be collected here
-        # if single-animal, we only have 'unique bodyparts' [in a way] and the process is identical
-        points = {}
-        for _, kpt in keypoints.items():
-            node = Node(kpt["value"]["keypointlabels"][0])
-            points[node] = Point(
-                (kpt["value"]["x"] * kpt["original_width"]) / 100,
-                (kpt["value"]["y"] * kpt["original_height"]) / 100,
-                visible=True,
-            )
-        if len(points) > 0:
-            instances.append(Instance(points, skeleton))
+    # If this is multi-animal, any leftover keypoints should be unique bodyparts, and will be collected here
+    # if single-animal, we only have 'unique bodyparts' [in a way] and the process is identical
+    points = {}
+    for _, kpt in keypoints.items():
+        node = Node(kpt["value"]["keypointlabels"][0])
+        points[node] = Point(
+            (kpt["value"]["x"] * kpt["original_width"]) / 100,
+            (kpt["value"]["y"] * kpt["original_height"]) / 100,
+            visible=True,
+        )
+    if len(points) > 0:
+        instances.append(Instance(points, skeleton))
 
-        video, frame_idx = video_from_task(task)
+    video, frame_idx = video_from_task(task)
 
-        return LabeledFrame(video, frame_idx, instances)
-    except Exception as excpt:
-        raise RuntimeError(
-            "While working on Task #{}, encountered the following error:".format(
-                task.get("id", "??")
-            )
-        ) from excpt
+    return LabeledFrame(video, frame_idx, instances)
 
 
 def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, dict]:
@@ -239,8 +290,8 @@ def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, 
         annot_type: annotation type to filter e.x. 'keypointlabels' or 'rectanglelabels'
 
     Returns:
-        Dict[str, dict] - indexed and filtered annotations. Only annotations of type `annot_type`
-        will survive, and annotations are indexed by ID
+        Dict[str, dict] - indexed and filtered annotations. Only annotations of type
+        `annot_type` will survive, and annotations are indexed by ID.
     """
     filtered = list(filter(lambda d: d["type"] == annot_type, annotations))
     indexed = {item["id"]: item for item in filtered}
@@ -248,7 +299,7 @@ def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, 
 
 
 def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[str]]:
-    """Build a two-way relationship map between annotations
+    """Build a two-way relationship map between annotations.
 
     Args:
         annotations: annotations, presumably, containing relation types
@@ -270,10 +321,10 @@ def build_relation_map(annotations: Iterable[dict]) -> Dict[str, List[str]]:
 
 
 def video_from_task(task: dict) -> Tuple[Video, int]:
-    """Given a label-studio task, retrieve video information
+    """Given a Label Studio task, retrieve video information.
 
     Args:
-        task: label-studio task
+        task: Label Studio task
 
     Returns:
         Video and frame index for this task

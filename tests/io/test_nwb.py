@@ -3,10 +3,10 @@ from pathlib import Path
 import datetime
 
 import numpy as np
-from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
+from pynwb import NWBFile, NWBHDF5IO
 
 from sleap_io import load_slp
-from sleap_io import write_labels_to_nwb, append_labels_data_to_nwb
+from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def nwbfile():
 
 def test_typical_case_append(nwbfile, slp_typical):
     labels = load_slp(slp_typical)
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile)
+    nwbfile = append_nwb_data(labels, nwbfile)
 
     # Test matching number of processing modules
     number_of_videos = len(labels.videos)
@@ -46,7 +46,7 @@ def test_typical_case_append(nwbfile, slp_typical):
     container_name = "track=untracked"
     assert container_name in all_containers
 
-    # Test that the skeleton nodes are store as nodes in containers
+    # Test that the skeleton nodes are stored as nodes in containers
     pose_estimation_container = all_containers[container_name]
     expected_node_names = [node.name for node in labels.skeletons[0]]
     assert expected_node_names == pose_estimation_container.nodes
@@ -66,7 +66,7 @@ def test_typical_case_append_with_metadata_propagation(nwbfile, slp_typical):
         ],  # The dimensions of the video frame extracted using ffmpeg probe
     }
 
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
+    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     # Test processing module naming
     video_index = 0
@@ -89,7 +89,7 @@ def test_typical_case_append_with_metadata_propagation(nwbfile, slp_typical):
 
 def test_provenance_writing(nwbfile, slp_predictions_with_provenance):
     labels = load_slp(slp_predictions_with_provenance)
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile)
+    nwbfile = append_nwb_data(labels, nwbfile)
 
     # Extract processing module
     video_index = 0
@@ -110,7 +110,7 @@ def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
         "scorer": "overwritten_value",
         "video_sample_rate": expected_sampling_rate,
     }
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
+    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     # Extract processing module
     video_index = 0
@@ -131,7 +131,7 @@ def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
 
 def test_complex_case_append(nwbfile, slp_predictions):
     labels = load_slp(slp_predictions)
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile)
+    nwbfile = append_nwb_data(labels, nwbfile)
 
     # Test matching number of processing modules
     number_of_videos = len(labels.videos)
@@ -178,7 +178,7 @@ def test_complex_case_append_with_timestamps_metadata(nwbfile, slp_predictions):
         "video_timestamps": video_timestamps,
     }
 
-    nwbfile = append_labels_data_to_nwb(labels, nwbfile, pose_estimation_metadata)
+    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     # Test processing module naming
     video_index = 0
@@ -219,14 +219,14 @@ def test_assertion_with_no_predicted_instance(nwbfile, slp_minimal):
     with pytest.raises(
         ValueError, match="No predicted instances found in labels object"
     ):
-        nwbfile = append_labels_data_to_nwb(labels, nwbfile)
+        nwbfile = append_nwb_data(labels, nwbfile)
 
 
 def test_typical_case_write(slp_typical, tmp_path):
     labels = load_slp(slp_typical)
 
     nwbfile_path = tmp_path / "write_to_nwb_typical_case.nwb"
-    write_labels_to_nwb(labels=labels, nwbfile_path=nwbfile_path)
+    write_nwb(labels=labels, nwbfile_path=nwbfile_path)
 
     with NWBHDF5IO(str(nwbfile_path), "r") as io:
         nwbfile = io.read()
@@ -234,3 +234,24 @@ def test_typical_case_write(slp_typical, tmp_path):
         # Test matching number of processing modules
         number_of_videos = len(labels.videos)
         assert len(nwbfile.processing) == number_of_videos
+
+
+def test_get_timestamps(nwbfile, slp_predictions):
+    labels = load_slp(slp_predictions)
+    nwbfile = append_nwb_data(labels, nwbfile)
+    processing = nwbfile.processing["SLEAP_VIDEO_000_centered_pair_low_quality"]
+    assert True
+
+    # explicit timestamps
+    series = processing["track=1"]["head"]
+    ts = get_timestamps(series)
+    assert len(ts) == 1095
+    assert ts[0] == 0
+    assert ts[-1] == 1098
+
+    # starting time + rate
+    series = processing["track=1"]["thorax"]
+    ts = get_timestamps(series)
+    assert len(ts) == 1099
+    assert ts[0] == 0
+    assert ts[-1] == 1098

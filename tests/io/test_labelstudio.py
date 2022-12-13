@@ -1,11 +1,11 @@
 """Tests for functions in the sleap_io.io.labelstudio file."""
 from sleap_io import Labels
-from sleap_io.io.labelstudio import parse_tasks, read_labels, write_labels
+from sleap_io.io.labelstudio import parse_tasks, read_labels, convert_labels
 from sleap_io.io.slp import read_labels as slp_read_labels
 
 
 def round_trip_labels(labels: Labels) -> Labels:
-    ls_labels = parse_tasks(write_labels(labels), labels.skeletons[0])
+    ls_labels = parse_tasks(convert_labels(labels), labels.skeletons[0])
     return ls_labels
 
 
