@@ -25,6 +25,14 @@ from sleap_io import (
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
 
+def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
+    """Return a vector of timestamps for a `PoseEstimationSeries`."""
+    if series.timestamps is not None:
+        return np.asarray(series.timestamps)
+    else:
+        return np.arange(series.data.shape[0]) * series.rate + series.starting_time
+
+
 def read_nwb(path: str) -> Labels:
     """Read an NWB formatted file to a SLEAP `Labels` object.
 
@@ -57,13 +65,19 @@ def read_nwb(path: str) -> Labels:
             _track_keys: List[str] = list(processing_module.fields["data_interfaces"])
             is_tracked: bool = re.sub("[0-9]+", "", _track_keys[0]) == "track"
 
-            # Extract info needed to create video and tracks_numpy
-            test_pose_estimation = processing_module[_track_keys[0]]
-            test_pose_estimation_series = test_pose_estimation[node_names[0]]
+            # Figure out the max number of frames and the canonical timestamps
+            timestamps = np.empty(())
+            for track_key in _track_keys:
+                for node_name in node_names:
+                    pose_estimation_series = processing_module[track_key][node_name]
+                    timestamps = np.union1d(
+                        timestamps, get_timestamps(pose_estimation_series)
+                    )
+            timestamps = np.sort(timestamps)
 
             # Recreate Labels numpy (same as output of Labels.numpy())
             n_tracks = len(_track_keys)
-            n_frames = test_pose_estimation_series.data[:].shape[0]
+            n_frames = len(timestamps)
             n_nodes = len(node_names)
             tracks_numpy = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, np.float32)
             confidence = np.full((n_frames, n_tracks, n_nodes), np.nan, np.float32)
@@ -72,12 +86,14 @@ def read_nwb(path: str) -> Labels:
 
                 for node_idx, node_name in enumerate(node_names):
                     pose_estimation_series = pose_estimation[node_name]
-
+                    frame_inds = np.searchsorted(
+                        timestamps, get_timestamps(pose_estimation_series)
+                    )
                     tracks_numpy[
-                        :, track_idx, node_idx, :
+                        frame_inds, track_idx, node_idx, :
                     ] = pose_estimation_series.data[:]
                     confidence[
-                        :, track_idx, node_idx
+                        frame_inds, track_idx, node_idx
                     ] = pose_estimation_series.confidence[:]
 
             video_tracks[Path(test_pose_estimation.original_videos[0]).as_posix()] = (

@@ -6,7 +6,7 @@ import numpy as np
 from pynwb import NWBFile, NWBHDF5IO
 
 from sleap_io import load_slp
-from sleap_io.io.nwb import write_nwb, append_nwb_data
+from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def test_typical_case_append(nwbfile, slp_typical):
     container_name = "track=untracked"
     assert container_name in all_containers
 
-    # Test that the skeleton nodes are store as nodes in containers
+    # Test that the skeleton nodes are stored as nodes in containers
     pose_estimation_container = all_containers[container_name]
     expected_node_names = [node.name for node in labels.skeletons[0]]
     assert expected_node_names == pose_estimation_container.nodes
@@ -234,3 +234,24 @@ def test_typical_case_write(slp_typical, tmp_path):
         # Test matching number of processing modules
         number_of_videos = len(labels.videos)
         assert len(nwbfile.processing) == number_of_videos
+
+
+def test_get_timestamps(nwbfile, slp_predictions):
+    labels = load_slp(slp_predictions)
+    nwbfile = append_nwb_data(labels, nwbfile)
+    processing = nwbfile.processing["SLEAP_VIDEO_000_centered_pair_low_quality"]
+    assert True
+
+    # explicit timestamps
+    series = processing["track=1"]["head"]
+    ts = get_timestamps(series)
+    assert len(ts) == 1095
+    assert ts[0] == 0
+    assert ts[-1] == 1098
+
+    # starting time + rate
+    series = processing["track=1"]["thorax"]
+    ts = get_timestamps(series)
+    assert len(ts) == 1099
+    assert ts[0] == 0
+    assert ts[-1] == 1098
