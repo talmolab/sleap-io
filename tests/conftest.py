@@ -2,4 +2,5 @@
 
 from tests.fixtures.slp import *
 from tests.fixtures.labels import *
+from tests.fixtures.dlc import *
 from tests.fixtures.labelstudio import *
