@@ -1,8 +1,8 @@
 """This module exposes all high level APIs for sleap-io."""
 
 # Define package version.
-# This is read dynamically by setuptools in setup.cfg to determine the release version.
-__version__ = "0.0.2"
+# This is read dynamically by setuptools in pyproject.toml to determine the release version.
+__version__ = "0.0.3"
 
 from sleap_io.model.skeleton import Node, Edge, Skeleton, Symmetry
 from sleap_io.model.video import Video
