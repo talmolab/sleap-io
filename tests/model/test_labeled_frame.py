@@ -8,7 +8,7 @@ def test_labeled_frame():
     """Test initialization and methods of `LabeledFrame` class."""
     inst = Instance([[0, 1], [2, 3]], skeleton=Skeleton(["A", "B"]))
     lf = LabeledFrame(
-        video=Video(filename="test", shape=(1, 1, 1, 1)),
+        video=Video(filename="test"),
         frame_idx=0,
         instances=[
             inst,
