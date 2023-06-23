@@ -38,8 +38,30 @@ def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
     assert type(labels) == Labels
 
 
-def test_load_lsp_with_provenance(slp_predictions_with_provenance):
+def test_load_slp_with_provenance(slp_predictions_with_provenance):
     labels = read_labels(slp_predictions_with_provenance)
     provenance = labels.provenance
     assert type(provenance) == dict
     assert provenance["sleap_version"] == "1.2.7"
+
+
+def test_read_instances_from_predicted(slp_real_data):
+    labels = read_labels(slp_real_data)
+
+    lf = labels.find(video=labels.video, frame_idx=220)[0]
+    assert len(lf) == 3
+    assert type(lf.instances[0]) == PredictedInstance
+    assert type(lf.instances[1]) == PredictedInstance
+    assert type(lf.instances[2]) == Instance
+    assert lf.instances[2].from_predicted == lf.instances[1]
+    assert lf.unused_predictions == [lf.instances[0]]
+
+    lf = labels.find(video=labels.video, frame_idx=770)[0]
+    assert len(lf) == 4
+    assert type(lf.instances[0]) == PredictedInstance
+    assert type(lf.instances[1]) == PredictedInstance
+    assert type(lf.instances[2]) == Instance
+    assert type(lf.instances[3]) == Instance
+    assert lf.instances[2].from_predicted == lf.instances[1]
+    assert lf.instances[3].from_predicted == lf.instances[0]
+    assert len(lf.unused_predictions) == 0

@@ -202,7 +202,8 @@ def read_instances(
     """
     instances_data = read_hdf5_dataset(labels_path, "instances")
 
-    instances = []
+    instances = {}
+    from_predicted_pairs = []
     for instance_data in instances_data:
         if format_id < 1.2:
             (
@@ -232,23 +233,29 @@ def read_instances(
             ) = instance_data
 
         if instance_type == InstanceType.USER:
-            instances.append(
-                Instance(
-                    points=points[point_id_start:point_id_end],  # type: ignore[arg-type]
-                    skeleton=skeletons[skeleton_id],
-                    track=tracks[track_id] if track_id >= 0 else None,
-                )
+            instances[instance_id] = Instance(
+                points=points[point_id_start:point_id_end],  # type: ignore[arg-type]
+                skeleton=skeletons[skeleton_id],
+                track=tracks[track_id] if track_id >= 0 else None,
             )
+            if from_predicted >= 0:
+                from_predicted_pairs.append((instance_id, from_predicted))
         elif instance_type == InstanceType.PREDICTED:
-            instances.append(
-                PredictedInstance(
-                    points=pred_points[point_id_start:point_id_end],  # type: ignore[arg-type]
-                    skeleton=skeletons[skeleton_id],
-                    track=tracks[track_id] if track_id >= 0 else None,
-                    score=instance_score,
-                    tracking_score=tracking_score,
-                )
+            instances[instance_id] = PredictedInstance(
+                points=pred_points[point_id_start:point_id_end],  # type: ignore[arg-type]
+                skeleton=skeletons[skeleton_id],
+                track=tracks[track_id] if track_id >= 0 else None,
+                score=instance_score,
+                tracking_score=tracking_score,
             )
+
+    # Link instances based on from_predicted field.
+    for instance_id, from_predicted in from_predicted_pairs:
+        instances[instance_id].from_predicted = instances[from_predicted]
+
+    # Convert instances back to list.
+    instances = list(instances.values())
+
     return instances
 
 
