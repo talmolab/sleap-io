@@ -60,7 +60,6 @@ def read_nwb(path: str) -> Labels:
         edge_inds = test_pose_estimation.edges[:]
 
         for processing_module in nwb_file.values():
-
             # Get track keys
             _track_keys: List[str] = list(processing_module.fields["data_interfaces"])
             is_tracked: bool = re.sub("[0-9]+", "", _track_keys[0]) == "track"
@@ -241,7 +240,6 @@ def append_nwb_data(
 
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
-
         video_path = Path(video.filename)
         processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
         nwb_processing_module = get_processing_module_for_video(
@@ -415,7 +413,6 @@ def build_track_pose_estimation_list(
 
     pose_estimation_series_list: List[PoseEstimationSeries] = []
     for node_name in name_of_nodes_in_track:
-
         # Drop data with missing values
         data_for_node = track_data_df[node_name].dropna(axis="index", how="any")
 
