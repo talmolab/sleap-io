@@ -42,7 +42,7 @@ class VideoBackend:
         cls,
         filename: str,
         dataset: Optional[str] = None,
-        grayscale: Optional[str] = None,
+        grayscale: Optional[bool] = None,
         **kwargs,
     ) -> VideoBackend:
         """Create a VideoBackend from a filename.

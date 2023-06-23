@@ -142,7 +142,8 @@ def test_instance_comparison():
 def test_predicted_instance():
     """Test initialization and creation of `PredictedInstance` object."""
     inst = PredictedInstance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
-    assert_equal(inst.numpy(), [[0, 1, 0], [2, 3, 0]])
+    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert_equal(inst.numpy(scores=True), [[0, 1, 0], [2, 3, 0]])
     assert type(inst["A"]) == PredictedPoint
 
     inst = PredictedInstance.from_numpy(
