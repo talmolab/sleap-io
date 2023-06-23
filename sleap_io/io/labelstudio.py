@@ -13,6 +13,7 @@ import simplejson as json
 import math
 import uuid
 from typing import Dict, Iterable, List, Tuple, Optional, Union
+import warnings
 
 from sleap_io import Instance, LabeledFrame, Labels, Node, Point, Video, Skeleton
 
@@ -74,7 +75,7 @@ def infer_nodes(tasks: List[Dict]) -> Skeleton:
 
 
 def parse_tasks(tasks: List[Dict], skeleton: Skeleton) -> Labels:
-    """Read Label Studio style annotations from a file and return a `Labels` object
+    """Read Label Studio style annotations from a file and return a `Labels` object.
 
     Args:
         tasks: Collection of tasks to be converted to `Labels`.
@@ -107,7 +108,6 @@ def convert_labels(labels: Labels) -> List[dict]:
     Returns:
         Label Studio dictionaries of the `Labels` data.
     """
-
     out = []
     for frame in labels.labeled_frames:
         if frame.video.shape is not None:
@@ -228,13 +228,20 @@ def write_labels(labels: Labels, filename: str):
 def task_to_labeled_frame(
     task: dict, skeleton: Skeleton, key: str = "annotations"
 ) -> LabeledFrame:
-    """Parse annotations from an entry"""
+    """Parse annotations from an entry.
 
+    Args:
+        task: Label Studio task to be parsed.
+        skeleton: Skeleton to use for parsing.
+        key: Key to use for parsing annotations. Defaults to "annotations".
+
+    Returns:
+        Parsed `LabeledFrame` instance.
+    """
     if len(task[key]) > 1:
-        print(
-            "WARNING: Task {}: Multiple annotations found, only taking the first!".format(
-                task.get("id", "??")
-            )
+        warnings.warn(
+            f"Task {task.get('id', '??')}: Multiple annotations found, "
+            "only taking the first!"
         )
 
     # only parse the first entry result
@@ -264,8 +271,9 @@ def task_to_labeled_frame(
             if len(points) > 0:
                 instances.append(Instance(points, skeleton))
 
-    # If this is multi-animal, any leftover keypoints should be unique bodyparts, and will be collected here
-    # if single-animal, we only have 'unique bodyparts' [in a way] and the process is identical
+    # If this is multi-animal, any leftover keypoints should be unique bodyparts, and
+    # will be collected here if single-animal, we only have 'unique bodyparts' [in a
+    # way] and the process is identical
     points = {}
     for _, kpt in keypoints.items():
         node = Node(kpt["value"]["keypointlabels"][0])
@@ -283,15 +291,15 @@ def task_to_labeled_frame(
 
 
 def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, dict]:
-    """Filter annotations based on the type field and index them by ID
+    """Filter annotations based on the type field and index them by ID.
 
     Args:
         annotation: annotations to filter and index
         annot_type: annotation type to filter e.x. 'keypointlabels' or 'rectanglelabels'
 
     Returns:
-        Dict[str, dict] - indexed and filtered annotations. Only annotations of type
-        `annot_type` will survive, and annotations are indexed by ID.
+        Dict of ndexed and filtered annotations. Only annotations of type `annot_type`
+        will survive, and annotations are indexed by ID.
     """
     filtered = list(filter(lambda d: d["type"] == annot_type, annotations))
     indexed = {item["id"]: item for item in filtered}

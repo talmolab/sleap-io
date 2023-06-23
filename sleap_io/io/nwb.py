@@ -1,5 +1,4 @@
-"""Functions to write and read from the neurodata without borders (NWB) format. 
-"""
+"""Functions to write and read from the neurodata without borders (NWB) format."""
 from copy import deepcopy
 from typing import List, Optional, Union
 from pathlib import Path
@@ -60,7 +59,6 @@ def read_nwb(path: str) -> Labels:
         edge_inds = test_pose_estimation.edges[:]
 
         for processing_module in nwb_file.values():
-
             # Get track keys
             _track_keys: List[str] = list(processing_module.fields["data_interfaces"])
             is_tracked: bool = re.sub("[0-9]+", "", _track_keys[0]) == "track"
@@ -146,38 +144,36 @@ def write_nwb(
     nwb_file_kwargs: Optional[dict] = None,
     pose_estimation_metadata: Optional[dict] = None,
 ):
-    """Write labels to an nwb file and save it to the nwbfile_path given
+    """Write labels to an nwb file and save it to the nwbfile_path given.
 
     Args:
-        labels (Labels): A general label object
-        nwbfile_path (str): The path where the nwb file is to be written
-        nwb_file_kwargs (Optional[dict], optional): A dict containing metadata to
-        the nwbfile. Example:
-        nwb_file_kwargs = {
-            'session_description: 'your_session_description',
-            'identifier': 'your session_identifier',
-        }
-        For a full list of possible values see:
-        https://pynwb.readthedocs.io/en/stable/pynwb.file.html#pynwb.file.NWBFile
+        labels: A general `Labels` object.
+        nwbfile_path: The path where the nwb file is to be written.
+        nwb_file_kwargs: A dict containing metadata to the nwbfile. Example:
+            nwb_file_kwargs = {
+                'session_description: 'your_session_description',
+                'identifier': 'your session_identifier',
+            }
+            For a full list of possible values see:
+            https://pynwb.readthedocs.io/en/stable/pynwb.file.html#pynwb.file.NWBFile
 
-        Defaults to None and default values are used to generate the nwb file.
+            Defaults to None and default values are used to generate the nwb file.
 
-        pose_estimation_metadata (dict): This argument has a dual purpose:
+        pose_estimation_metadata: This argument has a dual purpose:
 
-        1) It can be used to pass time information about the video which is
-        necessary for synchronizing frames in pose estimation tracking to other
-        modalities. Either the video timestamps can be passed to
-        This can be used to pass the timestamps with the key `video_timestamps`
-        or the sampling rate with key`video_sample_rate`.
+            1) It can be used to pass time information about the video which is
+            necessary for synchronizing frames in pose estimation tracking to other
+            modalities. Either the video timestamps can be passed to
+            This can be used to pass the timestamps with the key `video_timestamps`
+            or the sampling rate with key`video_sample_rate`.
 
-        e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
-        or   pose_estimation_metadata["video_sample_rate] = 15  # In Hz
+            e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
+            or   pose_estimation_metadata["video_sample_rate] = 15  # In Hz
 
-        2) The other use of this dictionary is to ovewrite sleap-io default
-        arguments for the PoseEstimation container.
-        see https://github.com/rly/ndx-pose for a full list or arguments.
+            2) The other use of this dictionary is to ovewrite sleap-io default
+            arguments for the PoseEstimation container.
+            see https://github.com/rly/ndx-pose for a full list or arguments.
     """
-
     nwb_file_kwargs = nwb_file_kwargs or dict()
 
     # Add required values for nwbfile if not present
@@ -228,7 +224,6 @@ def append_nwb_data(
     Returns:
         An in-memory nwbfile with the data from the labels object appended.
     """
-
     pose_estimation_metadata = pose_estimation_metadata or dict()
 
     # Extract default metadata
@@ -241,7 +236,6 @@ def append_nwb_data(
 
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
-
         video_path = Path(video.filename)
         processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
         nwb_processing_module = get_processing_module_for_video(
@@ -282,7 +276,7 @@ def append_nwb(
 
     Args:
         labels: A general `Labels` object.
-        nwbfile: And in-memory nwbfile where the data is to be appended.
+        filename: The path to the NWB file.
         pose_estimation_metadata: Metadata for pose estimation. See `append_nwb_data`
             for details.
 
@@ -328,7 +322,7 @@ def build_pose_estimation_container_for_track(
     video: Video,
     pose_estimation_metadata: dict,
 ) -> PoseEstimation:
-    """Creates a PoseEstimation container for a track.
+    """Create a PoseEstimation container for a track.
 
     Args:
         labels_data_df (pd.DataFrame): A pandas object with the data corresponding
@@ -397,8 +391,7 @@ def build_pose_estimation_container_for_track(
 def build_track_pose_estimation_list(
     track_data_df: pd.DataFrame, timestamps: ArrayLike
 ) -> List[PoseEstimationSeries]:
-    """An auxiliar function to build a list of PoseEstimationSeries associated with
-    a Track object.
+    """Build a list of PoseEstimationSeries from tracks.
 
     Args:
         track_data_df (pd.DataFrame): A pandas DataFrame object containing the
@@ -408,14 +401,12 @@ def build_track_pose_estimation_list(
         List[PoseEstimationSeries]: The list of all the PoseEstimationSeries.
         One for each node.
     """
-
     name_of_nodes_in_track = track_data_df.columns.get_level_values(
         "node_name"
     ).unique()
 
     pose_estimation_series_list: List[PoseEstimationSeries] = []
     for node_name in name_of_nodes_in_track:
-
         # Drop data with missing values
         data_for_node = track_data_df[node_name].dropna(axis="index", how="any")
 
