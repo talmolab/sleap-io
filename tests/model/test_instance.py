@@ -74,8 +74,8 @@ def test_predicted_point():
 
     # Test equivelance of Point and PredictedPoint
     pt3 = Point(x=1.2, y=3.4, visible=True, complete=False)
-    assert not ppt1 == pt3  # PredictedPoint is not equivelant to Point
-    assert not pt3 == ppt1  # Point is not equivelant to PredictedPoint
+    assert not ppt1 == pt3  # PredictedPoint is not equivalent to Point
+    assert not pt3 == ppt1  # Point is not equivalent to PredictedPoint
 
 
 def test_track():
@@ -142,13 +142,15 @@ def test_instance_comparison():
 def test_predicted_instance():
     """Test initialization and creation of `PredictedInstance` object."""
     inst = PredictedInstance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
-    assert_equal(inst.numpy(), [[0, 1, 0], [2, 3, 0]])
+    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert_equal(inst.numpy(scores=True), [[0, 1, 0], [2, 3, 0]])
     assert type(inst["A"]) == PredictedPoint
 
     inst = PredictedInstance.from_numpy(
         [[0, 1], [2, 3]], [0.4, 0.5], instance_score=0.6, skeleton=Skeleton(["A", "B"])
     )
-    assert_equal(inst.numpy(), [[0, 1, 0.4], [2, 3, 0.5]])
+    assert_equal(inst.numpy(), [[0, 1], [2, 3]])
+    assert_equal(inst.numpy(scores=True), [[0, 1, 0.4], [2, 3, 0.5]])
     assert inst[0].score == 0.4
     assert inst[1].score == 0.5
     assert inst.score == 0.6

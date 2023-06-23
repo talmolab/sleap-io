@@ -21,6 +21,12 @@ def slp_minimal():
 
 
 @pytest.fixture
+def slp_minimal_pkg():
+    """SLP project with minimal real data and embedded images."""
+    return "tests/data/slp/minimal_instance.pkg.slp"
+
+
+@pytest.fixture
 def slp_predictions():
     """A more complex example containing predicted instances from multiple tracks and a single video"""
     return "tests/data/slp/centered_pair_predictions.slp"

@@ -24,7 +24,10 @@ dependencies = [
     "pynwb",
     "ndx-pose",
     "pandas",
-    "simplejson"
+    "simplejson",
+    "imageio",
+    "imageio-ffmpeg",
+    "av"
 ]
 dynamic = ["version"]
 

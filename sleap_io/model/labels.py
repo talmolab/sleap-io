@@ -164,9 +164,7 @@ class Labels:
             i = int(lf.frame_idx - first_frame)
             if untracked:
                 for j, inst in enumerate(lf.predicted_instances):
-                    tracks[i, j] = (
-                        inst.numpy() if return_confidence else inst.numpy()[:, 0:2]
-                    )
+                    tracks[i, j] = inst.numpy(scores=return_confidence)
             else:
                 tracked_instances = [
                     inst
@@ -175,8 +173,6 @@ class Labels:
                 ]
                 for inst in tracked_instances:
                     j = self.tracks.index(inst.track)  # type: ignore[arg-type]
-                    tracks[i, j] = (
-                        inst.numpy() if return_confidence else inst.numpy()[:, 0:2]
-                    )
+                    tracks[i, j] = inst.numpy(scores=return_confidence)
 
         return tracks

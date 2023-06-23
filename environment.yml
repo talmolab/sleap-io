@@ -1,8 +1,17 @@
 name: sleap-io
 
+channels:
+  - conda-forge
+  - defaults
+
 dependencies:
   - python=3.9
   - ffmpeg
+  - imageio
+  - attrs
+  - h5py
+  - numpy
   - pip
   - pip:
+    - opencv-python-headless
     - "--editable=.[dev]"

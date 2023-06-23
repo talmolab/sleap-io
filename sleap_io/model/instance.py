@@ -368,10 +368,12 @@ class PredictedInstance(Instance):
             track=track,
         )
 
-    def numpy(self) -> np.ndarray:
+    def numpy(self, scores: bool = False) -> np.ndarray:
         """Return the instance points as a numpy array."""
         pts = np.full((len(self.skeleton), 3), np.nan)
         for node, point in self.points.items():
             if point.visible:
                 pts[self.skeleton.index(node)] = point.numpy()
+        if not scores:
+            pts = pts[:, :2]
         return pts

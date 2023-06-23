@@ -76,6 +76,7 @@ jobs:
         with:
           environment-file: environment.yml
           cache-environment: true
+          cache-environment-key: environment-${{ hashFiles('environment.yml') }}-${{ hashFiles('pyproject.toml') }}
           init-shell: >-
             bash
             powershell
@@ -87,6 +88,7 @@ jobs:
           which python
           micromamba info
           micromamba list
+          pip freeze
 
       - name: Test with pytest
         if: ${{ !(startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9) }}

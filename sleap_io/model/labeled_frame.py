@@ -61,3 +61,8 @@ class LabeledFrame:
         for i, inst in enumerate(self.instances):
             pts[i] = inst.numpy()[:, 0:2]
         return pts
+
+    @property
+    def image(self) -> np.ndarray:
+        """Return the image of the frame as a numpy array."""
+        return self.video[self.frame_idx]
