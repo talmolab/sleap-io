@@ -20,6 +20,7 @@ from sleap_io import (
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video import VideoBackend
 from enum import IntEnum
+from pathlib import Path
 
 
 class InstanceType(IntEnum):
@@ -43,18 +44,29 @@ def read_videos(labels_path: str) -> list[Video]:
     video_objects = []
     for video in videos:
         backend = video["backend"]
+
+        # Basic path resolution.
+        video_path = Path(backend["filename"])
+        if not video_path.exists():
+            # Check for the same filename in the same directory as the labels file.
+            video_path_ = Path(labels_path).parent / video_path.name
+            if video_path_.exists():
+                video_path = video_path_
+            else:
+                # TODO (TP): Expand capabilities of path resolution to support more
+                # complex path finding strategies.
+                pass
+
         try:
             backend = VideoBackend.from_filename(
-                backend["filename"],
+                video_path.as_posix(),
                 dataset=backend.get("dataset", None),
                 grayscale=backend.get("grayscale", None),
                 input_format=backend.get("input_format", None),
             )
         except ValueError:
             backend = None
-        video_objects.append(
-            Video(filename=video["backend"]["filename"], backend=backend)
-        )
+        video_objects.append(Video(filename=video_path.as_posix(), backend=backend))
     return video_objects
 
 
