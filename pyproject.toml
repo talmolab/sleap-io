@@ -27,7 +27,7 @@ dependencies = [
     "simplejson",
     "imageio",
     "imageio-ffmpeg",
-    "av",
+    "av"
 ]
 dynamic = ["version"]
 
