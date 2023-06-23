@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "sleap-io"
 authors = [
     {name = "Liezl Maree", email = "lmaree@salk.edu"},
+    {name = "David Samy", email = "davidasamy@gmail.com"},
     {name = "Talmo Pereira", email = "talmo@salk.edu"}
 ]
 description="Standalone utilities for working with pose data from SLEAP and other tools."
@@ -45,6 +46,10 @@ dev = [
     "twine",
     "build"
 ]
+
+[project.urls]
+Homepage = "https://sleap.ai"
+Repository = "https://github.com/talmolab/sleap-io"
 
 [tool.black]
 line-length = 88
