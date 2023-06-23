@@ -1,7 +1,14 @@
 """Test methods and functions in the sleap_io.model.labels file."""
 from numpy.testing import assert_equal
 import pytest
-from sleap_io import Video, Skeleton, Instance, PredictedInstance, LabeledFrame
+from sleap_io import (
+    Video,
+    Skeleton,
+    Instance,
+    PredictedInstance,
+    LabeledFrame,
+    load_slp,
+)
 from sleap_io.model.labels import Labels
 
 
@@ -57,3 +64,40 @@ def test_labels_numpy(labels_predictions: Labels):
             inst.track = None
     labels_predictions.tracks = []
     assert labels_predictions.numpy(untracked=False).shape == (1100, 0, 24, 2)
+
+
+def test_labels_find(slp_typical):
+    labels = load_slp(slp_typical)
+
+    results = labels.find(video=labels.video, frame_idx=0)
+    assert len(results) == 1
+    lf = results[0]
+    assert lf.frame_idx == 0
+
+    labels.labeled_frames.append(LabeledFrame(video=labels.video, frame_idx=1))
+
+    results = labels.find(video=labels.video)
+    assert len(results) == 2
+
+    results = labels.find(video=labels.video, frame_idx=2)
+    assert len(results) == 0
+
+    results = labels.find(video=labels.video, frame_idx=2, return_new=True)
+    assert len(results) == 1
+    assert results[0].frame_idx == 2
+    assert len(results[0]) == 0
+
+
+def test_labels_video():
+    labels = Labels()
+
+    with pytest.raises(ValueError):
+        labels.video
+
+    vid = Video(filename="test")
+    labels.videos.append(vid)
+    assert labels.video == vid
+
+    labels.videos.append(Video(filename="test2"))
+    with pytest.raises(ValueError):
+        labels.video
