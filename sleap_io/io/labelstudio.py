@@ -229,12 +229,12 @@ def task_to_labeled_frame(
     task: dict, skeleton: Skeleton, key: str = "annotations"
 ) -> LabeledFrame:
     """Parse annotations from an entry.
-    
+
     Args:
         task: Label Studio task to be parsed.
         skeleton: Skeleton to use for parsing.
         key: Key to use for parsing annotations. Defaults to "annotations".
-    
+
     Returns:
         Parsed `LabeledFrame` instance.
     """
