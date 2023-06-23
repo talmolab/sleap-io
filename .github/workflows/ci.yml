@@ -67,32 +67,26 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3.0.2
+        uses: actions/checkout@v3
 
-      - name: Cache conda
-        uses: actions/cache@v1
-        env:
-          # Increase this value to reset cache if environment.yml has not changed
-          CACHE_NUMBER: 0
+      - name: Setup Micromamba
+        # https://github.com/mamba-org/setup-micromamba
+        # Note: Set channel-priority in .condarc if needed
+        uses: mamba-org/setup-micromamba@v1
         with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('environment.yml', 'setup.cfg') }}
-
-      - name: Setup Miniconda
-        # https://github.com/conda-incubator/setup-miniconda
-        uses: conda-incubator/setup-miniconda@v2.1.1
-        with:
-          python-version: ${{ matrix.python }}
-          use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
           environment-file: environment.yml
-          activate-environment: sleap-io
+          cache-environment: true
+          init-shell: >-
+            bash
+            powershell
+          post-cleanup: all
 
       - name: Print environment info
         shell: bash -l {0}
         run: |
           which python
-          conda info
-          conda list
+          mamba info
+          mamba list
 
       - name: Test with pytest
         if: ${{ !(startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9) }}
@@ -107,7 +101,7 @@ jobs:
           pytest --cov=sleap_io --cov-report=xml tests/
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v3.1.0
+        uses: codecov/codecov-action@v3
         if: ${{ startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9 }}
         with:
           fail_ci_if_error: true
