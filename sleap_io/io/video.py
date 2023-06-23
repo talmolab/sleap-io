@@ -5,7 +5,7 @@ from __future__ import annotations
 import simplejson as json
 import sys
 from io import BytesIO
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import attrs
 import h5py
@@ -68,6 +68,9 @@ class VideoBackend:
         Returns:
             VideoBackend subclass instance.
         """
+        if type(filename) != str:
+            filename = str(filename)
+
         if filename.endswith(MediaVideo.EXTS):
             return MediaVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(MediaVideo, kwargs)
@@ -91,7 +94,7 @@ class VideoBackend:
 
     def _read_frames(self, frame_inds: list) -> np.ndarray:
         """Read a list of frames from the video. Must be implemented in subclasses."""
-        return np.stack([self.read_frame(i) for i in frame_inds], axis=0)
+        return np.stack([self._read_frame(i) for i in frame_inds], axis=0)
 
     def read_test_frame(self) -> np.ndarray:
         """Read a single frame from the video to test for grayscale.
@@ -100,7 +103,7 @@ class VideoBackend:
             This reads the frame at index 0. This may not be appropriate if the first
             frame is not available in a given backend.
         """
-        return self.read_frame(0)
+        return self._read_frame(0)
 
     def detect_grayscale(self, test_img: np.ndarray | None = None) -> bool:
         """Detect whether the video is grayscale.
@@ -119,7 +122,7 @@ class VideoBackend:
         """
         if test_img is None:
             test_img = self.read_test_frame()
-        is_grayscale = bool(np.alltrue(test_img[..., 0] == test_img[..., -1]))
+        is_grayscale = bool(np.all(test_img[..., 0] == test_img[..., -1]))
         self.grayscale = is_grayscale
         return is_grayscale
 
@@ -176,7 +179,7 @@ class VideoBackend:
 
         See also: `get_frames`
         """
-        img = self.read_frame(frame_idx)
+        img = self._read_frame(frame_idx)
 
         if self.grayscale is None:
             self.detect_grayscale(img)
@@ -208,7 +211,7 @@ class VideoBackend:
 
         See also: `get_frame`
         """
-        imgs = self.read_frames(frame_inds)
+        imgs = self._read_frames(frame_inds)
 
         if self.grayscale is None:
             self.detect_grayscale(imgs[0])
@@ -218,7 +221,7 @@ class VideoBackend:
 
         return imgs
 
-    def __getitem__(self, ind: int | list[int]) -> np.ndarray:
+    def __getitem__(self, ind: int | list[int] | slice) -> np.ndarray:
         """Return a single frame or a list of frames from the video.
 
         Args:
@@ -234,6 +237,13 @@ class VideoBackend:
         if np.isscalar(ind):
             return self.get_frame(ind)
         else:
+            if type(ind) is slice:
+                start = (ind.start or 0) % len(self)
+                stop = ind.stop or len(self)
+                if stop < 0:
+                    stop = len(self) + stop
+                step = ind.step or 1
+                ind = range(start, stop, step)
             return self.get_frames(ind)
 
 
@@ -294,7 +304,7 @@ class MediaVideo(VideoBackend):
     def num_frames(self) -> int:
         """Number of frames in the video."""
         if self.plugin == "opencv":
-            return cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FRAME_COUNT)
+            return int(cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FRAME_COUNT))
         else:
             return iio.improps(self.filename, plugin="pyav").shape[0]
 
@@ -346,7 +356,7 @@ class MediaVideo(VideoBackend):
 
         else:
             with iio.imopen(self.filename, "r", plugin=self.plugin) as vid:
-                imgs = np.stack([vid.read(idx) for idx in frame_inds], axis=0)
+                imgs = np.stack([vid.read(index=idx) for idx in frame_inds], axis=0)
         return imgs
 
 
@@ -419,20 +429,34 @@ class HDF5Video(VideoBackend):
 
             f.visititems(find_movies)
 
-            if self.dataset is None:
-                return
+        if self.dataset is None:
+            # Iterate through datasets to find an embedded video dataset.
+            def find_embedded(name, obj):
+                if isinstance(obj, h5py.Dataset) and name.endswith("/video"):
+                    self.dataset = name
+                    return True
+
+            f.visititems(find_embedded)
+
+        if self.dataset is None:
+            # Couldn't find video datasets.
+            return
 
         if isinstance(f[self.dataset], h5py.Group):
+            # If this is a group, assume it's an embedded video dataset.
             if "video" in f[self.dataset]:
                 self.dataset = f"{self.dataset}/video"
 
         if self.dataset.split("/")[-1] == "video":
             # This may be an embedded video dataset. Check for frame map.
             ds = f[self.dataset]
+
             if "frame_numbers" in ds.parent:
                 frame_numbers = ds.parent["frame_numbers"][:]
                 self.frame_map = {frame: idx for idx, frame in enumerate(frame_numbers)}
                 self.source_inds = frame_numbers
+
+            if "source_video" in ds.parent:
                 self.source_filename = json.loads(
                     ds.parent["source_video"].attrs["json"]
                 )["backend"]["filename"]

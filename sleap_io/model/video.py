@@ -103,9 +103,17 @@ class Video:
         """Informal string representation (for print or format)."""
         return self.__repr__()
 
-    def __getitem__(self, inds: int | list[int]) -> np.ndarray:
+    def __getitem__(self, inds: int | list[int] | slice) -> np.ndarray:
         """Return the frames of the video at the given indices.
-        
+
+        Args:
+            ind: Index or list of indices of frames to read.
+
+        Returns:
+            Frame or frames as a numpy array of shape `(height, width, channels)` if a
+            scalar index is provided, or `(frames, height, width, channels)` if a list
+            of indices is provided.
+
         See also: VideoBackend.get_frame, VideoBackend.get_frames
         """
         if self.backend is None:
