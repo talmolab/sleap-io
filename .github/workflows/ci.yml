@@ -87,6 +87,7 @@ jobs:
           which python
           micromamba info
           micromamba list
+          pip freeze
 
       - name: Test with pytest
         if: ${{ !(startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9) }}
