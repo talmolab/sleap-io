@@ -29,7 +29,7 @@ def _overwrite_hdf5_dataset(
     """Overwrite dataset in HDF5 file.
 
     Args:
-        filename: Path to an HDF5 file.
+        f: Handle to HDF5 file.
         dataset: Path to a dataset.
         data: Data to write to dataset.
     """
@@ -176,13 +176,10 @@ def write_hdf5_attrs(filename: str, dataset: str, attributes: dict[str, Any]):
 
 
 def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
-    """Helper function to convert predictions data to a Pandas dataframe.
+    """Convert predictions data to a Pandas dataframe.
 
     Args:
-        labels (Labels): A general label object.
-
-    Raises:
-        ValueError: If no frames in the label objects contain predicted instances.
+        labels: A general label object.
 
     Returns:
         pd.DataFrame: A pandas data frame with the structured data with
@@ -192,8 +189,10 @@ def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
                 "track_name",
                 "node_name",
         And it is indexed by the frames.
-    """
 
+    Raises:
+        ValueError: If no frames in the label objects contain predicted instances.
+    """
     # Form pairs of labeled_frames and predicted instances
     labeled_frames = labels.labeled_frames
     all_frame_instance_tuples: Generator[
