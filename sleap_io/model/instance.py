@@ -19,15 +19,18 @@ import math
 class Point:
     """A 2D spatial landmark and metadata associated with annotation.
 
-    Class Variables:
-    eq_atol: Controls absolute tolerence allowed in `x` and `y` when comparing two `Point`s for equality
-    eq_rtol: Controls relative tolerence allowed in `x` and `y` when comparing two `Point`s for equality
-
     Attributes:
         x: The horizontal pixel location of point in image coordinates.
         y: The vertical pixel location of point in image coordinates.
         visible: Whether point is visible in the image or not.
         complete: Has the point been verified by the user labeler.
+
+    Class variables:
+        eq_atol: Controls absolute tolerence allowed in `x` and `y` when comparing two
+            `Point`s for equality.
+        eq_rtol: Controls relative tolerence allowed in `x` and `y` when comparing two
+            `Point`s for equality.
+
     """
 
     eq_atol: ClassVar[float] = 1e-08
@@ -39,7 +42,7 @@ class Point:
     complete: bool = False
 
     def __eq__(self, other: object):
-        """Compare `self` and `other` for equality
+        """Compare `self` and `other` for equality.
 
         Precision error between the respective `x` and `y` properties of two
         instances may be allowed or controlled via the `Point.eq_atol` and
@@ -48,17 +51,17 @@ class Point:
         https://numpy.org/doc/stable/reference/generated/numpy.isclose.html
 
         Args:
-            self, other: instance of `Point` to compare
+            other: Instance of `Point` to compare to.
 
         Returns:
-            True if all attributes of `self` and `other` are the identical (possibly allowing
-            precision error for `x` and `y` attributes).
+            True if all attributes of `self` and `other` are the identical (possibly
+            allowing precision error for `x` and `y` attributes).
         """
-        # check that other is a Point
+        # Check that other is a Point.
         if type(other) is not type(self):
             return False
 
-        # we know that we have some kind of point at this point
+        # We know that we have some kind of point at this point.
         other = cast(Point, other)
 
         return bool(
@@ -106,7 +109,7 @@ class PredictedPoint(Point):
         )
 
     def __eq__(self, other: object):
-        """Compare `self` and `other` for equality
+        """Compare `self` and `other` for equality.
 
         See `Point.__eq__()` for important notes about point equality semantics!
 
@@ -114,8 +117,8 @@ class PredictedPoint(Point):
             self, other: instance of `PredictedPoint` to compare
 
         Returns:
-            True if all attributes of `self` and `other` are the identical (possibly allowing
-            precision error for `x` and `y` attributes).
+            True if all attributes of `self` and `other` are the identical (possibly
+            allowing precision error for `x` and `y` attributes).
         """
         if not super().__eq__(other):
             return False
@@ -150,7 +153,7 @@ def _compare_points(
     a: Union[dict[Node, Point], dict[Node, PredictedPoint]],
     b: Union[dict[Node, Point], dict[Node, PredictedPoint]],
 ) -> bool:
-    """Compare two sets of points for equality
+    """Compare two sets of points for equality.
 
     To satisfy equaity, the two set of points must:
         1) each contain the same set of `Nodes`
@@ -205,7 +208,7 @@ class Instance:
         return self._POINT_TYPE(x, y, visible=not (math.isnan(x) or math.isnan(y)))
 
     def _convert_points(self, attr, points):
-        """Callback for maintaining points mappings between nodes and points."""
+        """Maintain points mappings between nodes and points."""
         if type(points) == np.ndarray:
             points = points.tolist()
 

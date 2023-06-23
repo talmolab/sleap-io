@@ -1,3 +1,51 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "sleap-io"
+authors = [
+    {name = "Liezl Maree", email = "lmaree@salk.edu"},
+    {name = "Talmo Pereira", email = "talmo@salk.edu"}
+]
+description="Standalone utilities for working with pose data from SLEAP and other tools."
+requires-python = ">=3.7"
+keywords = ["sleap", "pose tracking", "pose estimation", "behavior"]
+license = {text = "BSD-3-Clause"}
+classifiers = [
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9"
+]
+dependencies = [
+    "numpy>=1.19.5",
+    "attrs>=21.2.0",
+    "h5py>=3.1.0",
+    "pynwb",
+    "ndx-pose",
+    "pandas",
+    "simplejson"
+]
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = {attr = "sleap_io.__version__"}
+readme = {file = ["README.md"]}
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "pydocstyle",
+    "toml",
+    "twine",
+    "build"
+]
+
+[tool.black]
+line-length = 88
+
+[pydocstyle]
+convention = "google"
+match-dir = "sleap_io"
