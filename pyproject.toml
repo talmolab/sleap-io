@@ -10,7 +10,7 @@ authors = [
 ]
 description="Standalone utilities for working with pose data from SLEAP and other tools."
 requires-python = ">=3.7"
-keywords = ["sleap, "pose tracking", "pose estimation", "behavior"]
+keywords = ["sleap", "pose tracking", "pose estimation", "behavior"]
 license = {text = "BSD-3-Clause"}
 classifiers = [
     "Programming Language :: Python :: 3.7",
