@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import numpy as np
-import json
+import simplejson as json
 from typing import Union
 from sleap_io import (
     Video,

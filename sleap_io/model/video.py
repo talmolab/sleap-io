@@ -18,11 +18,15 @@ class Video:
     This class is used to store information regarding a video and its components.
     It is used to store the video's `filename`, `shape`, and the video's `backend`.
 
+    To create a `Video` object, use the `from_filename` method which will select the
+    backend appropriately.
+
     Args:
         filename: The filename of the video.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
 
+    See also: VideoBackend
     """
 
     filename: str
@@ -45,7 +49,7 @@ class Video:
                 load.
 
         Returns:
-            Video instance.
+            Video instance with the appropriate backend instantiated.
         """
         return cls(
             filename=filename,
@@ -56,9 +60,19 @@ class Video:
 
     @property
     def shape(self) -> Tuple[int, int, int, int] | None:
-        return self.get_shape()
+        """Return the shape of the video as (num_frames, height, width, channels).
 
-    def get_shape(self) -> Tuple[int, int, int, int] | None:
+        If the video backend is not set or it cannot determine the shape of the video,
+        this will return None.
+        """
+        return self._get_shape()
+
+    def _get_shape(self) -> Tuple[int, int, int, int] | None:
+        """Return the shape of the video as (num_frames, height, width, channels).
+
+        This suppresses errors related to querying the backend for the video shape, such
+        as when it has not been set or when the video file is not found.
+        """
         try:
             return self.backend.shape
         except:
@@ -90,6 +104,10 @@ class Video:
         return self.__repr__()
 
     def __getitem__(self, inds: int | list[int]) -> np.ndarray:
+        """Return the frames of the video at the given indices.
+        
+        See also: VideoBackend.get_frame, VideoBackend.get_frames
+        """
         if self.backend is None:
             raise ValueError(
                 "Video backend is not set. "
