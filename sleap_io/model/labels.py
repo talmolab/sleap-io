@@ -59,7 +59,7 @@ class Labels:
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
 
-    def __getitem__(self, key: int) -> Union[list[LabeledFrame], LabeledFrame]:
+    def __getitem__(self, key: int) -> list[LabeledFrame] | LabeledFrame:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:
             return self.labeled_frames[key]
@@ -176,3 +176,62 @@ class Labels:
                     tracks[i, j] = inst.numpy(scores=return_confidence)
 
         return tracks
+
+    @property
+    def video(self) -> Video:
+        """Return the video if there is only a single video in the labels."""
+        if len(self.videos) == 0:
+            raise ValueError("There are no videos in the labels.")
+        elif len(self.videos) == 1:
+            return self.videos[0]
+        else:
+            raise ValueError(
+                "Labels.video can only be used when there is only a single video saved "
+                "in the labels. Use Labels.videos instead."
+            )
+
+    def find(
+        self,
+        video: Video,
+        frame_idx: int | list[int] | None = None,
+        return_new: bool = False,
+    ) -> list[LabeledFrame]:
+        """Search for labeled frames given video and/or frame index.
+
+        Args:
+            video: A `Video` that is associated with the project.
+            frame_idx: The frame index (or indices) which we want to find in the video.
+                If a range is specified, we'll return all frames with indices in that
+                range. If not specific, then we'll return all labeled frames for video.
+            return_new: Whether to return singleton of new and empty `LabeledFrame` if
+                none are found in project.
+
+        Returns:
+            List of `LabeledFrame` objects that match the criteria.
+
+            The list will be empty if no matches found, unless return_new is True,
+            in which case it contains new (empty) `LabeledFrame` objects with `video`
+            and `frame_index` set.
+        """
+        results = []
+
+        if frame_idx is None:
+            for lf in self.labeled_frames:
+                if lf.video == video:
+                    results.append(lf)
+            return results
+
+        if np.isscalar(frame_idx):
+            frame_idx = np.array(frame_idx).reshape(-1)
+
+        for frame_ind in frame_idx:
+            result = None
+            for lf in self.labeled_frames:
+                if lf.video == video and lf.frame_idx == frame_ind:
+                    result = lf
+                    results.append(result)
+                    break
+            if result is None and return_new:
+                results.append(LabeledFrame(video=video, frame_idx=frame_ind))
+
+        return results
