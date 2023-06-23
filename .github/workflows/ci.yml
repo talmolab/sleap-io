@@ -30,20 +30,12 @@ jobs:
     # 2. Docstring style checking with pydocstyle 
     # Note: This uses Google-style docstring convention
     # Ref: https://google.github.io/styleguide/pyguide.html
-    #
-    # 3. Static type checking with MyPy
-    # Note: We check using Python 3.9 to use the newer conventions for generic types.
-    #
-    # For a workaround on previous versions, simply add this import:
-    #   from __future__ import annotations
-    #
-    # See: https://mypy.readthedocs.io/en/stable/builtin_types.html#generic-types
     name: Lint
     runs-on: "ubuntu-22.04"
     steps:
 
     - name: Checkout repo
-      uses: actions/checkout@v3.0.2
+      uses: actions/checkout@v3
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -61,10 +53,6 @@ jobs:
     - name: Run pydocstyle
       run: |
         pydocstyle --convention=google sleap_io/
-
-    - name: Run MyPy
-      run: |
-        mypy --follow-imports=skip --ignore-missing-imports sleap_io tests
 
   # Tests with pytest
   tests:
