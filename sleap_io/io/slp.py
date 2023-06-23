@@ -18,6 +18,7 @@ from sleap_io import (
     Labels,
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
+from sleap_io.io.video import VideoBackend
 from enum import IntEnum
 
 
@@ -41,8 +42,18 @@ def read_videos(labels_path: str) -> list[Video]:
     videos = [json.loads(x) for x in read_hdf5_dataset(labels_path, "videos_json")]
     video_objects = []
     for video in videos:
+        backend = video["backend"]
+        try:
+            backend = VideoBackend.from_filename(
+                backend["filename"],
+                dataset=backend.get("dataset", None),
+                grayscale=backend.get("grayscale", None),
+                input_format=backend.get("input_format", None),
+            )
+        except ValueError:
+            backend = None
         video_objects.append(
-            Video(filename=video["backend"]["filename"], backend=video["backend"])
+            Video(filename=video["backend"]["filename"], backend=backend)
         )
     return video_objects
 
