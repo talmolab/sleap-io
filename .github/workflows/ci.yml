@@ -9,7 +9,6 @@ on:
       - "tests/**"
       - ".github/workflows/ci.yml"
       - "environment.yml"
-      - "setup.cfg"
   push:
     branches:
       - main
@@ -21,7 +20,7 @@ on:
       - "setup.cfg"
 
 jobs:
-  # Lint with black, docstring check with pydocstyle, static type checking with mypy
+  # Lint with black and docstring check with pydocstyle
   lint:
     # This job runs:
     #

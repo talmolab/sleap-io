@@ -66,3 +66,41 @@ class LabeledFrame:
     def image(self) -> np.ndarray:
         """Return the image of the frame as a numpy array."""
         return self.video[self.frame_idx]
+
+    @property
+    def unused_predictions(self) -> list[Instance]:
+        """Return a list of "unused" `PredictedInstance` objects in frame.
+
+        This is all of the `PredictedInstance` objects which do not have a corresponding
+        `Instance` in the same track in the same frame.
+        """
+        unused_predictions = []
+        any_tracks = [inst.track for inst in self.instances if inst.track is not None]
+        if len(any_tracks):
+            # Use tracks to determine which predicted instances have been used
+            used_tracks = [
+                inst.track
+                for inst in self.instances
+                if type(inst) == Instance and inst.track is not None
+            ]
+            unused_predictions = [
+                inst
+                for inst in self.instances
+                if inst.track not in used_tracks and type(inst) == PredictedInstance
+            ]
+
+        else:
+            # Use from_predicted to determine which predicted instances have been used
+            # TODO: should we always do this instead of using tracks?
+            used_instances = [
+                inst.from_predicted
+                for inst in self.instances
+                if inst.from_predicted is not None
+            ]
+            unused_predictions = [
+                inst
+                for inst in self.instances
+                if type(inst) == PredictedInstance and inst not in used_instances
+            ]
+
+        return unused_predictions
