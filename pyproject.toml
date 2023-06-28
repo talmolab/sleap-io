@@ -26,7 +26,7 @@ dependencies = [
     "ndx-pose",
     "pandas",
     "simplejson",
-    "imageio",
+    "imageio>=2.26.0",
     "imageio-ffmpeg",
     "av"
 ]
