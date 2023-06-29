@@ -65,3 +65,11 @@ def test_read_instances_from_predicted(slp_real_data):
     assert lf.instances[2].from_predicted == lf.instances[1]
     assert lf.instances[3].from_predicted == lf.instances[0]
     assert len(lf.unused_predictions) == 0
+
+
+def test_read_videos_pkg(slp_minimal_pkg):
+    videos = read_videos(slp_minimal_pkg)
+    assert len(videos) == 1
+    video = videos[0]
+    assert video.shape == (1, 384, 384, 1)
+    assert video.backend.dataset == "video0/video"
