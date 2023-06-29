@@ -5,9 +5,9 @@ on:
   release:
     types:
       - published
-      push:
-        branches:
-          - talmo/v0.0.7
+  push:
+    branches:
+      - talmo/v0.0.7
 jobs:
   pypi:
     name: PyPI Wheel
