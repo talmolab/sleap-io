@@ -44,9 +44,14 @@ def read_videos(labels_path: str) -> list[Video]:
     video_objects = []
     for video in videos:
         backend = video["backend"]
+        video_path = backend["filename"]
+
+        # Marker for embedded videos.
+        if video_path == ".":
+            video_path = labels_path
 
         # Basic path resolution.
-        video_path = Path(backend["filename"])
+        video_path = Path(video_path)
         if not video_path.exists():
             # Check for the same filename in the same directory as the labels file.
             video_path_ = Path(labels_path).parent / video_path.name
