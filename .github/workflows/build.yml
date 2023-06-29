@@ -5,9 +5,11 @@ on:
   release:
     types:
       - published
-  push:
-    branches:
-      - talmo/v0.0.7
+  # # Modify and uncomment below to manually trigger build:
+  # push:
+  #   branches:
+  #     - talmo/v0.0.7
+
 jobs:
   pypi:
     name: PyPI Wheel
