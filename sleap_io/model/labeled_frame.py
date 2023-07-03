@@ -44,7 +44,7 @@ class LabeledFrame:
 
     @property
     def predicted_instances(self) -> list[Instance]:
-        """Frame instances that are user-labeled (`PredictedInstance` objects)."""
+        """Frame instances that are predicted by a model (`PredictedInstance` objects)."""
         return [inst for inst in self.instances if type(inst) == PredictedInstance]
 
     def numpy(self) -> np.ndarray:
