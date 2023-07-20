@@ -129,8 +129,8 @@ def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
                 assert pose_estimation_series.rate == expected_sampling_rate
 
 
-def test_complex_case_append(nwbfile, slp_predictions):
-    labels = load_slp(slp_predictions)
+def test_complex_case_append(nwbfile, centered_pair):
+    labels = load_slp(centered_pair)
     nwbfile = append_nwb_data(labels, nwbfile)
 
     # Test matching number of processing modules
@@ -167,8 +167,8 @@ def test_complex_case_append(nwbfile, slp_predictions):
         assert node_name in pose_estimation_container.pose_estimation_series
 
 
-def test_complex_case_append_with_timestamps_metadata(nwbfile, slp_predictions):
-    labels = load_slp(slp_predictions)
+def test_complex_case_append_with_timestamps_metadata(nwbfile, centered_pair):
+    labels = load_slp(centered_pair)
 
     number_of_frames = 1100  # extracted using ffmpeg probe
     video_sample_rate = 15.0  # 15 Hz extracted using ffmpeg probe for the video stream
@@ -236,8 +236,8 @@ def test_typical_case_write(slp_typical, tmp_path):
         assert len(nwbfile.processing) == number_of_videos
 
 
-def test_get_timestamps(nwbfile, slp_predictions):
-    labels = load_slp(slp_predictions)
+def test_get_timestamps(nwbfile, centered_pair):
+    labels = load_slp(centered_pair)
     nwbfile = append_nwb_data(labels, nwbfile)
     processing = nwbfile.processing["SLEAP_VIDEO_000_centered_pair_low_quality"]
     assert True
