@@ -4,7 +4,7 @@ import pytest
 
 @pytest.fixture
 def slp_typical():
-    """Typical SLP file including  `PredictedInstance`, `Instance`, `Track` and `Skeleton` objects."""
+    """Typical SLP file including."""
     return "tests/data/slp/typical.slp"
 
 
@@ -27,14 +27,21 @@ def slp_minimal_pkg():
 
 
 @pytest.fixture
-def slp_predictions():
-    """A more complex example containing predicted instances from multiple tracks and a single video"""
+def centered_pair():
+    """Example with predicted instances from multiple tracks and a single video.
+
+    This project:
+    - Has 1 grayscale video with 1100 frames, cropped to 384x384 with 2 flies
+    - Has a 24 node skeleton with edges and symmetries
+    - Has 0 user instances and 2274 predicted instances
+    - Has 2 correct tracks and 25 extraneous tracks
+    """
     return "tests/data/slp/centered_pair_predictions.slp"
 
 
 @pytest.fixture
 def slp_predictions_with_provenance():
-    """The slp file generated with the collab tutorial and sleap version 1.27"""
+    """The slp file generated with the colab tutorial and sleap version 1.2.7."""
     return "tests/data/slp/predictions_1.2.7_provenance_and_tracking.slp"
 
 

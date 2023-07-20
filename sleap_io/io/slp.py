@@ -8,6 +8,7 @@ from sleap_io import (
     Video,
     Skeleton,
     Edge,
+    Symmetry,
     Node,
     Track,
     Point,
@@ -123,7 +124,7 @@ def read_skeletons(labels_path: str) -> list[Skeleton]:
     skeleton_objects = []
     for skel in metadata["skeletons"]:
         # Parse out the cattr-based serialization stuff from the skeleton links.
-        edge_inds = []
+        edge_inds, symmetry_inds = [], []
         for link in skel["links"]:
             if "py/reduce" in link["type"]:
                 edge_type = link["type"]["py/reduce"][1]["py/tuple"][0]
@@ -133,20 +134,40 @@ def read_skeletons(labels_path: str) -> list[Skeleton]:
             if edge_type == 1:  # 1 -> real edge, 2 -> symmetry edge
                 edge_inds.append((link["source"], link["target"]))
 
+            elif edge_type == 2:
+                symmetry_inds.append((link["source"], link["target"]))
+
         # Re-index correctly.
         skeleton_node_inds = [node["id"] for node in skel["nodes"]]
         node_names = [node_names[i] for i in skeleton_node_inds]
+
+        # Create nodes.
+        nodes = []
+        for name in node_names:
+            nodes.append(Node(name=name))
+
+        # Create edges.
         edge_inds = [
             (skeleton_node_inds.index(s), skeleton_node_inds.index(d))
             for s, d in edge_inds
         ]
-        nodes = []
-        for name in node_names:
-            nodes.append(Node(name=name))
         edges = []
         for edge in edge_inds:
             edges.append(Edge(source=nodes[edge[0]], destination=nodes[edge[1]]))
-        skel = Skeleton(nodes=nodes, edges=edges, name=skel["graph"]["name"])
+
+        # Create symmetries.
+        symmetry_inds = [
+            (skeleton_node_inds.index(s), skeleton_node_inds.index(d))
+            for s, d in symmetry_inds
+        ]
+        symmetries = []
+        for symmetry in symmetry_inds:
+            symmetries.append(Symmetry([nodes[symmetry[0]], nodes[symmetry[1]]]))
+
+        # Create the full skeleton.
+        skel = Skeleton(
+            nodes=nodes, edges=edges, symmetries=symmetries, name=skel["graph"]["name"]
+        )
         skeleton_objects.append(skel)
     return skeleton_objects
 
