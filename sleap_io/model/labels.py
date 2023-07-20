@@ -190,6 +190,19 @@ class Labels:
                 "in the labels. Use Labels.videos instead."
             )
 
+    @property
+    def skeleton(self) -> Skeleton:
+        """Return the skeleton if there is only a single skeleton in the labels."""
+        if len(self.skeletons) == 0:
+            raise ValueError("There are no skeletons in the labels.")
+        elif len(self.skeletons) == 1:
+            return self.skeletons[0]
+        else:
+            raise ValueError(
+                "Labels.skeleton can only be used when there is only a single skeleton "
+                "saved in the labels. Use Labels.skeletons instead."
+            )
+
     def find(
         self,
         video: Video,

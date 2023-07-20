@@ -86,7 +86,7 @@ class Skeleton:
         self._node_name_map = {node.name: node for node in nodes}
         self._node_ind_map = {node: i for i, node in enumerate(nodes)}
 
-    nodes: list[Node] = field(on_setattr=_update_node_map)
+    nodes: list[Node] = field(factory=list, on_setattr=_update_node_map)
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
     name: Optional[str] = None
