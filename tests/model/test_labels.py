@@ -101,3 +101,18 @@ def test_labels_video():
     labels.videos.append(Video(filename="test2"))
     with pytest.raises(ValueError):
         labels.video
+
+
+def test_labels_skeleton():
+    labels = Labels()
+
+    with pytest.raises(ValueError):
+        labels.skeleton
+
+    skel = Skeleton(["A"])
+    labels.skeletons.append(skel)
+    assert labels.skeleton == skel
+
+    labels.skeletons.append(Skeleton(["B"]))
+    with pytest.raises(ValueError):
+        labels.skeleton
