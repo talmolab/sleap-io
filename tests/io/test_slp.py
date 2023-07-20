@@ -67,6 +67,18 @@ def test_read_instances_from_predicted(slp_real_data):
     assert len(lf.unused_predictions) == 0
 
 
+def test_read_skeleton(centered_pair):
+    skeletons = read_skeletons(centered_pair)
+    assert len(skeletons) == 1
+    skeleton = skeletons[0]
+    assert type(skeleton) == Skeleton
+    assert len(skeleton.nodes) == 24
+    assert len(skeleton.edges) == 23
+    assert len(skeleton.symmetries) == 20
+    assert Node("wingR") in skeleton.symmetries[0].nodes
+    assert Node("wingL") in skeleton.symmetries[0].nodes
+
+
 def test_read_videos_pkg(slp_minimal_pkg):
     videos = read_videos(slp_minimal_pkg)
     assert len(videos) == 1
