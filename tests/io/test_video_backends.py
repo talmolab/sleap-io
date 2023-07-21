@@ -82,20 +82,21 @@ def test_mediavideo(centered_pair_low_quality_path):
     assert backend[:3].shape == (3, 384, 384, 1)
 
 
-def test_hdf5video_rank4(centered_pair_low_quality_path, tmpdir):
+def test_hdf5video_rank4(centered_pair_low_quality_path, tmp_path):
     backend = VideoBackend.from_filename(centered_pair_low_quality_path)
     imgs = backend[:3]
     assert imgs.shape == (3, 384, 384, 1)
 
-    with h5py.File(tmpdir / "test.h5", "w") as f:
+    with h5py.File(tmp_path / "test.h5", "w") as f:
         f.create_dataset("images", data=imgs)
 
-    backend = VideoBackend.from_filename(tmpdir / "test.h5")
+    backend = VideoBackend.from_filename(tmp_path / "test.h5")
     assert type(backend) == HDF5Video
 
     assert backend.shape == (3, 384, 384, 1)
     assert backend[0].shape == (384, 384, 1)
     assert backend[:].shape == (3, 384, 384, 1)
+    assert not backend.has_embedded_images
 
 
 def test_hdf5video_embedded(slp_minimal_pkg):
@@ -110,3 +111,4 @@ def test_hdf5video_embedded(slp_minimal_pkg):
         backend.source_filename
         == "tests/data/json_format_v1/centered_pair_low_quality.mp4"
     )
+    assert backend.has_embedded_images

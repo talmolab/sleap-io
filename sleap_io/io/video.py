@@ -494,6 +494,13 @@ class HDF5Video(VideoBackend):
             frame_idx = 0
         return self.read_frame(frame_idx)
 
+    @property
+    def has_embedded_images(self) -> bool:
+        """Return True if the dataset contains embedded images."""
+        with h5py.File(self.filename, "r") as f:
+            ds = f[self.dataset]
+            return "format" in ds.attrs
+
     def decode_embedded(self, img_string: np.ndarray, format: str) -> np.ndarray:
         """Decode an embedded image string into a numpy array.
 
