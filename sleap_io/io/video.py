@@ -351,6 +351,7 @@ class MediaVideo(VideoBackend):
                 if reader.get(cv2.CAP_PROP_POS_FRAMES) != idx:
                     reader.set(cv2.CAP_PROP_POS_FRAMES, idx)
                 _, img = reader.read()
+                img = img[..., ::-1]  # BGR -> RGB
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)
 
