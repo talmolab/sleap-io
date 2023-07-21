@@ -489,6 +489,135 @@ def read_instances(
     return instances
 
 
+def write_lfs(labels_path: str, labels: Labels):
+    """Write labeled frames, instances and points to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object to store the metadata for.
+    """
+    instance_dtype = np.dtype(
+        [
+            ("instance_id", "i8"),
+            ("instance_type", "u1"),
+            ("frame_id", "u8"),
+            ("skeleton", "u4"),
+            ("track", "i4"),
+            ("from_predicted", "i8"),
+            ("score", "f4"),
+            ("point_id_start", "u8"),
+            ("point_id_end", "u8"),
+            ("tracking_score", "f4"),
+        ]
+    )
+
+    frame_dtype = np.dtype(
+        [
+            ("frame_id", "u8"),
+            ("video", "u4"),
+            ("frame_idx", "u8"),
+            ("instance_id_start", "u8"),
+            ("instance_id_end", "u8"),
+        ]
+    )
+
+    point_dtype = np.dtype(
+        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?")]
+    )
+
+    predicted_point_dtype = np.dtype(
+        [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?"), ("score", "f8")]
+    )
+
+    frames, instances, points, predicted_points = [], [], [], []
+
+    for lf in labels:
+        frame_id = len(frames)
+        instance_id_start = len(instances)
+        for inst in lf:
+            # ("instance_id", "i8"),
+            # ("instance_type", "u1"),
+            # ("frame_id", "u8"),
+            # ("skeleton", "u4"),
+            # ("track", "i4"),
+            # ("from_predicted", "i8"),
+            # ("score", "f4"),
+            # ("point_id_start", "u8"),
+            # ("point_id_end", "u8"),
+            # ("tracking_score", "f4"),
+            instance_id = len(instances)
+            skeleton_id = labels.skeletons.index(inst.skeleton)
+            track = labels.tracks.index(inst.track) if inst.track else -1
+            from_predicted = -1  # TODO: Link after the loop.
+
+            if type(inst) == Instance:
+                instance_type = InstanceType.USER
+                score = np.nan
+                tracking_score = np.nan
+                point_id_start = len(points)
+
+                # for pt in inst.points:
+                for node in inst.skeleton.nodes:
+                    pt = inst.points[node]
+                    points.append([pt.x, pt.y, pt.visible, pt.complete])
+
+                point_id_end = len(points)
+
+            elif type(inst) == PredictedInstance:
+                instance_type = InstanceType.PREDICTED
+                score = inst.score
+                tracking_score = inst.tracking_score
+                point_id_start = len(predicted_points)
+
+                for node in inst.skeleton.nodes:
+                    pt = inst.points[node]
+                    predicted_points.append(
+                        [pt.x, pt.y, pt.visible, pt.complete, pt.score]
+                    )
+
+                point_id_end = len(predicted_points)
+
+            else:
+                raise ValueError(f"Unknown instance type: {type(inst)}")
+
+            instances.append(
+                [
+                    instance_id,
+                    instance_type,
+                    frame_id,
+                    skeleton_id,
+                    track,
+                    from_predicted,
+                    score,
+                    point_id_start,
+                    point_id_end,
+                    tracking_score,
+                ]
+            )
+
+        instance_id_end = len(instances)
+
+        # ("frame_id", "u8"),
+        # ("video", "u4"),
+        # ("frame_idx", "u8"),
+        # ("instance_id_start", "u8"),
+        # ("instance_id_end", "u8"),
+        frames.append(
+            [
+                frame_id,
+                labels.videos.index(lf.video),
+                lf.frame_idx,
+                instance_id_start,
+                instance_id_end,
+            ]
+        )
+
+    points = np.array(points, dtype=point_dtype)
+    predicted_points = np.array(predicted_points, dtype=predicted_point_dtype)
+    instances = np.array(instances).astype(instance_dtype)
+    frames = np.array(frames, dtype=frame_dtype)
+
+
 def read_labels(labels_path: str) -> Labels:
     """Read a SLEAP labels file.
 
