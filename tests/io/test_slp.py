@@ -14,15 +14,16 @@ from sleap_io import (
 )
 from sleap_io.io.slp import (
     read_videos,
+    write_videos,
     read_skeletons,
     read_tracks,
+    write_tracks,
     read_instances,
     read_metadata,
     read_points,
     read_pred_points,
     read_instances,
     read_labels,
-    write_videos,
 )
 from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
@@ -101,3 +102,19 @@ def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
     json_fixture = read_hdf5_dataset(centered_pair, "videos_json")
     json_test = read_hdf5_dataset(tmp_path / "test_centered_pair.slp", "videos_json")
     assert json_fixture == json_test
+
+
+def test_write_tracks(centered_pair, tmp_path):
+    tracks = read_tracks(centered_pair)
+    write_tracks(tmp_path / "test.slp", tracks)
+
+    # TODO: Test for byte-for-byte equality of HDF5 datasets when we implement the
+    # spawned_on attribute.
+    # json_fixture = read_hdf5_dataset(centered_pair, "tracks_json")
+    # json_test = read_hdf5_dataset(tmp_path / "test.slp", "tracks_json")
+    # assert (json_fixture == json_test).all()
+
+    saved_tracks = read_tracks(tmp_path / "test.slp")
+    assert len(saved_tracks) == len(tracks)
+    for saved_track, track in zip(saved_tracks, tracks):
+        assert saved_track.name == track.name

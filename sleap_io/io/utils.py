@@ -41,7 +41,7 @@ def _overwrite_hdf5_dataset(
 
 
 def write_hdf5_dataset(filename: str, dataset: str, data: np.ndarray):
-    """Write data from an HDF5 file.
+    """Write data to an HDF5 file.
 
     Args:
         filename: Path to an HDF5 file.

@@ -132,7 +132,7 @@ def read_tracks(labels_path: str) -> list[Track]:
     """Read `Track` dataset in a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string path to the SLEAP labels file.
 
     Returns:
         A list of `Track` objects.
@@ -142,6 +142,23 @@ def read_tracks(labels_path: str) -> list[Track]:
     for track in tracks:
         track_objects.append(Track(name=track[1]))
     return track_objects
+
+
+def write_tracks(labels_path: str, tracks: list[Track]):
+    """Write track metadata to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        tracks: A list of `Track` objects to store the metadata for.
+    """
+    # TODO: Add support for track metadata like spawned on frame.
+    SPAWNED_ON = 0
+    tracks_json = [
+        np.string_(json.dumps([SPAWNED_ON, track.name], separators=(",", ":")))
+        for track in tracks
+    ]
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("tracks_json", data=tracks_json, maxshape=(None,))
 
 
 def read_metadata(labels_path: str) -> dict:
