@@ -81,3 +81,8 @@ def test_flipped_node_inds():
         Symmetry([Node("DL"), Node("DR")]),
     ]
     assert skel.flipped_node_inds == [0, 2, 1, 3, 5, 4]
+
+    assert skel.symmetries[0][0] in (Node("BL"), Node("BR"))
+    assert skel.symmetries[0][1] in (Node("BL"), Node("BR"))
+    syms = list(skel.symmetries[0])
+    assert syms[0] != syms[1]
