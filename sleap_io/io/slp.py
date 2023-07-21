@@ -672,3 +672,18 @@ def read_labels(labels_path: str) -> Labels:
     )
 
     return labels
+
+
+def write_labels(labels_path: str, labels: Labels):
+    """Write a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file to save.
+        labels: A `Labels` object to save.
+    """
+    if Path(labels_path).exists():
+        Path(labels_path).unlink()
+    write_videos(labels_path, labels.videos)
+    write_tracks(labels_path, labels.tracks)
+    write_metadata(labels_path, labels)
+    write_lfs(labels_path, labels)

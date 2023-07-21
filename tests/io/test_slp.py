@@ -27,6 +27,7 @@ from sleap_io.io.slp import (
     read_instances,
     write_lfs,
     read_labels,
+    write_labels,
 )
 from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
@@ -158,3 +159,22 @@ def test_write_lfs(centered_pair, slp_real_data, tmp_path):
     pred_points = read_pred_points(tmp_path / "test2.slp")
 
     assert (len(points) + len(pred_points)) == (n_insts * len(labels.skeleton))
+
+
+def test_write_labels(centered_pair, slp_real_data, tmp_path):
+    for fn in [centered_pair, slp_real_data]:
+        labels = read_labels(fn)
+        write_labels(tmp_path / "test.slp", labels)
+
+        saved_labels = read_labels(tmp_path / "test.slp")
+        assert len(saved_labels) == len(labels)
+        assert [lf.frame_idx for lf in saved_labels] == [lf.frame_idx for lf in labels]
+        assert [len(lf) for lf in saved_labels] == [len(lf) for lf in labels]
+        np.testing.assert_array_equal(saved_labels.numpy(), labels.numpy())
+        assert saved_labels.video.filename == labels.video.filename
+        assert type(saved_labels.video.backend) == type(labels.video.backend)
+        assert saved_labels.video.backend.grayscale == labels.video.backend.grayscale
+        assert saved_labels.video.backend.shape == labels.video.backend.shape
+        assert len(saved_labels.skeletons) == len(labels.skeletons) == 1
+        assert saved_labels.skeleton.name == labels.skeleton.name
+        assert saved_labels.skeleton.node_names == labels.skeleton.node_names
