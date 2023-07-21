@@ -60,6 +60,16 @@ class Symmetry:
 
     nodes: set[Node] = field(converter=set, validator=lambda _, __, val: len(val) == 2)
 
+    def __iter__(self):
+        """Iterate over the symmetric nodes."""
+        return iter(self.nodes)
+
+    def __getitem__(self, idx) -> Node:
+        """Return the first node."""
+        for i, node in enumerate(self.nodes):
+            if i == idx:
+                return node
+
 
 @define
 class Skeleton:
@@ -154,6 +164,20 @@ class Skeleton:
             (self.nodes.index(edge.source), self.nodes.index(edge.destination))
             for edge in self.edges
         ]
+
+    @property
+    def flipped_node_inds(self) -> list[int]:
+        """Returns node indices that should be switched when horizontally flipping."""
+        flip_idx = np.arange(len(self.nodes))
+        if len(self.symmetries) > 0:
+            symmetry_inds = np.array(
+                [(self.index(a), self.index(b)) for a, b in self.symmetries]
+            )
+            flip_idx[symmetry_inds[:, 0]] = symmetry_inds[:, 1]
+            flip_idx[symmetry_inds[:, 1]] = symmetry_inds[:, 0]
+
+        flip_idx = flip_idx.tolist()
+        return flip_idx
 
     def __len__(self) -> int:
         """Return the number of nodes in the skeleton."""
