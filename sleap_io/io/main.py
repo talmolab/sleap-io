@@ -19,6 +19,16 @@ def load_slp(filename: str) -> Labels:
     return slp.read_labels(filename)
 
 
+def save_slp(labels: Labels, filename: str):
+    """Save a SLEAP dataset to a `.slp` file.
+
+    Args:
+        labels: A SLEAP `Labels` object (see `load_slp`).
+        filename: Path to save labels to ending with `.slp`.
+    """
+    return slp.write_labels(filename, labels)
+
+
 def load_nwb(filename: str) -> Labels:
     """Load an NWB dataset as a SLEAP `Labels` object.
 
