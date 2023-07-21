@@ -76,9 +76,6 @@ class VideoBackend:
                 filename, grayscale=grayscale, **_get_valid_kwargs(MediaVideo, kwargs)
             )
         elif filename.endswith(HDF5Video.EXTS):
-            valid_kwargs = {
-                k: v for k, v in kwargs.items() if k in MediaVideo.__attrs_attrs__
-            }
             return HDF5Video(
                 filename,
                 dataset=dataset,
