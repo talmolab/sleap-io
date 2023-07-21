@@ -165,13 +165,12 @@ def read_metadata(labels_path: str) -> dict:
     """Read metadata from a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string path to the SLEAP labels file.
 
     Returns:
         A dict containing the metadata from a SLEAP labels file.
     """
     md = read_hdf5_attrs(labels_path, "metadata", "json")
-    assert type(md) == np.bytes_
     return json.loads(md.decode())
 
 
@@ -241,11 +240,147 @@ def read_skeletons(labels_path: str) -> list[Skeleton]:
     return skeleton_objects
 
 
+def serialize_skeletons(skeletons: list[Skeleton]) -> tuple[list[dict], list[dict]]:
+    """Serialize a list of `Skeleton` objects to JSON-compatible dicts.
+
+    Args:
+        skeletons: A list of `Skeleton` objects.
+
+    Returns:
+        A tuple of `nodes_dicts, skeletons_dicts`.
+
+        `nodes_dicts` is a list of dicts containing the nodes in all the skeletons.
+
+        `skeletons_dicts` is a list of dicts containing the skeletons.
+
+    Notes:
+        This function attempts to replicate the serialization of skeletons in legacy
+        SLEAP which relies on a combination of networkx's graph serialization and our
+        own metadata used to store nodes and edges independent of the graph structure.
+
+        However, because sleap-io does not currently load in the legacy metadata, this
+        function will not produce byte-level compatible serialization with legacy
+        formats, even though the ordering and all attributes of nodes and edges should
+        match up.
+    """
+    # Create global list of nodes with all nodes from all skeletons.
+    nodes_dicts = []
+    node_to_id = {}
+    for skeleton in skeletons:
+        for node in skeleton.nodes:
+            if node not in node_to_id:
+                # Note: This ID is not the same as the node index in the skeleton in
+                # legacy SLEAP, but we do not retain this information in the labels, so
+                # IDs will be different.
+                #
+                # The weight is also kept fixed here, but technically this is not
+                # modified or used in legacy SLEAP either.
+                #
+                # TODO: Store legacy metadata in labels to get byte-level compatibility?
+                node_to_id[node] = len(node_to_id)
+                nodes_dicts.append({"name": node.name, "weight": 1.0})
+
+    skeletons_dicts = []
+    for skeleton in skeletons:
+        # Build links dicts for normal edges.
+        edges_dicts = []
+        for edge_ind, edge in enumerate(skeleton.edges):
+            if edge_ind == 0:
+                edge_type = {
+                    "py/reduce": [
+                        {"py/type": "sleap.skeleton.EdgeType"},
+                        {"py/tuple": [1]},  # 1 = real edge, 2 = symmetry edge
+                    ]
+                }
+            else:
+                edge_type = {"py/id": 1}
+
+            edges_dicts.append(
+                {
+                    # Note: Insert idx is not the same as the edge index in the skeleton
+                    # in legacy SLEAP.
+                    "edge_insert_idx": edge_ind,
+                    "key": 0,  # Always 0.
+                    "source": node_to_id[edge.source],
+                    "target": node_to_id[edge.destination],
+                    "type": edge_type,
+                }
+            )
+
+        # Build links dicts for symmetry edges.
+        for symmetry_ind, symmetry in enumerate(skeleton.symmetries):
+            if symmetry_ind == 0:
+                edge_type = {
+                    "py/reduce": [
+                        {"py/type": "sleap.skeleton.EdgeType"},
+                        {"py/tuple": [2]},  # 1 = real edge, 2 = symmetry edge
+                    ]
+                }
+            else:
+                edge_type = {"py/id": 2}
+
+            src, dst = tuple(symmetry.nodes)
+            edges_dicts.append(
+                {
+                    "key": 0,
+                    "source": node_to_id[src],
+                    "target": node_to_id[dst],
+                    "type": edge_type,
+                }
+            )
+
+        # Create skeleton dict.
+        skeletons_dicts.append(
+            {
+                "directed": True,
+                "graph": {
+                    "name": skeleton.name,
+                    "num_edges_inserted": len(skeleton.edges),
+                },
+                "links": edges_dicts,
+                "multigraph": True,
+                # In the order in Skeleton.nodes and must match up with nodes_dicts.
+                "nodes": [{"id": node_to_id[node]} for node in skeleton.nodes],
+            }
+        )
+
+    return skeletons_dicts, nodes_dicts
+
+
+def write_metadata(labels_path: str, labels: Labels):
+    """Write metadata to a SLEAP labels file.
+
+    This function will write the skeletons and provenance for the labels.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object to store the metadata for.
+
+    See also: serialize_skeletons
+    """
+    skeletons_dicts, nodes_dicts = serialize_skeletons(labels.skeletons)
+
+    md = {
+        "version": "2.0.0",
+        "skeletons": skeletons_dicts,
+        "nodes": nodes_dicts,
+        "videos": [],
+        "tracks": [],
+        "suggestions": [],  # TODO: Handle suggestions metadata.
+        "negative_anchors": [],
+        "provenance": labels.provenance,
+    }
+    with h5py.File(labels_path, "a") as f:
+        grp = f.require_group("metadata")
+        grp.attrs["format_id"] = 1.2
+        grp.attrs["json"] = np.string_(json.dumps(md, separators=(",", ":")))
+
+
 def read_points(labels_path: str) -> list[Point]:
     """Read `Point` dataset from a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file.
+        labels_path: A string path to the SLEAP labels file.
 
     Returns:
         A list of `Point` objects.
@@ -261,7 +396,7 @@ def read_pred_points(labels_path: str) -> list[PredictedPoint]:
     """Read `PredictedPoint` dataset from a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string path to the SLEAP labels file.
 
     Returns:
         A list of `PredictedPoint` objects.
@@ -284,7 +419,7 @@ def read_instances(
     """Read `Instance` dataset in a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string path to the SLEAP labels file.
         skeletons: A list of `Skeleton` objects (see `read_skeletons`).
         tracks: A list of `Track` objects (see `read_tracks`).
         points: A list of `Point` objects (see `read_points`).
@@ -358,7 +493,7 @@ def read_labels(labels_path: str) -> Labels:
     """Read a SLEAP labels file.
 
     Args:
-        labels_path: Path to a SLEAP-formatted labels file (.slp).
+        labels_path: A string path to the SLEAP labels file.
 
     Returns:
         The processed `Labels` object.

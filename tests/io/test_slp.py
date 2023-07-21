@@ -15,11 +15,13 @@ from sleap_io import (
 from sleap_io.io.slp import (
     read_videos,
     write_videos,
-    read_skeletons,
     read_tracks,
     write_tracks,
     read_instances,
     read_metadata,
+    read_skeletons,
+    serialize_skeletons,
+    write_metadata,
     read_points,
     read_pred_points,
     read_instances,
@@ -118,3 +120,20 @@ def test_write_tracks(centered_pair, tmp_path):
     assert len(saved_tracks) == len(tracks)
     for saved_track, track in zip(saved_tracks, tracks):
         assert saved_track.name == track.name
+
+
+def test_write_metadata(centered_pair, tmp_path):
+    labels = read_labels(centered_pair)
+    write_metadata(tmp_path / "test.slp", labels)
+
+    saved_md = read_metadata(tmp_path / "test.slp")
+    assert saved_md["version"] == "2.0.0"
+    assert saved_md["provenance"] == labels.provenance
+
+    saved_skeletons = read_skeletons(tmp_path / "test.slp")
+    assert len(saved_skeletons) == len(labels.skeletons)
+    assert len(saved_skeletons) == 1
+    assert saved_skeletons[0].name == labels.skeletons[0].name
+    assert saved_skeletons[0].node_names == labels.skeletons[0].node_names
+    assert saved_skeletons[0].edge_inds == labels.skeletons[0].edge_inds
+    assert saved_skeletons[0].flipped_node_inds == labels.skeletons[0].flipped_node_inds
