@@ -496,6 +496,8 @@ def write_lfs(labels_path: str, labels: Labels):
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to store the metadata for.
     """
+    # We store the data in structured arrays for performance, so we first define the
+    # dtype fields.
     instance_dtype = np.dtype(
         [
             ("instance_id", "i8"),
@@ -507,10 +509,9 @@ def write_lfs(labels_path: str, labels: Labels):
             ("score", "f4"),
             ("point_id_start", "u8"),
             ("point_id_end", "u8"),
-            ("tracking_score", "f4"),
+            ("tracking_score", "f4"),  # FORMAT_ID >= 1.2
         ]
     )
-
     frame_dtype = np.dtype(
         [
             ("frame_id", "u8"),
@@ -520,35 +521,27 @@ def write_lfs(labels_path: str, labels: Labels):
             ("instance_id_end", "u8"),
         ]
     )
-
     point_dtype = np.dtype(
         [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?")]
     )
-
     predicted_point_dtype = np.dtype(
         [("x", "f8"), ("y", "f8"), ("visible", "?"), ("complete", "?"), ("score", "f8")]
     )
 
-    frames, instances, points, predicted_points = [], [], [], []
-
+    # Next, we extract the data from the labels object into lists with the same fields.
+    frames, instances, points, predicted_points, to_link = [], [], [], [], []
+    inst_to_id = {}
     for lf in labels:
         frame_id = len(frames)
         instance_id_start = len(instances)
         for inst in lf:
-            # ("instance_id", "i8"),
-            # ("instance_type", "u1"),
-            # ("frame_id", "u8"),
-            # ("skeleton", "u4"),
-            # ("track", "i4"),
-            # ("from_predicted", "i8"),
-            # ("score", "f4"),
-            # ("point_id_start", "u8"),
-            # ("point_id_end", "u8"),
-            # ("tracking_score", "f4"),
             instance_id = len(instances)
+            inst_to_id[id(inst)] = instance_id
             skeleton_id = labels.skeletons.index(inst.skeleton)
             track = labels.tracks.index(inst.track) if inst.track else -1
-            from_predicted = -1  # TODO: Link after the loop.
+            from_predicted = -1
+            if inst.from_predicted:
+                to_link.append((instance_id, inst.from_predicted))
 
             if type(inst) == Instance:
                 instance_type = InstanceType.USER
@@ -556,7 +549,6 @@ def write_lfs(labels_path: str, labels: Labels):
                 tracking_score = np.nan
                 point_id_start = len(points)
 
-                # for pt in inst.points:
                 for node in inst.skeleton.nodes:
                     pt = inst.points[node]
                     points.append([pt.x, pt.y, pt.visible, pt.complete])
@@ -583,7 +575,7 @@ def write_lfs(labels_path: str, labels: Labels):
             instances.append(
                 [
                     instance_id,
-                    instance_type,
+                    int(instance_type),
                     frame_id,
                     skeleton_id,
                     track,
@@ -597,11 +589,6 @@ def write_lfs(labels_path: str, labels: Labels):
 
         instance_id_end = len(instances)
 
-        # ("frame_id", "u8"),
-        # ("video", "u4"),
-        # ("frame_idx", "u8"),
-        # ("instance_id_start", "u8"),
-        # ("instance_id_end", "u8"),
         frames.append(
             [
                 frame_id,
@@ -612,10 +599,36 @@ def write_lfs(labels_path: str, labels: Labels):
             ]
         )
 
+    # Link instances based on from_predicted field.
+    for instance_id, from_predicted in to_link:
+        instances[instance_id][5] = inst_to_id[id(from_predicted)]
+
+    # Create structured arrays.
     points = np.array(points, dtype=point_dtype)
     predicted_points = np.array(predicted_points, dtype=predicted_point_dtype)
+    # TODO: Look into overflow errors here. These are u8 fields, but we're storing large
+    # integers for things like frame indices.
     instances = np.array(instances).astype(instance_dtype)
-    frames = np.array(frames, dtype=frame_dtype)
+    frames = np.array(frames).astype(frame_dtype)
+
+    # Write to file.
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("points", data=points, dtype=points.dtype)
+        f.create_dataset(
+            "pred_points",
+            data=predicted_points,
+            dtype=predicted_points.dtype,
+        )
+        f.create_dataset(
+            "instances",
+            data=instances,
+            dtype=instances.dtype,
+        )
+        f.create_dataset(
+            "frames",
+            data=frames,
+            dtype=frames.dtype,
+        )
 
 
 def read_labels(labels_path: str) -> Labels:
@@ -633,7 +646,6 @@ def read_labels(labels_path: str) -> Labels:
     points = read_points(labels_path)
     pred_points = read_pred_points(labels_path)
     format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
-    assert isinstance(format_id, float)
     instances = read_instances(
         labels_path, skeletons, tracks, points, pred_points, format_id
     )

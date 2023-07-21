@@ -25,6 +25,7 @@ from sleap_io.io.slp import (
     read_points,
     read_pred_points,
     read_instances,
+    write_lfs,
     read_labels,
 )
 from sleap_io.io.utils import read_hdf5_dataset
@@ -137,3 +138,23 @@ def test_write_metadata(centered_pair, tmp_path):
     assert saved_skeletons[0].node_names == labels.skeletons[0].node_names
     assert saved_skeletons[0].edge_inds == labels.skeletons[0].edge_inds
     assert saved_skeletons[0].flipped_node_inds == labels.skeletons[0].flipped_node_inds
+
+
+def test_write_lfs(centered_pair, slp_real_data, tmp_path):
+    labels = read_labels(centered_pair)
+    n_insts = len([inst for lf in labels for inst in lf])
+    write_lfs(tmp_path / "test.slp", labels)
+
+    points = read_points(tmp_path / "test.slp")
+    pred_points = read_pred_points(tmp_path / "test.slp")
+
+    assert (len(points) + len(pred_points)) == (n_insts * len(labels.skeleton))
+
+    labels = read_labels(slp_real_data)
+    n_insts = len([inst for lf in labels for inst in lf])
+    write_lfs(tmp_path / "test2.slp", labels)
+
+    points = read_points(tmp_path / "test2.slp")
+    pred_points = read_pred_points(tmp_path / "test2.slp")
+
+    assert (len(points) + len(pred_points)) == (n_insts * len(labels.skeleton))
