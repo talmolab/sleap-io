@@ -59,5 +59,13 @@ def slp_real_data():
         - frame_idx 220 has 1 user instance from prediction and 1 predicted instance
         - frame_idx 770 has 2 user instances from predictions
     - Does not have tracks
+
+    Note: There are two versions of these labels, one with absolute paths and one with
+    relative paths. The relative paths version is used here:
+
+        >> sio.load_slp("tests/data/slp/labels.v002.rel_paths.slp").video.filename
+        "tests/data/videos/centered_pair_low_quality.mp4"
+        >> sio.load_slp("tests/data/slp/labels.v002.slp").video.filename
+        "/Users/talmo/sleap-io/tests/data/videos/centered_pair_low_quality.mp4"
     """
     return "tests/data/slp/labels.v002.rel_paths.slp"
