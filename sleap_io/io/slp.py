@@ -604,12 +604,12 @@ def write_lfs(labels_path: str, labels: Labels):
         instances[instance_id][5] = inst_to_id[id(from_predicted)]
 
     # Create structured arrays.
-    points = np.array(points, dtype=point_dtype)
-    predicted_points = np.array(predicted_points, dtype=predicted_point_dtype)
-    # TODO: Look into overflow errors here. These are u8 fields, but we're storing large
-    # integers for things like frame indices.
-    instances = np.array(instances).astype(instance_dtype)
-    frames = np.array(frames).astype(frame_dtype)
+    points = np.array([tuple(x) for x in points], dtype=point_dtype)
+    predicted_points = np.array(
+        [tuple(x) for x in predicted_points], dtype=predicted_point_dtype
+    )
+    instances = np.array([tuple(x) for x in instances], dtype=instance_dtype)
+    frames = np.array([tuple(x) for x in frames], dtype=frame_dtype)
 
     # Write to file.
     with h5py.File(labels_path, "a") as f:
