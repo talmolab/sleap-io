@@ -60,4 +60,4 @@ def slp_real_data():
         - frame_idx 770 has 2 user instances from predictions
     - Does not have tracks
     """
-    return "tests/data/slp/labels.v002.slp"
+    return "tests/data/slp/labels.v002.rel_paths.slp"
