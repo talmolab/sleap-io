@@ -48,7 +48,7 @@ def write_hdf5_dataset(filename: str, dataset: str, data: np.ndarray):
         dataset: Path to a dataset.
         data: Data to write to dataset.
     """
-    with h5py.File(filename, "r+") as f:
+    with h5py.File(filename, "a") as f:  # "a": read/write if exists, create otherwise
         _overwrite_hdf5_dataset(f, dataset, data)
 
 
@@ -116,7 +116,7 @@ def write_hdf5_group(filename: str, data: dict[str, np.ndarray]):
                     f=parent_group, dataset=name, data=dataset_or_group
                 )
 
-    with h5py.File(filename, "r+") as f:
+    with h5py.File(filename, "a") as f:  # "a": read/write if exists, create otherwise
         write_group(f, data)
 
 
@@ -169,7 +169,7 @@ def write_hdf5_attrs(filename: str, dataset: str, attributes: dict[str, Any]):
             pass
         group_or_dataset.attrs.create(attr_name, data)
 
-    with h5py.File(filename, "r+") as f:
+    with h5py.File(filename, "a") as f:  # "a": read/write if exists, create otherwise
         ds = f[dataset]
         for attr_name, attr_value in attributes.items():
             _overwrite_hdf5_attr(ds, attr_name, attr_value)
