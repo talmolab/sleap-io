@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import numpy as np
+import h5py
 import simplejson as json
 from typing import Union
 from sleap_io import (
@@ -18,7 +19,14 @@ from sleap_io import (
     LabeledFrame,
     Labels,
 )
-from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
+from sleap_io.io.video import MediaVideo, HDF5Video
+from sleap_io.io.utils import (
+    read_hdf5_attrs,
+    read_hdf5_dataset,
+    write_hdf5_dataset,
+    write_hdf5_group,
+    write_hdf5_attrs,
+)
 from sleap_io.io.video import VideoBackend
 from enum import IntEnum
 from pathlib import Path
@@ -35,7 +43,7 @@ def read_videos(labels_path: str) -> list[Video]:
     """Read `Video` dataset in a SLEAP labels file.
 
     Args:
-        labels_path: A string that contains the path to the labels file
+        labels_path: A string path to the SLEAP labels file.
 
     Returns:
         A list of `Video` objects.
@@ -74,6 +82,50 @@ def read_videos(labels_path: str) -> list[Video]:
             backend = None
         video_objects.append(Video(filename=video_path.as_posix(), backend=backend))
     return video_objects
+
+
+def write_videos(labels_path: str, videos: list[Video]):
+    """Write video metadata to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: A list of `Video` objects to store the metadata for.
+    """
+    video_jsons = []
+    for video in videos:
+        if type(video.backend) == MediaVideo:
+            video_json = {
+                "backend": {
+                    "filename": video.filename,
+                    "grayscale": video.backend.grayscale,
+                    "bgr": True,
+                    "dataset": "",
+                    "input_format": "",
+                }
+            }
+
+        elif type(video.backend) == HDF5Video:
+            video_json = {
+                "backend": {
+                    "filename": "."
+                    if video.backend.has_embedded_images
+                    else video.filename,
+                    "dataset": video.backend.dataset,
+                    "input_format": video.backend.input_format,
+                    "convert_range": False,
+                }
+            }
+            # TODO: Handle saving embedded images or restoring source video.
+            # Ref: https://github.com/talmolab/sleap/blob/fb61b6ce7a9ac9613d99303111f3daafaffc299b/sleap/io/format/hdf5.py#L246-L273
+
+        else:
+            raise NotImplementedError(
+                f"Cannot serialize video backend for video: {video}"
+            )
+        video_jsons.append(np.string_(json.dumps(video_json, separators=(",", ":"))))
+
+        with h5py.File(labels_path, "a") as f:
+            f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
 
 
 def read_tracks(labels_path: str) -> list[Track]:

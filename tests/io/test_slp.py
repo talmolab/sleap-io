@@ -22,7 +22,9 @@ from sleap_io.io.slp import (
     read_pred_points,
     read_instances,
     read_labels,
+    write_videos,
 )
+from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
 
 
@@ -85,3 +87,17 @@ def test_read_videos_pkg(slp_minimal_pkg):
     video = videos[0]
     assert video.shape == (1, 384, 384, 1)
     assert video.backend.dataset == "video0/video"
+
+
+def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
+    videos = read_videos(slp_minimal_pkg)
+    write_videos(tmp_path / "test_minimal_pkg.slp", videos)
+    json_fixture = read_hdf5_dataset(slp_minimal_pkg, "videos_json")
+    json_test = read_hdf5_dataset(tmp_path / "test_minimal_pkg.slp", "videos_json")
+    assert json_fixture == json_test
+
+    videos = read_videos(centered_pair)
+    write_videos(tmp_path / "test_centered_pair.slp", videos)
+    json_fixture = read_hdf5_dataset(centered_pair, "videos_json")
+    json_test = read_hdf5_dataset(tmp_path / "test_centered_pair.slp", "videos_json")
+    assert json_fixture == json_test
