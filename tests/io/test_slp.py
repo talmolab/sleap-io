@@ -14,15 +14,22 @@ from sleap_io import (
 )
 from sleap_io.io.slp import (
     read_videos,
-    read_skeletons,
+    write_videos,
     read_tracks,
+    write_tracks,
     read_instances,
     read_metadata,
+    read_skeletons,
+    serialize_skeletons,
+    write_metadata,
     read_points,
     read_pred_points,
     read_instances,
+    write_lfs,
     read_labels,
+    write_labels,
 )
+from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
 
 
@@ -85,3 +92,89 @@ def test_read_videos_pkg(slp_minimal_pkg):
     video = videos[0]
     assert video.shape == (1, 384, 384, 1)
     assert video.backend.dataset == "video0/video"
+
+
+def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
+    videos = read_videos(slp_minimal_pkg)
+    write_videos(tmp_path / "test_minimal_pkg.slp", videos)
+    json_fixture = read_hdf5_dataset(slp_minimal_pkg, "videos_json")
+    json_test = read_hdf5_dataset(tmp_path / "test_minimal_pkg.slp", "videos_json")
+    assert json_fixture == json_test
+
+    videos = read_videos(centered_pair)
+    write_videos(tmp_path / "test_centered_pair.slp", videos)
+    json_fixture = read_hdf5_dataset(centered_pair, "videos_json")
+    json_test = read_hdf5_dataset(tmp_path / "test_centered_pair.slp", "videos_json")
+    assert json_fixture == json_test
+
+
+def test_write_tracks(centered_pair, tmp_path):
+    tracks = read_tracks(centered_pair)
+    write_tracks(tmp_path / "test.slp", tracks)
+
+    # TODO: Test for byte-for-byte equality of HDF5 datasets when we implement the
+    # spawned_on attribute.
+    # json_fixture = read_hdf5_dataset(centered_pair, "tracks_json")
+    # json_test = read_hdf5_dataset(tmp_path / "test.slp", "tracks_json")
+    # assert (json_fixture == json_test).all()
+
+    saved_tracks = read_tracks(tmp_path / "test.slp")
+    assert len(saved_tracks) == len(tracks)
+    for saved_track, track in zip(saved_tracks, tracks):
+        assert saved_track.name == track.name
+
+
+def test_write_metadata(centered_pair, tmp_path):
+    labels = read_labels(centered_pair)
+    write_metadata(tmp_path / "test.slp", labels)
+
+    saved_md = read_metadata(tmp_path / "test.slp")
+    assert saved_md["version"] == "2.0.0"
+    assert saved_md["provenance"] == labels.provenance
+
+    saved_skeletons = read_skeletons(tmp_path / "test.slp")
+    assert len(saved_skeletons) == len(labels.skeletons)
+    assert len(saved_skeletons) == 1
+    assert saved_skeletons[0].name == labels.skeletons[0].name
+    assert saved_skeletons[0].node_names == labels.skeletons[0].node_names
+    assert saved_skeletons[0].edge_inds == labels.skeletons[0].edge_inds
+    assert saved_skeletons[0].flipped_node_inds == labels.skeletons[0].flipped_node_inds
+
+
+def test_write_lfs(centered_pair, slp_real_data, tmp_path):
+    labels = read_labels(centered_pair)
+    n_insts = len([inst for lf in labels for inst in lf])
+    write_lfs(tmp_path / "test.slp", labels)
+
+    points = read_points(tmp_path / "test.slp")
+    pred_points = read_pred_points(tmp_path / "test.slp")
+
+    assert (len(points) + len(pred_points)) == (n_insts * len(labels.skeleton))
+
+    labels = read_labels(slp_real_data)
+    n_insts = len([inst for lf in labels for inst in lf])
+    write_lfs(tmp_path / "test2.slp", labels)
+
+    points = read_points(tmp_path / "test2.slp")
+    pred_points = read_pred_points(tmp_path / "test2.slp")
+
+    assert (len(points) + len(pred_points)) == (n_insts * len(labels.skeleton))
+
+
+def test_write_labels(centered_pair, slp_real_data, tmp_path):
+    for fn in [centered_pair, slp_real_data]:
+        labels = read_labels(fn)
+        write_labels(tmp_path / "test.slp", labels)
+
+        saved_labels = read_labels(tmp_path / "test.slp")
+        assert len(saved_labels) == len(labels)
+        assert [lf.frame_idx for lf in saved_labels] == [lf.frame_idx for lf in labels]
+        assert [len(lf) for lf in saved_labels] == [len(lf) for lf in labels]
+        np.testing.assert_array_equal(saved_labels.numpy(), labels.numpy())
+        assert saved_labels.video.filename == labels.video.filename
+        assert type(saved_labels.video.backend) == type(labels.video.backend)
+        assert saved_labels.video.backend.grayscale == labels.video.backend.grayscale
+        assert saved_labels.video.backend.shape == labels.video.backend.shape
+        assert len(saved_labels.skeletons) == len(labels.skeletons) == 1
+        assert saved_labels.skeleton.name == labels.skeleton.name
+        assert saved_labels.skeleton.node_names == labels.skeleton.node_names

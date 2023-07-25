@@ -76,9 +76,6 @@ class VideoBackend:
                 filename, grayscale=grayscale, **_get_valid_kwargs(MediaVideo, kwargs)
             )
         elif filename.endswith(HDF5Video.EXTS):
-            valid_kwargs = {
-                k: v for k, v in kwargs.items() if k in MediaVideo.__attrs_attrs__
-            }
             return HDF5Video(
                 filename,
                 dataset=dataset,
@@ -351,6 +348,7 @@ class MediaVideo(VideoBackend):
                 if reader.get(cv2.CAP_PROP_POS_FRAMES) != idx:
                     reader.set(cv2.CAP_PROP_POS_FRAMES, idx)
                 _, img = reader.read()
+                img = img[..., ::-1]  # BGR -> RGB
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)
 
@@ -493,6 +491,13 @@ class HDF5Video(VideoBackend):
         else:
             frame_idx = 0
         return self.read_frame(frame_idx)
+
+    @property
+    def has_embedded_images(self) -> bool:
+        """Return True if the dataset contains embedded images."""
+        with h5py.File(self.filename, "r") as f:
+            ds = f[self.dataset]
+            return "format" in ds.attrs
 
     def decode_embedded(self, img_string: np.ndarray, format: str) -> np.ndarray:
         """Decode an embedded image string into a numpy array.

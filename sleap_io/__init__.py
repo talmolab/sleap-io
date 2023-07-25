@@ -17,6 +17,7 @@ from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.io.main import (
     load_slp,
+    save_slp,
     load_nwb,
     save_nwb,
     load_labelstudio,

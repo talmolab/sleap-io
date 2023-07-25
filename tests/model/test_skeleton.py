@@ -70,3 +70,19 @@ def test_skeleton_node_map():
     skel.nodes = [B, A]
     assert skel.index("A") == 1
     assert skel.index("B") == 0
+
+
+def test_flipped_node_inds():
+    skel = Skeleton(["A", "BL", "BR", "C", "DL", "DR"])
+    assert skel.flipped_node_inds == [0, 1, 2, 3, 4, 5]
+
+    skel.symmetries = [
+        Symmetry([Node("BL"), Node("BR")]),
+        Symmetry([Node("DL"), Node("DR")]),
+    ]
+    assert skel.flipped_node_inds == [0, 2, 1, 3, 5, 4]
+
+    assert skel.symmetries[0][0] in (Node("BL"), Node("BR"))
+    assert skel.symmetries[0][1] in (Node("BL"), Node("BR"))
+    syms = list(skel.symmetries[0])
+    assert syms[0] != syms[1]
