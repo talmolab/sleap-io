@@ -9,6 +9,7 @@ from attrs import define
 from typing import Tuple, Optional, Optional
 import numpy as np
 from sleap_io.io.video import VideoBackend
+from pathlib import Path
 
 
 @define
@@ -31,6 +32,13 @@ class Video:
 
     filename: str
     backend: Optional[VideoBackend] = None
+
+    def __attrs_post_init__(self):
+        """Set the video backend if not already set."""
+        if self.backend is None:
+            if Path(self.filename).exists():
+                # TODO: Automatic path resolution?
+                self.backend = VideoBackend.from_filename(self.filename)
 
     @classmethod
     def from_filename(
