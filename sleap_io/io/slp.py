@@ -367,7 +367,7 @@ def write_metadata(labels_path: str, labels: Labels):
         "videos": [],
         "tracks": [],
         "suggestions": [],  # TODO: Handle suggestions metadata.
-        "negative_anchors": [],
+        "negative_anchors": {},
         "provenance": labels.provenance,
     }
     with h5py.File(labels_path, "a") as f:
