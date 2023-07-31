@@ -8,7 +8,7 @@ def test_edge():
     edge = Edge(Node("A"), Node("B"))
     assert edge[0].name == "A"
     assert edge[1].name == "B"
-    with pytest.raises(ValueError):
+    with pytest.raises(IndexError):
         edge[2]
 
 
