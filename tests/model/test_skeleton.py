@@ -86,3 +86,14 @@ def test_flipped_node_inds():
     assert skel.symmetries[0][1] in (Node("BL"), Node("BR"))
     syms = list(skel.symmetries[0])
     assert syms[0] != syms[1]
+
+
+def test_edge_unpack():
+    skel = Skeleton(["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+    edge = skel.edges[0]
+    assert edge[0].name == "A"
+    assert edge[1].name == "B"
+
+    src, dst = skel.edges[0]
+    assert src.name == "A"
+    assert dst.name == "B"
