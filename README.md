@@ -28,15 +28,35 @@ pip install -e .[dev]
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information on development.
 
 ## Usage
+
+### Load and save in different formats
+
+```py
+import sleap_io as sio
+
+# Load from SLEAP file.
+labels = sio.load_slp("predictions.slp")
+
+# Save to NWB file.
+sio.save_nwb(labels, "predictions.nwb")
 ```
+
+### Create labels from raw data
+
+```py
 import sleap_io as sio
 import numpy as np
 
+# Create skeleton.
 skeleton = sio.Skeleton(
     nodes=["head", "thorax", "abdomen"],
     edges=[("head", "thorax"), ("thorax", "abdomen")]
 )
 
+# Create video.
+video = sio.Video.from_filename("test.mp4")
+
+# Create instance.
 instance = sio.Instance.from_numpy(
     points=np.array([
         [10.2, 20.4],
@@ -45,6 +65,12 @@ instance = sio.Instance.from_numpy(
     ]),
     skeleton=skeleton
 )
+
+# Create labeled frame.
+lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+
+# Create labels.
+labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
 ```
 
 ## Support
