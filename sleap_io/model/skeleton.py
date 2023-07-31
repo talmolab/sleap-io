@@ -40,14 +40,14 @@ class Edge:
     source: Node
     destination: Node
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Node:
         """Return the source `Node` (`idx` is 0) or destination `Node` (`idx` is 1)."""
         if idx == 0:
             return self.source
         elif idx == 1:
             return self.destination
         else:
-            raise ValueError("Edge only has 2 nodes (source and destination).")
+            raise IndexError("Edge only has 2 nodes (source and destination).")
 
 
 @define
