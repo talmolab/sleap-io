@@ -138,8 +138,6 @@ def prediction_to_instance(data: Union[np.ndarray[np.uint16], np.ndarray[np.floa
     if not points:
         return None
     else:
-        return Instance(points, skeleton=skeleton)
-        # Tracks aren't saving correctly...
-        #return Instance(points, skeleton=skeleton, track=Track)
+        return Instance(points, skeleton=skeleton, track=track)
 
 
