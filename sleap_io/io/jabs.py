@@ -76,12 +76,12 @@ def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SK
             pose_version = pose_file['poseest'].attrs['version'][0]
         except:
             pose_version = 2
+            tracks[1] = Track('1')
             data_shape = pose_file['poseest/points'].shape
             assert len(data_shape)==3, f'Pose version not present and shape does not match single mouse: shape of {data_shape} for {labels_path}'
         # Change field name for newer pose formats
         if pose_version == 3:
             id_key = 'instance_track_id'
-            tracks[1] = Track('1')
         elif pose_version > 3:
             id_key = 'instance_embed_id'
             max_ids = pose_file['poseest/points'].shape[1]
@@ -105,9 +105,9 @@ def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SK
                     # Note: ignores 'poseest/id_mask' to keep predictions that were not assigned an id
                     if pose_version > 3 and pose_ids[cur_id] <= 0:
                         continue
-                    if cur_id not in tracks.keys():
-                        tracks[cur_id] = Track(str(pose_ids[cur_id]))
-                    new_instance = prediction_to_instance(pose_data[cur_id], pose_conf[cur_id], skeleton, tracks[cur_id])
+                    if pose_ids[cur_id] not in tracks.keys():
+                        tracks[pose_ids[cur_id]] = Track(str(pose_ids[cur_id]))
+                    new_instance = prediction_to_instance(pose_data[cur_id], pose_conf[cur_id], skeleton, tracks[pose_ids[cur_id]])
                     if new_instance:
                         instances.append(new_instance)
             frame_label = LabeledFrame(Video(video_name), frame_idx, instances)
