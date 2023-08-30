@@ -91,3 +91,7 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
         Parsed labels as a `Labels` instance.
     """
     return jabs.read_labels(filename, skeleton=skeleton)
+
+def save_jabs(labels: Labels, filename: str, pose_version: int):
+    """Save a SLEAP dataset to JABS pose file format."""
+    jabs.write_labels(labels, filename, pose_version)
