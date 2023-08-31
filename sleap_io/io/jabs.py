@@ -55,6 +55,8 @@ JABS_DEFAULT_SKELETON = Skeleton(JABS_DEFAULT_KEYPOINTS, JABS_DEFAULT_EDGES, JAB
 def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SKELETON) -> Labels:
     """Read JABS style pose from a file and return a `Labels` object.
     TODO: Currently only reads in pose data. v5 static objects are currently ignored
+    TODO: Attributes are ignored. Is there a way to keep them in SLEAP format?
+    TODO: px_to_cm field is ignored.
 
     Args:
         labels_path: Path to the JABS pose file.
@@ -142,33 +144,34 @@ def prediction_to_instance(data: Union[np.ndarray[np.uint16], np.ndarray[np.floa
     else:
         return Instance(points, skeleton=skeleton, track=track)
 
-def get_max_ids_in_video(labels: Labels) -> int:
+def get_max_ids_in_video(labels: List[Labels]) -> int:
     """Determine the maximum number of identities that exist at the same time
     
     Args:
         labels: SLEAP `Labels` to count 
     """
     max_labels = 0
-    for label in labels.labeled_frames:
+    for label in labels:
         n_labels = len(label.instances)
         max_labels = max(max_labels, n_labels)
 
     return max_labels
 
-def convert_labels(labels: Labels) -> dict:
+def convert_labels(labels: List[Labels]) -> dict:
     """Convert a `Labels` object into JABS-formatted annotations.
     TODO: Currently assumes all data is mouse
     TODO: Identity is an unsafe str -> cast. Convert to factorize op
+    TODO: See ignored fields in `read_labels`
 
     Args:
-        labels: SLEAP `Labels` to be converted to JABS format.
+        labels: list of SLEAP `Labels` belonging to a single video to be converted to JABS format.
 
     Returns:
         Dictionary of JABS data of the `Labels` data.
     """
     # Determine shape of output
-    num_frames = labels.video.shape[0]
-    num_keypoints = len(labels.skeleton.nodes)
+    num_frames = len(labels)
+    num_keypoints = len(labels[0][0].skeleton.nodes)
     num_mice = get_max_ids_in_video(labels)
 
     keypoint_mat = np.zeros([num_frames, num_mice, num_keypoints, 2], dtype=np.uint16)
@@ -177,7 +180,7 @@ def convert_labels(labels: Labels) -> dict:
     instance_vector = np.zeros([num_frames], dtype=np.uint8)
 
     # Populate the matrices with data
-    for label in labels.labeled_frames:
+    for label in labels:
         assigned_instances = 0
         for instance_idx, instance in enumerate(label.instances):
             pose = instance.numpy()
@@ -194,13 +197,12 @@ def convert_labels(labels: Labels) -> dict:
     # Return the data as a dict
     return {'keypoints': keypoint_mat, 'confidence': confidence_mat, 'identity': identity_mat, 'num_identities': instance_vector}
 
-def write_labels(labels: Labels, filename: str, pose_version: int):
+def write_labels(labels: Labels, pose_version: int):
     """Convert and save a SLEAP `Labels` object to a JABS pose file.
     Only supports pose version 2 (single mouse) and 3-5 (multi mouse).
 
     Args:
         labels: SLEAP `Labels` to be converted to JABS pose format.
-        filename: Path to save JABS annotations (`.h5`).
         pose_version: JABS pose version to use when writing data.
     """
 
@@ -208,8 +210,19 @@ def write_labels(labels: Labels, filename: str, pose_version: int):
         video_labels = labels.find(video=video)
         converted_labels = convert_labels(video_labels)
         out_filename = re.sub('\.avi', f'_pose_est_v{pose_version}.h5', video.filename)
+        # Do we want to overwrite?
         if os.path.exists(out_filename):
             pass
+        if pose_version == 2:
+            write_jabs_v2(converted_labels, out_filename)
+        elif pose_version == 3:
+            write_jabs_v3(converted_labels, out_filename)
+        elif pose_version == 4:
+            write_jabs_v4(converted_labels, out_filename)
+        elif pose_version == 5:
+            write_jabs_v5(converted_labels, out_filename)
+        else:
+            raise NotImplementedError(f"Pose format {pose_version} not supported.")
 
 def write_jabs_v2(data: dict, filename: str):
     """ Write JABS pose file v2 data to file.
@@ -228,6 +241,7 @@ def write_jabs_v2(data: dict, filename: str):
         pose_grp = h5.require_group('poseest')
         pose_grp.attrs.update({'version':[2,0]})
         pose_dataset = pose_grp.require_dataset('points', out_keypoints.shape, out_keypoints.dtype, data = out_keypoints)
+        conf_dataset = pose_grp.require_dataset('confidence', out_confidences.shape, out_confidences.dtype, data = out_confidences)
 
 
 def write_jabs_v3(data: dict, filename: str):
@@ -249,7 +263,7 @@ def write_jabs_v3(data: dict, filename: str):
         id_dataset = pose_grp.require_dataset('instance_track_id', data['identity'].shape, data['identity'].dtype, data = data['identity'])
         # instance count field
         count_dataset = pose_grp.require_dataset('instance_count', data['num_identities'].shape, data['num_identities'].dtype, data = data['num_identities'])
-        # extra field where we don't have data
+        # extra field where we don't have data, so fill with default data
         kp_embedding_dataset = pose_grp.require_dataset('instance_embedding', data['confidence'].shape, data['confidence'].dtype, data = np.zeros_like(data['confidence']))
 
 def write_jabs_v4(data: dict, filename: str):
@@ -260,14 +274,37 @@ def write_jabs_v4(data: dict, filename: str):
         data: Dictionary of JABS data generated from convert_labels
         filename: Filename to write data to
     """
-    pass
+    # v4 extends v3
+    write_jabs_v3(data, filename)
+    with h5py.File(filename, 'a') as h5:
+        pose_grp = h5.require_group('poseest')
+        pose_grp.attrs.update({'version':[4,0]})
+        # new fields on top of v4
+        identity_mask_mat = np.all(data['confidence']==0, axis=-1)
+        mask_dataset = pose_grp.require_dataset('id_mask', identity_mask_mat.shape, identity_mask_mat.dtype, data = identity_mask_mat)
+        # No identity embedding data
+        # Note that since the identity information doesn't exist, this will break any functionality that relies on it
+        default_id_embeds = np.zeros(list(identity_mask_mat.shape) + [0], dtype = np.float32)
+        id_embed_dataset = pose_grp.require_dataset('identity_embeds', default_id_embeds.shape, default_id_embeds.dtype, data = default_id_embeds)
+        default_id_centers = np.zeros(default_id_embeds.shape[1:], dtype=np.float32)
+        id_centers = pose_grp.require_dataset('instance_id_center', default_id_centers.shape, default_id_centers.dtype, data = default_id_centers)
+        # v4 uses a new id field
+        pose_grp.require_dataset('instance_embed_id', data['identity'].shape, data['identity'].dtype, data = data['identity'])
+
 
 def write_jabs_v5(data: dict, filename: str):
     """ Write JABS pose file v5 data to file.
     Writes multi-mouse pose, longterm identity, and static object data.
+    # TODO: Add in static objects
 
     Args:
         data: Dictionary of JABS data generated from convert_labels
         filename: Filename to write data to
     """
-    pass
+    # v5 extends v4
+    write_jabs_v4(data, filename)
+    with h5py.File(filename, 'a') as h5:
+        pose_grp = h5.require_group('poseest')
+        pose_grp.attrs.update({'version':[5,0]})
+        object_grp = h5.require_group('static_objects')
+        # Static objects aren't in the data dict yet...

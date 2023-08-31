@@ -92,6 +92,11 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
     """
     return jabs.read_labels(filename, skeleton=skeleton)
 
-def save_jabs(labels: Labels, filename: str, pose_version: int):
-    """Save a SLEAP dataset to JABS pose file format."""
-    jabs.write_labels(labels, filename, pose_version)
+def save_jabs(labels: Labels, pose_version: int):
+    """Save a SLEAP dataset to JABS pose file format. Filenames for JABS poses are based on video filenames.
+
+    Args:
+        labels: SLEAP `Labels` object
+        pose_version: The JABS pose version to write data out
+    """
+    jabs.write_labels(labels, pose_version)
