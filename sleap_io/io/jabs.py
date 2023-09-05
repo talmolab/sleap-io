@@ -7,6 +7,7 @@ import re
 import os
 import numpy as np
 from typing import Dict, Iterable, List, Tuple, Optional, Union
+import warnings
 
 from sleap_io import Instance, LabeledFrame, Labels, Node, Edge, Symmetry, Point, Video, Skeleton, Track
 
@@ -144,7 +145,7 @@ def prediction_to_instance(data: Union[np.ndarray[np.uint16], np.ndarray[np.floa
     else:
         return Instance(points, skeleton=skeleton, track=track)
 
-def get_max_ids_in_video(labels: List[Labels]) -> int:
+def get_max_ids_in_video(labels: List[Labels], key: str = 'Mouse') -> int:
     """Determine the maximum number of identities that exist at the same time
     
     Args:
@@ -152,50 +153,67 @@ def get_max_ids_in_video(labels: List[Labels]) -> int:
     """
     max_labels = 0
     for label in labels:
-        n_labels = len(label.instances)
+        n_labels = sum([x.skeleton.name == key for x in label.instances])
         max_labels = max(max_labels, n_labels)
 
     return max_labels
 
-def convert_labels(labels: List[Labels]) -> dict:
+def convert_labels(all_labels: Labels, video: str) -> dict:
     """Convert a `Labels` object into JABS-formatted annotations.
     TODO: Currently assumes all data is mouse
     TODO: Identity is an unsafe str -> cast. Convert to factorize op
     TODO: See ignored fields in `read_labels`
 
     Args:
-        labels: list of SLEAP `Labels` belonging to a single video to be converted to JABS format.
+        all_labels: SLEAP `Labels` to be converted to JABS format.
+        video: name of video to be converted
 
     Returns:
         Dictionary of JABS data of the `Labels` data.
     """
     # Determine shape of output
-    num_frames = len(labels)
-    num_keypoints = len(labels[0][0].skeleton.nodes)
-    num_mice = get_max_ids_in_video(labels)
+    labels = all_labels.find(video=video)
+
+    num_frames = [x.shape[0] for x in all_labels.videos if x == video][0]
+    num_keypoints = [len(x.nodes) for x in all_labels.skeletons if x.name == 'Mouse'][0]
+    num_mice = get_max_ids_in_video(labels, key = 'Mouse')
+    track_2_idx = {key:val for key,val in zip(all_labels.tracks, range(len(all_labels.tracks)))}
+    last_unassigned_id = num_mice
 
     keypoint_mat = np.zeros([num_frames, num_mice, num_keypoints, 2], dtype=np.uint16)
     confidence_mat = np.zeros([num_frames, num_mice, num_keypoints], dtype=np.float32)
     identity_mat = np.zeros([num_frames, num_mice], dtype=np.uint32)
     instance_vector = np.zeros([num_frames], dtype=np.uint8)
+    static_objects = {}
 
     # Populate the matrices with data
     for label in labels:
         assigned_instances = 0
+        tracks = [x.track for x in label.instances if x.track]
+        track_ids = [track_2_idx[track] for track in tracks]
         for instance_idx, instance in enumerate(label.instances):
+            # Handle non-mouse annotations differently
+            if not instance.skeleton and instance.skeleton.name is not 'Mouse':
+                if not instance.skeleton:
+                    static_objects[instance.skeleton.name] = instance.numpy()
             pose = instance.numpy()
             missing_points = np.isnan(pose[:,0])
             pose[np.isnan(pose)] = 0
             # JABS stores y,x
             pose = pose.astype(np.uint16)[:,::-1]
-            keypoint_mat[label.frame_idx, instance_idx] = pose
+            keypoint_mat[label.frame_idx, instance_idx, :, :] = pose
             confidence_mat[label.frame_idx, instance_idx, ~missing_points] = 1.0
-            identity_mat[label.frame_idx, instance_idx] = np.uint32(instance.track.name)
+            if instance.track:
+                identity_mat[label.frame_idx, instance_idx] = track_2_idx[instance.track]
+            else:
+                warnings.warn(f"Pose with unassigned track found on {label.video.filename} frame {label.frame_idx} instance {instance_idx}. Assigning ID {last_unassigned_id}.")
+                identity_mat[label.frame_idx, instance_idx] = last_unassigned_id
+                last_unassigned_id += 1
             assigned_instances += 1
         instance_vector[label.frame_idx] = assigned_instances
 
     # Return the data as a dict
-    return {'keypoints': keypoint_mat, 'confidence': confidence_mat, 'identity': identity_mat, 'num_identities': instance_vector}
+    return {'keypoints': keypoint_mat.astype(np.uint16), 'confidence': confidence_mat.astype(np.float32), 'identity': identity_mat.astype(np.uint32), 'num_identities': instance_vector.astype(np.uint16), 'static_objects': static_objects}
 
 def write_labels(labels: Labels, pose_version: int):
     """Convert and save a SLEAP `Labels` object to a JABS pose file.
@@ -207,9 +225,8 @@ def write_labels(labels: Labels, pose_version: int):
     """
 
     for video in labels.videos:
-        video_labels = labels.find(video=video)
-        converted_labels = convert_labels(video_labels)
-        out_filename = re.sub('\.avi', f'_pose_est_v{pose_version}.h5', video.filename)
+        converted_labels = convert_labels(labels, video)
+        out_filename = os.path.splitext(video.filename)[0] + f'_pose_est_v{pose_version}.h5'
         # Do we want to overwrite?
         if os.path.exists(out_filename):
             pass
@@ -280,7 +297,7 @@ def write_jabs_v4(data: dict, filename: str):
         pose_grp = h5.require_group('poseest')
         pose_grp.attrs.update({'version':[4,0]})
         # new fields on top of v4
-        identity_mask_mat = np.all(data['confidence']==0, axis=-1)
+        identity_mask_mat = np.all(data['confidence']==0, axis=-1).astype(bool)
         mask_dataset = pose_grp.require_dataset('id_mask', identity_mask_mat.shape, identity_mask_mat.dtype, data = identity_mask_mat)
         # No identity embedding data
         # Note that since the identity information doesn't exist, this will break any functionality that relies on it
@@ -288,8 +305,10 @@ def write_jabs_v4(data: dict, filename: str):
         id_embed_dataset = pose_grp.require_dataset('identity_embeds', default_id_embeds.shape, default_id_embeds.dtype, data = default_id_embeds)
         default_id_centers = np.zeros(default_id_embeds.shape[1:], dtype=np.float32)
         id_centers = pose_grp.require_dataset('instance_id_center', default_id_centers.shape, default_id_centers.dtype, data = default_id_centers)
-        # v4 uses a new id field
-        pose_grp.require_dataset('instance_embed_id', data['identity'].shape, data['identity'].dtype, data = data['identity'])
+        # v4 uses an id field that is 1-indexed
+        identities_1_indexed = np.copy(data['identity']) + 1
+        identities_1_indexed[identity_mask_mat] = 0
+        pose_grp.require_dataset('instance_embed_id', identities_1_indexed.shape, identities_1_indexed.dtype, data = identities_1_indexed)
 
 
 def write_jabs_v5(data: dict, filename: str):
