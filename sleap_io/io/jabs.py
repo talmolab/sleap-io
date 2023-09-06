@@ -117,7 +117,6 @@ def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SK
             frames.append(frame_label)
     return Labels(frames)
 
-
 def prediction_to_instance(data: Union[np.ndarray[np.uint16], np.ndarray[np.float32]], confidence: np.ndarray[np.float32], skeleton: Skeleton, track: Track = None) -> Instance:
     """Create an `Instance` from prediction data.
 
@@ -160,8 +159,6 @@ def get_max_ids_in_video(labels: List[Labels], key: str = 'Mouse') -> int:
 
 def convert_labels(all_labels: Labels, video: str) -> dict:
     """Convert a `Labels` object into JABS-formatted annotations.
-    TODO: Currently assumes all data is mouse
-    TODO: Identity is an unsafe str -> cast. Convert to factorize op
     TODO: See ignored fields in `read_labels`
 
     Args:
@@ -264,6 +261,7 @@ def write_jabs_v2(data: dict, filename: str):
 def write_jabs_v3(data: dict, filename: str):
     """ Write JABS pose file v3 data to file.
     Writes multi-mouse pose data.
+    TODO: v3 requires continuous tracklets (eg no gaps) IDs need to be incremented for this field
 
     Args:
         data: Dictionary of JABS data generated from convert_labels
