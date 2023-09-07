@@ -55,9 +55,9 @@ JABS_DEFAULT_SKELETON = Skeleton(JABS_DEFAULT_KEYPOINTS, JABS_DEFAULT_EDGES, JAB
 
 def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SKELETON) -> Labels:
     """Read JABS style pose from a file and return a `Labels` object.
-    TODO: Currently only reads in pose data. v5 static objects are currently ignored
-    TODO: Attributes are ignored. Is there a way to keep them in SLEAP format?
-    TODO: px_to_cm field is ignored.
+    TODO: Attributes are ignored, including px_to_cm field.
+    TODO: Segmentation data ignored in v6, but will read in pose.
+    TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should be converted to multiple objects
 
     Args:
         labels_path: Path to the JABS pose file.
@@ -92,7 +92,7 @@ def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SK
         for frame_idx in range(num_frames):
             instances = []
             pose_data = pose_file['poseest/points'][frame_idx, ...]
-            # JABS stores y,x
+            # JABS stores y,x for poses
             pose_data = np.flip(pose_data, axis=-1)
             pose_conf = pose_file['poseest/confidence'][frame_idx, ...]
             # single animal case
@@ -185,7 +185,6 @@ def get_max_ids_in_video(labels: List[Labels], key: str = 'Mouse') -> int:
 
 def convert_labels(all_labels: Labels, video: str) -> dict:
     """Convert a `Labels` object into JABS-formatted annotations.
-    TODO: See ignored fields in `read_labels`
 
     Args:
         all_labels: SLEAP `Labels` to be converted to JABS format.
@@ -194,9 +193,9 @@ def convert_labels(all_labels: Labels, video: str) -> dict:
     Returns:
         Dictionary of JABS data of the `Labels` data.
     """
-    # Determine shape of output
     labels = all_labels.find(video=video)
 
+    # Determine shape of output
     num_frames = [x.shape[0] for x in all_labels.videos if x == video][0]
     num_keypoints = [len(x.nodes) for x in all_labels.skeletons if x.name == 'Mouse'][0]
     num_mice = get_max_ids_in_video(labels, key = 'Mouse')
@@ -219,13 +218,14 @@ def convert_labels(all_labels: Labels, video: str) -> dict:
             if not instance.skeleton:
                 continue
             # Static objects just get added to the object dict
+            # This will clobber data if more than one frame is annotated
             elif instance.skeleton.name != 'Mouse':
                 static_objects[instance.skeleton.name] = instance.numpy()
                 continue
             pose = instance.numpy()
             missing_points = np.isnan(pose[:,0])
             pose[np.isnan(pose)] = 0
-            # JABS stores y,x
+            # JABS stores y,x for poses
             pose = np.flip(pose.astype(np.uint16), axis=-1)
             keypoint_mat[label.frame_idx, instance_idx, :, :] = pose
             confidence_mat[label.frame_idx, instance_idx, ~missing_points] = 1.0
@@ -283,8 +283,8 @@ def write_jabs_v2(data: dict, filename: str):
     with h5py.File(filename, 'w') as h5:
         pose_grp = h5.require_group('poseest')
         pose_grp.attrs.update({'version':[2,0]})
-        pose_dataset = pose_grp.require_dataset('points', out_keypoints.shape, out_keypoints.dtype, data = out_keypoints)
-        conf_dataset = pose_grp.require_dataset('confidence', out_confidences.shape, out_confidences.dtype, data = out_confidences)
+        pose_grp.require_dataset('points', out_keypoints.shape, out_keypoints.dtype, data = out_keypoints)
+        pose_grp.require_dataset('confidence', out_confidences.shape, out_confidences.dtype, data = out_confidences)
 
 
 def write_jabs_v3(data: dict, filename: str):
@@ -300,15 +300,15 @@ def write_jabs_v3(data: dict, filename: str):
         pose_grp = h5.require_group('poseest')
         pose_grp.attrs.update({'version':[3,0]})
         # keypoint field
-        pose_dataset = pose_grp.require_dataset('points', data['keypoints'].shape, data['keypoints'].dtype, data = data['keypoints'])
+        pose_grp.require_dataset('points', data['keypoints'].shape, data['keypoints'].dtype, data = data['keypoints'])
         # confidence field
-        conf_dataset = pose_grp.require_dataset('confidence', data['confidence'].shape, data['confidence'].dtype, data = data['confidence'])
+        pose_grp.require_dataset('confidence', data['confidence'].shape, data['confidence'].dtype, data = data['confidence'])
         # id field
-        id_dataset = pose_grp.require_dataset('instance_track_id', data['identity'].shape, data['identity'].dtype, data = data['identity'])
+        pose_grp.require_dataset('instance_track_id', data['identity'].shape, data['identity'].dtype, data = data['identity'])
         # instance count field
-        count_dataset = pose_grp.require_dataset('instance_count', data['num_identities'].shape, data['num_identities'].dtype, data = data['num_identities'])
+        pose_grp.require_dataset('instance_count', data['num_identities'].shape, data['num_identities'].dtype, data = data['num_identities'])
         # extra field where we don't have data, so fill with default data
-        kp_embedding_dataset = pose_grp.require_dataset('instance_embedding', data['confidence'].shape, data['confidence'].dtype, data = np.zeros_like(data['confidence']))
+        pose_grp.require_dataset('instance_embedding', data['confidence'].shape, data['confidence'].dtype, data = np.zeros_like(data['confidence']))
 
 def write_jabs_v4(data: dict, filename: str):
     """ Write JABS pose file v4 data to file.
@@ -325,13 +325,13 @@ def write_jabs_v4(data: dict, filename: str):
         pose_grp.attrs.update({'version':[4,0]})
         # new fields on top of v4
         identity_mask_mat = np.all(data['confidence']==0, axis=-1).astype(bool)
-        mask_dataset = pose_grp.require_dataset('id_mask', identity_mask_mat.shape, identity_mask_mat.dtype, data = identity_mask_mat)
+        pose_grp.require_dataset('id_mask', identity_mask_mat.shape, identity_mask_mat.dtype, data = identity_mask_mat)
         # No identity embedding data
         # Note that since the identity information doesn't exist, this will break any functionality that relies on it
         default_id_embeds = np.zeros(list(identity_mask_mat.shape) + [0], dtype = np.float32)
-        id_embed_dataset = pose_grp.require_dataset('identity_embeds', default_id_embeds.shape, default_id_embeds.dtype, data = default_id_embeds)
+        pose_grp.require_dataset('identity_embeds', default_id_embeds.shape, default_id_embeds.dtype, data = default_id_embeds)
         default_id_centers = np.zeros(default_id_embeds.shape[1:], dtype=np.float32)
-        id_centers = pose_grp.require_dataset('instance_id_center', default_id_centers.shape, default_id_centers.dtype, data = default_id_centers)
+        pose_grp.require_dataset('instance_id_center', default_id_centers.shape, default_id_centers.dtype, data = default_id_centers)
         # v4 uses an id field that is 1-indexed
         identities_1_indexed = np.copy(data['identity']) + 1
         identities_1_indexed[identity_mask_mat] = 0
