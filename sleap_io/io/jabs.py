@@ -92,6 +92,8 @@ def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SK
         for frame_idx in range(num_frames):
             instances = []
             pose_data = pose_file['poseest/points'][frame_idx, ...]
+            # JABS stores y,x
+            pose_data = np.flip(pose_data, axis=-1)
             pose_conf = pose_file['poseest/confidence'][frame_idx, ...]
             # single animal case
             if pose_version == 2:
@@ -113,9 +115,33 @@ def read_labels(labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SK
                     new_instance = prediction_to_instance(pose_data[cur_id], pose_conf[cur_id], skeleton, tracks[pose_ids[cur_id]])
                     if new_instance:
                         instances.append(new_instance)
+            # Static objects
+            if frame_idx == 0 and pose_version >= 5 and 'static_objects' in pose_file.keys():
+                present_objects = pose_file['static_objects'].keys()
+                for cur_object in present_objects:
+                    object_keypoints = pose_file['static_objects/' + cur_object][:]
+                    object_skeleton = make_simple_skeleton(cur_object, object_keypoints.shape[0])
+                    new_instance = prediction_to_instance(object_keypoints, np.ones(object_keypoints.shape[:-1]), object_skeleton)
+                    if new_instance:
+                        instances.append(new_instance)
             frame_label = LabeledFrame(Video(video_name), frame_idx, instances)
             frames.append(frame_label)
     return Labels(frames)
+
+def make_simple_skeleton(name: str, num_points: int) -> Skeleton:
+    """Create a `Skeleton` with a requested number of nodes attached in a line
+
+    Args:
+        name: name of the skeleton and prefix to nodes
+        num_points: number of points to use in the skeleton
+
+    Returns:
+        Generated `Skeleton`.
+
+    """
+    nodes = [Node(name + '_kp' + str(i)) for i in range(num_points)]
+    edges = [Edge(nodes[i], nodes[i+1]) for i in range(num_points-1)]
+    return Skeleton(nodes, edges, name=name)
 
 def prediction_to_instance(data: Union[np.ndarray[np.uint16], np.ndarray[np.float32]], confidence: np.ndarray[np.float32], skeleton: Skeleton, track: Track = None) -> Instance:
     """Create an `Instance` from prediction data.
@@ -134,8 +160,8 @@ def prediction_to_instance(data: Union[np.ndarray[np.uint16], np.ndarray[np.floa
         # confidence of 0 indicates no keypoint predicted for instance
         if confidence[i] > 0.001:
             points[cur_node] = Point(
-                data[i,1],
                 data[i,0],
+                data[i,1],
                 visible=True,
             )
 
@@ -189,15 +215,18 @@ def convert_labels(all_labels: Labels, video: str) -> dict:
         tracks = [x.track for x in label.instances if x.track]
         track_ids = [track_2_idx[track] for track in tracks]
         for instance_idx, instance in enumerate(label.instances):
-            # Handle non-mouse annotations differently
-            if not instance.skeleton and instance.skeleton.name is not 'Mouse':
-                if not instance.skeleton:
-                    static_objects[instance.skeleton.name] = instance.numpy()
+            # Don't handle instances without skeletons
+            if not instance.skeleton:
+                continue
+            # Static objects just get added to the object dict
+            elif instance.skeleton.name != 'Mouse':
+                static_objects[instance.skeleton.name] = instance.numpy()
+                continue
             pose = instance.numpy()
             missing_points = np.isnan(pose[:,0])
             pose[np.isnan(pose)] = 0
             # JABS stores y,x
-            pose = pose.astype(np.uint16)[:,::-1]
+            pose = np.flip(pose.astype(np.uint16), axis=-1)
             keypoint_mat[label.frame_idx, instance_idx, :, :] = pose
             confidence_mat[label.frame_idx, instance_idx, ~missing_points] = 1.0
             if instance.track:
@@ -312,7 +341,6 @@ def write_jabs_v4(data: dict, filename: str):
 def write_jabs_v5(data: dict, filename: str):
     """ Write JABS pose file v5 data to file.
     Writes multi-mouse pose, longterm identity, and static object data.
-    # TODO: Add in static objects
 
     Args:
         data: Dictionary of JABS data generated from convert_labels
@@ -323,5 +351,7 @@ def write_jabs_v5(data: dict, filename: str):
     with h5py.File(filename, 'a') as h5:
         pose_grp = h5.require_group('poseest')
         pose_grp.attrs.update({'version':[5,0]})
-        object_grp = h5.require_group('static_objects')
-        # Static objects aren't in the data dict yet...
+        if 'static_objects' in data.keys():
+            object_grp = h5.require_group('static_objects')
+            for object_key, object_keypoints in data['static_objects'].items():
+                object_grp.require_dataset(object_key, object_keypoints.shape, np.uint16, data = object_keypoints.astype(np.uint16))
