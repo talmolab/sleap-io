@@ -80,6 +80,7 @@ def save_labelstudio(labels: Labels, filename: str):
     """Save a SLEAP dataset to Label Studio format."""
     labelstudio.write_labels(labels, filename)
 
+
 def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
     """Read JABS-style predictions from a file and return a `Labels` object.
 
@@ -91,6 +92,7 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
         Parsed labels as a `Labels` instance.
     """
     return jabs.read_labels(filename, skeleton=skeleton)
+
 
 def save_jabs(labels: Labels, pose_version: int):
     """Save a SLEAP dataset to JABS pose file format. Filenames for JABS poses are based on video filenames.
