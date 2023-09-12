@@ -341,9 +341,14 @@ class MediaVideo(VideoBackend):
         if self.plugin == "opencv":
             return int(self.reader.get(cv2.CAP_PROP_FRAME_COUNT))
         else:
-            n_frames = iio.improps(self.filename, plugin=self.plugin).shape[0]
+            props = iio.improps(self.filename, plugin=self.plugin)
+            n_frames = props.n_images
             if np.isinf(n_frames):
-                return self.reader.legacy_get_reader().count_frames()
+                legacy_reader = self.reader.legacy_get_reader()
+                # Note: This might be super slow for some videos, so maybe we should
+                # defer evaluation of this or give the user control over it.
+                n_frames = legacy_reader.count_frames()
+            return n_frames
 
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.

@@ -63,7 +63,7 @@ def test_mediavideo(centered_pair_low_quality_path, keep_open):
     )
     assert type(backend) == MediaVideo
     assert backend.filename == centered_pair_low_quality_path
-    # assert backend.shape == (1100, 384, 384, 1) # TODO: Fix frame counting in FFMPEG.
+    assert backend.shape == (1100, 384, 384, 1)
     assert backend[0].shape == (384, 384, 1)
     assert backend[:3].shape == (3, 384, 384, 1)
     if keep_open:
