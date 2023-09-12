@@ -43,11 +43,17 @@ class VideoBackend:
     Attributes:
         filename: Path to video file.
         grayscale: Whether to force grayscale. If None, autodetect on first frame load.
+        keep_open: Whether to keep the video reader open between calls to read frames.
+            If False, will close the reader after each call. If True (the default), it
+            will keep the reader open and cache it for subsequent calls which may
+            enhance the performance of reading multiple frames.
     """
 
     filename: str
     grayscale: Optional[bool] = None
+    keep_open: bool = True
     _cached_shape: Optional[Tuple[int, int, int, int]] = None
+    _open_reader: Optional[object] = None
 
     @classmethod
     def from_filename(
@@ -55,6 +61,7 @@ class VideoBackend:
         filename: str,
         dataset: Optional[str] = None,
         grayscale: Optional[bool] = None,
+        keep_open: bool = True,
         **kwargs,
     ) -> VideoBackend:
         """Create a VideoBackend from a filename.
@@ -64,6 +71,10 @@ class VideoBackend:
             dataset: Name of dataset in HDF5 file.
             grayscale: Whether to force grayscale. If None, autodetect on first frame
                 load.
+            keep_open: Whether to keep the video reader open between calls to read
+                frames. If False, will close the reader after each call. If True (the
+                default), it will keep the reader open and cache it for subsequent calls
+                which may enhance the performance of reading multiple frames.
 
         Returns:
             VideoBackend subclass instance.
@@ -73,13 +84,17 @@ class VideoBackend:
 
         if filename.endswith(MediaVideo.EXTS):
             return MediaVideo(
-                filename, grayscale=grayscale, **_get_valid_kwargs(MediaVideo, kwargs)
+                filename,
+                grayscale=grayscale,
+                keep_open=keep_open,
+                **_get_valid_kwargs(MediaVideo, kwargs),
             )
         elif filename.endswith(HDF5Video.EXTS):
             return HDF5Video(
                 filename,
                 dataset=dataset,
                 grayscale=grayscale,
+                keep_open=keep_open,
                 **_get_valid_kwargs(HDF5Video, kwargs),
             )
         else:
@@ -319,12 +334,25 @@ class MediaVideo(VideoBackend):
             `get_frame` method of the `VideoBackend` class instead.
         """
         if self.plugin == "opencv":
-            reader = cv2.VideoCapture(self.filename)
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = cv2.VideoCapture(self.filename)
+                reader = self._open_reader
+            else:
+                reader = cv2.VideoCapture(self.filename)
             reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             _, img = reader.read()
-        else:
-            with iio.imopen(self.filename, "r", plugin=self.plugin) as vid:
+        elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = iio.imopen(
+                        self.filename, "r", plugin=self.plugin
+                    )
+                reader = self._open_reader
                 img = vid.read(index=frame_idx)
+            else:
+                with iio.imopen(self.filename, "r", plugin=self.plugin) as vid:
+                    img = vid.read(index=frame_idx)
         return img
 
     def _read_frames(self, frame_inds: list) -> np.ndarray:
@@ -341,7 +369,13 @@ class MediaVideo(VideoBackend):
             `get_frames` method of the `VideoBackend` class instead.
         """
         if self.plugin == "opencv":
-            reader = cv2.VideoCapture(self.filename)
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = cv2.VideoCapture(self.filename)
+                reader = self._open_reader
+            else:
+                reader = cv2.VideoCapture(self.filename)
+
             reader.set(cv2.CAP_PROP_POS_FRAMES, frame_inds[0])
             imgs = []
             for idx in frame_inds:
@@ -352,9 +386,17 @@ class MediaVideo(VideoBackend):
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)
 
-        else:
-            with iio.imopen(self.filename, "r", plugin=self.plugin) as vid:
+        elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = iio.imopen(
+                        self.filename, "r", plugin=self.plugin
+                    )
+                reader = self._open_reader
                 imgs = np.stack([vid.read(index=idx) for idx in frame_inds], axis=0)
+            else:
+                with iio.imopen(self.filename, "r", plugin=self.plugin) as vid:
+                    imgs = np.stack([vid.read(index=idx) for idx in frame_inds], axis=0)
         return imgs
 
 

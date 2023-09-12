@@ -4,6 +4,7 @@ from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video
 import numpy as np
 from numpy.testing import assert_equal
 import h5py
+import pytest
 
 
 def test_video_backend_from_filename(centered_pair_low_quality_path, slp_minimal_pkg):
@@ -55,9 +56,10 @@ def test_get_frame(centered_pair_low_quality_path):
     assert_equal(backend[-3:-1], backend.get_frames(range(1097, 1099)))
 
 
-def test_mediavideo(centered_pair_low_quality_path):
+@pytest.mark.parametrize("keep_open", [False, True])
+def test_mediavideo(centered_pair_low_quality_path, keep_open):
     backend = VideoBackend.from_filename(
-        centered_pair_low_quality_path, plugin="FFMPEG"
+        centered_pair_low_quality_path, plugin="FFMPEG", keep_open=keep_open
     )
     assert type(backend) == MediaVideo
     assert backend.filename == centered_pair_low_quality_path
