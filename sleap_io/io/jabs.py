@@ -4,7 +4,7 @@ import h5py
 import re
 import os
 import numpy as np
-from typing import Dict, Iterable, List, Tuple, Optional, Union
+from typing import List, Optional, Union
 import warnings
 
 from sleap_io import (
@@ -92,7 +92,7 @@ def read_labels(
         num_frames = pose_file["poseest/points"].shape[0]
         try:
             pose_version = pose_file["poseest"].attrs["version"][0]
-        except:
+        except Exception:
             pose_version = 2
             tracks[1] = Track("1")
             data_shape = pose_file["poseest/points"].shape
@@ -261,8 +261,6 @@ def convert_labels(all_labels: Labels, video: str) -> dict:
     # Populate the matrices with data
     for label in labels:
         assigned_instances = 0
-        tracks = [x.track for x in label.instances if x.track]
-        track_ids = [track_2_idx[track] for track in tracks]
         for instance_idx, instance in enumerate(label.instances):
             # Don't handle instances without skeletons
             if not instance.skeleton:
@@ -462,7 +460,7 @@ def write_jabs_v4(data: dict, filename: str):
 
 def write_jabs_v5(data: dict, filename: str):
     """Write JABS pose file v5 data to file.
-    
+
     Writes multi-mouse pose, longterm identity, and static object data.
 
     Args:
