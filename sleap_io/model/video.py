@@ -46,6 +46,7 @@ class Video:
         filename: str,
         dataset: Optional[str] = None,
         grayscale: Optional[str] = None,
+        keep_open: bool = True,
         **kwargs,
     ) -> VideoBackend:
         """Create a Video from a filename.
@@ -55,6 +56,10 @@ class Video:
             dataset: Name of dataset in HDF5 file.
             grayscale: Whether to force grayscale. If None, autodetect on first frame
                 load.
+            keep_open: Whether to keep the video reader open between calls to read
+                frames. If False, will close the reader after each call. If True (the
+                default), it will keep the reader open and cache it for subsequent calls
+                which may enhance the performance of reading multiple frames.
 
         Returns:
             Video instance with the appropriate backend instantiated.
@@ -62,7 +67,11 @@ class Video:
         return cls(
             filename=filename,
             backend=VideoBackend.from_filename(
-                filename, dataset=dataset, grayscale=grayscale, **kwargs
+                filename,
+                dataset=dataset,
+                grayscale=grayscale,
+                keep_open=keep_open,
+                **kwargs,
             ),
         )
 
