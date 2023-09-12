@@ -8,7 +8,11 @@ import re
 
 import pandas as pd  # type: ignore[import]
 import numpy as np
-from numpy.typing import ArrayLike
+
+try:
+    from numpy.typing import ArrayLike
+except ImportError:
+    ArrayLike = np.ndarray
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
 from ndx_pose import PoseEstimationSeries, PoseEstimation  # type: ignore[import]
 
