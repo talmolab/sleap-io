@@ -1,6 +1,4 @@
-"""This module handles direct I/O operations for working with JABS files.
-
-"""
+"""This module handles direct I/O operations for working with JABS files."""
 
 import h5py
 import re
@@ -71,6 +69,7 @@ def read_labels(
     labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SKELETON
 ) -> Labels:
     """Read JABS style pose from a file and return a `Labels` object.
+
     TODO: Attributes are ignored, including px_to_cm field.
     TODO: Segmentation data ignored in v6, but will read in pose.
     TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should be converted to multiple objects
@@ -165,7 +164,7 @@ def read_labels(
 
 
 def make_simple_skeleton(name: str, num_points: int) -> Skeleton:
-    """Create a `Skeleton` with a requested number of nodes attached in a line
+    """Create a `Skeleton` with a requested number of nodes attached in a line.
 
     Args:
         name: name of the skeleton and prefix to nodes
@@ -173,7 +172,6 @@ def make_simple_skeleton(name: str, num_points: int) -> Skeleton:
 
     Returns:
         Generated `Skeleton`.
-
     """
     nodes = [Node(name + "_kp" + str(i)) for i in range(num_points)]
     edges = [Edge(nodes[i], nodes[i + 1]) for i in range(num_points - 1)]
@@ -216,10 +214,14 @@ def prediction_to_instance(
 
 
 def get_max_ids_in_video(labels: List[Labels], key: str = "Mouse") -> int:
-    """Determine the maximum number of identities that exist at the same time
+    """Determine the maximum number of identities that exist at the same time.
 
     Args:
         labels: SLEAP `Labels` to count
+        key: Name of the skeleton to select for identities
+
+    Returns:
+        Count of the maximum concurrent identities in a single frame
     """
     max_labels = 0
     for label in labels:
@@ -302,13 +304,13 @@ def convert_labels(all_labels: Labels, video: str) -> dict:
 
 def write_labels(labels: Labels, pose_version: int):
     """Convert and save a SLEAP `Labels` object to a JABS pose file.
+
     Only supports pose version 2 (single mouse) and 3-5 (multi mouse).
 
     Args:
         labels: SLEAP `Labels` to be converted to JABS pose format.
         pose_version: JABS pose version to use when writing data.
     """
-
     for video in labels.videos:
         converted_labels = convert_labels(labels, video)
         out_filename = (
@@ -331,6 +333,7 @@ def write_labels(labels: Labels, pose_version: int):
 
 def write_jabs_v2(data: dict, filename: str):
     """Write JABS pose file v2 data to file.
+
     Writes single mouse pose data.
 
     Args:
@@ -358,6 +361,7 @@ def write_jabs_v2(data: dict, filename: str):
 
 def write_jabs_v3(data: dict, filename: str):
     """Write JABS pose file v3 data to file.
+
     Writes multi-mouse pose data.
     TODO: v3 requires continuous tracklets (eg no gaps) IDs need to be incremented for this field
 
@@ -407,6 +411,7 @@ def write_jabs_v3(data: dict, filename: str):
 
 def write_jabs_v4(data: dict, filename: str):
     """Write JABS pose file v4 data to file.
+
     Writes multi-mouse pose and longterm identity object data.
 
     Args:
@@ -457,6 +462,7 @@ def write_jabs_v4(data: dict, filename: str):
 
 def write_jabs_v5(data: dict, filename: str):
     """Write JABS pose file v5 data to file.
+    
     Writes multi-mouse pose, longterm identity, and static object data.
 
     Args:
