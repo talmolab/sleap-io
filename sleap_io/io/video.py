@@ -30,7 +30,8 @@ except ImportError:
 
 def _get_valid_kwargs(cls, kwargs: dict) -> dict:
     """Filter a list of kwargs to the ones that are valid for a class."""
-    return {k: v for k, v in kwargs.items() if k in cls.__attrs_attrs__}
+    valid_fields = [a.name for a in attrs.fields(cls)]
+    return {k: v for k, v in kwargs.items() if k in valid_fields}
 
 
 @attrs.define
