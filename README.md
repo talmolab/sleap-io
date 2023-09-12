@@ -41,6 +41,24 @@ labels = sio.load_slp("predictions.slp")
 sio.save_nwb(labels, "predictions.nwb")
 ```
 
+### Convert labels to raw arrays
+
+```py
+import sleap_io as sio
+
+labels = sio.load_slp("tests/data/slp/centered_pair_predictions.slp")
+
+# Convert predictions to point coordinates in a single array.
+trx = labels.numpy()
+n_frames, n_tracks, n_nodes, xy = trx.shape
+assert xy == 2
+
+# Convert to array with confidence scores appended.
+trx_with_scores = labels.numpy(return_confidence=True)
+n_frames, n_tracks, n_nodes, xy_score = trx.shape 
+assert xy_score == 3
+```
+
 ### Create labels from raw data
 
 ```py
