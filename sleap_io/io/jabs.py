@@ -247,8 +247,10 @@ def convert_labels(all_labels: Labels, video: str) -> dict:
     num_frames = [x.shape[0] for x in all_labels.videos if x == video][0]
     num_keypoints = [len(x.nodes) for x in all_labels.skeletons if x.name == "Mouse"][0]
     num_mice = get_max_ids_in_video(labels, key="Mouse")
+    # Note that this 1-indexes identities
     track_2_idx = {
-        key: val for key, val in zip(all_labels.tracks, range(len(all_labels.tracks)))
+        key: val + 1
+        for key, val in zip(all_labels.tracks, range(len(all_labels.tracks)))
     }
     last_unassigned_id = num_mice
 
@@ -329,6 +331,45 @@ def write_labels(labels: Labels, pose_version: int):
             raise NotImplementedError(f"Pose format {pose_version} not supported.")
 
 
+def tracklets_to_v3(tracklet_matrix: np.ndarray) -> np.ndarray:
+    """Changes identity tracklets to the v3 format specifications.
+
+    v3 specifications require:
+        (a) tracklets are 0-indexed
+        (b) tracklets appear in ascending order
+        (c) tracklets exist for continuous blocks of time
+
+    Args:
+        tracklet_matrix: Numpy array of shape (frame, n_animals) that contains identity values. Identities are assumed to be 1-indexed.
+
+    Returns:
+        A corrected numpy array of the same shape as input
+    """
+    assert tracklet_matrix.ndim == 2
+
+    # Fragment the tracklets based on gaps
+    valid_ids = np.unique(tracklet_matrix)
+    valid_ids = valid_ids[valid_ids != 0]
+    track_fragments = {}
+    for cur_id in valid_ids:
+        frame_idx, column_idx = np.where(tracklet_matrix == cur_id)
+        gaps = np.nonzero(np.diff(frame_idx) - 1)[0]
+        for sliced_frame, sliced_column in zip(
+            np.split(frame_idx, gaps), np.split(column_idx, gaps)
+        ):
+            # The keys used here are (first frame, first column) such that sorting can be used for ascending order
+            track_fragments[sliced_frame[0], sliced_column[0]] = sliced_column
+
+    return_mat = np.zeros_like(tracklet_matrix)
+    for next_id, key in enumerate(sorted(track_fragments.keys())):
+        columns_to_assign = track_fragments[key]
+        return_mat[
+            range(key[0], key[0] + len(columns_to_assign)), columns_to_assign
+        ] = next_id
+
+    return return_mat
+
+
 def write_jabs_v2(data: dict, filename: str):
     """Write JABS pose file v2 data to file.
 
@@ -361,12 +402,12 @@ def write_jabs_v3(data: dict, filename: str):
     """Write JABS pose file v3 data to file.
 
     Writes multi-mouse pose data.
-    TODO: v3 requires continuous tracklets (eg no gaps) IDs need to be incremented for this field
 
     Args:
         data: Dictionary of JABS data generated from convert_labels
         filename: Filename to write data to
     """
+    v3_tracklets = tracklets_to_v3(data["identity"])
     with h5py.File(filename, "w") as h5:
         pose_grp = h5.require_group("poseest")
         pose_grp.attrs.update({"version": [3, 0]})
@@ -387,9 +428,9 @@ def write_jabs_v3(data: dict, filename: str):
         # id field
         pose_grp.require_dataset(
             "instance_track_id",
-            data["identity"].shape,
-            data["identity"].dtype,
-            data=data["identity"],
+            v3_tracklets.shape,
+            v3_tracklets.dtype,
+            data=v3_tracklets,
         )
         # instance count field
         pose_grp.require_dataset(
@@ -448,13 +489,11 @@ def write_jabs_v4(data: dict, filename: str):
             data=default_id_centers,
         )
         # v4 uses an id field that is 1-indexed
-        identities_1_indexed = np.copy(data["identity"]) + 1
-        identities_1_indexed[identity_mask_mat] = 0
         pose_grp.require_dataset(
             "instance_embed_id",
-            identities_1_indexed.shape,
-            identities_1_indexed.dtype,
-            data=identities_1_indexed,
+            data["identity"].shape,
+            data["identity"].dtype,
+            data=data["identity"],
         )
 
 
