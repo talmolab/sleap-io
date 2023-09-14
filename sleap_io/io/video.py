@@ -30,7 +30,8 @@ except ImportError:
 
 def _get_valid_kwargs(cls, kwargs: dict) -> dict:
     """Filter a list of kwargs to the ones that are valid for a class."""
-    return {k: v for k, v in kwargs.items() if k in cls.__attrs_attrs__}
+    valid_fields = [a.name for a in attrs.fields(cls)]
+    return {k: v for k, v in kwargs.items() if k in valid_fields}
 
 
 @attrs.define
@@ -43,11 +44,17 @@ class VideoBackend:
     Attributes:
         filename: Path to video file.
         grayscale: Whether to force grayscale. If None, autodetect on first frame load.
+        keep_open: Whether to keep the video reader open between calls to read frames.
+            If False, will close the reader after each call. If True (the default), it
+            will keep the reader open and cache it for subsequent calls which may
+            enhance the performance of reading multiple frames.
     """
 
     filename: str
     grayscale: Optional[bool] = None
+    keep_open: bool = True
     _cached_shape: Optional[Tuple[int, int, int, int]] = None
+    _open_reader: Optional[object] = None
 
     @classmethod
     def from_filename(
@@ -55,6 +62,7 @@ class VideoBackend:
         filename: str,
         dataset: Optional[str] = None,
         grayscale: Optional[bool] = None,
+        keep_open: bool = True,
         **kwargs,
     ) -> VideoBackend:
         """Create a VideoBackend from a filename.
@@ -64,6 +72,10 @@ class VideoBackend:
             dataset: Name of dataset in HDF5 file.
             grayscale: Whether to force grayscale. If None, autodetect on first frame
                 load.
+            keep_open: Whether to keep the video reader open between calls to read
+                frames. If False, will close the reader after each call. If True (the
+                default), it will keep the reader open and cache it for subsequent calls
+                which may enhance the performance of reading multiple frames.
 
         Returns:
             VideoBackend subclass instance.
@@ -73,13 +85,17 @@ class VideoBackend:
 
         if filename.endswith(MediaVideo.EXTS):
             return MediaVideo(
-                filename, grayscale=grayscale, **_get_valid_kwargs(MediaVideo, kwargs)
+                filename,
+                grayscale=grayscale,
+                keep_open=keep_open,
+                **_get_valid_kwargs(MediaVideo, kwargs),
             )
         elif filename.endswith(HDF5Video.EXTS):
             return HDF5Video(
                 filename,
                 dataset=dataset,
                 grayscale=grayscale,
+                keep_open=keep_open,
                 **_get_valid_kwargs(HDF5Video, kwargs),
             )
         else:
@@ -274,6 +290,10 @@ class MediaVideo(VideoBackend):
     Attributes:
         filename: Path to video file.
         grayscale: Whether to force grayscale. If None, autodetect on first frame load.
+        keep_open: Whether to keep the video reader open between calls to read frames.
+            If False, will close the reader after each call. If True (the default), it
+            will keep the reader open and cache it for subsequent calls which may
+            enhance the performance of reading multiple frames.
         plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav". If `None`,
             will use the first available plugin in the order listed above.
     """
@@ -298,12 +318,37 @@ class MediaVideo(VideoBackend):
             )
 
     @property
+    def reader(self) -> object:
+        """Return the reader object for the video, caching if necessary."""
+        if self.keep_open:
+            if self._open_reader is None:
+                if self.plugin == "opencv":
+                    self._open_reader = cv2.VideoCapture(self.filename)
+                elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+                    self._open_reader = iio.imopen(
+                        self.filename, "r", plugin=self.plugin
+                    )
+            return self._open_reader
+        else:
+            if self.plugin == "opencv":
+                return cv2.VideoCapture(self.filename)
+            elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+                return iio.imopen(self.filename, "r", plugin=self.plugin)
+
+    @property
     def num_frames(self) -> int:
         """Number of frames in the video."""
         if self.plugin == "opencv":
-            return int(cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FRAME_COUNT))
+            return int(self.reader.get(cv2.CAP_PROP_FRAME_COUNT))
         else:
-            return iio.improps(self.filename, plugin="pyav").shape[0]
+            props = iio.improps(self.filename, plugin=self.plugin)
+            n_frames = props.n_images
+            if np.isinf(n_frames):
+                legacy_reader = self.reader.legacy_get_reader()
+                # Note: This might be super slow for some videos, so maybe we should
+                # defer evaluation of this or give the user control over it.
+                n_frames = legacy_reader.count_frames()
+            return n_frames
 
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
@@ -319,12 +364,15 @@ class MediaVideo(VideoBackend):
             `get_frame` method of the `VideoBackend` class instead.
         """
         if self.plugin == "opencv":
-            reader = cv2.VideoCapture(self.filename)
-            reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            _, img = reader.read()
-        else:
-            with iio.imopen(self.filename, "r", plugin=self.plugin) as vid:
-                img = vid.read(index=frame_idx)
+            if self.reader.get(cv2.CAP_PROP_POS_FRAMES) != frame_idx:
+                self.reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            _, img = self.reader.read()
+        elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+            if self.keep_open:
+                img = self.reader.read(index=frame_idx)
+            else:
+                with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
+                    img = reader.read(index=frame_idx)
         return img
 
     def _read_frames(self, frame_inds: list) -> np.ndarray:
@@ -341,7 +389,13 @@ class MediaVideo(VideoBackend):
             `get_frames` method of the `VideoBackend` class instead.
         """
         if self.plugin == "opencv":
-            reader = cv2.VideoCapture(self.filename)
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = cv2.VideoCapture(self.filename)
+                reader = self._open_reader
+            else:
+                reader = cv2.VideoCapture(self.filename)
+
             reader.set(cv2.CAP_PROP_POS_FRAMES, frame_inds[0])
             imgs = []
             for idx in frame_inds:
@@ -352,9 +406,19 @@ class MediaVideo(VideoBackend):
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)
 
-        else:
-            with iio.imopen(self.filename, "r", plugin=self.plugin) as vid:
-                imgs = np.stack([vid.read(index=idx) for idx in frame_inds], axis=0)
+        elif self.plugin == "pyav" or self.plugin == "FFMPEG":
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = iio.imopen(
+                        self.filename, "r", plugin=self.plugin
+                    )
+                reader = self._open_reader
+                imgs = np.stack([reader.read(index=idx) for idx in frame_inds], axis=0)
+            else:
+                with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
+                    imgs = np.stack(
+                        [reader.read(index=idx) for idx in frame_inds], axis=0
+                    )
         return imgs
 
 
@@ -381,6 +445,10 @@ class HDF5Video(VideoBackend):
     Attributes:
         filename: Path to HDF5 file (.h5, .hdf5 or .slp).
         grayscale: Whether to force grayscale. If None, autodetect on first frame load.
+        keep_open: Whether to keep the video reader open between calls to read frames.
+            If False, will close the reader after each call. If True (the default), it
+            will keep the reader open and cache it for subsequent calls which may
+            enhance the performance of reading multiple frames.
         dataset: Name of dataset to read from. If `None`, will try to find a rank-4
             dataset by iterating through datasets in the file. If specifying an embedded
             dataset, this can be the group containing a "video" dataset or the dataset
@@ -537,19 +605,28 @@ class HDF5Video(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
-        with h5py.File(self.filename, "r") as f:
-            ds = f[self.dataset]
+        if self.keep_open:
+            if self._open_reader is None:
+                self._open_reader = h5py.File(self.filename, "r")
+            f = self._open_reader
+        else:
+            f = h5py.File(self.filename, "r")
 
-            if self.frame_map:
-                frame_idx = self.frame_map[frame_idx]
+        ds = f[self.dataset]
 
-            img = ds[frame_idx]
+        if self.frame_map:
+            frame_idx = self.frame_map[frame_idx]
 
-            if "format" in ds.attrs:
-                img = self.decode_embedded(img, ds.attrs["format"])
+        img = ds[frame_idx]
+
+        if "format" in ds.attrs:
+            img = self.decode_embedded(img, ds.attrs["format"])
 
         if self.input_format == "channels_first":
             img = np.transpose(img, (2, 1, 0))
+
+        if not self.keep_open:
+            f.close()
         return img
 
     def _read_frames(self, frame_inds: list) -> np.ndarray:
@@ -565,20 +642,29 @@ class HDF5Video(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frames` method of the `VideoBackend` class instead.
         """
-        with h5py.File(self.filename, "r") as f:
-            if self.frame_map:
-                frame_inds = [self.frame_map[idx] for idx in frame_inds]
+        if self.keep_open:
+            if self._open_reader is None:
+                self._open_reader = h5py.File(self.filename, "r")
+            f = self._open_reader
+        else:
+            f = h5py.File(self.filename, "r")
 
-            ds = f[self.dataset]
-            imgs = ds[frame_inds]
+        if self.frame_map:
+            frame_inds = [self.frame_map[idx] for idx in frame_inds]
 
-            if "format" in ds.attrs:
-                imgs = np.stack(
-                    [self.decode_embedded(img, ds.attrs["format"]) for img in imgs],
-                    axis=0,
-                )
+        ds = f[self.dataset]
+        imgs = ds[frame_inds]
+
+        if "format" in ds.attrs:
+            imgs = np.stack(
+                [self.decode_embedded(img, ds.attrs["format"]) for img in imgs],
+                axis=0,
+            )
 
         if self.input_format == "channels_first":
             imgs = np.transpose(imgs, (0, 3, 2, 1))
+
+        if not self.keep_open:
+            f.close()
 
         return imgs
