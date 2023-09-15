@@ -94,11 +94,12 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
     return jabs.read_labels(filename, skeleton=skeleton)
 
 
-def save_jabs(labels: Labels, pose_version: int):
+def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = None):
     """Save a SLEAP dataset to JABS pose file format. Filenames for JABS poses are based on video filenames.
 
     Args:
         labels: SLEAP `Labels` object
         pose_version: The JABS pose version to write data out
+        root_folder: Optional root folder where the files should be saved
     """
-    jabs.write_labels(labels, pose_version)
+    jabs.write_labels(labels, pose_version, root_folder)

@@ -306,7 +306,7 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
     }
 
 
-def write_labels(labels: Labels, pose_version: int):
+def write_labels(labels: Labels, pose_version: int, root_folder: str):
     """Convert and save a SLEAP `Labels` object to a JABS pose file.
 
     Only supports pose version 2 (single mouse) and 3-5 (multi mouse).
@@ -314,12 +314,16 @@ def write_labels(labels: Labels, pose_version: int):
     Args:
         labels: SLEAP `Labels` to be converted to JABS pose format.
         pose_version: JABS pose version to use when writing data.
+        root_folder: Root folder where the jabs files should be written
     """
     for video in labels.videos:
         converted_labels = convert_labels(labels, video)
         out_filename = (
             os.path.splitext(video.filename)[0] + f"_pose_est_v{pose_version}.h5"
         )
+        if root_folder:
+            out_filename = os.path.join(root_folder, out_filename)
+        os.makedirs(os.path.dirname(out_filename), exist_ok=True)
         # Do we want to overwrite?
         if os.path.exists(out_filename):
             pass
