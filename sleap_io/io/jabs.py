@@ -231,7 +231,7 @@ def get_max_ids_in_video(labels: List[Labels], key: str = "Mouse") -> int:
     return max_labels
 
 
-def convert_labels(all_labels: Labels, video: str) -> dict:
+def convert_labels(all_labels: Labels, video: Video) -> dict:
     """Convert a `Labels` object into JABS-formatted annotations.
 
     Args:
@@ -244,7 +244,11 @@ def convert_labels(all_labels: Labels, video: str) -> dict:
     labels = all_labels.find(video=video)
 
     # Determine shape of output
-    num_frames = [x.shape[0] for x in all_labels.videos if x == video][0]
+    # Low estimate of last frame labeled
+    num_frames = max([x.frame_idx for x in labels]) + 1
+    # If there is metadata available for the video, use that
+    if video.shape:
+        num_frames = max(num_frames, video.shape[0])
     num_keypoints = [len(x.nodes) for x in all_labels.skeletons if x.name == "Mouse"][0]
     num_mice = get_max_ids_in_video(labels, key="Mouse")
     # Note that this 1-indexes identities
@@ -355,7 +359,7 @@ def tracklets_to_v3(tracklet_matrix: np.ndarray) -> np.ndarray:
         frame_idx, column_idx = np.where(tracklet_matrix == cur_id)
         gaps = np.nonzero(np.diff(frame_idx) - 1)[0]
         for sliced_frame, sliced_column in zip(
-            np.split(frame_idx, gaps), np.split(column_idx, gaps)
+            np.split(frame_idx, gaps + 1), np.split(column_idx, gaps + 1)
         ):
             # The keys used here are (first frame, first column) such that sorting can be used for ascending order
             track_fragments[sliced_frame[0], sliced_column[0]] = sliced_column

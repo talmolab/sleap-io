@@ -40,19 +40,21 @@ def test_tracklets_to_v3(jabs_real_data_v5):
 
     # Criteria 1: tracklets are 0-indexed
     valid_ids = original_tracklets != 0
-    id_values = np.unique(adjusted_tracklets[valid_ids])
+    masked_ids = np.ma.array(adjusted_tracklets, mask=~valid_ids)
+    id_values = np.unique(masked_ids.compressed())
     assert np.all(id_values == range(len(id_values)))
 
     last_id_first_frame = 0
     for current_identity in id_values:
-        frames_detected, _ = np.where(adjusted_tracklets == current_identity)
+        print(current_identity)
+        frames_detected, _ = np.where(masked_ids == current_identity)
         first_frame_detected = frames_detected[0]
         # Criteria 2: tracklets appear in ascending order
         assert last_id_first_frame <= first_frame_detected
         last_id_first_frame = first_frame_detected
 
         # Criteria 3: tracklets are all continuous in time
-        assert len(frames_detected) == frames_detected[-1] - frames_detected[0]
+        assert len(frames_detected) == (frames_detected[-1] - frames_detected[0] + 1)
 
 
 def test_get_max_ids_in_video(jabs_real_data_v5):
