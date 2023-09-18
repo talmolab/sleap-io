@@ -268,15 +268,17 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
     for label in labels:
         assigned_instances = 0
         for instance_idx, instance in enumerate(label.instances):
-            # Don't handle instances without skeletons
-            if not instance.skeleton:
-                continue
             # Static objects just get added to the object dict
             # This will clobber data if more than one frame is annotated
-            elif instance.skeleton.name != "Mouse":
+            if instance.skeleton.name != "Mouse":
                 static_objects[instance.skeleton.name] = instance.numpy()
                 continue
             pose = instance.numpy()
+            if pose.shape[0] != len(JABS_DEFAULT_KEYPOINTS):
+                warnings.warn(
+                    f"JABS format only supports 12 keypoints for mice. Skipping storage of instance on frame {label.frame_idx} with {len(instance.points)} keypoints."
+                )
+                continue
             missing_points = np.isnan(pose[:, 0])
             pose[np.isnan(pose)] = 0
             # JABS stores y,x for poses
