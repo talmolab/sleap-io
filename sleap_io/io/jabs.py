@@ -88,17 +88,23 @@ def read_labels(
         skeleton = JABS_DEFAULT_SKELETON
     tracks = {}
 
+    if not os.access(labels_path, os.F_OK):
+        raise PermissionError(f"{labels_path} cannot be accessed.")
+    if not os.access(labels_path, os.R_OK):
+        raise FileNotFoundError(f"{labels_path} doesn't exist.")
+
     with h5py.File(labels_path, "r") as pose_file:
         num_frames = pose_file["poseest/points"].shape[0]
         try:
             pose_version = pose_file["poseest"].attrs["version"][0]
-        except Exception:
+        except (KeyError, IndexError):
             pose_version = 2
-            tracks[1] = Track("1")
             data_shape = pose_file["poseest/points"].shape
             assert (
                 len(data_shape) == 3
             ), f"Pose version not present and shape does not match single mouse: shape of {data_shape} for {labels_path}"
+        if pose_version == 2:
+            tracks[1] = Track("1")
         # Change field name for newer pose formats
         if pose_version == 3:
             id_key = "instance_track_id"
@@ -200,7 +206,7 @@ def prediction_to_instance(
     points = {}
     for i, cur_node in enumerate(skeleton.nodes):
         # confidence of 0 indicates no keypoint predicted for instance
-        if confidence[i] > 0.001:
+        if confidence[i] > 0:
             points[cur_node] = Point(
                 data[i, 0],
                 data[i, 1],
@@ -326,9 +332,9 @@ def write_labels(labels: Labels, pose_version: int, root_folder: str):
         if root_folder:
             out_filename = os.path.join(root_folder, out_filename)
         os.makedirs(os.path.dirname(out_filename), exist_ok=True)
-        # Do we want to overwrite?
         if os.path.exists(out_filename):
-            pass
+            warnings.warn(f"Skipping {out_filename} because it already exists.")
+            continue
         if pose_version == 2:
             write_jabs_v2(converted_labels, out_filename)
         elif pose_version == 3:
