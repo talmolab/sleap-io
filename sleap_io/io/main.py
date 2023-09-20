@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from sleap_io import Labels, Skeleton
-from sleap_io.io import slp, nwb, labelstudio
+from sleap_io.io import slp, nwb, labelstudio, jabs
 from typing import Optional, Union
 from pathlib import Path
 
@@ -79,3 +79,27 @@ def load_labelstudio(
 def save_labelstudio(labels: Labels, filename: str):
     """Save a SLEAP dataset to Label Studio format."""
     labelstudio.write_labels(labels, filename)
+
+
+def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
+    """Read JABS-style predictions from a file and return a `Labels` object.
+
+    Args:
+        filename: Path to the jabs h5 pose file.
+        skeleton: An optional `Skeleton` object.
+
+    Returns:
+        Parsed labels as a `Labels` instance.
+    """
+    return jabs.read_labels(filename, skeleton=skeleton)
+
+
+def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = None):
+    """Save a SLEAP dataset to JABS pose file format. Filenames for JABS poses are based on video filenames.
+
+    Args:
+        labels: SLEAP `Labels` object
+        pose_version: The JABS pose version to write data out
+        root_folder: Optional root folder where the files should be saved
+    """
+    jabs.write_labels(labels, pose_version, root_folder)
