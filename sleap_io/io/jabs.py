@@ -89,9 +89,9 @@ def read_labels(
     tracks = {}
 
     if not os.access(labels_path, os.F_OK):
-        raise PermissionError(f"{labels_path} cannot be accessed.")
-    if not os.access(labels_path, os.R_OK):
         raise FileNotFoundError(f"{labels_path} doesn't exist.")
+    if not os.access(labels_path, os.R_OK):
+        raise PermissionError(f"{labels_path} cannot be accessed.")
 
     with h5py.File(labels_path, "r") as pose_file:
         num_frames = pose_file["poseest/points"].shape[0]
