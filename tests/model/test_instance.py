@@ -72,7 +72,7 @@ def test_predicted_point():
     ppt2 = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
     assert ppt1 == ppt2
 
-    # Test equivelance of Point and PredictedPoint
+    # Test equivalence of Point and PredictedPoint
     pt3 = Point(x=1.2, y=3.4, visible=True, complete=False)
     assert not ppt1 == pt3  # PredictedPoint is not equivalent to Point
     assert not pt3 == ppt1  # Point is not equivalent to PredictedPoint

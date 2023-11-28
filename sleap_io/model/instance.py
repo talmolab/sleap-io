@@ -26,9 +26,9 @@ class Point:
         complete: Has the point been verified by the user labeler.
 
     Class variables:
-        eq_atol: Controls absolute tolerence allowed in `x` and `y` when comparing two
+        eq_atol: Controls absolute tolerance allowed in `x` and `y` when comparing two
             `Point`s for equality.
-        eq_rtol: Controls relative tolerence allowed in `x` and `y` when comparing two
+        eq_rtol: Controls relative tolerance allowed in `x` and `y` when comparing two
             `Point`s for equality.
 
     """
@@ -166,7 +166,7 @@ def _compare_points(
     Returns:
         True if `a` and `b` are considered equal, otherwise False
     """
-    # First check we are speaking the same languague of nodes
+    # First check we are speaking the same language of nodes
     if not set(a.keys()) == set(b.keys()):
         return False
 
