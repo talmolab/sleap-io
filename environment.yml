@@ -11,7 +11,7 @@ dependencies:
   - attrs
   - h5py
   - numpy
+  - conda-forge::opencv
   - pip
   - pip:
-    - opencv-python-headless
     - "--editable=.[dev]"

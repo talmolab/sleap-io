@@ -107,6 +107,13 @@ def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
     json_test = read_hdf5_dataset(tmp_path / "test_centered_pair.slp", "videos_json")
     assert json_fixture == json_test
 
+    videos = read_videos(centered_pair) * 2
+    write_videos(tmp_path / "test_centered_pair_2vids.slp", videos)
+    json_test = read_hdf5_dataset(
+        tmp_path / "test_centered_pair_2vids.slp", "videos_json"
+    )
+    assert len(json_test) == 2
+
 
 def test_write_tracks(centered_pair, tmp_path):
     tracks = read_tracks(centered_pair)

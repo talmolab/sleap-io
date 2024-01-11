@@ -124,8 +124,8 @@ def write_videos(labels_path: str, videos: list[Video]):
             )
         video_jsons.append(np.string_(json.dumps(video_json, separators=(",", ":"))))
 
-        with h5py.File(labels_path, "a") as f:
-            f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
 
 
 def read_tracks(labels_path: str) -> list[Track]:
