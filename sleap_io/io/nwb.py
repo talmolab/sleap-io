@@ -174,7 +174,7 @@ def write_nwb(
             e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
             or   pose_estimation_metadata["video_sample_rate] = 15  # In Hz
 
-            2) The other use of this dictionary is to ovewrite sleap-io default
+            2) The other use of this dictionary is to overwrite sleap-io default
             arguments for the PoseEstimation container.
             see https://github.com/rly/ndx-pose for a full list or arguments.
     """
@@ -221,7 +221,7 @@ def append_nwb_data(
             e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
             or   pose_estimation_metadata["video_sample_rate"] = 15  # In Hz
 
-            2) The other use of this dictionary is to ovewrite sleap-io default
+            2) The other use of this dictionary is to overwrite sleap-io default
             arguments for the PoseEstimation container.
             see https://github.com/rly/ndx-pose for a full list or arguments.
 
@@ -366,7 +366,7 @@ def build_pose_estimation_container_for_track(
     timestamps = pose_estimation_metadata_copy.pop("video_timestamps", None)
     sample_rate = pose_estimation_metadata_copy.pop("video_sample_rate", 1.0)
     if timestamps is None:
-        # Keeps backward compatbility.
+        # Keeps backward compatibility.
         timestamps = np.arange(track_data_df.shape[0]) * sample_rate
     else:
         timestamps = np.asarray(timestamps)
