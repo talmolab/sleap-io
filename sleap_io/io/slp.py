@@ -107,9 +107,9 @@ def write_videos(labels_path: str, videos: list[Video]):
         elif type(video.backend) == HDF5Video:
             video_json = {
                 "backend": {
-                    "filename": "."
-                    if video.backend.has_embedded_images
-                    else video.filename,
+                    "filename": (
+                        "." if video.backend.has_embedded_images else video.filename
+                    ),
                     "dataset": video.backend.dataset,
                     "input_format": video.backend.input_format,
                     "convert_range": False,

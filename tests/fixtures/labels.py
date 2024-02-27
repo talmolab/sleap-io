@@ -1,4 +1,5 @@
 """Fixtures that return `Labels` objects."""
+
 import pytest
 import sleap_io
 

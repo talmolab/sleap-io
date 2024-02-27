@@ -1,4 +1,5 @@
 """Tests for functions in the sleap_io.io.slp file."""
+
 from sleap_io import (
     Video,
     Skeleton,

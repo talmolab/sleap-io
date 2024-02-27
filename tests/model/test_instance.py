@@ -1,4 +1,5 @@
 """Tests for methods in the sleap_io.model.instance file."""
+
 from pickletools import pyset
 import numpy as np
 from numpy.testing import assert_equal

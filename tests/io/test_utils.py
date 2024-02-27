@@ -1,4 +1,5 @@
 """Tests for the sleap_io.io.test_utils file."""
+
 import pytest
 import h5py
 import numpy as np

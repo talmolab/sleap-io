@@ -1,4 +1,5 @@
 """Fixtures that return paths to label-studio .json files."""
+
 import pytest
 from sleap_io import Skeleton, Node, Edge
 

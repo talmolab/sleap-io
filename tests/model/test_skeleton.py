@@ -1,4 +1,5 @@
 """Tests for methods in the sleap_io.model.skeleton file."""
+
 import pytest
 from sleap_io.model.skeleton import Node, Edge, Symmetry, Skeleton
 

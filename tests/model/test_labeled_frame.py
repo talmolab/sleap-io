@@ -1,4 +1,5 @@
 """Tests for methods in sleap_io.model.labeled_frame file."""
+
 from numpy.testing import assert_equal
 from sleap_io import Video, Skeleton, Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
