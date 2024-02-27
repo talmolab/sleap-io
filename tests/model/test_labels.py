@@ -1,4 +1,5 @@
 """Test methods and functions in the sleap_io.model.labels file."""
+
 from numpy.testing import assert_equal
 import pytest
 from sleap_io import (

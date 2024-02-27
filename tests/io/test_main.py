@@ -1,4 +1,5 @@
 """Tests for functions in the sleap_io.io.main file."""
+
 from sleap_io import Labels
 from sleap_io.io.main import (
     load_slp,

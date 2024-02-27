@@ -1,4 +1,5 @@
 """Functions to write and read from the neurodata without borders (NWB) format."""
+
 from copy import deepcopy
 from typing import List, Optional, Union
 from pathlib import Path
@@ -91,12 +92,12 @@ def read_nwb(path: str) -> Labels:
                     frame_inds = np.searchsorted(
                         timestamps, get_timestamps(pose_estimation_series)
                     )
-                    tracks_numpy[
-                        frame_inds, track_idx, node_idx, :
-                    ] = pose_estimation_series.data[:]
-                    confidence[
-                        frame_inds, track_idx, node_idx
-                    ] = pose_estimation_series.confidence[:]
+                    tracks_numpy[frame_inds, track_idx, node_idx, :] = (
+                        pose_estimation_series.data[:]
+                    )
+                    confidence[frame_inds, track_idx, node_idx] = (
+                        pose_estimation_series.confidence[:]
+                    )
 
             video_tracks[Path(pose_estimation.original_videos[0]).as_posix()] = (
                 tracks_numpy,

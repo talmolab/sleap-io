@@ -226,9 +226,11 @@ class Instance:
                 for node in points.keys()
             ]
             vals = [
-                point
-                if type(point) == self._POINT_TYPE
-                else self._make_default_point(*point)
+                (
+                    point
+                    if type(point) == self._POINT_TYPE
+                    else self._make_default_point(*point)
+                )
                 for point in points.values()
             ]
             points = {k: v for k, v in zip(keys, vals)}

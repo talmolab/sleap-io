@@ -1,4 +1,5 @@
 """Tests for functions in the sleap_io.io.jabs file."""
+
 import numpy as np
 import h5py
 

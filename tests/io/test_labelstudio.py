@@ -1,4 +1,5 @@
 """Tests for functions in the sleap_io.io.labelstudio file."""
+
 from sleap_io import Labels
 from sleap_io.io.labelstudio import parse_tasks, read_labels, convert_labels
 from sleap_io.io.slp import read_labels as slp_read_labels

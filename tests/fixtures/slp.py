@@ -1,4 +1,5 @@
 """Fixtures that return paths to .slp files."""
+
 import pytest
 
 
