@@ -17,7 +17,6 @@ on:
       - "tests/**"
       - ".github/workflows/ci.yml"
       - "environment.yml"
-      - "setup.cfg"
 
 jobs:
   # Lint with black and docstring check with pydocstyle
@@ -99,6 +98,7 @@ jobs:
         if: ${{ startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9 }}
         shell: bash -l {0}
         run: |
+          apt-get update && apt-get install libglapi-mesa libegl-mesa0 libegl1 libopengl0 libgl1-mesa-glx  # https://github.com/conda-forge/opencv-feedstock/issues/401
           pytest --cov=sleap_io --cov-report=xml tests/
 
       - name: Upload coverage
