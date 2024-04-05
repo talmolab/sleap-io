@@ -2,7 +2,7 @@
 
 # Define package version.
 # This is read dynamically by setuptools in pyproject.toml to determine the release version.
-__version__ = "0.0.13"
+__version__ = "0.0.14"
 
 from sleap_io.model.skeleton import Node, Edge, Skeleton, Symmetry
 from sleap_io.model.video import Video
