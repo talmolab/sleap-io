@@ -1,5 +1,7 @@
 """This module handles direct I/O operations for working with JABS files."""
 
+from __future__ import annotations
+
 import h5py
 import re
 import os
