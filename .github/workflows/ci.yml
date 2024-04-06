@@ -17,7 +17,6 @@ on:
       - "tests/**"
       - ".github/workflows/ci.yml"
       - "environment.yml"
-      - "setup.cfg"
 
 jobs:
   # Lint with black and docstring check with pydocstyle
@@ -88,6 +87,13 @@ jobs:
           micromamba info
           micromamba list
           pip freeze
+
+      - name: Install graphics dependencies on Ubuntu
+        # https://github.com/conda-forge/opencv-feedstock/issues/401
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        shell: bash -l {0}
+        run: |
+          sudo apt-get update && sudo apt-get install libglapi-mesa libegl-mesa0 libegl1 libopengl0 libgl1-mesa-glx
 
       - name: Test with pytest
         if: ${{ !(startsWith(matrix.os, 'ubuntu') && matrix.python == 3.9) }}
