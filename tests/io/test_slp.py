@@ -186,3 +186,31 @@ def test_write_labels(centered_pair, slp_real_data, tmp_path):
         assert len(saved_labels.skeletons) == len(labels.skeletons) == 1
         assert saved_labels.skeleton.name == labels.skeleton.name
         assert saved_labels.skeleton.node_names == labels.skeleton.node_names
+
+
+def test_load_multi_skeleton(tmpdir):
+    """Test loading multiple skeletons from a single file."""
+    skel1 = Skeleton()
+    skel1.add_node(Node("n1"))
+    skel1.add_node(Node("n2"))
+    skel1.add_edge("n1", "n2")
+    skel1.add_symmetry("n1", "n2")
+
+    skel2 = Skeleton()
+    skel2.add_node(Node("n3"))
+    skel2.add_node(Node("n4"))
+    skel2.add_edge("n3", "n4")
+    skel2.add_symmetry("n3", "n4")
+
+    skels = [skel1, skel2]
+    labels = Labels(skeletons=skels)
+    write_metadata(tmpdir / "test.slp", labels)
+
+    loaded_skels = read_skeletons(tmpdir / "test.slp")
+    assert len(loaded_skels) == 2
+    assert loaded_skels[0].node_names == ["n1", "n2"]
+    assert loaded_skels[1].node_names == ["n3", "n4"]
+    assert loaded_skels[0].edge_inds == [(0, 1)]
+    assert loaded_skels[1].edge_inds == [(0, 1)]
+    assert loaded_skels[0].flipped_node_inds == [(0, 1)]
+    assert loaded_skels[1].flipped_node_inds == [(0, 1)]
