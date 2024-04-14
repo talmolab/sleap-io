@@ -35,13 +35,6 @@ class Video:
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS
 
-    def __attrs_post_init__(self):
-        """Set the video backend if not already set."""
-        if self.backend is None:
-            if Path(self.filename).exists():
-                # TODO: Automatic path resolution?
-                self.backend = VideoBackend.from_filename(self.filename)
-
     @classmethod
     def from_filename(
         cls,
@@ -135,10 +128,67 @@ class Video:
 
         See also: VideoBackend.get_frame, VideoBackend.get_frames
         """
-        if self.backend is None:
-            raise ValueError(
-                "Video backend is not set. "
-                "This may be because the video reader could not be determined "
-                "automatically from the filename."
-            )
+        if not self.is_open:
+            self.open()
         return self.backend[inds]
+
+    def exists(self) -> bool:
+        """Check if the video file exists."""
+        return Path(self.filename).exists()
+
+    @property
+    def is_open(self) -> bool:
+        """Check if the video backend is open."""
+        return self.exists() and self.backend is not None
+
+    def open(
+        self,
+        dataset: Optional[str] = None,
+        grayscale: Optional[str] = None,
+        keep_open: bool = True,
+    ):
+        """Open the video backend for reading.
+
+        Args:
+            dataset: Name of dataset in HDF5 file.
+            grayscale: Whether to force grayscale. If None, autodetect on first frame
+                load.
+            keep_open: Whether to keep the video reader open between calls to read
+                frames. If False, will close the reader after each call. If True (the
+                default), it will keep the reader open and cache it for subsequent calls
+                which may enhance the performance of reading multiple frames.
+
+        Notes:
+            This is useful for opening the video backend to read frames and then closing
+            it after reading all the necessary frames.
+
+            If the backend was already open, it will be closed before opening a new one.
+            Values for the HDF5 dataset and grayscale will be remembered if not
+            specified.
+        """
+        if not self.exists():
+            raise FileNotFoundError(f"Video file not found: {self.filename}")
+
+        # Try to remember values from previous backend if available and not specified.
+        if self.backend is not None:
+            if dataset is None:
+                dataset = getattr(self.backend, "dataset", None)
+            if grayscale is None:
+                grayscale = getattr(self.backend, "grayscale", None)
+
+        # Close previous backend if open.
+        self.close()
+
+        # Create new backend.
+        self.backend = VideoBackend.from_filename(
+            self.filename,
+            dataset=dataset,
+            grayscale=grayscale,
+            keep_open=keep_open,
+        )
+
+    def close(self):
+        """Close the video backend."""
+        if self.backend is not None:
+            del self.backend
+            self.backend = None

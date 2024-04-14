@@ -40,3 +40,37 @@ def test_video_repr(centered_pair_low_quality_video):
         'Video(filename="tests/data/videos/centered_pair_low_quality.mp4", '
         "shape=(1100, 384, 384, 1), backend=MediaVideo)"
     )
+
+
+def test_video_exists(centered_pair_low_quality_video):
+    video = Video("test.mp4")
+    assert video.exists() is False
+
+    assert centered_pair_low_quality_video.exists() is True
+
+
+def test_video_open_close(centered_pair_low_quality_path):
+    video = Video(centered_pair_low_quality_path)
+    assert video.is_open is False
+    assert video.backend is None
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.is_open is True
+    assert type(video.backend) == MediaVideo
+
+    video.close()
+    assert video.is_open is False
+    assert video.backend is None
+    assert video.shape is None
+
+    video.open()
+    assert video.is_open is True
+    assert type(video.backend) == MediaVideo
+    assert video[0].shape == (384, 384, 1)
+
+    video = Video.from_filename(centered_pair_low_quality_path, grayscale=False)
+    assert video.shape == (1100, 384, 384, 3)
+    video.open()
+    assert video.shape == (1100, 384, 384, 3)
+    video.open(grayscale=True)
+    assert video.shape == (1100, 384, 384, 1)
