@@ -96,7 +96,7 @@ jobs:
       - name: Test with pytest (with coverage)
         shell: bash -l {0}
         run: |
-          pytest --cov=sleap_io --cov-report=xml tests/
+          pytest --cov=sleap_io --cov-report=xml --durations=-1 tests/
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
