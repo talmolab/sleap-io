@@ -125,24 +125,84 @@ def load_video(filename: str, **kwargs) -> Video:
     return Video.from_filename(filename, **kwargs)
 
 
-def load_file(filename: str, **kwargs) -> Union[Labels, Video]:
+def load_file(
+    filename: str | Path, format: Optional[str] = None, **kwargs
+) -> Union[Labels, Video]:
     """Load a file and return the appropriate object.
 
     Args:
         filename: Path to a file.
+        format: Optional format to load as. If not provided, will be inferred from the
+            file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs"
+            and "video".
 
     Returns:
         A `Labels` or `Video` object.
     """
     if isinstance(filename, Path):
         filename = str(filename)
+
+    if format is None:
+        if filename.endswith(".slp"):
+            format = "slp"
+        elif filename.endswith(".nwb"):
+            format = "nwb"
+        elif filename.endswith(".json"):
+            format = "json"
+        elif filename.endswith(".h5"):
+            format = "jabs"
+        else:
+            for vid_ext in Video.EXTS:
+                if filename.endswith(vid_ext):
+                    format = "video"
+                    break
+        if format is None:
+            raise ValueError(f"Could not infer format from filename: '{filename}'.")
+
     if filename.endswith(".slp"):
-        return load_slp(filename)
+        return load_slp(filename, **kwargs)
     elif filename.endswith(".nwb"):
-        return load_nwb(filename)
+        return load_nwb(filename, **kwargs)
     elif filename.endswith(".json"):
-        return load_labelstudio(filename)
+        return load_labelstudio(filename, **kwargs)
     elif filename.endswith(".h5"):
-        return load_jabs(filename)
-    else:
+        return load_jabs(filename, **kwargs)
+    elif format == "video":
         return load_video(filename, **kwargs)
+
+
+def save_file(
+    labels: Labels, filename: str | Path, format: Optional[str] = None, **kwargs
+):
+    """Save a file based on the extension.
+
+    Args:
+        labels: A SLEAP `Labels` object (see `load_slp`).
+        filename: Path to save labels to.
+        format: Optional format to save as. If not provided, will be inferred from the
+            file extension. Available formats are: "slp", "nwb", "labelstudio" and
+            "jabs".
+    """
+    if isinstance(filename, Path):
+        filename = str(filename)
+
+    if format is None:
+        if filename.endswith(".slp"):
+            format = "slp"
+        elif filename.endswith(".nwb"):
+            format = "nwb"
+        elif filename.endswith(".json"):
+            format = "json"
+        elif filename.endswith(".h5"):
+            format = "jabs"
+
+    if format == "slp":
+        save_slp(labels, filename, **kwargs)
+    elif format == "nwb":
+        save_nwb(labels, filename, **kwargs)
+    elif format == "labelstudio":
+        save_labelstudio(labels, filename, **kwargs)
+    elif format == "jabs":
+        save_jabs(labels, filename, **kwargs)
+    else:
+        raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")

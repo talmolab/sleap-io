@@ -8,7 +8,7 @@ from __future__ import annotations
 from attrs import define
 from typing import Tuple, Optional, Optional
 import numpy as np
-from sleap_io.io.video import VideoBackend
+from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video
 from pathlib import Path
 
 
@@ -32,6 +32,8 @@ class Video:
 
     filename: str
     backend: Optional[VideoBackend] = None
+
+    EXTS = MediaVideo.EXTS + HDF5Video.EXTS
 
     def __attrs_post_init__(self):
         """Set the video backend if not already set."""
