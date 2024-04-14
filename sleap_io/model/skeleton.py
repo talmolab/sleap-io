@@ -221,8 +221,9 @@ class Skeleton:
             dst: The destination `Node` or name of the destination node.
         """
         if type(src) == Edge:
-            if src not in self.edges:
-                self.edges.append(src)
+            edge = src
+            if edge not in self.edges:
+                self.edges.append(edge)
             if edge.source not in self.nodes:
                 self.add_node(edge.source)
             if edge.destination not in self.nodes:
