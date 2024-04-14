@@ -25,5 +25,5 @@ from sleap_io.io.main import (
     load_jabs,
     save_jabs,
     load_video,
-    load_file
+    load_file,
 )

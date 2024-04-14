@@ -78,7 +78,7 @@ def load_labelstudio(
 
 def save_labelstudio(labels: Labels, filename: str):
     """Save a SLEAP dataset to Label Studio format.
-    
+
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to save labels to ending with `.json`.
@@ -115,7 +115,7 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = No
 
 def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
-    
+
     Args:
         filename: Path to a video file.
 
