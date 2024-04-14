@@ -134,6 +134,8 @@ def load_file(filename: str, **kwargs) -> Union[Labels, Video]:
     Returns:
         A `Labels` or `Video` object.
     """
+    if isinstance(filename, Path):
+        filename = str(filename)
     if filename.endswith(".slp"):
         return load_slp(filename)
     elif filename.endswith(".nwb"):
