@@ -5,7 +5,7 @@ channels:
 
 dependencies:
   - python
-  - ffmpeg>=6.1.0
+  - ffmpeg
   - imageio
   - imageio-ffmpeg
   - av
