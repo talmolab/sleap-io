@@ -192,8 +192,8 @@ def save_file(
         elif filename.endswith(".nwb"):
             format = "nwb"
         elif filename.endswith(".json"):
-            format = "json"
-        elif filename.endswith(".h5"):
+            format = "labelstudio"
+        elif "pose_version" in kwargs:
             format = "jabs"
 
     if format == "slp":
@@ -203,6 +203,7 @@ def save_file(
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
-        save_jabs(labels, filename, **kwargs)
+        pose_version = kwargs.pop("pose_version", 5)
+        save_jabs(labels, pose_version, filename, **kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
