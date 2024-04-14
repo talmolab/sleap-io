@@ -269,3 +269,16 @@ class Labels:
                 results.append(LabeledFrame(video=video, frame_idx=frame_ind))
 
         return results
+
+    def save(self, filename: str, format: Optional[str] = None, **kwargs):
+        """Save labels to file in specified format.
+
+        Args:
+            filename: Path to save labels to.
+            format: The format to save the labels in. If `None`, the format will be
+                inferred from the file extension. Available formats are "slp", "nwb",
+                "labelstudio", and "jabs".
+        """
+        from sleap_io import save_file
+
+        save_file(self, filename, format=format, **kwargs)

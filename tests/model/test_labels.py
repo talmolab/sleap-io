@@ -141,3 +141,9 @@ def test_labels_getitem(slp_typical):
 
     with pytest.raises(IndexError):
         labels[None]
+
+
+def test_labels_save(tmp_path, slp_typical):
+    labels = load_slp(slp_typical)
+    labels.save(tmp_path / "test.slp")
+    assert (tmp_path / "test.slp").exists()
