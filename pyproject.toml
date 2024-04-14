@@ -16,17 +16,18 @@ license = {text = "BSD-3-Clause"}
 classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10"
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11"
 ]
 dependencies = [
-    "numpy>=1.19.2",
-    "attrs>=21.2.0",
+    "numpy",
+    "attrs",
     "h5py>=3.8.0",
     "pynwb",
     "ndx-pose",
     "pandas",
     "simplejson",
-    "imageio>=2.26.0",
+    "imageio",
     "imageio-ffmpeg",
     "av"
 ]
