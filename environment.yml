@@ -8,8 +8,10 @@ dependencies:
   - ffmpeg>=6.1.0
   - imageio
   - imageio-ffmpeg
+  - av
   - attrs
   - pandas
+  - simplejson
   - h5py>=3.7.0
   - hdmf
   - numpy
