@@ -8,6 +8,7 @@ from sleap_io import (
     Instance,
     PredictedInstance,
     LabeledFrame,
+    Track,
     load_slp,
     load_video,
 )
@@ -147,3 +148,113 @@ def test_labels_save(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     labels.save(tmp_path / "test.slp")
     assert (tmp_path / "test.slp").exists()
+
+
+def test_labels_clean_unchanged(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert len(labels) == 10
+    assert labels[0].frame_idx == 0
+    assert len(labels[0]) == 2
+    assert labels[1].frame_idx == 990
+    assert len(labels[1]) == 2
+    assert len(labels.skeletons) == 1
+    assert len(labels.videos) == 1
+    assert len(labels.tracks) == 0
+    labels.clean(
+        frames=True, empty_instances=True, skeletons=True, tracks=True, videos=True
+    )
+    assert len(labels) == 10
+    assert labels[0].frame_idx == 0
+    assert len(labels[0]) == 2
+    assert labels[1].frame_idx == 990
+    assert len(labels[1]) == 2
+    assert len(labels.skeletons) == 1
+    assert len(labels.videos) == 1
+    assert len(labels.tracks) == 0
+
+
+def test_labels_clean_frames(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels[0].frame_idx == 0
+    assert len(labels[0]) == 2
+    labels[0].instances = []
+    labels.clean(
+        frames=True, empty_instances=False, skeletons=False, tracks=False, videos=False
+    )
+    assert len(labels) == 9
+    assert labels[0].frame_idx == 990
+    assert len(labels[0]) == 2
+
+
+def test_labels_clean_empty_instances(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels[0].frame_idx == 0
+    assert len(labels[0]) == 2
+    labels[0].instances = [
+        Instance.from_numpy(
+            np.full((len(labels.skeleton), 2), np.nan), skeleton=labels.skeleton
+        )
+    ]
+    labels.clean(
+        frames=False, empty_instances=True, skeletons=False, tracks=False, videos=False
+    )
+    assert len(labels) == 10
+    assert labels[0].frame_idx == 0
+    assert len(labels[0]) == 0
+
+    labels.clean(
+        frames=True, empty_instances=True, skeletons=False, tracks=False, videos=False
+    )
+    assert len(labels) == 9
+
+
+def test_labels_clean_skeletons(slp_real_data):
+    labels = load_slp(slp_real_data)
+    labels.skeletons.append(Skeleton(["A", "B"]))
+    assert len(labels.skeletons) == 2
+    labels.clean(
+        frames=False, empty_instances=False, skeletons=True, tracks=False, videos=False
+    )
+    assert len(labels) == 10
+    assert len(labels.skeletons) == 1
+
+
+def test_labels_clean_tracks(slp_real_data):
+    labels = load_slp(slp_real_data)
+    labels.tracks.append(Track(name="test1"))
+    labels.tracks.append(Track(name="test2"))
+    assert len(labels.tracks) == 2
+    labels[0].instances[0].track = labels.tracks[1]
+    labels.clean(
+        frames=False, empty_instances=False, skeletons=False, tracks=True, videos=False
+    )
+    assert len(labels) == 10
+    assert len(labels.tracks) == 1
+    assert labels[0].instances[0].track == labels.tracks[0]
+    assert labels.tracks[0].name == "test2"
+
+
+def test_labels_clean_videos(slp_real_data):
+    labels = load_slp(slp_real_data)
+    labels.videos.append(Video(filename="test2"))
+    assert len(labels.videos) == 2
+    labels.clean(
+        frames=False, empty_instances=False, skeletons=False, tracks=False, videos=True
+    )
+    assert len(labels) == 10
+    assert len(labels.videos) == 1
+    assert labels.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+
+
+def test_labels_remove_predictions(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert len(labels) == 10
+    assert sum([len(lf.predicted_instances) for lf in labels]) == 12
+    labels.remove_predictions(clean=False)
+    assert len(labels) == 10
+    assert sum([len(lf.predicted_instances) for lf in labels]) == 0
+
+    labels = load_slp(slp_real_data)
+    labels.remove_predictions(clean=True)
+    assert len(labels) == 5
+    assert sum([len(lf.predicted_instances) for lf in labels]) == 0
