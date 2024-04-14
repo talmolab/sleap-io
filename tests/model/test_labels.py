@@ -9,8 +9,10 @@ from sleap_io import (
     PredictedInstance,
     LabeledFrame,
     load_slp,
+    load_video,
 )
 from sleap_io.model.labels import Labels
+import numpy as np
 
 
 def test_labels():
@@ -117,3 +119,25 @@ def test_labels_skeleton():
     labels.skeletons.append(Skeleton(["B"]))
     with pytest.raises(ValueError):
         labels.skeleton
+
+
+def test_labels_getitem(slp_typical):
+    labels = load_slp(slp_typical)
+    labels.labeled_frames.append(LabeledFrame(video=labels.video, frame_idx=1))
+    assert len(labels) == 2
+    assert labels[0].frame_idx == 0
+    assert len(labels[:2]) == 2
+    assert len(labels[[0, 1]]) == 2
+    assert len(labels[np.array([0, 1])]) == 2
+    assert labels[(labels.video, 0)].frame_idx == 0
+
+    with pytest.raises(IndexError):
+        labels[(labels.video, 2000)]
+
+    assert len(labels[labels.video]) == 2
+
+    with pytest.raises(IndexError):
+        labels[Video(filename="test")]
+
+    with pytest.raises(IndexError):
+        labels[None]

@@ -63,6 +63,27 @@ class Labels:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:
             return self.labeled_frames[key]
+        elif type(key) == slice:
+            return [self.labeled_frames[i] for i in range(*key.indices(len(self)))]
+        elif type(key) == list:
+            return [self.labeled_frames[i] for i in key]
+        elif isinstance(key, np.ndarray):
+            return [self.labeled_frames[i] for i in key.tolist()]
+        elif type(key) == tuple and len(key) == 2:
+            video, frame_idx = key
+            res = self.find(video, frame_idx)
+            if len(res) == 1:
+                return res[0]
+            elif len(res) == 0:
+                raise IndexError(
+                    f"No labeled frames found for video {video} and "
+                    f"frame index {frame_idx}."
+                )
+        elif type(key) == Video:
+            res = self.find(key)
+            if len(res) == 0:
+                raise IndexError(f"No labeled frames found for video {key}.")
+            return res
         else:
             raise IndexError(f"Invalid indexing argument for labels: {key}")
 
