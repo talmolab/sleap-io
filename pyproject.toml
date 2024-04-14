@@ -57,3 +57,9 @@ line-length = 88
 [pydocstyle]
 convention = "google"
 match-dir = "sleap_io"
+
+[tool.codespell]
+skip = '.git,*.pdf,*.svg'
+check-hidden = true
+# ignore-regex = ''
+# ignore-words-list = ''

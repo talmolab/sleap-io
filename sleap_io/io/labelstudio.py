@@ -2,7 +2,7 @@
 
 Some important nomenclature:
   - `tasks`: typically maps to a single frame of data to be annotated, closest
-    correspondance is to `LabeledFrame`
+    correspondence is to `LabeledFrame`
   - `annotations`: collection of points, polygons, relations, etc. corresponds to
     `Instance`s and `Point`s, but a flattened hierarchy
 
