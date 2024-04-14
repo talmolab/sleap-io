@@ -1,7 +1,7 @@
 """This module contains high-level wrappers for utilizing different I/O backends."""
 
 from __future__ import annotations
-from sleap_io import Labels, Skeleton
+from sleap_io import Labels, Skeleton, Video
 from sleap_io.io import slp, nwb, labelstudio, jabs
 from typing import Optional, Union
 from pathlib import Path
@@ -77,7 +77,12 @@ def load_labelstudio(
 
 
 def save_labelstudio(labels: Labels, filename: str):
-    """Save a SLEAP dataset to Label Studio format."""
+    """Save a SLEAP dataset to Label Studio format.
+    
+    Args:
+        labels: A SLEAP `Labels` object (see `load_slp`).
+        filename: Path to save labels to ending with `.json`.
+    """
     labelstudio.write_labels(labels, filename)
 
 
@@ -95,11 +100,47 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
 
 
 def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = None):
-    """Save a SLEAP dataset to JABS pose file format. Filenames for JABS poses are based on video filenames.
+    """Save a SLEAP dataset to JABS pose file format.
 
     Args:
-        labels: SLEAP `Labels` object
-        pose_version: The JABS pose version to write data out
-        root_folder: Optional root folder where the files should be saved
+        labels: SLEAP `Labels` object.
+        pose_version: The JABS pose version to write data out.
+        root_folder: Optional root folder where the files should be saved.
+
+    Note:
+        Filenames for JABS poses are based on video filenames.
     """
     jabs.write_labels(labels, pose_version, root_folder)
+
+
+def load_video(filename: str, **kwargs) -> Video:
+    """Load a video file.
+    
+    Args:
+        filename: Path to a video file.
+
+    Returns:
+        A `Video` object.
+    """
+    return Video.from_filename(filename, **kwargs)
+
+
+def load_file(filename: str, **kwargs) -> Union[Labels, Video]:
+    """Load a file and return the appropriate object.
+
+    Args:
+        filename: Path to a file.
+
+    Returns:
+        A `Labels` or `Video` object.
+    """
+    if filename.endswith(".slp"):
+        return load_slp(filename)
+    elif filename.endswith(".nwb"):
+        return load_nwb(filename)
+    elif filename.endswith(".json"):
+        return load_labelstudio(filename)
+    elif filename.endswith(".h5"):
+        return load_jabs(filename)
+    else:
+        return load_video(filename, **kwargs)
