@@ -104,3 +104,7 @@ class LabeledFrame:
             ]
 
         return unused_predictions
+
+    def remove_predictions(self):
+        """Remove all `PredictedInstance` objects from the frame."""
+        self.instances = [inst for inst in self.instances if type(inst) == Instance]
