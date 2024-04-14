@@ -3,6 +3,8 @@
 from sleap_io import Video
 from sleap_io.io.video import MediaVideo
 import numpy as np
+import pytest
+from pathlib import Path
 
 
 def test_video_class():
@@ -46,6 +48,15 @@ def test_video_open_close(centered_pair_low_quality_path):
     assert video.is_open is False
     assert video.backend is None
 
+    img = video[0]
+    assert img.shape == (384, 384, 1)
+    assert video.is_open is True
+
+    video = Video("test.mp4")
+    assert video.is_open is False
+    with pytest.raises(FileNotFoundError):
+        video[0]
+
     video = Video.from_filename(centered_pair_low_quality_path)
     assert video.is_open is True
     assert type(video.backend) == MediaVideo
@@ -73,6 +84,11 @@ def test_video_replace_filename(centered_pair_low_quality_path):
     assert video.exists() is False
 
     video.replace_filename(centered_pair_low_quality_path)
+    assert video.exists() is True
+    assert video.is_open is True
+    assert type(video.backend) == MediaVideo
+
+    video.replace_filename(Path(centered_pair_low_quality_path))
     assert video.exists() is True
     assert video.is_open is True
     assert type(video.backend) == MediaVideo
