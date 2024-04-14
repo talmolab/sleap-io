@@ -108,3 +108,7 @@ class LabeledFrame:
     def remove_predictions(self):
         """Remove all `PredictedInstance` objects from the frame."""
         self.instances = [inst for inst in self.instances if type(inst) == Instance]
+
+    def remove_empty_instances(self):
+        """Remove all instances with no visible points."""
+        self.instances = [inst for inst in self.instances if not inst.is_empty]
