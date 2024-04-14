@@ -63,6 +63,27 @@ class Labels:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:
             return self.labeled_frames[key]
+        elif type(key) == slice:
+            return [self.labeled_frames[i] for i in range(*key.indices(len(self)))]
+        elif type(key) == list:
+            return [self.labeled_frames[i] for i in key]
+        elif isinstance(key, np.ndarray):
+            return [self.labeled_frames[i] for i in key.tolist()]
+        elif type(key) == tuple and len(key) == 2:
+            video, frame_idx = key
+            res = self.find(video, frame_idx)
+            if len(res) == 1:
+                return res[0]
+            elif len(res) == 0:
+                raise IndexError(
+                    f"No labeled frames found for video {video} and "
+                    f"frame index {frame_idx}."
+                )
+        elif type(key) == Video:
+            res = self.find(key)
+            if len(res) == 0:
+                raise IndexError(f"No labeled frames found for video {key}.")
+            return res
         else:
             raise IndexError(f"Invalid indexing argument for labels: {key}")
 
@@ -248,3 +269,99 @@ class Labels:
                 results.append(LabeledFrame(video=video, frame_idx=frame_ind))
 
         return results
+
+    def save(self, filename: str, format: Optional[str] = None, **kwargs):
+        """Save labels to file in specified format.
+
+        Args:
+            filename: Path to save labels to.
+            format: The format to save the labels in. If `None`, the format will be
+                inferred from the file extension. Available formats are "slp", "nwb",
+                "labelstudio", and "jabs".
+        """
+        from sleap_io import save_file
+
+        save_file(self, filename, format=format, **kwargs)
+
+    def clean(
+        self,
+        frames: bool = True,
+        empty_instances: bool = False,
+        skeletons: bool = True,
+        tracks: bool = True,
+        videos: bool = False,
+    ):
+        """Remove empty frames, unused skeletons, tracks and videos.
+
+        Args:
+            frames: If `True` (the default), remove empty frames.
+            empty_instances: If `True` (NOT default), remove instances that have no
+                visible points.
+            skeletons: If `True` (the default), remove unused skeletons.
+            tracks: If `True` (the default), remove unused tracks.
+            videos: If `True` (NOT default), remove videos that have no labeled frames.
+        """
+        used_skeletons = []
+        used_tracks = []
+        used_videos = []
+        kept_frames = []
+        for lf in self.labeled_frames:
+
+            if empty_instances:
+                lf.remove_empty_instances()
+
+            if frames and len(lf) == 0:
+                continue
+
+            if videos and lf.video not in used_videos:
+                used_videos.append(lf.video)
+
+            if skeletons or tracks:
+                for inst in lf:
+                    if skeletons and inst.skeleton not in used_skeletons:
+                        used_skeletons.append(inst.skeleton)
+                    if (
+                        tracks
+                        and inst.track is not None
+                        and inst.track not in used_tracks
+                    ):
+                        used_tracks.append(inst.track)
+
+            if frames:
+                kept_frames.append(lf)
+
+        if videos:
+            self.videos = [video for video in self.videos if video in used_videos]
+
+        if skeletons:
+            self.skeletons = [
+                skeleton for skeleton in self.skeletons if skeleton in used_skeletons
+            ]
+
+        if tracks:
+            self.tracks = [track for track in self.tracks if track in used_tracks]
+
+        if frames:
+            self.labeled_frames = kept_frames
+
+    def remove_predictions(self, clean: bool = True):
+        """Remove all predicted instances from the labels.
+
+        Args:
+            clean: If `True` (the default), also remove any empty frames and unused
+                tracks and skeletons. It does NOT remove videos that have no labeled
+                frames or instances with no visible points.
+
+        See also: `Labels.clean`
+        """
+        for lf in self.labeled_frames:
+            lf.remove_predictions()
+
+        if clean:
+            self.clean(
+                frames=True,
+                empty_instances=False,
+                skeletons=True,
+                tracks=True,
+                videos=False,
+            )

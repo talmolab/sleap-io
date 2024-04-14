@@ -54,6 +54,7 @@ jobs:
 
   # Tests with pytest
   tests:
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
