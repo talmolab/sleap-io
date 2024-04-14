@@ -11,7 +11,7 @@ dependencies:
   - imageio-ffmpeg
   - attrs
   - pandas
-  - h5py>=3.8
+  - h5py>=3.7.0
   - hdmf
   - numpy
   - conda-forge::opencv
