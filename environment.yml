@@ -2,16 +2,29 @@ name: sleap-io
 
 channels:
   - conda-forge
-  - defaults
 
 dependencies:
-  - python=3.9
-  - ffmpeg
+  - python
+  - ffmpeg<6.1.0
   - imageio
+  - imageio-ffmpeg
+  - av
   - attrs
-  - h5py
+  - pandas
+  - simplejson
+  - h5py>=3.8.0
+  - hdmf
   - numpy
-  - conda-forge::opencv
+  - opencv<4.9.0
+  - pynwb
+  - ndx-pose
+  - pytest
+  - pytest-cov
+  - black
+  - pydocstyle
+  - toml
+  - twine
+  - build
   - pip
   - pip:
     - "--editable=.[dev]"
