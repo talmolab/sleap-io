@@ -68,3 +68,4 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
 
 def test_load_video(centered_pair_low_quality_path):
     assert load_video(centered_pair_low_quality_path).shape == (1100, 384, 384, 1)
+    assert load_file(centered_pair_low_quality_path).shape == (1100, 384, 384, 1)
