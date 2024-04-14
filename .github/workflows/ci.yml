@@ -58,10 +58,10 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "windows-latest", "macos-14"]
-        python: ["3.7", "3.10"]
+        python: ["3.8", "3.10"]
         exclude:
           - os: "macos-14"
-            python: "3.7"
+            python: "3.8"
 
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
