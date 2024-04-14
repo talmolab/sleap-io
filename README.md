@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/talmolab/sleap-io/branch/main/graph/badge.svg?token=Sj8kIFl3pi)](https://codecov.io/gh/talmolab/sleap-io)
 [![Release](https://img.shields.io/github/v/release/talmolab/sleap-io?label=Latest)](https://github.com/talmolab/sleap-io/releases/)
 [![PyPI](https://img.shields.io/pypi/v/sleap-io?label=PyPI)](https://pypi.org/project/sleap-io)
-<!-- TODO: ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/sleap-io) -->
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/sleap-io)
 
 Standalone utilities for working with animal pose tracking data.
 
@@ -35,10 +35,12 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information on development.
 import sleap_io as sio
 
 # Load from SLEAP file.
-labels = sio.load_slp("predictions.slp")
+labels = sio.load_file("predictions.slp")
 
 # Save to NWB file.
-sio.save_nwb(labels, "predictions.nwb")
+sio.save_file(labels, "predictions.nwb")
+# Or:
+# labels.save("predictions.nwb")
 ```
 
 ### Convert labels to raw arrays
@@ -59,6 +61,18 @@ n_frames, n_tracks, n_nodes, xy_score = trx.shape
 assert xy_score == 3
 ```
 
+### Read video data
+
+```py
+import sleap_io as sio
+
+video = sio.load_video("test.mp4")
+n_frames, height, width, channels = video.shape
+
+frame = video[0]
+height, width, channels = frame.shape
+```
+
 ### Create labels from raw data
 
 ```py
@@ -72,7 +86,7 @@ skeleton = sio.Skeleton(
 )
 
 # Create video.
-video = sio.Video.from_filename("test.mp4")
+video = sio.load_video("test.mp4")
 
 # Create instance.
 instance = sio.Instance.from_numpy(
@@ -89,6 +103,9 @@ lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
 
 # Create labels.
 labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+# Save.
+labels.save("labels.slp")
 ```
 
 ## Support
