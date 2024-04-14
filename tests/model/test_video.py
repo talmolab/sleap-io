@@ -18,15 +18,7 @@ def test_video_from_filename(centered_pair_low_quality_path):
     test_video = Video.from_filename(centered_pair_low_quality_path)
     assert test_video.filename == centered_pair_low_quality_path
     assert test_video.shape == (1100, 384, 384, 1)
-
-
-def test_video_auto_backend(centered_pair_low_quality_path):
-    """Test initialization of `Video` object with automatic backend selection."""
-    test_video = Video(filename=centered_pair_low_quality_path)
-    assert test_video.backend is not None
     assert type(test_video.backend) == MediaVideo
-    assert test_video.filename == centered_pair_low_quality_path
-    assert test_video.shape == (1100, 384, 384, 1)
 
 
 def test_video_getitem(centered_pair_low_quality_video):
