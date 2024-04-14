@@ -5,9 +5,10 @@ channels:
   - defaults
 
 dependencies:
-  - python=3.11
+  - python=3.10
   - ffmpeg
   - imageio
+  - imageio-ffmpeg
   - attrs
   - pandas
   - h5py
