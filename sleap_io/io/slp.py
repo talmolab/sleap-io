@@ -207,11 +207,11 @@ def read_skeletons(labels_path: str) -> list[Skeleton]:
 
         # Re-index correctly.
         skeleton_node_inds = [node["id"] for node in skel["nodes"]]
-        node_names = [node_names[i] for i in skeleton_node_inds]
+        sorted_node_names = [node_names[i] for i in skeleton_node_inds]
 
         # Create nodes.
         nodes = []
-        for name in node_names:
+        for name in sorted_node_names:
             nodes.append(Node(name=name))
 
         # Create edges.

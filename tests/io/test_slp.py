@@ -212,5 +212,5 @@ def test_load_multi_skeleton(tmpdir):
     assert loaded_skels[1].node_names == ["n3", "n4"]
     assert loaded_skels[0].edge_inds == [(0, 1)]
     assert loaded_skels[1].edge_inds == [(0, 1)]
-    assert loaded_skels[0].flipped_node_inds == [(0, 1)]
-    assert loaded_skels[1].flipped_node_inds == [(0, 1)]
+    assert loaded_skels[0].flipped_node_inds == [1, 0]
+    assert loaded_skels[1].flipped_node_inds == [1, 0]
