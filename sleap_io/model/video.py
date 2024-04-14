@@ -192,3 +192,22 @@ class Video:
         if self.backend is not None:
             del self.backend
             self.backend = None
+
+    def replace_filename(self, new_filename: str | Path, open: bool = True):
+        """Update the filename of the video, optionally opening the backend.
+
+        Args:
+            new_filename: New filename to set for the video.
+            open: If `True` (the default), open the backend with the new filename. If
+                the new filename does not exist, no error is raised.
+        """
+        if isinstance(new_filename, Path):
+            new_filename = str(new_filename)
+
+        self.filename = new_filename
+
+        if open:
+            if self.exists():
+                self.open()
+            else:
+                self.close()

@@ -74,3 +74,22 @@ def test_video_open_close(centered_pair_low_quality_path):
     assert video.shape == (1100, 384, 384, 3)
     video.open(grayscale=True)
     assert video.shape == (1100, 384, 384, 1)
+
+
+def test_video_replace_filename(centered_pair_low_quality_path):
+    video = Video.from_filename("test.mp4")
+    assert video.exists() is False
+
+    video.replace_filename(centered_pair_low_quality_path)
+    assert video.exists() is True
+    assert video.is_open is True
+    assert type(video.backend) == MediaVideo
+
+    video.replace_filename("test.mp4")
+    assert video.exists() is False
+    assert video.is_open is False
+
+    video.replace_filename(centered_pair_low_quality_path, open=False)
+    assert video.exists() is True
+    assert video.is_open is False
+    assert video.backend is None
