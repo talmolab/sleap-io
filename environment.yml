@@ -6,12 +6,13 @@ channels:
 
 dependencies:
   - python
-  - ffmpeg
+  - ffmpeg>=6.1.0
   - imageio
   - imageio-ffmpeg
   - attrs
   - pandas
-  - h5py
+  - h5py>=3.8
+  - hdmf
   - numpy
   - conda-forge::opencv
   - pynwb
