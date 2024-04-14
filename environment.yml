@@ -5,13 +5,16 @@ channels:
   - defaults
 
 dependencies:
-  - python=3.9
+  - python=3.11
   - ffmpeg
   - imageio
   - attrs
+  - pandas
   - h5py
   - numpy
   - conda-forge::opencv
+  - pynwb
+  - ndx-pose
   - pip
   - pip:
     - "--editable=.[dev]"
