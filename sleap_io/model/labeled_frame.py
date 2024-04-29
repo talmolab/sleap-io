@@ -15,7 +15,7 @@ import numpy as np
 class LabeledFrame:
     """Labeled data for a single frame of a video.
 
-    Args:
+    Attributes:
         video: The :class:`Video` associated with this `LabeledFrame`.
         frame_idx: The index of the `LabeledFrame` in the `Video`.
         instances: List of `Instance` objects associated with this `LabeledFrame`.

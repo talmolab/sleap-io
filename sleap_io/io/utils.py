@@ -121,7 +121,7 @@ def write_hdf5_group(filename: str, data: dict[str, np.ndarray]):
 
 
 def read_hdf5_attrs(
-    filename, dataset: str = "/", attribute: Optional[str] = None
+    filename: str, dataset: str = "/", attribute: Optional[str] = None
 ) -> Union[Any, dict[str, Any]]:
     """Read attributes from an HDF5 dataset.
 

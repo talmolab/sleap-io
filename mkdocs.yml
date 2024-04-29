@@ -1,0 +1,156 @@
+site_name: sleap-io documentation
+site_url: https://io.sleap.ai/
+repo_url: https://github.com/talmolab/sleap-io
+
+theme:
+  name: material
+  logo: assets/sleap-logo.png
+  favicon: assets/favicon.ico
+  icon:
+    repo: fontawesome/brands/github
+
+  palette:
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - scheme: default
+      primary: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+
+  features:
+    - navigation.tracking
+    # - toc.integrate
+    - toc.follow
+    # Tabs
+    # - navigation.tabs
+    # - navigation.tabs.sticky  # stays visible at the top
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tooltips
+    # Insiders:
+    # - navigation.instant
+    # - navigation.instant.prefetch
+    # - navigation.instant.progress
+    # - navigation.instant.preview
+    - content.code.select
+    - content.footnote.tooltips
+
+plugins:
+  - search
+  - privacy
+  - mkdocs-jupyter
+  - mike
+  - autorefs
+  - gen-files:
+      scripts:
+        - scripts/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            summary: true
+            show_root_heading: true
+            docstring_options:
+              returns_multiple_items: false
+            docstring_section_style: table  # table, list, spacy
+  
+
+
+markdown_extensions:
+
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      linenums_style: pymdownx-inline
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  consent:
+    title: Cookie consent
+    description: >- 
+      We use cookies to recognize your repeated visits and preferences, as well
+      as to measure the effectiveness of our documentation and whether users
+      find what they're searching for. With your consent, you're helping us to
+      make our documentation better.
+    actions:
+      - accept
+      - reject
+      - manage
+
+  analytics:
+    provider: google
+    property: G-V7MWLE7LXW
+
+  version:
+    provider: mike
+
+  social:
+    - icon: fontawesome/brands/github 
+      link: https://github.com/talmolab
+    - icon: fontawesome/brands/x-twitter
+      link: https://twitter.com/talmop
+
+extra_css:
+  - css/mkdocstrings.css
+
+copyright: >
+  Copyright &copy; 2024 - 2024 Talmo Lab –
+  <a href="#__consent">Change cookie settings</a>
+
+nav:
+  - Overview: index.md
+  - Changelog: https://github.com/talmolab/sleap-io/releases
+  - Core API:
+    - Data model: model.md
+    - Data formats: formats.md
+  - Full API: reference/

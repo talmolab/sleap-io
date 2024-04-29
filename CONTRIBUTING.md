@@ -138,15 +138,7 @@ def load_tracks(filepath: str) -> np.ndarray:
 - Use backticks (`) when possible to enable auto-linking for documentation.
 - Always document shapes and data types when describing inputs/outputs that are arrays.
 
-Adherence to the docstring conventions is automatically checked on push (see [`.github/workflows/lint.yml`](.github/workflows/lint.yml)).
-
-
-### Static type checking
-All types must be statically defined and will be checked using [`mypy`](https://mypy.readthedocs.io/).
-
-See [PEP 484](https://peps.python.org/pep-0484/) for reference.
-
-Adherence to typing requirements is automatically checked on push (see [`.github/workflows/lint.yml`](.github/workflows/lint.yml)).
+Adherence to the docstring conventions is automatically checked on push (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 
 ## Releases
@@ -165,9 +157,9 @@ Valid examples:
 ```
 
 ### Build
-The PyPI-compatible package settings are in [setup.cfg].
+The PyPI-compatible package settings are in [pyproject.toml].
 
-The version number is set in [sleap_io/__init__.py] in the `__version__` variable. This is read automatically by setuptools during installation and build.
+The version number is set in [sleap_io/version.py] in the `__version__` variable. This is read automatically by setuptools during installation and build.
 
 To manually build (e.g., locally):
 ```
@@ -178,6 +170,7 @@ To trigger an automated build (via the [.github/workflows/build.yml] action), [p
 
 
 ## Documentation website
-**TODO:**
-- [ ] Setup sphinx/autodoc.
-- [ ] Describe documentation best practices.
+
+1. Install with the `dev` dependencies (e.g., `pip install -e ".[dev]")
+2. Preview live changes with `mkdocs serve`
+3. Manually push a specific version with: `mike deploy --push --update-aliases 0.1.0 latest`

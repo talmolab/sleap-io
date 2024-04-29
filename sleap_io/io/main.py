@@ -64,7 +64,7 @@ def load_labelstudio(
     """Read Label Studio-style annotations from a file and return a `Labels` object.
 
     Args:
-        labels_path: Path to the label-studio annotation file in JSON format.
+        filename: Path to the label-studio annotation file in JSON format.
         skeleton: An optional `Skeleton` object or list of node names. If not provided
             (the default), skeleton will be inferred from the data. It may be useful to
             provide this so the keypoint label types can be filtered to just the ones in

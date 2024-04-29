@@ -22,7 +22,7 @@ class Video:
     To create a `Video` object, use the `from_filename` method which will select the
     backend appropriately.
 
-    Args:
+    Attributes:
         filename: The filename of the video.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
@@ -119,7 +119,7 @@ class Video:
         """Return the frames of the video at the given indices.
 
         Args:
-            ind: Index or list of indices of frames to read.
+            inds: Index or list of indices of frames to read.
 
         Returns:
             Frame or frames as a numpy array of shape `(height, width, channels)` if a

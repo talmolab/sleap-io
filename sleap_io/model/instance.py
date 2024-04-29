@@ -41,7 +41,7 @@ class Point:
     visible: bool = True
     complete: bool = False
 
-    def __eq__(self, other: object):
+    def __eq__(self, other: object) -> bool:
         """Compare `self` and `other` for equality.
 
         Precision error between the respective `x` and `y` properties of two
@@ -54,8 +54,8 @@ class Point:
             other: Instance of `Point` to compare to.
 
         Returns:
-            True if all attributes of `self` and `other` are the identical (possibly
-            allowing precision error for `x` and `y` attributes).
+            Returns True if all attributes of `self` and `other` are the identical
+                (possibly allowing precision error for `x` and `y` attributes).
         """
         # Check that other is a Point.
         if type(other) is not type(self):
@@ -108,17 +108,17 @@ class PredictedPoint(Point):
             else np.full((3,), np.nan)
         )
 
-    def __eq__(self, other: object):
+    def __eq__(self, other: object) -> bool:
         """Compare `self` and `other` for equality.
 
         See `Point.__eq__()` for important notes about point equality semantics!
 
         Args:
-            self, other: instance of `PredictedPoint` to compare
+            other: Instance of `PredictedPoint` to compare
 
         Returns:
-            True if all attributes of `self` and `other` are the identical (possibly
-            allowing precision error for `x` and `y` attributes).
+            Returns True if all attributes of `self` and `other` are the identical
+                (possibly allowing precision error for `x` and `y` attributes).
         """
         if not super().__eq__(other):
             return False
@@ -306,7 +306,7 @@ class Instance:
 class PredictedInstance(Instance):
     """A `PredictedInstance` is an `Instance` that was predicted using a model.
 
-    Args:
+    Attributes:
         skeleton: The `Skeleton` that this `Instance` is associated with.
         points: A dictionary where keys are `Skeleton` nodes and values are `Point`s.
         track: An optional `Track` associated with a unique animal/object across frames
