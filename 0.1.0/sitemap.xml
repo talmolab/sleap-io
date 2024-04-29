@@ -1,102 +1,102 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/</loc>
+         <loc>https://io.sleap.ai/0.1.0/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/formats/</loc>
+         <loc>https://io.sleap.ai/0.1.0/formats/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/model/</loc>
+         <loc>https://io.sleap.ai/0.1.0/model/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/SUMMARY/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/SUMMARY/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/version/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/version/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/jabs/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/jabs/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/labelstudio/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/labelstudio/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/main/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/main/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/nwb/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/nwb/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/slp/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/slp/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/utils/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/utils/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/io/video/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/io/video/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/model/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/model/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/model/instance/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/model/instance/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/model/labeled_frame/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/model/labeled_frame/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/model/labels/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/model/labels/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/model/skeleton/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/model/skeleton/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://talmolab.github.io/sleap-io/0.1.0/reference/sleap_io/model/video/</loc>
+         <loc>https://io.sleap.ai/0.1.0/reference/sleap_io/model/video/</loc>
          <lastmod>2024-04-29</lastmod>
          <changefreq>daily</changefreq>
     </url>
