@@ -1,1 +1,1 @@
-{"config":{"lang":["en"],"separator":"[\\s\\-]+","pipeline":["stopWordFilter"]},"docs":[{"location":"","title":"sleap-io documentation","text":""}]}
+{"config":{"lang":["en"],"separator":"[\\s\\-]+","pipeline":["stopWordFilter"]},"docs":[{"location":"","title":"sleap-io documentation","text":""},{"location":"model/","title":"Data model","text":"<p>This subpackage contains data model interfaces.</p>"}]}
