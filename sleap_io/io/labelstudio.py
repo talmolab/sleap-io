@@ -294,7 +294,7 @@ def filter_and_index(annotations: Iterable[dict], annot_type: str) -> Dict[str, 
     """Filter annotations based on the type field and index them by ID.
 
     Args:
-        annotation: annotations to filter and index
+        annotations: annotations to filter and index
         annot_type: annotation type to filter e.x. 'keypointlabels' or 'rectanglelabels'
 
     Returns:

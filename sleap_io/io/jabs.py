@@ -195,8 +195,10 @@ def prediction_to_instance(
     """Create an `Instance` from prediction data.
 
     Args:
-        points: keypoint locations
+        data: keypoint locations
         confidence: confidence for keypoints
+        skeleton: `Skeleton` to use for `Instance`
+        track: `Track` to assign to `Instance`
 
     Returns:
         Parsed `Instance`.

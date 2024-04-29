@@ -243,9 +243,9 @@ class Labels:
         Returns:
             List of `LabeledFrame` objects that match the criteria.
 
-            The list will be empty if no matches found, unless return_new is True,
-            in which case it contains new (empty) `LabeledFrame` objects with `video`
-            and `frame_index` set.
+            The list will be empty if no matches found, unless return_new is True, in
+            which case it contains new (empty) `LabeledFrame` objects with `video` and
+            `frame_index` set.
         """
         results = []
 
