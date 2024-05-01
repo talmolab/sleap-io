@@ -227,3 +227,12 @@ def test_slp_imgvideo(tmpdir, slp_imgvideo):
     labels = read_labels(tmpdir / "test.slp")
     assert type(labels.video.backend) == ImageVideo
     assert labels.video.shape == (3, 384, 384, 1)
+
+    videos = [Video.from_filename(["fake1.jpg", "fake2.jpg"])]
+    assert videos[0].shape is None
+    assert len(videos[0].filename) == 2
+    write_videos(tmpdir / "test2.slp", videos)
+    videos = read_videos(tmpdir / "test2.slp")
+    assert type(videos[0].backend) == ImageVideo
+    assert len(videos[0].filename) == 2
+    assert videos[0].shape is None
