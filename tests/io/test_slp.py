@@ -33,6 +33,8 @@ from sleap_io.io.slp import (
 from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
 
+from sleap_io.io.video import ImageVideo
+
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
     """Test `read_labels` can read different types of .slp files."""
@@ -214,3 +216,14 @@ def test_load_multi_skeleton(tmpdir):
     assert loaded_skels[1].edge_inds == [(0, 1)]
     assert loaded_skels[0].flipped_node_inds == [1, 0]
     assert loaded_skels[1].flipped_node_inds == [1, 0]
+
+
+def test_slp_imgvideo(tmpdir, slp_imgvideo):
+    labels = read_labels(slp_imgvideo)
+    assert type(labels.video.backend) == ImageVideo
+    assert labels.video.shape == (3, 384, 384, 1)
+
+    write_labels(tmpdir / "test.slp", labels)
+    labels = read_labels(tmpdir / "test.slp")
+    assert type(labels.video.backend) == ImageVideo
+    assert labels.video.shape == (3, 384, 384, 1)

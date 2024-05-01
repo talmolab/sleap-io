@@ -19,7 +19,7 @@ from sleap_io import (
     LabeledFrame,
     Labels,
 )
-from sleap_io.io.video import MediaVideo, HDF5Video
+from sleap_io.io.video import ImageVideo, MediaVideo, HDF5Video
 from sleap_io.io.utils import (
     read_hdf5_attrs,
     read_hdf5_dataset,
@@ -71,16 +71,23 @@ def read_videos(labels_path: str) -> list[Video]:
                 # complex path finding strategies.
                 pass
 
+        video_path = video_path.as_posix()
+
+        if "filenames" in backend:
+            # This is an ImageVideo.
+            # TODO: Path resolution.
+            video_path = backend["filenames"]
+
         try:
             backend = VideoBackend.from_filename(
-                video_path.as_posix(),
+                video_path,
                 dataset=backend.get("dataset", None),
                 grayscale=backend.get("grayscale", None),
                 input_format=backend.get("input_format", None),
             )
         except ValueError:
             backend = None
-        video_objects.append(Video(filename=video_path.as_posix(), backend=backend))
+        video_objects.append(Video(filename=video_path, backend=backend))
     return video_objects
 
 
@@ -117,6 +124,24 @@ def write_videos(labels_path: str, videos: list[Video]):
             }
             # TODO: Handle saving embedded images or restoring source video.
             # Ref: https://github.com/talmolab/sleap/blob/fb61b6ce7a9ac9613d99303111f3daafaffc299b/sleap/io/format/hdf5.py#L246-L273
+
+        elif type(video.backend) == ImageVideo:
+            shape = video.shape
+            if shape is None:
+                height, width, channels = 0, 0, 1
+            else:
+                height, width, channels = shape[1:]
+
+            video_json = {
+                "backend": {
+                    "filename": video.filename[0],
+                    "filenames": video.filename,
+                    "height_": height,
+                    "width_": width,
+                    "channels_": channels,
+                    "grayscale": video.backend.grayscale,
+                }
+            }
 
         else:
             raise NotImplementedError(
