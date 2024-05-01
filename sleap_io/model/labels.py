@@ -12,7 +12,14 @@ training models) and predictions (inference results).
 """
 
 from __future__ import annotations
-from sleap_io import LabeledFrame, Instance, PredictedInstance, Video, Track
+from sleap_io import (
+    LabeledFrame,
+    Instance,
+    PredictedInstance,
+    Video,
+    Track,
+    SuggestionFrame,
+)
 from attrs import define, field
 from typing import Union, Optional, Any
 import numpy as np
@@ -32,6 +39,7 @@ class Labels:
         skeletons: A list of `Skeleton`s that are associated with this dataset. This
             should generally only contain a single skeleton.
         tracks: A list of `Track`s that are associated with this dataset.
+        suggestions: A list of `SuggestionFrame`s that are associated with this dataset.
         provenance: Dictionary of arbitrary metadata providing additional information
             about where the dataset came from.
 
@@ -44,6 +52,7 @@ class Labels:
     videos: list[Video] = field(factory=list)
     skeletons: list[Skeleton] = field(factory=list)
     tracks: list[Track] = field(factory=list)
+    suggestions: list[SuggestionFrame] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
     def __attrs_post_init__(self):
