@@ -70,3 +70,9 @@ def slp_real_data():
         "/Users/talmo/sleap-io/tests/data/videos/centered_pair_low_quality.mp4"
     """
     return "tests/data/slp/labels.v002.rel_paths.slp"
+
+
+@pytest.fixture
+def slp_imgvideo():
+    """SLP project with a single image video."""
+    return "tests/data/slp/imgvideo.slp"
