@@ -3,7 +3,6 @@
 from __future__ import annotations
 from sleap_io.model.video import Video
 import attrs
-from typing import Optional
 
 
 @attrs.define(auto_attribs=True)
