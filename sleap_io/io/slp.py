@@ -12,6 +12,7 @@ from sleap_io import (
     Symmetry,
     Node,
     Track,
+    SuggestionFrame,
     Point,
     PredictedPoint,
     Instance,
@@ -184,6 +185,55 @@ def write_tracks(labels_path: str, tracks: list[Track]):
     ]
     with h5py.File(labels_path, "a") as f:
         f.create_dataset("tracks_json", data=tracks_json, maxshape=(None,))
+
+
+def read_suggestions(labels_path: str, videos: list[Video]) -> list[SuggestionFrame]:
+    """Read `SuggestionFrame` dataset in a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: A list of `Video` objects.
+
+    Returns:
+        A list of `SuggestionFrame` objects.
+    """
+    suggestions = [
+        json.loads(x) for x in read_hdf5_dataset(labels_path, "suggestions_json")
+    ]
+    suggestions_objects = []
+    for suggestion in suggestions:
+        suggestions_objects.append(
+            SuggestionFrame(
+                video=videos[int(suggestion["video"])],
+                frame_idx=suggestion["frame_idx"],
+            )
+        )
+    return suggestions_objects
+
+
+def write_suggestions(
+    labels_path: str, suggestions: list[SuggestionFrame], videos: list[Video]
+):
+    """Write track metadata to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        suggestions: A list of `SuggestionFrame` objects to store the metadata for.
+        videos: A list of `Video` objects.
+    """
+    GROUP = 0  # TODO: Handle storing extraneous metadata.
+    suggestions_json = []
+    for suggestion in suggestions:
+        suggestion_dict = {
+            "video": str(videos.index(suggestion.video)),
+            "frame_idx": suggestion.frame_idx,
+            "group": GROUP,
+        }
+        suggestion_json = np.string_(json.dumps(suggestion_dict, separators=(",", ":")))
+        suggestions_json.append(suggestion_json)
+
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("suggestions_json", data=suggestions_json, maxshape=(None,))
 
 
 def read_metadata(labels_path: str) -> dict:
@@ -674,6 +724,7 @@ def read_labels(labels_path: str) -> Labels:
     instances = read_instances(
         labels_path, skeletons, tracks, points, pred_points, format_id
     )
+    suggestions = read_suggestions(labels_path, videos)
     metadata = read_metadata(labels_path)
     provenance = metadata.get("provenance", dict())
 
@@ -693,6 +744,7 @@ def read_labels(labels_path: str) -> Labels:
         videos=videos,
         skeletons=skeletons,
         tracks=tracks,
+        suggestions=suggestions,
         provenance=provenance,
     )
 
@@ -710,5 +762,6 @@ def write_labels(labels_path: str, labels: Labels):
         Path(labels_path).unlink()
     write_videos(labels_path, labels.videos)
     write_tracks(labels_path, labels.tracks)
+    write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_metadata(labels_path, labels)
     write_lfs(labels_path, labels)

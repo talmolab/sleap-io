@@ -10,6 +10,7 @@ from sleap_io.model.instance import (
     Instance,
     PredictedInstance,
 )
+from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.io.main import (
