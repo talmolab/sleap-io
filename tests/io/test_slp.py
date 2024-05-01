@@ -186,6 +186,7 @@ def test_write_labels(centered_pair, slp_real_data, tmp_path):
         assert len(saved_labels.skeletons) == len(labels.skeletons) == 1
         assert saved_labels.skeleton.name == labels.skeleton.name
         assert saved_labels.skeleton.node_names == labels.skeleton.node_names
+        assert len(saved_labels.suggestions) == len(labels.suggestions)
 
 
 def test_load_multi_skeleton(tmpdir):
