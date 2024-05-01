@@ -220,7 +220,9 @@ class Video:
             new_filename = str(new_filename)
 
         if isinstance(new_filename, list):
-            new_filename = [str(p) if isinstance(p, Path) else p for p in new_filename]
+            new_filename = [
+                p.as_posix() if isinstance(p, Path) else p for p in new_filename
+            ]
 
         self.filename = new_filename
 

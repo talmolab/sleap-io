@@ -51,7 +51,7 @@ class VideoBackend:
             enhance the performance of reading multiple frames.
     """
 
-    filename: str | list[str]
+    filename: str | Path | list[str] | list[Path]
     grayscale: Optional[bool] = None
     keep_open: bool = True
     _cached_shape: Optional[Tuple[int, int, int, int]] = None
@@ -82,12 +82,13 @@ class VideoBackend:
             VideoBackend subclass instance.
         """
         if isinstance(filename, Path):
-            filename = str(filename)
+            filename = filename.as_posix()
 
         if type(filename) == str and Path(filename).is_dir():
             filename = ImageVideo.find_images(filename)
 
         if type(filename) == list:
+            filename = [Path(f).as_posix() for f in filename]
             return ImageVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
@@ -700,7 +701,7 @@ class ImageVideo(VideoBackend):
         """Find images in a folder and return a list of filenames."""
         folder = Path(folder)
         return sorted(
-            [str(f) for f in folder.glob("*") if f.suffix[1:] in ImageVideo.EXTS]
+            [f.as_posix() for f in folder.glob("*") if f.suffix[1:] in ImageVideo.EXTS]
         )
 
     @property
