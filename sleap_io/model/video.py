@@ -23,14 +23,14 @@ class Video:
     backend appropriately.
 
     Attributes:
-        filename: The filename of the video.
+        filename: The filename(s) of the video.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
 
     See also: VideoBackend
     """
 
-    filename: str
+    filename: str | list[str]
     backend: Optional[VideoBackend] = None
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS
@@ -38,16 +38,16 @@ class Video:
     @classmethod
     def from_filename(
         cls,
-        filename: str,
+        filename: str | list[str],
         dataset: Optional[str] = None,
-        grayscale: Optional[str] = None,
+        grayscale: Optional[bool] = None,
         keep_open: bool = True,
         **kwargs,
     ) -> VideoBackend:
         """Create a Video from a filename.
 
         Args:
-            filename: Path to video file.
+            filename: Path to video file(s).
             dataset: Name of dataset in HDF5 file.
             grayscale: Whether to force grayscale. If None, autodetect on first frame
                 load.
@@ -132,8 +132,21 @@ class Video:
             self.open()
         return self.backend[inds]
 
-    def exists(self) -> bool:
-        """Check if the video file exists."""
+    def exists(self, check_all: bool = False) -> bool:
+        """Check if the video file exists.
+
+        Args:
+            check_all: If `True`, check that all filenames in a list exist. If `False`
+                (the default), check that the first filename exists.
+        """
+        if isinstance(self.filename, list):
+            if check_all:
+                for f in self.filename:
+                    if not Path(f).exists():
+                        return False
+                return True
+            else:
+                return Path(self.filename[0]).exists()
         return Path(self.filename).exists()
 
     @property
@@ -193,7 +206,9 @@ class Video:
             del self.backend
             self.backend = None
 
-    def replace_filename(self, new_filename: str | Path, open: bool = True):
+    def replace_filename(
+        self, new_filename: str | Path | list[str] | list[Path], open: bool = True
+    ):
         """Update the filename of the video, optionally opening the backend.
 
         Args:
@@ -203,6 +218,9 @@ class Video:
         """
         if isinstance(new_filename, Path):
             new_filename = str(new_filename)
+
+        if isinstance(new_filename, list):
+            new_filename = [str(p) if isinstance(p, Path) else p for p in new_filename]
 
         self.filename = new_filename
 
