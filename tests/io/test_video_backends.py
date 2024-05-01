@@ -1,10 +1,11 @@
 """Tests for methods in the sleap_io.io.video file."""
 
-from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video
+from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video, ImageVideo
 import numpy as np
 from numpy.testing import assert_equal
 import h5py
 import pytest
+from pathlib import Path
 
 
 def test_video_backend_from_filename(centered_pair_low_quality_path, slp_minimal_pkg):
@@ -140,3 +141,23 @@ def test_hdf5video_embedded(slp_minimal_pkg):
         == "tests/data/json_format_v1/centered_pair_low_quality.mp4"
     )
     assert backend.has_embedded_images
+
+
+def test_imagevideo(centered_pair_frame_paths):
+    backend = VideoBackend.from_filename(centered_pair_frame_paths)
+    assert type(backend) == ImageVideo
+    assert backend.shape == (3, 384, 384, 1)
+    assert backend[0].shape == (384, 384, 1)
+    assert backend[:3].shape == (3, 384, 384, 1)
+
+    img_folder = Path(centered_pair_frame_paths[0]).parent
+    imgs = ImageVideo.find_images(img_folder)
+    assert imgs == centered_pair_frame_paths
+
+    backend = VideoBackend.from_filename(img_folder)
+    assert type(backend) == ImageVideo
+    assert backend.shape == (3, 384, 384, 1)
+
+    backend = VideoBackend.from_filename(centered_pair_frame_paths[0])
+    assert type(backend) == ImageVideo
+    assert backend.shape == (1, 384, 384, 1)

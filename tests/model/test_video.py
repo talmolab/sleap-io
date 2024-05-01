@@ -1,7 +1,7 @@
 """Tests for methods in the sleap_io.model.video file."""
 
 from sleap_io import Video
-from sleap_io.io.video import MediaVideo
+from sleap_io.io.video import MediaVideo, ImageVideo
 import numpy as np
 import pytest
 from pathlib import Path
@@ -36,11 +36,23 @@ def test_video_repr(centered_pair_low_quality_video):
     )
 
 
-def test_video_exists(centered_pair_low_quality_video):
+def test_video_exists(centered_pair_low_quality_video, centered_pair_frame_paths):
     video = Video("test.mp4")
     assert video.exists() is False
 
     assert centered_pair_low_quality_video.exists() is True
+
+    video = Video(centered_pair_frame_paths)
+    assert video.exists() is True
+    assert video.exists(check_all=True) is True
+
+    video = Video([centered_pair_frame_paths[0], "fake.jpg"])
+    assert video.exists() is True
+    assert video.exists(check_all=True) is False
+
+    video = Video(["fake.jpg", centered_pair_frame_paths[0]])
+    assert video.exists() is False
+    assert video.exists(check_all=True) is False
 
 
 def test_video_open_close(centered_pair_low_quality_path):
@@ -79,7 +91,9 @@ def test_video_open_close(centered_pair_low_quality_path):
     assert video.shape == (1100, 384, 384, 1)
 
 
-def test_video_replace_filename(centered_pair_low_quality_path):
+def test_video_replace_filename(
+    centered_pair_low_quality_path, centered_pair_frame_paths
+):
     video = Video.from_filename("test.mp4")
     assert video.exists() is False
 
@@ -101,3 +115,9 @@ def test_video_replace_filename(centered_pair_low_quality_path):
     assert video.exists() is True
     assert video.is_open is False
     assert video.backend is None
+
+    video = Video.from_filename(["fake.jpg", "fake2.jpg", "fake3.jpg"])
+    assert type(video.backend) == ImageVideo
+    video.replace_filename(centered_pair_frame_paths)
+    assert type(video.backend) == ImageVideo
+    assert video.exists(check_all=True) is True
