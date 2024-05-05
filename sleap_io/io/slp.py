@@ -202,10 +202,10 @@ def embed_video(
     Args:
         labels_path: A string path to the SLEAP labels file.
         video: A `Video` object to embed in the labels file.
-        frame_inds: A list of frame indices to embed.
         group: The name of the group to store the embedded video in. Image data will be
             stored in a dataset named `{group}/video`. Frame indices will be stored
             in a data set named `{group}/frame_numbers`.
+        frame_inds: A list of frame indices to embed.
         image_format: The image format to use for embedding. Valid formats are "png"
             (the default), "jpg" or "hdf5".
         fixed_length: If `True` (the default), the embedded images will be padded to the
