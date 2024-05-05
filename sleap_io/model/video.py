@@ -5,14 +5,14 @@ a video and its components used in SLEAP.
 """
 
 from __future__ import annotations
-from attrs import define
+import attrs
 from typing import Tuple, Optional, Optional
 import numpy as np
 from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video
 from pathlib import Path
 
 
-@define
+@attrs.define
 class Video:
     """`Video` class used by sleap to represent videos and data associated with them.
 
@@ -37,7 +37,7 @@ class Video:
 
     filename: str | list[str]
     backend: Optional[VideoBackend] = None
-    backend_metadata: dict[str, any] = {}
+    backend_metadata: dict[str, any] = attrs.field(factory=dict)
     source_video: Optional[Video] = None
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS
