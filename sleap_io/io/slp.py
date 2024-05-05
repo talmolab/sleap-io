@@ -136,7 +136,7 @@ def video_to_dict(video: Video) -> dict:
         A dictionary containing the video metadata.
     """
     if video.backend is None:
-        return {"filename": video.filename, "backend": None}
+        return {"filename": video.filename, "backend": video.backend_metadata}
 
     if type(video.backend) == MediaVideo:
         return {
@@ -176,9 +176,9 @@ def video_to_dict(video: Video) -> dict:
                 "shape": video.shape,
                 "filename": video.backend.filename[0],
                 "filenames": video.backend.filename,
-                "dataset": getattr(video.backend, "dataset", None),
-                "grayscale": getattr(video.backend, "grayscale", None),
-                "input_format": getattr(video.backend, "input_format", None),
+                "dataset": video.backend_metadata.get("dataset", None),
+                "grayscale": video.grayscale,
+                "input_format": video.backend_metadata.get("input_format", None),
             },
         }
 
