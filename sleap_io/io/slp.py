@@ -25,9 +25,15 @@ from sleap_io.io.utils import (
     read_hdf5_attrs,
     read_hdf5_dataset,
 )
-import imageio.v3 as iio
 from enum import IntEnum
 from pathlib import Path
+import imageio.v3 as iio
+import sys
+
+try:
+    import cv2
+except ImportError:
+    pass
 
 
 class InstanceType(IntEnum):
@@ -214,9 +220,17 @@ def embed_video(
         if image_format == "hdf5":
             img_data = frame
         else:
-            img_data = iio.imwrite(
-                "<bytes>", frame, extension="." + image_format
-            ).astype("int8")
+            if "cv2" in sys.modules:
+                img_data = np.squeeze(
+                    cv2.imencode("." + image_format, frame)[1]
+                ).astype("int8")
+            else:
+                img_data = np.frombuffer(
+                    iio.imwrite(
+                        "<bytes>", frame.squeeze(axis=-1), extension="." + image_format
+                    ),
+                    dtype="int8",
+                )
 
         imgs_data.append(img_data)
 

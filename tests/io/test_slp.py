@@ -101,32 +101,26 @@ def test_read_videos_pkg(slp_minimal_pkg):
 
 def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
 
-    def load_jsons(h5_path, dataset):
-        return [json.loads(x) for x in read_hdf5_dataset(h5_path, dataset)]
+    def compare_videos(videos_ref, videos_test):
+        assert len(videos_ref) == len(videos_test)
+        for video_ref, video_test in zip(videos_ref, videos_test):
+            assert video_ref.shape == video_test.shape
+            assert (video_ref[0] == video_test[0]).all()
 
-    def compare_jsons(jsons_ref, jsons_test):
-        for jsons_ref, jsons_test in zip(jsons_ref, jsons_test):
-            for k in jsons_ref["backend"]:
-                assert jsons_ref["backend"][k] == jsons_test["backend"][k]
+    videos_ref = read_videos(slp_minimal_pkg)
+    write_videos(tmp_path / "test_minimal_pkg.slp", videos_ref)
+    videos_test = read_videos(tmp_path / "test_minimal_pkg.slp")
+    compare_videos(videos_ref, videos_test)
 
-    videos = read_videos(slp_minimal_pkg)
-    write_videos(tmp_path / "test_minimal_pkg.slp", videos)
-    json_fixture = load_jsons(slp_minimal_pkg, "videos_json")
-    json_test = load_jsons(tmp_path / "test_minimal_pkg.slp", "videos_json")
-    compare_jsons(json_fixture, json_test)
-
-    videos = read_videos(centered_pair)
-    write_videos(tmp_path / "test_centered_pair.slp", videos)
-    json_fixture = load_jsons(centered_pair, "videos_json")
-    json_test = load_jsons(tmp_path / "test_centered_pair.slp", "videos_json")
-    compare_jsons(json_fixture, json_test)
+    videos_ref = read_videos(centered_pair)
+    write_videos(tmp_path / "test_centered_pair.slp", videos_ref)
+    videos_test = read_videos(tmp_path / "test_centered_pair.slp")
+    compare_videos(videos_ref, videos_test)
 
     videos = read_videos(centered_pair) * 2
     write_videos(tmp_path / "test_centered_pair_2vids.slp", videos)
-    json_test = read_hdf5_dataset(
-        tmp_path / "test_centered_pair_2vids.slp", "videos_json"
-    )
-    assert len(json_test) == 2
+    videos_test = read_videos(tmp_path / "test_centered_pair_2vids.slp")
+    compare_videos(videos, videos_test)
 
 
 def test_write_tracks(centered_pair, tmp_path):

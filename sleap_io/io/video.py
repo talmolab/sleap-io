@@ -585,13 +585,12 @@ class HDF5Video(VideoBackend):
         """Return True if the dataset contains embedded images."""
         return self.image_format is not None and self.image_format != "hdf5"
 
-    def decode_embedded(self, img_string: np.ndarray, format: str) -> np.ndarray:
+    def decode_embedded(self, img_string: np.ndarray) -> np.ndarray:
         """Decode an embedded image string into a numpy array.
 
         Args:
             img_string: Binary string of the image as a `int8` numpy vector with the
                 bytes as values corresponding to the format-encoded image.
-            format: Image format (e.g., "png" or "jpg").
 
         Returns:
             The decoded image as a numpy array of shape `(height, width, channels)`. If
@@ -604,7 +603,7 @@ class HDF5Video(VideoBackend):
         if "cv2" in sys.modules:
             img = cv2.imdecode(img_string, cv2.IMREAD_UNCHANGED)
         else:
-            img = iio.imread(BytesIO(img_string), extension=f".{format}")
+            img = iio.imread(BytesIO(img_string), extension=f".{self.image_format}")
 
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
