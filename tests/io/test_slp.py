@@ -32,6 +32,8 @@ from sleap_io.io.slp import (
 )
 from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
+import simplejson as json
+
 
 from sleap_io.io.video import ImageVideo
 
@@ -98,17 +100,26 @@ def test_read_videos_pkg(slp_minimal_pkg):
 
 
 def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
+
+    def load_jsons(h5_path, dataset):
+        return [json.loads(x) for x in read_hdf5_dataset(h5_path, dataset)]
+
+    def compare_jsons(jsons_ref, jsons_test):
+        for jsons_ref, jsons_test in zip(jsons_ref, jsons_test):
+            for k in jsons_ref["backend"]:
+                assert jsons_ref["backend"][k] == jsons_test["backend"][k]
+
     videos = read_videos(slp_minimal_pkg)
     write_videos(tmp_path / "test_minimal_pkg.slp", videos)
-    json_fixture = read_hdf5_dataset(slp_minimal_pkg, "videos_json")
-    json_test = read_hdf5_dataset(tmp_path / "test_minimal_pkg.slp", "videos_json")
-    assert json_fixture == json_test
+    json_fixture = load_jsons(slp_minimal_pkg, "videos_json")
+    json_test = load_jsons(tmp_path / "test_minimal_pkg.slp", "videos_json")
+    compare_jsons(json_fixture, json_test)
 
     videos = read_videos(centered_pair)
     write_videos(tmp_path / "test_centered_pair.slp", videos)
-    json_fixture = read_hdf5_dataset(centered_pair, "videos_json")
-    json_test = read_hdf5_dataset(tmp_path / "test_centered_pair.slp", "videos_json")
-    assert json_fixture == json_test
+    json_fixture = load_jsons(centered_pair, "videos_json")
+    json_test = load_jsons(tmp_path / "test_centered_pair.slp", "videos_json")
+    compare_jsons(json_fixture, json_test)
 
     videos = read_videos(centered_pair) * 2
     write_videos(tmp_path / "test_centered_pair_2vids.slp", videos)

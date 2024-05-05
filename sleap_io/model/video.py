@@ -26,12 +26,16 @@ class Video:
         filename: The filename(s) of the video.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
+        backend_metadata: A dictionary of metadata specific to the backend. This is
+            useful for storing metadata that requires an open backend (e.g., shape
+            information) without having access to the video file itself.
 
     See also: VideoBackend
     """
 
     filename: str | list[str]
     backend: Optional[VideoBackend] = None
+    backend_metadata: dict[str, any] = {}
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS
 
@@ -88,6 +92,23 @@ class Video:
         try:
             return self.backend.shape
         except:
+            if "shape" in self.backend_metadata:
+                return self.backend_metadata["shape"]
+            return None
+
+    @property
+    def grayscale(self) -> bool | None:
+        """Return whether the video is grayscale.
+
+        If the video backend is not set or it cannot determine whether the video is
+        grayscale, this will return None.
+        """
+        shape = self.shape
+        if shape is not None:
+            return shape[-1] == 1
+        else:
+            if "grayscale" in self.backend_metadata:
+                return self.backend_metadata["grayscale"]
             return None
 
     def __len__(self) -> int:
@@ -189,6 +210,12 @@ class Video:
             if grayscale is None:
                 grayscale = getattr(self.backend, "grayscale", None)
 
+        else:
+            if "dataset" in self.backend_metadata:
+                dataset = self.backend_metadata["dataset"]
+            if "grayscale" in self.backend_metadata:
+                grayscale = self.backend_metadata["grayscale"]
+
         # Close previous backend if open.
         self.close()
 
@@ -231,10 +258,3 @@ class Video:
                 self.open()
             else:
                 self.close()
-
-    def to_json(self) -> dict:
-        """Return a dictionary representation of the video."""
-        if self.backend is not None:
-            return self.backend.to_json()
-        else:
-            return {"filename": self.filename, "backend": None}
