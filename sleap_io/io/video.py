@@ -674,7 +674,7 @@ class HDF5Video(VideoBackend):
 
         if "format" in ds.attrs:
             imgs = np.stack(
-                [self.decode_embedded(img, ds.attrs["format"]) for img in imgs],
+                [self.decode_embedded(img) for img in imgs],
                 axis=0,
             )
 
