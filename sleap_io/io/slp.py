@@ -37,13 +37,16 @@ class InstanceType(IntEnum):
     PREDICTED = 1
 
 
-def make_video(labels_path: str, video_json: dict, video_index: int) -> Video:
+def make_video(
+    labels_path: str, video_json: dict, video_ind: int | None = None
+) -> Video:
     """Create a `Video` object from a JSON dictionary.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         video_json: A dictionary containing the video metadata.
-        video_index: The index of the video in the labels file.
+        video_ind: The index of the video in the labels file. This is used to try to
+            recover the source video for embedded videos. This is skipped if `None`.
     """
     backend_metadata = video_json["backend"]
     video_path = backend_metadata["filename"]
@@ -67,17 +70,19 @@ def make_video(labels_path: str, video_json: dict, video_index: int) -> Video:
             # complex path finding strategies.
             pass
 
-    if is_embedded and video_path.exists():
-        # Try to recover the source video.
-        with h5py.File(labels_path, "r") as f:
-            if f"video{video_index}" in f:
-                source_video_json = json.loads(
-                    f[f"video{video_index}/source_video"].attrs["json"]
-                )
-                source_video = make_video(labels_path, source_video_json, video_index)
-
     # Convert video path to string.
     video_path = video_path.as_posix()
+
+    if is_embedded:
+        # Try to recover the source video.
+        with h5py.File(labels_path, "r") as f:
+            if f"video{video_ind}" in f:
+                source_video_json = json.loads(
+                    f[f"video{video_ind}/source_video"].attrs["json"]
+                )
+                source_video = make_video(
+                    labels_path, source_video_json, video_ind=None
+                )
 
     if "filenames" in backend_metadata:
         # This is an ImageVideo.
@@ -116,7 +121,7 @@ def read_videos(labels_path: str) -> list[Video]:
         read_hdf5_dataset(labels_path, "videos_json")
     ):
         video_json = json.loads(video_data)
-        video = make_video(labels_path, video_json, video_index=video_ind)
+        video = make_video(labels_path, video_json, video_ind=video_ind)
         videos.append(video)
     return videos
 
