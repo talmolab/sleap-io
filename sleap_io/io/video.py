@@ -479,6 +479,8 @@ class HDF5Video(VideoBackend):
             when reading embedded image datasets.
         source_inds: Indices of the frames in the source video file. This is metadata
             and only used when reading embedded image datasets.
+        image_format: Format of the images in the embedded dataset. This is metadata and
+            only used when reading embedded image datasets.
     """
 
     dataset: Optional[str] = None
@@ -489,6 +491,7 @@ class HDF5Video(VideoBackend):
     frame_map: dict[int, int] = attrs.field(init=False, default=attrs.Factory(dict))
     source_filename: Optional[str] = None
     source_inds: Optional[np.ndarray] = None
+    image_format: str = "hdf5"
 
     EXTS = ("h5", "hdf5", "slp")
 
@@ -530,6 +533,9 @@ class HDF5Video(VideoBackend):
         if self.dataset.split("/")[-1] == "video":
             # This may be an embedded video dataset. Check for frame map.
             ds = f[self.dataset]
+
+            if "format" in ds.attrs:
+                self.image_format = ds.attrs["format"]
 
             if "frame_numbers" in ds.parent:
                 frame_numbers = ds.parent["frame_numbers"][:]
@@ -577,9 +583,7 @@ class HDF5Video(VideoBackend):
     @property
     def has_embedded_images(self) -> bool:
         """Return True if the dataset contains embedded images."""
-        with h5py.File(self.filename, "r") as f:
-            ds = f[self.dataset]
-            return "format" in ds.attrs
+        return self.image_format is not None and self.image_format != "hdf5"
 
     def decode_embedded(self, img_string: np.ndarray, format: str) -> np.ndarray:
         """Decode an embedded image string into a numpy array.
@@ -633,8 +637,8 @@ class HDF5Video(VideoBackend):
 
         img = ds[frame_idx]
 
-        if "format" in ds.attrs:
-            img = self.decode_embedded(img, ds.attrs["format"])
+        if self.has_embedded_images:
+            img = self.decode_embedded(img)
 
         if self.input_format == "channels_first":
             img = np.transpose(img, (2, 1, 0))

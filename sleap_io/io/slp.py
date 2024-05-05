@@ -201,7 +201,7 @@ def embed_video(
             stored in a dataset named `{group}/video`. Frame indices will be stored
             in a data set named `{group}/frame_numbers`.
         image_format: The image format to use for embedding. Valid formats are "png"
-            (the default), "jpg" or "gzip".
+            (the default), "jpg" or "hdf5".
         fixed_length: If `True` (the default), the embedded images will be padded to the
             length of the largest image. If `False`, the images will be stored as
             variable length, which is smaller but may not be supported by all readers.
@@ -211,7 +211,7 @@ def embed_video(
     for frame_idx in frame_inds:
         frame = video[frame_idx]
 
-        if image_format == "gzip":
+        if image_format == "hdf5":
             img_data = frame
         else:
             img_data = iio.imwrite(
@@ -222,7 +222,7 @@ def embed_video(
 
     # Write the image data to the labels file.
     with h5py.File(labels_path, "a") as f:
-        if image_format == "gzip":
+        if image_format == "hdf5":
             f.create_dataset(
                 f"{group}/video", data=imgs_data, compression="gzip", chunks=True
             )
@@ -259,6 +259,7 @@ def embed_video(
 
         # Store source video.
         if video.source_video is not None:
+            # If this is already an embedded dataset, retain the previous source video.
             source_video = video.source_video
         else:
             source_video = video
@@ -276,13 +277,18 @@ def write_videos(labels_path: str, videos: list[Video]):
         videos: A list of `Video` objects to store the metadata for.
     """
     video_jsons = []
-    for video in videos:
+    for video_ind, video in enumerate(videos):
         video_json = video_to_dict(video)
 
-        if type(video.backend) == HDF5Video:
-            # TODO: Handle saving embedded images or restoring source video.
-            # Ref: https://github.com/talmolab/sleap/blob/fb61b6ce7a9ac9613d99303111f3daafaffc299b/sleap/io/format/hdf5.py#L246-L273
-            pass
+        if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
+            # If the video is an HDF5Video with embedded images, embed the images again.
+            embed_video(
+                labels_path,
+                video,
+                group=f"video{video_ind}",
+                frame_inds=video.backend.source_inds,
+                image_format=video.backend.image_format,
+            )
 
         video_jsons.append(np.string_(json.dumps(video_json, separators=(",", ":"))))
 
