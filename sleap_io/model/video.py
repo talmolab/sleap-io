@@ -231,3 +231,10 @@ class Video:
                 self.open()
             else:
                 self.close()
+
+    def to_json(self) -> dict:
+        """Return a dictionary representation of the video."""
+        if self.backend is not None:
+            return self.backend.to_json()
+        else:
+            return {"filename": self.filename, "backend": None}

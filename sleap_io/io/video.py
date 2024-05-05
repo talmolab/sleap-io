@@ -434,6 +434,20 @@ class MediaVideo(VideoBackend):
                     )
         return imgs
 
+    def to_json(self) -> dict:
+        """Return JSON-serializable dictionary of the video backend."""
+        return {
+            "type": "MediaVideo",
+            "shape": self.shape,
+            "backend": {
+                "filename": self.filename,
+                "grayscale": self.grayscale,
+                "bgr": True,
+                "dataset": "",
+                "input_format": "",
+            },
+        }
+
 
 @attrs.define
 class HDF5Video(VideoBackend):
@@ -682,6 +696,20 @@ class HDF5Video(VideoBackend):
 
         return imgs
 
+    def to_json(self) -> dict:
+        """Return JSON-serializable dictionary of the video backend."""
+        return {
+            "type": "HDF5Video",
+            "shape": self.shape,
+            "backend": {
+                "filename": ("." if self.has_embedded_images else self.filename),
+                "dataset": self.dataset,
+                "input_format": self.input_format,
+                "convert_range": False,
+                "has_embedded_images": self.has_embedded_images,
+            },
+        }
+
 
 @attrs.define
 class ImageVideo(VideoBackend):
@@ -726,3 +754,25 @@ class ImageVideo(VideoBackend):
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
         return img
+
+    def to_json(self) -> dict:
+        """Return JSON-serializable dictionary of the video backend."""
+
+        shape = self.shape
+        if shape is None:
+            height, width, channels = 0, 0, 1
+        else:
+            height, width, channels = shape[1:]
+
+        return {
+            "type": "ImageVideo",
+            "shape": self.shape,
+            "backend": {
+                "filename": self.filename[0],
+                "filenames": self.filename,
+                "height_": height,
+                "width_": width,
+                "channels_": channels,
+                "grayscale": self.grayscale,
+            },
+        }
