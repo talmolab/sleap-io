@@ -300,7 +300,7 @@ def embed_video(
             video_to_dict(source_video), separators=(",", ":")
         )
 
-        return embedded_video
+    return embedded_video
 
 
 def embed_frames(
@@ -362,8 +362,10 @@ def write_videos(labels_path: str, videos: list[Video]):
         if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
             # If the video has embedded images, embed them images again if we haven't
             # already.
-            with h5py.File(labels_path, "r") as f:
-                already_embedded = f"video{video_ind}/video" in f
+            already_embedded = False
+            if Path(labels_path).exists():
+                with h5py.File(labels_path, "r") as f:
+                    already_embedded = f"video{video_ind}/video" in f
 
             if not already_embedded:
                 video = embed_video(
