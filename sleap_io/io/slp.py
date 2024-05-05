@@ -37,19 +37,23 @@ class InstanceType(IntEnum):
     PREDICTED = 1
 
 
-def make_video(video_json: dict, labels_path: str) -> Video:
+def make_video(labels_path: str, video_json: dict, video_index: int) -> Video:
     """Create a `Video` object from a JSON dictionary.
 
     Args:
-        video_json: A dictionary containing the video metadata.
         labels_path: A string path to the SLEAP labels file.
+        video_json: A dictionary containing the video metadata.
+        video_index: The index of the video in the labels file.
     """
     backend_metadata = video_json["backend"]
     video_path = backend_metadata["filename"]
 
     # Marker for embedded videos.
+    source_video = None
+    is_embedded = False
     if video_path == ".":
         video_path = labels_path
+        is_embedded = True
 
     # Basic path resolution.
     video_path = Path(video_path)
@@ -63,6 +67,16 @@ def make_video(video_json: dict, labels_path: str) -> Video:
             # complex path finding strategies.
             pass
 
+    if is_embedded and video_path.exists():
+        # Try to recover the source video.
+        with h5py.File(labels_path, "r") as f:
+            if f"video{video_index}" in f:
+                source_video_json = json.loads(
+                    f[f"video{video_index}/source_video"].attrs["json"]
+                )
+                source_video = make_video(labels_path, source_video_json, video_index)
+
+    # Convert video path to string.
     video_path = video_path.as_posix()
 
     if "filenames" in backend_metadata:
@@ -81,7 +95,10 @@ def make_video(video_json: dict, labels_path: str) -> Video:
         backend = None
 
     return Video(
-        filename=video_path, backend=backend, backend_metadata=backend_metadata
+        filename=video_path,
+        backend=backend,
+        backend_metadata=backend_metadata,
+        source_video=source_video,
     )
 
 
@@ -95,9 +112,11 @@ def read_videos(labels_path: str) -> list[Video]:
         A list of `Video` objects.
     """
     videos = []
-    for video_data in read_hdf5_dataset(labels_path, "videos_json"):
+    for video_ind, video_data in enumerate(
+        read_hdf5_dataset(labels_path, "videos_json")
+    ):
         video_json = json.loads(video_data)
-        video = make_video(video_json, labels_path)
+        video = make_video(labels_path, video_json, video_index=video_ind)
         videos.append(video)
     return videos
 
@@ -234,8 +253,14 @@ def embed_video(
         f.create_dataset(f"{group}/frame_numbers", data=frame_inds)
 
         # Store source video.
+        if video.source_video is not None:
+            source_video = video.source_video
+        else:
+            source_video = video
         grp = f.require_group(f"{group}/source_video")
-        grp.attrs["json"] = json.dumps(video_to_dict(video), separators=(",", ":"))
+        grp.attrs["json"] = json.dumps(
+            video_to_dict(source_video), separators=(",", ":")
+        )
 
 
 def write_videos(labels_path: str, videos: list[Video]):

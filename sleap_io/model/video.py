@@ -29,6 +29,8 @@ class Video:
         backend_metadata: A dictionary of metadata specific to the backend. This is
             useful for storing metadata that requires an open backend (e.g., shape
             information) without having access to the video file itself.
+        source_video: The source video object if this is a proxy video. This is present
+            when the video contains an embedded subset of frames from another video.
 
     See also: VideoBackend
     """
@@ -36,6 +38,7 @@ class Video:
     filename: str | list[str]
     backend: Optional[VideoBackend] = None
     backend_metadata: dict[str, any] = {}
+    source_video: Optional[Video] = None
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS
 
@@ -46,6 +49,7 @@ class Video:
         dataset: Optional[str] = None,
         grayscale: Optional[bool] = None,
         keep_open: bool = True,
+        source_video: Optional[Video] = None,
         **kwargs,
     ) -> VideoBackend:
         """Create a Video from a filename.
@@ -59,6 +63,9 @@ class Video:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            source_video: The source video object if this is a proxy video. This is
+                present when the video contains an embedded subset of frames from
+                another video.
 
         Returns:
             Video instance with the appropriate backend instantiated.
@@ -72,6 +79,7 @@ class Video:
                 keep_open=keep_open,
                 **kwargs,
             ),
+            source_video=source_video,
         )
 
     @property
@@ -211,9 +219,9 @@ class Video:
                 grayscale = getattr(self.backend, "grayscale", None)
 
         else:
-            if "dataset" in self.backend_metadata:
+            if dataset is None and "dataset" in self.backend_metadata:
                 dataset = self.backend_metadata["dataset"]
-            if "grayscale" in self.backend_metadata:
+            if grayscale is None and "grayscale" in self.backend_metadata:
                 grayscale = self.backend_metadata["grayscale"]
 
         # Close previous backend if open.
