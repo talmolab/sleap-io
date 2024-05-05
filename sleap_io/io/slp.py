@@ -196,7 +196,7 @@ def embed_video(
     frame_inds: list[int],
     image_format: str = "png",
     fixed_length: bool = True,
-):
+) -> Video:
     """Embed frames of a video in a SLEAP labels file.
 
     Args:
@@ -211,6 +211,12 @@ def embed_video(
         fixed_length: If `True` (the default), the embedded images will be padded to the
             length of the largest image. If `False`, the images will be stored as
             variable length, which is smaller but may not be supported by all readers.
+
+    Returns:
+        An embedded `Video` object.
+
+        If the video is already embedded, the original video will be returned. If not,
+        a new `Video` object will be created with the embedded data.
     """
     # Load the image data and optionally encode it.
     imgs_data = []
@@ -275,12 +281,72 @@ def embed_video(
         if video.source_video is not None:
             # If this is already an embedded dataset, retain the previous source video.
             source_video = video.source_video
+            embedded_video = video
         else:
             source_video = video
+            embedded_video = Video(
+                filename=labels_path,
+                backend=VideoBackend.from_filename(
+                    labels_path,
+                    dataset=f"{group}/video",
+                    grayscale=video.grayscale,
+                    keep_open=False,
+                ),
+                source_video=source_video,
+            )
+
         grp = f.require_group(f"{group}/source_video")
         grp.attrs["json"] = json.dumps(
             video_to_dict(source_video), separators=(",", ":")
         )
+
+        return embedded_video
+
+
+def embed_frames(
+    labels_path: str,
+    labels: Labels,
+    to_embed: list[tuple[Video, int]],
+    image_format: str = "png",
+):
+    """Embed frames in a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object to embed in the labels file.
+        to_embed: A list of tuples of `(video, frame_idx)` specifying the frames to
+            embed.
+        image_format: The image format to use for embedding. Valid formats are "png"
+            (the default), "jpg" or "hdf5".
+
+    Notes:
+        This function will embed the frames in the labels file and update the `Videos`
+        and `Labels` objects in place.
+    """
+    to_embed_by_video = {}
+    for video, frame_idx in to_embed:
+        if video not in to_embed_by_video:
+            to_embed_by_video[video] = []
+        to_embed_by_video[video].append(frame_idx)
+
+    replaced_videos = {}
+    for video, frame_inds in to_embed_by_video.items():
+        video_ind = labels.videos.index(video)
+        embedded_video = embed_video(
+            labels_path,
+            video,
+            group=f"video{video_ind}",
+            frame_inds=frame_inds,
+            image_format=image_format,
+        )
+
+        labels.videos[video_ind] = embedded_video
+        replaced_videos[video] = embedded_video
+
+    # Update the labeled frames with the new videos.
+    for lf in labels:
+        if lf.video in replaced_videos:
+            lf.video = replaced_videos[lf.video]
 
 
 def write_videos(labels_path: str, videos: list[Video]):
@@ -292,17 +358,23 @@ def write_videos(labels_path: str, videos: list[Video]):
     """
     video_jsons = []
     for video_ind, video in enumerate(videos):
-        video_json = video_to_dict(video)
 
         if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
-            # If the video is an HDF5Video with embedded images, embed the images again.
-            embed_video(
-                labels_path,
-                video,
-                group=f"video{video_ind}",
-                frame_inds=video.backend.source_inds,
-                image_format=video.backend.image_format,
-            )
+            # If the video has embedded images, embed them images again if we haven't
+            # already.
+            with h5py.File(labels_path, "r") as f:
+                already_embedded = f"video{video_ind}/video" in f
+
+            if not already_embedded:
+                video = embed_video(
+                    labels_path,
+                    video,
+                    group=f"video{video_ind}",
+                    frame_inds=video.backend.source_inds,
+                    image_format=video.backend.image_format,
+                )
+
+        video_json = video_to_dict(video)
 
         video_jsons.append(np.string_(json.dumps(video_json, separators=(",", ":"))))
 
