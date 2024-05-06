@@ -349,6 +349,33 @@ def embed_frames(
             lf.video = replaced_videos[lf.video]
 
 
+def embed_videos(
+    labels_path: str, labels: Labels, to_embed: str | list[tuple[Video, int]]
+):
+    """Embed videos in a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file to save.
+        labels: A `Labels` object to save.
+        to_embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, or list of
+            tuples of `(video, frame_idx)` specifying the frames to embed.
+    """
+
+    if to_embed == "user":
+        to_embed = [(lf.video, lf.frame_idx) for lf in labels]
+    elif to_embed == "suggestions":
+        to_embed = [(sf.video, sf.frame_idx) for sf in labels.suggestions]
+    elif to_embed == "user+suggestions":
+        to_embed = [(lf.video, lf.frame_idx) for lf in labels]
+        to_embed += [(sf.video, sf.frame_idx) for sf in labels.suggestions]
+    elif isinstance(to_embed, list):
+        to_embed = to_embed
+    else:
+        raise ValueError(f"Invalid value for to_embed: {to_embed}")
+
+    embed_frames(labels_path, labels, to_embed)
+
+
 def write_videos(labels_path: str, videos: list[Video]):
     """Write video metadata to a SLEAP labels file.
 
@@ -981,15 +1008,22 @@ def read_labels(labels_path: str) -> Labels:
     return labels
 
 
-def write_labels(labels_path: str, labels: Labels):
+def write_labels(
+    labels_path: str, labels: Labels, embed: str | list[tuple[Video, int]] | None = None
+):
     """Write a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file to save.
         labels: A `Labels` object to save.
+        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, or list of tuples
+            of `(video, frame_idx)` specifying the frames to embed. If `None`, no frames
+            will be embedded. Existing embedded videos will be re-saved regardless.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
+    if embed is not None:
+        embed_videos(labels_path, labels, embed)
     write_videos(labels_path, labels.videos)
     write_tracks(labels_path, labels.tracks)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
