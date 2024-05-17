@@ -12,7 +12,7 @@ from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video
 from pathlib import Path
 
 
-@attrs.define
+@attrs.define(eq=False)
 class Video:
     """`Video` class used by sleap to represent videos and data associated with them.
 
@@ -31,6 +31,11 @@ class Video:
             information) without having access to the video file itself.
         source_video: The source video object if this is a proxy video. This is present
             when the video contains an embedded subset of frames from another video.
+
+    Notes:
+        Instances of this class are hashed by identity, not by value. This means that
+        two `Video` instances with the same attributes will NOT be considered equal in a
+        set or dict.
 
     See also: VideoBackend
     """
