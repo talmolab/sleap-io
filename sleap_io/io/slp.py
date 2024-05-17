@@ -282,6 +282,7 @@ def embed_video(
             # If this is already an embedded dataset, retain the previous source video.
             source_video = video.source_video
             embedded_video = video
+            video.replace_filename(labels_path, open=False)
         else:
             source_video = video
             embedded_video = Video(
@@ -348,6 +349,11 @@ def embed_frames(
         if lf.video in replaced_videos:
             lf.video = replaced_videos[lf.video]
 
+    # Update suggestions with the new videos.
+    for sf in labels.suggestions:
+        if sf.video in replaced_videos:
+            sf.video = replaced_videos[sf.video]
+
 
 def embed_videos(
     labels_path: str, labels: Labels, to_embed: str | list[tuple[Video, int]]
@@ -362,11 +368,11 @@ def embed_videos(
     """
 
     if to_embed == "user":
-        to_embed = [(lf.video, lf.frame_idx) for lf in labels]
+        to_embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
     elif to_embed == "suggestions":
         to_embed = [(sf.video, sf.frame_idx) for sf in labels.suggestions]
     elif to_embed == "user+suggestions":
-        to_embed = [(lf.video, lf.frame_idx) for lf in labels]
+        to_embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
         to_embed += [(sf.video, sf.frame_idx) for sf in labels.suggestions]
     elif isinstance(to_embed, list):
         to_embed = to_embed
