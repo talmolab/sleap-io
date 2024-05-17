@@ -86,6 +86,7 @@ def read_labels(
     frames: List[LabeledFrame] = []
     # Video name is the pose file minus the suffix
     video_name = re.sub(r"(_pose_est_v[2-6])?\.h5", ".avi", labels_path)
+    video = Video.from_filename(video_name)
     if not skeleton:
         skeleton = JABS_DEFAULT_SKELETON
     tracks = {}
@@ -166,7 +167,7 @@ def read_labels(
                     )
                     if new_instance:
                         instances.append(new_instance)
-            frame_label = LabeledFrame(Video(video_name), frame_idx, instances)
+            frame_label = LabeledFrame(video, frame_idx, instances)
             frames.append(frame_label)
     return Labels(frames)
 
