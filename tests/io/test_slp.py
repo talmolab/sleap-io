@@ -33,9 +33,10 @@ from sleap_io.io.slp import (
 from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
 import simplejson as json
+import pytest
 
 
-from sleap_io.io.video import ImageVideo
+from sleap_io.io.video import ImageVideo, HDF5Video, MediaVideo
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -242,3 +243,48 @@ def test_slp_imgvideo(tmpdir, slp_imgvideo):
     assert type(videos[0].backend) == ImageVideo
     assert len(videos[0].filename) == 2
     assert videos[0].shape is None
+
+
+def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
+    labels = read_labels(slp_minimal_pkg)
+    assert type(labels.video.backend) == HDF5Video
+    assert labels.video.shape == (1, 384, 384, 1)
+    assert labels.video.backend.embedded_frame_inds == [0]
+    assert labels.video.filename == slp_minimal_pkg
+
+    write_labels(str(tmpdir / "roundtrip.pkg.slp"), labels)
+    labels = read_labels(str(tmpdir / "roundtrip.pkg.slp"))
+    assert type(labels.video.backend) == HDF5Video
+    assert labels.video.shape == (1, 384, 384, 1)
+    assert labels.video.backend.embedded_frame_inds == [0]
+    assert labels.video.filename == str(tmpdir / "roundtrip.pkg.slp")
+
+
+@pytest.mark.parametrize("to_embed", ["user", "suggestions", "user+suggestions"])
+def test_embed(tmpdir, slp_real_data, to_embed):
+    base_labels = read_labels(slp_real_data)
+    assert type(base_labels.video.backend) == MediaVideo
+    assert (
+        base_labels.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+    assert base_labels.video.shape == (1100, 384, 384, 1)
+    assert len(base_labels) == 10
+    assert len(base_labels.suggestions) == 10
+    assert len(base_labels.user_labeled_frames) == 5
+
+    labels_path = str(tmpdir / "labels.pkg.slp")
+    write_labels(labels_path, base_labels, embed=to_embed)
+    labels = read_labels(labels_path)
+    assert len(labels) == 10
+    assert type(labels.video.backend) == HDF5Video
+    assert labels.video.filename == labels_path
+    assert (
+        labels.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+    if to_embed == "user":
+        assert labels.video.backend.embedded_frame_inds == [0, 990, 440, 220, 770]
+    elif to_embed == "suggestions":
+        assert len(labels.video.backend.embedded_frame_inds) == 10
+    elif to_embed == "suggestions+user":
+        assert len(labels.video.backend.embedded_frame_inds) == 10
