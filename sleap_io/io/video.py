@@ -585,6 +585,11 @@ class HDF5Video(VideoBackend):
         """Return True if the dataset contains embedded images."""
         return self.image_format is not None and self.image_format != "hdf5"
 
+    @property
+    def embedded_frame_inds(self) -> list[int]:
+        """Return the frame indices of the embedded images."""
+        return list(self.frame_map.keys())
+
     def decode_embedded(self, img_string: np.ndarray) -> np.ndarray:
         """Decode an embedded image string into a numpy array.
 
