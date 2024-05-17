@@ -374,3 +374,8 @@ class Labels:
                 tracks=True,
                 videos=False,
             )
+
+    @property
+    def user_labeled_frames(self) -> list[LabeledFrame]:
+        """Return all labeled frames with user (non-predicted) instances."""
+        return [lf for lf in self.labeled_frames if lf.has_user_instances]
