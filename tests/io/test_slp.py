@@ -12,6 +12,7 @@ from sleap_io import (
     PredictedPoint,
     PredictedInstance,
     Labels,
+    SuggestionFrame,
 )
 from sleap_io.io.slp import (
     read_videos,
@@ -29,6 +30,8 @@ from sleap_io.io.slp import (
     write_lfs,
     read_labels,
     write_labels,
+    read_suggestions,
+    write_suggestions,
 )
 from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
@@ -237,3 +240,20 @@ def test_slp_imgvideo(tmpdir, slp_imgvideo):
     assert type(videos[0].backend) == ImageVideo
     assert len(videos[0].filename) == 2
     assert videos[0].shape is None
+
+
+def test_suggestions(tmpdir):
+    labels = Labels()
+    labels.videos.append(Video.from_filename("fake.mp4"))
+    labels.suggestions.append(SuggestionFrame(video=labels.video, frame_idx=0))
+
+    write_suggestions(tmpdir / "test.slp", labels.suggestions, labels.videos)
+    loaded_suggestions = read_suggestions(tmpdir / "test.slp", labels.videos)
+    assert len(loaded_suggestions) == 1
+    assert loaded_suggestions[0].video.filename == "fake.mp4"
+    assert loaded_suggestions[0].frame_idx == 0
+
+    # Handle missing suggestions dataset
+    write_videos(tmpdir / "test2.slp", labels.videos)
+    loaded_suggestions = read_suggestions(tmpdir / "test2.slp", labels.videos)
+    assert len(loaded_suggestions) == 0
