@@ -27,3 +27,5 @@
 ::: sleap_io.Track
 
 ::: sleap_io.Video
+
+::: sleap_io.SuggestionFrame

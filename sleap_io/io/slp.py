@@ -462,9 +462,11 @@ def read_suggestions(labels_path: str, videos: list[Video]) -> list[SuggestionFr
     Returns:
         A list of `SuggestionFrame` objects.
     """
-    suggestions = [
-        json.loads(x) for x in read_hdf5_dataset(labels_path, "suggestions_json")
-    ]
+    try:
+        suggestions = read_hdf5_dataset(labels_path, "suggestions_json")
+    except KeyError:
+        return []
+    suggestions = [json.loads(x) for x in suggestions]
     suggestions_objects = []
     for suggestion in suggestions:
         suggestions_objects.append(
