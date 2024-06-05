@@ -15,6 +15,7 @@ from sleap_io import (
 )
 from sleap_io.model.labels import Labels
 import numpy as np
+from pathlib import Path
 
 
 def test_labels():
@@ -393,10 +394,16 @@ def test_replace_filenames():
     labels.replace_filenames(
         filename_map={"c.mp4": "/a/b/c.mp4", "d.mp4": "/a/b/d.mp4"}
     )
-    assert [v.filename for v in labels.videos] == ["/a/b/c.mp4", "/a/b/d.mp4"]
+    assert [Path(v.filename).as_posix() for v in labels.videos] == [
+        "/a/b/c.mp4",
+        "/a/b/d.mp4",
+    ]
 
     labels.replace_filenames(prefix_map={"/a/b/": "/A/B"})
-    assert [v.filename for v in labels.videos] == ["/A/B/c.mp4", "/A/B/d.mp4"]
+    assert [Path(v.filename).as_posix() for v in labels.videos] == [
+        "/A/B/c.mp4",
+        "/A/B/d.mp4",
+    ]
 
     labels = Labels(videos=[Video.from_filename(["imgs/img0.png", "imgs/img1.png"])])
     labels.replace_filenames(
