@@ -9,11 +9,13 @@ from sleap_io import (
     PredictedInstance,
     LabeledFrame,
     Track,
+    SuggestionFrame,
     load_slp,
     load_video,
 )
 from sleap_io.model.labels import Labels
 import numpy as np
+from pathlib import Path
 
 
 def test_labels():
@@ -42,7 +44,98 @@ def test_labels():
     for lf_idx, lf in enumerate(labels):
         assert lf == labels[lf_idx]
 
-    assert str(labels) == "Labels(labeled_frames=1, videos=1, skeletons=1, tracks=0)"
+    assert (
+        str(labels)
+        == "Labels(labeled_frames=1, videos=1, skeletons=1, tracks=0, suggestions=0)"
+    )
+
+
+def test_update(slp_real_data):
+    base_labels = load_slp(slp_real_data)
+
+    labels = Labels(base_labels.labeled_frames)
+    assert len(labels.videos) == len(base_labels.videos) == 1
+    assert len(labels.tracks) == len(base_labels.tracks) == 0
+    assert len(labels.skeletons) == len(base_labels.skeletons) == 1
+
+    new_video = Video.from_filename("fake.mp4")
+    labels.suggestions.append(SuggestionFrame(video=new_video, frame_idx=0))
+
+    new_track = Track("new_track")
+    labels[0][0].track = new_track
+
+    new_skel = Skeleton(["A", "B"])
+    new_video2 = Video.from_filename("fake2.mp4")
+    labels.append(
+        LabeledFrame(
+            video=new_video2,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(np.array([[0, 1], [2, 3]]), skeleton=new_skel)
+            ],
+        ),
+        update=False,
+    )
+
+    labels.update()
+    assert new_video in labels.videos
+    assert new_video2 in labels.videos
+    assert new_track in labels.tracks
+    assert new_skel in labels.skeletons
+
+
+def test_append_extend():
+    labels = Labels()
+
+    new_skel = Skeleton(["A", "B"])
+    new_video = Video.from_filename("fake.mp4")
+    new_track = Track("new_track")
+    labels.append(
+        LabeledFrame(
+            video=new_video,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=new_skel, track=new_track
+                )
+            ],
+        ),
+        update=True,
+    )
+    assert labels.videos == [new_video]
+    assert labels.skeletons == [new_skel]
+    assert labels.tracks == [new_track]
+
+    new_video2 = Video.from_filename("fake.mp4")
+    new_skel2 = Skeleton(["A", "B", "C"])
+    new_track2 = Track("new_track2")
+    labels.extend(
+        [
+            LabeledFrame(
+                video=new_video,
+                frame_idx=1,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[0, 1], [2, 3]]), skeleton=new_skel, track=new_track2
+                    )
+                ],
+            ),
+            LabeledFrame(
+                video=new_video2,
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[0, 1], [2, 3], [4, 5]]), skeleton=new_skel2
+                    )
+                ],
+            ),
+        ],
+        update=True,
+    )
+
+    assert labels.videos == [new_video, new_video2]
+    assert labels.skeletons == [new_skel, new_skel2]
+    assert labels.tracks == [new_track, new_track2]
 
 
 def test_labels_numpy(labels_predictions: Labels):
@@ -272,3 +365,54 @@ def test_replace_videos(slp_real_data):
 
     for sf in labels.suggestions:
         assert sf.video.filename == "fake.mp4"
+
+
+def test_replace_filenames():
+    labels = Labels(videos=[Video.from_filename("a.mp4"), Video.from_filename("b.mp4")])
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames()
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(new_filenames=[], filename_map={})
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(new_filenames=[], prefix_map={})
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(filename_map={}, prefix_map={})
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(new_filenames=[], filename_map={}, prefix_map={})
+
+    labels.replace_filenames(new_filenames=["c.mp4", "d.mp4"])
+    assert [v.filename for v in labels.videos] == ["c.mp4", "d.mp4"]
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(["f.mp4"])
+
+    labels.replace_filenames(
+        filename_map={"c.mp4": "/a/b/c.mp4", "d.mp4": "/a/b/d.mp4"}
+    )
+    assert [Path(v.filename).as_posix() for v in labels.videos] == [
+        "/a/b/c.mp4",
+        "/a/b/d.mp4",
+    ]
+
+    labels.replace_filenames(prefix_map={"/a/b/": "/A/B"})
+    assert [Path(v.filename).as_posix() for v in labels.videos] == [
+        "/A/B/c.mp4",
+        "/A/B/d.mp4",
+    ]
+
+    labels = Labels(videos=[Video.from_filename(["imgs/img0.png", "imgs/img1.png"])])
+    labels.replace_filenames(
+        filename_map={
+            "imgs/img0.png": "train/imgs/img0.png",
+            "imgs/img1.png": "train/imgs/img1.png",
+        }
+    )
+    assert labels.video.filename == ["train/imgs/img0.png", "train/imgs/img1.png"]
+
+    labels.replace_filenames(prefix_map={"train/": "test/"})
+    assert labels.video.filename == ["test/imgs/img0.png", "test/imgs/img1.png"]

@@ -23,7 +23,7 @@ from sleap_io import (
 from attrs import define, field
 from typing import Union, Optional, Any
 import numpy as np
-
+from pathlib import Path
 from sleap_io.model.skeleton import Skeleton
 
 
@@ -57,6 +57,14 @@ class Labels:
 
     def __attrs_post_init__(self):
         """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
+        self.update()
+
+    def update(self):
+        """Update data structures based on contents.
+
+        This function will update the list of skeletons, videos and tracks from the
+        labeled frames, instances and suggestions.
+        """
         for lf in self.labeled_frames:
             if lf.video not in self.videos:
                 self.videos.append(lf.video)
@@ -68,7 +76,13 @@ class Labels:
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
 
-    def __getitem__(self, key: int) -> list[LabeledFrame] | LabeledFrame:
+        for sf in self.suggestions:
+            if sf.video not in self.videos:
+                self.videos.append(sf.video)
+
+    def __getitem__(
+        self, key: int | slice | list[int] | np.ndarray | tuple[Video, int]
+    ) -> list[LabeledFrame] | LabeledFrame:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) == int:
             return self.labeled_frames[key]
@@ -111,13 +125,57 @@ class Labels:
             f"labeled_frames={len(self.labeled_frames)}, "
             f"videos={len(self.videos)}, "
             f"skeletons={len(self.skeletons)}, "
-            f"tracks={len(self.tracks)}"
+            f"tracks={len(self.tracks)}, "
+            f"suggestions={len(self.suggestions)}"
             ")"
         )
 
     def __str__(self) -> str:
         """Return a readable representation of the labels."""
         return self.__repr__()
+
+    def append(self, lf: LabeledFrame, update: bool = True):
+        """Append a labeled frame to the labels.
+
+        Args:
+            lf: A labeled frame to add to the labels.
+            update: If `True` (the default), update list of videos, tracks and
+                skeletons from the contents.
+        """
+        self.labeled_frames.append(lf)
+
+        if update:
+            if lf.video not in self.videos:
+                self.videos.append(lf.video)
+
+            for inst in lf:
+                if inst.skeleton not in self.skeletons:
+                    self.skeletons.append(inst.skeleton)
+
+                if inst.track is not None and inst.track not in self.tracks:
+                    self.tracks.append(inst.track)
+
+    def extend(self, lfs: list[LabeledFrame], update: bool = True):
+        """Append a labeled frame to the labels.
+
+        Args:
+            lfs: A list of labeled frames to add to the labels.
+            update: If `True` (the default), update list of videos, tracks and
+                skeletons from the contents.
+        """
+        self.labeled_frames.extend(lfs)
+
+        if update:
+            for lf in lfs:
+                if lf.video not in self.videos:
+                    self.videos.append(lf.video)
+
+                for inst in lf:
+                    if inst.skeleton not in self.skeletons:
+                        self.skeletons.append(inst.skeleton)
+
+                    if inst.track is not None and inst.track not in self.tracks:
+                        self.tracks.append(inst.track)
 
     def numpy(
         self,
@@ -417,3 +475,79 @@ class Labels:
         for sf in self.suggestions:
             if sf.video in video_map:
                 sf.video = video_map[sf.video]
+
+    def replace_filenames(
+        self,
+        new_filenames: list[str | Path] | None = None,
+        filename_map: dict[str | Path, str | Path] | None = None,
+        prefix_map: dict[str | Path, str | Path] | None = None,
+    ):
+        """Replace video filenames.
+
+        Args:
+            new_filenames: List of new filenames. Must have the same length as the
+                number of videos in the labels.
+            filename_map: Dictionary mapping old filenames (keys) to new filenames
+                (values).
+            prefix_map: Dictonary mapping old prefixes (keys) to new prefixes (values).
+
+        Notes:
+            Only one of the argument types can be provided.
+        """
+        n = 0
+        if new_filenames is not None:
+            n += 1
+        if filename_map is not None:
+            n += 1
+        if prefix_map is not None:
+            n += 1
+        if n != 1:
+            raise ValueError(
+                "Exactly one input method must be provided to replace filenames."
+            )
+
+        if new_filenames is not None:
+            if len(self.videos) != len(new_filenames):
+                raise ValueError(
+                    f"Number of new filenames ({len(new_filenames)}) does not match "
+                    f"the number of videos ({len(self.videos)})."
+                )
+
+            for video, new_filename in zip(self.videos, new_filenames):
+                video.replace_filename(new_filename)
+
+        elif filename_map is not None:
+            for video in self.videos:
+                for old_fn, new_fn in filename_map.items():
+                    if type(video.filename) == list:
+                        new_fns = []
+                        for fn in video.filename:
+                            if Path(fn) == Path(old_fn):
+                                new_fns.append(new_fn)
+                            else:
+                                new_fns.append(fn)
+                        video.replace_filename(new_fns)
+                    else:
+                        if Path(video.filename) == Path(old_fn):
+                            video.replace_filename(new_fn)
+
+        elif prefix_map is not None:
+            for video in self.videos:
+                for old_prefix, new_prefix in prefix_map.items():
+                    old_prefix, new_prefix = Path(old_prefix), Path(new_prefix)
+
+                    if type(video.filename) == list:
+                        new_fns = []
+                        for fn in video.filename:
+                            fn = Path(fn)
+                            if fn.as_posix().startswith(old_prefix.as_posix()):
+                                new_fns.append(new_prefix / fn.relative_to(old_prefix))
+                            else:
+                                new_fns.append(fn)
+                        video.replace_filename(new_fns)
+                    else:
+                        fn = Path(video.filename)
+                        if fn.as_posix().startswith(old_prefix.as_posix()):
+                            video.replace_filename(
+                                new_prefix / fn.relative_to(old_prefix)
+                            )

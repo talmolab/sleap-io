@@ -40,6 +40,8 @@ def test_skeleton():
     assert skel.edges[0] == Edge(skel.nodes[0], skel.nodes[1])
     assert skel.edge_inds == [(0, 1)]
 
+    assert str(skel) == 'Skeleton(nodes=["A", "B"], edges=[(0, 1)])'
+
     with pytest.raises(IndexError):
         skel[None]
 
@@ -119,6 +121,7 @@ def test_add_edge():
     skel = Skeleton(["A", "B"])
     skel.add_edge("A", "B")
     assert skel.edge_inds == [(0, 1)]
+    assert skel.edge_names == [("A", "B")]
 
     skel.add_edge("B", "A")
     assert skel.edge_inds == [(0, 1), (1, 0)]

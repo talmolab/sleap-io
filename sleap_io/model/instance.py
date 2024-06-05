@@ -265,6 +265,13 @@ class Instance:
         """Return the number of points in the instance."""
         return len(self.points)
 
+    def __repr__(self) -> str:
+        """Return a readable representation of the instance."""
+        pts = self.numpy().tolist()
+        track = f'"{self.track.name}"' if self.track is not None else self.track
+
+        return f"Instance(points={pts}, track={track})"
+
     @property
     def n_visible(self) -> int:
         """Return the number of visible points in the instance."""
@@ -326,6 +333,22 @@ class PredictedInstance(Instance):
     )
     score: float = 0.0
     tracking_score: Optional[float] = 0
+
+    def __repr__(self) -> str:
+        """Return a readable representation of the instance."""
+        pts = self.numpy().tolist()
+        track = f'"{self.track.name}"' if self.track is not None else self.track
+
+        score = str(self.score) if self.score is None else f"{self.score:.2f}"
+        tracking_score = (
+            str(self.tracking_score)
+            if self.tracking_score is None
+            else f"{self.tracking_score:.2f}"
+        )
+        return (
+            f"PredictedInstance(points={pts}, track={track}, "
+            f"score={score}, tracking_score={tracking_score})"
+        )
 
     @classmethod
     def from_numpy(  # type: ignore[override]
