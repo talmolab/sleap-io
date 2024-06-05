@@ -20,6 +20,7 @@ def test_video_from_filename(centered_pair_low_quality_path):
     test_video = Video.from_filename(centered_pair_low_quality_path)
     assert test_video.filename == centered_pair_low_quality_path
     assert test_video.shape == (1100, 384, 384, 1)
+    assert len(test_video) == 1100
     assert type(test_video.backend) == MediaVideo
 
 
