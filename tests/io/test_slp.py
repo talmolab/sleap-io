@@ -279,7 +279,7 @@ def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
     assert labels.video.backend.embedded_frame_inds == [0]
     assert (
         Path(labels.video.filename).as_posix()
-        == (tmpdir / "roundtrip.pkg.slp").as_posix()
+        == Path(tmpdir / "roundtrip.pkg.slp").as_posix()
     )
 
 
