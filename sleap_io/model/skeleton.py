@@ -188,6 +188,11 @@ class Skeleton:
         """Return the number of nodes in the skeleton."""
         return len(self.nodes)
 
+    def __repr__(self) -> str:
+        """Return a readable representation of the skeleton."""
+        nodes = ", ".join([f'"{node}"' for node in self.node_names])
+        return "Skeleton(" f"nodes=[{nodes}], " f"edges={self.edge_inds}" ")"
+
     def index(self, node: Node | str) -> int:
         """Return the index of a node specified as a `Node` or string name."""
         if type(node) == str:
