@@ -93,6 +93,15 @@ We check for coverage by parsing the outputs from `pytest` and uploading to [Cod
 
 All changes should aim to increase or maintain test coverage.
 
+### Live coverage
+
+*The following steps are based on [this guide](https://jasonstitt.com/perfect-python-live-test-coverage).*
+
+1. If you already have an environment installed, `pip install -e ."[dev]"` to make sure you have the latest dev tools (namely `pytest-watch`).
+2. Install the [Coverage Gutters extension](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters) in VS Code.
+3. Open a terminal, `conda activate sleap-io` and then run `ptw` to automatically run tests. This will generate a new `lcov.info` file when it's done.
+4. Enable the coverage gutters by using **Ctrl/Cmd**+**Shift**+**P**, then **Coverage Gutters: Display Coverage**.
+
 
 ### Code style
 To standardize formatting conventions, we use [`black`](https://black.readthedocs.io/en/stable/).

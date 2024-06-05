@@ -19,14 +19,20 @@ def load_slp(filename: str) -> Labels:
     return slp.read_labels(filename)
 
 
-def save_slp(labels: Labels, filename: str):
+def save_slp(
+    labels: Labels, filename: str, embed: str | list[tuple[Video, int]] | None = None
+):
     """Save a SLEAP dataset to a `.slp` file.
 
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to save labels to ending with `.slp`.
+        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or
+            list of tuples of `(video, frame_idx)` specifying the frames to embed. If
+            `"source"` is specified, no images will be embedded and the source video
+            will be restored if available.
     """
-    return slp.write_labels(filename, labels)
+    return slp.write_labels(filename, labels, embed=embed)
 
 
 def load_nwb(filename: str) -> Labels:

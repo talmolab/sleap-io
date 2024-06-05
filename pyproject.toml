@@ -7,8 +7,7 @@ name = "sleap-io"
 authors = [
     {name = "Liezl Maree", email = "lmaree@salk.edu"},
     {name = "David Samy", email = "davidasamy@gmail.com"},
-    {name = "Talmo Pereira", email = "talmo@salk.edu"}
-]
+    {name = "Talmo Pereira", email = "talmo@salk.edu"}]
 description="Standalone utilities for working with pose data from SLEAP and other tools."
 requires-python = ">=3.7"
 keywords = ["sleap", "pose tracking", "pose estimation", "behavior"]
@@ -19,8 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12"
-]
+    "Programming Language :: Python :: 3.12"]
 dependencies = [
     "numpy",
     "attrs",
@@ -31,8 +29,7 @@ dependencies = [
     "simplejson",
     "imageio",
     "imageio-ffmpeg",
-    "av"
-]
+    "av"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
@@ -43,6 +40,7 @@ readme = {file = ["README.md"], content-type="text/markdown"}
 dev = [
     "pytest",
     "pytest-cov",
+    "pytest-watch",
     "black",
     "pydocstyle",
     "toml",
@@ -52,12 +50,14 @@ dev = [
     "mkdocs-jupyter",
     "mkdocstrings[python]>=0.18",
     "mkdocs-gen-files",
-    "mkdocs-literate-nav"
-]
+    "mkdocs-literate-nav"]
 
 [project.urls]
-Homepage = "https://sleap.ai"
+Homepage = "https://io.sleap.ai"
 Repository = "https://github.com/talmolab/sleap-io"
+
+[tool.setuptools.packages.find]
+exclude = ["site"]
 
 [tool.black]
 line-length = 88
@@ -65,3 +65,9 @@ line-length = 88
 [pydocstyle]
 convention = "google"
 match-dir = "sleap_io"
+
+[tool.coverage.run]
+source = ["livecov"]
+
+[tool.pytest.ini_options]
+addopts = "--cov sleap_io --cov-report=lcov:lcov.info --cov-report=term"

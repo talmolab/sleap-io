@@ -5,14 +5,14 @@ a video and its components used in SLEAP.
 """
 
 from __future__ import annotations
-from attrs import define
+import attrs
 from typing import Tuple, Optional, Optional
 import numpy as np
 from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video
 from pathlib import Path
 
 
-@define
+@attrs.define(eq=False)
 class Video:
     """`Video` class used by sleap to represent videos and data associated with them.
 
@@ -26,14 +26,31 @@ class Video:
         filename: The filename(s) of the video.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
+        backend_metadata: A dictionary of metadata specific to the backend. This is
+            useful for storing metadata that requires an open backend (e.g., shape
+            information) without having access to the video file itself.
+        source_video: The source video object if this is a proxy video. This is present
+            when the video contains an embedded subset of frames from another video.
+
+    Notes:
+        Instances of this class are hashed by identity, not by value. This means that
+        two `Video` instances with the same attributes will NOT be considered equal in a
+        set or dict.
 
     See also: VideoBackend
     """
 
     filename: str | list[str]
     backend: Optional[VideoBackend] = None
+    backend_metadata: dict[str, any] = attrs.field(factory=dict)
+    source_video: Optional[Video] = None
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS
+
+    def __attrs_post_init__(self):
+        """Post init syntactic sugar."""
+        if self.backend is None and self.exists():
+            self.open()
 
     @classmethod
     def from_filename(
@@ -42,6 +59,7 @@ class Video:
         dataset: Optional[str] = None,
         grayscale: Optional[bool] = None,
         keep_open: bool = True,
+        source_video: Optional[Video] = None,
         **kwargs,
     ) -> VideoBackend:
         """Create a Video from a filename.
@@ -55,6 +73,9 @@ class Video:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            source_video: The source video object if this is a proxy video. This is
+                present when the video contains an embedded subset of frames from
+                another video.
 
         Returns:
             Video instance with the appropriate backend instantiated.
@@ -68,6 +89,7 @@ class Video:
                 keep_open=keep_open,
                 **kwargs,
             ),
+            source_video=source_video,
         )
 
     @property
@@ -88,6 +110,23 @@ class Video:
         try:
             return self.backend.shape
         except:
+            if "shape" in self.backend_metadata:
+                return self.backend_metadata["shape"]
+            return None
+
+    @property
+    def grayscale(self) -> bool | None:
+        """Return whether the video is grayscale.
+
+        If the video backend is not set or it cannot determine whether the video is
+        grayscale, this will return None.
+        """
+        shape = self.shape
+        if shape is not None:
+            return shape[-1] == 1
+        else:
+            if "grayscale" in self.backend_metadata:
+                return self.backend_metadata["grayscale"]
             return None
 
     def __len__(self) -> int:
@@ -188,6 +227,12 @@ class Video:
                 dataset = getattr(self.backend, "dataset", None)
             if grayscale is None:
                 grayscale = getattr(self.backend, "grayscale", None)
+
+        else:
+            if dataset is None and "dataset" in self.backend_metadata:
+                dataset = self.backend_metadata["dataset"]
+            if grayscale is None and "grayscale" in self.backend_metadata:
+                grayscale = self.backend_metadata["grayscale"]
 
         # Close previous backend if open.
         self.close()

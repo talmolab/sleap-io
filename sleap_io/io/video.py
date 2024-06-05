@@ -160,7 +160,8 @@ class VideoBackend:
     @property
     def img_shape(self) -> Tuple[int, int, int]:
         """Shape of a single frame in the video."""
-        return self.get_frame(0).shape
+        height, width, channels = self.get_frame(0).shape
+        return int(height), int(width), int(channels)
 
     @property
     def shape(self) -> Tuple[int, int, int, int]:
@@ -478,6 +479,8 @@ class HDF5Video(VideoBackend):
             when reading embedded image datasets.
         source_inds: Indices of the frames in the source video file. This is metadata
             and only used when reading embedded image datasets.
+        image_format: Format of the images in the embedded dataset. This is metadata and
+            only used when reading embedded image datasets.
     """
 
     dataset: Optional[str] = None
@@ -488,6 +491,7 @@ class HDF5Video(VideoBackend):
     frame_map: dict[int, int] = attrs.field(init=False, default=attrs.Factory(dict))
     source_filename: Optional[str] = None
     source_inds: Optional[np.ndarray] = None
+    image_format: str = "hdf5"
 
     EXTS = ("h5", "hdf5", "slp")
 
@@ -530,6 +534,9 @@ class HDF5Video(VideoBackend):
             # This may be an embedded video dataset. Check for frame map.
             ds = f[self.dataset]
 
+            if "format" in ds.attrs:
+                self.image_format = ds.attrs["format"]
+
             if "frame_numbers" in ds.parent:
                 frame_numbers = ds.parent["frame_numbers"][:]
                 self.frame_map = {frame: idx for idx, frame in enumerate(frame_numbers)}
@@ -563,7 +570,7 @@ class HDF5Video(VideoBackend):
                 img_shape = ds.shape[1:]
         if self.input_format == "channels_first":
             img_shape = img_shape[::-1]
-        return img_shape
+        return int(img_shape[0]), int(img_shape[1]), int(img_shape[2])
 
     def read_test_frame(self) -> np.ndarray:
         """Read a single frame from the video to test for grayscale."""
@@ -576,17 +583,19 @@ class HDF5Video(VideoBackend):
     @property
     def has_embedded_images(self) -> bool:
         """Return True if the dataset contains embedded images."""
-        with h5py.File(self.filename, "r") as f:
-            ds = f[self.dataset]
-            return "format" in ds.attrs
+        return self.image_format is not None and self.image_format != "hdf5"
 
-    def decode_embedded(self, img_string: np.ndarray, format: str) -> np.ndarray:
+    @property
+    def embedded_frame_inds(self) -> list[int]:
+        """Return the frame indices of the embedded images."""
+        return list(self.frame_map.keys())
+
+    def decode_embedded(self, img_string: np.ndarray) -> np.ndarray:
         """Decode an embedded image string into a numpy array.
 
         Args:
             img_string: Binary string of the image as a `int8` numpy vector with the
                 bytes as values corresponding to the format-encoded image.
-            format: Image format (e.g., "png" or "jpg").
 
         Returns:
             The decoded image as a numpy array of shape `(height, width, channels)`. If
@@ -599,7 +608,7 @@ class HDF5Video(VideoBackend):
         if "cv2" in sys.modules:
             img = cv2.imdecode(img_string, cv2.IMREAD_UNCHANGED)
         else:
-            img = iio.imread(BytesIO(img_string), extension=f".{format}")
+            img = iio.imread(BytesIO(img_string), extension=f".{self.image_format}")
 
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
@@ -632,8 +641,8 @@ class HDF5Video(VideoBackend):
 
         img = ds[frame_idx]
 
-        if "format" in ds.attrs:
-            img = self.decode_embedded(img, ds.attrs["format"])
+        if self.has_embedded_images:
+            img = self.decode_embedded(img)
 
         if self.input_format == "channels_first":
             img = np.transpose(img, (2, 1, 0))
@@ -670,7 +679,7 @@ class HDF5Video(VideoBackend):
 
         if "format" in ds.attrs:
             imgs = np.stack(
-                [self.decode_embedded(img, ds.attrs["format"]) for img in imgs],
+                [self.decode_embedded(img) for img in imgs],
                 axis=0,
             )
 

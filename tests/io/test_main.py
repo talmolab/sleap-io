@@ -55,6 +55,7 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
     labels_single_written = load_jabs(str(tmp_path / jabs_real_data_v2))
     # Confidence field is not preserved, so just check number of labels
     assert len(labels_single) == len(labels_single_written)
+    assert len(labels_single.videos) == len(labels_single_written.videos)
     assert type(load_file(jabs_real_data_v2)) == Labels
 
     labels_multi = load_jabs(jabs_real_data_v5)
@@ -66,6 +67,7 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
     # v5 contains all v4 and v3 data, so only need to check v5
     # Confidence field and ordering of identities is not preserved, so just check number of labels
     assert len(labels_v5_written) == len(labels_multi)
+    assert len(labels_v5_written.videos) == len(labels_multi.videos)
 
 
 def test_load_video(centered_pair_low_quality_path):
