@@ -123,7 +123,10 @@ def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
 
     Args:
-        filename: Path to a video file.
+        filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
+            "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
+            "tiff", "bmp". If the filename is a list, a list of image filenames are
+            expected. If filename is a folder, it will be searched for images.
 
     Returns:
         A `Video` object.

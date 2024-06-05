@@ -8,7 +8,7 @@ from __future__ import annotations
 import attrs
 from typing import Tuple, Optional, Optional
 import numpy as np
-from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video
+from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video, ImageVideo
 from pathlib import Path
 
 
@@ -23,7 +23,10 @@ class Video:
     backend appropriately.
 
     Attributes:
-        filename: The filename(s) of the video.
+        filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
+            "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
+            "tiff", "bmp". If the filename is a list, a list of image filenames are
+            expected. If filename is a folder, it will be searched for images.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
         backend_metadata: A dictionary of metadata specific to the backend. This is
@@ -45,7 +48,7 @@ class Video:
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
     source_video: Optional[Video] = None
 
-    EXTS = MediaVideo.EXTS + HDF5Video.EXTS
+    EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
 
     @classmethod
     def from_filename(
@@ -60,7 +63,10 @@ class Video:
         """Create a Video from a filename.
 
         Args:
-            filename: Path to video file(s).
+            filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
+                "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
+                "tiff", "bmp". If the filename is a list, a list of image filenames are
+                expected. If filename is a folder, it will be searched for images.
             dataset: Name of dataset in HDF5 file.
             grayscale: Whether to force grayscale. If None, autodetect on first frame
                 load.
