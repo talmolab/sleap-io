@@ -277,7 +277,10 @@ def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
     assert type(labels.video.backend) == HDF5Video
     assert labels.video.shape == (1, 384, 384, 1)
     assert labels.video.backend.embedded_frame_inds == [0]
-    assert labels.video.filename == str(tmpdir / "roundtrip.pkg.slp")
+    assert (
+        Path(labels.video.filename).as_posix()
+        == (tmpdir / "roundtrip.pkg.slp").as_posix()
+    )
 
 
 @pytest.mark.parametrize("to_embed", ["user", "suggestions", "user+suggestions"])
@@ -293,12 +296,12 @@ def test_embed(tmpdir, slp_real_data, to_embed):
     assert len(base_labels.suggestions) == 10
     assert len(base_labels.user_labeled_frames) == 5
 
-    labels_path = str(tmpdir / "labels.pkg.slp")
+    labels_path = Path(tmpdir / "labels.pkg.slp").as_posix()
     write_labels(labels_path, base_labels, embed=to_embed)
     labels = read_labels(labels_path)
     assert len(labels) == 10
     assert type(labels.video.backend) == HDF5Video
-    assert labels.video.filename == labels_path
+    assert Path(labels.video.filename).as_posix() == labels_path
     assert (
         Path(labels.video.source_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
