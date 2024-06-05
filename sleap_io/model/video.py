@@ -55,6 +55,11 @@ class Video:
         if self.backend is None and self.exists():
             self.open()
 
+    def __attrs_post_init__(self):
+        """Post init syntactic sugar."""
+        if self.backend is None and self.exists():
+            self.open()
+
     @classmethod
     def from_filename(
         cls,
