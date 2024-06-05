@@ -547,7 +547,7 @@ class Labels:
                         video.replace_filename(new_fns)
                     else:
                         fn = Path(video.filename)
-                        if fn.is_relative_to(old_prefix):
+                        if fn.as_posix().startswith(old_prefix.as_posix()):
                             video.replace_filename(
                                 new_prefix / fn.relative_to(old_prefix)
                             )
