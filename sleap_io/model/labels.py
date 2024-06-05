@@ -123,13 +123,57 @@ class Labels:
             f"labeled_frames={len(self.labeled_frames)}, "
             f"videos={len(self.videos)}, "
             f"skeletons={len(self.skeletons)}, "
-            f"tracks={len(self.tracks)}"
+            f"tracks={len(self.tracks)}, "
+            f"suggestions={len(self.suggestions)}"
             ")"
         )
 
     def __str__(self) -> str:
         """Return a readable representation of the labels."""
         return self.__repr__()
+
+    def append(self, lf: LabeledFrame, update: bool = True):
+        """Append a labeled frame to the labels.
+
+        Args:
+            lf: A labeled frame to add to the labels.
+            update: If `True` (the default), update list of videos, tracks and
+                skeletons from the contents.
+        """
+        self.labeled_frames.append(lf)
+
+        if update:
+            if lf.video not in self.videos:
+                self.videos.append(lf.video)
+
+            for inst in lf:
+                if inst.skeleton not in self.skeletons:
+                    self.skeletons.append(inst.skeleton)
+
+                if inst.track is not None and inst.track not in self.tracks:
+                    self.tracks.append(inst.track)
+
+    def extend(self, lfs: list[LabeledFrame], update: bool = True):
+        """Append a labeled frame to the labels.
+
+        Args:
+            lfs: A list of labeled frames to add to the labels.
+            update: If `True` (the default), update list of videos, tracks and
+                skeletons from the contents.
+        """
+        self.labeled_frames.extend(lfs)
+
+        if update:
+            for lf in lfs:
+                if lf.video not in self.videos:
+                    self.videos.append(lf.video)
+
+                for inst in lf:
+                    if inst.skeleton not in self.skeletons:
+                        self.skeletons.append(inst.skeleton)
+
+                    if inst.track is not None and inst.track not in self.tracks:
+                        self.tracks.append(inst.track)
 
     def numpy(
         self,

@@ -9,6 +9,7 @@ from sleap_io import (
     PredictedInstance,
     LabeledFrame,
     Track,
+    SuggestionFrame,
     load_slp,
     load_video,
 )
@@ -42,7 +43,98 @@ def test_labels():
     for lf_idx, lf in enumerate(labels):
         assert lf == labels[lf_idx]
 
-    assert str(labels) == "Labels(labeled_frames=1, videos=1, skeletons=1, tracks=0)"
+    assert (
+        str(labels)
+        == "Labels(labeled_frames=1, videos=1, skeletons=1, tracks=0, suggestions=0)"
+    )
+
+
+def test_update(slp_real_data):
+    base_labels = load_slp(slp_real_data)
+
+    labels = Labels(base_labels.labeled_frames)
+    assert len(labels.videos) == len(base_labels.videos) == 1
+    assert len(labels.tracks) == len(base_labels.tracks) == 0
+    assert len(labels.skeletons) == len(base_labels.skeletons) == 1
+
+    new_video = Video.from_filename("fake.mp4")
+    labels.suggestions.append(SuggestionFrame(video=new_video, frame_idx=0))
+
+    new_track = Track("new_track")
+    labels[0][0].track = new_track
+
+    new_skel = Skeleton(["A", "B"])
+    new_video2 = Video.from_filename("fake2.mp4")
+    labels.append(
+        LabeledFrame(
+            video=new_video2,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(np.array([[0, 1], [2, 3]]), skeleton=new_skel)
+            ],
+        ),
+        update=False,
+    )
+
+    labels.update()
+    assert new_video in labels.videos
+    assert new_video2 in labels.videos
+    assert new_track in labels.tracks
+    assert new_skel in labels.skeletons
+
+
+def test_append_extend():
+    labels = Labels()
+
+    new_skel = Skeleton(["A", "B"])
+    new_video = Video.from_filename("fake.mp4")
+    new_track = Track("new_track")
+    labels.append(
+        LabeledFrame(
+            video=new_video,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=new_skel, track=new_track
+                )
+            ],
+        ),
+        update=True,
+    )
+    assert labels.videos == [new_video]
+    assert labels.skeletons == [new_skel]
+    assert labels.tracks == [new_track]
+
+    new_video2 = Video.from_filename("fake.mp4")
+    new_skel2 = Skeleton(["A", "B", "C"])
+    new_track2 = Track("new_track2")
+    labels.extend(
+        [
+            LabeledFrame(
+                video=new_video,
+                frame_idx=1,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[0, 1], [2, 3]]), skeleton=new_skel, track=new_track2
+                    )
+                ],
+            ),
+            LabeledFrame(
+                video=new_video2,
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        np.array([[0, 1], [2, 3], [4, 5]]), skeleton=new_skel2
+                    )
+                ],
+            ),
+        ],
+        update=True,
+    )
+
+    assert labels.videos == [new_video, new_video2]
+    assert labels.skeletons == [new_skel, new_skel2]
+    assert labels.tracks == [new_track, new_track2]
 
 
 def test_labels_numpy(labels_predictions: Labels):
