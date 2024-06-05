@@ -166,6 +166,11 @@ class Skeleton:
         ]
 
     @property
+    def edge_names(self) -> list[str, str]:
+        """Edge names as a list of 2-tuples with string node names."""
+        return [(edge.source.name, edge.destination.name) for edge in self.edges]
+
+    @property
     def flipped_node_inds(self) -> list[int]:
         """Returns node indices that should be switched when horizontally flipping."""
         flip_idx = np.arange(len(self.nodes))
