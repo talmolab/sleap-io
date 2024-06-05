@@ -89,6 +89,10 @@ def test_instance():
     inst = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
     assert type(inst["A"]) == Point
+    assert str(inst) == "Instance(points=[[0.0, 1.0], [2.0, 3.0]], track=None)"
+
+    inst.track = Track("trk")
+    assert str(inst) == 'Instance(points=[[0.0, 1.0], [2.0, 3.0]], track="trk")'
 
     inst = Instance({"A": [0, 1]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [np.nan, np.nan]])

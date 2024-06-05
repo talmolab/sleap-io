@@ -265,6 +265,13 @@ class Instance:
         """Return the number of points in the instance."""
         return len(self.points)
 
+    def __repr__(self) -> str:
+        """Return a readable representation of the instance."""
+        pts = self.numpy().tolist()
+        track = f'"{self.track.name}"' if self.track is not None else self.track
+
+        return f"Instance(points={pts}, track={track})"
+
     @property
     def n_visible(self) -> int:
         """Return the number of visible points in the instance."""
