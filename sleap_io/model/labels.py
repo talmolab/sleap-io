@@ -57,6 +57,14 @@ class Labels:
 
     def __attrs_post_init__(self):
         """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
+        self.update()
+
+    def update(self):
+        """Update data structures based on contents.
+
+        This function will update the list of skeletons, videos and tracks from the
+        labeled frames, instances and suggestions.
+        """
         for lf in self.labeled_frames:
             if lf.video not in self.videos:
                 self.videos.append(lf.video)
@@ -67,6 +75,10 @@ class Labels:
 
                 if inst.track is not None and inst.track not in self.tracks:
                     self.tracks.append(inst.track)
+
+        for sf in self.suggestions:
+            if sf.video not in self.videos:
+                self.videos.append(sf.video)
 
     def __getitem__(self, key: int) -> list[LabeledFrame] | LabeledFrame:
         """Return one or more labeled frames based on indexing criteria."""
