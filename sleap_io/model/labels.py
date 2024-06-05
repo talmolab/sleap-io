@@ -540,7 +540,7 @@ class Labels:
                         new_fns = []
                         for fn in video.filename:
                             fn = Path(fn)
-                            if fn.is_relative_to(old_prefix):
+                            if fn.as_posix().startswith(old_prefix.as_posix()):
                                 new_fns.append(new_prefix / fn.relative_to(old_prefix))
                             else:
                                 new_fns.append(fn)
