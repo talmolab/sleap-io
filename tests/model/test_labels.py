@@ -364,3 +364,48 @@ def test_replace_videos(slp_real_data):
 
     for sf in labels.suggestions:
         assert sf.video.filename == "fake.mp4"
+
+
+def test_replace_filenames():
+    labels = Labels(videos=[Video.from_filename("a.mp4"), Video.from_filename("b.mp4")])
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames()
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(new_filenames=[], filename_map={})
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(new_filenames=[], prefix_map={})
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(filename_map={}, prefix_map={})
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(new_filenames=[], filename_map={}, prefix_map={})
+
+    labels.replace_filenames(new_filenames=["c.mp4", "d.mp4"])
+    assert [v.filename for v in labels.videos] == ["c.mp4", "d.mp4"]
+
+    with pytest.raises(ValueError):
+        labels.replace_filenames(["f.mp4"])
+
+    labels.replace_filenames(
+        filename_map={"c.mp4": "/a/b/c.mp4", "d.mp4": "/a/b/d.mp4"}
+    )
+    assert [v.filename for v in labels.videos] == ["/a/b/c.mp4", "/a/b/d.mp4"]
+
+    labels.replace_filenames(prefix_map={"/a/b/": "/A/B"})
+    assert [v.filename for v in labels.videos] == ["/A/B/c.mp4", "/A/B/d.mp4"]
+
+    labels = Labels(videos=[Video.from_filename(["imgs/img0.png", "imgs/img1.png"])])
+    labels.replace_filenames(
+        filename_map={
+            "imgs/img0.png": "train/imgs/img0.png",
+            "imgs/img1.png": "train/imgs/img1.png",
+        }
+    )
+    assert labels.video.filename == ["train/imgs/img0.png", "train/imgs/img1.png"]
+
+    labels.replace_filenames(prefix_map={"train/": "test/"})
+    assert labels.video.filename == ["test/imgs/img0.png", "test/imgs/img1.png"]

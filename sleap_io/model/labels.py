@@ -23,7 +23,7 @@ from sleap_io import (
 from attrs import define, field
 from typing import Union, Optional, Any
 import numpy as np
-
+from pathlib import Path
 from sleap_io.model.skeleton import Skeleton
 
 
@@ -473,3 +473,79 @@ class Labels:
         for sf in self.suggestions:
             if sf.video in video_map:
                 sf.video = video_map[sf.video]
+
+    def replace_filenames(
+        self,
+        new_filenames: list[str | Path] | None = None,
+        filename_map: dict[str | Path, str | Path] | None = None,
+        prefix_map: dict[str | Path, str | Path] | None = None,
+    ):
+        """Replace video filenames.
+
+        Args:
+            new_filenames: List of new filenames. Must have the same length as the
+                number of videos in the labels.
+            filename_map: Dictionary mapping old filenames (keys) to new filenames
+                (values).
+            prefix_map: Dictonary mapping old prefixes (keys) to new prefixes (values).
+
+        Notes:
+            Only one of the argument types can be provided.
+        """
+        n = 0
+        if new_filenames is not None:
+            n += 1
+        if filename_map is not None:
+            n += 1
+        if prefix_map is not None:
+            n += 1
+        if n != 1:
+            raise ValueError(
+                "Exactly one input method must be provided to replace filenames."
+            )
+
+        if new_filenames is not None:
+            if len(self.videos) != len(new_filenames):
+                raise ValueError(
+                    f"Number of new filenames ({len(new_filenames)}) does not match "
+                    f"the number of videos ({len(self.videos)})."
+                )
+
+            for video, new_filename in zip(self.videos, new_filenames):
+                video.replace_filename(new_filename)
+
+        elif filename_map is not None:
+            for video in self.videos:
+                for old_fn, new_fn in filename_map.items():
+                    if type(video.filename) == list:
+                        new_fns = []
+                        for fn in video.filename:
+                            if Path(fn) == Path(old_fn):
+                                new_fns.append(new_fn)
+                            else:
+                                new_fns.append(fn)
+                        video.replace_filename(new_fns)
+                    else:
+                        if Path(video.filename) == Path(old_fn):
+                            video.replace_filename(new_fn)
+
+        elif prefix_map is not None:
+            for video in self.videos:
+                for old_prefix, new_prefix in prefix_map.items():
+                    old_prefix, new_prefix = Path(old_prefix), Path(new_prefix)
+
+                    if type(video.filename) == list:
+                        new_fns = []
+                        for fn in video.filename:
+                            fn = Path(fn)
+                            if fn.is_relative_to(old_prefix):
+                                new_fns.append(new_prefix / fn.relative_to(old_prefix))
+                            else:
+                                new_fns.append(fn)
+                        video.replace_filename(new_fns)
+                    else:
+                        fn = Path(video.filename)
+                        if fn.is_relative_to(old_prefix):
+                            video.replace_filename(
+                                new_prefix / fn.relative_to(old_prefix)
+                            )
