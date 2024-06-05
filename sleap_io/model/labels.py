@@ -390,3 +390,30 @@ class Labels:
     def user_labeled_frames(self) -> list[LabeledFrame]:
         """Return all labeled frames with user (non-predicted) instances."""
         return [lf for lf in self.labeled_frames if lf.has_user_instances]
+
+    def replace_videos(
+        self,
+        old_videos: list[Video] | None = None,
+        new_videos: list[Video] | None = None,
+        video_map: dict[Video, Video] | None = None,
+    ):
+        """Replace videos and update all references.
+
+        Args:
+            old_videos: List of videos to be replaced.
+            new_videos: List of videos to replace with.
+            video_map: Alternative input of dictionary where keys are the old videos and
+                values are the new videos.
+        """
+        if video_map is None:
+            video_map = {o: n for o, n in zip(old_videos, new_videos)}
+
+        # Update the labeled frames with the new videos.
+        for lf in self.labeled_frames:
+            if lf.video in video_map:
+                lf.video = video_map[lf.video]
+
+        # Update suggestions with the new videos.
+        for sf in self.suggestions:
+            if sf.video in video_map:
+                sf.video = video_map[sf.video]

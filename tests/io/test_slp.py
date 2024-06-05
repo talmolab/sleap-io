@@ -288,3 +288,27 @@ def test_embed(tmpdir, slp_real_data, to_embed):
         assert len(labels.video.backend.embedded_frame_inds) == 10
     elif to_embed == "suggestions+user":
         assert len(labels.video.backend.embedded_frame_inds) == 10
+
+
+def test_embed_two_rounds(tmpdir, slp_real_data):
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmpdir / "labels.pkg.slp")
+    write_labels(labels_path, base_labels, embed="user")
+    labels = read_labels(labels_path)
+
+    assert labels.video.backend.embedded_frame_inds == [0, 990, 440, 220, 770]
+
+    labels2_path = str(tmpdir / "labels2.pkg.slp")
+    write_labels(labels2_path, labels)
+    labels2 = read_labels(labels2_path)
+    assert (
+        labels2.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+    assert labels2.video.backend.embedded_frame_inds == [0, 990, 440, 220, 770]
+
+    labels3_path = str(tmpdir / "labels3.slp")
+    write_labels(labels3_path, labels, embed="source")
+    labels3 = read_labels(labels3_path)
+    assert labels3.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+    assert type(labels3.video.backend) == MediaVideo

@@ -307,7 +307,7 @@ def embed_video(
 def embed_frames(
     labels_path: str,
     labels: Labels,
-    to_embed: list[tuple[Video, int]],
+    embed: list[tuple[Video, int]],
     image_format: str = "png",
 ):
     """Embed frames in a SLEAP labels file.
@@ -315,8 +315,7 @@ def embed_frames(
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object to embed in the labels file.
-        to_embed: A list of tuples of `(video, frame_idx)` specifying the frames to
-            embed.
+        embed: A list of tuples of `(video, frame_idx)` specifying the frames to embed.
         image_format: The image format to use for embedding. Valid formats are "png"
             (the default), "jpg" or "hdf5".
 
@@ -325,7 +324,7 @@ def embed_frames(
         and `Labels` objects in place.
     """
     to_embed_by_video = {}
-    for video, frame_idx in to_embed:
+    for video, frame_idx in embed:
         if video not in to_embed_by_video:
             to_embed_by_video[video] = []
         to_embed_by_video[video].append(frame_idx)
@@ -344,70 +343,73 @@ def embed_frames(
         labels.videos[video_ind] = embedded_video
         replaced_videos[video] = embedded_video
 
-    # Update the labeled frames with the new videos.
-    for lf in labels:
-        if lf.video in replaced_videos:
-            lf.video = replaced_videos[lf.video]
-
-    # Update suggestions with the new videos.
-    for sf in labels.suggestions:
-        if sf.video in replaced_videos:
-            sf.video = replaced_videos[sf.video]
+    if len(replaced_videos) > 0:
+        labels.replace_videos(video_map=replaced_videos)
 
 
 def embed_videos(
-    labels_path: str, labels: Labels, to_embed: str | list[tuple[Video, int]]
+    labels_path: str, labels: Labels, embed: str | list[tuple[Video, int]]
 ):
     """Embed videos in a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file to save.
         labels: A `Labels` object to save.
-        to_embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, or list of
-            tuples of `(video, frame_idx)` specifying the frames to embed.
+        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or
+            list of tuples of `(video, frame_idx)` specifying the frames to embed. If
+            `"source"` is specified, no images will be embedded and the source video
+            will be restored if available.
     """
 
-    if to_embed == "user":
-        to_embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
-    elif to_embed == "suggestions":
-        to_embed = [(sf.video, sf.frame_idx) for sf in labels.suggestions]
-    elif to_embed == "user+suggestions":
-        to_embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
-        to_embed += [(sf.video, sf.frame_idx) for sf in labels.suggestions]
-    elif isinstance(to_embed, list):
-        to_embed = to_embed
+    if embed == "user":
+        embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
+    elif embed == "suggestions":
+        embed = [(sf.video, sf.frame_idx) for sf in labels.suggestions]
+    elif embed == "user+suggestions":
+        embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
+        embed += [(sf.video, sf.frame_idx) for sf in labels.suggestions]
+    elif embed == "source":
+        embed = []
+    elif isinstance(embed, list):
+        embed = embed
     else:
-        raise ValueError(f"Invalid value for to_embed: {to_embed}")
+        raise ValueError(f"Invalid value for embed: {embed}")
 
-    embed_frames(labels_path, labels, to_embed)
+    embed_frames(labels_path, labels, embed)
 
 
-def write_videos(labels_path: str, videos: list[Video]):
+def write_videos(labels_path: str, videos: list[Video], restore_source: bool = False):
     """Write video metadata to a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         videos: A list of `Video` objects to store the metadata for.
+        restore_source: If `True`, restore source videos if available and will not
+            re-embed the embedded images. If `False` (the default), will re-embed images
+            that were previously embedded.
     """
     video_jsons = []
     for video_ind, video in enumerate(videos):
 
         if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
-            # If the video has embedded images, embed them images again if we haven't
-            # already.
-            already_embedded = False
-            if Path(labels_path).exists():
-                with h5py.File(labels_path, "r") as f:
-                    already_embedded = f"video{video_ind}/video" in f
+            if restore_source:
+                video = video.source_video
+            else:
+                # If the video has embedded images, embed them images again if we haven't
+                # already.
+                already_embedded = False
+                if Path(labels_path).exists():
+                    with h5py.File(labels_path, "r") as f:
+                        already_embedded = f"video{video_ind}/video" in f
 
-            if not already_embedded:
-                video = embed_video(
-                    labels_path,
-                    video,
-                    group=f"video{video_ind}",
-                    frame_inds=video.backend.source_inds,
-                    image_format=video.backend.image_format,
-                )
+                if not already_embedded:
+                    video = embed_video(
+                        labels_path,
+                        video,
+                        group=f"video{video_ind}",
+                        frame_inds=video.backend.source_inds,
+                        image_format=video.backend.image_format,
+                    )
 
         video_json = video_to_dict(video)
 
@@ -1022,15 +1024,17 @@ def write_labels(
     Args:
         labels_path: A string path to the SLEAP labels file to save.
         labels: A `Labels` object to save.
-        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, or list of tuples
-            of `(video, frame_idx)` specifying the frames to embed. If `None`, no frames
-            will be embedded. Existing embedded videos will be re-saved regardless.
+        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"`,
+            `None` or list of tuples of `(video, frame_idx)` specifying the frames to
+            embed. If `"source"` is specified, no images will be embedded and the source
+            video will be restored if available. If `None` is specified (the default),
+            existing embedded images will be re-embedded.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
     if embed is not None:
         embed_videos(labels_path, labels, embed)
-    write_videos(labels_path, labels.videos)
+    write_videos(labels_path, labels.videos, restore_source=(embed == "source"))
     write_tracks(labels_path, labels.tracks)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_metadata(labels_path, labels)
