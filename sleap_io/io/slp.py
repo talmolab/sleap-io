@@ -360,7 +360,6 @@ def embed_videos(
             `"source"` is specified, no images will be embedded and the source video
             will be restored if available.
     """
-
     if embed == "user":
         embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
     elif embed == "suggestions":

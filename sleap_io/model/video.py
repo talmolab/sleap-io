@@ -50,6 +50,11 @@ class Video:
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
 
+    def __attrs_post_init__(self):
+        """Post init syntactic sugar."""
+        if self.backend is None and self.exists():
+            self.open()
+
     @classmethod
     def from_filename(
         cls,

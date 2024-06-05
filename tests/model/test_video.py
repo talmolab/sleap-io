@@ -20,6 +20,7 @@ def test_video_from_filename(centered_pair_low_quality_path):
     test_video = Video.from_filename(centered_pair_low_quality_path)
     assert test_video.filename == centered_pair_low_quality_path
     assert test_video.shape == (1100, 384, 384, 1)
+    assert len(test_video) == 1100
     assert type(test_video.backend) == MediaVideo
 
 
@@ -57,8 +58,8 @@ def test_video_exists(centered_pair_low_quality_video, centered_pair_frame_paths
 
 def test_video_open_close(centered_pair_low_quality_path):
     video = Video(centered_pair_low_quality_path)
-    assert video.is_open is False
-    assert video.backend is None
+    assert video.is_open
+    assert type(video.backend) == MediaVideo
 
     img = video[0]
     assert img.shape == (384, 384, 1)
