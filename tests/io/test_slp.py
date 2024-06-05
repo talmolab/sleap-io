@@ -37,7 +37,7 @@ from sleap_io.io.utils import read_hdf5_dataset
 import numpy as np
 import simplejson as json
 import pytest
-
+from pathlib import Path
 
 from sleap_io.io.video import ImageVideo, HDF5Video, MediaVideo
 
@@ -285,7 +285,8 @@ def test_embed(tmpdir, slp_real_data, to_embed):
     base_labels = read_labels(slp_real_data)
     assert type(base_labels.video.backend) == MediaVideo
     assert (
-        base_labels.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+        Path(base_labels.video.filename).as_posix()
+        == "tests/data/videos/centered_pair_low_quality.mp4"
     )
     assert base_labels.video.shape == (1100, 384, 384, 1)
     assert len(base_labels) == 10
@@ -299,7 +300,7 @@ def test_embed(tmpdir, slp_real_data, to_embed):
     assert type(labels.video.backend) == HDF5Video
     assert labels.video.filename == labels_path
     assert (
-        labels.video.source_video.filename
+        Path(labels.video.source_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
     if to_embed == "user":
@@ -322,7 +323,7 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
     write_labels(labels2_path, labels)
     labels2 = read_labels(labels2_path)
     assert (
-        labels2.video.source_video.filename
+        Path(labels2.video.source_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
     assert labels2.video.backend.embedded_frame_inds == [0, 990, 440, 220, 770]
@@ -330,5 +331,8 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
     labels3_path = str(tmpdir / "labels3.slp")
     write_labels(labels3_path, labels, embed="source")
     labels3 = read_labels(labels3_path)
-    assert labels3.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+    assert (
+        Path(labels3.video.filename).as_posix()
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
     assert type(labels3.video.backend) == MediaVideo
