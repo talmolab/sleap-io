@@ -279,7 +279,13 @@ class Labels:
 
         return results
 
-    def save(self, filename: str, format: Optional[str] = None, **kwargs):
+    def save(
+        self,
+        filename: str,
+        format: Optional[str] = None,
+        embed: str | list[tuple[Video, int]] | None = None,
+        **kwargs,
+    ):
         """Save labels to file in specified format.
 
         Args:
@@ -287,10 +293,15 @@ class Labels:
             format: The format to save the labels in. If `None`, the format will be
                 inferred from the file extension. Available formats are "slp", "nwb",
                 "labelstudio", and "jabs".
+            embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or
+                list of tuples of `(video, frame_idx)` specifying the frames to embed.
+                If `"source"` is specified, no images will be embedded and the source
+                video will be restored if available. This argument is only valid for the
+                SLP backend.
         """
         from sleap_io import save_file
 
-        save_file(self, filename, format=format, **kwargs)
+        save_file(self, filename, format=format, embed=embed, **kwargs)
 
     def clean(
         self,
