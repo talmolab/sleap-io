@@ -55,11 +55,6 @@ class Video:
         if self.backend is None and self.exists():
             self.open()
 
-    def __attrs_post_init__(self):
-        """Post init syntactic sugar."""
-        if self.backend is None and self.exists():
-            self.open()
-
     @classmethod
     def from_filename(
         cls,
@@ -273,7 +268,7 @@ class Video:
                 the new filename does not exist, no error is raised.
         """
         if isinstance(new_filename, Path):
-            new_filename = str(new_filename)
+            new_filename = new_filename.as_posix()
 
         if isinstance(new_filename, list):
             new_filename = [
