@@ -729,6 +729,13 @@ def write_metadata(labels_path: str, labels: Labels):
         "negative_anchors": {},
         "provenance": labels.provenance,
     }
+
+    # Custom encoding.
+    for k in md["provenance"]:
+        if isinstance(md["provenance"][k], Path):
+            # Path -> str
+            md["provenance"][k] = md["provenance"][k].as_posix()
+
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = 1.2
