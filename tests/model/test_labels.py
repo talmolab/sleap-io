@@ -498,8 +498,14 @@ def test_split(slp_real_data, tmp_path):
     split1.save(tmp_path / "split1.pkg.slp", embed=True)
     split2.save(tmp_path / "split2.pkg.slp", embed=True)
     assert pkg.video.filename == (tmp_path / "test.pkg.slp").as_posix()
-    assert split1.video.filename == (tmp_path / "split1.pkg.slp").as_posix()
-    assert split2.video.filename == (tmp_path / "split2.pkg.slp").as_posix()
+    assert (
+        Path(split1.video.filename).as_posix()
+        == (tmp_path / "split1.pkg.slp").as_posix()
+    )
+    assert (
+        Path(split2.video.filename).as_posix()
+        == (tmp_path / "split2.pkg.slp").as_posix()
+    )
     assert (
         split1.video.source_video.filename
         == "tests/data/videos/centered_pair_low_quality.mp4"
@@ -513,8 +519,14 @@ def test_split(slp_real_data, tmp_path):
     split2_ = load_slp(tmp_path / "split2.pkg.slp")
     assert len(split1_) == 8
     assert len(split2_) == 2
-    assert split1_.video.filename == (tmp_path / "split1.pkg.slp").as_posix()
-    assert split2_.video.filename == (tmp_path / "split2.pkg.slp").as_posix()
+    assert (
+        Path(split1_.video.filename).as_posix()
+        == (tmp_path / "split1.pkg.slp").as_posix()
+    )
+    assert (
+        Path(split2_.video.filename).as_posix()
+        == (tmp_path / "split2.pkg.slp").as_posix()
+    )
     assert (
         split1_.video.source_video.filename
         == "tests/data/videos/centered_pair_low_quality.mp4"

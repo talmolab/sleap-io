@@ -967,12 +967,9 @@ def write_lfs(labels_path: str, labels: Labels):
 
     # Link instances based on from_predicted field.
     for instance_id, from_predicted in to_link:
-        if id(from_predicted) in inst_to_id:
-            instances[instance_id][5] = inst_to_id[id(from_predicted)]
-        else:
-            # Source instance may be missing if predictions were removed from the
-            # labels, in which case, remove the link.
-            instances[instance_id][5] = -1
+        # Source instance may be missing if predictions were removed from the labels, in
+        # which case, remove the link.
+        instances[instance_id][5] = inst_to_id.get(id(from_predicted), -1)
 
     # Create structured arrays.
     points = np.array([tuple(x) for x in points], dtype=point_dtype)
