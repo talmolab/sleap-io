@@ -166,20 +166,21 @@ Valid examples:
 ```
 
 ### Build
-The PyPI-compatible package settings are in [pyproject.toml].
+The PyPI-compatible package settings are in [`pyproject.toml`](pyproject.toml).
 
-The version number is set in [sleap_io/version.py] in the `__version__` variable. This is read automatically by setuptools during installation and build.
+The version number is set in [`sleap_io/version.py`](sleap_io/version.py) in the `__version__` variable. This is read automatically by setuptools during installation and build.
 
 To manually build (e.g., locally):
 ```
 python -m build --wheel
 ```
 
-To trigger an automated build (via the [.github/workflows/build.yml] action), [publish a Release](https://github.com/talmolab/sleap-io/releases/new).
+To trigger an automated build (via the [`.github/workflows/build.yml`](.github/workflows/build.yml) action), [publish a Release](https://github.com/talmolab/sleap-io/releases/new).
 
 
 ## Documentation website
 
-1. Install with the `dev` dependencies (e.g., `pip install -e ".[dev]")
-2. Preview live changes with `mkdocs serve`
-3. Manually push a specific version with: `mike deploy --push --update-aliases 0.1.0 latest`
+1. Install `sleap-io` with the `dev` dependencies (e.g., `pip install -e ".[dev]"`). This is the default when installing from source via conda (`conda env create -f environment.yml`).
+2. Build and tag a new version of the docs: `mike deploy --update-aliases 0.1.4 latest`
+3. Preview live changes locally with: `mike serve`
+4. Manually push a specific version with: `mike deploy --push --update-aliases --allow-empty 0.1.4 latest`
