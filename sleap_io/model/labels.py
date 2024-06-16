@@ -647,9 +647,10 @@ class Labels:
             Frames with user labeled data will be embedded in the resulting files.
 
             If `save_dir` is specified, this will save the randomly sampled splits to:
-                - `{save_dir}/train.pkg.slp`
-                - `{save_dir}/val.pkg.slp`
-                - `{save_dir}/test.pkg.slp` (if `n_test` is specified)
+
+            - `{save_dir}/train.pkg.slp`
+            - `{save_dir}/val.pkg.slp`
+            - `{save_dir}/test.pkg.slp` (if `n_test` is specified)
 
         See also: `Labels.split`
         """

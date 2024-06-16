@@ -37,10 +37,11 @@ import sleap_io as sio
 labels = sio.load_file("predictions.slp")
 
 # Save to NWB file.
-sio.save_file(labels, "predictions.nwb")
-# Or:
-# labels.save("predictions.nwb")
+labels.save("predictions.nwb")
 ```
+
+**See also:** [`Labels.save`](model.md#sleap_io.Labels.save) and [Formats](formats.md)
+
 
 ### Convert labels to raw arrays
 
@@ -60,6 +61,9 @@ n_frames, n_tracks, n_nodes, xy_score = trx.shape
 assert xy_score == 3
 ```
 
+**See also:** [`Labels.numpy`](model.md#sleap_io.Labels.numpy)
+
+
 ### Read video data
 
 ```py
@@ -71,6 +75,10 @@ n_frames, height, width, channels = video.shape
 frame = video[0]
 height, width, channels = frame.shape
 ```
+
+**See also:** [`sio.load_video`](formats.md#sleap_io.load_video) and [`Video`](model.md#sleap_io.Video)
+
+
 
 ### Create labels from raw data
 
@@ -106,6 +114,67 @@ labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
 # Save.
 labels.save("labels.slp")
 ```
+
+**See also:** [Model](model.md), [`Labels`](model.md#sleap_io.Labels),
+[`LabeledFrame`](model.md#sleap_io.LabeledFrame),
+[`Instance`](model.md#sleap_io.Instance),
+[`PredictedInstance`](model.md#sleap_io.PredictedInstance),
+[`Skeleton`](model.md#sleap_io.Skeleton), [`Video`](model.md#sleap_io.Video), [`Track`](model.md#sleap_io.Track), [`SuggestionFrame`](model.md#sleap_io.SuggestionFrame)
+
+
+### Fix video paths
+
+```py
+import sleap_io as sio
+
+labels = sio.load_file("labels.v001.slp")
+
+# Fix paths using prefixes.
+labels.replace_filenames(prefix_map={
+    "D:/data/sleap_projects": "/home/user/sleap_projects",
+    "C:/Users/sleaper/Desktop/test": "/home/user/sleap_projects",
+})
+
+labels.save("labels.v002.slp")
+```
+
+**See also:** [`Labels.replace_filenames`](model.md#sleap_io.Labels.replace_filenames)
+
+
+### Save labels with embedded images
+
+```py
+import sleap_io as sio
+
+# Load source labels.
+labels = sio.load_file("labels.v001.slp")
+
+# Save with embedded images for frames with user labeled data and suggested frames.
+labels.save("labels.v001.pkg.slp", embed="user+suggestions")
+```
+
+**See also:** [`Labels.save`](model.md#sleap_io.Labels.save)
+
+
+### Make training/validation/test splits
+
+```py
+import sleap_io as sio
+
+# Load source labels.
+labels = sio.load_file("labels.v001.slp")
+
+# Make splits and export with embedded images.
+labels.make_training_splits(n_train=0.8, n_val=0.1, n_test=0.1, save_dir="split1", seed=42)
+
+# Splits will be saved as self-contained SLP package files with images and labels.
+labels_train = sio.load_file("split1/train.pkg.slp")
+labels_val = sio.load_file("split1/val.pkg.slp")
+labels_test = sio.load_file("split1/test.pkg.slp")
+```
+
+**See also:** [`Labels.make_training_splits`](model.md#sleap_io.Labels.make_training_splits)
+
 
 ## Support
 For technical inquiries specific to this package, please [open an Issue](https://github.com/talmolab/sleap-io/issues)
