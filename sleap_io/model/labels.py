@@ -614,3 +614,74 @@ class Labels:
         split2.provenance["source_labels"] = self.provenance.get("filename", None)
 
         return split1, split2
+
+    def make_training_splits(
+        self,
+        n_train: int | float,
+        n_val: int | float | None = None,
+        n_test: int | float | None = None,
+        save_dir: str | Path | None = None,
+        seed: int | None = None,
+    ) -> tuple[Labels, Labels] | tuple[Labels, Labels, Labels]:
+        """Make splits for training with embedded images.
+
+        Args:
+            n_train: Size of the training split as integer or fraction.
+            n_val: Size of the validation split as integer or fraction. If `None`,
+                this will be inferred based on the values of `n_train` and `n_test`. If
+                `n_test` is `None`, this will be the remainder of the data after the
+                training split.
+            n_test: Size of the testing split as integer or fraction. If `None`, the
+                test split will not be saved.
+            save_dir: If specified, save splits to SLP files with embedded images.
+            seed: Optional integer seed to use for reproducibility.
+
+        Returns:
+            A tuple of `labels_train, labels_val` or
+            `labels_train, labels_val, labels_test` if `n_test` was specified.
+
+        Notes:
+            Predictions and suggestions will be removed before saving, leaving only
+            frames with user labeled data (the source labels are not affected).
+
+            Frames with user labeled data will be embedded in the resulting files.
+
+            If `save_dir` is specified, this will save the randomly sampled splits to:
+                - `{save_dir}/train.pkg.slp`
+                - `{save_dir}/val.pkg.slp`
+                - `{save_dir}/test.pkg.slp` (if `n_test` is specified)
+
+        See also: `Labels.split`
+        """
+        # Clean up labels.
+        labels = deepcopy(self)
+        labels.remove_predictions()
+        labels.suggestions = []
+        labels.clean()
+
+        # Make splits.
+        labels_train, labels_rest = labels.split(n_train, seed=seed)
+        if n_test is not None:
+            if n_test < 1:
+                n_test = (n_test * len(labels)) / len(labels_rest)
+            labels_test, labels_rest = labels_rest.split(n=n_test, seed=seed)
+        if n_val is not None:
+            if n_val < 1:
+                n_val = (n_val * len(labels)) / len(labels_rest)
+            labels_val, _ = labels_rest.split(n=n_val, seed=seed)
+        else:
+            labels_val = labels_rest
+
+        # Save.
+        if save_dir is not None:
+            save_dir = Path(save_dir)
+            save_dir.mkdir(exist_ok=True, parents=True)
+
+            labels_train.save(save_dir / "train.pkg.slp", embed="user")
+            labels_val.save(save_dir / "val.pkg.slp", embed="user")
+            labels_test.save(save_dir / "test.pkg.slp", embed="user")
+
+        if n_test is None:
+            return labels_train, labels_val
+        else:
+            return labels_train, labels_val, labels_test

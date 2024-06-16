@@ -523,3 +523,55 @@ def test_split(slp_real_data, tmp_path):
         split2_.video.source_video.filename
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
+
+
+def test_make_training_splits(slp_real_data, tmp_path):
+    labels = load_slp(slp_real_data)
+    assert len(labels.user_labeled_frames) == 5
+
+    train, val = labels.make_training_splits(0.8)
+    assert len(train) == 4
+    assert len(val) == 1
+
+    train, val = labels.make_training_splits(3)
+    assert len(train) == 3
+    assert len(val) == 2
+
+    train, val = labels.make_training_splits(0.8, 0.2)
+    assert len(train) == 4
+    assert len(val) == 1
+
+    train, val, test = labels.make_training_splits(0.8, 0.1, 0.1)
+    assert len(train) == 4
+    assert len(val) == 1
+    assert len(test) == 1
+
+    train, val, test = labels.make_training_splits(n_train=0.6, n_test=1)
+    assert len(train) == 3
+    assert len(val) == 1
+    assert len(test) == 1
+
+    train, val, test = labels.make_training_splits(n_train=1, n_val=1, n_test=1)
+    assert len(train) == 1
+    assert len(val) == 1
+    assert len(test) == 1
+
+
+def test_make_training_splits_save(slp_real_data, tmp_path):
+    labels = load_slp(slp_real_data)
+
+    train, val, test = labels.make_training_splits(0.6, 0.2, 0.2, save_dir=tmp_path)
+
+    train_, val_, test_ = (
+        load_slp(tmp_path / "train.pkg.slp"),
+        load_slp(tmp_path / "val.pkg.slp"),
+        load_slp(tmp_path / "test.pkg.slp"),
+    )
+
+    assert len(train_) == len(train)
+    assert len(val_) == len(val)
+    assert len(test_) == len(test)
+
+    assert train_.provenance["source_labels"] == slp_real_data
+    assert val_.provenance["source_labels"] == slp_real_data
+    assert test_.provenance["source_labels"] == slp_real_data
