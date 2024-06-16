@@ -283,7 +283,9 @@ def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
     )
 
 
-@pytest.mark.parametrize("to_embed", ["user", "suggestions", "user+suggestions"])
+@pytest.mark.parametrize(
+    "to_embed", [True, "all", "user", "suggestions", "user+suggestions"]
+)
 def test_embed(tmpdir, slp_real_data, to_embed):
     base_labels = read_labels(slp_real_data)
     assert type(base_labels.video.backend) == MediaVideo
@@ -306,8 +308,21 @@ def test_embed(tmpdir, slp_real_data, to_embed):
         Path(labels.video.source_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
-    if to_embed == "user":
-        assert labels.video.backend.embedded_frame_inds == [0, 990, 440, 220, 770]
+    if to_embed == "all" or to_embed is True:
+        assert labels.video.backend.embedded_frame_inds == [
+            0,
+            110,
+            220,
+            330,
+            440,
+            550,
+            660,
+            770,
+            880,
+            990,
+        ]
+    elif to_embed == "user":
+        assert labels.video.backend.embedded_frame_inds == [0, 220, 440, 770, 990]
     elif to_embed == "suggestions":
         assert len(labels.video.backend.embedded_frame_inds) == 10
     elif to_embed == "suggestions+user":
@@ -320,7 +335,7 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
     write_labels(labels_path, base_labels, embed="user")
     labels = read_labels(labels_path)
 
-    assert labels.video.backend.embedded_frame_inds == [0, 990, 440, 220, 770]
+    assert labels.video.backend.embedded_frame_inds == [0, 220, 440, 770, 990]
 
     labels2_path = str(tmpdir / "labels2.pkg.slp")
     write_labels(labels2_path, labels)
@@ -329,7 +344,7 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
         Path(labels2.video.source_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
-    assert labels2.video.backend.embedded_frame_inds == [0, 990, 440, 220, 770]
+    assert labels2.video.backend.embedded_frame_inds == [0, 220, 440, 770, 990]
 
     labels3_path = str(tmpdir / "labels3.slp")
     write_labels(labels3_path, labels, embed="source")
