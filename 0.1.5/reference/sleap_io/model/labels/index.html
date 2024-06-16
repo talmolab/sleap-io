@@ -1787,9 +1787,9 @@ about where the dataset came from.</p>
 <a id="__codelineno-0-648" name="__codelineno-0-648"></a><a href="#__codelineno-0-648"><span class="linenos" data-linenos="648 "></span></a>
 <a id="__codelineno-0-649" name="__codelineno-0-649"></a><a href="#__codelineno-0-649"><span class="linenos" data-linenos="649 "></span></a><span class="sd">            If `save_dir` is specified, this will save the randomly sampled splits to:</span>
 <a id="__codelineno-0-650" name="__codelineno-0-650"></a><a href="#__codelineno-0-650"><span class="linenos" data-linenos="650 "></span></a>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a><span class="sd">                {save_dir}/train.pkg.slp</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a><span class="sd">                {save_dir}/val.pkg.slp</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a><span class="sd">                {save_dir}/test.pkg.slp (if `n_test` is specified)</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a><span class="sd">            - `{save_dir}/train.pkg.slp`</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a><span class="sd">            - `{save_dir}/val.pkg.slp`</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a><span class="sd">            - `{save_dir}/test.pkg.slp` (if `n_test` is specified)</span>
 <a id="__codelineno-0-654" name="__codelineno-0-654"></a><a href="#__codelineno-0-654"><span class="linenos" data-linenos="654 "></span></a>
 <a id="__codelineno-0-655" name="__codelineno-0-655"></a><a href="#__codelineno-0-655"><span class="linenos" data-linenos="655 "></span></a><span class="sd">        See also: `Labels.split`</span>
 <a id="__codelineno-0-656" name="__codelineno-0-656"></a><a href="#__codelineno-0-656"><span class="linenos" data-linenos="656 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
@@ -2732,10 +2732,11 @@ test split will not be saved.</p>
 frames with user labeled data (the source labels are not affected).</p>
 <p>Frames with user labeled data will be embedded in the resulting files.</p>
 <p>If <code>save_dir</code> is specified, this will save the randomly sampled splits to:</p>
-<div class="highlight"><pre><span></span><code>{save_dir}/train.pkg.slp
-{save_dir}/val.pkg.slp
-{save_dir}/test.pkg.slp (if `n_test` is specified)
-</code></pre></div>
+<ul>
+<li><code>{save_dir}/train.pkg.slp</code></li>
+<li><code>{save_dir}/val.pkg.slp</code></li>
+<li><code>{save_dir}/test.pkg.slp</code> (if <code>n_test</code> is specified)</li>
+</ul>
 </details>      <p>See also: <code>Labels.split</code></p>
 
           <details class="quote">
@@ -2773,9 +2774,9 @@ frames with user labeled data (the source labels are not affected).</p>
 <a id="__codelineno-0-648" name="__codelineno-0-648"></a><a href="#__codelineno-0-648"><span class="linenos" data-linenos="648 "></span></a>
 <a id="__codelineno-0-649" name="__codelineno-0-649"></a><a href="#__codelineno-0-649"><span class="linenos" data-linenos="649 "></span></a><span class="sd">        If `save_dir` is specified, this will save the randomly sampled splits to:</span>
 <a id="__codelineno-0-650" name="__codelineno-0-650"></a><a href="#__codelineno-0-650"><span class="linenos" data-linenos="650 "></span></a>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a><span class="sd">            {save_dir}/train.pkg.slp</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a><span class="sd">            {save_dir}/val.pkg.slp</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a><span class="sd">            {save_dir}/test.pkg.slp (if `n_test` is specified)</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a><span class="sd">        - `{save_dir}/train.pkg.slp`</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a><span class="sd">        - `{save_dir}/val.pkg.slp`</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a><span class="sd">        - `{save_dir}/test.pkg.slp` (if `n_test` is specified)</span>
 <a id="__codelineno-0-654" name="__codelineno-0-654"></a><a href="#__codelineno-0-654"><span class="linenos" data-linenos="654 "></span></a>
 <a id="__codelineno-0-655" name="__codelineno-0-655"></a><a href="#__codelineno-0-655"><span class="linenos" data-linenos="655 "></span></a><span class="sd">    See also: `Labels.split`</span>
 <a id="__codelineno-0-656" name="__codelineno-0-656"></a><a href="#__codelineno-0-656"><span class="linenos" data-linenos="656 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
