@@ -378,6 +378,24 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#save-labels-with-embedded-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Save labels with embedded images
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#make-trainingvalidationtest-splits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Make training/validation/test splits
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -480,7 +498,7 @@
         
   
   <span class="md-ellipsis">
-    Data model
+    Model
   </span>
   
 
@@ -501,7 +519,7 @@
         
   
   <span class="md-ellipsis">
-    Data formats
+    Formats
   </span>
   
 
@@ -1108,6 +1126,24 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#save-labels-with-embedded-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Save labels with embedded images
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#make-trainingvalidationtest-splits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Make training/validation/test splits
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1176,10 +1212,9 @@ have any functionality related to labeling, training, or inference.</p>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Save to NWB file.</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_file</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;predictions.nwb&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Or:</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># labels.save(&quot;predictions.nwb&quot;)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;predictions.nwb&quot;</span><span class="p">)</span>
 </code></pre></div>
+<p><strong>See also:</strong> <a href="model/#sleap_io.Labels.save"><code>Labels.save</code></a> and <a href="formats/">Formats</a></p>
 <h3 id="convert-labels-to-raw-arrays">Convert labels to raw arrays<a class="headerlink" href="#convert-labels-to-raw-arrays" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
@@ -1195,6 +1230,7 @@ have any functionality related to labeling, training, or inference.</p>
 <a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">n_frames</span><span class="p">,</span> <span class="n">n_tracks</span><span class="p">,</span> <span class="n">n_nodes</span><span class="p">,</span> <span class="n">xy_score</span> <span class="o">=</span> <span class="n">trx</span><span class="o">.</span><span class="n">shape</span> 
 <a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">assert</span> <span class="n">xy_score</span> <span class="o">==</span> <span class="mi">3</span>
 </code></pre></div>
+<p><strong>See also:</strong> <a href="model/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a></p>
 <h3 id="read-video-data">Read video data<a class="headerlink" href="#read-video-data" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
@@ -1204,6 +1240,7 @@ have any functionality related to labeling, training, or inference.</p>
 <a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 <a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">channels</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span>
 </code></pre></div>
+<p><strong>See also:</strong> <a href="formats/#sleap_io.load_video"><code>sio.load_video</code></a> and <a href="model/#sleap_io.Video"><code>Video</code></a></p>
 <h3 id="create-labels-from-raw-data">Create labels from raw data<a class="headerlink" href="#create-labels-from-raw-data" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
@@ -1236,19 +1273,43 @@ have any functionality related to labeling, training, or inference.</p>
 <a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="c1"># Save.</span>
 <a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
+<p><strong>See also:</strong> <a href="model/">Model</a></p>
 <h3 id="fix-video-paths">Fix video paths<a class="headerlink" href="#fix-video-paths" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">labels</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">prefix_map</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="s2">&quot;D:/data/sleap_projects&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="s2">&quot;/home/user/sleap_projects&quot;</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">})</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v002.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Fix paths using prefixes.</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">labels</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">prefix_map</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="s2">&quot;D:/data/sleap_projects&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/user/sleap_projects&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="s2">&quot;C:/Users/sleaper/Desktop/test&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/user/sleap_projects&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="p">})</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v002.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
-<p>See: <a href="model/#sleap_io.Labels.replace_filenames"><code>Labels.replace_filenames</code></a></p>
+<p><strong>See also:</strong> <a href="model/#sleap_io.Labels.replace_filenames"><code>Labels.replace_filenames</code></a></p>
+<h3 id="save-labels-with-embedded-images">Save labels with embedded images<a class="headerlink" href="#save-labels-with-embedded-images" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v001.pkg.slp&quot;</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="s2">&quot;user+suggestions&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>See also:</strong> <a href="model/#sleap_io.Labels.save"><code>Labels.save</code></a></p>
+<h3 id="make-trainingvalidationtest-splits">Make training/validation/test splits<a class="headerlink" href="#make-trainingvalidationtest-splits" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Load source labels.</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Make splits and export with embedded images.</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">make_training_splits</span><span class="p">(</span><span class="n">n_train</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">n_val</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">n_test</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">save_dir</span><span class="o">=</span><span class="s2">&quot;split1&quot;</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Splits will be saved as self-contained SLP package files with images and labels.</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="n">labels_train</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/train.pkg.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="n">labels_val</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/val.pkg.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="n">labels_test</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/test.pkg.slp&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>See also:</strong> <a href="model/#sleap_io.Labels.make_training_splits"><code>Labels.make_training_splits</code></a></p>
 <h2 id="support">Support<a class="headerlink" href="#support" title="Permanent link">&para;</a></h2>
 <p>For technical inquiries specific to this package, please <a href="https://github.com/talmolab/sleap-io/issues">open an Issue</a>
 with a description of your problem or request.</p>
@@ -1294,7 +1355,7 @@ restrictions. See <a href="https://github.com/talmolab/sleap-io/blob/main/LICENS
       <div class="md-copyright">
   
     <div class="md-copyright__highlight">
-      Copyright &copy; 2024 - 2024 Talmo Lab – <a href="#__consent">Change cookie settings</a>
+      Copyright &copy; 2022 - 2024 Talmo Lab – <a href="#__consent">Change cookie settings</a>
 
     </div>
   
