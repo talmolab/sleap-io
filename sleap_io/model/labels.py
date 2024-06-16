@@ -608,4 +608,9 @@ class Labels:
         split1, split2 = deepcopy(split1), deepcopy(split2)
         split1, split2 = Labels(split1), Labels(split2)
 
+        split1.provenance = self.provenance
+        split2.provenance = self.provenance
+        split1.provenance["source_labels"] = self.provenance.get("filename", None)
+        split2.provenance["source_labels"] = self.provenance.get("filename", None)
+
         return split1, split2
