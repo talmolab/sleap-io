@@ -25,6 +25,7 @@ from typing import Union, Optional, Any
 import numpy as np
 from pathlib import Path
 from sleap_io.model.skeleton import Skeleton
+from copy import deepcopy
 
 
 @define
@@ -560,3 +561,51 @@ class Labels:
                             video.replace_filename(
                                 new_prefix / fn.relative_to(old_prefix)
                             )
+
+    def split(self, n: int | float, seed: int | None = None) -> tuple[Labels, Labels]:
+        """Separate the labels into random splits.
+
+        Args:
+            n: Size of the first split. If integer >= 1, assumes that this is the number
+                of labeled frames in the first split. If < 1.0, this will be treated as
+                a fraction of the total labeled frames.
+            seed: Optional integer seed to use for reproducibility.
+
+        Returns:
+            A tuple of `split1, split2`.
+
+            If an integer was specified, `len(split1) == n`.
+
+            If a fraction was specified, `len(split1) == int(n * len(labels))`.
+
+            The second split contains the remainder, i.e.,
+            `len(split2) == len(labels) - len(split1)`.
+
+            If there are too few frames, a minimum of 1 frame will be kept in the second
+            split.
+
+            If there is exactly 1 labeled frame in the labels, the same frame will be
+            assigned to both splits.
+        """
+        n0 = len(self)
+        if n0 == 0:
+            return self, self
+        n1 = n
+        if n < 1.0:
+            n1 = max(int(n0 * float(n)), 1)
+        n2 = max(n0 - n1, 1)
+        n1, n2 = int(n1), int(n2)
+
+        rng = np.random.default_rng(seed=seed)
+        inds1 = rng.choice(n0, size=(n1,), replace=False)
+
+        if n0 == 1:
+            inds2 = np.array([0])
+        else:
+            inds2 = np.setdiff1d(np.arange(n0), inds1)
+
+        split1, split2 = self[inds1], self[inds2]
+        split1, split2 = deepcopy(split1), deepcopy(split2)
+        split1, split2 = Labels(split1), Labels(split2)
+
+        return split1, split2
