@@ -1273,7 +1273,11 @@ have any functionality related to labeling, training, or inference.</p>
 <a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="c1"># Save.</span>
 <a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
-<p><strong>See also:</strong> <a href="model/">Model</a></p>
+<p><strong>See also:</strong> <a href="model/">Model</a>, <a href="model/#sleap_io.Labels"><code>Labels</code></a>,
+<a href="model/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a>,
+<a href="model/#sleap_io.Instance"><code>Instance</code></a>,
+<a href="model/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a>,
+<a href="model/#sleap_io.Skeleton"><code>Skeleton</code></a>, <a href="model/#sleap_io.Video"><code>Video</code></a>, <a href="model/#sleap_io.Track"><code>Track</code></a>, <a href="model/#sleap_io.SuggestionFrame"><code>SuggestionFrame</code></a></p>
 <h3 id="fix-video-paths">Fix video paths<a class="headerlink" href="#fix-video-paths" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
@@ -1291,8 +1295,11 @@ have any functionality related to labeling, training, or inference.</p>
 <h3 id="save-labels-with-embedded-images">Save labels with embedded images<a class="headerlink" href="#save-labels-with-embedded-images" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v001.pkg.slp&quot;</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="s2">&quot;user+suggestions&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Load source labels.</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Save with embedded images for frames with user labeled data and suggested frames.</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v001.pkg.slp&quot;</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="s2">&quot;user+suggestions&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="model/#sleap_io.Labels.save"><code>Labels.save</code></a></p>
 <h3 id="make-trainingvalidationtest-splits">Make training/validation/test splits<a class="headerlink" href="#make-trainingvalidationtest-splits" title="Permanent link">&para;</a></h3>
