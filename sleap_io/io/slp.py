@@ -1031,6 +1031,7 @@ def read_labels(labels_path: str) -> Labels:
         suggestions=suggestions,
         provenance=provenance,
     )
+    labels.provenance["filename"] = labels_path
 
     return labels
 

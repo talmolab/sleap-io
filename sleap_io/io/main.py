@@ -161,7 +161,7 @@ def load_file(
         A `Labels` or `Video` object.
     """
     if isinstance(filename, Path):
-        filename = str(filename)
+        filename = filename.as_posix()
 
     if format is None:
         if filename.endswith(".slp"):

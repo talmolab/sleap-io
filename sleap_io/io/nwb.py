@@ -140,6 +140,7 @@ def read_nwb(path: str) -> Labels:
                     LabeledFrame(video=video, frame_idx=frame_idx, instances=insts)
                 )
     labels = Labels(lfs)
+    labels.provenance["filename"] = path
     return labels
 
 
