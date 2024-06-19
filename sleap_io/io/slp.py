@@ -373,7 +373,7 @@ def embed_videos(
 
             This argument is only valid for the SLP backend.
     """
-    if embed == True:
+    if embed is True:
         embed = "all"
     if embed == "user":
         embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
