@@ -538,7 +538,7 @@ class HDF5Video(VideoBackend):
                 self.image_format = ds.attrs["format"]
 
             if "frame_numbers" in ds.parent:
-                frame_numbers = ds.parent["frame_numbers"][:]
+                frame_numbers = ds.parent["frame_numbers"][:].astype(int)
                 self.frame_map = {frame: idx for idx, frame in enumerate(frame_numbers)}
                 self.source_inds = frame_numbers
 

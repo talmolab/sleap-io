@@ -144,13 +144,13 @@ extra_css:
   - css/mkdocstrings.css
 
 copyright: >
-  Copyright &copy; 2024 - 2024 Talmo Lab –
+  Copyright &copy; 2022 - 2024 Talmo Lab –
   <a href="#__consent">Change cookie settings</a>
 
 nav:
   - Overview: index.md
   - Changelog: https://github.com/talmolab/sleap-io/releases
   - Core API:
-    - Data model: model.md
-    - Data formats: formats.md
+    - Model: model.md
+    - Formats: formats.md
   - Full API: reference/

@@ -169,7 +169,9 @@ def read_labels(
                         instances.append(new_instance)
             frame_label = LabeledFrame(video, frame_idx, instances)
             frames.append(frame_label)
-    return Labels(frames)
+    labels = Labels(frames)
+    labels.provenance["filename"] = labels_path
+    return labels
 
 
 def make_simple_skeleton(name: str, num_points: int) -> Skeleton:

@@ -20,17 +20,29 @@ def load_slp(filename: str) -> Labels:
 
 
 def save_slp(
-    labels: Labels, filename: str, embed: str | list[tuple[Video, int]] | None = None
+    labels: Labels,
+    filename: str,
+    embed: bool | str | list[tuple[Video, int]] | None = None,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to save labels to ending with `.slp`.
-        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or
-            list of tuples of `(video, frame_idx)` specifying the frames to embed. If
-            `"source"` is specified, no images will be embedded and the source video
+        embed: Frames to embed in the saved labels file. One of `None`, `True`,
+            `"all"`, `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or list
+            of tuples of `(video, frame_idx)`.
+
+            If `None` is specified (the default) and the labels contains embedded
+            frames, those embedded frames will be re-saved to the new file.
+
+            If `True` or `"all"`, all labeled frames and suggested frames will be
+            embedded.
+
+            If `"source"` is specified, no images will be embedded and the source video
             will be restored if available.
+
+            This argument is only valid for the SLP backend.
     """
     return slp.write_labels(filename, labels, embed=embed)
 
@@ -149,7 +161,7 @@ def load_file(
         A `Labels` or `Video` object.
     """
     if isinstance(filename, Path):
-        filename = str(filename)
+        filename = filename.as_posix()
 
     if format is None:
         if filename.endswith(".slp"):

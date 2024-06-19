@@ -329,6 +329,9 @@ def embed_frames(
             to_embed_by_video[video] = []
         to_embed_by_video[video].append(frame_idx)
 
+    for video in to_embed_by_video:
+        to_embed_by_video[video] = np.unique(to_embed_by_video[video])
+
     replaced_videos = {}
     for video, frame_inds in to_embed_by_video.items():
         video_ind = labels.videos.index(video)
@@ -348,24 +351,39 @@ def embed_frames(
 
 
 def embed_videos(
-    labels_path: str, labels: Labels, embed: str | list[tuple[Video, int]]
+    labels_path: str, labels: Labels, embed: bool | str | list[tuple[Video, int]]
 ):
     """Embed videos in a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file to save.
         labels: A `Labels` object to save.
-        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or
-            list of tuples of `(video, frame_idx)` specifying the frames to embed. If
-            `"source"` is specified, no images will be embedded and the source video
+        embed: Frames to embed in the saved labels file. One of `None`, `True`,
+            `"all"`, `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or list
+            of tuples of `(video, frame_idx)`.
+
+            If `None` is specified (the default) and the labels contains embedded
+            frames, those embedded frames will be re-saved to the new file.
+
+            If `True` or `"all"`, all labeled frames and suggested frames will be
+            embedded.
+
+            If `"source"` is specified, no images will be embedded and the source video
             will be restored if available.
+
+            This argument is only valid for the SLP backend.
     """
+    if embed is True:
+        embed = "all"
     if embed == "user":
         embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
     elif embed == "suggestions":
         embed = [(sf.video, sf.frame_idx) for sf in labels.suggestions]
     elif embed == "user+suggestions":
         embed = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
+        embed += [(sf.video, sf.frame_idx) for sf in labels.suggestions]
+    elif embed == "all":
+        embed = [(lf.video, lf.frame_idx) for lf in labels]
         embed += [(sf.video, sf.frame_idx) for sf in labels.suggestions]
     elif embed == "source":
         embed = []
@@ -711,6 +729,13 @@ def write_metadata(labels_path: str, labels: Labels):
         "negative_anchors": {},
         "provenance": labels.provenance,
     }
+
+    # Custom encoding.
+    for k in md["provenance"]:
+        if isinstance(md["provenance"][k], Path):
+            # Path -> str
+            md["provenance"][k] = md["provenance"][k].as_posix()
+
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = 1.2
@@ -942,7 +967,9 @@ def write_lfs(labels_path: str, labels: Labels):
 
     # Link instances based on from_predicted field.
     for instance_id, from_predicted in to_link:
-        instances[instance_id][5] = inst_to_id[id(from_predicted)]
+        # Source instance may be missing if predictions were removed from the labels, in
+        # which case, remove the link.
+        instances[instance_id][5] = inst_to_id.get(id(from_predicted), -1)
 
     # Create structured arrays.
     points = np.array([tuple(x) for x in points], dtype=point_dtype)
@@ -1013,23 +1040,35 @@ def read_labels(labels_path: str) -> Labels:
         suggestions=suggestions,
         provenance=provenance,
     )
+    labels.provenance["filename"] = labels_path
 
     return labels
 
 
 def write_labels(
-    labels_path: str, labels: Labels, embed: str | list[tuple[Video, int]] | None = None
+    labels_path: str,
+    labels: Labels,
+    embed: bool | str | list[tuple[Video, int]] | None = None,
 ):
     """Write a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file to save.
         labels: A `Labels` object to save.
-        embed: One of `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"`,
-            `None` or list of tuples of `(video, frame_idx)` specifying the frames to
-            embed. If `"source"` is specified, no images will be embedded and the source
-            video will be restored if available. If `None` is specified (the default),
-            existing embedded images will be re-embedded.
+        embed: Frames to embed in the saved labels file. One of `None`, `True`,
+            `"all"`, `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or list
+            of tuples of `(video, frame_idx)`.
+
+            If `None` is specified (the default) and the labels contains embedded
+            frames, those embedded frames will be re-saved to the new file.
+
+            If `True` or `"all"`, all labeled frames and suggested frames will be
+            embedded.
+
+            If `"source"` is specified, no images will be embedded and the source video
+            will be restored if available.
+
+            This argument is only valid for the SLP backend.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()

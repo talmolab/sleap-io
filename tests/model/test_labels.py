@@ -416,3 +416,174 @@ def test_replace_filenames():
 
     labels.replace_filenames(prefix_map={"train/": "test/"})
     assert labels.video.filename == ["test/imgs/img0.png", "test/imgs/img1.png"]
+
+
+def test_split(slp_real_data, tmp_path):
+    # n = 0
+    labels = Labels()
+    split1, split2 = labels.split(0.5)
+    assert len(split1) == len(split2) == 0
+
+    # n = 1
+    labels.append(LabeledFrame(video=Video("test.mp4"), frame_idx=0))
+    split1, split2 = labels.split(0.5)
+    assert len(split1) == len(split2) == 1
+    assert split1[0].frame_idx == 0
+    assert split2[0].frame_idx == 0
+
+    split1, split2 = labels.split(0.999)
+    assert len(split1) == len(split2) == 1
+    assert split1[0].frame_idx == 0
+    assert split2[0].frame_idx == 0
+
+    split1, split2 = labels.split(n=1)
+    assert len(split1) == len(split2) == 1
+    assert split1[0].frame_idx == 0
+    assert split2[0].frame_idx == 0
+
+    # Real data
+    labels = load_slp(slp_real_data)
+    assert len(labels) == 10
+
+    split1, split2 = labels.split(n=0.6)
+    assert len(split1) == 6
+    assert len(split2) == 4
+
+    # Rounding errors
+    split1, split2 = labels.split(n=0.001)
+    assert len(split1) == 1
+    assert len(split2) == 9
+
+    split1, split2 = labels.split(n=0.999)
+    assert len(split1) == 9
+    assert len(split2) == 1
+
+    # Integer
+    split1, split2 = labels.split(n=8)
+    assert len(split1) == 8
+    assert len(split2) == 2
+
+    # Serialization round trip
+    split1.save(tmp_path / "split1.slp")
+    split1_ = load_slp(tmp_path / "split1.slp")
+    assert len(split1) == len(split1_)
+    assert split1.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+    assert split1_.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+
+    split2.save(tmp_path / "split2.slp")
+    split2_ = load_slp(tmp_path / "split2.slp")
+    assert len(split2) == len(split2_)
+    assert split2.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+    assert split2_.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
+
+    # Serialization round trip with embedded data
+    labels = load_slp(slp_real_data)
+    labels.save(tmp_path / "test.pkg.slp", embed=True)
+    pkg = load_slp(tmp_path / "test.pkg.slp")
+
+    split1, split2 = pkg.split(n=0.8)
+    assert len(split1) == 8
+    assert len(split2) == 2
+    assert split1.video.filename == (tmp_path / "test.pkg.slp").as_posix()
+    assert split2.video.filename == (tmp_path / "test.pkg.slp").as_posix()
+    assert (
+        split1.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+    assert (
+        split2.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+
+    split1.save(tmp_path / "split1.pkg.slp", embed=True)
+    split2.save(tmp_path / "split2.pkg.slp", embed=True)
+    assert pkg.video.filename == (tmp_path / "test.pkg.slp").as_posix()
+    assert (
+        Path(split1.video.filename).as_posix()
+        == (tmp_path / "split1.pkg.slp").as_posix()
+    )
+    assert (
+        Path(split2.video.filename).as_posix()
+        == (tmp_path / "split2.pkg.slp").as_posix()
+    )
+    assert (
+        split1.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+    assert (
+        split2.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+
+    split1_ = load_slp(tmp_path / "split1.pkg.slp")
+    split2_ = load_slp(tmp_path / "split2.pkg.slp")
+    assert len(split1_) == 8
+    assert len(split2_) == 2
+    assert (
+        Path(split1_.video.filename).as_posix()
+        == (tmp_path / "split1.pkg.slp").as_posix()
+    )
+    assert (
+        Path(split2_.video.filename).as_posix()
+        == (tmp_path / "split2.pkg.slp").as_posix()
+    )
+    assert (
+        split1_.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+    assert (
+        split2_.video.source_video.filename
+        == "tests/data/videos/centered_pair_low_quality.mp4"
+    )
+
+
+def test_make_training_splits(slp_real_data, tmp_path):
+    labels = load_slp(slp_real_data)
+    assert len(labels.user_labeled_frames) == 5
+
+    train, val = labels.make_training_splits(0.8)
+    assert len(train) == 4
+    assert len(val) == 1
+
+    train, val = labels.make_training_splits(3)
+    assert len(train) == 3
+    assert len(val) == 2
+
+    train, val = labels.make_training_splits(0.8, 0.2)
+    assert len(train) == 4
+    assert len(val) == 1
+
+    train, val, test = labels.make_training_splits(0.8, 0.1, 0.1)
+    assert len(train) == 4
+    assert len(val) == 1
+    assert len(test) == 1
+
+    train, val, test = labels.make_training_splits(n_train=0.6, n_test=1)
+    assert len(train) == 3
+    assert len(val) == 1
+    assert len(test) == 1
+
+    train, val, test = labels.make_training_splits(n_train=1, n_val=1, n_test=1)
+    assert len(train) == 1
+    assert len(val) == 1
+    assert len(test) == 1
+
+
+def test_make_training_splits_save(slp_real_data, tmp_path):
+    labels = load_slp(slp_real_data)
+
+    train, val, test = labels.make_training_splits(0.6, 0.2, 0.2, save_dir=tmp_path)
+
+    train_, val_, test_ = (
+        load_slp(tmp_path / "train.pkg.slp"),
+        load_slp(tmp_path / "val.pkg.slp"),
+        load_slp(tmp_path / "test.pkg.slp"),
+    )
+
+    assert len(train_) == len(train)
+    assert len(val_) == len(val)
+    assert len(test_) == len(test)
+
+    assert train_.provenance["source_labels"] == slp_real_data
+    assert val_.provenance["source_labels"] == slp_real_data
+    assert test_.provenance["source_labels"] == slp_real_data

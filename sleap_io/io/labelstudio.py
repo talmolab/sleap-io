@@ -43,7 +43,9 @@ def read_labels(
     else:
         assert isinstance(skeleton, Skeleton)
 
-    return parse_tasks(tasks, skeleton)
+    labels = parse_tasks(tasks, skeleton)
+    labels.provenance["filename"] = labels_path
+    return labels
 
 
 def infer_nodes(tasks: List[Dict]) -> Skeleton:
