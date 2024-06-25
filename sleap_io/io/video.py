@@ -160,7 +160,11 @@ class VideoBackend:
     @property
     def img_shape(self) -> Tuple[int, int, int]:
         """Shape of a single frame in the video."""
-        height, width, channels = self.get_frame(0).shape
+        height, width, channels = self.read_test_frame().shape
+        if self.grayscale is False:
+            channels = 3
+        elif self.grayscale is True:
+            channels = 1
         return int(height), int(width), int(channels)
 
     @property
@@ -578,7 +582,7 @@ class HDF5Video(VideoBackend):
             frame_idx = list(self.frame_map.keys())[0]
         else:
             frame_idx = 0
-        return self.read_frame(frame_idx)
+        return self._read_frame(frame_idx)
 
     @property
     def has_embedded_images(self) -> bool:
@@ -699,7 +703,7 @@ class ImageVideo(VideoBackend):
     This backend supports reading videos stored as a list of images.
 
     Attributes:
-        filename: Path to video files.
+        filename: Path to image files.
         grayscale: Whether to force grayscale. If None, autodetect on first frame load.
     """
 
