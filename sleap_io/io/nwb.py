@@ -15,14 +15,7 @@ try:
 except ImportError:
     ArrayLike = np.ndarray
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
-from ndx_pose import (
-    PoseEstimationSeries,
-    PoseEstimation,
-    TrainingFrame,
-    TrainingFrames,
-    PoseTraining,
-    SourceVideo,
-)  # type: ignore[import]
+from ndx_pose import PoseEstimationSeries,PoseEstimation # type: ignore[import]
 
 from sleap_io import (
     Labels,
@@ -36,9 +29,7 @@ from sleap_io import (
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
 
-def convert_nwb(
-    nwb_data_structure: Union[TrainingFrame, TrainingFrames, PoseTraining, SourceVideo]
-) -> Union[LabeledFrame, List[LabeledFrame], Labels, Video]:
+def convert_nwb(nwb_data_structure):
     """Converts an NWB instance to its corresponding SLEAP instance."""
 
     def convert_frame(frame: TrainingFrame) -> LabeledFrame:
@@ -69,7 +60,7 @@ def convert_nwb(
         return Labels(
             [convert_frame(frame) for frame in nwb_data_structure.training_frames]
         )
-    elif isinstance(nwb_data_structure, SourceVideo):
+    elif isinstance(nwb_data_structure, SourceVideos):
         return Video(filename=nwb_data_structure.data)
     else:
         raise ValueError(
