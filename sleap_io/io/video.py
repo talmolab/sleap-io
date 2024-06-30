@@ -161,6 +161,8 @@ class VideoBackend:
     def img_shape(self) -> Tuple[int, int, int]:
         """Shape of a single frame in the video."""
         height, width, channels = self.read_test_frame().shape
+        if self.grayscale is None:
+            self.detect_grayscale()
         if self.grayscale is False:
             channels = 3
         elif self.grayscale is True:

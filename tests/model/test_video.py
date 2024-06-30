@@ -131,3 +131,14 @@ def test_grayscale(centered_pair_low_quality_path):
 
     video.grayscale = False
     assert video.shape[-1] == 3
+
+    video.close()
+    video.open()
+    assert video.grayscale == False
+    assert video.shape[-1] == 3
+
+    video.grayscale = True
+    video.close()
+    video.open()
+    assert video.grayscale == True
+    assert video.shape[-1] == 1
