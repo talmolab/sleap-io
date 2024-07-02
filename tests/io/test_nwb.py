@@ -6,7 +6,7 @@ import numpy as np
 from pynwb import NWBFile, NWBHDF5IO
 
 from sleap_io import load_slp
-from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps
+from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps, read_nwb
 
 
 @pytest.fixture
@@ -54,6 +54,15 @@ def test_typical_case_append(nwbfile, slp_typical):
     # Test that each PoseEstimationSeries is named as a node
     for node_name in pose_estimation_container.nodes:
         assert node_name in pose_estimation_container.pose_estimation_series
+
+def test_load_nwb():
+    """Test loading NWB files."""
+    path1 = "~/tests/data/centered_pair_predictions.nwb"
+    labels1 = read_nwb(path1)
+    
+
+    path2 = "~/tests/data/minimal_instance_w_prediction.nwb"
+
 
 
 def test_typical_case_append_with_metadata_propagation(nwbfile, slp_typical):

@@ -29,6 +29,7 @@ dependencies = [
     "simplejson",
     "imageio",
     "imageio-ffmpeg",
+    "ndx-pose @ git+https://github.com/rly/ndx-pose@a847ad4be75e60ef9e413b8cbfc99c616fc9fd05",
     "av"]
 dynamic = ["version", "readme"]
 

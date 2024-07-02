@@ -59,7 +59,7 @@ def load_nwb(filename: str) -> Labels:
     return nwb.read_nwb(filename)
 
 
-def save_nwb(labels: Labels, filename: str, append: bool = True):
+def save_nwb(labels: Labels, filename: str, append: bool = True, **kwargs):
     """Save a SLEAP dataset to NWB format.
 
     Args:
@@ -190,6 +190,8 @@ def load_file(
         return load_jabs(filename, **kwargs)
     elif format == "video":
         return load_video(filename, **kwargs)
+    else:
+        raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
 
 
 def save_file(
@@ -226,5 +228,7 @@ def save_file(
     elif format == "jabs":
         pose_version = kwargs.pop("pose_version", 5)
         save_jabs(labels, pose_version, filename, **kwargs)
+    elif format == "nwb_training_data":
+        save_nwb(labels, filename, **kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")

@@ -15,7 +15,14 @@ try:
 except ImportError:
     ArrayLike = np.ndarray
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
-from ndx_pose import PoseEstimationSeries,PoseEstimation # type: ignore[import]
+from ndx_pose import (
+    PoseEstimationSeries,
+    PoseEstimation,
+    TrainingFrame,
+    TrainingFrames,
+    PoseTraining,
+    SourceVideos
+ ) # type: ignore[import]
 
 from sleap_io import (
     Labels,
@@ -27,45 +34,78 @@ from sleap_io import (
     PredictedInstance,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
+from pynwb.testing.mock.utils import name_generator
 
 
-def convert_nwb(nwb_data_structure):
-    """Converts an NWB instance to its corresponding SLEAP instance."""
+# def convert_nwb(nwb_data_structure):
+#     """Converts an NWB object to its object SLEAP instance."""
 
-    def convert_frame(frame: TrainingFrame) -> LabeledFrame:
-        """
-        Converts an NWB TrainingFrame instance to a LabeledFrame instance.
-        """
-        return LabeledFrame(
-            video=Video(filename=frame.source_video.data),
-            frame_idx=frame.frame_number.data,
-            instances=[
-                PredictedInstance.from_numpy(
-                    points=frame.points.data,
-                    point_scores=frame.confidence.data,
-                    instance_score=frame.confidence.data.mean(),
-                    skeleton=Skeleton(
-                        nodes=frame.skeleton.nodes.data,
-                        edges=frame.skeleton.edges.data,
-                    ),
-                )
-            ],
+#     def convert_frame(frame: TrainingFrame) -> LabeledFrame:
+#         """
+#         Converts an NWB TrainingFrame instance to a LabeledFrame instance.
+#         """
+#         return LabeledFrame(
+#             video=Video(filename=frame.source_video.data),
+#             frame_idx=frame.frame_number.data,
+#             instances=[
+#                 PredictedInstance.from_numpy(
+#                     points=frame.points.data,
+#                     point_scores=frame.confidence.data,
+#                     instance_score=frame.confidence.data.mean(),
+#                     skeleton=Skeleton(
+#                         nodes=frame.skeleton.nodes.data,
+#                         edges=frame.skeleton.edges.data,
+#                     ),
+#                 )
+#             ],
+#         )
+
+#     if isinstance(nwb_data_structure, TrainingFrame):
+#         return convert_frame(nwb_data_structure)
+#     elif isinstance(nwb_data_structure, TrainingFrames):
+#         return [convert_frame(frame) for frame in nwb_data_structure.training_frames]
+#     elif isinstance(nwb_data_structure, PoseTraining):
+#         return Labels(
+#             [convert_frame(frame) for frame in nwb_data_structure.training_frames]
+#         )
+#     elif isinstance(nwb_data_structure, SourceVideos):
+#         return Video(filename=nwb_data_structure.data)
+#     else:
+#         raise ValueError(
+#             f"Cannot convert {type(nwb_data_structure)} to SLEAP instance."
+#         )
+
+
+def convert_labels_to_pose_training(labels: Labels):
+    """Creates an NWB PoseTraining object from a Labels object."""
+    training_frame_list = []
+    for labeled_frame in labels.labeled_frames:
+        training_frame_name = name_generator("training_frame")
+        training_frame_skeleton_instances = labeled_frame.instances
+        training_frame_video = labeled_frame.video
+        training_frame_video_index = labeled_frame.frame_idx
+        training_frame = TrainingFrame(
+            name=training_frame_name,
+            source_video=training_frame_video.filename,
+            frame_number=training_frame_video_index,
+            points=np.array([inst.points for inst in training_frame_skeleton_instances]),
+            confidence=np.array(
+                [inst.points.score for inst in training_frame_skeleton_instances]
+            ),
+            skeleton=Skeleton(
+                nodes=training_frame_skeleton_instances[0].skeleton.nodes,
+                edges=training_frame_skeleton_instances[0].skeleton.edges,
+            ),
         )
+        training_frame_list.append(training_frame)
+    training_frames = TrainingFrames(training_frames=training_frame_list)
 
-    if isinstance(nwb_data_structure, TrainingFrame):
-        return convert_frame(nwb_data_structure)
-    elif isinstance(nwb_data_structure, TrainingFrames):
-        return [convert_frame(frame) for frame in nwb_data_structure.training_frames]
-    elif isinstance(nwb_data_structure, PoseTraining):
-        return Labels(
-            [convert_frame(frame) for frame in nwb_data_structure.training_frames]
-        )
-    elif isinstance(nwb_data_structure, SourceVideos):
-        return Video(filename=nwb_data_structure.data)
-    else:
-        raise ValueError(
-            f"Cannot convert {type(nwb_data_structure)} to SLEAP instance."
-        )
+    source_videos = labels.videos[0].filename
+    pose_training = PoseTraining(
+        training_frames=training_frames,
+        source_videos=source_videos
+    )    
+    return pose_training
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -301,7 +341,7 @@ def append_nwb_data(
             .unique()
         )
 
-        for track_index, track_name in enumerate(name_of_tracks_in_video):
+        for track_name in name_of_tracks_in_video:
             pose_estimation_container = build_pose_estimation_container_for_track(
                 labels_data_df,
                 labels,
