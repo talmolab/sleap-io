@@ -21,8 +21,8 @@ from ndx_pose import (
     TrainingFrame,
     TrainingFrames,
     PoseTraining,
-    SourceVideos
- ) # type: ignore[import]
+    SourceVideos,
+)  # type: ignore[import]
 
 from sleap_io import (
     Labels,
@@ -76,35 +76,55 @@ from pynwb.testing.mock.utils import name_generator
 #         )
 
 
-def convert_labels_to_pose_training(labels: Labels):
+def convert_pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
+    """Creates a Labels object from an NWB PoseTraining object."""
+    labeled_frames = []
+    for training_frame in pose_training.training_frames:
+        video = Video(filename=training_frame.source_video)
+        frame_idx = training_frame.source_video_frame_index
+        instances = [
+            PredictedInstance.from_numpy(
+                points=inst,
+                point_scores=np.ones(inst.shape[0]),
+                instance_score=1.0,
+                skeleton=Skeleton(
+                    nodes=pose_training.skeleton.nodes,
+                    edges=pose_training.skeleton.edges,
+                ),
+            )
+            for inst in training_frame.skeleton_instances
+        ]
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
+        )
+    return Labels(labeled_frames)
+
+
+def convert_labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object."""
     training_frame_list = []
-    for labeled_frame in labels.labeled_frames:
+    for i, labeled_frame in enumerate(labels.labeled_frames):
         training_frame_name = name_generator("training_frame")
-        training_frame_skeleton_instances = labeled_frame.instances
+        training_frame_annotator = f"{training_frame_name}{i}"
+        training_frame_skeleton_instances = np.array(
+            [inst.points for inst in labeled_frame.instances]
+        )
         training_frame_video = labeled_frame.video
         training_frame_video_index = labeled_frame.frame_idx
         training_frame = TrainingFrame(
             name=training_frame_name,
+            annotator=training_frame_annotator,
+            skeleton_instances=training_frame_skeleton_instances,
             source_video=training_frame_video.filename,
-            frame_number=training_frame_video_index,
-            points=np.array([inst.points for inst in training_frame_skeleton_instances]),
-            confidence=np.array(
-                [inst.points.score for inst in training_frame_skeleton_instances]
-            ),
-            skeleton=Skeleton(
-                nodes=training_frame_skeleton_instances[0].skeleton.nodes,
-                edges=training_frame_skeleton_instances[0].skeleton.edges,
-            ),
+            source_video_frame_index=training_frame_video_index,
         )
         training_frame_list.append(training_frame)
     training_frames = TrainingFrames(training_frames=training_frame_list)
 
     source_videos = labels.videos[0].filename
     pose_training = PoseTraining(
-        training_frames=training_frames,
-        source_videos=source_videos
-    )    
+        training_frames=training_frames, source_videos=source_videos
+    )
     return pose_training
 
 
