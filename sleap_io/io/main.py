@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from sleap_io import Labels, Skeleton, Video
-from sleap_io.io import slp, nwb, labelstudio, jabs
+from sleap_io.io import slp, nwb, labelstudio, jabs, coco
 from typing import Optional, Union
 from pathlib import Path
 
@@ -131,6 +131,43 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = No
     jabs.write_labels(labels, pose_version, root_folder)
 
 
+def load_coco(
+    filename: str | Path, imgs_prefix: str | Path | None = None
+) -> Labels | list[Labels]:
+    """Load a COCO dataset.
+
+    Args:
+        filename: Path to a JSON file with the annotations or a directory containing
+            folders named "annotation" and "images".
+        imgs_prefix: Optional path specifying a prefix to prepend to image filenames.
+            This is typically a path to the folder containing the images. If not
+            provided, assumes that there exists an "images" folder in the parent
+            directory of the folder containing the annotations.
+
+    Returns:
+        The parsed `Labels`.
+
+    Notes:
+        If a directory is provided, the first JSON annotation file will be loaded. To
+        load a specific split when multiple JSON files are present, specify a direct
+        path to the JSON annotation file.
+    """
+    filename = Path(filename)
+    if filename.is_dir():
+        ann_dir = filename / "annotations"
+        jsons = list(ann_dir.glob("*.json"))
+        if len(jsons) == 0:
+            FileNotFoundError(
+                f"Could not find any JSON files in {ann_dir}. "
+                "Provide a path to an annotation JSON file or verify that the "
+                "annotations directory contains JSON files."
+            )
+        filename = jsons[0]
+        # TODO: Recursively call if multiple annotations (usually splits) are found?
+
+    return coco.read_labels(filename, imgs_prefix=imgs_prefix)
+
+
 def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
 
@@ -169,7 +206,7 @@ def load_file(
         elif filename.endswith(".nwb"):
             format = "nwb"
         elif filename.endswith(".json"):
-            format = "json"
+            format = "labelstudio"
         elif filename.endswith(".h5"):
             format = "jabs"
         else:
@@ -180,16 +217,20 @@ def load_file(
         if format is None:
             raise ValueError(f"Could not infer format from filename: '{filename}'.")
 
-    if filename.endswith(".slp"):
+    if format == "slp":
         return load_slp(filename, **kwargs)
-    elif filename.endswith(".nwb"):
+    elif format == "nwb":
         return load_nwb(filename, **kwargs)
-    elif filename.endswith(".json"):
+    elif format == "labelstudio":
         return load_labelstudio(filename, **kwargs)
-    elif filename.endswith(".h5"):
+    elif format == "jabs":
         return load_jabs(filename, **kwargs)
+    elif format == "coco":
+        return load_coco(filename, **kwargs)
     elif format == "video":
         return load_video(filename, **kwargs)
+    else:
+        raise ValueError(f"Unknown format: {format}")
 
 
 def save_file(
