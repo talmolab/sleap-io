@@ -737,7 +737,11 @@ class ImageVideo(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
-        img = iio.imread(self.filename[frame_idx])
+        if "cv2" in sys.modules:
+            img = cv2.imread(self.filename[frame_idx])
+        else:
+            img = iio.imread(self.filename[frame_idx])
+
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
         return img
