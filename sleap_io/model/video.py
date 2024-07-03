@@ -63,6 +63,7 @@ class Video:
         grayscale: Optional[bool] = None,
         keep_open: bool = True,
         source_video: Optional[Video] = None,
+        backend_metadata: Optional[dict[str, any]] = None,
         **kwargs,
     ) -> VideoBackend:
         """Create a Video from a filename.
@@ -82,6 +83,9 @@ class Video:
             source_video: The source video object if this is a proxy video. This is
                 present when the video contains an embedded subset of frames from
                 another video.
+            backend_metadata: A dictionary of metadata specific to the backend. This is
+                useful for storing metadata that requires an open backend (e.g., shape
+                information) without having access to the video file itself.
 
         Returns:
             Video instance with the appropriate backend instantiated.
@@ -96,6 +100,7 @@ class Video:
                 **kwargs,
             ),
             source_video=source_video,
+            backend_metadata=backend_metadata,
         )
 
     @property
