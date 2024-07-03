@@ -24,12 +24,11 @@ dependencies = [
     "attrs",
     "h5py>=3.8.0",
     "pynwb",
-    "ndx-pose",
+    "ndx-pose @ git+https://github.com/rly/ndx-pose@a847ad4be75e60ef9e413b8cbfc99c616fc9fd05",
     "pandas",
     "simplejson",
     "imageio",
     "imageio-ffmpeg",
-    "ndx-pose @ git+https://github.com/rly/ndx-pose@a847ad4be75e60ef9e413b8cbfc99c616fc9fd05",
     "av"]
 dynamic = ["version", "readme"]
 

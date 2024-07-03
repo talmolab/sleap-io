@@ -71,9 +71,9 @@ def save_nwb(labels: Labels, filename: str, append: bool = True, **kwargs):
     See also: nwb.write_nwb, nwb.append_nwb
     """
     if append and Path(filename).exists():
-        nwb.append_nwb(labels, filename)
+        nwb.append_nwb(labels, filename, **kwargs)
     else:
-        nwb.write_nwb(labels, filename)
+        nwb.write_nwb(labels, filename, **kwargs)
 
 
 def load_labelstudio(
@@ -228,7 +228,7 @@ def save_file(
     elif format == "jabs":
         pose_version = kwargs.pop("pose_version", 5)
         save_jabs(labels, pose_version, filename, **kwargs)
-    elif format == "nwb_training_data":
-        save_nwb(labels, filename, **kwargs)
+    elif format == "nwb_training":
+        nwb.convert_labels_to_pose_training(labels, filename, **kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")

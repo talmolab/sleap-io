@@ -221,26 +221,26 @@ def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
             )
             data_list.append(row_dict)
 
-    # if not data_list:
-    #     raise ValueError("No predicted instances found in labels object")
-    if data_list:
-        labels_df = pd.DataFrame(data_list)
+    if not data_list:
+        raise ValueError("No predicted instances found in labels object")
+
+    labels_df = pd.DataFrame(data_list)
 
     # Reformat the data with columns for dict-like hierarchical data access.
-        index = [
-            "skeleton_name",
-            "track_name",
-            "node_name",
-            "video_path",
-            "frame_idx",
-        ]
+    index = [
+        "skeleton_name",
+        "track_name",
+        "node_name",
+        "video_path",
+        "frame_idx",
+    ]
 
-        labels_tidy_df = (
-            labels_df.set_index(index)
-            .unstack(level=[0, 1, 2, 3])
-            .swaplevel(0, -1, axis=1)  # video_path on top while x, y score on bottom
-            .sort_index(axis=1)  # Better format for columns
-            .sort_index(axis=0)  # Sorts by frames
-        )
+    labels_tidy_df = (
+        labels_df.set_index(index)
+        .unstack(level=[0, 1, 2, 3])
+        .swaplevel(0, -1, axis=1)  # video_path on top while x, y score on bottom
+        .sort_index(axis=1)  # Better format for columns
+        .sort_index(axis=0)  # Sorts by frames
+    )
 
-        return labels_tidy_df
+    return labels_tidy_df

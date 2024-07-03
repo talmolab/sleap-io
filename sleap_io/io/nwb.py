@@ -18,6 +18,10 @@ from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
 from ndx_pose import (
     PoseEstimationSeries,
     PoseEstimation,
+    Subject,
+    Skeleton,
+    SkeletonInstance,
+    SkeletonInstances,
     TrainingFrame,
     TrainingFrames,
     PoseTraining,
@@ -29,7 +33,7 @@ from sleap_io import (
     Video,
     LabeledFrame,
     Track,
-    Skeleton,
+    Skeleton as SLEAPSkeleton,
     Instance,
     PredictedInstance,
 )
@@ -100,14 +104,22 @@ def convert_pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # t
     return Labels(labeled_frames)
 
 
-def convert_labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[return]
+def convert_labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object."""
     training_frame_list = []
     for i, labeled_frame in enumerate(labels.labeled_frames):
         training_frame_name = name_generator("training_frame")
         training_frame_annotator = f"{training_frame_name}{i}"
-        training_frame_skeleton_instances = np.array(
-            [inst.points for inst in labeled_frame.instances]
+        training_frame_skeleton_instances = SkeletonInstances(
+            [
+                SkeletonInstance(
+                    name=instance.track.name,
+                    skeleton=instance.skeleton,
+                    points=instance.points,
+                    confidence=instance.point_scores,
+                )
+                for instance in labeled_frame.instances
+            ]
         )
         training_frame_video = labeled_frame.video
         training_frame_video_index = labeled_frame.frame_idx
@@ -126,6 +138,15 @@ def convert_labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ig
         training_frames=training_frames, source_videos=source_videos
     )
     return pose_training
+
+def convert_slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> Skeleton: # type: ignore[return]
+    """Converts SLEAP skeleton to NWB skeleton."""
+    edges = []
+    return Skeleton(
+        name=skeleton.name,
+        nodes=skeleton.node_names,
+        edges=edges,
+    )
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -226,7 +247,7 @@ def read_nwb(path: str) -> Labels:
                 if np.isnan(inst_pts).all():
                     continue
                 insts.append(
-                    PredictedInstance.from_numpy(
+                    Instance.from_numpy(
                         points=inst_pts,  # (n_nodes, 2)
                         point_scores=inst_confs,  # (n_nodes,)
                         instance_score=inst_confs.mean(),  # ()
@@ -337,8 +358,13 @@ def append_nwb_data(
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
 
-    labels_data_df = convert_predictions_to_dataframe(labels)
-
+    for lf in labels.labeled_frames:
+        if lf.has_predicted_instances:
+            labels_data_df = convert_predictions_to_dataframe(labels)
+            break
+        else:
+            labels_data_df = pd.DataFrame()
+    
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
         video_path = Path(video.filename)
