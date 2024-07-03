@@ -18,8 +18,7 @@ from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
 from ndx_pose import (
     PoseEstimationSeries,
     PoseEstimation,
-    Subject,
-    Skeleton,
+    Skeleton as NWBSkeleton,
     SkeletonInstance,
     SkeletonInstances,
     TrainingFrame,
@@ -87,11 +86,11 @@ def convert_pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # t
         video = Video(filename=training_frame.source_video)
         frame_idx = training_frame.source_video_frame_index
         instances = [
-            PredictedInstance.from_numpy(
+            Instance.from_numpy(
                 points=inst,
                 point_scores=np.ones(inst.shape[0]),
                 instance_score=1.0,
-                skeleton=Skeleton(
+                skeleton=NWBSkeleton(
                     nodes=pose_training.skeleton.nodes,
                     edges=pose_training.skeleton.edges,
                 ),
@@ -139,14 +138,22 @@ def convert_labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> 
     )
     return pose_training
 
-def convert_slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> Skeleton: # type: ignore[return]
+def convert_slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[return]
     """Converts SLEAP skeleton to NWB skeleton."""
-    edges = []
-    return Skeleton(
+    nwb_edges: list[list[int, int]] = []
+    for i, _ in enumerate(skeleton.edges):
+        if i == len(skeleton.edges):
+            break
+        nwb_edges.append([i, i + 1])
+    print(nwb_edges)
+    return NWBSkeleton(
         name=skeleton.name,
         nodes=skeleton.node_names,
-        edges=edges,
+        edges=np.array(nwb_edges, dtype=np.uint8),
     )
+
+def convert_nwb():
+    raise
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -226,7 +233,7 @@ def read_nwb(path: str) -> Labels:
             )
 
     # Create skeleton
-    skeleton = Skeleton(
+    skeleton = SLEAPSkeleton(
         nodes=node_names,
         edges=edge_inds,
     )
