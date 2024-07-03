@@ -192,7 +192,7 @@ def load_file(
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs"
-            and "video".
+            "coco" and "video".
 
     Returns:
         A `Labels` or `Video` object.
