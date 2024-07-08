@@ -14,7 +14,11 @@ try:
     from numpy.typing import ArrayLike
 except ImportError:
     ArrayLike = np.ndarray
-from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
+
+from pynwb import NWBFile, NWBHDF5IO, ProcessingModule # type: ignore[import]
+from pynwb.image import ImageSeries
+from pynwb.testing.mock.utils import name_generator
+
 from ndx_pose import (
     PoseEstimationSeries,
     PoseEstimation,
@@ -25,7 +29,7 @@ from ndx_pose import (
     TrainingFrames,
     PoseTraining,
     SourceVideos,
-)  # type: ignore[import]
+)
 
 from sleap_io import (
     Labels,
@@ -37,13 +41,12 @@ from sleap_io import (
     PredictedInstance,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
-from pynwb.testing.mock.utils import name_generator
 
 
-# def convert_nwb(nwb_data_structure):
+# def convert_nwb_to_slp(nwb_data_structure):
 #     """Converts an NWB object to its object SLEAP instance."""
 
-#     def convert_frame(frame: TrainingFrame) -> LabeledFrame:
+#     def convert_frame(frame: TrainingFrame) -> LabeledFrame: # type: ignore[return]
 #         """
 #         Converts an NWB TrainingFrame instance to a LabeledFrame instance.
 #         """
@@ -111,12 +114,7 @@ def convert_labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> 
         training_frame_annotator = f"{training_frame_name}{i}"
         training_frame_skeleton_instances = SkeletonInstances(
             [
-                SkeletonInstance(
-                    name=instance.track.name,
-                    skeleton=instance.skeleton,
-                    points=instance.points,
-                    confidence=instance.point_scores,
-                )
+                convert_instance_to_skeleton_instance(instance)
                 for instance in labeled_frame.instances
             ]
         )
@@ -145,15 +143,23 @@ def convert_slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type:
         if i == len(skeleton.edges):
             break
         nwb_edges.append([i, i + 1])
-    print(nwb_edges)
     return NWBSkeleton(
         name=skeleton.name,
         nodes=skeleton.node_names,
         edges=np.array(nwb_edges, dtype=np.uint8),
     )
 
-def convert_nwb():
-    raise
+def convert_instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # type: ignore[return]
+    id = np.uint(10)
+    skeleton = convert_slp_skeleton_to_nwb(instance.skeleton)
+    node_locations = skeleton.edges
+    node_visibility = [True, False]
+    return SkeletonInstance(
+        id=id,
+        node_locations=node_locations,
+        node_visibility=node_visibility,
+        skeleton=skeleton,
+    )
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
