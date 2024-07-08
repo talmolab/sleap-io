@@ -46,10 +46,10 @@ from sleap_io.io.utils import convert_predictions_to_dataframe
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
     """
     Creates a Labels object from an NWB PoseTraining object.
-    
+
     Args:
         pose_training: An NWB PoseTraining object.
-    
+
     Returns:
         A Labels object.
     """
@@ -76,11 +76,11 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
 def labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTraining:  # type: ignore[return]
     """
     Creates an NWB PoseTraining object from a Labels object.
-    
+
     Args:
         labels: A Labels object.
         filename: The filename of the source video.
-    
+
     Returns:
         A PoseTraining object.
     """
@@ -112,13 +112,14 @@ def labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTrai
     )
     return pose_training
 
-def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[return]
+
+def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore[return]
     """
     Converts SLEAP skeleton to NWB skeleton.
-    
+
     Args:
         skeleton: A SLEAP skeleton.
-    
+
     Returns:
         An NWB skeleton.
     """
@@ -134,13 +135,13 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[
     )
 
 
-def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # type: ignore[return]
+def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # type: ignore[return]
     """
     Converts a SLEAP Instance to an NWB SkeletonInstance.
 
     Args:
         instance: A SLEAP Instance.
-    
+
     Returns:
         An NWB SkeletonInstance.
     """
@@ -153,13 +154,13 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # typ
     )
 
 
-def videos_to_source_videos(videos: List[Video]) -> SourceVideos: # type: ignore[return]
+def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignore[return]
     """
     Converts a list of SLEAP Videos to NWB SourceVideos.
-    
+
     Args:
         videos: A list of SLEAP Videos.
-    
+
     Returns:
         An NWB SourceVideos object.
     """
@@ -394,7 +395,7 @@ def append_nwb_data(
             break
         else:
             labels_data_df = pd.DataFrame()
-    
+
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
         video_path = Path(video.filename)
@@ -550,7 +551,7 @@ def build_pose_estimation_container_for_track(
 
 
 def build_track_pose_estimation_list(
-    track_data_df: pd.DataFrame, timestamps: ArrayLike # type: ignore[return]
+    track_data_df: pd.DataFrame, timestamps: ArrayLike  # type: ignore[return]
 ) -> List[PoseEstimationSeries]:
     """Build a list of PoseEstimationSeries from tracks.
 
