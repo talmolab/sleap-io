@@ -3,7 +3,6 @@
 from numpy.testing import assert_equal
 from sleap_io import Video, Skeleton, Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
-from sleap_io.io.nwb import convert_nwb, read_nwb, write_nwb
 import numpy as np
 
 
@@ -31,9 +30,6 @@ def test_labeled_frame():
 
     assert lf.has_predicted_instances
     assert lf.has_user_instances
-
-    # Test LabeledFrame instances converted from NWB TrainingFrame instances
-    
 
 
 def test_remove_predictions():
