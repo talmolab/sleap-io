@@ -237,6 +237,7 @@ def test_labels_getitem(slp_typical):
     with pytest.raises(IndexError):
         labels[None]
 
+
 @pytest.fixture
 def test_labels_save(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
