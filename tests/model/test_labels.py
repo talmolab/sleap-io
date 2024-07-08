@@ -2,6 +2,7 @@
 
 from numpy.testing import assert_equal
 import pytest
+import sleap_io as sio
 from sleap_io import (
     Video,
     Skeleton,
@@ -241,6 +242,17 @@ def test_labels_save(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     labels.save(tmp_path / "test.slp")
     assert (tmp_path / "test.slp").exists()
+
+    # Saving SLEAP data as NWB data
+    labels_original = sio.load_slp("tests/data/slp/minimal_instance.pkg.slp")
+    labels_original.save("minimal_instance.pkg.nwb", format="nwb_training")
+    labels_loaded = sio.load_nwb("minimal_instance.pkg.nwb")
+    assert labels_original.labeled_frames == labels_loaded.labeled_frames
+    assert labels_original.videos == labels_loaded.videos
+    assert labels_original.skeletons == labels_loaded.skeletons
+    assert labels_original.tracks == labels_loaded.tracks
+    assert labels_original.suggestions == labels_loaded.suggestions
+    assert labels_original.provenance == labels_loaded.provenance
 
 
 def test_labels_clean_unchanged(slp_real_data):

@@ -113,10 +113,9 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[
 
 def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # type: ignore[return]
     skeleton = slp_skeleton_to_nwb(instance.skeleton)
-    node_locations = skeleton.edges
     return SkeletonInstance(
         id=np.uint(10),
-        node_locations=node_locations,
+        node_locations=skeleton.edges,
         node_visibility=[True, False],
         skeleton=skeleton,
     )
