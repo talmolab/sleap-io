@@ -7,7 +7,7 @@ import datetime
 import uuid
 import re
 
-import pandas as pd  # type: ignore[import]
+import pandas as pd
 import numpy as np
 
 try:
@@ -15,7 +15,7 @@ try:
 except ImportError:
     ArrayLike = np.ndarray
 
-from pynwb import NWBFile, NWBHDF5IO, ProcessingModule # type: ignore[import]
+from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
 from pynwb.image import ImageSeries
 from pynwb.testing.mock.utils import name_generator
 
@@ -44,7 +44,15 @@ from sleap_io.io.utils import convert_predictions_to_dataframe
 
 
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
-    """Creates a Labels object from an NWB PoseTraining object."""
+    """
+    Creates a Labels object from an NWB PoseTraining object.
+    
+    Args:
+        pose_training: An NWB PoseTraining object.
+    
+    Returns:
+        A Labels object.
+    """
     labeled_frames = []
     for training_frame in pose_training.training_frames:
         video = Video(filename=training_frame.source_video)
@@ -52,8 +60,6 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         instances = [
             Instance.from_numpy(
                 points=inst,
-                point_scores=np.ones(inst.shape[0]),
-                instance_score=1.0,
                 skeleton=NWBSkeleton(
                     nodes=pose_training.skeleton.nodes,
                     edges=pose_training.skeleton.edges,
@@ -68,7 +74,16 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
 
 
 def labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTraining:  # type: ignore[return]
-    """Creates an NWB PoseTraining object from a Labels object."""
+    """
+    Creates an NWB PoseTraining object from a Labels object.
+    
+    Args:
+        labels: A Labels object.
+        filename: The filename of the source video.
+    
+    Returns:
+        A PoseTraining object.
+    """
     training_frame_list = []
     for i, labeled_frame in enumerate(labels.labeled_frames):
         training_frame_name = name_generator("training_frame")
@@ -98,7 +113,15 @@ def labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTrai
     return pose_training
 
 def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[return]
-    """Converts SLEAP skeleton to NWB skeleton."""
+    """
+    Converts SLEAP skeleton to NWB skeleton.
+    
+    Args:
+        skeleton: A SLEAP skeleton.
+    
+    Returns:
+        An NWB skeleton.
+    """
     nwb_edges: list[list[int, int]] = []
     for i, _ in enumerate(skeleton.edges):
         if i == len(skeleton.edges):
@@ -112,6 +135,15 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[
 
 
 def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # type: ignore[return]
+    """
+    Converts a SLEAP Instance to an NWB SkeletonInstance.
+
+    Args:
+        instance: A SLEAP Instance.
+    
+    Returns:
+        An NWB SkeletonInstance.
+    """
     skeleton = slp_skeleton_to_nwb(instance.skeleton)
     return SkeletonInstance(
         id=np.uint(10),
@@ -122,7 +154,15 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # typ
 
 
 def videos_to_source_videos(videos: List[Video]) -> SourceVideos: # type: ignore[return]
-    """Converts a list of SLEAP Videos to NWB SourceVideos."""
+    """
+    Converts a list of SLEAP Videos to NWB SourceVideos.
+    
+    Args:
+        videos: A list of SLEAP Videos.
+    
+    Returns:
+        An NWB SourceVideos object.
+    """
     source_videos = []
     for video in videos:
         image_series = ImageSeries(
