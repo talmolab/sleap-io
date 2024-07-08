@@ -43,46 +43,7 @@ from sleap_io import (
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
 
-# def convert_nwb_to_slp(nwb_data_structure):
-#     """Converts an NWB object to its object SLEAP instance."""
-
-#     def convert_frame(frame: TrainingFrame) -> LabeledFrame: # type: ignore[return]
-#         """
-#         Converts an NWB TrainingFrame instance to a LabeledFrame instance.
-#         """
-#         return LabeledFrame(
-#             video=Video(filename=frame.source_video.data),
-#             frame_idx=frame.frame_number.data,
-#             instances=[
-#                 PredictedInstance.from_numpy(
-#                     points=frame.points.data,
-#                     point_scores=frame.confidence.data,
-#                     instance_score=frame.confidence.data.mean(),
-#                     skeleton=Skeleton(
-#                         nodes=frame.skeleton.nodes.data,
-#                         edges=frame.skeleton.edges.data,
-#                     ),
-#                 )
-#             ],
-#         )
-
-#     if isinstance(nwb_data_structure, TrainingFrame):
-#         return convert_frame(nwb_data_structure)
-#     elif isinstance(nwb_data_structure, TrainingFrames):
-#         return [convert_frame(frame) for frame in nwb_data_structure.training_frames]
-#     elif isinstance(nwb_data_structure, PoseTraining):
-#         return Labels(
-#             [convert_frame(frame) for frame in nwb_data_structure.training_frames]
-#         )
-#     elif isinstance(nwb_data_structure, SourceVideos):
-#         return Video(filename=nwb_data_structure.data)
-#     else:
-#         raise ValueError(
-#             f"Cannot convert {type(nwb_data_structure)} to SLEAP instance."
-#         )
-
-
-def convert_pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
+def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
     """Creates a Labels object from an NWB PoseTraining object."""
     labeled_frames = []
     for training_frame in pose_training.training_frames:
@@ -106,7 +67,7 @@ def convert_pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # t
     return Labels(labeled_frames)
 
 
-def convert_labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTraining:  # type: ignore[return]
+def labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object."""
     training_frame_list = []
     for i, labeled_frame in enumerate(labels.labeled_frames):
@@ -114,7 +75,7 @@ def convert_labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> 
         training_frame_annotator = f"{training_frame_name}{i}"
         training_frame_skeleton_instances = SkeletonInstances(
             [
-                convert_instance_to_skeleton_instance(instance)
+                instance_to_skeleton_instance(instance)
                 for instance in labeled_frame.instances
             ]
         )
@@ -136,7 +97,7 @@ def convert_labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> 
     )
     return pose_training
 
-def convert_slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[return]
+def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type: ignore[return]
     """Converts SLEAP skeleton to NWB skeleton."""
     nwb_edges: list[list[int, int]] = []
     for i, _ in enumerate(skeleton.edges):
@@ -149,17 +110,35 @@ def convert_slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton: # type:
         edges=np.array(nwb_edges, dtype=np.uint8),
     )
 
-def convert_instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # type: ignore[return]
-    id = np.uint(10)
-    skeleton = convert_slp_skeleton_to_nwb(instance.skeleton)
+
+def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance: # type: ignore[return]
+    skeleton = slp_skeleton_to_nwb(instance.skeleton)
     node_locations = skeleton.edges
     node_visibility = [True, False]
     return SkeletonInstance(
-        id=id,
+        id=np.uint(10),
         node_locations=node_locations,
         node_visibility=node_visibility,
         skeleton=skeleton,
     )
+
+
+def videos_to_source_videos(videos: List[Video]) -> SourceVideos: # type: ignore[return]
+    """Converts a list of SLEAP Videos to NWB SourceVideos."""
+    source_videos = []
+    for video in videos:
+        image_series = ImageSeries(
+            name=video.filename,
+            description="Video file",
+            unit="NA",
+            format="external",
+            external_file=[video.filename],
+            dimension=[video.backend.height, video.backend.width],
+            starting_frame=[0],
+            rate=30.0,
+        )
+        source_videos.append(image_series)
+    return SourceVideos(data=source_videos)
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -307,7 +286,7 @@ def write_nwb(
             or the sampling rate with key`video_sample_rate`.
 
             e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
-            or   pose_estimation_metadata["video_sample_rate] = 15  # In Hz
+            or   pose_estimation_metadata["video_sample_rate"] = 15  # In Hz
 
             2) The other use of this dictionary is to ovewrite sleap-io default
             arguments for the PoseEstimation container.
@@ -533,7 +512,7 @@ def build_pose_estimation_container_for_track(
 
 
 def build_track_pose_estimation_list(
-    track_data_df: pd.DataFrame, timestamps: ArrayLike
+    track_data_df: pd.DataFrame, timestamps: ArrayLike # type: ignore[return]
 ) -> List[PoseEstimationSeries]:
     """Build a list of PoseEstimationSeries from tracks.
 

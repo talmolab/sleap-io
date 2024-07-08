@@ -229,6 +229,6 @@ def save_file(
         pose_version = kwargs.pop("pose_version", 5)
         save_jabs(labels, pose_version, filename, **kwargs)
     elif format == "nwb_training":
-        nwb.convert_labels_to_pose_training(labels, filename, **kwargs)
+        nwb.labels_to_pose_training(labels, filename, **kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
