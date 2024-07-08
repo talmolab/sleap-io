@@ -56,14 +56,6 @@ def test_typical_case_append(nwbfile, slp_typical):
         assert node_name in pose_estimation_container.pose_estimation_series
 
 
-def test_load_nwb():
-    """Test loading NWB files."""
-    path1 = "~/tests/data/centered_pair_predictions.nwb"
-    labels1 = read_nwb(path1)
-
-    path2 = "~/tests/data/minimal_instance_w_prediction.nwb"
-
-
 def test_typical_case_append_with_metadata_propagation(nwbfile, slp_typical):
     labels = load_slp(slp_typical)
 
