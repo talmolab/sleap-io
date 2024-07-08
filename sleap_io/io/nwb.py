@@ -44,8 +44,7 @@ from sleap_io.io.utils import convert_predictions_to_dataframe
 
 
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
-    """
-    Creates a Labels object from an NWB PoseTraining object.
+    """Creates a Labels object from an NWB PoseTraining object.
 
     Args:
         pose_training: An NWB PoseTraining object.
@@ -73,9 +72,8 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
     return Labels(labeled_frames)
 
 
-def labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTraining:  # type: ignore[return]
-    """
-    Creates an NWB PoseTraining object from a Labels object.
+def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: ignore[return]
+    """Creates an NWB PoseTraining object from a Labels object.
 
     Args:
         labels: A Labels object.
@@ -114,8 +112,7 @@ def labels_to_pose_training(labels: Labels, filename: str, **kwargs) -> PoseTrai
 
 
 def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore[return]
-    """
-    Converts SLEAP skeleton to NWB skeleton.
+    """Converts SLEAP skeleton to NWB skeleton.
 
     Args:
         skeleton: A SLEAP skeleton.
@@ -136,8 +133,7 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
 
 
 def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # type: ignore[return]
-    """
-    Converts a SLEAP Instance to an NWB SkeletonInstance.
+    """Converts a SLEAP Instance to an NWB SkeletonInstance.
 
     Args:
         instance: A SLEAP Instance.
@@ -155,8 +151,7 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
 
 
 def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignore[return]
-    """
-    Converts a list of SLEAP Videos to NWB SourceVideos.
+    """Converts a list of SLEAP Videos to NWB SourceVideos.
 
     Args:
         videos: A list of SLEAP Videos.
