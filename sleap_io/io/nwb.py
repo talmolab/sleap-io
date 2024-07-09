@@ -39,6 +39,7 @@ from sleap_io import (
     Skeleton as SLEAPSkeleton,
     Instance,
     PredictedInstance,
+    Edge
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
@@ -86,11 +87,13 @@ def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: 
     for i, labeled_frame in enumerate(labels.labeled_frames):
         training_frame_name = name_generator("training_frame")
         training_frame_annotator = f"{training_frame_name}{i}"
+        skeleton_instances_list = []
+        for instance in labeled_frame.instances:
+            skeleton_instance = instance_to_skeleton_instance(instance)
+            skeleton_instances_list.append(skeleton_instance)
+        
         training_frame_skeleton_instances = SkeletonInstances(
-            [
-                instance_to_skeleton_instance(instance)
-                for instance in labeled_frame.instances
-            ]
+            skeleton_instances=skeleton_instances_list
         )
         training_frame_video = labeled_frame.video
         training_frame_video_index = labeled_frame.frame_idx
@@ -120,13 +123,15 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
     Returns:
         An NWB skeleton.
     """
-    nwb_edges: list[list[int, int]] = []
-    for i, _ in enumerate(skeleton.edges):
-        if i == len(skeleton.edges):
-            break
-        nwb_edges.append([i, i + 1])
+    skeleton_edges = {i: node for i, node in enumerate(skeleton.nodes)}
+    nwb_edges = []
+    for i, source in skeleton_edges.items():
+        for destination in skeleton_edges.values()[i:]:
+            if Edge(source, destination) in skeleton.edges:
+                nwb_edges.append([i, skeleton_edges.index(destination)])
+
     return NWBSkeleton(
-        name=skeleton.name,
+        name=f"Nodes {skeleton.nodes[0].name} - {skeleton.nodes[-1].name}",
         nodes=skeleton.node_names,
         edges=np.array(nwb_edges, dtype=np.uint8),
     )
@@ -143,9 +148,10 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     """
     skeleton = slp_skeleton_to_nwb(instance.skeleton)
     return SkeletonInstance(
+        name="skeleton_instance",
         id=np.uint(10),
         node_locations=skeleton.edges,
-        node_visibility=[True, False],
+        node_visibility=[True for _ in range(len(skeleton.nodes))],
         skeleton=skeleton,
     )
 
