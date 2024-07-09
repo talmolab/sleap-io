@@ -39,7 +39,7 @@ from sleap_io import (
     Skeleton as SLEAPSkeleton,
     Instance,
     PredictedInstance,
-    Edge
+    Edge,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
@@ -91,7 +91,7 @@ def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: 
         for instance in labeled_frame.instances:
             skeleton_instance = instance_to_skeleton_instance(instance)
             skeleton_instances_list.append(skeleton_instance)
-        
+
         training_frame_skeleton_instances = SkeletonInstances(
             skeleton_instances=skeleton_instances_list
         )
