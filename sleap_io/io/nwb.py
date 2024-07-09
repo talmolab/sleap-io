@@ -124,11 +124,11 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
         An NWB skeleton.
     """
     skeleton_edges = {i: node for i, node in enumerate(skeleton.nodes)}
-    nwb_edges = []
+    nwb_edges: list[list[int, int]] = []
     for i, source in skeleton_edges.items():
-        for destination in skeleton_edges.values()[i:]:
+        for destination in list(skeleton_edges.values())[i:]:
             if Edge(source, destination) in skeleton.edges:
-                nwb_edges.append([i, skeleton_edges.index(destination)])
+                nwb_edges.append([i, list(skeleton_edges.values()).index(destination)])
 
     return NWBSkeleton(
         name=f"Nodes {skeleton.nodes[0].name} - {skeleton.nodes[-1].name}",
