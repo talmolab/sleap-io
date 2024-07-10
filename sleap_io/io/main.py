@@ -82,7 +82,11 @@ def save_nwb(labels: Labels, filename: str, format: str, append: bool = True, **
             nwb.write_nwb(labels, filename, **kwargs)
 
     elif format == "nwb_training":
-        raise NotImplementedError
+        pose_training = nwb.labels_to_pose_training(labels, **kwargs)
+        if append and Path(filename).exists():
+            nwb.append_nwb_training(pose_training, filename, **kwargs)
+        else:
+            nwb.write_nwb_training(pose_training, filename, **kwargs)
 
 
 def load_labelstudio(
@@ -230,15 +234,12 @@ def save_file(
 
     if format == "slp":
         save_slp(labels, filename, **kwargs)
-    elif format == "nwb":
+    elif format == "nwb" or format == "nwb_training":
         save_nwb(labels, filename, **kwargs)
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
         pose_version = kwargs.pop("pose_version", 5)
         save_jabs(labels, pose_version, filename, **kwargs)
-    elif format == "nwb_training":
-        pose_training = nwb.labels_to_pose_training(labels, **kwargs)
-        save_nwb_training(pose_training, filename, **kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")

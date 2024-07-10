@@ -374,6 +374,19 @@ def write_nwb(
         io.write(nwbfile)
 
 
+def write_nwb_training(pose_training: PoseTraining, nwbfile_path: str):  # type: ignore[return]
+    """Writes data from a `PoseTraining` object to an NWB file.
+
+    Args:
+        pose_training: A `PoseTraining` object.
+        nwbfile_path: The path where the nwb file is to be written.
+
+    Returns:
+        None
+    """
+    raise NotImplementedError
+
+
 def append_nwb_data(
     labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict] = None
 ) -> NWBFile:
@@ -469,6 +482,10 @@ def append_nwb(
             labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
         )
         io.write(nwb_file)
+
+
+def append_nwb_training(pose_training: PoseTraining, nwbfile_path: str) -> NWBFile:  # type: ignore[return]
+    raise NotImplementedError
 
 
 def get_processing_module_for_video(
