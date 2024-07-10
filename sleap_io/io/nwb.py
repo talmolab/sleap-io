@@ -40,8 +40,6 @@ from sleap_io import (
     Instance,
     PredictedInstance,
     Edge,
-    Point,
-    PredictedPoint,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
@@ -61,13 +59,13 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         frame_idx = training_frame.source_video_frame_index
         instances = [
             Instance.from_numpy(
-                points=inst,
+                points=instance,
                 skeleton=NWBSkeleton(
                     nodes=pose_training.skeleton.nodes,
                     edges=pose_training.skeleton.edges,
                 ),
             )
-            for inst in training_frame.skeleton_instances
+            for instance in training_frame.skeleton_instances
         ]
         labeled_frames.append(
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
@@ -124,7 +122,7 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
     Returns:
         An NWB skeleton.
     """
-    nwb_edges: list[list[int, int]] 
+    nwb_edges: list[list[int, int]]
 
     skeleton_edges = {i: node for i, node in enumerate(skeleton.nodes)}
     nwb_edges = []
