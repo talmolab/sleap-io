@@ -195,7 +195,7 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
             rate=30.0,
         )
         source_videos.append(image_series)
-    return SourceVideos(image_series=[source_videos])
+    return SourceVideos(image_series=source_videos)
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
