@@ -106,11 +106,11 @@ def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: 
             source_video_frame_index=training_frame_video_index,
         )
         training_frame_list.append(training_frame)
-    training_frames = TrainingFrames(training_frames=training_frame_list)
 
-    source_videos = labels.videos[0].filename
+    training_frames = TrainingFrames(training_frames=training_frame_list)
     pose_training = PoseTraining(
-        training_frames=training_frames, source_videos=source_videos
+        training_frames=training_frames,
+        source_videos=videos_to_source_videos(labels.videos),
     )
     return pose_training
 
@@ -149,11 +149,8 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     Returns:
         An NWB SkeletonInstance.
     """
-    node_locations: list[Union[Point, PredictedPoint]]
-
     skeleton = slp_skeleton_to_nwb(instance.skeleton)
-    node_locations = list(instance.points.values())
-    np_node_locations = np.array(node_locations)
+    np_node_locations = np.array(point for point in list(instance.points.values()))
     return SkeletonInstance(
         name="skeleton_instance",
         id=np.uint(10),
