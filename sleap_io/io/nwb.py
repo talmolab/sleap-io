@@ -102,7 +102,18 @@ def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: 
             name=training_frame_name,
             annotator=training_frame_annotator,
             skeleton_instances=training_frame_skeleton_instances,
-            source_video=training_frame_video.filename,
+            source_video=ImageSeries(
+                name=training_frame_name,
+                description=training_frame_annotator,
+                unit="NA",
+                format="external",
+                external_file=[training_frame_video.filename],
+                dimension=[training_frame_video.backend.img_shape[0],
+                           training_frame_video.backend.img_shape[1],
+                ],
+                starting_frame=[0],
+                rate=30.0,
+            ),
             source_video_frame_index=training_frame_video_index,
         )
         training_frame_list.append(training_frame)
@@ -134,7 +145,7 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
                 nwb_edges.append([i, list(skeleton_edges.values()).index(destination)])
 
     return NWBSkeleton(
-        name=f"Nodes {skeleton.nodes[0].name} - {skeleton.nodes[-1].name}",
+        name=f"Nodes {skeleton.nodes[0].name}, ..., {skeleton.nodes[-1].name}",
         nodes=skeleton.node_names,
         edges=np.array(nwb_edges, dtype=np.uint8),
     )
@@ -150,9 +161,11 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
         An NWB SkeletonInstance.
     """
     skeleton = slp_skeleton_to_nwb(instance.skeleton)
-    np_node_locations = np.array(point for point in list(instance.points.values()))
+    points_list = list(instance.points.values())
+    node_locs = [[point.x, point.y] for point in points_list]
+    np_node_locations = np.array(node_locs)
     return SkeletonInstance(
-        name="skeleton_instance",
+        name=name_generator("skeleton_instance"),
         id=np.uint(10),
         node_locations=np_node_locations,
         node_visibility=[True for _ in range(len(skeleton.nodes))],
@@ -170,19 +183,19 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
         An NWB SourceVideos object.
     """
     source_videos = []
-    for video in videos:
+    for i, video in enumerate(videos):
         image_series = ImageSeries(
-            name=video.filename,
+            name=f"video_{i}",
             description="Video file",
             unit="NA",
             format="external",
             external_file=[video.filename],
-            dimension=[video.backend.height, video.backend.width],
+            dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
             starting_frame=[0],
             rate=30.0,
         )
         source_videos.append(image_series)
-    return SourceVideos(data=source_videos)
+    return SourceVideos(image_series=[source_videos])
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
