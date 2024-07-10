@@ -108,8 +108,9 @@ def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: 
                 unit="NA",
                 format="external",
                 external_file=[training_frame_video.filename],
-                dimension=[training_frame_video.backend.img_shape[0],
-                           training_frame_video.backend.img_shape[1],
+                dimension=[
+                    training_frame_video.backend.img_shape[0],
+                    training_frame_video.backend.img_shape[1],
                 ],
                 starting_frame=[0],
                 rate=30.0,

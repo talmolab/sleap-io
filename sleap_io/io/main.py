@@ -58,13 +58,12 @@ def load_nwb(filename: str, format: str) -> Labels:
     """
     if format == "nwb":
         return nwb.read_nwb(filename)
-    
+
     elif format == "nwb_training":
         return
 
 
-def save_nwb(labels: Labels, filename: str, format: str,
-             append: bool = True, **kwargs):
+def save_nwb(labels: Labels, filename: str, format: str, append: bool = True, **kwargs):
     """Save a SLEAP dataset to NWB format.
 
     Args:
@@ -81,7 +80,7 @@ def save_nwb(labels: Labels, filename: str, format: str,
             nwb.append_nwb(labels, filename, **kwargs)
         else:
             nwb.write_nwb(labels, filename, **kwargs)
-    
+
     elif format == "nwb_training":
         raise NotImplementedError
 
