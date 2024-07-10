@@ -47,7 +47,7 @@ def save_slp(
     return slp.write_labels(filename, labels, embed=embed)
 
 
-def load_nwb(filename: str) -> Labels:
+def load_nwb(filename: str, format: Optional[str]) -> Labels:
     """Load an NWB dataset as a SLEAP `Labels` object.
 
     Args:
@@ -56,10 +56,14 @@ def load_nwb(filename: str) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
-    return nwb.read_nwb(filename)
+    if format == "nwb":
+        return nwb.read_nwb(filename)
+    if format == "nwb_training":
+        return
 
 
-def save_nwb(labels: Labels, filename: str, append: bool = True, **kwargs):
+def save_nwb(labels: Labels, filename: str, format: Optional[str],
+             append: bool = True, **kwargs):
     """Save a SLEAP dataset to NWB format.
 
     Args:
@@ -70,10 +74,16 @@ def save_nwb(labels: Labels, filename: str, append: bool = True, **kwargs):
 
     See also: nwb.write_nwb, nwb.append_nwb
     """
-    if append and Path(filename).exists():
-        nwb.append_nwb(labels, filename, **kwargs)
-    else:
-        nwb.write_nwb(labels, filename, **kwargs)
+    if format == "nwb":
+        if append and Path(filename).exists():
+            nwb.append_nwb(labels, filename, **kwargs)
+        else:
+            nwb.write_nwb(labels, filename, **kwargs)
+
+
+def save_nwb_training():
+    """"""
+    raise NotImplementedError
 
 
 def load_labelstudio(
@@ -230,5 +240,6 @@ def save_file(
         save_jabs(labels, pose_version, filename, **kwargs)
     elif format == "nwb_training":
         pose_training = nwb.labels_to_pose_training(labels, **kwargs)
+        save_nwb_training(pose_training, filename, **kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
