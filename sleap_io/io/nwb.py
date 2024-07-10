@@ -374,7 +374,11 @@ def write_nwb(
         io.write(nwbfile)
 
 
-def write_nwb_training(pose_training: PoseTraining, nwbfile_path: str):  # type: ignore[return]
+def write_nwb_training(pose_training: PoseTraining,  # type: ignore[return]
+                       nwbfile_path: str,
+                       nwb_file_kwargs: Optional[dict],
+                       pose_estimation_metadata: Optional[dict] = None,
+                       ):
     """Writes data from a `PoseTraining` object to an NWB file.
 
     Args:
@@ -384,7 +388,12 @@ def write_nwb_training(pose_training: PoseTraining, nwbfile_path: str):  # type:
     Returns:
         None
     """
-    raise NotImplementedError
+    nwb_file_kwargs = nwb_file_kwargs or {}
+
+    nwbfile = NWBFile(**nwb_file_kwargs)
+    nwbfile = append_nwb_data(pose_training, nwbfile, pose_estimation_metadata)
+    with NWBHDF5IO(str(nwbfile_path), "w") as io:
+        io.write(nwbfile)
 
 
 def append_nwb_data(
