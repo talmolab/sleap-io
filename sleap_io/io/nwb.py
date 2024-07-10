@@ -40,6 +40,8 @@ from sleap_io import (
     Instance,
     PredictedInstance,
     Edge,
+    Point,
+    PredictedPoint,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
@@ -122,8 +124,10 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
     Returns:
         An NWB skeleton.
     """
+    nwb_edges: list[list[int, int]] 
+
     skeleton_edges = {i: node for i, node in enumerate(skeleton.nodes)}
-    nwb_edges: list[list[int, int]] = []
+    nwb_edges = []
     for i, source in skeleton_edges.items():
         for destination in list(skeleton_edges.values())[i:]:
             if Edge(source, destination) in skeleton.edges:
@@ -145,11 +149,15 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     Returns:
         An NWB SkeletonInstance.
     """
+    node_locations: list[Union[Point, PredictedPoint]]
+
     skeleton = slp_skeleton_to_nwb(instance.skeleton)
+    node_locations = list(instance.points.values())
+    np_node_locations = np.array(node_locations)
     return SkeletonInstance(
         name="skeleton_instance",
         id=np.uint(10),
-        node_locations=skeleton.edges,
+        node_locations=np_node_locations,
         node_visibility=[True for _ in range(len(skeleton.nodes))],
         skeleton=skeleton,
     )
