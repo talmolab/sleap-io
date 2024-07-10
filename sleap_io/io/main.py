@@ -47,7 +47,7 @@ def save_slp(
     return slp.write_labels(filename, labels, embed=embed)
 
 
-def load_nwb(filename: str, format: Optional[str]) -> Labels:
+def load_nwb(filename: str, format: str) -> Labels:
     """Load an NWB dataset as a SLEAP `Labels` object.
 
     Args:
@@ -58,17 +58,19 @@ def load_nwb(filename: str, format: Optional[str]) -> Labels:
     """
     if format == "nwb":
         return nwb.read_nwb(filename)
-    if format == "nwb_training":
+    
+    elif format == "nwb_training":
         return
 
 
-def save_nwb(labels: Labels, filename: str, format: Optional[str],
+def save_nwb(labels: Labels, filename: str, format: str,
              append: bool = True, **kwargs):
     """Save a SLEAP dataset to NWB format.
 
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to NWB file to save to. Must end in `.nwb`.
+        format: distinguishes between `nwb` and `nwb_training`
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
 
@@ -79,11 +81,9 @@ def save_nwb(labels: Labels, filename: str, format: Optional[str],
             nwb.append_nwb(labels, filename, **kwargs)
         else:
             nwb.write_nwb(labels, filename, **kwargs)
-
-
-def save_nwb_training():
-    """"""
-    raise NotImplementedError
+    
+    elif format == "nwb_training":
+        raise NotImplementedError
 
 
 def load_labelstudio(
