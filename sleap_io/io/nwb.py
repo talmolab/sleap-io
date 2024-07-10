@@ -89,6 +89,8 @@ def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: 
         training_frame_annotator = f"{training_frame_name}{i}"
         skeleton_instances_list = []
         for instance in labeled_frame.instances:
+            if isinstance(instance, PredictedInstance):
+                continue
             skeleton_instances_list.append(instance_to_skeleton_instance(instance))
 
         training_frame_skeleton_instances = SkeletonInstances(
