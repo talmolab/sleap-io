@@ -485,6 +485,15 @@ def append_nwb(
 
 
 def append_nwb_training(pose_training: PoseTraining, nwbfile_path: str) -> NWBFile:  # type: ignore[return]
+    """Append a PoseTraining object to an existing NWB data file.
+    
+    Args:
+        pose_training: A PoseTraining object.
+        nwbfile_path: The path to the NWB file.
+        
+    Returns:
+        An in-memory NWB file with the PoseTraining data appended.
+    """
     raise NotImplementedError
 
 
