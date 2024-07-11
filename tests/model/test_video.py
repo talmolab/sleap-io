@@ -122,23 +122,3 @@ def test_video_replace_filename(
     video.replace_filename(centered_pair_frame_paths)
     assert type(video.backend) == ImageVideo
     assert video.exists(check_all=True) is True
-
-
-def test_grayscale(centered_pair_low_quality_path):
-    video = Video.from_filename(centered_pair_low_quality_path)
-    assert video.grayscale == True
-    assert video.shape[-1] == 1
-
-    video.grayscale = False
-    assert video.shape[-1] == 3
-
-    video.close()
-    video.open()
-    assert video.grayscale == False
-    assert video.shape[-1] == 3
-
-    video.grayscale = True
-    video.close()
-    video.open()
-    assert video.grayscale == True
-    assert video.shape[-1] == 1

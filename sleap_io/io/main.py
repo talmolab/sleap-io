@@ -81,12 +81,12 @@ def save_nwb(labels: Labels, filename: str, format: str, append: bool = True, **
         else:
             nwb.write_nwb(labels, filename, **kwargs)
 
-    elif format == "nwb_training":
-        pose_training = nwb.labels_to_pose_training(labels, **kwargs)
-        if append and Path(filename).exists():
-            nwb.append_nwb_training(pose_training, filename, **kwargs)
-        else:
-            nwb.write_nwb_training(pose_training, filename, **kwargs)
+    # elif format == "nwb_training":
+    #     pose_training = nwb.labels_to_pose_training(labels, **kwargs)
+    #     if append and Path(filename).exists():
+    #         nwb.append_nwb_training(pose_training, filename, **kwargs)
+    #     else:
+    #         nwb.write_nwb_training(pose_training, filename, **kwargs)
 
 
 def load_labelstudio(
@@ -235,7 +235,7 @@ def save_file(
     if format == "slp":
         save_slp(labels, filename, **kwargs)
     elif format == "nwb" or format == "nwb_training":
-        save_nwb(labels, filename, **kwargs)
+        save_nwb(labels, filename, format, **kwargs)
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":

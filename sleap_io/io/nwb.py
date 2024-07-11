@@ -55,7 +55,7 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
     """
     labeled_frames = []
     for training_frame in pose_training.training_frames:
-        video = Video(filename=training_frame.source_video)
+        video = Video(filename="training_frame.source_video")
         frame_idx = training_frame.source_video_frame_index
         instances = [
             Instance.from_numpy(
