@@ -47,47 +47,47 @@ def save_slp(
     return slp.write_labels(filename, labels, embed=embed)
 
 
-def load_nwb(filename: str, format: str) -> Labels:
+def load_nwb(filename: str, as_training: bool) -> Labels:
     """Load an NWB dataset as a SLEAP `Labels` object.
 
     Args:
         filename: Path to a NWB file (`.nwb`).
+        as_training: If `True`, load the dataset as a training dataset.
 
     Returns:
         The dataset as a `Labels` object.
     """
-    if format == "nwb":
+    if as_training:
+        return nwb.read_nwb_training(filename)
+    else:
         return nwb.read_nwb(filename)
 
-    elif format == "nwb_training":
-        return
 
-
-def save_nwb(labels: Labels, filename: str, format: str, append: bool = True, **kwargs):
+def save_nwb(labels: Labels, filename: str, as_training: bool, append: bool = True, **kwargs):
     """Save a SLEAP dataset to NWB format.
 
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to NWB file to save to. Must end in `.nwb`.
-        format: distinguishes between `nwb` and `nwb_training`
+        as_training: If `True`, save the dataset as a training dataset.
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
 
     See also: nwb.write_nwb, nwb.append_nwb
     """
-    if format == "nwb":
-        if append and Path(filename).exists():
-            nwb.append_nwb(labels, filename, **kwargs)
-        else:
-            nwb.write_nwb(labels, filename, **kwargs)
-
-    elif format == "nwb_training":
+    if as_training:
         pose_training = nwb.labels_to_pose_training(labels, **kwargs)
         if append and Path(filename).exists():
             nwb.append_nwb_training(pose_training, filename, **kwargs)
         else:
             nwb.write_nwb_training(pose_training, filename, **kwargs)
 
+    else:
+        if append and Path(filename).exists():
+            nwb.append_nwb(labels, filename, **kwargs)
+        else:
+            nwb.write_nwb(labels, filename, **kwargs)
+        
 
 def load_labelstudio(
     filename: str, skeleton: Optional[Union[Skeleton, list[str]]] = None
@@ -234,7 +234,7 @@ def save_file(
 
     if format == "slp":
         save_slp(labels, filename, **kwargs)
-    elif format == "nwb" or format == "nwb_training":
+    elif format in ("nwb", "nwb_training", "nwb_predictions"):
         save_nwb(labels, filename, format, **kwargs)
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)

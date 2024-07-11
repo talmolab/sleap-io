@@ -169,7 +169,7 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
         name=name_generator("skeleton_instance"),
         id=np.uint(10),
         node_locations=np_node_locations,
-        node_visibility=[True for _ in range(len(skeleton.nodes))],
+        node_visibility=[point.visible for point in instance.points.values()],
         skeleton=skeleton,
     )
 
@@ -384,9 +384,6 @@ def write_nwb_training(pose_training: PoseTraining,  # type: ignore[return]
     Args:
         pose_training: A `PoseTraining` object.
         nwbfile_path: The path where the nwb file is to be written.
-
-    Returns:
-        None
     """
     nwb_file_kwargs = nwb_file_kwargs or {}
 
