@@ -55,10 +55,8 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         A Labels object.
     """
     labeled_frames = []
-    t_frames = pose_training.training_frames
-    for training_frame in t_frames:
-        print(type(t_frames))
-        video = Video(filename=f"{training_frame.source_video}")
+    for training_frame in pose_training.training_frames:
+        video = Video(filename=f"{training_frame.source_videos}")
         frame_idx = training_frame # TODO
         instances = [
             Instance.from_numpy(
@@ -70,7 +68,7 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         labeled_frames.append(
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
         )
-    return Labels(labeled_frames)
+    return Labels(labeled_frames=labeled_frames)
 
 
 def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: ignore[return]

@@ -47,7 +47,7 @@ def save_slp(
     return slp.write_labels(filename, labels, embed=embed)
 
 
-def load_nwb(filename: str, as_training: bool) -> Labels:
+def load_nwb(filename: str, as_training: Optional[bool]=None) -> Labels:
     """Load an NWB dataset as a SLEAP `Labels` object.
 
     Args:
@@ -57,6 +57,9 @@ def load_nwb(filename: str, as_training: bool) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
+    if as_training is None:
+        return 
+
     if as_training:
         return nwb.read_nwb_training(filename)
     else:
@@ -235,7 +238,7 @@ def save_file(
     if format == "slp":
         save_slp(labels, filename, **kwargs)
     elif format in ("nwb", "nwb_training", "nwb_predictions"):
-        save_nwb(labels, filename, format, **kwargs)
+        save_nwb(labels, filename, **kwargs)
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
