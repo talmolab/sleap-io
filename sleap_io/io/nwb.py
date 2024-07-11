@@ -40,6 +40,7 @@ from sleap_io import (
     Instance,
     PredictedInstance,
     Edge,
+    Node,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
@@ -54,16 +55,15 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         A Labels object.
     """
     labeled_frames = []
-    for training_frame in pose_training.training_frames:
-        video = Video(filename="training_frame.source_video")
-        frame_idx = training_frame.source_video_frame_index
+    t_frames = pose_training.training_frames
+    for training_frame in t_frames:
+        print(type(t_frames))
+        video = Video(filename=f"{training_frame.source_video}")
+        frame_idx = training_frame # TODO
         instances = [
             Instance.from_numpy(
-                points=instance,
-                skeleton=NWBSkeleton(
-                    nodes=pose_training.skeleton.nodes,
-                    edges=pose_training.skeleton.edges,
-                ),
+                points=instance.node_locations,
+                skeleton=nwb_skeleton_to_sleap(instance.skeleton),
             )
             for instance in training_frame.skeleton_instances
         ]
@@ -71,6 +71,24 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
         )
     return Labels(labeled_frames)
+
+
+def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: ignore[return]
+    """Converts an NWB skeleton to a SLEAP skeleton.
+
+    Args:
+        skeleton: An NWB skeleton.
+    
+    Returns:
+        A SLEAP skeleton.
+    """
+    nodes = [Node(name=node) for node in skeleton.nodes]
+    edges = [Edge(source=edge[0], destination=edge[1]) for edge in skeleton.edges]
+    return SLEAPSkeleton(
+        nodes=nodes,
+        edges=edges,
+        name=skeleton.name,
+    )
 
 
 def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: ignore[return]
@@ -91,7 +109,8 @@ def labels_to_pose_training(labels: Labels, **kwargs) -> PoseTraining:  # type: 
         for instance in labeled_frame.instances:
             if isinstance(instance, PredictedInstance):
                 continue
-            skeleton_instances_list.append(instance_to_skeleton_instance(instance))
+            skeleton_instance = instance_to_skeleton_instance(instance)
+            skeleton_instances_list.append(skeleton_instance)
 
         training_frame_skeleton_instances = SkeletonInstances(
             skeleton_instances=skeleton_instances_list
