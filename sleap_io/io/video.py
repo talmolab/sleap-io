@@ -708,6 +708,7 @@ class ImageVideo(VideoBackend):
     """
 
     EXTS = ("png", "jpg", "jpeg", "tif", "tiff", "bmp")
+    fps = None
 
     @staticmethod
     def find_images(folder: str) -> list[str]:
