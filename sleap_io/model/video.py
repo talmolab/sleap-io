@@ -62,6 +62,7 @@ class Video:
         dataset: Optional[str] = None,
         grayscale: Optional[bool] = None,
         keep_open: bool = True,
+        _frame_rate: Optional[float] = None,
         source_video: Optional[Video] = None,
         **kwargs,
     ) -> VideoBackend:
@@ -79,6 +80,7 @@ class Video:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            _frame_rate: The frame rate of the video.
             source_video: The source video object if this is a proxy video. This is
                 present when the video contains an embedded subset of frames from
                 another video.
@@ -93,6 +95,7 @@ class Video:
                 dataset=dataset,
                 grayscale=grayscale,
                 keep_open=keep_open,
+                _frame_rate=None,
                 **kwargs,
             ),
             source_video=source_video,
@@ -106,6 +109,15 @@ class Video:
         this will return None.
         """
         return self._get_shape()
+    
+    @property
+    def frame_rate(self) -> float | None:
+        """Return the frames per second of the video.
+
+        If the video backend is not set or it cannot determine the frames per second of
+        the video, this will return None.
+        """
+        return self.backend.frame_rate
 
     def _get_shape(self) -> Tuple[int, int, int, int] | None:
         """Return the shape of the video as (num_frames, height, width, channels).
