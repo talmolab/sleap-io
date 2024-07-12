@@ -66,7 +66,7 @@ def load_nwb(filename: str, as_training: Optional[bool]=None) -> Labels:
         return nwb.read_nwb(filename)
 
 
-def save_nwb(labels: Labels, filename: str, as_training: bool, append: bool = True, **kwargs):
+def save_nwb(labels: Labels, filename: str, as_training: bool = None, append: bool = True, **kwargs):
     """Save a SLEAP dataset to NWB format.
 
     Args:
@@ -89,7 +89,7 @@ def save_nwb(labels: Labels, filename: str, as_training: bool, append: bool = Tr
         if append and Path(filename).exists():
             nwb.append_nwb(labels, filename, **kwargs)
         else:
-            nwb.write_nwb(labels, filename, **kwargs)
+            nwb.write_nwb(labels, filename)
         
 
 def load_labelstudio(
