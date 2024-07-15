@@ -85,12 +85,6 @@ class VideoBackend:
         Returns:
             VideoBackend subclass instance.
         """
-        video_extensions = ["mp4", "avi", "mov", "mj2", "mkv", "slp"]
-        if isinstance(filename, str):
-            if any(filename.endswith(ext) for ext in video_extensions):
-                fps = cv2.VideoCapture(filename).get(cv2.CAP_PROP_FPS)
-                _frame_rate = fps if fps > 0 else None
-
         if isinstance(filename, Path):
             filename = filename.as_posix()
 
@@ -119,7 +113,6 @@ class VideoBackend:
                 dataset=dataset,
                 grayscale=grayscale,
                 keep_open=keep_open,
-                _frame_rate=_frame_rate,
                 **_get_valid_kwargs(HDF5Video, kwargs),
             )
         else:
@@ -195,8 +188,12 @@ class VideoBackend:
         return self.shape[0]
 
     @property
-    def frame_rate(self) -> float:
+    def frame_rate(self) -> Optional[float]:
         """Frames per second of the video."""
+        video_extensions = ["mp4", "avi", "mov", "mj2", "mkv", "slp"]
+        if isinstance(self.filename, str):
+            if any(self.filename.endswith(ext) for ext in video_extensions):
+                return cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FPS)
         return self._frame_rate
 
     def __len__(self) -> int:
