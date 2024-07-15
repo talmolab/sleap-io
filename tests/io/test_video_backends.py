@@ -14,6 +14,7 @@ def test_video_backend_from_filename(centered_pair_low_quality_path, slp_minimal
     assert type(backend) == MediaVideo
     assert backend.filename == centered_pair_low_quality_path
     assert backend.shape == (1100, 384, 384, 1)
+    assert backend.frame_rate == 15.0
 
     backend = VideoBackend.from_filename(slp_minimal_pkg)
     assert type(backend) == HDF5Video
