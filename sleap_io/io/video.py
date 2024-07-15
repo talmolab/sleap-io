@@ -86,9 +86,10 @@ class VideoBackend:
             VideoBackend subclass instance.
         """
         video_extensions = ["mp4", "avi", "mov", "mj2", "mkv", "slp"]
-        if any(filename.endswith(ext) for ext in video_extensions):
-            fps = cv2.VideoCapture(filename).get(cv2.CAP_PROP_FPS)
-            _frame_rate = fps if fps > 0 else None
+        if isinstance(filename, str):
+            if any(filename.endswith(ext) for ext in video_extensions):
+                fps = cv2.VideoCapture(filename).get(cv2.CAP_PROP_FPS)
+                _frame_rate = fps if fps > 0 else None
 
         if isinstance(filename, Path):
             filename = filename.as_posix()
@@ -110,7 +111,6 @@ class VideoBackend:
                 filename,
                 grayscale=grayscale,
                 keep_open=keep_open,
-                _frame_rate=_frame_rate,
                 **_get_valid_kwargs(MediaVideo, kwargs),
             )
         elif filename.endswith(HDF5Video.EXTS):
@@ -324,7 +324,7 @@ class MediaVideo(VideoBackend):
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
-        _frame rate: Frame rate of the video.
+        _frame_rate: Frame rate of the video.
         plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav". If `None`,
             will use the first available plugin in the order listed above.
     """
