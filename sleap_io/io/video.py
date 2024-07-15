@@ -66,7 +66,6 @@ class VideoBackend:
         dataset: Optional[str] = None,
         grayscale: Optional[bool] = None,
         keep_open: bool = True,
-        _frame_rate: Optional[bool] = None,
         **kwargs,
     ) -> VideoBackend:
         """Create a VideoBackend from a filename.
@@ -191,9 +190,10 @@ class VideoBackend:
     def frame_rate(self) -> Optional[float]:
         """Frames per second of the video."""
         video_extensions = ["mp4", "avi", "mov", "mj2", "mkv", "slp"]
-        if isinstance(self.filename, str):
-            if any(self.filename.endswith(ext) for ext in video_extensions):
-                return cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FPS)
+        if isinstance(self.filename, str) and any(
+            self.filename.endswith(ext) for ext in video_extensions
+        ):
+            return cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FPS)
         return self._frame_rate
 
     def __len__(self) -> int:
