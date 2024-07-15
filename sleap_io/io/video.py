@@ -80,10 +80,16 @@ class VideoBackend:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            _frame_rate: Frame rate of the video.
 
         Returns:
             VideoBackend subclass instance.
         """
+        video_extensions = ["mp4", "avi", "mov", "mj2", "mkv", "slp"]
+        if any(filename.endswith(ext) for ext in video_extensions):
+            fps = cv2.VideoCapture(filename).get(cv2.CAP_PROP_FPS)
+            _frame_rate = fps if fps > 0 else None
+
         if isinstance(filename, Path):
             filename = filename.as_posix()
 
@@ -187,7 +193,7 @@ class VideoBackend:
     def frames(self) -> int:
         """Number of frames in the video."""
         return self.shape[0]
-    
+
     @property
     def frame_rate(self) -> float:
         """Frames per second of the video."""
@@ -318,7 +324,7 @@ class MediaVideo(VideoBackend):
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
-        _frame rate: Frame rate of the video. If `None`, will default to 30.0.
+        _frame rate: Frame rate of the video.
         plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav". If `None`,
             will use the first available plugin in the order listed above.
     """
@@ -474,7 +480,7 @@ class HDF5Video(VideoBackend):
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
-        _frame_rate: Frame rate of the video. If `None`, will default to 30.0.
+        _frame_rate: Frame rate of the video.
         dataset: Name of dataset to read from. If `None`, will try to find a rank-4
             dataset by iterating through datasets in the file. If specifying an embedded
             dataset, this can be the group containing a "video" dataset or the dataset
@@ -494,6 +500,7 @@ class HDF5Video(VideoBackend):
         image_format: Format of the images in the embedded dataset. This is metadata and
             only used when reading embedded image datasets.
     """
+
     dataset: Optional[str] = None
     input_format: str = attrs.field(
         default="channels_last",

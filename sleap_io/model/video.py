@@ -95,7 +95,7 @@ class Video:
                 dataset=dataset,
                 grayscale=grayscale,
                 keep_open=keep_open,
-                _frame_rate=None,
+                _frame_rate=_frame_rate,
                 **kwargs,
             ),
             source_video=source_video,
@@ -109,7 +109,7 @@ class Video:
         this will return None.
         """
         return self._get_shape()
-    
+
     @property
     def frame_rate(self) -> float | None:
         """Return the frames per second of the video.
