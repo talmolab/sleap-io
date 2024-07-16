@@ -6,7 +6,13 @@ import numpy as np
 from pynwb import NWBFile, NWBHDF5IO
 
 from sleap_io import load_slp
-from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps
+from sleap_io.io.nwb import (
+    write_nwb,
+    append_nwb_data,
+    get_timestamps,
+    pose_training_to_labels,
+    labels_to_pose_training,
+)
 
 
 @pytest.fixture
@@ -22,6 +28,19 @@ def nwbfile():
     )
 
     return nwbfile
+
+
+def test_nwb_slp_conversion():
+    labels_original = load_slp("tests/data/slp/minimal_instance.pkg.slp")
+    pose = labels_to_pose_training(labels_original)
+    labels_converted = pose_training_to_labels(pose)
+    assert len(labels_original.labeled_frames) == len(labels_converted.labeled_frames)
+    assert labels_original.provenance == labels_converted.provenance
+
+    original_instances_len = len(labels_original.labeled_frames[0].instances)
+    converted_instances_len = len(labels_converted.labeled_frames[0].instances)
+    assert original_instances_len == converted_instances_len
+    
 
 
 def test_typical_case_append(nwbfile, slp_typical):
