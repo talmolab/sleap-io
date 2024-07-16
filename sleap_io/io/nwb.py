@@ -6,6 +6,7 @@ from pathlib import Path
 import datetime
 import uuid
 import re
+from imageio.v3 import imwrite
 
 import pandas as pd
 import numpy as np
@@ -214,6 +215,25 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
         )
         source_videos.append(image_series)
     return SourceVideos(image_series=source_videos)
+
+
+def sleap_pkg_to_nwb(filename: str, labels: Labels, **kwargs):
+    """Write a SLEAP package to an NWB file.
+
+    Args:
+        filename: The path to the SLEAP package.
+        labels: The SLEAP Labels object.
+    """
+    assert filename.endswith(".pkg.slp")
+
+    path = filename.split(".slp")[0]
+    save_path = Path(path + ".nwb_images")
+    img_paths = []
+    for i, labeled_frame in enumerate(labels.labeled_frames):
+        img_path = save_path / f"frame_{i}.png"
+        imwrite(img_path, labeled_frame.image)
+        img_paths.append(img_path)
+    
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
