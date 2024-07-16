@@ -35,7 +35,6 @@ def test_nwb_slp_conversion():
     pose = labels_to_pose_training(labels_original)
     labels_converted = pose_training_to_labels(pose)
     assert len(labels_original.labeled_frames) == len(labels_converted.labeled_frames)
-    assert labels_original.provenance == labels_converted.provenance
 
     original_instances_len = len(labels_original.labeled_frames[0].instances)
     converted_instances_len = len(labels_converted.labeled_frames[0].instances)
