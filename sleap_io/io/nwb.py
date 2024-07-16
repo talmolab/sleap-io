@@ -55,15 +55,15 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         A Labels object.
     """
     labeled_frames = []
-    for training_frame in pose_training.training_frames:
-        video = Video(filename=f"{training_frame.source_videos}")
-        frame_idx = training_frame # TODO
+    for training_frame in pose_training.training_frames.training_frames.values():
+        video = Video(filename=f"{training_frame.source_video}")
+        frame_idx = training_frame.source_video_frame_index
         instances = [
             Instance.from_numpy(
                 points=instance.node_locations,
                 skeleton=nwb_skeleton_to_sleap(instance.skeleton),
             )
-            for instance in training_frame.skeleton_instances
+            for instance in training_frame.skeleton_instances.skeleton_instances.values()
         ]
         labeled_frames.append(
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
