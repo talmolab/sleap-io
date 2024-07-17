@@ -356,6 +356,7 @@ def write_nwb(
     nwbfile_path: str,
     nwb_file_kwargs: Optional[dict] = None,
     pose_estimation_metadata: Optional[dict] = None,
+    as_training: Optional[bool] = None,
 ):
     """Write labels to an nwb file and save it to the nwbfile_path given.
 
@@ -405,27 +406,11 @@ def write_nwb(
     )
 
     nwbfile = NWBFile(**nwb_file_kwargs)
-    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
+    if as_training:
+        nwbfile = append_nwb_training(labels, nwbfile, pose_estimation_metadata)
+    else:
+        nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
-    with NWBHDF5IO(str(nwbfile_path), "w") as io:
-        io.write(nwbfile)
-
-
-def write_nwb_training(pose_training: PoseTraining,  # type: ignore[return]
-                       nwbfile_path: str,
-                       nwb_file_kwargs: Optional[dict] = None,
-                       pose_estimation_metadata: Optional[dict] = None,
-                       ):
-    """Writes data from a `PoseTraining` object to an NWB file.
-
-    Args:
-        pose_training: A `PoseTraining` object.
-        nwbfile_path: The path where the nwb file is to be written.
-    """
-    nwb_file_kwargs = nwb_file_kwargs or {}
-
-    nwbfile = NWBFile(**nwb_file_kwargs)
-    nwbfile = append_nwb_data(pose_training, nwbfile, pose_estimation_metadata)
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
         io.write(nwbfile)
 
@@ -518,6 +503,7 @@ def append_nwb_training(labels: Labels, nwbfile_path: str) -> NWBFile:  # type: 
     """
     pose_training = labels_to_pose_training(labels)
     provenance = labels.provenance
+    raise NotImplementedError
 
 
 def append_nwb(

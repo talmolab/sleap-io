@@ -47,7 +47,7 @@ def save_slp(
     return slp.write_labels(filename, labels, embed=embed)
 
 
-def load_nwb(filename: str, as_training: Optional[bool]=None) -> Labels:
+def load_nwb(filename: str, as_training: Optional[bool] = None) -> Labels:
     """Load an NWB dataset as a SLEAP `Labels` object.
 
     Args:
@@ -60,7 +60,13 @@ def load_nwb(filename: str, as_training: Optional[bool]=None) -> Labels:
     return nwb.read_nwb(filename)
 
 
-def save_nwb(labels: Labels, filename: str, as_training: bool = None, append: bool = True, **kwargs):
+def save_nwb(
+    labels: Labels,
+    filename: str,
+    as_training: bool = None,
+    append: bool = True,
+    **kwargs,
+):
     """Save a SLEAP dataset to NWB format.
 
     Args:
@@ -73,18 +79,17 @@ def save_nwb(labels: Labels, filename: str, as_training: bool = None, append: bo
     See also: nwb.write_nwb, nwb.append_nwb
     """
     if as_training:
-        pose_training = nwb.labels_to_pose_training(labels, **kwargs)
         if append and Path(filename).exists():
-            nwb.append_nwb(labels, filename)
+            nwb.append_nwb_training(labels, filename)
         else:
-            nwb.write_nwb(labels, filename)
+            nwb.write_nwb_training(labels, filename)
 
     else:
         if append and Path(filename).exists():
             nwb.append_nwb(labels, filename, **kwargs)
         else:
             nwb.write_nwb(labels, filename)
-        
+
 
 def load_labelstudio(
     filename: str, skeleton: Optional[Union[Skeleton, list[str]]] = None
