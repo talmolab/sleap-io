@@ -77,7 +77,7 @@ def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: igno
 
     Args:
         skeleton: An NWB skeleton.
-    
+
     Returns:
         A SLEAP skeleton.
     """
@@ -211,7 +211,7 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
             external_file=[video.filename],
             dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
             starting_frame=[0],
-            rate=30.0, # TODO - change to `video.backend.fps` when available
+            rate=30.0,  # TODO - change to `video.backend.fps` when available
         )
         source_videos.append(image_series)
     return SourceVideos(image_series=source_videos)
@@ -233,7 +233,6 @@ def sleap_pkg_to_nwb(filename: str, labels: Labels, **kwargs):
         img_path = save_path / f"frame_{i}.png"
         imwrite(img_path, labeled_frame.image)
         img_paths.append(img_path)
-    
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -491,13 +490,15 @@ def append_nwb_data(
     return nwbfile
 
 
-def append_nwb_training(labels: Labels, nwbfile_path: str) -> NWBFile:  # type: ignore[return]
+def append_nwb_training(
+    labels: Labels, nwbfile_path: str, pose_estimation_metadata: Optional[dict]
+) -> NWBFile:
     """Append a PoseTraining object to an existing NWB data file.
-    
+
     Args:
         pose_training: A PoseTraining object.
         nwbfile_path: The path to the NWB file.
-        
+
     Returns:
         An in-memory NWB file with the PoseTraining data appended.
     """
@@ -507,8 +508,10 @@ def append_nwb_training(labels: Labels, nwbfile_path: str) -> NWBFile:  # type: 
 
 
 def append_nwb(
-    labels: Labels, filename: str, pose_estimation_metadata: Optional[dict] = None,
-    as_training: Optional[bool] = None
+    labels: Labels,
+    filename: str,
+    pose_estimation_metadata: Optional[dict] = None,
+    as_training: Optional[bool] = None,
 ):
     """Append a SLEAP `Labels` object to an existing NWB data file.
 

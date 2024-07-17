@@ -82,7 +82,7 @@ def save_nwb(
         if append and Path(filename).exists():
             nwb.append_nwb_training(labels, filename)
         else:
-            nwb.write_nwb_training(labels, filename)
+            nwb.write_nwb(labels, filename, None, None, True)
 
     else:
         if append and Path(filename).exists():
