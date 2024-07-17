@@ -413,7 +413,7 @@ def write_nwb(
 
 def write_nwb_training(pose_training: PoseTraining,  # type: ignore[return]
                        nwbfile_path: str,
-                       nwb_file_kwargs: Optional[dict],
+                       nwb_file_kwargs: Optional[dict] = None,
                        pose_estimation_metadata: Optional[dict] = None,
                        ):
     """Writes data from a `PoseTraining` object to an NWB file.
@@ -506,8 +506,23 @@ def append_nwb_data(
     return nwbfile
 
 
+def append_nwb_training(labels: Labels, nwbfile_path: str) -> NWBFile:  # type: ignore[return]
+    """Append a PoseTraining object to an existing NWB data file.
+    
+    Args:
+        pose_training: A PoseTraining object.
+        nwbfile_path: The path to the NWB file.
+        
+    Returns:
+        An in-memory NWB file with the PoseTraining data appended.
+    """
+    pose_training = labels_to_pose_training(labels)
+    provenance = labels.provenance
+
+
 def append_nwb(
-    labels: Labels, filename: str, pose_estimation_metadata: Optional[dict] = None
+    labels: Labels, filename: str, pose_estimation_metadata: Optional[dict] = None,
+    as_training: Optional[bool] = None
 ):
     """Append a SLEAP `Labels` object to an existing NWB data file.
 
@@ -519,25 +534,20 @@ def append_nwb(
 
     See also: append_nwb_data
     """
-    with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
-        nwb_file = io.read()
-        nwb_file = append_nwb_data(
-            labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
-        )
-        io.write(nwb_file)
-
-
-def append_nwb_training(pose_training: PoseTraining, nwbfile_path: str) -> NWBFile:  # type: ignore[return]
-    """Append a PoseTraining object to an existing NWB data file.
-    
-    Args:
-        pose_training: A PoseTraining object.
-        nwbfile_path: The path to the NWB file.
-        
-    Returns:
-        An in-memory NWB file with the PoseTraining data appended.
-    """
-    raise NotImplementedError
+    if as_training:
+        with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
+            nwb_file = io.read()
+            nwb_file = append_nwb_training(
+                labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
+            )
+            io.write(nwb_file)
+    else:
+        with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
+            nwb_file = io.read()
+            nwb_file = append_nwb_data(
+                labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
+            )
+            io.write(nwb_file)
 
 
 def get_processing_module_for_video(

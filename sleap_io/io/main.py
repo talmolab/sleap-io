@@ -57,10 +57,7 @@ def load_nwb(filename: str, as_training: Optional[bool]=None) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
-    if as_training:
-        return nwb.read_nwb_training(filename)
-    else:
-        return nwb.read_nwb(filename)
+    return nwb.read_nwb(filename)
 
 
 def save_nwb(labels: Labels, filename: str, as_training: bool = None, append: bool = True, **kwargs):
@@ -78,9 +75,9 @@ def save_nwb(labels: Labels, filename: str, as_training: bool = None, append: bo
     if as_training:
         pose_training = nwb.labels_to_pose_training(labels, **kwargs)
         if append and Path(filename).exists():
-            nwb.append_nwb_training(pose_training, filename, **kwargs)
+            nwb.append_nwb(labels, filename)
         else:
-            nwb.write_nwb_training(pose_training, filename, **kwargs)
+            nwb.write_nwb(labels, filename)
 
     else:
         if append and Path(filename).exists():
@@ -234,8 +231,10 @@ def save_file(
 
     if format == "slp":
         save_slp(labels, filename, **kwargs)
-    elif format in ("nwb", "nwb_training", "nwb_predictions"):
-        save_nwb(labels, filename, **kwargs)
+    elif format in ("nwb", "nwb_predictions"):
+        save_nwb(labels, filename, as_training=False, **kwargs)
+    elif format == "nwb_training":
+        save_nwb(labels, filename, as_training=True, **kwargs)
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
