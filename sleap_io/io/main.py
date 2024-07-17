@@ -57,9 +57,6 @@ def load_nwb(filename: str, as_training: Optional[bool]=None) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
-    if as_training is None:
-        return 
-
     if as_training:
         return nwb.read_nwb_training(filename)
     else:
