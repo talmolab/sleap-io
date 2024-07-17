@@ -211,7 +211,7 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
             external_file=[video.filename],
             dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
             starting_frame=[0],
-            rate=30.0,
+            rate=30.0, # TODO - change to `video.backend.fps` when available
         )
         source_videos.append(image_series)
     return SourceVideos(image_series=source_videos)
