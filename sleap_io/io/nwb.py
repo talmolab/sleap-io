@@ -46,6 +46,7 @@ from sleap_io import (
     Node,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
+from sleap_io.io.main import load_slp
 
 
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
@@ -165,8 +166,16 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
             if Edge(source, destination) in skeleton.edges:
                 nwb_edges.append([i, list(skeleton_edges.values()).index(destination)])
 
+    if len(skeleton.nodes) == 1:
+        name = f"Node {skeleton.nodes[0].name}"
+    elif len(skeleton.nodes) == 2:
+        name = f"Nodes {skeleton.nodes[0].name}, {skeleton.nodes[1].name}"
+    elif len(skeleton.nodes) > 2:
+        name = f"Nodes {skeleton.nodes[0].name}, ..., {skeleton.nodes[-1].name}"
+    else:
+        name = "No nodes"
     return NWBSkeleton(
-        name=f"Nodes {skeleton.nodes[0].name}, ..., {skeleton.nodes[-1].name}",
+        name=name,
         nodes=skeleton.node_names,
         edges=np.array(nwb_edges, dtype=np.uint8),
     )
@@ -219,15 +228,16 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
     return SourceVideos(image_series=source_videos)
 
 
-def sleap_pkg_to_nwb(filename: str, labels: Labels, **kwargs):
+def sleap_pkg_to_nwb(filename: str, **kwargs):
     """Write a SLEAP package to an NWB file.
 
     Args:
         filename: The path to the SLEAP package.
-        labels: The SLEAP Labels object.
     """
     if not filename.endswith(".pkg.slp"):
         raise ValueError("The filename must end with '.pkg.slp'.")
+    
+    labels = load_slp(filename)
 
     path = filename.split(".slp")[0]
     save_path = Path(path + ".nwb_images")
@@ -414,6 +424,7 @@ def write_nwb(
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
+        #io.nwb_version = (2.0, "2.0.0") #TODO figure out how to set version
         io.write(nwbfile)
 
 
@@ -511,6 +522,7 @@ def append_nwb_training(
     default_metadata = dict(scorer=str(provenance))
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
+    default_metadata.update(pose_estimation_metadata)
 
     subject = Subject(subject_id="No specified id", species="No specified species")
     nwbfile.subject = subject
@@ -553,7 +565,6 @@ def append_nwb_training(
         )
         pose_estimation_series_list.append(pose_estimation_series)
 
-    labeled_videos = [video.filename for video in labels.videos]
     dimensions = np.array(
         [[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]]
     )
