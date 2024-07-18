@@ -494,7 +494,7 @@ def append_nwb_data(
 
 
 def append_nwb_training(
-    labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict]
+    labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict] = None
 ) -> NWBFile:
     """Append training data from a Labels object to an in-memory NWB file.
 
@@ -548,27 +548,20 @@ def append_nwb_training(
                                                     )
         pose_estimation_series_list.append(pose_estimation_series)
     
+    dimensions = np.array([[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]])
     pose_estimation = PoseEstimation(name="pose_estimation",
                                      pose_estimation_series=pose_estimation_series_list,
                                      description="Estimated positions of the nodes in the video",
                                      original_videos=[video.filename for video in labels.videos],
                                      labeled_videos=[video.filename for video in labels.videos],
-                                     dimensions=np.array([[labels.videos[0].backend.height, labels.videos[0].backend.width]]),
+                                     dimensions=dimensions,
                                      devices=[camera],
                                      scorer="No specified scorer",
                                      source_software="SLEAP",
                                      source_software_version=sleap_version,
                                      skeleton=skeletons_list[0],
                                     )
-    
-    
-
-    for lf in labels.labeled_frames:
-        if lf.has_predicted_instances:
-            labels_data_df = convert_predictions_to_dataframe(labels)
-            break
-        else:
-            labels_data_df = pd.DataFrame()
+    behavior_pm.add(pose_estimation)
     return nwbfile
 
 
