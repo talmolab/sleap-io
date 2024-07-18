@@ -529,6 +529,39 @@ def append_nwb_training(
     camera = nwbfile.create_device(name="camera",
                                    description="Camera used to record the video",
                                    manufacturer="No specified manufacturer")
+    
+    data = np.random.rand(100, 2)
+    timestamps = np.linspace(0, 10, num=100)
+    confidence = np.random.rand(100)
+    reference_frame = "The coordinates are in (x, y) relative to the top-left of the image."
+    confidence_definition = "Softmax output of the deep neural network"
+    pose_estimation_series_list = []
+    for node in skeletons_list[0].nodes:
+        pose_estimation_series = PoseEstimationSeries(name=node,
+                                                     description=f"Sequential trajectory of {node}.",
+                                                     data=data,
+                                                     unit="pixels",
+                                                     reference_frame=reference_frame,
+                                                     timestamps=timestamps,
+                                                     confidence=confidence,
+                                                     confidence_definition=confidence_definition,
+                                                    )
+        pose_estimation_series_list.append(pose_estimation_series)
+    
+    pose_estimation = PoseEstimation(name="pose_estimation",
+                                     pose_estimation_series=pose_estimation_series_list,
+                                     description="Estimated positions of the nodes in the video",
+                                     original_videos=[video.filename for video in labels.videos],
+                                     labeled_videos=[video.filename for video in labels.videos],
+                                     dimensions=np.array([[labels.videos[0].backend.height, labels.videos[0].backend.width]]),
+                                     devices=[camera],
+                                     scorer="No specified scorer",
+                                     source_software="SLEAP",
+                                     source_software_version=sleap_version,
+                                     skeleton=skeletons_list[0],
+                                    )
+    
+    
 
     for lf in labels.labeled_frames:
         if lf.has_predicted_instances:
