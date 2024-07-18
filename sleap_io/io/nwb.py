@@ -17,6 +17,7 @@ except ImportError:
     ArrayLike = np.ndarray
 
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
+from pynwb.file import Subject
 from pynwb.image import ImageSeries
 from pynwb.testing.mock.utils import name_generator
 
@@ -24,6 +25,7 @@ from ndx_pose import (
     PoseEstimationSeries,
     PoseEstimation,
     Skeleton as NWBSkeleton,
+    Skeletons,
     SkeletonInstance,
     SkeletonInstances,
     TrainingFrame,
@@ -492,13 +494,14 @@ def append_nwb_data(
 
 
 def append_nwb_training(
-    labels: Labels, nwbfile_path: str, pose_estimation_metadata: Optional[dict]
+    labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict]
 ) -> NWBFile:
-    """Append a PoseTraining object to an existing NWB data file.
+    """Append training data from a Labels object to an in-memory NWB file.
 
     Args:
-        pose_training: A PoseTraining object.
-        nwbfile_path: The path to the NWB file.
+        labels: A general labels object.
+        nwbfile: An in-memory NWB file.
+        pose_estimation_metadata: Metadata for pose estimation.
 
     Returns:
         An in-memory NWB file with the PoseTraining data appended.
@@ -508,7 +511,24 @@ def append_nwb_training(
     default_metadata = dict(scorer=str(provenance))
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
+
+    subject = Subject(subject_id="No specified id", species="No specified species")
+    nwbfile.subject = subject
     pose_training = labels_to_pose_training(labels)
+
+    behavior_pm = nwbfile.create_processing_module(
+        name="behavior",
+        description="Behavioral data",
+    )
+    behavior_pm.add(pose_training)
+
+    skeletons_list = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
+    skeletons = Skeletons(skeletons=skeletons_list)
+    behavior_pm.add(skeletons)
+
+    camera = nwbfile.create_device(name="camera",
+                                   description="Camera used to record the video",
+                                   manufacturer="No specified manufacturer")
 
     for lf in labels.labeled_frames:
         if lf.has_predicted_instances:
@@ -516,7 +536,7 @@ def append_nwb_training(
             break
         else:
             labels_data_df = pd.DataFrame()
-    raise NotImplementedError
+    return nwbfile
 
 
 def append_nwb(
