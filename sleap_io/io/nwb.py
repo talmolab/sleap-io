@@ -587,6 +587,7 @@ def append_nwb(
         filename: The path to the NWB file.
         pose_estimation_metadata: Metadata for pose estimation. See `append_nwb_data`
             for details.
+        as_training: If `True`, append the data as training data.
 
     See also: append_nwb_data
     """

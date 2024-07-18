@@ -39,7 +39,6 @@ def test_nwb_slp_conversion():
     original_instances_len = len(labels_original.labeled_frames[0].instances)
     converted_instances_len = len(labels_converted.labeled_frames[0].instances)
     assert original_instances_len == converted_instances_len
-    
 
 
 def test_typical_case_append(nwbfile, slp_typical):
