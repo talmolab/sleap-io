@@ -12,8 +12,12 @@ from sleap_io.io.nwb import (
     get_timestamps,
     pose_training_to_labels,
     labels_to_pose_training,
+    slp_skeleton_to_nwb
 )
-
+from sleap_io.model.labels import Labels, LabeledFrame
+from sleap_io.model.video import Video
+from sleap_io.model.instance import Instance, PredictedInstance
+from sleap_io.model.skeleton import Skeleton, Node, Edge
 
 @pytest.fixture
 def nwbfile():
@@ -39,6 +43,14 @@ def test_nwb_slp_conversion():
     original_instances_len = len(labels_original.labeled_frames[0].instances)
     converted_instances_len = len(labels_converted.labeled_frames[0].instances)
     assert original_instances_len == converted_instances_len
+
+    nodes = [Node("A"), Node("B"), Node("C")]
+    edges = [Edge(Node("A"), Node("B")), Edge(Node("B"), Node("C"))]
+    slp_skeleton = Skeleton(nodes, edges, name="test_skeleton")
+    nwb_skeleton = slp_skeleton_to_nwb(slp_skeleton)
+    assert len(nwb_skeleton.nodes) == len(slp_skeleton.nodes)
+    
+
 
 
 def test_typical_case_append(nwbfile, slp_typical):
