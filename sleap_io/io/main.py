@@ -65,6 +65,7 @@ def save_nwb(
     filename: str,
     as_training: bool = None,
     append: bool = True,
+    img_paths: Optional[list[str]] = None,
     **kwargs,
 ):
     """Save a SLEAP dataset to NWB format.
