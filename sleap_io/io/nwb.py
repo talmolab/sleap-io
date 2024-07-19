@@ -170,10 +170,8 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
         name = f"Node {skeleton.nodes[0].name}"
     elif len(skeleton.nodes) == 2:
         name = f"Nodes {skeleton.nodes[0].name}, {skeleton.nodes[1].name}"
-    elif len(skeleton.nodes) > 2:
-        name = f"Nodes {skeleton.nodes[0].name}, ..., {skeleton.nodes[-1].name}"
     else:
-        name = "No nodes"
+        name = f"Nodes {skeleton.nodes[0].name}, ..., {skeleton.nodes[-1].name}"
     return NWBSkeleton(
         name=name,
         nodes=skeleton.node_names,
@@ -228,24 +226,31 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
     return SourceVideos(image_series=source_videos)
 
 
-def sleap_pkg_to_nwb(filename: str, **kwargs):
+def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
     """Write a SLEAP package to an NWB file.
 
     Args:
         filename: The path to the SLEAP package.
+    
+    Returns:
+        An NWBFile object.
     """
     if not filename.endswith(".pkg.slp"):
         raise ValueError("The filename must end with '.pkg.slp'.")
     
     labels = load_slp(filename)
 
-    path = filename.split(".slp")[0]
-    save_path = Path(path + ".nwb_images")
+    save_path = Path(filename.replace(".slp", ".nwb"))
+    save_path.mkdir(parents=True, exist_ok=True)
     img_paths = []
     for i, labeled_frame in enumerate(labels.labeled_frames):
         img_path = save_path / f"frame_{i}.png"
-        imwrite(img_path, labeled_frame.image)
+        if labeled_frame.image.ndim == 3 and labeled_frame.image.shape[-1] == 1:
+            imwrite(img_path, labeled_frame.image[:, :, 0])
+        else:
+            imwrite(img_path, labeled_frame.image)
         img_paths.append(img_path)
+    return img_paths
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
