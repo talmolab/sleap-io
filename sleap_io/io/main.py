@@ -76,6 +76,7 @@ def save_nwb(
         as_training: If `True`, save the dataset as a training dataset.
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
+        img_paths: Optional list of image paths to save to the NWB file.
 
     See also: nwb.write_nwb, nwb.append_nwb
     """
