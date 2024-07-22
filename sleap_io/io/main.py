@@ -80,11 +80,10 @@ def save_nwb(
 
     See also: nwb.write_nwb, nwb.append_nwb
     """
-    if as_training:
-        if append and Path(filename).exists():
-            nwb.append_nwb(labels, filename, as_training=True)
-        else:
-            nwb.write_nwb(labels, filename, as_training=True)
+    if append and Path(filename).exists():
+        nwb.append_nwb(labels, filename, as_training=as_training, **kwargs)
+    else:
+        nwb.write_nwb(labels, filename, as_training=as_training, **kwargs)
 
     else:
         if append and Path(filename).exists():
