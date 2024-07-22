@@ -57,6 +57,7 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         A Labels object.
     """
     labeled_frames = []
+    skeletons = {}
     for training_frame in pose_training.training_frames.training_frames.values():
         source_video = training_frame.source_video
         if source_video.format == "external" and len(source_video.external_file) == 1:
@@ -65,13 +66,16 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
             raise NotImplementedError("Only single-file external videos are supported.")
 
         frame_idx = training_frame.source_video_frame_index
-        instances = [
-            Instance.from_numpy(
-                points=instance.node_locations,
-                skeleton=nwb_skeleton_to_sleap(instance.skeleton),
-            )
-            for instance in training_frame.skeleton_instances.skeleton_instances.values()
-        ]
+        instances = []
+        for instance in training_frame.skeleton_instances.skeleton_instances.values():
+            if instance.skeleton.name not in skeletons:
+                skeletons[instance.skeleton.name] = nwb_skeleton_to_sleap(
+                    instance.skeleton
+                )
+            skeleton = skeletons[instance.skeleton.name]
+            instances.append(
+                Instance.from_numpy(points=instance.node_locations, skeleton=skeleton)
+            ) # `track` field is not stored in `SkeletonInstance` objects
         labeled_frames.append(
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
         )
@@ -132,34 +136,19 @@ def labels_to_pose_training(
         training_frame_video = labeled_frame.video
         training_frame_video_index = labeled_frame.frame_idx
 
-        if img_paths:
-            source_video = ImageSeries(
-                name=training_frame_name,
-                description=training_frame_annotator,
-                unit="NA",
-                format="external",
-                external_file=img_paths,
-                dimension=[
-                    training_frame_video.backend.img_shape[0],
-                    training_frame_video.backend.img_shape[1],
-                ],
-                starting_frame=[0],
-                rate=30.0,  # change to `video.backend.fps` when available
-            )
-        else:
-            source_video = ImageSeries(
-                name=training_frame_name,
-                description=training_frame_annotator,
-                unit="NA",
-                format="external",
-                external_file=[training_frame_video.filename],
-                dimension=[
-                    training_frame_video.shape[1],
-                    training_frame_video.shape[2],
-                ],
-                starting_frame=[0],
-                rate=30.0,  # change to `video.backend.fps` when available
-            )
+        source_video = ImageSeries(
+            name=training_frame_name,
+            description=training_frame_annotator,
+            unit="NA",
+            format="external",
+            external_file=[training_frame_video.filename],
+            dimension=[
+                training_frame_video.shape[1],
+                training_frame_video.shape[2],
+            ],
+            starting_frame=[0],
+            rate=30.0,  # change to `video.backend.fps` when available
+        )
         training_frame = TrainingFrame(
             name=training_frame_name,
             annotator=training_frame_annotator,
@@ -215,7 +204,7 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     np_node_locations = np.array(node_locs)
     return SkeletonInstance(
         name=f"skeleton_instance_{id(instance)}",
-        id=np.uint(10),
+        id=id(instance),
         node_locations=np_node_locations,
         node_visibility=[point.visible for point in instance.points.values()],
         skeleton=skeleton,
@@ -489,12 +478,7 @@ def append_nwb_data(
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
 
-    for lf in labels.labeled_frames:
-        if lf.has_predicted_instances:
-            labels_data_df = convert_predictions_to_dataframe(labels)
-            break
-        else:
-            labels_data_df = pd.DataFrame()
+    labels_data_df = convert_predictions_to_dataframe(labels)
 
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
