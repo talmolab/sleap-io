@@ -19,7 +19,6 @@ except ImportError:
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
 from pynwb.file import Subject
 from pynwb.image import ImageSeries
-from pynwb.testing.mock.utils import name_generator
 
 from ndx_pose import (
     PoseEstimationSeries,
@@ -59,7 +58,12 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
     """
     labeled_frames = []
     for training_frame in pose_training.training_frames.training_frames.values():
-        video = Video(filename=f"{training_frame.source_video}")
+        source_video = training_frame.source_video
+        if source_video.format == "external" and len(source_video.external_file) == 1:
+            video = Video(filename=source_video.external_file[0])
+        else:
+            raise NotImplementedError("Only single-file external videos are supported.")
+
         frame_idx = training_frame.source_video_frame_index
         instances = [
             Instance.from_numpy(
@@ -83,9 +87,6 @@ def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: igno
     Returns:
         A SLEAP skeleton.
     """
-    if not isinstance(skeleton, NWBSkeleton):
-        raise ValueError("The input must be an NWB Skeleton object.")
-    
     nodes = [Node(name=node) for node in skeleton.nodes]
     edges = [Edge(source=edge[0], destination=edge[1]) for edge in skeleton.edges]
     return SLEAPSkeleton(
@@ -106,19 +107,19 @@ def labels_to_pose_training(
 
     Returns:
         A PoseTraining object.
-    """    
-    skeletons_list: list[Skeleton] = [] # type: ignore[assignment]
-    skeletons = Skeletons(skeletons=skeletons_list) # type: ignore[assignment]
+    """
+    skeletons_list: list[NWBSkeleton] = []  # type: ignore[assignment]
+    skeletons = Skeletons(skeletons=skeletons_list)  # type: ignore[assignment]
     training_frame_list = []
     for i, labeled_frame in enumerate(labels.labeled_frames):
-        training_frame_name = name_generator("training_frame")
-        training_frame_annotator = f"{training_frame_name}_{i}"
+        training_frame_name = f"training_frame_{i}"
+        training_frame_annotator = "N/A"
         skeleton_instances_list = []
-        
+
         for instance in labeled_frame.instances:
             if isinstance(instance, PredictedInstance):
                 continue
-            
+
             if instance.skeleton not in skeletons_list:
                 skeletons_list.append(instance.skeleton)
                 skeletons = Skeletons(skeletons=skeletons_list)
@@ -143,10 +144,10 @@ def labels_to_pose_training(
                     training_frame_video.backend.img_shape[1],
                 ],
                 starting_frame=[0],
-                rate=30.0, # change to `video.backend.fps` when available
+                rate=30.0,  # change to `video.backend.fps` when available
             )
         else:
-            source_video=ImageSeries(
+            source_video = ImageSeries(
                 name=training_frame_name,
                 description=training_frame_annotator,
                 unit="NA",
@@ -157,7 +158,7 @@ def labels_to_pose_training(
                     training_frame_video.shape[2],
                 ],
                 starting_frame=[0],
-                rate=30.0, # change to `video.backend.fps` when available
+                rate=30.0,  # change to `video.backend.fps` when available
             )
         training_frame = TrainingFrame(
             name=training_frame_name,
@@ -213,7 +214,7 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     node_locs = [[point.x, point.y] for point in points_list]
     np_node_locations = np.array(node_locs)
     return SkeletonInstance(
-        name=name_generator("skeleton_instance"),
+        name=f"skeleton_instance_{id(instance)}",
         id=np.uint(10),
         node_locations=np_node_locations,
         node_visibility=[point.visible for point in instance.points.values()],
@@ -233,8 +234,8 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
     source_videos = []
     for video in videos:
         image_series = ImageSeries(
-            name=name_generator("video"),
-            description="Video file",
+            name=f"video_{id(video)}",
+            description="N/A",
             unit="NA",
             format="external",
             external_file=[video.filename],
@@ -267,7 +268,7 @@ def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
         else:
             imwrite(img_path, labeled_frame.image)
         img_paths.append(img_path)
-    
+
     # then use img_paths when saving the NWB TrainingFrames with references
     # to the appropriate image files
     save_nwb(labels, save_path, img_paths=img_paths, **kwargs)
@@ -450,7 +451,7 @@ def write_nwb(
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
-        #io.nwb_version = (2.0, "2.0.0") #TODO figure out how to set version
+        # io.nwb_version = (2.0, "2.0.0") #TODO figure out how to set version
         io.write(nwbfile)
 
 
@@ -548,7 +549,7 @@ def append_nwb_training(
     default_metadata = dict(scorer=str(provenance))
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
-    
+
     for i, video in enumerate(labels.videos):
         video_path = Path(video.filename)
         processing_module_name = f"SLEAP_VIDEO_{i:03}_{video_path.stem}"
