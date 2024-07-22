@@ -46,7 +46,6 @@ from sleap_io import (
     Node,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
-from sleap_io.io.main import load_slp, save_nwb
 
 
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
@@ -58,9 +57,6 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
     Returns:
         A Labels object.
     """
-    if not isinstance(pose_training, PoseTraining):
-        raise ValueError("The input must be an NWB PoseTraining object.")
-    
     labeled_frames = []
     for training_frame in pose_training.training_frames.training_frames.values():
         video = Video(filename=f"{training_frame.source_video}")
@@ -110,10 +106,7 @@ def labels_to_pose_training(
 
     Returns:
         A PoseTraining object.
-    """
-    if not isinstance(labels, Labels):
-        raise ValueError("The input must be a SLEAP Labels object.")
-    
+    """    
     skeletons_list: list[Skeleton] = [] # type: ignore[assignment]
     skeletons = Skeletons(skeletons=skeletons_list) # type: ignore[assignment]
     training_frame_list = []
@@ -192,10 +185,6 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
     Returns:
         An NWB skeleton.
     """
-    nwb_edges: list[list[int, int]]
-    if not isinstance(skeleton, SLEAPSkeleton):
-        raise ValueError("The input must be a SLEAP Skeleton object.")
-
     skeleton_edges = {i: node for i, node in enumerate(skeleton.nodes)}
     nwb_edges = []
     for i, source in skeleton_edges.items():
@@ -203,14 +192,8 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
             if Edge(source, destination) in skeleton.edges:
                 nwb_edges.append([i, list(skeleton_edges.values()).index(destination)])
 
-    if len(skeleton.nodes) == 1:
-        name = f"Node {skeleton.nodes[0].name}"
-    elif len(skeleton.nodes) == 2:
-        name = f"Nodes {skeleton.nodes[0].name}, {skeleton.nodes[1].name}"
-    else:
-        name = f"Nodes {skeleton.nodes[0].name}, ..., {skeleton.nodes[-1].name}"
     return NWBSkeleton(
-        name=name,
+        name=skeleton.name,
         nodes=skeleton.node_names,
         edges=np.array(nwb_edges, dtype=np.uint8),
     )
@@ -225,9 +208,6 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     Returns:
         An NWB SkeletonInstance.
     """
-    if not isinstance(instance, Instance):
-        raise ValueError("The input must be a SLEAP Instance object.")
-    
     skeleton = slp_skeleton_to_nwb(instance.skeleton)
     points_list = list(instance.points.values())
     node_locs = [[point.x, point.y] for point in points_list]
@@ -250,9 +230,6 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
     Returns:
         An NWB SourceVideos object.
     """
-    if not isinstance(videos, list) or not all(isinstance(video, Video) for video in videos):
-        raise ValueError("The input must be a list of SLEAP Video objects.")
-    
     source_videos = []
     for video in videos:
         image_series = ImageSeries(
@@ -278,9 +255,6 @@ def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
     Returns:
         An NWBFile object.
     """
-    if not filename.endswith(".pkg.slp"):
-        raise ValueError("The filename must end with '.pkg.slp'.")
-
     labels = load_slp(filename)
 
     save_path = Path(filename.replace(".slp", ".nwb"))
