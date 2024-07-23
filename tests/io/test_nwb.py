@@ -7,9 +7,6 @@ from pynwb import NWBFile, NWBHDF5IO
 
 from sleap_io import load_slp
 from sleap_io.io.nwb import *
-from sleap_io.model.labels import Labels, LabeledFrame
-from sleap_io.model.video import Video
-from sleap_io.model.instance import Instance, PredictedInstance
 
 @pytest.fixture
 def nwbfile():

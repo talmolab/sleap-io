@@ -62,7 +62,7 @@ def load_nwb(filename: str) -> Labels:
 def save_nwb(
     labels: Labels,
     filename: str,
-    as_training: bool = None,
+    as_training: bool = None, # replace with a variable that determines whether it's a package
     append: bool = True,
     **kwargs,
 ):

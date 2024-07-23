@@ -6,10 +6,16 @@ from pathlib import Path
 import datetime
 import uuid
 import re
-from imageio.v3 import imwrite
+import imageio.v3 as iio
+import sys
 
 import pandas as pd
 import numpy as np
+
+try:
+    import cv2
+except ImportError:
+    pass
 
 try:
     from numpy.typing import ArrayLike
@@ -45,6 +51,7 @@ from sleap_io import (
     Node,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
+from sleap_io.io.slp import embed_video
 
 
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
@@ -75,7 +82,7 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
             skeleton = skeletons[instance.skeleton.name]
             instances.append(
                 Instance.from_numpy(points=instance.node_locations, skeleton=skeleton)
-            ) # `track` field is not stored in `SkeletonInstance` objects
+            )  # `track` field is not stored in `SkeletonInstance` objects
         labeled_frames.append(
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
         )
@@ -236,6 +243,34 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
     return SourceVideos(image_series=source_videos)
 
 
+def write_img_to_path(video: Video, filename: str) -> list[str]:
+    """
+    Write an image to a path and return the path.
+
+    Args:
+        filename: The filename of the image to write.
+
+    Returns:
+        A list of the path of the image.
+    """
+    image_path = Path(filename)
+    save_path = image_path.parent
+
+    imgs_data = []
+    for frame_idx in frame_inds:
+        frame = video[frame_idx]
+
+        if image_format == "hdf5":
+            img_data = frame
+        else:
+            if "cv2" in sys.modules:
+                img_data = np.squeeze(
+                    cv2.imencode("." + image_format, frame)[1]
+                ).astype("int8")
+
+        imgs_data.append(img_data)
+
+
 def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
     """Write a SLEAP package to an NWB file.
 
@@ -245,7 +280,6 @@ def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
     Returns:
         An NWBFile object.
     """
-    labels = load_slp(filename)
 
     save_path = Path(filename.replace(".slp", ".nwb"))
     save_path.mkdir(parents=True, exist_ok=True)
@@ -253,9 +287,9 @@ def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
     for i, labeled_frame in enumerate(labels.labeled_frames):
         img_path = save_path / f"frame_{i}.png"
         if labeled_frame.image.ndim == 3 and labeled_frame.image.shape[-1] == 1:
-            imwrite(img_path, labeled_frame.image[:, :, 0])
+            iio.imwrite(img_path, labeled_frame.image[:, :, 0])
         else:
-            imwrite(img_path, labeled_frame.image)
+            iio.imwrite(img_path, labeled_frame.image)
         img_paths.append(img_path)
 
     # then use img_paths when saving the NWB TrainingFrames with references
