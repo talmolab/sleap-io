@@ -123,6 +123,7 @@ def labels_to_pose_training(
     skeletons = Skeletons(skeletons=skeletons_list)  # type: ignore[assignment]
     training_frame_list = []
     image_series: dict[Video, ImageSeries] = {}
+    path_index: dict[tuple[Video, int], str] = {}
     for i, labeled_frame in enumerate(labels.labeled_frames):
         training_frame_name = f"training_frame_{i}"
         training_frame_annotator = "N/A"
@@ -244,37 +245,44 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
     return SourceVideos(image_series=source_videos)
 
 
-def write_img_to_path(video: Video, filename: str) -> list[str]:
+def write_img_to_path(
+    labels_path: str,
+    video: Video,
+    filename: str,
+    frame_inds: Optional[list[int]] = None,
+    image_format: str = "png",
+) -> list[str]:
     """
     Write an image to a path and return the path.
 
     Args:
+        video: The video to write.
         filename: The filename of the image to write.
+        image_format: The format of the image to write.
 
     Returns:
         A list of the path of the image.
     """
-    
+
     save_path = Path(filename)
-    image_format = ".png"
     imgs_data = []
-    frame_inds = range(len(video))
+    if frame_inds is None:
+        frame_inds = [idx for idx in range(len(video))]
+
     for frame_idx in frame_inds:
         frame = video[frame_idx]
-
         if image_format == "hdf5":
             img_data = frame
         else:
-            if "cv2" in sys.modules:
-                img_data = np.squeeze(cv2.imencode(image_format, frame)[1]).astype(
-                    "int8"
-                )
+            img_data = np.squeeze(cv2.imencode("." + image_format, frame)[1]).astype(
+                "int8"
+            )
 
         imgs_data.append(img_data)
-    
+
     with h5py.File(save_path, "a") as f:
-        pass
-    
+        raise NotImplementedError
+
     # image_series = ImageSeries(
     #     name="video",
     #     description="N/A",
@@ -285,7 +293,6 @@ def write_img_to_path(video: Video, filename: str) -> list[str]:
     #     starting_frame=[0],
     #     rate=30.0,  # TODO - change to `video.backend.fps` when available
     # )
-    
 
 
 def sleap_pkg_to_nwb(labels: Labels, filename: str, **kwargs) -> NWBFile:
@@ -436,7 +443,7 @@ def write_nwb(
     nwbfile_path: str,
     nwb_file_kwargs: Optional[dict] = None,
     pose_estimation_metadata: Optional[dict] = None,
-    as_training: Optional[bool] = None,
+    as_training: bool = True,
 ):
     """Write labels to an nwb file and save it to the nwbfile_path given.
 
@@ -591,9 +598,9 @@ def append_nwb_training(
             Path(video.filename) if type(video.filename) == str else video.filename[0]
         )
         processing_module_name = f"SLEAP_VIDEO_{i:03}_{video_path.stem}"
-        # nwb_processing_module = get_processing_module_for_video(
-        #     processing_module_name, nwbfile
-        # )
+        nwb_processing_module = get_processing_module_for_video(
+            processing_module_name, nwbfile
+        )
         default_metadata["original_videos"] = [f"{video.filename}"]
         default_metadata["labeled_videos"] = [f"{video.filename}"]
         default_metadata.update(pose_estimation_metadata)
@@ -676,20 +683,17 @@ def append_nwb(
 
     See also: append_nwb_data
     """
-    if as_training:
-        with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
-            nwb_file = io.read()
+    with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
+        nwb_file = io.read()
+        if as_training:
             nwb_file = append_nwb_training(
                 labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
             )
-            io.write(nwb_file)
-    else:
-        with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
-            nwb_file = io.read()
+        else:
             nwb_file = append_nwb_data(
                 labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
             )
-            io.write(nwb_file)
+        io.write(nwb_file)
 
 
 def get_processing_module_for_video(
