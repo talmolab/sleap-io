@@ -8,6 +8,7 @@ import uuid
 import re
 import imageio.v3 as iio
 import sys
+import h5py
 
 import pandas as pd
 import numpy as np
@@ -51,7 +52,6 @@ from sleap_io import (
     Node,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
-from sleap_io.io.slp import embed_video
 
 
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
@@ -122,6 +122,7 @@ def labels_to_pose_training(
     skeletons_list: list[NWBSkeleton] = []  # type: ignore[assignment]
     skeletons = Skeletons(skeletons=skeletons_list)  # type: ignore[assignment]
     training_frame_list = []
+    image_series: dict[Video, ImageSeries] = {}
     for i, labeled_frame in enumerate(labels.labeled_frames):
         training_frame_name = f"training_frame_{i}"
         training_frame_annotator = "N/A"
@@ -132,7 +133,7 @@ def labels_to_pose_training(
                 continue
 
             if instance.skeleton not in skeletons_list:
-                skeletons_list.append(instance.skeleton)
+                skeletons_list.append(slp_skeleton_to_nwb(instance.skeleton))
                 skeletons = Skeletons(skeletons=skeletons_list)
             skeleton_instance = instance_to_skeleton_instance(instance)
             skeleton_instances_list.append(skeleton_instance)
@@ -211,7 +212,7 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     np_node_locations = np.array(node_locs)
     return SkeletonInstance(
         name=f"skeleton_instance_{id(instance)}",
-        id=id(instance),
+        id=np.uint64(id(instance)),
         node_locations=np_node_locations,
         node_visibility=[point.visible for point in instance.points.values()],
         skeleton=skeleton,
@@ -228,9 +229,9 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
         An NWB SourceVideos object.
     """
     source_videos = []
-    for video in videos:
+    for i, video in enumerate(videos):
         image_series = ImageSeries(
-            name=f"video_{id(video)}",
+            name=f"video_{i}",
             description="N/A",
             unit="NA",
             format="external",
@@ -253,10 +254,11 @@ def write_img_to_path(video: Video, filename: str) -> list[str]:
     Returns:
         A list of the path of the image.
     """
-    image_path = Path(filename)
-    save_path = image_path.parent
-
+    
+    save_path = Path(filename)
+    image_format = ".png"
     imgs_data = []
+    frame_inds = range(len(video))
     for frame_idx in frame_inds:
         frame = video[frame_idx]
 
@@ -264,17 +266,33 @@ def write_img_to_path(video: Video, filename: str) -> list[str]:
             img_data = frame
         else:
             if "cv2" in sys.modules:
-                img_data = np.squeeze(
-                    cv2.imencode("." + image_format, frame)[1]
-                ).astype("int8")
+                img_data = np.squeeze(cv2.imencode(image_format, frame)[1]).astype(
+                    "int8"
+                )
 
         imgs_data.append(img_data)
+    
+    with h5py.File(save_path, "a") as f:
+        pass
+    
+    # image_series = ImageSeries(
+    #     name="video",
+    #     description="N/A",
+    #     unit="NA",
+    #     format="external",
+    #     external_file=[filename],
+    #     dimension=[],
+    #     starting_frame=[0],
+    #     rate=30.0,  # TODO - change to `video.backend.fps` when available
+    # )
+    
 
 
-def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
+def sleap_pkg_to_nwb(labels: Labels, filename: str, **kwargs) -> NWBFile:
     """Write a SLEAP package to an NWB file.
 
     Args:
+        labels: The SLEAP labels to write.
         filename: The path to the SLEAP package.
 
     Returns:
@@ -294,8 +312,8 @@ def sleap_pkg_to_nwb(filename: str, **kwargs) -> NWBFile:
 
     # then use img_paths when saving the NWB TrainingFrames with references
     # to the appropriate image files
-    save_nwb(labels, save_path, img_paths=img_paths, **kwargs)
-    raise NotImplementedError("This function is not yet implemented.")
+    # save_nwb(labels, save_path, img_paths=img_paths, **kwargs)
+    # raise NotImplementedError("This function is not yet implemented.")
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -569,11 +587,13 @@ def append_nwb_training(
     default_metadata["source_software_version"] = sleap_version
 
     for i, video in enumerate(labels.videos):
-        video_path = Path(video.filename)
-        processing_module_name = f"SLEAP_VIDEO_{i:03}_{video_path.stem}"
-        nwb_processing_module = get_processing_module_for_video(
-            processing_module_name, nwbfile
+        video_path = (
+            Path(video.filename) if type(video.filename) == str else video.filename[0]
         )
+        processing_module_name = f"SLEAP_VIDEO_{i:03}_{video_path.stem}"
+        # nwb_processing_module = get_processing_module_for_video(
+        #     processing_module_name, nwbfile
+        # )
         default_metadata["original_videos"] = [f"{video.filename}"]
         default_metadata["labeled_videos"] = [f"{video.filename}"]
         default_metadata.update(pose_estimation_metadata)

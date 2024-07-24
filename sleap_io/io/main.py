@@ -62,9 +62,8 @@ def load_nwb(filename: str) -> Labels:
 def save_nwb(
     labels: Labels,
     filename: str,
-    as_training: bool = None, # replace with a variable that determines whether it's a package
+    as_training: bool = True,
     append: bool = True,
-    **kwargs,
 ):
     """Save a SLEAP dataset to NWB format.
 
@@ -74,14 +73,13 @@ def save_nwb(
         as_training: If `True`, save the dataset as a training dataset.
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
-        img_paths: Optional list of image paths to save to the NWB file.
 
     See also: nwb.write_nwb, nwb.append_nwb
     """
     if append and Path(filename).exists():
-        nwb.append_nwb(labels, filename, as_training=as_training, **kwargs)
+        nwb.append_nwb(labels, filename, as_training=as_training)
     else:
-        nwb.write_nwb(labels, filename, as_training=as_training, **kwargs)
+        nwb.write_nwb(labels, filename, as_training=as_training)
 
 
 def load_labelstudio(
@@ -230,9 +228,9 @@ def save_file(
     if format == "slp":
         save_slp(labels, filename, **kwargs)
     elif format in ("nwb", "nwb_predictions"):
-        save_nwb(labels, filename, as_training=False, **kwargs)
+        save_nwb(labels, filename, as_training=False)
     elif format == "nwb_training":
-        save_nwb(labels, filename, as_training=True, **kwargs)
+        save_nwb(labels, filename, as_training=True)
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
