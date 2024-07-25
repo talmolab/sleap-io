@@ -8,7 +8,7 @@ import uuid
 import re
 import imageio.v3 as iio
 import sys
-import h5py
+import os
 
 import pandas as pd
 import numpy as np
@@ -52,8 +52,10 @@ from sleap_io import (
     Node,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
+from sleap_io.io.video import ImageVideo
 
 
+# the only option should be to export indiviudal images if as_training
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
     """Creates a Labels object from an NWB PoseTraining object.
 
@@ -120,7 +122,6 @@ def labels_to_pose_training(
         A PoseTraining object.
     """
     skeletons_list: list[NWBSkeleton] = []  # type: ignore[assignment]
-    skeletons = Skeletons(skeletons=skeletons_list)  # type: ignore[assignment]
     training_frame_list = []
     image_series: dict[Video, ImageSeries] = {}
     path_index: dict[tuple[Video, int], str] = {}
@@ -132,10 +133,11 @@ def labels_to_pose_training(
         for instance in labeled_frame.instances:
             if isinstance(instance, PredictedInstance):
                 continue
-
             if instance.skeleton not in skeletons_list:
                 skeletons_list.append(slp_skeleton_to_nwb(instance.skeleton))
-                skeletons = Skeletons(skeletons=skeletons_list)
+        
+        skeletons = Skeletons(skeletons=skeletons_list)
+        for instance in labeled_frame.instances:
             skeleton_instance = instance_to_skeleton_instance(instance)
             skeleton_instances_list.append(skeleton_instance)
 
@@ -213,7 +215,9 @@ def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # ty
     np_node_locations = np.array(node_locs)
     return SkeletonInstance(
         name=f"skeleton_instance_{id(instance)}",
-        id=np.uint64(id(instance)),
+        id=np.uint64(
+            id(instance)
+        ),  # consider adding a counter in the loop to track the number of instances
         node_locations=np_node_locations,
         node_visibility=[point.visible for point in instance.points.values()],
         skeleton=skeleton,
@@ -246,12 +250,10 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
 
 
 def write_img_to_path(
-    labels_path: str,
     video: Video,
-    filename: str,
     frame_inds: Optional[list[int]] = None,
     image_format: str = "png",
-) -> list[str]:
+) -> str:
     """
     Write an image to a path and return the path.
 
@@ -261,27 +263,35 @@ def write_img_to_path(
         image_format: The format of the image to write.
 
     Returns:
-        A list of the path of the image.
+        The pathname of the images folder.
     """
-
-    save_path = Path(filename)
-    imgs_data = []
     if frame_inds is None:
         frame_inds = [idx for idx in range(len(video))]
+    
+    if isinstance(video.filename, list):
+        save_path = video.filename[0].split(".")[0]
+    else:
+        save_path = video.filename.split(".")[0]
+    os.makedirs(save_path, exist_ok=True)
 
-    for frame_idx in frame_inds:
-        frame = video[frame_idx]
-        if image_format == "hdf5":
-            img_data = frame
-        else:
-            img_data = np.squeeze(cv2.imencode("." + image_format, frame)[1]).astype(
-                "int8"
-            )
+    img_paths = []
+    if "cv2" in sys.modules:
+        for frame_idx in frame_inds:
+            frame = video[frame_idx]
+            frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
+            cv2.imwrite(frame_path, frame)
+            img_paths.append(frame_path)
+    else:
+        for frame_idx in frame_inds:
+            frame = video[frame_idx]
+            frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
+            iio.imwrite(frame_path, frame)
+            img_paths.append(frame_path)
+    
+    return img_paths
 
-        imgs_data.append(img_data)
-
-    with h5py.File(save_path, "a") as f:
-        raise NotImplementedError
+    # with h5py.File(labels_path, "a") as f:
+    #     pass
 
     # image_series = ImageSeries(
     #     name="video",

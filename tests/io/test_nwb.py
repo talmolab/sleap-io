@@ -23,6 +23,13 @@ def nwbfile():
     return nwbfile
 
 
+def test_img_to_path():
+    video = Video(filename="tests/data/videos/centered_pair_low_quality.mp4")
+    pathname = write_img_to_path(video, frame_inds=[i for i in range(30, 50)])
+    assert len(pathname) == 20
+    assert pathname[0] == "tests/data/videos/centered_pair_low_quality/frame_30.png"
+
+
 def test_nwb_slp_conversion():
     labels_original = load_slp("tests/data/slp/minimal_instance.pkg.slp")
     pose_training = labels_to_pose_training(labels_original)
