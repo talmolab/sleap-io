@@ -109,14 +109,11 @@ def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: igno
     )
 
 
-def labels_to_pose_training(
-    labels: Labels, img_paths: Optional[list[str]] = None, **kwargs
-) -> PoseTraining:  # type: ignore[return]
+def labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object.
 
     Args:
         labels: A Labels object.
-        img_paths: An optional list of image paths for the labeled frames.
 
     Returns:
         A PoseTraining object.
@@ -126,8 +123,6 @@ def labels_to_pose_training(
     image_series: dict[Video, ImageSeries] = {}
     path_index: dict[tuple[Video, int], str] = {}
     for i, labeled_frame in enumerate(labels.labeled_frames):
-        training_frame_name = f"training_frame_{i}"
-        training_frame_annotator = "N/A"
         skeleton_instances_list = []
 
         for instance in labeled_frame.instances:
@@ -148,21 +143,13 @@ def labels_to_pose_training(
         training_frame_video_index = labeled_frame.frame_idx
 
         source_video = ImageSeries(
-            name=training_frame_name,
-            description=training_frame_annotator,
-            unit="NA",
-            format="external",
+            name=f"video_{i}",
             external_file=[training_frame_video.filename],
-            dimension=[
-                training_frame_video.shape[1],
-                training_frame_video.shape[2],
-            ],
-            starting_frame=[0],
             rate=30.0,  # change to `video.backend.fps` when available
         )
         training_frame = TrainingFrame(
-            name=training_frame_name,
-            annotator=training_frame_annotator,
+            name=f"training_frame_{i}",
+            annotator="N/A",
             skeleton_instances=training_frame_skeleton_instances,
             source_video=source_video,
             source_video_frame_index=training_frame_video_index,
@@ -249,18 +236,18 @@ def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignor
     return SourceVideos(image_series=source_videos)
 
 
-def write_img_to_path(
+def write_video_to_path(
     video: Video,
     frame_inds: Optional[list[int]] = None,
     image_format: str = "png",
 ) -> str:
     """
-    Write an image to a path and return the path.
+    Write individual frames of a video to a path and return the pathname.
 
     Args:
         video: The video to write.
-        filename: The filename of the image to write.
-        image_format: The format of the image to write.
+        frame_inds: The indices of the frames to write. If None, all frames are written.
+        image_format: The format of the image to write. Default is .png
 
     Returns:
         The pathname of the images folder.
@@ -289,48 +276,6 @@ def write_img_to_path(
             img_paths.append(frame_path)
     
     return img_paths
-
-    # with h5py.File(labels_path, "a") as f:
-    #     pass
-
-    # image_series = ImageSeries(
-    #     name="video",
-    #     description="N/A",
-    #     unit="NA",
-    #     format="external",
-    #     external_file=[filename],
-    #     dimension=[],
-    #     starting_frame=[0],
-    #     rate=30.0,  # TODO - change to `video.backend.fps` when available
-    # )
-
-
-def sleap_pkg_to_nwb(labels: Labels, filename: str, **kwargs) -> NWBFile:
-    """Write a SLEAP package to an NWB file.
-
-    Args:
-        labels: The SLEAP labels to write.
-        filename: The path to the SLEAP package.
-
-    Returns:
-        An NWBFile object.
-    """
-
-    save_path = Path(filename.replace(".slp", ".nwb"))
-    save_path.mkdir(parents=True, exist_ok=True)
-    img_paths = []
-    for i, labeled_frame in enumerate(labels.labeled_frames):
-        img_path = save_path / f"frame_{i}.png"
-        if labeled_frame.image.ndim == 3 and labeled_frame.image.shape[-1] == 1:
-            iio.imwrite(img_path, labeled_frame.image[:, :, 0])
-        else:
-            iio.imwrite(img_path, labeled_frame.image)
-        img_paths.append(img_path)
-
-    # then use img_paths when saving the NWB TrainingFrames with references
-    # to the appropriate image files
-    # save_nwb(labels, save_path, img_paths=img_paths, **kwargs)
-    # raise NotImplementedError("This function is not yet implemented.")
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
