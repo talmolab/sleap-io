@@ -109,32 +109,24 @@ def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: igno
     )
 
 
-def labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[return]
+def labels_to_pose_training(labels: Labels, skeletons_list: list[NWBSkeleton]) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object.
 
     Args:
         labels: A Labels object.
+        skeletons_list: A list of NWB skeletons.
 
     Returns:
         A PoseTraining object.
     """
-    skeletons_list = []
     training_frame_list = []
-    image_series: dict[Video, ImageSeries] = {}
-    path_index: dict[tuple[Video, int], str] = {}
-    for i, labeled_frame in enumerate(labels.labeled_frames):
-        skeleton_instances_list = []
-
-        for instance in labeled_frame.instances:
-            if isinstance(instance, PredictedInstance):
-                continue
-            if instance.skeleton not in skeletons_list:
-                skeletons_list.append(slp_skeleton_to_nwb(instance.skeleton))
-        
-        nwb_skeletons = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
-        skeletons = Skeletons(skeletons=nwb_skeletons)
-        for instance in labeled_frame.instances:
-            skeleton_instance = instance_to_skeleton_instance(instance)
+    skeleton_instances_list = []
+    source_video_list = []
+    # image_series: dict[Video, ImageSeries] = {}
+    # path_index: dict[tuple[Video, int], str] = {}
+    for i, labeled_frame in enumerate(labels.labeled_frames):        
+        for instance, skeleton in zip(labeled_frame.instances, skeletons_list):
+            skeleton_instance = instance_to_skeleton_instance(instance, skeleton)
             skeleton_instances_list.append(skeleton_instance)
 
         training_frame_skeleton_instances = SkeletonInstances(
@@ -145,9 +137,17 @@ def labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[ret
 
         source_video = ImageSeries(
             name=f"video_{i}",
+            description="N/A",
+            unit="NA",
+            format="external",
             external_file=[training_frame_video.filename],
+            dimension=[training_frame_video.backend.img_shape[0],
+                       training_frame_video.backend.img_shape[1],
+            ],
+            starting_frame=[0],
             rate=30.0,  # change to `video.backend.fps` when available
         )
+        source_video_list.append(source_video)
         training_frame = TrainingFrame(
             name=f"training_frame_{i}",
             annotator="N/A",
@@ -158,6 +158,7 @@ def labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[ret
         training_frame_list.append(training_frame)
 
     training_frames = TrainingFrames(training_frames=training_frame_list)
+    _ = SourceVideos(image_series=source_video_list)
     pose_training = PoseTraining(
         training_frames=training_frames,
         source_videos=videos_to_source_videos(labels.videos),
@@ -188,16 +189,16 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
     )
 
 
-def instance_to_skeleton_instance(instance: Instance) -> SkeletonInstance:  # type: ignore[return]
+def instance_to_skeleton_instance(instance: Instance, skeleton: NWBSkeleton) -> SkeletonInstance:  # type: ignore[return]
     """Converts a SLEAP Instance to an NWB SkeletonInstance.
 
     Args:
         instance: A SLEAP Instance.
+        skeleton: An NWB Skeleton.
 
     Returns:
         An NWB SkeletonInstance.
     """
-    skeleton = slp_skeleton_to_nwb(instance.skeleton)
     points_list = list(instance.points.values())
     node_locs = [[point.x, point.y] for point in points_list]
     np_node_locations = np.array(node_locs)
@@ -276,13 +277,13 @@ def write_video_to_path(
             iio.imwrite(frame_path, frame)
             img_paths.append(frame_path)
     
-    image_series = ImageSeries(
-        name=video.filename,
-        external_file="external",
-        format=image_format,
-        dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
-        starting_frame=[frame_inds[0]],
-    )
+    # image_series = ImageSeries(
+    #     name=video.filename,
+    #     external_file="external",
+    #     format=image_format,
+    #     dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
+    #     starting_frame=[frame_inds[0]],
+    # )
 
     return save_path
 
@@ -593,9 +594,8 @@ def append_nwb_training(
     skeletons = Skeletons(skeletons=skeletons_list)
     nwb_processing_module.add(skeletons)
 
-    pose_training = labels_to_pose_training(labels)
+    pose_training = labels_to_pose_training(labels, skeletons_list)
     nwb_processing_module.add(pose_training)
-
 
     camera = nwbfile.create_device(
         name="camera",
