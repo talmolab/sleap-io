@@ -189,12 +189,14 @@ class VideoBackend:
     @property
     def frame_rate(self) -> Optional[float]:
         """Frames per second of the video."""
-        video_extensions = ["mp4", "avi", "mov", "mj2", "mkv", "slp"]
-        if isinstance(self.filename, str) and any(
-            self.filename.endswith(ext) for ext in video_extensions
-        ):
+        video_extensions = ["mp4", "avi", "mov", "mj2", "mkv"]
+        if not any(self.filename.endswith(ext) for ext in video_extensions):
+            return None
+        
+        if "cv2" in sys.modules:
             return cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FPS)
-        return self._frame_rate
+        else:
+            return iio.immeta(self.filename)["fps"]
 
     def __len__(self) -> int:
         """Return number of frames in the video."""
