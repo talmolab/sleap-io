@@ -409,9 +409,14 @@ def read_nwb_training(filename: str) -> tuple[Labels, str]:
     
     Inputs:
         filename: the name of the NWB file to read
+    
     Returns:
-        tuple[Labels, str]: A Labels object and the name of the images folder."""
-    pass
+        tuple[Labels, str]: A Labels object and the name of the images folder.
+    """
+    with NWBHDF5IO(filename, mode="r", load_namespaces=True) as io:
+        read_nwbfile = io.read()
+        processing_module = get_processing_module_for_video()
+        raise NotImplementedError
 
 
 def write_nwb(
@@ -583,13 +588,14 @@ def append_nwb_training(
 
     subject = Subject(subject_id="No specified id", species="No specified species")
     nwbfile.subject = subject
-    pose_training = labels_to_pose_training(labels)
-
-    nwb_processing_module.add(pose_training)
 
     skeletons_list = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
     skeletons = Skeletons(skeletons=skeletons_list)
     nwb_processing_module.add(skeletons)
+
+    pose_training = labels_to_pose_training(labels)
+    nwb_processing_module.add(pose_training)
+
 
     camera = nwbfile.create_device(
         name="camera",
