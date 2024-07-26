@@ -143,9 +143,16 @@ class Video:
         if shape is not None:
             return shape[-1] == 1
         else:
-            if "grayscale" in self.backend_metadata:
-                return self.backend_metadata["grayscale"]
-            return None
+            return self.backend_metadata.get("grayscale", None)
+
+    @grayscale.setter
+    def grayscale(self, value: bool):
+        """Set the grayscale value and adjust the backend."""
+        if self.backend is not None:
+            self.backend.grayscale = value
+            self.backend._cached_shape = None
+
+        self.backend_metadata["grayscale"] = value
 
     def __len__(self) -> int:
         """Return the length of the video as the number of frames."""
