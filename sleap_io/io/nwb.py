@@ -585,15 +585,11 @@ def append_nwb_training(
     nwbfile.subject = subject
     pose_training = labels_to_pose_training(labels)
 
-    behavior_pm = nwbfile.create_processing_module(
-        name="behavior",
-        description="Behavioral data",
-    )
-    behavior_pm.add(pose_training)
+    nwb_processing_module.add(pose_training)
 
     skeletons_list = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
     skeletons = Skeletons(skeletons=skeletons_list)
-    behavior_pm.add(skeletons)
+    nwb_processing_module.add(skeletons)
 
     camera = nwbfile.create_device(
         name="camera",
@@ -638,7 +634,7 @@ def append_nwb_training(
         source_software_version=sleap_version,
         skeleton=skeletons_list[0],
     )
-    behavior_pm.add(pose_estimation)
+    nwb_processing_module.add(pose_estimation)
     return nwbfile
 
 
