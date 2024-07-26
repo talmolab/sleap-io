@@ -120,8 +120,8 @@ def labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[ret
     """
     skeletons_list = []
     training_frame_list = []
-    # image_series: dict[Video, ImageSeries] = {}
-    # path_index: dict[tuple[Video, int], str] = {}
+    image_series: dict[Video, ImageSeries] = {}
+    path_index: dict[tuple[Video, int], str] = {}
     for i, labeled_frame in enumerate(labels.labeled_frames):
         skeleton_instances_list = []
 
@@ -276,7 +276,15 @@ def write_video_to_path(
             iio.imwrite(frame_path, frame)
             img_paths.append(frame_path)
     
-    return img_paths
+    image_series = ImageSeries(
+        name=video.filename,
+        external_file="external",
+        format=image_format,
+        dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
+        starting_frame=[frame_inds[0]],
+    )
+
+    return save_path
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -394,6 +402,18 @@ def read_nwb(path: str) -> Labels:
     return labels
 
 
+def read_nwb_training(filename: str) -> tuple[Labels, str]:
+    """
+    Reads an NWB file with NWB training data and returns a Labels object and the
+    name of the folder with the video frames.
+    
+    Inputs:
+        filename: the name of the NWB file to read
+    Returns:
+        tuple[Labels, str]: A Labels object and the name of the images folder."""
+    pass
+
+
 def write_nwb(
     labels: Labels,
     nwbfile_path: str,
@@ -504,8 +524,8 @@ def append_nwb_data(
         )
 
         # Propagate video metadata
-        default_metadata["original_videos"] = [f"{video.filename}"]  # type: ignore
-        default_metadata["labeled_videos"] = [f"{video.filename}"]  # type: ignore
+        default_metadata["original_videos"] = [f"{video.filename}"]
+        default_metadata["labeled_videos"] = [f"{video.filename}"]
 
         # Overwrite default with the user provided metadata
         default_metadata.update(pose_estimation_metadata)

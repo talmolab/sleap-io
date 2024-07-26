@@ -6,6 +6,10 @@ from sleap_io.io import slp, nwb, labelstudio, jabs
 from typing import Optional, Union
 from pathlib import Path
 
+from pynwb import NWBHDF5IO
+
+from ndx_pose import PoseTraining
+
 
 def load_slp(filename: str) -> Labels:
     """Load a SLEAP dataset.
@@ -56,7 +60,12 @@ def load_nwb(filename: str) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
-    return nwb.read_nwb(filename)
+    with NWBHDF5IO(filename, "r", load_namespaces=True) as io:
+        nwb_file = io.read()
+        if any(isinstance(elem, PoseTraining) for elem in nwb_file.processing):
+            return nwb.read_nwb_training(filename)
+        else:
+            return nwb.read_nwb(filename)
 
 
 def save_nwb(
