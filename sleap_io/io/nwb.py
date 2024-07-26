@@ -118,10 +118,10 @@ def labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[ret
     Returns:
         A PoseTraining object.
     """
-    skeletons_list: list[NWBSkeleton] = []  # type: ignore[assignment]
+    skeletons_list = []
     training_frame_list = []
-    image_series: dict[Video, ImageSeries] = {}
-    path_index: dict[tuple[Video, int], str] = {}
+    # image_series: dict[Video, ImageSeries] = {}
+    # path_index: dict[tuple[Video, int], str] = {}
     for i, labeled_frame in enumerate(labels.labeled_frames):
         skeleton_instances_list = []
 
@@ -131,7 +131,8 @@ def labels_to_pose_training(labels: Labels) -> PoseTraining:  # type: ignore[ret
             if instance.skeleton not in skeletons_list:
                 skeletons_list.append(slp_skeleton_to_nwb(instance.skeleton))
         
-        skeletons = Skeletons(skeletons=skeletons_list)
+        nwb_skeletons = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
+        skeletons = Skeletons(skeletons=nwb_skeletons)
         for instance in labeled_frame.instances:
             skeleton_instance = instance_to_skeleton_instance(instance)
             skeleton_instances_list.append(skeleton_instance)
@@ -454,7 +455,7 @@ def write_nwb(
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
-        # io.nwb_version = (2.0, "2.0.0") #TODO figure out how to set version
+        #TODO figure out how to set version
         io.write(nwbfile)
 
 
