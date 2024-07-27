@@ -73,6 +73,7 @@ def save_nwb(
     filename: str,
     as_training: bool = True,
     append: bool = True,
+    frame_inds: Optional[list[int]] = None,
 ):
     """Save a SLEAP dataset to NWB format.
 
@@ -82,13 +83,15 @@ def save_nwb(
         as_training: If `True`, save the dataset as a training dataset.
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
+        frame_inds: Optional list of frame indices to save. If None, all frames
+            will be saved.
 
     See also: nwb.write_nwb, nwb.append_nwb
     """
     if append and Path(filename).exists():
         nwb.append_nwb(labels, filename, as_training=as_training)
     else:
-        nwb.write_nwb(labels, filename, as_training=as_training)
+        nwb.write_nwb(labels, filename, as_training=as_training, frame_inds=frame_inds)
 
 
 def load_labelstudio(

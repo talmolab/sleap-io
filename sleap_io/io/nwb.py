@@ -52,10 +52,8 @@ from sleap_io import (
     Node,
 )
 from sleap_io.io.utils import convert_predictions_to_dataframe
-from sleap_io.io.video import ImageVideo
 
 
-# the only option should be to export indiviudal images if as_training
 def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
     """Creates a Labels object from an NWB PoseTraining object.
 
@@ -70,7 +68,7 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
     for training_frame in pose_training.training_frames.training_frames.values():
         source_video = training_frame.source_video
         if source_video.format == "external" and len(source_video.external_file) == 1:
-            video = Video(filename=source_video.external_file[0])
+            video = Video(source_video.external_file[0])
         else:
             raise NotImplementedError("Only single-file external videos are supported.")
 
@@ -109,7 +107,9 @@ def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: igno
     )
 
 
-def labels_to_pose_training(labels: Labels, skeletons_list: list[NWBSkeleton]) -> PoseTraining:  # type: ignore[return]
+def labels_to_pose_training(
+    labels: Labels, skeletons_list: list[NWBSkeleton]  # type: ignore[return]
+) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object.
 
     Args:
@@ -124,7 +124,7 @@ def labels_to_pose_training(labels: Labels, skeletons_list: list[NWBSkeleton]) -
     source_video_list = []
     # image_series: dict[Video, ImageSeries] = {}
     # path_index: dict[tuple[Video, int], str] = {}
-    for i, labeled_frame in enumerate(labels.labeled_frames):        
+    for i, labeled_frame in enumerate(labels.labeled_frames):
         for instance, skeleton in zip(labeled_frame.instances, skeletons_list):
             skeleton_instance = instance_to_skeleton_instance(instance, skeleton)
             skeleton_instances_list.append(skeleton_instance)
@@ -141,8 +141,9 @@ def labels_to_pose_training(labels: Labels, skeletons_list: list[NWBSkeleton]) -
             unit="NA",
             format="external",
             external_file=[training_frame_video.filename],
-            dimension=[training_frame_video.backend.img_shape[0],
-                       training_frame_video.backend.img_shape[1],
+            dimension=[
+                training_frame_video.backend.img_shape[0],
+                training_frame_video.backend.img_shape[1],
             ],
             starting_frame=[0],
             rate=30.0,  # change to `video.backend.fps` when available
@@ -189,7 +190,9 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
     )
 
 
-def instance_to_skeleton_instance(instance: Instance, skeleton: NWBSkeleton) -> SkeletonInstance:  # type: ignore[return]
+def instance_to_skeleton_instance(
+    instance: Instance, skeleton: NWBSkeleton # type: ignore[return]
+) -> SkeletonInstance:  # type: ignore[return]
     """Converts a SLEAP Instance to an NWB SkeletonInstance.
 
     Args:
@@ -255,8 +258,10 @@ def write_video_to_path(
         The pathname of the images folder.
     """
     if frame_inds is None:
-        frame_inds = [idx for idx in range(len(video))]
-    
+        frame_inds = [idx for idx in range(video.shape[0])]
+    print(video.shape)
+    print(frame_inds)
+
     if isinstance(video.filename, list):
         save_path = video.filename[0].split(".")[0]
     else:
@@ -276,15 +281,13 @@ def write_video_to_path(
             frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
             iio.imwrite(frame_path, frame)
             img_paths.append(frame_path)
-    
-    # image_series = ImageSeries(
-    #     name=video.filename,
-    #     external_file="external",
-    #     format=image_format,
-    #     dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
-    #     starting_frame=[frame_inds[0]],
-    # )
 
+    image_series = ImageSeries(
+        name="video",
+        external_file=img_paths,
+        starting_frame=frame_inds,
+        rate=video.backend.fps,
+    )
     return save_path
 
 
@@ -407,10 +410,10 @@ def read_nwb_training(filename: str) -> tuple[Labels, str]:
     """
     Reads an NWB file with NWB training data and returns a Labels object and the
     name of the folder with the video frames.
-    
+
     Inputs:
         filename: the name of the NWB file to read
-    
+
     Returns:
         tuple[Labels, str]: A Labels object and the name of the images folder.
     """
@@ -426,6 +429,7 @@ def write_nwb(
     nwb_file_kwargs: Optional[dict] = None,
     pose_estimation_metadata: Optional[dict] = None,
     as_training: bool = True,
+    frame_inds: Optional[list[int]] = None,
 ):
     """Write labels to an nwb file and save it to the nwbfile_path given.
 
@@ -456,6 +460,9 @@ def write_nwb(
             2) The other use of this dictionary is to ovewrite sleap-io default
             arguments for the PoseEstimation container.
             see https://github.com/rly/ndx-pose for a full list or arguments.
+
+        as_training: If `True`, append the data as training data.
+        frame_inds: The indices of the frames to write. If None, all frames are written.
     """
     nwb_file_kwargs = nwb_file_kwargs or dict()
 
@@ -481,8 +488,9 @@ def write_nwb(
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
-        #TODO figure out how to set version
         io.write(nwbfile)
+
+    write_video_to_path(labels.video, frame_inds)
 
 
 def append_nwb_data(
@@ -557,7 +565,9 @@ def append_nwb_data(
 
 
 def append_nwb_training(
-    labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict] = None
+    labels: Labels,
+    nwbfile: NWBFile,
+    pose_estimation_metadata: Optional[dict] = None,
 ) -> NWBFile:
     """Append training data from a Labels object to an in-memory NWB file.
 
@@ -600,7 +610,7 @@ def append_nwb_training(
     camera = nwbfile.create_device(
         name="camera",
         description="Camera used to record the video",
-        manufacturer="No specified manufacturer",
+        manufacturer="N/A",
     )
 
     data = np.random.rand(100, 2)
@@ -628,7 +638,7 @@ def append_nwb_training(
         [[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]]
     )
     pose_estimation = PoseEstimation(
-        name="pose_estimation",
+        name="Pose Estimation",
         pose_estimation_series=pose_estimation_series_list,
         description="Estimated positions of the nodes in the video",
         original_videos=[video.filename for video in labels.videos],
@@ -661,7 +671,7 @@ def append_nwb(
 
     See also: append_nwb_data
     """
-    with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
+    with NWBHDF5IO(filename, mode="w", load_namespaces=True) as io:
         nwb_file = io.read()
         if as_training:
             nwb_file = append_nwb_training(
