@@ -6,9 +6,9 @@ from pathlib import Path
 import datetime
 import uuid
 import re
-import imageio.v3 as iio
 import sys
 import os
+import imageio.v3 as iio
 
 import pandas as pd
 import numpy as np
@@ -108,7 +108,7 @@ def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: igno
 
 
 def labels_to_pose_training(
-    labels: Labels, skeletons_list: list[NWBSkeleton]  # type: ignore[return]
+    labels: Labels, skeletons_list: list[NWBSkeleton], index_data,  # type: ignore[return]
 ) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object.
 
@@ -176,7 +176,7 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
     Returns:
         An NWB skeleton.
     """
-    skeleton_edges = {i: node for i, node in enumerate(skeleton.nodes)}
+    skeleton_edges = dict(enumerate(skeleton.nodes))
     nwb_edges = []
     for i, source in skeleton_edges.items():
         for destination in list(skeleton_edges.values())[i:]:
@@ -245,9 +245,9 @@ def write_video_to_path(
     video: Video,
     frame_inds: Optional[list[int]] = None,
     image_format: str = "png",
-) -> str:
+) -> tuple[dict[int, str], Video, ImageSeries]:
     """
-    Write individual frames of a video to a path and return the pathname.
+    Write individual frames of a video to a path and return .
 
     Args:
         video: The video to write.
@@ -255,12 +255,12 @@ def write_video_to_path(
         image_format: The format of the image to write. Default is .png
 
     Returns:
-        The pathname of the images folder.
+        A tuple containing a dictionary mapping frame indices to file paths,
+        the video, and the ImageSeries.
     """
+    index_data = {}
     if frame_inds is None:
-        frame_inds = [idx for idx in range(video.shape[0])]
-    print(video.shape)
-    print(frame_inds)
+        frame_inds = list(range(video.shape[0]))
 
     if isinstance(video.filename, list):
         save_path = video.filename[0].split(".")[0]
@@ -273,12 +273,14 @@ def write_video_to_path(
         for frame_idx in frame_inds:
             frame = video[frame_idx]
             frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
+            index_data[frame_idx] = frame_path
             cv2.imwrite(frame_path, frame)
             img_paths.append(frame_path)
     else:
         for frame_idx in frame_inds:
             frame = video[frame_idx]
             frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
+            index_data[frame_idx] = frame_path
             iio.imwrite(frame_path, frame)
             img_paths.append(frame_path)
 
@@ -286,9 +288,9 @@ def write_video_to_path(
         name="video",
         external_file=img_paths,
         starting_frame=frame_inds,
-        rate=video.backend.fps,
+        rate=30.0,
     )
-    return save_path
+    return index_data, video, image_series
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
@@ -420,6 +422,8 @@ def read_nwb_training(filename: str) -> tuple[Labels, str]:
     with NWBHDF5IO(filename, mode="r", load_namespaces=True) as io:
         read_nwbfile = io.read()
         processing_module = get_processing_module_for_video()
+        nwb_pose_training = processing_module["pose_training"]
+        labels = pose_training_to_labels(nwb_pose_training)
         raise NotImplementedError
 
 
@@ -483,14 +487,12 @@ def write_nwb(
 
     nwbfile = NWBFile(**nwb_file_kwargs)
     if as_training:
-        nwbfile = append_nwb_training(labels, nwbfile, pose_estimation_metadata)
+        nwbfile = append_nwb_training(labels, nwbfile, pose_estimation_metadata, frame_inds)
     else:
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
         io.write(nwbfile)
-
-    write_video_to_path(labels.video, frame_inds)
 
 
 def append_nwb_data(
@@ -568,6 +570,7 @@ def append_nwb_training(
     labels: Labels,
     nwbfile: NWBFile,
     pose_estimation_metadata: Optional[dict] = None,
+    frame_inds: Optional[list[int]] = None,
 ) -> NWBFile:
     """Append training data from a Labels object to an in-memory NWB file.
 
@@ -575,6 +578,7 @@ def append_nwb_training(
         labels: A general labels object.
         nwbfile: An in-memory NWB file.
         pose_estimation_metadata: Metadata for pose estimation.
+        frame_inds: The indices of the frames to write. If None, all frames are written.
 
     Returns:
         An in-memory NWB file with the PoseTraining data appended.
@@ -604,7 +608,8 @@ def append_nwb_training(
     skeletons = Skeletons(skeletons=skeletons_list)
     nwb_processing_module.add(skeletons)
 
-    pose_training = labels_to_pose_training(labels, skeletons_list)
+    index_data = write_video_to_path(labels.video, frame_inds)[0]
+    pose_training = labels_to_pose_training(labels, skeletons_list, index_data)
     nwb_processing_module.add(pose_training)
 
     camera = nwbfile.create_device(

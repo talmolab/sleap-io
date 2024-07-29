@@ -64,8 +64,7 @@ def load_nwb(filename: str) -> Labels:
         nwb_file = io.read()
         if any(isinstance(elem, PoseTraining) for elem in nwb_file.processing):
             return nwb.read_nwb_training(filename)
-        else:
-            return nwb.read_nwb(filename)
+        return nwb.read_nwb(filename)
 
 
 def save_nwb(
