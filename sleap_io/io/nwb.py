@@ -109,7 +109,7 @@ def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: igno
 
 def labels_to_pose_training(
     labels: Labels,
-    skeletons_list: list[NWBSkeleton], # type: ignore[return]
+    skeletons_list: list[NWBSkeleton],  # type: ignore[return]
     video_info: tuple[dict[int, str], Video, ImageSeries],
 ) -> PoseTraining:  # type: ignore[return]
     """Creates an NWB PoseTraining object from a Labels object.
@@ -181,7 +181,7 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
 
 
 def instance_to_skeleton_instance(
-    instance: Instance, skeleton: NWBSkeleton # type: ignore[return]
+    instance: Instance, skeleton: NWBSkeleton  # type: ignore[return]
 ) -> SkeletonInstance:  # type: ignore[return]
     """Converts a SLEAP Instance to an NWB SkeletonInstance.
 
@@ -259,27 +259,24 @@ def write_video_to_path(
         save_path = video.filename.split(".")[0]
     os.makedirs(save_path, exist_ok=True)
 
-    img_paths = []
     if "cv2" in sys.modules:
         for frame_idx in frame_inds:
             frame = video[frame_idx]
             frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             cv2.imwrite(frame_path, frame)
-            img_paths.append(frame_path)
     else:
         for frame_idx in frame_inds:
             frame = video[frame_idx]
             frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             iio.imwrite(frame_path, frame)
-            img_paths.append(frame_path)
 
     image_series = ImageSeries(
         name="video",
-        external_file=img_paths,
-        starting_frame=frame_inds,
-        rate=30.0, # TODO - change to `video.backend.fps` when available
+        external_file=os.listdir(save_path),
+        starting_frame=[0 for _ in range(len(os.listdir(save_path)))],
+        rate=30.0,  # TODO - change to `video.backend.fps` when available
     )
     return index_data, video, image_series
 
@@ -477,7 +474,9 @@ def write_nwb(
 
     nwbfile = NWBFile(**nwb_file_kwargs)
     if as_training:
-        nwbfile = append_nwb_training(labels, nwbfile, pose_estimation_metadata, frame_inds)
+        nwbfile = append_nwb_training(
+            labels, nwbfile, pose_estimation_metadata, frame_inds
+        )
     else:
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
