@@ -134,7 +134,6 @@ def labels_to_pose_training(
         training_frame_skeleton_instances = SkeletonInstances(
             skeleton_instances=skeleton_instances_list
         )
-        training_frame_video = labeled_frame.video
         training_frame_video_index = labeled_frame.frame_idx
 
         _, _, image_series = video_info
@@ -207,7 +206,7 @@ def instance_to_skeleton_instance(
     )
 
 
-def videos_to_source_videos(videos: List[Video]) -> SourceVideos:  # type: ignore[return]
+def videos_to_source_videos(videos: list[Video]) -> SourceVideos:  # type: ignore[return]
     """Converts a list of SLEAP Videos to NWB SourceVideos.
 
     Args:
@@ -400,23 +399,22 @@ def read_nwb(path: str) -> Labels:
     return labels
 
 
-def read_nwb_training(filename: str) -> tuple[Labels, str]:
+def read_nwb_training(filename: str) -> Labels:
     """
-    Reads an NWB file with NWB training data and returns a Labels object and the
-    name of the folder with the video frames.
+    Reads an NWB file with NWB training data and returns a Labels object.
 
     Inputs:
         filename: the name of the NWB file to read
 
     Returns:
-        tuple[Labels, str]: A Labels object and the name of the images folder.
+        A `Labels` object.
     """
     with NWBHDF5IO(filename, mode="r", load_namespaces=True) as io:
         read_nwbfile = io.read()
-        processing_module = get_processing_module_for_video()
+        processing_module = read_nwbfile.processing
         nwb_pose_training = processing_module["pose_training"]
         labels = pose_training_to_labels(nwb_pose_training)
-        raise NotImplementedError
+        return labels
 
 
 def write_nwb(
