@@ -1,5 +1,5 @@
 """Functions to write and read from the neurodata without borders (NWB) format."""
-
+from __future__ import annotations
 from copy import deepcopy
 from typing import List, Optional, Union
 from pathlib import Path
@@ -9,7 +9,6 @@ import re
 import sys
 import os
 import imageio.v3 as iio
-from __future__ import annotations
 
 import pandas as pd
 import numpy as np
