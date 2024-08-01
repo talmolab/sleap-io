@@ -23,11 +23,13 @@ def nwbfile():
     return nwbfile
 
 
-def test_img_to_path():
+def test_video_to_path():
     video = Video(filename="tests/data/videos/centered_pair_low_quality.mp4")
-    pathname = write_video_to_path(video, frame_inds=[i for i in range(30, 50)])
-    assert len(pathname) == 20
-    assert pathname[0] == "tests/data/videos/centered_pair_low_quality/frame_30.png"
+    video_info = write_video_to_path(video, frame_inds=[i for i in range(30, 50)])
+    index_data, _, _ = video_info
+    assert list(index_data.keys()) == [i for i in range(30, 50)]
+    image_0_name = list(index_data.values())[0]
+    assert image_0_name == "tests/data/videos/centered_pair_low_quality/frame_0.png"
 
 
 def test_nwb_slp_conversion():
