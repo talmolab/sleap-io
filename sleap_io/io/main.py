@@ -241,7 +241,7 @@ def save_file(
     elif format in ("nwb", "nwb_predictions"):
         save_nwb(labels, filename, as_training=False)
     elif format == "nwb_training":
-        save_nwb(labels, filename, as_training=True)
+        save_nwb(labels, filename, True, frame_inds=kwargs.pop("frame_inds", None))
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
