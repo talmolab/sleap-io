@@ -70,7 +70,7 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
         if source_video.format == "external" and len(source_video.external_file) == 1:
             video = Video(source_video.external_file[0])
         else:
-            video = Video.from_filename(source_video.external_file)
+            raise NotImplementedError("Only single-file external videos are supported.")
 
         frame_idx = training_frame.source_video_frame_index
         instances = []
