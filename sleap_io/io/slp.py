@@ -65,8 +65,7 @@ def make_video(
         is_embedded = True
 
     # Basic path resolution.
-    video_path = video_path.replace("\\", "/")
-    video_path = Path(video_path)
+    video_path = Path(Path(video_path).as_posix().replace("\\", "/"))
 
     try:
         if not video_path.exists():
