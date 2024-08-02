@@ -1189,8 +1189,9 @@
 <p><a href="https://github.com/talmolab/sleap-io/actions/workflows/ci.yml"><img alt="CI" src="assets/external/github.com/talmolab/sleap-io/actions/workflows/ci.yml/badge.svg"></a>
 <a href="https://codecov.io/gh/talmolab/sleap-io"><img alt="codecov" src="assets/external/codecov.io/gh/talmolab/sleap-io/branch/main/graph/badge.a688273e.svg"></a>
 <a href="https://github.com/talmolab/sleap-io/releases/"><img alt="Release" src="assets/external/img.shields.io/github/v/release/talmolab/sleap-io.bf78f93a.svg"></a>
+<img alt="PyPI - Python Version" src="assets/external/img.shields.io/pypi/pyversions/sleap-io.svg">
 <a href="https://pypi.org/project/sleap-io"><img alt="PyPI" src="assets/external/img.shields.io/pypi/v/sleap-io.e0d24428.svg"></a>
-<img alt="PyPI - Python Version" src="assets/external/img.shields.io/pypi/pyversions/sleap-io.svg"></p>
+<a href="https://anaconda.org/conda-forge/sleap-io/"><img alt="conda-forge" src="assets/external/img.shields.io/conda/vn/conda-forge/sleap-io.svg"></a></p>
 <p>Standalone utilities for working with animal pose tracking data.</p>
 <p>This is intended to be a complement to the core <a href="https://github.com/talmolab/sleap">SLEAP</a>
 package that aims to provide functionality for interacting with pose tracking-related
@@ -1199,79 +1200,82 @@ have any functionality related to labeling, training, or inference.</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip install sleap-io
 </code></pre></div>
-<p>For development, use one of the following syntaxes:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>conda env create -f environment.yml
+<p>or</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>conda install -c conda-forge sleap-io
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip install -e .[dev]
+<p>For development, use one of the following syntaxes:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>conda env create -f environment.yml
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip install -e .[dev]
 </code></pre></div></p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <h3 id="load-and-save-in-different-formats">Load and save in different formats<a class="headerlink" href="#load-and-save-in-different-formats" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Load from SLEAP file.</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Save to NWB file.</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;predictions.nwb&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Load from SLEAP file.</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Save to NWB file.</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;predictions.nwb&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="model/#sleap_io.Labels.save"><code>Labels.save</code></a> and <a href="formats/">Formats</a></p>
 <h3 id="convert-labels-to-raw-arrays">Convert labels to raw arrays<a class="headerlink" href="#convert-labels-to-raw-arrays" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;tests/data/slp/centered_pair_predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Convert predictions to point coordinates in a single array.</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">trx</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">n_frames</span><span class="p">,</span> <span class="n">n_tracks</span><span class="p">,</span> <span class="n">n_nodes</span><span class="p">,</span> <span class="n">xy</span> <span class="o">=</span> <span class="n">trx</span><span class="o">.</span><span class="n">shape</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">assert</span> <span class="n">xy</span> <span class="o">==</span> <span class="mi">2</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Convert to array with confidence scores appended.</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">trx_with_scores</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">(</span><span class="n">return_confidence</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">n_frames</span><span class="p">,</span> <span class="n">n_tracks</span><span class="p">,</span> <span class="n">n_nodes</span><span class="p">,</span> <span class="n">xy_score</span> <span class="o">=</span> <span class="n">trx</span><span class="o">.</span><span class="n">shape</span> 
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">assert</span> <span class="n">xy_score</span> <span class="o">==</span> <span class="mi">3</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;tests/data/slp/centered_pair_predictions.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Convert predictions to point coordinates in a single array.</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">trx</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">n_frames</span><span class="p">,</span> <span class="n">n_tracks</span><span class="p">,</span> <span class="n">n_nodes</span><span class="p">,</span> <span class="n">xy</span> <span class="o">=</span> <span class="n">trx</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">assert</span> <span class="n">xy</span> <span class="o">==</span> <span class="mi">2</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Convert to array with confidence scores appended.</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">trx_with_scores</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">(</span><span class="n">return_confidence</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">n_frames</span><span class="p">,</span> <span class="n">n_tracks</span><span class="p">,</span> <span class="n">n_nodes</span><span class="p">,</span> <span class="n">xy_score</span> <span class="o">=</span> <span class="n">trx</span><span class="o">.</span><span class="n">shape</span> 
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="k">assert</span> <span class="n">xy_score</span> <span class="o">==</span> <span class="mi">3</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="model/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a></p>
 <h3 id="read-video-data">Read video data<a class="headerlink" href="#read-video-data" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">n_frames</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">channels</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">shape</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">channels</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">n_frames</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">channels</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">channels</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="formats/#sleap_io.load_video"><code>sio.load_video</code></a> and <a href="model/#sleap_io.Video"><code>Video</code></a></p>
 <h3 id="create-labels-from-raw-data">Create labels from raw data<a class="headerlink" href="#create-labels-from-raw-data" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Create skeleton.</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">skeleton</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Skeleton</span><span class="p">(</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">nodes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;head&quot;</span><span class="p">,</span> <span class="s2">&quot;thorax&quot;</span><span class="p">,</span> <span class="s2">&quot;abdomen&quot;</span><span class="p">],</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">edges</span><span class="o">=</span><span class="p">[(</span><span class="s2">&quot;head&quot;</span><span class="p">,</span> <span class="s2">&quot;thorax&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;thorax&quot;</span><span class="p">,</span> <span class="s2">&quot;abdomen&quot;</span><span class="p">)]</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">)</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Create video.</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Create instance.</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">instance</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Instance</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="n">points</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>        <span class="p">[</span><span class="mf">10.2</span><span class="p">,</span> <span class="mf">20.4</span><span class="p">],</span>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>        <span class="p">[</span><span class="mf">5.8</span><span class="p">,</span> <span class="mf">15.1</span><span class="p">],</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="p">[</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">10.6</span><span class="p">],</span>
-<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>    <span class="p">]),</span>
-<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="n">skeleton</span><span class="o">=</span><span class="n">skeleton</span>
-<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="p">)</span>
-<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>
-<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="c1"># Create labeled frame.</span>
-<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="n">lf</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">LabeledFrame</span><span class="p">(</span><span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">instances</span><span class="o">=</span><span class="p">[</span><span class="n">instance</span><span class="p">])</span>
-<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>
-<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="c1"># Create labels.</span>
-<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">],</span> <span class="n">skeletons</span><span class="o">=</span><span class="p">[</span><span class="n">skeleton</span><span class="p">],</span> <span class="n">labeled_frames</span><span class="o">=</span><span class="p">[</span><span class="n">lf</span><span class="p">])</span>
-<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>
-<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="c1"># Save.</span>
-<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Create skeleton.</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">skeleton</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Skeleton</span><span class="p">(</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">nodes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;head&quot;</span><span class="p">,</span> <span class="s2">&quot;thorax&quot;</span><span class="p">,</span> <span class="s2">&quot;abdomen&quot;</span><span class="p">],</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">edges</span><span class="o">=</span><span class="p">[(</span><span class="s2">&quot;head&quot;</span><span class="p">,</span> <span class="s2">&quot;thorax&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;thorax&quot;</span><span class="p">,</span> <span class="s2">&quot;abdomen&quot;</span><span class="p">)]</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">)</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Create video.</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># Create instance.</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">instance</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Instance</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">points</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>        <span class="p">[</span><span class="mf">10.2</span><span class="p">,</span> <span class="mf">20.4</span><span class="p">],</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>        <span class="p">[</span><span class="mf">5.8</span><span class="p">,</span> <span class="mf">15.1</span><span class="p">],</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>        <span class="p">[</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">10.6</span><span class="p">],</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="p">]),</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="n">skeleton</span><span class="o">=</span><span class="n">skeleton</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="p">)</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="c1"># Create labeled frame.</span>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="n">lf</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">LabeledFrame</span><span class="p">(</span><span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">instances</span><span class="o">=</span><span class="p">[</span><span class="n">instance</span><span class="p">])</span>
+<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
+<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1"># Create labels.</span>
+<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">Labels</span><span class="p">(</span><span class="n">videos</span><span class="o">=</span><span class="p">[</span><span class="n">video</span><span class="p">],</span> <span class="n">skeletons</span><span class="o">=</span><span class="p">[</span><span class="n">skeleton</span><span class="p">],</span> <span class="n">labeled_frames</span><span class="o">=</span><span class="p">[</span><span class="n">lf</span><span class="p">])</span>
+<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>
+<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="c1"># Save.</span>
+<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="model/">Model</a>, <a href="model/#sleap_io.Labels"><code>Labels</code></a>,
 <a href="model/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a>,
@@ -1279,42 +1283,42 @@ have any functionality related to labeling, training, or inference.</p>
 <a href="model/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a>,
 <a href="model/#sleap_io.Skeleton"><code>Skeleton</code></a>, <a href="model/#sleap_io.Video"><code>Video</code></a>, <a href="model/#sleap_io.Track"><code>Track</code></a>, <a href="model/#sleap_io.SuggestionFrame"><code>SuggestionFrame</code></a></p>
 <h3 id="fix-video-paths">Fix video paths<a class="headerlink" href="#fix-video-paths" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Fix paths using prefixes.</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">labels</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">prefix_map</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="s2">&quot;D:/data/sleap_projects&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/user/sleap_projects&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="s2">&quot;C:/Users/sleaper/Desktop/test&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/user/sleap_projects&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="p">})</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v002.slp&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Fix paths using prefixes.</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">labels</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">prefix_map</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="s2">&quot;D:/data/sleap_projects&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/user/sleap_projects&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="s2">&quot;C:/Users/sleaper/Desktop/test&quot;</span><span class="p">:</span> <span class="s2">&quot;/home/user/sleap_projects&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="p">})</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v002.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="model/#sleap_io.Labels.replace_filenames"><code>Labels.replace_filenames</code></a></p>
 <h3 id="save-labels-with-embedded-images">Save labels with embedded images<a class="headerlink" href="#save-labels-with-embedded-images" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Load source labels.</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Save with embedded images for frames with user labeled data and suggested frames.</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v001.pkg.slp&quot;</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="s2">&quot;user+suggestions&quot;</span><span class="p">)</span>
-</code></pre></div>
-<p><strong>See also:</strong> <a href="model/#sleap_io.Labels.save"><code>Labels.save</code></a></p>
-<h3 id="make-trainingvalidationtest-splits">Make training/validation/test splits<a class="headerlink" href="#make-trainingvalidationtest-splits" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Load source labels.</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Make splits and export with embedded images.</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">make_training_splits</span><span class="p">(</span><span class="n">n_train</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">n_val</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">n_test</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">save_dir</span><span class="o">=</span><span class="s2">&quot;split1&quot;</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Splits will be saved as self-contained SLP package files with images and labels.</span>
-<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="n">labels_train</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/train.pkg.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="n">labels_val</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/val.pkg.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="n">labels_test</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/test.pkg.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Save with embedded images for frames with user labeled data and suggested frames.</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.v001.pkg.slp&quot;</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="s2">&quot;user+suggestions&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>See also:</strong> <a href="model/#sleap_io.Labels.save"><code>Labels.save</code></a></p>
+<h3 id="make-trainingvalidationtest-splits">Make training/validation/test splits<a class="headerlink" href="#make-trainingvalidationtest-splits" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span> <span class="nn">sleap_io</span> <span class="k">as</span> <span class="nn">sio</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Load source labels.</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;labels.v001.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Make splits and export with embedded images.</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">make_training_splits</span><span class="p">(</span><span class="n">n_train</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">n_val</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">n_test</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">save_dir</span><span class="o">=</span><span class="s2">&quot;split1&quot;</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># Splits will be saved as self-contained SLP package files with images and labels.</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="n">labels_train</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/train.pkg.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="n">labels_val</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/val.pkg.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">labels_test</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/test.pkg.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="model/#sleap_io.Labels.make_training_splits"><code>Labels.make_training_splits</code></a></p>
 <h2 id="support">Support<a class="headerlink" href="#support" title="Permanent link">&para;</a></h2>
