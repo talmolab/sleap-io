@@ -50,7 +50,9 @@ dev = [
     "mkdocs-jupyter",
     "mkdocstrings[python]>=0.18",
     "mkdocs-gen-files",
-    "mkdocs-literate-nav"]
+    "mkdocs-literate-nav",
+    "mkdocs-section-index",
+    "mike"]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"
