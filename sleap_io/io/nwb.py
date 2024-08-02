@@ -81,7 +81,7 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
                 )
             skeleton = skeletons[instance.skeleton.name]
             instances.append(
-                Instance.from_numpy(points=instance.node_locations, skeleton=skeleton)
+                Instance.from_numpy(points=instance.node_locations[:], skeleton=skeleton)
             )  # `track` field is not stored in `SkeletonInstance` objects
         labeled_frames.append(
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
@@ -149,10 +149,10 @@ def labels_to_pose_training(
         training_frame_list.append(training_frame)
 
     training_frames = TrainingFrames(training_frames=training_frame_list)
-    _ = SourceVideos(image_series=source_video_list)
+    source_videos = SourceVideos(image_series=source_video_list)
     pose_training = PoseTraining(
         training_frames=training_frames,
-        source_videos=videos_to_source_videos(labels.videos),
+        source_videos=source_videos,
     )
     return pose_training
 
@@ -408,8 +408,9 @@ def read_nwb_training(filename: str) -> Labels:
     """
     with NWBHDF5IO(filename, mode="r", load_namespaces=True) as io:
         read_nwbfile = io.read()
-        processing_module = read_nwbfile.processing
-        nwb_pose_training = processing_module["pose_training"]
+        processing_module = read_nwbfile.processing['SLEAP_VIDEO_000_minimal_instance.pkg']
+        print(processing_module)
+        nwb_pose_training = processing_module["PoseTraining"]
         labels = pose_training_to_labels(nwb_pose_training)
         return labels
 
@@ -589,62 +590,63 @@ def append_nwb_training(
         default_metadata["original_videos"] = [f"{video.filename}"]
         default_metadata["labeled_videos"] = [f"{video.filename}"]
         default_metadata.update(pose_estimation_metadata)
+    
+    # nwb_processing_module = get_processing_module_for_video("behavior_processing", nwbfile)
 
-    subject = Subject(subject_id="No specified id", species="No specified species")
-    nwbfile.subject = subject
+        subject = Subject(subject_id="No specified id", species="No specified species")
+        nwbfile.subject = subject
 
-    skeletons_list = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
-    skeletons = Skeletons(skeletons=skeletons_list)
-    nwb_processing_module.add(skeletons)
+        skeletons_list = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
+        skeletons = Skeletons(skeletons=skeletons_list)
+        nwb_processing_module.add(skeletons)
 
-    video_info = write_video_to_path(labels.video, frame_inds)
-    pose_training = labels_to_pose_training(labels, skeletons_list, video_info)
-    nwb_processing_module.add(pose_training)
+        video_info = write_video_to_path(labels.video, frame_inds)
+        pose_training = labels_to_pose_training(labels, skeletons_list, video_info)
+        nwb_processing_module.add(pose_training)
 
-    camera = nwbfile.create_device(
-        name="camera",
-        description="Camera used to record the video",
-        manufacturer="N/A",
-    )
-
-    data = np.random.rand(100, 2)
-    timestamps = np.linspace(0, 10, num=100)
-    confidence = np.random.rand(100)
-    reference_frame = (
-        "The coordinates are in (x, y) relative to the top-left of the image."
-    )
-    confidence_definition = "Softmax output of the deep neural network"
-    pose_estimation_series_list = []
-    for node in skeletons_list[0].nodes:
-        pose_estimation_series = PoseEstimationSeries(
-            name=node,
-            description=f"Sequential trajectory of {node}.",
-            data=data,
-            unit="pixels",
-            reference_frame=reference_frame,
-            timestamps=timestamps,
-            confidence=confidence,
-            confidence_definition=confidence_definition,
+        camera = nwbfile.create_device(
+            name="camera",
+            description="Camera used to record the video",
+            manufacturer="N/A",
         )
-        pose_estimation_series_list.append(pose_estimation_series)
 
-    dimensions = np.array(
-        [[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]]
-    )
-    pose_estimation = PoseEstimation(
-        name="Pose Estimation",
-        pose_estimation_series=pose_estimation_series_list,
-        description="Estimated positions of the nodes in the video",
-        original_videos=[video.filename for video in labels.videos],
-        labeled_videos=[video.filename for video in labels.videos],
-        dimensions=dimensions,
-        devices=[camera],
-        scorer="No specified scorer",
-        source_software="SLEAP",
-        source_software_version=sleap_version,
-        skeleton=skeletons_list[0],
-    )
-    nwb_processing_module.add(pose_estimation)
+        data = np.random.rand(100, 2)
+        timestamps = np.linspace(0, 10, num=100)
+        confidence = np.random.rand(100)
+        reference_frame = (
+            "The coordinates are in (x, y) relative to the top-left of the image."
+        )
+        confidence_definition = "Softmax output of the deep neural network"
+        pose_estimation_series_list = []
+        for node in skeletons_list[0].nodes:
+            pose_estimation_series = PoseEstimationSeries(
+                name=node,
+                description=f"Sequential trajectory of {node}.",
+                data=data,
+                unit="pixels",
+                reference_frame=reference_frame,
+                timestamps=timestamps,
+                confidence=confidence,
+                confidence_definition=confidence_definition,
+            )
+            pose_estimation_series_list.append(pose_estimation_series)
+
+        dimensions = np.array(
+            [[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]]
+        )
+        pose_estimation = PoseEstimation(
+            pose_estimation_series=pose_estimation_series_list,
+            description="Estimated positions of the nodes in the video",
+            original_videos=[video.filename for video in labels.videos],
+            labeled_videos=[video.filename for video in labels.videos],
+            dimensions=dimensions,
+            devices=[camera],
+            source_software="SLEAP",
+            source_software_version=sleap_version,
+            skeleton=skeletons_list[0],
+        )
+        nwb_processing_module.add(pose_estimation)
+    
     return nwbfile
 
 
