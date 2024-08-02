@@ -5,17 +5,17 @@ channels:
 
 dependencies:
   - python
-  - ffmpeg<6.1.0
+  - ffmpeg
   - imageio
-  - imageio-ffmpeg
+  - imageio-ffmpeg >=0.5.0
   - av
   - attrs
   - pandas
   - simplejson
-  - h5py>=3.8.0
+  - h5py >=3.8.0
   - hdmf
-  - numpy
-  - opencv<4.9.0
+  - numpy <2.0.0
+  - opencv
   - pynwb
   - ndx-pose
   - pytest
