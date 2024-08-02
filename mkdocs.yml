@@ -49,7 +49,7 @@ theme:
 
 plugins:
   - search
-  - privacy
+  # - privacy  # Caching dynamic badges
   - mkdocs-jupyter
   - mike
   - autorefs
