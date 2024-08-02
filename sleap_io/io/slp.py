@@ -65,16 +65,21 @@ def make_video(
         is_embedded = True
 
     # Basic path resolution.
+    video_path = video_path.replace("\\", "/")
     video_path = Path(video_path)
-    if not video_path.exists():
-        # Check for the same filename in the same directory as the labels file.
-        video_path_ = Path(labels_path).parent / video_path.name
-        if video_path_.exists():
-            video_path = video_path_
-        else:
-            # TODO (TP): Expand capabilities of path resolution to support more
-            # complex path finding strategies.
-            pass
+
+    try:
+        if not video_path.exists():
+            # Check for the same filename in the same directory as the labels file.
+            video_path_ = Path(labels_path).parent / video_path.name
+            if video_path_.exists():
+                video_path = video_path_
+            else:
+                # TODO (TP): Expand capabilities of path resolution to support more
+                # complex path finding strategies.
+                pass
+    except OSError:
+        pass
 
     # Convert video path to string.
     video_path = video_path.as_posix()
