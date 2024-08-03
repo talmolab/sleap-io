@@ -138,7 +138,8 @@ def labels_to_pose_training(
 
         _, _, image_series = video_info
         source_video = image_series
-        source_video_list.append(source_video)
+        if source_video not in source_video_list:
+            source_video_list.append(source_video)
         training_frame = TrainingFrame(
             name=f"training_frame_{i}",
             annotator="N/A",
@@ -257,17 +258,35 @@ def write_video_to_path(
         save_path = video.filename[0].split(".")[0]
     else:
         save_path = video.filename.split(".")[0]
-    os.makedirs(save_path, exist_ok=True)
+    
+    try:
+        os.makedirs(save_path, exist_ok=True)
+    except PermissionError:
+        filename_with_extension = video.filename.split("/")[-1]
+        filename = filename_with_extension.split(".")[0]
+        print(filename)
+        save_path = input("Permission denied. Enter a new path:") + "/" + filename
+        os.makedirs(save_path, exist_ok=True)
 
     if "cv2" in sys.modules:
         for frame_idx in frame_inds:
-            frame = video[frame_idx]
+            try:
+                frame = video[frame_idx]
+            except FileNotFoundError:
+                video_filename = input("Video not found. Enter the video filename:")
+                video = Video.from_filename(video_filename)
+                frame = video[frame_idx]
             frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             cv2.imwrite(frame_path, frame)
     else:
         for frame_idx in frame_inds:
-            frame = video[frame_idx]
+            try:
+                frame = video[frame_idx]
+            except FileNotFoundError:
+                video_filename = input("Video not found. Enter the filename:")
+                video = Video.from_filename(video_filename)
+                frame = video[frame_idx]
             frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             iio.imwrite(frame_path, frame)
