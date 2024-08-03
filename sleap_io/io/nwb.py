@@ -264,7 +264,6 @@ def write_video_to_path(
     except PermissionError:
         filename_with_extension = video.filename.split("/")[-1]
         filename = filename_with_extension.split(".")[0]
-        print(filename)
         save_path = input("Permission denied. Enter a new path:") + "/" + filename
         os.makedirs(save_path, exist_ok=True)
 
@@ -650,9 +649,12 @@ def append_nwb_training(
             )
             pose_estimation_series_list.append(pose_estimation_series)
 
-        dimensions = np.array(
-            [[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]]
-        )
+        try:
+            dimensions = np.array(
+                [[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]]
+            )
+        except AttributeError:
+            dimensions = np.array([[400, 400]])
         pose_estimation = PoseEstimation(
             pose_estimation_series=pose_estimation_series_list,
             description="Estimated positions of the nodes in the video",
