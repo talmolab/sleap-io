@@ -1,4 +1,4 @@
-"""Fixtures that return paths to .nwb files."""
+"""Fixtures that return paths to `.nwb` files."""
 import pytest
 
 @pytest.fixture
@@ -8,5 +8,6 @@ def minimal_instance_pkg():
 
 @pytest.fixture
 def centered_pair_no_training():
-    """NWB file converted from .slp in the GUI without NWB training data."""
+    """NWB file converted from .slp in the GUI without converting to
+    NWB training data."""
     return "tests/data/nwb/centered_pair_predictions_no_training.nwb"

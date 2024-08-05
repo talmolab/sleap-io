@@ -61,9 +61,6 @@ def load_nwb(filename: str) -> Labels:
         The dataset as a `Labels` object.
     """
     with NWBHDF5IO(filename, "r", load_namespaces=True) as io:
-        nwb_file = io.read()
-        if any(isinstance(elem, PoseTraining) for elem in nwb_file.processing):
-            return nwb.read_nwb_training(filename)
         return nwb.read_nwb(filename)
 
 
@@ -73,6 +70,7 @@ def save_nwb(
     as_training: bool = True,
     append: bool = True,
     frame_inds: Optional[list[int]] = None,
+    frame_path: Optional[str] = None,
 ):
     """Save a SLEAP dataset to NWB format.
 
@@ -84,13 +82,27 @@ def save_nwb(
             created if it does not exist.
         frame_inds: Optional list of frame indices to save. If None, all frames
             will be saved.
+        frame_path: The path to save the frames. If None, the path is the video
+            filename without the extension.
 
-    See also: nwb.write_nwb, nwb.append_nwb
+    See also: nwb.write_nwb, nwb.append_nwb, nwb.append_nwb_training
     """
     if append and Path(filename).exists():
-        nwb.append_nwb(labels, filename, as_training=as_training)
+        nwb.append_nwb(
+            labels,
+            filename,
+            as_training=as_training,
+            frame_inds=frame_inds,
+            frame_path=frame_path,
+        )
     else:
-        nwb.write_nwb(labels, filename, as_training=as_training, frame_inds=frame_inds)
+        nwb.write_nwb(
+            labels,
+            filename,
+            as_training=as_training,
+            frame_inds=frame_inds,
+            frame_path=frame_path,
+        )
 
 
 def load_labelstudio(
