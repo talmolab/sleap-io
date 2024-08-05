@@ -161,11 +161,12 @@ def labels_to_pose_training(
     return pose_training
 
 
-def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore[return]
+def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton, subject: Subject) -> NWBSkeleton:  # type: ignore[return]
     """Converts SLEAP skeleton to NWB skeleton.
 
     Args:
         skeleton: A SLEAP skeleton.
+        subject: An NWB subject.
 
     Returns:
         An NWB skeleton.
@@ -181,6 +182,7 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton) -> NWBSkeleton:  # type: ignore
         name=skeleton.name,
         nodes=skeleton.node_names,
         edges=np.array(nwb_edges, dtype=np.uint8),
+        subject=subject,
     )
 
 
@@ -239,6 +241,7 @@ def write_video_to_path(
     video: Video,
     frame_inds: Optional[list[int]] = None,
     image_format: str = "png",
+    frame_path: Optional[str] = None,
 ) -> tuple[dict[int, str], Video, ImageSeries]:
     """
     Write individual frames of a video to a path and return the frame indices,
@@ -248,6 +251,8 @@ def write_video_to_path(
         video: The video to write.
         frame_inds: The indices of the frames to write. If None, all frames are written.
         image_format: The format of the image to write. Default is .png
+        frame_path: The path to save the frames. If None, the path is the video
+            filename without the extension.
 
     Returns:
         A tuple containing a dictionary mapping frame indices to file paths,
@@ -257,18 +262,19 @@ def write_video_to_path(
     if frame_inds is None:
         frame_inds = list(range(video.shape[0]))
 
-    if isinstance(video.filename, list):
-        save_path = video.filename[0].split(".")[0]
-    else:
-        save_path = video.filename.split(".")[0]
+    if frame_path is None:
+        if isinstance(video.filename, list):
+            frame_path = video.filename[0].split(".")[0]
+        else:
+            frame_path = video.filename.split(".")[0]
 
     try:
-        os.makedirs(save_path, exist_ok=True)
+        os.makedirs(frame_path, exist_ok=True)
     except PermissionError:
         filename_with_extension = video.filename.split("/")[-1]
         filename = filename_with_extension.split(".")[0]
-        save_path = input("Permission denied. Enter a new path:") + "/" + filename
-        os.makedirs(save_path, exist_ok=True)
+        frame_path = input("Permission denied. Enter a new path:") + "/" + filename
+        os.makedirs(frame_path, exist_ok=True)
 
     if "cv2" in sys.modules:
         for frame_idx in frame_inds:
@@ -278,7 +284,7 @@ def write_video_to_path(
                 video_filename = input("Video not found. Enter the video filename:")
                 video = Video.from_filename(video_filename)
                 frame = video[frame_idx]
-            frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
+            frame_path = f"{frame_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             cv2.imwrite(frame_path, frame)
     else:
@@ -289,14 +295,14 @@ def write_video_to_path(
                 video_filename = input("Video not found. Enter the filename:")
                 video = Video.from_filename(video_filename)
                 frame = video[frame_idx]
-            frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
+            frame_path = f"{frame_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             iio.imwrite(frame_path, frame)
 
     image_series = ImageSeries(
         name="video",
-        external_file=os.listdir(save_path),
-        starting_frame=[0 for _ in range(len(os.listdir(save_path)))],
+        external_file=os.listdir(frame_path),
+        starting_frame=[0 for _ in range(len(os.listdir(frame_path)))],
         rate=30.0,  # TODO - change to `video.backend.fps` when available
     )
     return index_data, video, image_series
@@ -417,27 +423,6 @@ def read_nwb(path: str) -> Labels:
     return labels
 
 
-def read_nwb_training(filename: str) -> Labels:
-    """
-    Reads an NWB file with NWB training data and returns a Labels object.
-
-    Inputs:
-        filename: the name of the NWB file to read
-
-    Returns:
-        A `Labels` object.
-    """
-    with NWBHDF5IO(filename, mode="r", load_namespaces=True) as io:
-        read_nwbfile = io.read()
-        processing_module = read_nwbfile.processing[
-            "SLEAP_VIDEO_000_minimal_instance.pkg"
-        ]
-        print(processing_module)
-        nwb_pose_training = processing_module["PoseTraining"]
-        labels = pose_training_to_labels(nwb_pose_training)
-        return labels
-
-
 def write_nwb(
     labels: Labels,
     nwbfile_path: str,
@@ -445,6 +430,7 @@ def write_nwb(
     pose_estimation_metadata: Optional[dict] = None,
     as_training: bool = True,
     frame_inds: Optional[list[int]] = None,
+    frame_path: Optional[str] = None,
 ):
     """Write labels to an nwb file and save it to the nwbfile_path given.
 
@@ -478,6 +464,8 @@ def write_nwb(
 
         as_training: If `True`, append the data as training data.
         frame_inds: The indices of the frames to write. If None, all frames are written.
+        frame_path: The path to save the frames. If None, the path is the video
+            filename without the extension.
     """
     nwb_file_kwargs = nwb_file_kwargs or dict()
 
@@ -499,7 +487,7 @@ def write_nwb(
     nwbfile = NWBFile(**nwb_file_kwargs)
     if as_training:
         nwbfile = append_nwb_training(
-            labels, nwbfile, pose_estimation_metadata, frame_inds
+            labels, nwbfile, pose_estimation_metadata, frame_inds, frame_path=frame_path,
         )
     else:
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
@@ -584,6 +572,7 @@ def append_nwb_training(
     nwbfile: NWBFile,
     pose_estimation_metadata: Optional[dict] = None,
     frame_inds: Optional[list[int]] = None,
+    frame_path: Optional[str] = None,
 ) -> NWBFile:
     """Append training data from a Labels object to an in-memory NWB file.
 
@@ -592,6 +581,8 @@ def append_nwb_training(
         nwbfile: An in-memory NWB file.
         pose_estimation_metadata: Metadata for pose estimation.
         frame_inds: The indices of the frames to write. If None, all frames are written.
+        frame_path: The path to save the frames. If None, the path is the video
+            filename without the extension.
 
     Returns:
         An in-memory NWB file with the PoseTraining data appended.
@@ -618,17 +609,17 @@ def append_nwb_training(
         nwbfile.subject = subject
 
         skeletons_list = [
-            slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons
+            slp_skeleton_to_nwb(skeleton, subject) for skeleton in labels.skeletons
         ]
         skeletons = Skeletons(skeletons=skeletons_list)
         nwb_processing_module.add(skeletons)
 
-        video_info = write_video_to_path(labels.video, frame_inds)
+        video_info = write_video_to_path(labels.video, frame_inds, frame_path=frame_path)
         pose_training = labels_to_pose_training(labels, skeletons_list, video_info)
         nwb_processing_module.add(pose_training)
 
         camera = nwbfile.create_device(
-            name="camera",
+            name="Camera",
             description="Camera used to record the video",
             manufacturer="N/A",
         )
@@ -641,7 +632,7 @@ def append_nwb_training(
         for node in skeletons_list[0].nodes:
             pose_estimation_series = PoseEstimationSeries(
                 name=node,
-                description=f"Sequential trajectory of {node}.",
+                description=f"Marker placed on {node}",
                 data=np.random.rand(100, 2),
                 unit="pixels",
                 reference_frame=reference_frame,
