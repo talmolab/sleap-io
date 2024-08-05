@@ -251,7 +251,7 @@ def write_video_to_path(
         video: The video to write.
         frame_inds: The indices of the frames to write. If None, all frames are written.
         image_format: The format of the image to write. Default is .png
-        frame_path: The path to save the frames. If None, the path is the video
+        frame_path: The directory to save the frames to. If None, the path is the video
             filename without the extension.
 
     Returns:
@@ -262,19 +262,21 @@ def write_video_to_path(
     if frame_inds is None:
         frame_inds = list(range(video.shape[0]))
 
-    if frame_path is None:
-        if isinstance(video.filename, list):
-            frame_path = video.filename[0].split(".")[0]
-        else:
-            frame_path = video.filename.split(".")[0]
-
+    if isinstance(video.filename, list):
+        save_path = video.filename[0].split(".")[0]
+    else:
+        save_path = video.filename.split(".")[0]
+    
+    if frame_path is not None:
+        save_path = frame_path
+    
     try:
-        os.makedirs(frame_path, exist_ok=True)
+        os.makedirs(save_path, exist_ok=True)
     except PermissionError:
         filename_with_extension = video.filename.split("/")[-1]
         filename = filename_with_extension.split(".")[0]
-        frame_path = input("Permission denied. Enter a new path:") + "/" + filename
-        os.makedirs(frame_path, exist_ok=True)
+        save_path = input("Permission denied. Enter a new path:") + "/" + filename
+        os.makedirs(save_path, exist_ok=True)
 
     if "cv2" in sys.modules:
         for frame_idx in frame_inds:
@@ -284,7 +286,7 @@ def write_video_to_path(
                 video_filename = input("Video not found. Enter the video filename:")
                 video = Video.from_filename(video_filename)
                 frame = video[frame_idx]
-            frame_path = f"{frame_path}/frame_{frame_idx}.{image_format}"
+            frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             cv2.imwrite(frame_path, frame)
     else:
@@ -295,14 +297,14 @@ def write_video_to_path(
                 video_filename = input("Video not found. Enter the filename:")
                 video = Video.from_filename(video_filename)
                 frame = video[frame_idx]
-            frame_path = f"{frame_path}/frame_{frame_idx}.{image_format}"
+            frame_path = f"{save_path}/frame_{frame_idx}.{image_format}"
             index_data[frame_idx] = frame_path
             iio.imwrite(frame_path, frame)
 
     image_series = ImageSeries(
         name="video",
-        external_file=os.listdir(frame_path),
-        starting_frame=[0 for _ in range(len(os.listdir(frame_path)))],
+        external_file=os.listdir(save_path),
+        starting_frame=[0 for _ in range(len(os.listdir(save_path)))],
         rate=30.0,  # TODO - change to `video.backend.fps` when available
     )
     return index_data, video, image_series
@@ -675,6 +677,8 @@ def append_nwb(
     labels: Labels,
     filename: str,
     pose_estimation_metadata: Optional[dict] = None,
+    frame_inds: Optional[list[int]] = None,
+    frame_path: Optional[str] = None,
     as_training: Optional[bool] = None,
 ):
     """Append a SLEAP `Labels` object to an existing NWB data file.
@@ -692,12 +696,10 @@ def append_nwb(
         nwb_file = io.read()
         if as_training:
             nwb_file = append_nwb_training(
-                labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
+                labels, nwb_file, pose_estimation_metadata, frame_inds, frame_path
             )
         else:
-            nwb_file = append_nwb_data(
-                labels, nwb_file, pose_estimation_metadata=pose_estimation_metadata
-            )
+            nwb_file = append_nwb_data(labels, nwb_file, pose_estimation_metadata)
         io.write(nwb_file)
 
 
