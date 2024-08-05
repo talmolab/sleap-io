@@ -1,4 +1,5 @@
 """Functions to write and read from the neurodata without borders (NWB) format."""
+
 from __future__ import annotations
 from copy import deepcopy
 from typing import List, Optional, Union
@@ -81,7 +82,9 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
                 )
             skeleton = skeletons[instance.skeleton.name]
             instances.append(
-                Instance.from_numpy(points=instance.node_locations[:], skeleton=skeleton)
+                Instance.from_numpy(
+                    points=instance.node_locations[:], skeleton=skeleton
+                )
             )  # `track` field is not stored in `SkeletonInstance` objects
         labeled_frames.append(
             LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
@@ -258,7 +261,7 @@ def write_video_to_path(
         save_path = video.filename[0].split(".")[0]
     else:
         save_path = video.filename.split(".")[0]
-    
+
     try:
         os.makedirs(save_path, exist_ok=True)
     except PermissionError:
@@ -426,7 +429,9 @@ def read_nwb_training(filename: str) -> Labels:
     """
     with NWBHDF5IO(filename, mode="r", load_namespaces=True) as io:
         read_nwbfile = io.read()
-        processing_module = read_nwbfile.processing['SLEAP_VIDEO_000_minimal_instance.pkg']
+        processing_module = read_nwbfile.processing[
+            "SLEAP_VIDEO_000_minimal_instance.pkg"
+        ]
         print(processing_module)
         nwb_pose_training = processing_module["PoseTraining"]
         labels = pose_training_to_labels(nwb_pose_training)
@@ -608,13 +613,13 @@ def append_nwb_training(
         default_metadata["original_videos"] = [f"{video.filename}"]
         default_metadata["labeled_videos"] = [f"{video.filename}"]
         default_metadata.update(pose_estimation_metadata)
-    
-    # nwb_processing_module = get_processing_module_for_video("behavior_processing", nwbfile)
 
         subject = Subject(subject_id="No specified id", species="No specified species")
         nwbfile.subject = subject
 
-        skeletons_list = [slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons]
+        skeletons_list = [
+            slp_skeleton_to_nwb(skeleton) for skeleton in labels.skeletons
+        ]
         skeletons = Skeletons(skeletons=skeletons_list)
         nwb_processing_module.add(skeletons)
 
@@ -628,9 +633,6 @@ def append_nwb_training(
             manufacturer="N/A",
         )
 
-        data = np.random.rand(100, 2)
-        timestamps = np.linspace(0, 10, num=100)
-        confidence = np.random.rand(100)
         reference_frame = (
             "The coordinates are in (x, y) relative to the top-left of the image."
         )
@@ -640,11 +642,11 @@ def append_nwb_training(
             pose_estimation_series = PoseEstimationSeries(
                 name=node,
                 description=f"Sequential trajectory of {node}.",
-                data=data,
+                data=np.random.rand(100, 2),
                 unit="pixels",
                 reference_frame=reference_frame,
-                timestamps=timestamps,
-                confidence=confidence,
+                timestamps=np.linspace(0, 10, num=100),
+                confidence=np.random.rand(100),
                 confidence_definition=confidence_definition,
             )
             pose_estimation_series_list.append(pose_estimation_series)
@@ -655,6 +657,7 @@ def append_nwb_training(
             )
         except AttributeError:
             dimensions = np.array([[400, 400]])
+
         pose_estimation = PoseEstimation(
             pose_estimation_series=pose_estimation_series_list,
             description="Estimated positions of the nodes in the video",
@@ -667,7 +670,7 @@ def append_nwb_training(
             skeleton=skeletons_list[0],
         )
         nwb_processing_module.add(pose_estimation)
-    
+
     return nwbfile
 
 
