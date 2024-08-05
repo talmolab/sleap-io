@@ -487,7 +487,11 @@ def write_nwb(
     nwbfile = NWBFile(**nwb_file_kwargs)
     if as_training:
         nwbfile = append_nwb_training(
-            labels, nwbfile, pose_estimation_metadata, frame_inds, frame_path=frame_path,
+            labels,
+            nwbfile,
+            pose_estimation_metadata,
+            frame_inds,
+            frame_path=frame_path,
         )
     else:
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
@@ -614,7 +618,9 @@ def append_nwb_training(
         skeletons = Skeletons(skeletons=skeletons_list)
         nwb_processing_module.add(skeletons)
 
-        video_info = write_video_to_path(labels.video, frame_inds, frame_path=frame_path)
+        video_info = write_video_to_path(
+            labels.video, frame_inds, frame_path=frame_path
+        )
         pose_training = labels_to_pose_training(labels, skeletons_list, video_info)
         nwb_processing_module.add(pose_training)
 
