@@ -61,6 +61,10 @@ def load_nwb(filename: str) -> Labels:
         The dataset as a `Labels` object.
     """
     with NWBHDF5IO(filename, "r", load_namespaces=True) as io:
+        nwb_processing = io.read().processing
+        for module in nwb_processing.values():
+            if 'PoseTraining' in module:
+                return nwb.read_nwb_training(nwb_processing)
         return nwb.read_nwb(filename)
 
 

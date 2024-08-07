@@ -24,6 +24,8 @@ try:
 except ImportError:
     ArrayLike = np.ndarray
 
+from hdmf.utils import LabelledDict
+
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
 from pynwb.file import Subject
 from pynwb.image import ImageSeries
@@ -425,6 +427,21 @@ def read_nwb(path: str) -> Labels:
     return labels
 
 
+def read_nwb_training(processing_modules: LabelledDict) -> Labels:
+    """Read an NWB formatted file with NWB training data to a
+    SLEAP `Labels` object.
+
+    Args:
+        processing_modules: A dictionary of processing modules from the NWB file.
+    
+    Returns:
+        A `Labels` object.
+    """
+    for name, processing_module in processing_modules.items():
+        if isinstance(processing_module, PoseTraining):
+            return pose_training_to_labels(processing_module)
+
+
 def write_nwb(
     labels: Labels,
     nwbfile_path: str,
@@ -626,15 +643,6 @@ def append_nwb_training(
         pose_training = labels_to_pose_training(labels, skeletons_list, video_info)
         nwb_processing_module.add(pose_training)
 
-        camera = nwbfile.create_device(
-            name="Camera",
-            description="Camera used to record the video",
-            manufacturer="N/A",
-        )
-
-        reference_frame = (
-            "The coordinates are in (x, y) relative to the top-left of the image."
-        )
         confidence_definition = "Softmax output of the deep neural network"
         pose_estimation_series_list = []
         for node in skeletons_list[0].nodes:
@@ -657,16 +665,12 @@ def append_nwb_training(
         except AttributeError:
             dimensions = np.array([[400, 400]])
 
-        pose_estimation = PoseEstimation(
-            pose_estimation_series=pose_estimation_series_list,
-            description="Estimated positions of the nodes in the video",
-            original_videos=[video.filename for video in labels.videos],
-            labeled_videos=[video.filename for video in labels.videos],
-            dimensions=dimensions,
-            devices=[camera],
-            source_software="SLEAP",
-            source_software_version=sleap_version,
-            skeleton=skeletons_list[0],
+        pose_estimation = build_pose_estimation_container_for_track(
+            labels_data_df=pd.DataFrame(),
+            labels=labels,
+            track_name="track",
+            video=video,
+            pose_estimation_metadata=pose_estimation_metadata,
         )
         nwb_processing_module.add(pose_estimation)
 
