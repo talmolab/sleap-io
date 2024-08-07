@@ -49,11 +49,13 @@ class VideoBackend:
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
+        _frame_rate: Frame rate of the video.
     """
 
     filename: str | Path | list[str] | list[Path]
     grayscale: Optional[bool] = None
     keep_open: bool = True
+    _frame_rate: Optional[float] = None
     _cached_shape: Optional[Tuple[int, int, int, int]] = None
     _open_reader: Optional[object] = None
 
@@ -77,6 +79,7 @@ class VideoBackend:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            _frame_rate: Frame rate of the video.
 
         Returns:
             VideoBackend subclass instance.
@@ -188,6 +191,18 @@ class VideoBackend:
     def frames(self) -> int:
         """Number of frames in the video."""
         return self.shape[0]
+
+    @property
+    def frame_rate(self) -> Optional[float]:
+        """Frames per second of the video."""
+        video_extensions = ["mp4", "avi", "mov", "mj2", "mkv"]
+        if not any(self.filename.endswith(ext) for ext in video_extensions):
+            return None
+        
+        if "cv2" in sys.modules:
+            return cv2.VideoCapture(self.filename).get(cv2.CAP_PROP_FPS)
+        else:
+            return iio.immeta(self.filename)["fps"]
 
     def __len__(self) -> int:
         """Return number of frames in the video."""
@@ -314,6 +329,7 @@ class MediaVideo(VideoBackend):
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
+        _frame_rate: Frame rate of the video.
         plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav". If `None`,
             will use the first available plugin in the order listed above.
     """
@@ -469,6 +485,7 @@ class HDF5Video(VideoBackend):
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
+        _frame_rate: Frame rate of the video.
         dataset: Name of dataset to read from. If `None`, will try to find a rank-4
             dataset by iterating through datasets in the file. If specifying an embedded
             dataset, this can be the group containing a "video" dataset or the dataset
@@ -710,6 +727,7 @@ class ImageVideo(VideoBackend):
     """
 
     EXTS = ("png", "jpg", "jpeg", "tif", "tiff", "bmp")
+    _frame_rate = None
 
     @staticmethod
     def find_images(folder: str) -> list[str]:
