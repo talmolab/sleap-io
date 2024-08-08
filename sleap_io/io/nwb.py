@@ -68,7 +68,8 @@ def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ign
     """
     labeled_frames = []
     skeletons = {}
-    for training_frame in pose_training.training_frames.training_frames.values():
+    training_frames = pose_training.training_frames.training_frames.values()
+    for training_frame in training_frames:
         source_video = training_frame.source_video
         if source_video.format == "external" and len(source_video.external_file) == 1:
             video = Video(source_video.external_file[0])
@@ -268,10 +269,10 @@ def write_video_to_path(
         save_path = video.filename[0].split(".")[0]
     else:
         save_path = video.filename.split(".")[0]
-    
+
     if frame_path is not None:
         save_path = frame_path
-    
+
     try:
         os.makedirs(save_path, exist_ok=True)
     except PermissionError:
@@ -433,11 +434,11 @@ def read_nwb_training(processing_modules: LabelledDict) -> Labels:
 
     Args:
         processing_modules: A dictionary of processing modules from the NWB file.
-    
+
     Returns:
         A `Labels` object.
     """
-    for name, processing_module in processing_modules.items():
+    for _, processing_module in processing_modules.items():
         if isinstance(processing_module, PoseTraining):
             return pose_training_to_labels(processing_module)
 
@@ -644,6 +645,12 @@ def append_nwb_training(
         nwb_processing_module.add(pose_training)
 
         confidence_definition = "Softmax output of the deep neural network"
+        reference_frame = (
+            "The coordinates are in (x, y) relative to the top-left of the image. "
+            "Coordinates refer to the midpoint of the pixel. "
+            "That is, t the midpoint of the top-left pixel is at (0, 0), whereas "
+            "the top-left corner of that same pixel is at (-0.5, -0.5)."
+        )
         pose_estimation_series_list = []
         for node in skeletons_list[0].nodes:
             pose_estimation_series = PoseEstimationSeries(
@@ -657,20 +664,29 @@ def append_nwb_training(
                 confidence_definition=confidence_definition,
             )
             pose_estimation_series_list.append(pose_estimation_series)
-
+        
+        camera = nwbfile.create_device(
+        name="camera",
+        description="Camera used to record the video",
+        manufacturer="No specified manufacturer",
+        )
         try:
-            dimensions = np.array(
-                [[labels.videos[0].backend.shape[1], labels.videos[0].backend.shape[2]]]
-            )
+            dimensions = np.array([[video.backend.shape[1], video.backend.shape[2]]])
         except AttributeError:
             dimensions = np.array([[400, 400]])
 
-        pose_estimation = build_pose_estimation_container_for_track(
-            labels_data_df=pd.DataFrame(),
-            labels=labels,
-            track_name="track",
-            video=video,
-            pose_estimation_metadata=pose_estimation_metadata,
+        pose_estimation = PoseEstimation(
+            name="pose_estimation",
+            pose_estimation_series=pose_estimation_series_list,
+            description="Estimated positions of the nodes in the video",
+            original_videos=[video.filename for video in labels.videos],
+            labeled_videos=[video.filename for video in labels.videos],
+            dimensions=dimensions,
+            devices=[camera],
+            scorer="No specified scorer",
+            source_software="SLEAP",
+            source_software_version=sleap_version,
+            skeleton=skeletons_list[0],
         )
         nwb_processing_module.add(pose_estimation)
 
