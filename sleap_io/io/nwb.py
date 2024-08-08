@@ -206,9 +206,9 @@ def instance_to_skeleton_instance(
     np_node_locations = np.array(node_locs)
     return SkeletonInstance(
         name=f"skeleton_instance_{id(instance)}",
-        id=np.uint64(
-            id(instance)
-        ),  # consider adding a counter in the loop to track the number of instances
+        id=np.uint64(id(instance)),
+        # TODO add a counter in the loop to track the number of instances
+        # instead of using id
         node_locations=np_node_locations,
         node_visibility=[point.visible for point in instance.points.values()],
         skeleton=skeleton,
