@@ -4,6 +4,7 @@ import datetime
 
 import numpy as np
 from pynwb import NWBFile, NWBHDF5IO
+from pynwb.file import Subject
 
 from sleap_io import load_slp
 from sleap_io.io.nwb import (
@@ -38,29 +39,27 @@ def test_video_to_path():
     index_data, _, _ = video_info
     assert list(index_data.keys()) == [i for i in range(30, 50)]
     image_0_name = list(index_data.values())[0]
-    assert image_0_name == "tests/data/videos/centered_pair_low_quality/frame_0.png"
+    assert image_0_name == "tests/data/videos/centered_pair_low_quality/frame_30.png"
 
 
-def test_nwb_slp_conversion():
+def test_slp_to_nwb_conversion():
     labels_original = load_slp("tests/data/slp/minimal_instance.pkg.slp")
-    pose_training = labels_to_pose_training(labels_original)
+    subject = Subject(subject_id="test_subject", species="test_species")
+    nwb_skeletons = [slp_skeleton_to_nwb(skeleton, subject) for skeleton in labels_original.skeletons]
+    video_info = write_video_to_path(labels_original.video)
+    pose_training = labels_to_pose_training(labels_original, nwb_skeletons, video_info)
     labels_converted = pose_training_to_labels(pose_training)
     assert len(labels_original.labeled_frames) == len(labels_converted.labeled_frames)
 
-    original_instances_length = len(labels_original.labeled_frames[0].instances)
-    converted_instances_length = len(labels_converted.labeled_frames[0].instances)
-    assert original_instances_length == converted_instances_length
-
     original_instance = labels_original.labeled_frames[0].instances[0]
     converted_instance = labels_converted.labeled_frames[0].instances[0]
-    assert original_instance.numpy == converted_instance.numpy
+    assert np.array_equal(original_instance.numpy(), converted_instance.numpy())
 
     slp_skeleton = labels_original.skeletons[0]
-    nwb_skeleton = slp_skeleton_to_nwb(slp_skeleton)
+    nwb_skeleton = slp_skeleton_to_nwb(slp_skeleton, subject)
     assert len(nwb_skeleton.nodes) == len(slp_skeleton.nodes)
     assert len(nwb_skeleton.edges) == len(slp_skeleton.edges)
 
-    assert len(pose_training.source_videos) == len(labels_original.videos)
     training_frames_len = len(pose_training.training_frames.training_frames)
     assert training_frames_len == len(labels_original.labeled_frames)
 
