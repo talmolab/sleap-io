@@ -142,7 +142,7 @@ def labels_to_pose_training(
         )
         training_frame_video_index = labeled_frame.frame_idx
 
-        _, _, image_series = video_info
+        image_series = video_info[2]
         source_video = image_series
         if source_video not in source_video_list:
             source_video_list.append(source_video)
@@ -246,9 +246,7 @@ def write_video_to_path(
     image_format: str = "png",
     frame_path: Optional[str] = None,
 ) -> tuple[dict[int, str], Video, ImageSeries]:
-    """
-    Write individual frames of a video to a path and return the frame indices,
-    file paths, video, and `ImageSeries`.
+    """Write individual frames of a video to a path.
 
     Args:
         video: The video to write.
@@ -429,8 +427,7 @@ def read_nwb(path: str) -> Labels:
 
 
 def read_nwb_training(processing_modules: LabelledDict) -> Labels:
-    """Read an NWB formatted file with NWB training data to a
-    SLEAP `Labels` object.
+    """Read an NWB formatted file with NWB training data to a SLEAP `Labels` object.
 
     Args:
         processing_modules: A dictionary of processing modules from the NWB file.
@@ -438,7 +435,7 @@ def read_nwb_training(processing_modules: LabelledDict) -> Labels:
     Returns:
         A `Labels` object.
     """
-    for _, processing_module in processing_modules.items():
+    for processing_module in processing_modules.values():
         if isinstance(processing_module, PoseTraining):
             return pose_training_to_labels(processing_module)
 
@@ -709,6 +706,9 @@ def append_nwb(
         pose_estimation_metadata: Metadata for pose estimation. See `append_nwb_data`
             for details.
         as_training: If `True`, append the data as training data.
+        frame_inds: The indices of the frames to write. If None, all frames are written.
+        frame_path: The path to save the frames. If None, the path is the video
+            filename without the extension.
 
     See also: append_nwb_data
     """
