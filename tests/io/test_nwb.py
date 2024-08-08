@@ -6,7 +6,16 @@ import numpy as np
 from pynwb import NWBFile, NWBHDF5IO
 
 from sleap_io import load_slp
-from sleap_io.io.nwb import *
+from sleap_io.io.nwb import (
+    Video,
+    write_video_to_path,
+    labels_to_pose_training,
+    pose_training_to_labels,
+    slp_skeleton_to_nwb,
+    append_nwb_data,
+    write_nwb,
+    get_timestamps,
+)
 
 
 def nwbfile():
