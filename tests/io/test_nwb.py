@@ -8,6 +8,7 @@ from pynwb import NWBFile, NWBHDF5IO
 from sleap_io import load_slp
 from sleap_io.io.nwb import *
 
+
 def nwbfile():
     session_description: str = "Testing session for nwb"
     session_start_time = datetime.datetime.now(datetime.timezone.utc)

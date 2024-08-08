@@ -664,11 +664,11 @@ def append_nwb_training(
                 confidence_definition=confidence_definition,
             )
             pose_estimation_series_list.append(pose_estimation_series)
-        
+
         camera = nwbfile.create_device(
-        name="camera",
-        description="Camera used to record the video",
-        manufacturer="No specified manufacturer",
+            name="camera",
+            description="Camera used to record the video",
+            manufacturer="No specified manufacturer",
         )
         try:
             dimensions = np.array([[video.backend.shape[1], video.backend.shape[2]]])

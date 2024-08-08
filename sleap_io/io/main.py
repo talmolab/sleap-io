@@ -8,8 +8,6 @@ from pathlib import Path
 
 from pynwb import NWBHDF5IO
 
-from ndx_pose import PoseTraining
-
 
 def load_slp(filename: str) -> Labels:
     """Load a SLEAP dataset.
@@ -63,7 +61,7 @@ def load_nwb(filename: str) -> Labels:
     with NWBHDF5IO(filename, "r", load_namespaces=True) as io:
         nwb_processing = io.read().processing
         for module in nwb_processing.values():
-            if 'PoseTraining' in module:
+            if "PoseTraining" in module:
                 return nwb.read_nwb_training(nwb_processing)
         return nwb.read_nwb(filename)
 
