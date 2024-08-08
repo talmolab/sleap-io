@@ -15,8 +15,3 @@ def labels_v002_nwb():
 def typical_nwb():
     """Typical NWB file."""
     return "tests/data/nwb/typical.nwb"
-
-@pytest.fixture
-def imgvideo_nwb():
-    """NWB file with an image video."""
-    return "tests/data/nwb/imgvideo.nwb"
