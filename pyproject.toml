@@ -24,7 +24,7 @@ dependencies = [
     "attrs",
     "h5py>=3.8.0",
     "pynwb",
-    "ndx-pose @ git+https://github.com/rly/ndx-pose@a847ad4be75e60ef9e413b8cbfc99c616fc9fd05",
+    "ndx-pose",
     "pandas",
     "simplejson",
     "imageio",

@@ -60,7 +60,7 @@ def load_nwb(filename: str) -> Labels:
     """
     with NWBHDF5IO(filename, "r", load_namespaces=True) as io:
         nwb_processing = io.read().processing
-        if any('PoseTraining' in module for module in nwb_processing.values()):
+        if any("PoseTraining" in module for module in nwb_processing.values()):
             return nwb.read_nwb_training(nwb_processing)
         return nwb.read_nwb(filename)
 
@@ -68,7 +68,7 @@ def load_nwb(filename: str) -> Labels:
 def save_nwb(
     labels: Labels,
     filename: str,
-    as_training: bool = True,
+    as_training: bool = False,
     append: bool = True,
     frame_inds: Optional[list[int]] = None,
     frame_path: Optional[str] = None,

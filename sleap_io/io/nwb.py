@@ -454,7 +454,7 @@ def write_nwb(
     nwbfile_path: str,
     nwb_file_kwargs: Optional[dict] = None,
     pose_estimation_metadata: Optional[dict] = None,
-    as_training: bool = True,
+    as_training: bool = False,
     frame_inds: Optional[list[int]] = None,
     frame_path: Optional[str] = None,
 ):
@@ -813,12 +813,27 @@ def build_pose_estimation_container_for_track(
         track_data_df, timestamps
     )
 
+    cameras = []
+    nwbfile = NWBFile(
+        session_description="Processed SLEAP pose data",
+        session_start_time=datetime.datetime.now(datetime.timezone.utc),
+        identifier=str(uuid.uuid1()),
+    )
+    for i, video in enumerate(labels.videos):
+        camera = nwbfile.create_device(
+            name=f"camera {i}",
+            description="Camera used to record video {i}",
+            manufacturer="No specified manufacturer",
+        )
+        cameras.append(camera)
+    
     # Arrange and mix metadata
     pose_estimation_container_kwargs = dict(
         name=f"track={track_name}",
         description=f"Estimated positions of {skeleton.name} in video {video_path.name}",
         pose_estimation_series=pose_estimation_series_list,
         nodes=skeleton.node_names,
+        devices=cameras,
         edges=np.array(skeleton.edge_inds).astype("uint64"),
         source_software="SLEAP",
         # dimensions=np.array([[video.backend.height, video.backend.width]]),
