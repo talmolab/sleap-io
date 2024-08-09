@@ -24,11 +24,19 @@ def test_load_slp(slp_typical):
 
 def test_nwb_training(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
-    save_nwb(labels, tmp_path / "test.nwb", True)
+    save_nwb(labels, tmp_path / "test_nwb.nwb")
     loaded_labels = load_nwb(tmp_path / "test.nwb")
     assert type(loaded_labels) == Labels
     assert type(load_file(tmp_path / "test.nwb")) == Labels
     assert len(loaded_labels) == len(labels)
+
+
+def test_nwb(tmp_path, slp_typical):
+    labels = load_slp(slp_typical)
+    save_nwb(labels, tmp_path / "test.nwb")
+    loaded_labels = load_nwb(tmp_path / "test_nwb.nwb")
+    assert type(loaded_labels) == Labels
+    assert type(load_file(tmp_path / "test_nwb.nwb")) == Labels
 
 
 def test_labelstudio(tmp_path, slp_typical):

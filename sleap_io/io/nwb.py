@@ -180,8 +180,8 @@ def slp_skeleton_to_nwb(
         subject = Subject(
             species_id="No specified species", subject_id="No specified id"
         )
-    skeleton_edges = dict(enumerate(skeleton.nodes))
     nwb_edges = []
+    skeleton_edges = dict(enumerate(skeleton.nodes))
     for i, source in skeleton_edges.items():
         for destination in list(skeleton_edges.values())[i:]:
             if Edge(source, destination) in skeleton.edges:
@@ -267,7 +267,7 @@ def write_video_to_path(
     """
     index_data = {}
     if frame_inds is None:
-        frame_inds = list(range(video.shape[0]))
+        frame_inds = list(range(video.backend.num_frames))
 
     if isinstance(video.filename, list):
         save_path = video.filename[0].split(".")[0]
@@ -643,9 +643,9 @@ def append_nwb_training(
         ]
         skeletons = Skeletons(skeletons=skeletons_list)
         nwb_processing_module.add(skeletons)
-
+        print(labels.videos)
         video_info = write_video_to_path(
-            labels.video, frame_inds, frame_path=frame_path
+            labels.videos[0], frame_inds, frame_path=frame_path
         )
         pose_training = labels_to_pose_training(labels, skeletons_list, video_info)
         nwb_processing_module.add(pose_training)
