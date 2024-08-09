@@ -164,7 +164,9 @@ def labels_to_pose_training(
     return pose_training
 
 
-def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton, subject: Subject) -> NWBSkeleton:  # type: ignore[return]
+def slp_skeleton_to_nwb(
+    skeleton: SLEAPSkeleton, subject: Optional[Subject] = None
+) -> NWBSkeleton:  # type: ignore[return]
     """Converts SLEAP skeleton to NWB skeleton.
 
     Args:
@@ -174,6 +176,10 @@ def slp_skeleton_to_nwb(skeleton: SLEAPSkeleton, subject: Subject) -> NWBSkeleto
     Returns:
         An NWB skeleton.
     """
+    if subject is None:
+        subject = Subject(
+            species_id="No specified species", subject_id="No specified id"
+        )
     skeleton_edges = dict(enumerate(skeleton.nodes))
     nwb_edges = []
     for i, source in skeleton_edges.items():
@@ -354,7 +360,10 @@ def read_nwb(path: str) -> Labels:
             timestamps = np.empty(())
             for track_key in _track_keys:
                 for node_name in node_names:
-                    pose_estimation_series = processing_module[track_key][node_name]
+                    try:
+                        pose_estimation_series = processing_module[track_key][node_name]
+                    except TypeError:
+                        continue
                     timestamps = np.union1d(
                         timestamps, get_timestamps(pose_estimation_series)
                     )
@@ -663,8 +672,8 @@ def append_nwb_training(
             pose_estimation_series_list.append(pose_estimation_series)
 
         camera = nwbfile.create_device(
-            name="camera",
-            description="Camera used to record the video",
+            name=f"camera {i}",
+            description="Camera used to record video {i}",
             manufacturer="No specified manufacturer",
         )
         try:
@@ -679,7 +688,7 @@ def append_nwb_training(
             original_videos=[video.filename for video in labels.videos],
             labeled_videos=[video.filename for video in labels.videos],
             dimensions=dimensions,
-            devices=[camera],
+            devices=[camera] * len(labels.videos),
             scorer="No specified scorer",
             source_software="SLEAP",
             source_software_version=sleap_version,
