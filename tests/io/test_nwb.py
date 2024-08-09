@@ -45,7 +45,9 @@ def test_video_to_path():
 def test_slp_to_nwb_conversion():
     labels_original = load_slp("tests/data/slp/minimal_instance.pkg.slp")
     subject = Subject(subject_id="test_subject", species="test_species")
-    nwb_skeletons = [slp_skeleton_to_nwb(skeleton, subject) for skeleton in labels_original.skeletons]
+    nwb_skeletons = [
+        slp_skeleton_to_nwb(skeleton, subject) for skeleton in labels_original.skeletons
+    ]
     video_info = write_video_to_path(labels_original.video)
     pose_training = labels_to_pose_training(labels_original, nwb_skeletons, video_info)
     labels_converted = pose_training_to_labels(pose_training)
