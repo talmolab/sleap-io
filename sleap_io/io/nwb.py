@@ -625,7 +625,9 @@ def append_nwb_training(
 
     for i, video in enumerate(labels.videos):
         video_path = (
-            Path(video.filename) if type(video.filename) == str else video.filename[0]
+            Path(video.filename)
+            if isinstance(video.filename, str)
+            else video.filename[i]
         )
         processing_module_name = f"SLEAP_VIDEO_{i:03}_{video_path.stem}"
         nwb_processing_module = get_processing_module_for_video(
@@ -643,7 +645,6 @@ def append_nwb_training(
         ]
         skeletons = Skeletons(skeletons=skeletons_list)
         nwb_processing_module.add(skeletons)
-        print(labels.videos)
         video_info = write_video_to_path(
             labels.videos[0], frame_inds, frame_path=frame_path
         )
@@ -826,7 +827,7 @@ def build_pose_estimation_container_for_track(
             manufacturer="No specified manufacturer",
         )
         cameras.append(camera)
-    
+
     # Arrange and mix metadata
     pose_estimation_container_kwargs = dict(
         name=f"track={track_name}",

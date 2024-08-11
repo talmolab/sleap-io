@@ -18,7 +18,7 @@ from sleap_io.io.nwb import (
     get_timestamps,
 )
 
-
+@pytest.fixture
 def nwbfile():
     session_description: str = "Testing session for nwb"
     session_start_time = datetime.datetime.now(datetime.timezone.utc)
