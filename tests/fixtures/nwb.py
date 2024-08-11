@@ -4,8 +4,14 @@ import pytest
 
 
 @pytest.fixture
+def minimal_instance_nwb():
+    """NWB file with a single instance."""
+    return "tests/data/nwb/minimal_instance.nwb"
+
+
+@pytest.fixture
 def minimal_instance_pkg_nwb():
-    """NWB file with a single instance. The video frame is not saved as an image."""
+    """NWB .pkg file with a single instance."""
     return "tests/data/nwb/minimal_instance.pkg.nwb"
 
 
