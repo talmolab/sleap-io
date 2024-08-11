@@ -823,7 +823,7 @@ def build_pose_estimation_container_for_track(
     for i, video in enumerate(labels.videos):
         camera = nwbfile.create_device(
             name=f"camera {i}",
-            description="Camera used to record video {i}",
+            description=f"Camera used to record video {i}",
             manufacturer="No specified manufacturer",
         )
         cameras.append(camera)
