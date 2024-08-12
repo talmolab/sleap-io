@@ -582,7 +582,7 @@ def append_nwb_data(
             .unique()
         )
 
-        for track_index, track_name in name_of_tracks_in_video:
+        for track_index, track_name in enumerate(name_of_tracks_in_video):
             pose_estimation_container = build_pose_estimation_container_for_track(
                 labels_data_df,
                 labels,
