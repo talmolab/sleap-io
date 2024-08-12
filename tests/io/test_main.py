@@ -40,7 +40,7 @@ def test_nwb(tmp_path, slp_typical):
 
 
 def test_nwb_training(tmp_path, slp_typical):
-    labels = load_slp(slp_typical) 
+    labels = load_slp(slp_typical)
     save_nwb(labels, tmp_path / "test_nwb.nwb", True)
 
 

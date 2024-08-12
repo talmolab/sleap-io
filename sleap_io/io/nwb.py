@@ -177,9 +177,7 @@ def slp_skeleton_to_nwb(
         An NWB skeleton.
     """
     if subject is None:
-        subject = Subject(
-            species_id="No specified species", subject_id="No specified id"
-        )
+        subject = Subject(species="No specified species", subject_id="No specified id")
     nwb_edges = []
     skeleton_edges = dict(enumerate(skeleton.nodes))
     for i, source in skeleton_edges.items():
@@ -522,7 +520,7 @@ def write_nwb(
     else:
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
-    with NWBHDF5IO(nwbfile_path, "w") as io:
+    with NWBHDF5IO(str(nwbfile_path), "w") as io:
         io.write(nwbfile)
 
 
@@ -584,14 +582,13 @@ def append_nwb_data(
             .unique()
         )
 
-        for track_name in name_of_tracks_in_video:
+        for track_index, track_name in name_of_tracks_in_video:
             pose_estimation_container = build_pose_estimation_container_for_track(
                 labels_data_df,
                 labels,
                 track_name,
                 video,
                 default_metadata,
-                nwbfile,
             )
             nwb_processing_module.add(pose_estimation_container)
 
@@ -765,7 +762,6 @@ def build_pose_estimation_container_for_track(
     track_name: str,
     video: Video,
     pose_estimation_metadata: dict,
-    nwbfile: NWBFile,
 ) -> PoseEstimation:
     """Create a PoseEstimation container for a track.
 
@@ -775,8 +771,7 @@ def build_pose_estimation_container_for_track(
         labels (Labels): A general labels object
         track_name (str): The name of the track in labels.tracks
         video (Video): The video to which data belongs to
-        pose_estimation_metadata (dict): Metadata for pose estimation.
-        nwbfile (NWBFile): The nwbfile to attach the pose estimation to.
+        pose_estimation_metadata (dict): Metadata for the pose estimation.
 
     Returns:
         PoseEstimation: A PoseEstimation multicontainer where the time series
@@ -798,8 +793,6 @@ def build_pose_estimation_container_for_track(
     skeleton = next(
         skeleton for skeleton in labels.skeletons if skeleton.name == skeleton_name
     )
-    nwb_skeleton = slp_skeleton_to_nwb(skeleton, nwbfile.subject)
-    skeletons = Skeletons(skeletons=[nwb_skeleton])
 
     track_data_df = labels_data_df[
         video.filename,
@@ -820,27 +813,20 @@ def build_pose_estimation_container_for_track(
         track_data_df, timestamps
     )
 
-    cameras = []
-    for i, video in enumerate(labels.videos):
-        camera = nwbfile.create_device(
-            name=f"camera {i}",
-            description=f"Camera used to record video {i}",
-            manufacturer="No specified manufacturer",
-        )
-        cameras.append(camera)
-
     # Arrange and mix metadata
     pose_estimation_container_kwargs = dict(
         name=f"track={track_name}",
         description=f"Estimated positions of {skeleton.name} in video {video_path.name}",
         pose_estimation_series=pose_estimation_series_list,
-        devices=cameras,
+        nodes=skeleton.node_names,
+        edges=np.array(skeleton.edge_inds).astype("uint64"),
         source_software="SLEAP",
-        skeleton=nwb_skeleton,
+        # dimensions=np.array([[video.backend.height, video.backend.width]]),
     )
 
     pose_estimation_container_kwargs.update(**pose_estimation_metadata_copy)
     pose_estimation_container = PoseEstimation(**pose_estimation_container_kwargs)
+
     return pose_estimation_container
 
 
