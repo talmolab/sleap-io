@@ -522,7 +522,7 @@ def write_nwb(
     else:
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
-    with NWBHDF5IO(str(nwbfile_path), "w") as io:
+    with NWBHDF5IO(nwbfile_path, "w") as io:
         io.write(nwbfile)
 
 
@@ -591,6 +591,7 @@ def append_nwb_data(
                 track_name,
                 video,
                 default_metadata,
+                nwbfile,
             )
             nwb_processing_module.add(pose_estimation_container)
 
@@ -623,6 +624,9 @@ def append_nwb_training(
     sleap_version = provenance.get("sleap_version", None)
     default_metadata["source_software_version"] = sleap_version
 
+    subject = Subject(subject_id="No specified id", species="No specified species")
+    nwbfile.subject = subject
+
     for i, video in enumerate(labels.videos):
         video_path = (
             Path(video.filename)
@@ -636,9 +640,6 @@ def append_nwb_training(
         default_metadata["original_videos"] = [f"{video.filename}"]
         default_metadata["labeled_videos"] = [f"{video.filename}"]
         default_metadata.update(pose_estimation_metadata)
-
-        subject = Subject(subject_id="No specified id", species="No specified species")
-        nwbfile.subject = subject
 
         skeletons_list = [
             slp_skeleton_to_nwb(skeleton, subject) for skeleton in labels.skeletons
@@ -674,7 +675,7 @@ def append_nwb_training(
 
         camera = nwbfile.create_device(
             name=f"camera {i}",
-            description="Camera used to record video {i}",
+            description=f"Camera used to record video {i}",
             manufacturer="No specified manufacturer",
         )
         try:
@@ -689,7 +690,7 @@ def append_nwb_training(
             original_videos=[video.filename for video in labels.videos],
             labeled_videos=[video.filename for video in labels.videos],
             dimensions=dimensions,
-            devices=[camera] * len(labels.videos),
+            devices=[camera],
             scorer="No specified scorer",
             source_software="SLEAP",
             source_software_version=sleap_version,
@@ -764,6 +765,7 @@ def build_pose_estimation_container_for_track(
     track_name: str,
     video: Video,
     pose_estimation_metadata: dict,
+    nwbfile: NWBFile,
 ) -> PoseEstimation:
     """Create a PoseEstimation container for a track.
 
@@ -773,6 +775,8 @@ def build_pose_estimation_container_for_track(
         labels (Labels): A general labels object
         track_name (str): The name of the track in labels.tracks
         video (Video): The video to which data belongs to
+        pose_estimation_metadata (dict): Metadata for pose estimation.
+        nwbfile (NWBFile): The nwbfile to attach the pose estimation to.
 
     Returns:
         PoseEstimation: A PoseEstimation multicontainer where the time series
@@ -794,6 +798,8 @@ def build_pose_estimation_container_for_track(
     skeleton = next(
         skeleton for skeleton in labels.skeletons if skeleton.name == skeleton_name
     )
+    nwb_skeleton = slp_skeleton_to_nwb(skeleton, nwbfile.subject)
+    skeletons = Skeletons(skeletons=[nwb_skeleton])
 
     track_data_df = labels_data_df[
         video.filename,
@@ -815,11 +821,6 @@ def build_pose_estimation_container_for_track(
     )
 
     cameras = []
-    nwbfile = NWBFile(
-        session_description="Processed SLEAP pose data",
-        session_start_time=datetime.datetime.now(datetime.timezone.utc),
-        identifier=str(uuid.uuid1()),
-    )
     for i, video in enumerate(labels.videos):
         camera = nwbfile.create_device(
             name=f"camera {i}",
@@ -833,16 +834,13 @@ def build_pose_estimation_container_for_track(
         name=f"track={track_name}",
         description=f"Estimated positions of {skeleton.name} in video {video_path.name}",
         pose_estimation_series=pose_estimation_series_list,
-        nodes=skeleton.node_names,
         devices=cameras,
-        edges=np.array(skeleton.edge_inds).astype("uint64"),
         source_software="SLEAP",
-        # dimensions=np.array([[video.backend.height, video.backend.width]]),
+        skeleton=nwb_skeleton,
     )
 
     pose_estimation_container_kwargs.update(**pose_estimation_metadata_copy)
     pose_estimation_container = PoseEstimation(**pose_estimation_container_kwargs)
-
     return pose_estimation_container
 
 
