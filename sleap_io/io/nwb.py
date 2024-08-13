@@ -25,6 +25,7 @@ except ImportError:
     ArrayLike = np.ndarray
 
 from hdmf.utils import LabelledDict
+from hdmf.build.errors import OrphanContainerBuildError
 
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule
 from pynwb.file import Subject
@@ -521,7 +522,17 @@ def write_nwb(
         nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
-        io.write(nwbfile)
+        try:
+            io.write(nwbfile)
+        except OrphanContainerBuildError:
+            processing_module = nwbfile.processing[
+                f"SLEAP_VIDEO_000_{Path(labels.videos[0].filename).stem}"
+            ]
+            pose_estimation = processing_module["track=untracked"]
+            skeleton = pose_estimation.skeleton
+            skeletons = Skeletons(skeletons=[skeleton])
+            processing_module.add(skeletons)
+            io.write(nwbfile)
 
 
 def append_nwb_data(
@@ -568,7 +579,7 @@ def append_nwb_data(
         nwb_processing_module = get_processing_module_for_video(
             processing_module_name, nwbfile
         )
-        
+
         camera = nwbfile.create_device(
             name=f"camera {video_index}",
             description=f"Camera used to record video {video_index}",
@@ -843,7 +854,7 @@ def build_pose_estimation_container_for_track(
 
 
 def build_track_pose_estimation_list(
-    track_data_df: pd.DataFrame, timestamps: ArrayLike # type: ignore[return]
+    track_data_df: pd.DataFrame, timestamps: ArrayLike  # type: ignore[return]
 ) -> List[PoseEstimationSeries]:
     """Build a list of PoseEstimationSeries from tracks.
 
