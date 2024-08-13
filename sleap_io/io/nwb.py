@@ -559,6 +559,7 @@ def append_nwb_data(
     default_metadata["source_software_version"] = sleap_version
 
     labels_data_df = convert_predictions_to_dataframe(labels)
+    cameras = []
 
     # For every video create a processing module
     for video_index, video in enumerate(labels.videos):
@@ -567,6 +568,13 @@ def append_nwb_data(
         nwb_processing_module = get_processing_module_for_video(
             processing_module_name, nwbfile
         )
+        
+        camera = nwbfile.create_device(
+            name=f"camera {video_index}",
+            description=f"Camera used to record video {video_index}",
+            manufacturer="No specified manufacturer",
+        )
+        cameras.append(camera)
 
         # Propagate video metadata
         default_metadata["original_videos"] = [f"{video.filename}"]
@@ -589,6 +597,7 @@ def append_nwb_data(
                 track_name,
                 video,
                 default_metadata,
+                nwbfile,
             )
             nwb_processing_module.add(pose_estimation_container)
 
@@ -762,6 +771,7 @@ def build_pose_estimation_container_for_track(
     track_name: str,
     video: Video,
     pose_estimation_metadata: dict,
+    nwbfile: NWBFile,
 ) -> PoseEstimation:
     """Create a PoseEstimation container for a track.
 
@@ -772,6 +782,7 @@ def build_pose_estimation_container_for_track(
         track_name (str): The name of the track in labels.tracks
         video (Video): The video to which data belongs to
         pose_estimation_metadata (dict): Metadata for the pose estimation.
+        nwbfile (NWBFile): The nwbfile.
 
     Returns:
         PoseEstimation: A PoseEstimation multicontainer where the time series
@@ -821,6 +832,7 @@ def build_pose_estimation_container_for_track(
         nodes=skeleton.node_names,
         edges=np.array(skeleton.edge_inds).astype("uint64"),
         source_software="SLEAP",
+        devices=[list(nwbfile.devices.values())[0]],
         # dimensions=np.array([[video.backend.height, video.backend.width]]),
     )
 
@@ -831,7 +843,7 @@ def build_pose_estimation_container_for_track(
 
 
 def build_track_pose_estimation_list(
-    track_data_df: pd.DataFrame, timestamps: ArrayLike  # type: ignore[return]
+    track_data_df: pd.DataFrame, timestamps: ArrayLike # type: ignore[return]
 ) -> List[PoseEstimationSeries]:
     """Build a list of PoseEstimationSeries from tracks.
 
