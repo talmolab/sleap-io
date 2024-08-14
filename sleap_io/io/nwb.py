@@ -346,7 +346,10 @@ def read_nwb(path: str) -> Labels:
         track_keys: List[str] = list(test_processing_module.fields["data_interfaces"])
 
         # Get track
-        test_pose_estimation: PoseEstimation = test_processing_module[track_keys[0]]
+        for key in track_keys:
+            if isinstance(test_processing_module[key], PoseEstimation):
+                test_pose_estimation = test_processing_module[key]
+                break
         node_names = test_pose_estimation.nodes[:]
         edge_inds = test_pose_estimation.edges[:]
 
@@ -363,6 +366,10 @@ def read_nwb(path: str) -> Labels:
                         pose_estimation_series = processing_module[track_key][node_name]
                     except TypeError:
                         continue
+                    except KeyError:
+                        pose_estimation_series = processing_module[
+                            "track=untracked"
+                        ].pose_estimation_series[node_name]
                     timestamps = np.union1d(
                         timestamps, get_timestamps(pose_estimation_series)
                     )
@@ -375,10 +382,20 @@ def read_nwb(path: str) -> Labels:
             tracks_numpy = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, np.float32)
             confidence = np.full((n_frames, n_tracks, n_nodes), np.nan, np.float32)
             for track_idx, track_key in enumerate(_track_keys):
-                pose_estimation = processing_module[track_key]
+                try:
+                    pose_estimation = processing_module[track_key]
+                    if not isinstance(pose_estimation, PoseEstimation):
+                        raise KeyError
+                except KeyError:
+                    pose_estimation = processing_module["track=untracked"]
 
                 for node_idx, node_name in enumerate(node_names):
-                    pose_estimation_series = pose_estimation[node_name]
+                    try:
+                        pose_estimation_series = pose_estimation[node_name]
+                    except KeyError:
+                        pose_estimation_series = pose_estimation.pose_estimation_series[
+                            node_name
+                        ]
                     frame_inds = np.searchsorted(
                         timestamps, get_timestamps(pose_estimation_series)
                     )
@@ -416,15 +433,24 @@ def read_nwb(path: str) -> Labels:
             ):
                 if np.isnan(inst_pts).all():
                     continue
-                insts.append(
-                    Instance.from_numpy(
-                        points=inst_pts,  # (n_nodes, 2)
-                        point_scores=inst_confs,  # (n_nodes,)
-                        instance_score=inst_confs.mean(),  # ()
-                        skeleton=skeleton,
-                        track=track if is_tracked else None,
+                try:
+                    insts.append(
+                        Instance.from_numpy(
+                            points=inst_pts,  # (n_nodes, 2)
+                            point_scores=inst_confs,  # (n_nodes,)
+                            instance_score=inst_confs.mean(),  # ()
+                            skeleton=skeleton,
+                            track=track if is_tracked else None,
+                        )
                     )
-                )
+                except TypeError:
+                    insts.append(
+                        Instance.from_numpy(
+                            points=inst_pts,
+                            skeleton=skeleton,
+                            track=track if is_tracked else None,
+                        )
+                    )
             if len(insts) > 0:
                 lfs.append(
                     LabeledFrame(video=video, frame_idx=frame_idx, instances=insts)
@@ -533,6 +559,38 @@ def write_nwb(
             skeletons = Skeletons(skeletons=[skeleton])
             processing_module.add(skeletons)
             io.write(nwbfile)
+
+
+def handle_orphan_container_error(labels: Labels, nwbfile: NWBFile) -> NWBFile:
+    """Handle orphan container error by adding a skeleton to the processing module.
+
+    Args:
+        labels: A general labels object.
+        nwbfile: An in-memory nwbfile where the data is to be appended.
+    
+    Returns:
+        An in-memory nwbfile with the data from the labels object appended.
+    """
+    processing_module = nwbfile.processing[
+        f"SLEAP_VIDEO_000_{Path(labels.videos[0].filename).stem}"
+    ]
+    if "track=untracked" in processing_module.containers:
+        pose_estimation = processing_module.containers["track=untracked"]
+        skeleton = pose_estimation.skeleton
+        skeletons = Skeletons(skeletons=[skeleton])
+    else:
+        skeletons = []
+        for i in range(len(labels.tracks)):
+            pose_estimation = processing_module.containers[f"track=track_{i}"]
+            skeleton = pose_estimation.skeleton
+            skeletons.append(skeleton)
+    try:
+        processing_module.add(skeletons)
+    except ValueError:
+        skeleton = pose_estimation.skeleton
+        skeletons = Skeletons(skeletons=[skeleton])
+        processing_module.add(skeletons)
+    return nwbfile
 
 
 def append_nwb_data(
