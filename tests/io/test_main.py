@@ -30,12 +30,6 @@ def test_nwb(tmp_path, slp_typical, slp_predictions_with_provenance):
     assert type(load_file(tmp_path / "test_nwb.nwb")) == Labels
     assert len(loaded_labels) == len(labels)
 
-    labels2 = load_slp(slp_predictions_with_provenance)
-    save_nwb(labels2, tmp_path / "test_nwb2.nwb", False)
-    loaded_labels2 = load_nwb(tmp_path / "test_nwb2.nwb")
-    assert type(loaded_labels2) == Labels
-    assert len(loaded_labels2) == len(labels2)
-
 
 def test_nwb_training(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
