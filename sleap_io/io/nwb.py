@@ -568,40 +568,6 @@ def write_nwb(
             io.write(nwbfile)
 
 
-def handle_orphan_container_error(
-    labels: Labels, nwbfile: NWBFile
-) -> tuple[NWBFile, Skeletons]:  # type: ignore[return]
-    """Handle orphan container error by adding a skeleton to the processing module.
-
-    Args:
-        labels: A general labels object.
-        nwbfile: An in-memory nwbfile where the data is to be appended.
-
-    Returns:
-        An in-memory nwbfile with the data from the labels object appended.
-    """
-    processing_module = nwbfile.processing[
-        f"SLEAP_VIDEO_000_{Path(labels.videos[0].filename).stem}"
-    ]
-    if "track=untracked" in processing_module.containers:
-        pose_estimation = processing_module.containers["track=untracked"]
-        skeleton = pose_estimation.skeleton
-        skeletons = Skeletons(skeletons=[skeleton])
-    else:
-        skeletons = []
-        for i in range(len(labels.tracks)):
-            pose_estimation = processing_module.containers[f"track=track_{i}"]
-            skeleton = pose_estimation.skeleton
-            skeletons.append(skeleton)
-    try:
-        processing_module.add(skeletons)
-    except ValueError:
-        skeleton = pose_estimation.skeleton
-        skeletons = Skeletons(skeletons=[skeleton])
-        processing_module.add(skeletons)
-    return nwbfile
-
-
 def append_nwb_data(
     labels: Labels, nwbfile: NWBFile, pose_estimation_metadata: Optional[dict] = None
 ) -> NWBFile:
