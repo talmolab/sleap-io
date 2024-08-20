@@ -460,20 +460,6 @@ def read_nwb(path: str) -> Labels:
     return labels
 
 
-def read_nwb_training(processing_modules: LabelledDict) -> Labels:
-    """Read an NWB formatted file with NWB training data to a SLEAP `Labels` object.
-
-    Args:
-        processing_modules: A dictionary of processing modules from the NWB file.
-
-    Returns:
-        A `Labels` object.
-    """
-    for processing_module in processing_modules.values():
-        if isinstance(processing_module, PoseTraining):
-            return pose_training_to_labels(processing_module)
-
-
 def write_nwb(
     labels: Labels,
     nwbfile_path: str,
@@ -773,7 +759,7 @@ def append_nwb(
 
     See also: append_nwb_data
     """
-    with NWBHDF5IO(filename, mode="w", load_namespaces=True) as io:
+    with NWBHDF5IO(filename, mode="a", load_namespaces=True) as io:
         nwb_file = io.read()
         if as_training:
             nwb_file = append_nwb_training(
