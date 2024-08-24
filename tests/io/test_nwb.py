@@ -174,6 +174,7 @@ def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
 
 def test_complex_case_append(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
+    labels.clean(tracks=True)
     nwbfile = append_nwb_data(labels, nwbfile)
 
     # Test matching number of processing modules
@@ -212,6 +213,7 @@ def test_complex_case_append(nwbfile, centered_pair):
 
 def test_complex_case_append_with_timestamps_metadata(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
+    labels.clean(tracks=True)
 
     number_of_frames = 1100  # extracted using ffmpeg probe
     video_sample_rate = 15.0  # 15 Hz extracted using ffmpeg probe for the video stream
@@ -281,6 +283,7 @@ def test_typical_case_write(slp_typical, tmp_path):
 
 def test_get_timestamps(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
+    labels.clean(tracks=True)
     nwbfile = append_nwb_data(labels, nwbfile)
     processing = nwbfile.processing["SLEAP_VIDEO_000_centered_pair_low_quality"]
     assert True
