@@ -6,6 +6,8 @@ from sleap_io.io import slp, nwb, labelstudio, jabs
 from typing import Optional, Union
 from pathlib import Path
 
+from pynwb import NWBHDF5IO
+
 
 def load_slp(filename: str) -> Labels:
     """Load a SLEAP dataset.
@@ -59,21 +61,45 @@ def load_nwb(filename: str) -> Labels:
     return nwb.read_nwb(filename)
 
 
-def save_nwb(labels: Labels, filename: str, append: bool = True):
+def save_nwb(
+    labels: Labels,
+    filename: str,
+    as_training: bool = False,
+    append: bool = True,
+    frame_inds: Optional[list[int]] = None,
+    frame_path: Optional[str] = None,
+):
     """Save a SLEAP dataset to NWB format.
 
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to NWB file to save to. Must end in `.nwb`.
+        as_training: If `True`, save the dataset as a training dataset.
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
+        frame_inds: Optional list of frame indices to save. If None, all frames
+            will be saved.
+        frame_path: The path to save the frames. If None, the path is the video
+            filename without the extension.
 
-    See also: nwb.write_nwb, nwb.append_nwb
+    See also: nwb.write_nwb, nwb.append_nwb, nwb.append_nwb_training
     """
     if append and Path(filename).exists():
-        nwb.append_nwb(labels, filename)
+        nwb.append_nwb(
+            labels,
+            filename,
+            as_training=as_training,
+            frame_inds=frame_inds,
+            frame_path=frame_path,
+        )
     else:
-        nwb.write_nwb(labels, filename)
+        nwb.write_nwb(
+            labels,
+            filename,
+            as_training=as_training,
+            frame_inds=frame_inds,
+            frame_path=frame_path,
+        )
 
 
 def load_labelstudio(
@@ -190,6 +216,8 @@ def load_file(
         return load_jabs(filename, **kwargs)
     elif format == "video":
         return load_video(filename, **kwargs)
+    else:
+        raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
 
 
 def save_file(
@@ -219,8 +247,10 @@ def save_file(
 
     if format == "slp":
         save_slp(labels, filename, **kwargs)
-    elif format == "nwb":
-        save_nwb(labels, filename, **kwargs)
+    elif format in ("nwb", "nwb_predictions"):
+        save_nwb(labels, filename, False)
+    elif format == "nwb_training":
+        save_nwb(labels, filename, True, frame_inds=kwargs.pop("frame_inds", None))
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
