@@ -16,7 +16,7 @@ dependencies:
   - hdmf
   - numpy <2.0.0
   - opencv
-  - pynwb
+  - pynwb <=2.7.0
   - ndx-pose
   - pytest
   - pytest-cov
