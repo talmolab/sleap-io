@@ -24,7 +24,6 @@ try:
 except ImportError:
     ArrayLike = np.ndarray
 
-from hdmf.utils import LabelledDict
 from hdmf.build.errors import OrphanContainerBuildError
 
 from pynwb import NWBFile, NWBHDF5IO, ProcessingModule

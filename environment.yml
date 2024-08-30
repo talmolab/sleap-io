@@ -13,10 +13,10 @@ dependencies:
   - pandas
   - simplejson
   - h5py >=3.8.0
-  - hdmf
+  - hdmf == 3.13.0
   - numpy <2.0.0
   - opencv
-  - pynwb <=2.7.0
+  - pynwb
   - ndx-pose
   - pytest
   - pytest-cov
