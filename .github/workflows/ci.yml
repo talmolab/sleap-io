@@ -54,12 +54,15 @@ jobs:
 
   # Tests with pytest
   tests:
-    timeout-minutes: 40
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "windows-latest", "macos-14"]
-        python: ["3.12"]
+        python: ["3.8", "3.12"]
+        exclude:
+          - os: "macos-14"
+            python: "3.8"
 
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
