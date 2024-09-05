@@ -24,7 +24,7 @@ dependencies:
   - pydocstyle
   - toml
   - twine
-  - build
+  - python-build
   - pip
   - pip:
     - "--editable=.[dev]"
