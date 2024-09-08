@@ -57,188 +57,6 @@ from sleap_io import (
 from sleap_io.io.utils import convert_predictions_to_dataframe
 
 
-def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
-    """Creates a Labels object from an NWB PoseTraining object.
-
-    Args:
-        pose_training: An NWB PoseTraining object.
-
-    Returns:
-        A Labels object.
-    """
-    labeled_frames = []
-    skeletons = {}
-    training_frames = pose_training.training_frames.training_frames.values()
-    for training_frame in training_frames:
-        source_video = training_frame.source_video
-        video = Video(source_video.external_file)
-
-        frame_idx = training_frame.source_video_frame_index
-        instances = []
-        for instance in training_frame.skeleton_instances.skeleton_instances.values():
-            if instance.skeleton.name not in skeletons:
-                skeletons[instance.skeleton.name] = nwb_skeleton_to_sleap(
-                    instance.skeleton
-                )
-            skeleton = skeletons[instance.skeleton.name]
-            instances.append(
-                Instance.from_numpy(
-                    points=instance.node_locations[:], skeleton=skeleton
-                )
-            )
-        labeled_frames.append(
-            LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
-        )
-    return Labels(labeled_frames=labeled_frames)
-
-
-def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: ignore[return]
-    """Converts an NWB skeleton to a SLEAP skeleton.
-
-    Args:
-        skeleton: An NWB skeleton.
-
-    Returns:
-        A SLEAP skeleton.
-    """
-    nodes = [Node(name=node) for node in skeleton.nodes]
-    edges = [Edge(source=edge[0], destination=edge[1]) for edge in skeleton.edges]
-    return SLEAPSkeleton(
-        nodes=nodes,
-        edges=edges,
-        name=skeleton.name,
-    )
-
-
-def labels_to_pose_training(
-    labels: Labels,
-    skeletons_list: list[NWBSkeleton],  # type: ignore[return]
-    video_info: tuple[dict[int, str], Video, ImageSeries],
-) -> PoseTraining:  # type: ignore[return]
-    """Creates an NWB PoseTraining object from a Labels object.
-
-    Args:
-        labels: A Labels object.
-        skeletons_list: A list of NWB skeletons.
-        video_info: A tuple containing a dictionary mapping frame indices to file paths,
-            the video, and the `ImageSeries`.
-
-    Returns:
-        A PoseTraining object.
-    """
-    training_frame_list = []
-    skeleton_instances_list = []
-    source_video_list = []
-    for i, labeled_frame in enumerate(labels.labeled_frames):
-        for instance, skeleton in zip(labeled_frame.instances, skeletons_list):
-            skeleton_instance = instance_to_skeleton_instance(instance, skeleton)
-            skeleton_instances_list.append(skeleton_instance)
-
-        training_frame_skeleton_instances = SkeletonInstances(
-            skeleton_instances=skeleton_instances_list
-        )
-        training_frame_video_index = labeled_frame.frame_idx
-
-        image_series = video_info[2]
-        source_video = image_series
-        if source_video not in source_video_list:
-            source_video_list.append(source_video)
-        training_frame = TrainingFrame(
-            name=f"training_frame_{i}",
-            annotator="N/A",
-            skeleton_instances=training_frame_skeleton_instances,
-            source_video=source_video,
-            source_video_frame_index=training_frame_video_index,
-        )
-        training_frame_list.append(training_frame)
-
-    training_frames = TrainingFrames(training_frames=training_frame_list)
-    source_videos = SourceVideos(image_series=source_video_list)
-    pose_training = PoseTraining(
-        training_frames=training_frames,
-        source_videos=source_videos,
-    )
-    return pose_training
-
-
-def slp_skeleton_to_nwb(
-    skeleton: SLEAPSkeleton, subject: Optional[Subject] = None
-) -> NWBSkeleton:  # type: ignore[return]
-    """Converts SLEAP skeleton to NWB skeleton.
-
-    Args:
-        skeleton: A SLEAP skeleton.
-        subject: An NWB subject.
-
-    Returns:
-        An NWB skeleton.
-    """
-    if subject is None:
-        subject = Subject(species="No specified species", subject_id="No specified id")
-    nwb_edges = []
-    skeleton_edges = dict(enumerate(skeleton.nodes))
-    for i, source in skeleton_edges.items():
-        for destination in list(skeleton_edges.values())[i:]:
-            if Edge(source, destination) in skeleton.edges:
-                nwb_edges.append([i, list(skeleton_edges.values()).index(destination)])
-
-    return NWBSkeleton(
-        name=skeleton.name,
-        nodes=skeleton.node_names,
-        edges=np.array(nwb_edges, dtype=np.uint8),
-        subject=subject,
-    )
-
-
-def instance_to_skeleton_instance(
-    instance: Instance, skeleton: NWBSkeleton  # type: ignore[return]
-) -> SkeletonInstance:  # type: ignore[return]
-    """Converts a SLEAP Instance to an NWB SkeletonInstance.
-
-    Args:
-        instance: A SLEAP Instance.
-        skeleton: An NWB Skeleton.
-
-    Returns:
-        An NWB SkeletonInstance.
-    """
-    points_list = list(instance.points.values())
-    node_locs = [[point.x, point.y] for point in points_list]
-    np_node_locations = np.array(node_locs)
-    return SkeletonInstance(
-        name=f"skeleton_instance_{id(instance)}",
-        id=np.uint64(id(instance)),
-        node_locations=np_node_locations,
-        node_visibility=[point.visible for point in instance.points.values()],
-        skeleton=skeleton,
-    )
-
-
-def videos_to_source_videos(videos: list[Video]) -> SourceVideos:  # type: ignore[return]
-    """Converts a list of SLEAP Videos to NWB SourceVideos.
-
-    Args:
-        videos: A list of SLEAP Videos.
-
-    Returns:
-        An NWB SourceVideos object.
-    """
-    source_videos = []
-    for i, video in enumerate(videos):
-        image_series = ImageSeries(
-            name=f"video_{i}",
-            description="N/A",
-            unit="NA",
-            format="external",
-            external_file=[video.filename],
-            dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
-            starting_frame=[0],
-            rate=30.0,  # TODO - change to `video.backend.fps` when available
-        )
-        source_videos.append(image_series)
-    return SourceVideos(image_series=source_videos)
-
-
 def write_video_to_path(
     video: Video,
     frame_inds: Optional[list[int]] = None,
@@ -308,6 +126,194 @@ def write_video_to_path(
         rate=30.0,  # TODO - change to `video.backend.fps` when available
     )
     return index_data, video, image_series
+
+
+def labels_to_pose_training(
+    labels: Labels,
+    skeletons_list: list[NWBSkeleton],  # type: ignore[return]
+    video_info: tuple[dict[int, str], Video, ImageSeries],
+) -> PoseTraining:  # type: ignore[return]
+    """Creates an NWB PoseTraining object from a Labels object.
+
+    Args:
+        labels: A Labels object.
+        skeletons_list: A list of NWB skeletons.
+        video_info: A tuple containing a dictionary mapping frame indices to file paths,
+            the video, and the `ImageSeries`.
+
+    Returns:
+        A PoseTraining object.
+    """
+    training_frame_list = []
+    skeleton_instances_list = []
+    source_video_list = []
+    for i, labeled_frame in enumerate(labels.labeled_frames):
+        instance_counter = 0
+        for instance, skeleton in zip(labeled_frame.instances, skeletons_list):
+            skeleton_instance = instance_to_skeleton_instance(
+                instance, skeleton, instance_counter
+            )
+            skeleton_instances_list.append(skeleton_instance)
+            instance_counter += 1
+
+        training_frame_skeleton_instances = SkeletonInstances(
+            skeleton_instances=skeleton_instances_list
+        )
+        training_frame_video_index = labeled_frame.frame_idx
+
+        image_series = video_info[2]
+        source_video = image_series
+        if source_video not in source_video_list:
+            source_video_list.append(source_video)
+        training_frame = TrainingFrame(
+            name=f"training_frame_{i}",
+            annotator="N/A",
+            skeleton_instances=training_frame_skeleton_instances,
+            source_video=source_video,
+            source_video_frame_index=training_frame_video_index,
+        )
+        training_frame_list.append(training_frame)
+
+    training_frames = TrainingFrames(training_frames=training_frame_list)
+    source_videos = SourceVideos(image_series=source_video_list)
+    pose_training = PoseTraining(
+        training_frames=training_frames,
+        source_videos=source_videos,
+    )
+    return pose_training
+
+
+def pose_training_to_labels(pose_training: PoseTraining) -> Labels:  # type: ignore[return]
+    """Creates a Labels object from an NWB PoseTraining object.
+
+    Args:
+        pose_training: An NWB PoseTraining object.
+
+    Returns:
+        A Labels object.
+    """
+    labeled_frames = []
+    skeletons = {}
+    training_frames = pose_training.training_frames.training_frames.values()
+    for training_frame in training_frames:
+        source_video = training_frame.source_video
+        video = Video(source_video.external_file)
+
+        frame_idx = training_frame.source_video_frame_index
+        instances = []
+        for instance in training_frame.skeleton_instances.skeleton_instances.values():
+            if instance.skeleton.name not in skeletons:
+                skeletons[instance.skeleton.name] = nwb_skeleton_to_sleap(
+                    instance.skeleton
+                )
+            skeleton = skeletons[instance.skeleton.name]
+            instances.append(
+                Instance.from_numpy(
+                    points=instance.node_locations[:], skeleton=skeleton
+                )
+            )
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
+        )
+    return Labels(labeled_frames=labeled_frames)
+
+
+def nwb_skeleton_to_sleap(skeleton: NWBSkeleton) -> SLEAPSkeleton:  # type: ignore[return]
+    """Converts an NWB skeleton to a SLEAP skeleton.
+
+    Args:
+        skeleton: An NWB skeleton.
+
+    Returns:
+        A SLEAP skeleton.
+    """
+    nodes = [Node(name=node) for node in skeleton.nodes]
+    edges = [Edge(source=edge[0], destination=edge[1]) for edge in skeleton.edges]
+    return SLEAPSkeleton(
+        nodes=nodes,
+        edges=edges,
+        name=skeleton.name,
+    )
+
+
+def slp_skeleton_to_nwb(
+    skeleton: SLEAPSkeleton, subject: Optional[Subject] = None
+) -> NWBSkeleton:  # type: ignore[return]
+    """Converts SLEAP skeleton to NWB skeleton.
+
+    Args:
+        skeleton: A SLEAP skeleton.
+        subject: An NWB subject.
+
+    Returns:
+        An NWB skeleton.
+    """
+    if subject is None:
+        subject = Subject(species="No specified species", subject_id="No specified id")
+    nwb_edges = []
+    skeleton_edges = dict(enumerate(skeleton.nodes))
+    for i, source in skeleton_edges.items():
+        for destination in list(skeleton_edges.values())[i:]:
+            if Edge(source, destination) in skeleton.edges:
+                nwb_edges.append([i, list(skeleton_edges.values()).index(destination)])
+
+    return NWBSkeleton(
+        name=skeleton.name,
+        nodes=skeleton.node_names,
+        edges=np.array(nwb_edges, dtype=np.uint8),
+        subject=subject,
+    )
+
+
+def instance_to_skeleton_instance(
+    instance: Instance,
+    skeleton: NWBSkeleton,  # type: ignore[return]
+    counter: int,
+) -> SkeletonInstance:  # type: ignore[return]
+    """Converts a SLEAP Instance to an NWB SkeletonInstance.
+
+    Args:
+        instance: A SLEAP Instance.
+        skeleton: An NWB Skeleton.
+        counter: An integer counter.
+
+    Returns:
+        An NWB SkeletonInstance.
+    """
+    points_list = list(instance.points.values())
+    node_locations = np.array([[point.x, point.y] for point in points_list])
+    return SkeletonInstance(
+        name=f"skeleton_instance_{counter}",
+        id=np.uint64(counter),
+        node_locations=node_locations,
+        node_visibility=[point.visible for point in instance.points.values()],
+        skeleton=skeleton,
+    )
+
+
+def videos_to_source_videos(videos: list[Video]) -> SourceVideos:  # type: ignore[return]
+    """Converts a list of SLEAP Videos to NWB SourceVideos.
+
+    Args:
+        videos: A list of SLEAP Videos.
+
+    Returns:
+        An NWB SourceVideos object.
+    """
+    source_videos = []
+    for i, video in enumerate(videos):
+        image_series = ImageSeries(
+            name=f"video_{i}",
+            description="N/A",
+            unit="NA",
+            format="external",
+            external_file=[video.filename],
+            dimension=[video.backend.img_shape[0], video.backend.img_shape[1]],
+            starting_frame=[0],
+            rate=30.0,  # TODO - change to `video.backend.fps` when available
+        )
+        source_videos.append(image_series)
+    return SourceVideos(image_series=source_videos)
 
 
 def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
