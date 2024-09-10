@@ -434,7 +434,7 @@ def write_videos(labels_path: str, videos: list[Video], restore_source: bool = F
 
         video_json = video_to_dict(video)
 
-        video_jsons.append(np.string_(json.dumps(video_json, separators=(",", ":"))))
+        video_jsons.append(np.bytes_(json.dumps(video_json, separators=(",", ":"))))
 
     with h5py.File(labels_path, "a") as f:
         f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
@@ -466,7 +466,7 @@ def write_tracks(labels_path: str, tracks: list[Track]):
     # TODO: Add support for track metadata like spawned on frame.
     SPAWNED_ON = 0
     tracks_json = [
-        np.string_(json.dumps([SPAWNED_ON, track.name], separators=(",", ":")))
+        np.bytes_(json.dumps([SPAWNED_ON, track.name], separators=(",", ":")))
         for track in tracks
     ]
     with h5py.File(labels_path, "a") as f:
@@ -517,7 +517,7 @@ def write_suggestions(
             "frame_idx": suggestion.frame_idx,
             "group": GROUP,
         }
-        suggestion_json = np.string_(json.dumps(suggestion_dict, separators=(",", ":")))
+        suggestion_json = np.bytes_(json.dumps(suggestion_dict, separators=(",", ":")))
         suggestions_json.append(suggestion_json)
 
     with h5py.File(labels_path, "a") as f:
@@ -743,7 +743,7 @@ def write_metadata(labels_path: str, labels: Labels):
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
         grp.attrs["format_id"] = 1.2
-        grp.attrs["json"] = np.string_(json.dumps(md, separators=(",", ":")))
+        grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
 
 
 def read_points(labels_path: str) -> list[Point]:
