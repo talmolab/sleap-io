@@ -148,7 +148,7 @@ class VideoBackend:
         """
         if test_img is None:
             test_img = self.read_test_frame()
-        is_grayscale = bool(np.all(test_img[..., 0] == test_img[..., -1]))
+        is_grayscale = np.array_equal(test_img[..., 0], test_img[..., -1])
         self.grayscale = is_grayscale
         return is_grayscale
 
