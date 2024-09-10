@@ -193,10 +193,10 @@ def convert_labels(labels: Labels) -> List[dict]:
                         "result": frame_annots,
                         "was_cancelled": False,
                         "ground_truth": False,
-                        "created_at": datetime.datetime.utcnow().strftime(
+                        "created_at": datetime.datetime.now(datetime.timezone.utc).strftime(
                             "%Y-%m-%dT%H:%M:%S.%fZ"
                         ),
-                        "updated_at": datetime.datetime.utcnow().strftime(
+                        "updated_at": datetime.datetime.now(datetime.timezone.utc).strftime(
                             "%Y-%m-%dT%H:%M:%S.%fZ"
                         ),
                         "lead_time": 0,
