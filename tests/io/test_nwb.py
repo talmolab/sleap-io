@@ -211,7 +211,7 @@ def test_complex_case_append_with_timestamps_metadata(nwbfile, centered_pair):
         # Other store timestamps and the timestmaps should be a subset of the videotimestamps
         else:
             extracted_timestamps = pose_estimation_series.timestamps
-            assert np.in1d(
+            assert np.isin(
                 extracted_timestamps, video_timestamps, assume_unique=True
             ).all()
 
