@@ -14,7 +14,7 @@ dependencies:
   - simplejson
   - h5py >=3.8.0
   - hdmf
-  - numpy <2.0.0
+  - numpy
   - opencv
   - pynwb
   - ndx-pose
@@ -24,7 +24,7 @@ dependencies:
   - pydocstyle
   - toml
   - twine
-  - build
+  - python-build
   - pip
   - pip:
     - "--editable=.[dev]"
