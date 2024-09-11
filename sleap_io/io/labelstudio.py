@@ -9,13 +9,14 @@ Some important nomenclature:
 """
 
 import datetime
-import simplejson as json
 import math
 import uuid
-from typing import Dict, Iterable, List, Tuple, Optional, Union
 import warnings
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
-from sleap_io import Instance, LabeledFrame, Labels, Node, Point, Video, Skeleton
+import simplejson as json
+
+from sleap_io import Instance, LabeledFrame, Labels, Node, Point, Skeleton, Video
 
 
 def read_labels(
@@ -193,12 +194,12 @@ def convert_labels(labels: Labels) -> List[dict]:
                         "result": frame_annots,
                         "was_cancelled": False,
                         "ground_truth": False,
-                        "created_at": datetime.datetime.utcnow().strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
-                        "updated_at": datetime.datetime.utcnow().strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
+                        "created_at": datetime.datetime.now(
+                            datetime.timezone.utc
+                        ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                        "updated_at": datetime.datetime.now(
+                            datetime.timezone.utc
+                        ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                         "lead_time": 0,
                         "result_count": 1,
                         # "completed_by": user['id']
