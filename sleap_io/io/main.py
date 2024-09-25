@@ -6,8 +6,6 @@ from sleap_io.io import slp, nwb, labelstudio, jabs
 from typing import Optional, Union
 from pathlib import Path
 
-from pynwb import NWBHDF5IO
-
 
 def load_slp(filename: str) -> Labels:
     """Load a SLEAP dataset.
@@ -74,13 +72,20 @@ def save_nwb(
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to NWB file to save to. Must end in `.nwb`.
-        as_training: If `True`, save the dataset as a training dataset.
+        as_training: If `True`, save the dataset as a training dataset. This will use
+            data structures from `ndx-pose` that do not assume the data is a continuous
+            timeseries. This is useful for saving training data which includes frames
+            from random videos. If `False` (the default), save the dataset as a
+            timeseries, assuming the data is continuous. This is useful for saving
+            tracked predictions that is used for downstream analysis.
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
-        frame_inds: Optional list of frame indices to save. If None, all frames
-            will be saved.
-        frame_path: The path to save the frames. If None, the path is the video
-            filename without the extension.
+        frame_inds: Optional list of frame indices to save when saving in training data
+            format. If `None`, all frames will be saved. No effect if `as_training` is
+            `False`.
+        frame_path: The path to save the extracted frame images to when saving in
+            training data format. If `None`, the path is the video filename without the
+            extension. No effect if `as_training` is `False`.
 
     See also: nwb.write_nwb, nwb.append_nwb, nwb.append_nwb_training
     """
@@ -250,7 +255,7 @@ def save_file(
     elif format in ("nwb", "nwb_predictions"):
         save_nwb(labels, filename, False)
     elif format == "nwb_training":
-        save_nwb(labels, filename, True, frame_inds=kwargs.pop("frame_inds", None))
+        save_nwb(labels, filename, True, frame_inds=kwargs.get("frame_inds", None))
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
