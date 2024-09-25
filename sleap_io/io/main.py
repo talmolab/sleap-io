@@ -66,6 +66,7 @@ def save_nwb(
     append: bool = True,
     frame_inds: Optional[list[int]] = None,
     frame_path: Optional[str] = None,
+    image_format: str = "png",
 ):
     """Save a SLEAP dataset to NWB format.
 
@@ -80,12 +81,14 @@ def save_nwb(
             tracked predictions that is used for downstream analysis.
         append: If `True` (the default), append to existing NWB file. File will be
             created if it does not exist.
-        frame_inds: Optional list of frame indices to save when saving in training data
-            format. If `None`, all frames will be saved. No effect if `as_training` is
-            `False`.
-        frame_path: The path to save the extracted frame images to when saving in
-            training data format. If `None`, the path is the video filename without the
-            extension. No effect if `as_training` is `False`.
+        frame_inds: Optional list of labeled frame indices within the Labels to save
+            when saving in training data format. If `None`, all labeled frames in the
+            labels will be saved. No effect if `as_training` is `False`.
+        frame_path: The path to a folder to save the extracted frame images to when
+            saving in training data format. If `None`, the path is the NWB filename
+            without the extension. No effect if `as_training` is `False`.
+        image_format: The image format to use when saving extracted frame images.
+            Defaults to "png". No effect if `as_training` is `False`.
 
     See also: nwb.write_nwb, nwb.append_nwb, nwb.append_nwb_training
     """
@@ -96,6 +99,7 @@ def save_nwb(
             as_training=as_training,
             frame_inds=frame_inds,
             frame_path=frame_path,
+            image_format=image_format,
         )
     else:
         nwb.write_nwb(
@@ -104,6 +108,7 @@ def save_nwb(
             as_training=as_training,
             frame_inds=frame_inds,
             frame_path=frame_path,
+            image_format=image_format,
         )
 
 
