@@ -41,6 +41,11 @@ labels = sio.load_file("predictions.slp")
 sio.save_file(labels, "predictions.nwb")
 # Or:
 # labels.save("predictions.nwb")
+
+# Save to an NWB file and convert SLEAP training data to NWB training data.
+# Note: This will save the first 3 frames of the video as individual images in a
+# subfolder next to the NWB file for portability.
+sio.save_file(labels, "predictions.nwb", as_training=True, frame_inds=[0, 1, 2])
 ```
 
 ### Convert labels to raw arrays
