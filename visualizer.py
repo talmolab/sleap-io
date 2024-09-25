@@ -1,6 +1,7 @@
 """Visualizer for SLEAP and NWB data. To run the web app,
 run `streamlit run visualizer.py` in the terminal."""
 
+import sys
 import numpy as np
 import streamlit as st
 import pygfx as gfx
@@ -8,6 +9,9 @@ from PyQt5.QtWidgets import QApplication
 from wgpu.gui.auto import WgpuCanvas
 import sleap_io as sio
 from sleap_io import Labels
+from streamlit.errors import StreamlitAPIException
+import tempfile
+import imageio.v3 as iio
 
 colors = [
     (255, 0, 0, 1.0),
@@ -18,7 +22,11 @@ colors = [
     (255, 0, 255, 1.0),
 ]
 
-def draw_slp(labels: Labels, frame_index: int):
+
+def draw_sleap(labels: Labels, frame_index: int) -> str:
+    """Renders an image using pygfx, saves it to a temporary file,
+    and returns the filename."""
+    canvas = WgpuCanvas()
     instances = labels.labeled_frames[frame_index].instances
     video = labels.videos[0]
     image_height, image_width = video.shape[1], video.shape[2]
@@ -47,30 +55,66 @@ def draw_slp(labels: Labels, frame_index: int):
                 )
             )
     camera = gfx.OrthographicCamera(image_width, image_height)
-    canvas.request_draw(lambda: renderer.render(scene, camera))
-    canvas
+    color_buffer = np.zeros((image_height, image_width, 4), dtype=np.uint8)
+    renderer.render(scene, camera, target=color_buffer)
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as file:
+        filename = file.name
+        iio.imwrite(filename, color_buffer)
+    return filename
 
 
-st.title("SLEAP and NWB data visualizer")
-st.write("See https://sleap.ai/ for more information about SLEAP.")
-st.write("See https://pynwb.readthedocs.io/ for more information about NWB.")
-filename = st.text_input("Enter the path to a .slp or .nwb file:")
-if not filename.endswith(".slp") and not filename.endswith(".nwb"):
-    st.write("Please enter a valid .slp or .nwb file path.")
+def make_app():
+    st.title("SLEAP and NWB data visualizer")
+    st.write("See [sleap-io](https://io.sleap.ai/) for more information about SLEAP.")
+    st.write("See [pynwb](https://pynwb.readthedocs.io/) for more information about NWB.")
+    st.write(
+        """**Note**: If you want to visualize an .nwb file, we recommend converting it 
+            to a .slp file using the following method before using this visualizer
+            to significantly decrease the load time.
 
-else:
-    try:
+        pip install sleap-io
+        import sleap_io as sio
+        filename = "/.../example.nwb"
         labels = sio.load_file(filename)
-        st.write(labels)
-        frame_index = st.slider(
-            "Choose the frame index to visualize:", 0, len(labels) - 1, 0
-        )
-        st.write(f"Frame {frame_index} instance points:")
-        st.write(labels[frame_index].instances[0].numpy())
-        # st.write(labels[frame_index].instances[0].skeleton)
-        # draw_slp(labels, frame_index)
-    except FileNotFoundError:
-        st.write("File not found. Please enter a valid .slp or .nwb file path.")
-    except Exception as e:
-        st.write(f"Error loading file: {e}")
+        sio.save_slp(labels, "/.../example.slp")"""
+    )
+
+    local_file = st.text_input("Enter the path to a .slp or .nwb file stored locally here:")
+    st.write("OR")
+    url_file = st.text_input(
+        "Enter the URL to a .slp or .nwb file stored online here: **Note: not yet supported**"
+    )
+    filename = local_file or url_file
+
+    if not filename.endswith(".slp") and not filename.endswith(".nwb"):
         st.write("Please enter a valid .slp or .nwb file path.")
+    else:
+        try:
+            labels = sio.load_file(filename)
+            st.write(labels)
+            frame_index = st.slider(
+                "Choose the frame index to visualize:", 0, len(labels) - 1, 0
+            )
+            for i, instance in enumerate(labels[frame_index].instances):
+                st.write(f"Instance {i} points:")
+                st.write(instance.numpy())
+            
+            img_file = draw_sleap(labels, frame_index)
+            # st.image(filename)
+        except FileNotFoundError:
+            st.write("File not found. Please enter a valid .slp or .nwb file path.")
+        except StreamlitAPIException:
+            # This error is raised if there is only one frame because
+            # the slider widget does not work with a single value.
+            for i, instance in enumerate(labels[0].instances):
+                st.write(f"Instance {i} points:")
+                st.write(instance.numpy())
+
+
+def main():
+    app = QApplication([])
+    make_app()
+
+if __name__ == "__main__":
+    main()
