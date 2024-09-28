@@ -66,9 +66,3 @@ line-length = 88
 [pydocstyle]
 convention = "google"
 match-dir = "sleap_io"
-
-[tool.coverage.run]
-source = ["livecov"]
-
-[tool.pytest.ini_options]
-addopts = "--cov sleap_io --cov-report=lcov:lcov.info --cov-report=term"
