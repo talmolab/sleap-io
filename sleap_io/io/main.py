@@ -7,16 +7,19 @@ from typing import Optional, Union
 from pathlib import Path
 
 
-def load_slp(filename: str) -> Labels:
+def load_slp(filename: str, open_videos: bool = True) -> Labels:
     """Load a SLEAP dataset.
 
     Args:
         filename: Path to a SLEAP labels file (`.slp`).
+        open_videos: If `True` (the default), attempt to open the video backend for
+            I/O. If `False`, the backend will not be opened (useful for reading metadata
+            when the video files are not available).
 
     Returns:
         The dataset as a `Labels` object.
     """
-    return slp.read_labels(filename)
+    return slp.read_labels(filename, open_videos=open_videos)
 
 
 def save_slp(
