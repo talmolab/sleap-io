@@ -109,6 +109,9 @@ def make_video(
             # This is an ImageVideo.
             # TODO: Path resolution.
             video_path = backend_metadata["filenames"]
+            video_path = [
+                Path(Path(p).as_posix().replace("\\", "/")) for p in video_path
+            ]
 
         try:
             backend = VideoBackend.from_filename(
@@ -117,7 +120,7 @@ def make_video(
                 grayscale=backend_metadata.get("grayscale", None),
                 input_format=backend_metadata.get("input_format", None),
             )
-        except:
+        except Exception:
             backend = None
 
     return Video(
@@ -125,10 +128,11 @@ def make_video(
         backend=backend,
         backend_metadata=backend_metadata,
         source_video=source_video,
+        open_backend=open_backend,
     )
 
 
-def read_videos(labels_path: str, open_backend: bool = False) -> list[Video]:
+def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
     """Read `Video` dataset in a SLEAP labels file.
 
     Args:

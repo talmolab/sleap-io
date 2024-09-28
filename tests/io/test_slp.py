@@ -354,3 +354,12 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
     assert type(labels3.video.backend) == MediaVideo
+
+
+def test_lazy_video_read(slp_real_data):
+    labels = read_labels(slp_real_data)
+    assert type(labels.video.backend) == MediaVideo
+    assert labels.video.exists()
+
+    labels = read_labels(slp_real_data, open_videos=False)
+    assert labels.video.backend is None
