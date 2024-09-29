@@ -134,14 +134,16 @@ labels.save("labels.slp")
 ```py
 import sleap_io as sio
 
-labels = sio.load_file("labels.v001.slp")
+# Load labels without trying to open the video files.
+labels = sio.load_file("labels.v001.slp", open_videos=False)
 
-# Fix paths using prefixes.
+# Fix paths using prefix replacement.
 labels.replace_filenames(prefix_map={
     "D:/data/sleap_projects": "/home/user/sleap_projects",
     "C:/Users/sleaper/Desktop/test": "/home/user/sleap_projects",
 })
 
+# Save labels with updated paths.
 labels.save("labels.v002.slp")
 ```
 
