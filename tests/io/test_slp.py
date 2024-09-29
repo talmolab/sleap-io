@@ -40,6 +40,7 @@ import pytest
 from pathlib import Path
 import shutil
 from sleap_io.io.video import ImageVideo, HDF5Video, MediaVideo
+import sys
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -385,15 +386,19 @@ def test_video_path_resolution(slp_real_data, tmp_path):
     )
     assert labels.video.exists()
 
-    # Make the video file inaccessible.
-    labels.video.replace_filename("new_fake/path/to/inaccessible.mp4", open=False)
-    labels.save(tmp_path / "labels2.slp")
-    shutil.copyfile(
-        tmp_path / "centered_pair_low_quality.mp4", tmp_path / "inaccessible.mp4"
-    )
-    Path(tmp_path / "inaccessible.mp4").chmod(0o000)
+    if sys.platform != "win32":  # Windows does not support chmod.
+        # Make the video file inaccessible.
+        labels.video.replace_filename("new_fake/path/to/inaccessible.mp4", open=False)
+        labels.save(tmp_path / "labels2.slp")
+        shutil.copyfile(
+            tmp_path / "centered_pair_low_quality.mp4", tmp_path / "inaccessible.mp4"
+        )
+        Path(tmp_path / "inaccessible.mp4").chmod(0o000)
 
-    # Fail to resolve when the video file is inaccessible.
-    labels = read_labels(tmp_path / "labels2.slp")
-    assert not labels.video.exists()
-    assert Path(labels.video.filename).as_posix() == "new_fake/path/to/inaccessible.mp4"
+        # Fail to resolve when the video file is inaccessible.
+        labels = read_labels(tmp_path / "labels2.slp")
+        assert not labels.video.exists()
+        assert (
+            Path(labels.video.filename).as_posix()
+            == "new_fake/path/to/inaccessible.mp4"
+        )
