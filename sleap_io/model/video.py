@@ -246,7 +246,7 @@ class Video:
             Values for the HDF5 dataset and grayscale will be remembered if not
             specified.
         """
-        if self.filename:
+        if filename is not None:
             self.replace_filename(filename, open=False)
 
         if not self.exists():

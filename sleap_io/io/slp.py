@@ -43,6 +43,23 @@ class InstanceType(IntEnum):
     PREDICTED = 1
 
 
+def sanitize_filename(
+    filename: str | Path | list[str] | list[Path],
+) -> str | list[str]:
+    """Sanitize a filename to a canonical posix-compatible format.
+
+    Args:
+        filename: A string or `Path` object or list of either to sanitize.
+
+    Returns:
+        A sanitized filename as a string (or list of strings if a list was provided)
+        with forward slashes and posix-formatted.
+    """
+    if isinstance(filename, list):
+        return [sanitize_filename(f) for f in filename]
+    return Path(filename).as_posix().replace("\\", "/")
+
+
 def make_video(
     labels_path: str,
     video_json: dict,
@@ -71,7 +88,7 @@ def make_video(
         is_embedded = True
 
     # Basic path resolution.
-    video_path = Path(Path(video_path).as_posix().replace("\\", "/"))
+    video_path = Path(sanitize_filename(video_path))
 
     if is_embedded:
         # Try to recover the source video.
@@ -109,9 +126,7 @@ def make_video(
             # This is an ImageVideo.
             # TODO: Path resolution.
             video_path = backend_metadata["filenames"]
-            video_path = [
-                Path(Path(p).as_posix().replace("\\", "/")) for p in video_path
-            ]
+            video_path = [Path(sanitize_filename(p)) for p in video_path]
 
         try:
             backend = VideoBackend.from_filename(
@@ -165,16 +180,17 @@ def video_to_dict(video: Video) -> dict:
     Returns:
         A dictionary containing the video metadata.
     """
+    video_filename = sanitize_filename(video.filename)
     if video.backend is None:
-        return {"filename": video.filename, "backend": video.backend_metadata}
+        return {"filename": video_filename, "backend": video.backend_metadata}
 
     if type(video.backend) == MediaVideo:
         return {
-            "filename": video.filename,
+            "filename": video_filename,
             "backend": {
                 "type": "MediaVideo",
                 "shape": video.shape,
-                "filename": video.filename,
+                "filename": video_filename,
                 "grayscale": video.grayscale,
                 "bgr": True,
                 "dataset": "",
@@ -184,12 +200,12 @@ def video_to_dict(video: Video) -> dict:
 
     elif type(video.backend) == HDF5Video:
         return {
-            "filename": video.filename,
+            "filename": video_filename,
             "backend": {
                 "type": "HDF5Video",
                 "shape": video.shape,
                 "filename": (
-                    "." if video.backend.has_embedded_images else video.filename
+                    "." if video.backend.has_embedded_images else video_filename
                 ),
                 "dataset": video.backend.dataset,
                 "input_format": video.backend.input_format,
@@ -200,12 +216,12 @@ def video_to_dict(video: Video) -> dict:
 
     elif type(video.backend) == ImageVideo:
         return {
-            "filename": video.filename,
+            "filename": video_filename,
             "backend": {
                 "type": "ImageVideo",
                 "shape": video.shape,
-                "filename": video.backend.filename[0],
-                "filenames": video.backend.filename,
+                "filename": sanitize_filename(video.backend.filename[0]),
+                "filenames": sanitize_filename(video.backend.filename),
                 "dataset": video.backend_metadata.get("dataset", None),
                 "grayscale": video.grayscale,
                 "input_format": video.backend_metadata.get("input_format", None),
