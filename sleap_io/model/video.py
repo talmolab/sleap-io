@@ -9,6 +9,7 @@ import attrs
 from typing import Tuple, Optional, Optional
 import numpy as np
 from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video, ImageVideo
+from sleap_io.io.utils import is_file_accessible
 from pathlib import Path
 
 
@@ -34,6 +35,11 @@ class Video:
             information) without having access to the video file itself.
         source_video: The source video object if this is a proxy video. This is present
             when the video contains an embedded subset of frames from another video.
+        open_backend: Whether to open the backend when the video is available. If `True`
+            (the default), the backend will be automatically opened if the video exists.
+            Set this to `False` when you want to manually open the backend, or when the
+            you know the video file does not exist and you want to avoid trying to open
+            the file.
 
     Notes:
         Instances of this class are hashed by identity, not by value. This means that
@@ -47,12 +53,13 @@ class Video:
     backend: Optional[VideoBackend] = None
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
     source_video: Optional[Video] = None
+    open_backend: bool = True
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
 
     def __attrs_post_init__(self):
         """Post init syntactic sugar."""
-        if self.backend is None and self.exists():
+        if self.open_backend and self.backend is None and self.exists():
             self.open()
 
     @classmethod
@@ -181,25 +188,34 @@ class Video:
         See also: VideoBackend.get_frame, VideoBackend.get_frames
         """
         if not self.is_open:
-            self.open()
+            if self.open_backend:
+                self.open()
+            else:
+                raise ValueError(
+                    "Video backend is not open. Call video.open() or set "
+                    "video.open_backend to True to do automatically on frame read."
+                )
         return self.backend[inds]
 
     def exists(self, check_all: bool = False) -> bool:
-        """Check if the video file exists.
+        """Check if the video file exists and is accessible.
 
         Args:
             check_all: If `True`, check that all filenames in a list exist. If `False`
                 (the default), check that the first filename exists.
+
+        Returns:
+            `True` if the file exists and is accessible, `False` otherwise.
         """
         if isinstance(self.filename, list):
             if check_all:
                 for f in self.filename:
-                    if not Path(f).exists():
+                    if not is_file_accessible(f):
                         return False
                 return True
             else:
-                return Path(self.filename[0]).exists()
-        return Path(self.filename).exists()
+                return is_file_accessible(self.filename[0])
+        return is_file_accessible(self.filename)
 
     @property
     def is_open(self) -> bool:
@@ -208,6 +224,7 @@ class Video:
 
     def open(
         self,
+        filename: Optional[str] = None,
         dataset: Optional[str] = None,
         grayscale: Optional[str] = None,
         keep_open: bool = True,
@@ -215,6 +232,8 @@ class Video:
         """Open the video backend for reading.
 
         Args:
+            filename: Filename to open. If not specified, will use the filename set on
+                the video object.
             dataset: Name of dataset in HDF5 file.
             grayscale: Whether to force grayscale. If None, autodetect on first frame
                 load.
@@ -231,6 +250,9 @@ class Video:
             Values for the HDF5 dataset and grayscale will be remembered if not
             specified.
         """
+        if filename is not None:
+            self.replace_filename(filename, open=False)
+
         if not self.exists():
             raise FileNotFoundError(f"Video file not found: {self.filename}")
 
