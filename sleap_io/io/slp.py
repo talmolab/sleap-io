@@ -1112,7 +1112,7 @@ def write_labels(
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
-    if embed is not None:
+    if embed:
         embed_videos(labels_path, labels, embed)
     write_videos(labels_path, labels.videos, restore_source=(embed == "source"))
     write_tracks(labels_path, labels.tracks)
