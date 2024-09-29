@@ -21,10 +21,7 @@ from sleap_io import (
     Labels,
 )
 from sleap_io.io.video import VideoBackend, ImageVideo, MediaVideo, HDF5Video
-from sleap_io.io.utils import (
-    read_hdf5_attrs,
-    read_hdf5_dataset,
-)
+from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset, is_file_accessible
 from enum import IntEnum
 from pathlib import Path
 import imageio.v3 as iio
@@ -107,11 +104,11 @@ def make_video(
     backend = None
     if open_backend:
         try:
-            if not video_path.exists():
+            if not is_file_accessible(video_path):
                 # Check for the same filename in the same directory as the labels file.
-                video_path_ = Path(labels_path).parent / video_path.name
-                if video_path_.exists() and video_path.stat():
-                    video_path = video_path_
+                candidate_video_path = Path(labels_path).parent / video_path.name
+                if is_file_accessible(candidate_video_path):
+                    video_path = candidate_video_path
                 else:
                     # TODO (TP): Expand capabilities of path resolution to support more
                     # complex path finding strategies.

@@ -56,7 +56,7 @@ def test_video_exists(centered_pair_low_quality_video, centered_pair_frame_paths
     assert video.exists(check_all=True) is False
 
 
-def test_video_open_close(centered_pair_low_quality_path):
+def test_video_open_close(centered_pair_low_quality_path, centered_pair_frame_paths):
     video = Video(centered_pair_low_quality_path)
     assert video.is_open
     assert type(video.backend) == MediaVideo
@@ -90,6 +90,10 @@ def test_video_open_close(centered_pair_low_quality_path):
     assert video.shape == (1100, 384, 384, 3)
     video.open(grayscale=True)
     assert video.shape == (1100, 384, 384, 1)
+
+    video.open(centered_pair_frame_paths)
+    assert video.shape == (3, 384, 384, 1)
+    assert type(video.backend) == ImageVideo
 
 
 def test_video_replace_filename(
@@ -142,3 +146,20 @@ def test_grayscale(centered_pair_low_quality_path):
     video.open()
     assert video.grayscale == True
     assert video.shape[-1] == 1
+
+
+def test_open_backend_preference(centered_pair_low_quality_path):
+    video = Video(centered_pair_low_quality_path)
+    assert video.is_open
+    assert type(video.backend) == MediaVideo
+
+    video = Video(centered_pair_low_quality_path, open_backend=False)
+    assert video.is_open is False
+    assert video.backend is None
+    with pytest.raises(ValueError):
+        video[0]
+
+    video.open_backend = True
+    img = video[0]
+    assert video.is_open
+    assert type(video.backend) == MediaVideo

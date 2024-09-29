@@ -9,6 +9,7 @@ import attrs
 from typing import Tuple, Optional, Optional
 import numpy as np
 from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video, ImageVideo
+from sleap_io.io.utils import is_file_accessible
 from pathlib import Path
 
 
@@ -197,21 +198,24 @@ class Video:
         return self.backend[inds]
 
     def exists(self, check_all: bool = False) -> bool:
-        """Check if the video file exists.
+        """Check if the video file exists and is accessible.
 
         Args:
             check_all: If `True`, check that all filenames in a list exist. If `False`
                 (the default), check that the first filename exists.
+
+        Returns:
+            `True` if the file exists and is accessible, `False` otherwise.
         """
         if isinstance(self.filename, list):
             if check_all:
                 for f in self.filename:
-                    if not Path(f).exists():
+                    if not is_file_accessible(f):
                         return False
                 return True
             else:
-                return Path(self.filename[0]).exists()
-        return Path(self.filename).exists()
+                return is_file_accessible(self.filename[0])
+        return is_file_accessible(self.filename)
 
     @property
     def is_open(self) -> bool:
