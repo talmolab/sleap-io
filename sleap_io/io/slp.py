@@ -209,7 +209,7 @@ def video_to_dict(video: Video) -> dict:
                 "input_format": video.backend.input_format,
                 "convert_range": False,
                 "has_embedded_images": video.backend.has_embedded_images,
-                "greyscale": video.grayscale,
+                "grayscale": video.grayscale,
             },
         }
 
