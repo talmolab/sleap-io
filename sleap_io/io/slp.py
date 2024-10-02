@@ -1108,7 +1108,7 @@ def write_labels(
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
-    
+
     if embed:
         embed_videos(labels_path, labels, embed)
     write_videos(labels_path, labels.videos, restore_source=(embed == "source"))
