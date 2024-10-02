@@ -163,3 +163,11 @@ def test_open_backend_preference(centered_pair_low_quality_path):
     img = video[0]
     assert video.is_open
     assert type(video.backend) == MediaVideo
+
+
+def test_safe_video_open(slp_minimal_pkg):
+    video = Video(slp_minimal_pkg, backend_metadata={"dataset": "video0/video"})
+    assert video.is_open
+
+    video = Video(slp_minimal_pkg, backend_metadata={"dataset": "video999/video"})
+    assert not video.is_open
