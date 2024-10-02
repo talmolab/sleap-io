@@ -60,7 +60,12 @@ class Video:
     def __attrs_post_init__(self):
         """Post init syntactic sugar."""
         if self.open_backend and self.backend is None and self.exists():
-            self.open()
+            try:
+                self.open()
+            except Exception as e:
+                # If we can't open the backend, just ignore it for now so we don't
+                # prevent the user from building the Video object entirely.
+                pass
 
     @classmethod
     def from_filename(
