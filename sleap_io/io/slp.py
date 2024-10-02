@@ -60,7 +60,6 @@ def sanitize_filename(
 def make_video(
     labels_path: str,
     video_json: dict,
-    video_ind: int | None = None,
     open_backend: bool = True,
 ) -> Video:
     """Create a `Video` object from a JSON dictionary.
@@ -68,8 +67,6 @@ def make_video(
     Args:
         labels_path: A string path to the SLEAP labels file.
         video_json: A dictionary containing the video metadata.
-        video_ind: The index of the video in the labels file. This is used to try to
-            recover the source video for embedded videos. This is skipped if `None`.
         open_backend: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
@@ -90,14 +87,16 @@ def make_video(
     if is_embedded:
         # Try to recover the source video.
         with h5py.File(labels_path, "r") as f:
-            if f"video{video_ind}" in f:
+            dataset = backend_metadata["dataset"]
+            if dataset.endswith("/video"):
+                dataset = dataset[:-6]
+            if dataset in f:
                 source_video_json = json.loads(
-                    f[f"video{video_ind}/source_video"].attrs["json"]
+                    f[f"{dataset}/source_video"].attrs["json"]
                 )
                 source_video = make_video(
                     labels_path,
                     source_video_json,
-                    video_ind=None,
                     open_backend=open_backend,
                 )
 
@@ -157,13 +156,10 @@ def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
         A list of `Video` objects.
     """
     videos = []
-    for video_ind, video_data in enumerate(
-        read_hdf5_dataset(labels_path, "videos_json")
-    ):
+    videos_metadata = read_hdf5_dataset(labels_path, "videos_json")
+    for video_data in videos_metadata:
         video_json = json.loads(video_data)
-        video = make_video(
-            labels_path, video_json, video_ind=video_ind, open_backend=open_backend
-        )
+        video = make_video(labels_path, video_json, open_backend=open_backend)
         videos.append(video)
     return videos
 
@@ -1112,6 +1108,7 @@ def write_labels(
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
+
     if embed:
         embed_videos(labels_path, labels, embed)
     write_videos(labels_path, labels.videos, restore_source=(embed == "source"))
