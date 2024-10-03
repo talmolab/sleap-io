@@ -147,6 +147,13 @@ def test_grayscale(centered_pair_low_quality_path):
     assert video.grayscale == True
     assert video.shape[-1] == 1
 
+    video.close()
+    assert "grayscale" in video.backend_metadata
+    assert video.grayscale == True
+
+    video.backend_metadata = {"shape": (1100, 384, 384, 1)}
+    assert video.grayscale == True
+
 
 def test_open_backend_preference(centered_pair_low_quality_path):
     video = Video(centered_pair_low_quality_path)
