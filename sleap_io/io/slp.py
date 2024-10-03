@@ -306,12 +306,13 @@ def embed_video(
 
         # Store metadata.
         ds.attrs["format"] = image_format
+        video_shape = video.shape
         (
             ds.attrs["frames"],
             ds.attrs["height"],
             ds.attrs["width"],
             ds.attrs["channels"],
-        ) = video.shape
+        ) = video_shape
 
         # Store frame indices.
         f.create_dataset(f"{group}/frame_numbers", data=frame_inds)
@@ -320,20 +321,20 @@ def embed_video(
         if video.source_video is not None:
             # If this is already an embedded dataset, retain the previous source video.
             source_video = video.source_video
-            embedded_video = video
-            video.replace_filename(labels_path, open=False)
         else:
             source_video = video
-            embedded_video = Video(
-                filename=labels_path,
-                backend=VideoBackend.from_filename(
-                    labels_path,
-                    dataset=f"{group}/video",
-                    grayscale=video.grayscale,
-                    keep_open=False,
-                ),
-                source_video=source_video,
-            )
+
+        # Create a new video object with the embedded data.
+        embedded_video = Video(
+            filename=labels_path,
+            backend=VideoBackend.from_filename(
+                labels_path,
+                dataset=f"{group}/video",
+                grayscale=video.grayscale,
+                keep_open=False,
+            ),
+            source_video=source_video,
+        )
 
         grp = f.require_group(f"{group}/source_video")
         grp.attrs["json"] = json.dumps(
@@ -369,7 +370,7 @@ def embed_frames(
         to_embed_by_video[video].append(frame_idx)
 
     for video in to_embed_by_video:
-        to_embed_by_video[video] = np.unique(to_embed_by_video[video])
+        to_embed_by_video[video] = np.unique(to_embed_by_video[video]).tolist()
 
     replaced_videos = {}
     for video, frame_inds in to_embed_by_video.items():
