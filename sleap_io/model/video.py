@@ -146,8 +146,6 @@ class Video:
             grayscale = None
             if "grayscale" in self.backend_metadata:
                 grayscale = self.backend_metadata["grayscale"]
-            elif "shape" in self.backend_metadata:
-                grayscale = self.backend_metadata["shape"][-1] == 1
             return grayscale
 
     @grayscale.setter
