@@ -1069,7 +1069,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         labeled_frames.append(
             LabeledFrame(
                 video=videos[video_id],
-                frame_idx=frame_idx,
+                frame_idx=int(frame_idx),
                 instances=instances[instance_id_start:instance_id_end],
             )
         )
