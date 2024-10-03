@@ -143,7 +143,10 @@ class Video:
         if shape is not None:
             return shape[-1] == 1
         else:
-            return self.backend_metadata.get("grayscale", None)
+            grayscale = None
+            if "grayscale" in self.backend_metadata:
+                grayscale = self.backend_metadata["grayscale"]
+            return grayscale
 
     @grayscale.setter
     def grayscale(self, value: bool):
@@ -271,8 +274,11 @@ class Video:
         else:
             if dataset is None and "dataset" in self.backend_metadata:
                 dataset = self.backend_metadata["dataset"]
-            if grayscale is None and "grayscale" in self.backend_metadata:
-                grayscale = self.backend_metadata["grayscale"]
+            if grayscale is None:
+                if "grayscale" in self.backend_metadata:
+                    grayscale = self.backend_metadata["grayscale"]
+                elif "shape" in self.backend_metadata:
+                    grayscale = self.backend_metadata["shape"][-1] == 1
 
         # Close previous backend if open.
         self.close()

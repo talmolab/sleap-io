@@ -125,10 +125,15 @@ def make_video(
             video_path = [Path(sanitize_filename(p)) for p in video_path]
 
         try:
+            grayscale = None
+            if "grayscale" in backend_metadata:
+                grayscale = backend_metadata["grayscale"]
+            elif "shape" in backend_metadata:
+                grayscale = backend_metadata["shape"][-1] == 1
             backend = VideoBackend.from_filename(
                 video_path,
                 dataset=backend_metadata.get("dataset", None),
-                grayscale=backend_metadata.get("grayscale", None),
+                grayscale=grayscale,
                 input_format=backend_metadata.get("input_format", None),
             )
         except Exception:
@@ -204,6 +209,7 @@ def video_to_dict(video: Video) -> dict:
                 "input_format": video.backend.input_format,
                 "convert_range": False,
                 "has_embedded_images": video.backend.has_embedded_images,
+                "grayscale": video.grayscale,
             },
         }
 
@@ -264,10 +270,10 @@ def embed_video(
                     cv2.imencode("." + image_format, frame)[1]
                 ).astype("int8")
             else:
+                if frame.shape[-1] == 1:
+                    frame = frame.squeeze(axis=-1)
                 img_data = np.frombuffer(
-                    iio.imwrite(
-                        "<bytes>", frame.squeeze(axis=-1), extension="." + image_format
-                    ),
+                    iio.imwrite("<bytes>", frame, extension="." + image_format),
                     dtype="int8",
                 )
 
@@ -440,7 +446,6 @@ def write_videos(labels_path: str, videos: list[Video], restore_source: bool = F
     """
     video_jsons = []
     for video_ind, video in enumerate(videos):
-
         if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
             if restore_source:
                 video = video.source_video
