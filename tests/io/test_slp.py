@@ -367,6 +367,31 @@ def test_embed_rgb(tmpdir, slp_real_data):
     labels = read_labels(labels_path)
     assert labels.video[0].shape == (384, 384, 3)
 
+    # Fallback to imageio
+    cv2_mod = sys.modules.pop("cv2")
+
+    labels_path = str(tmpdir / "labels_imageio.pkg.slp")
+    write_labels(labels_path, base_labels, embed="user")
+    labels = read_labels(labels_path)
+    assert labels.video[0].shape == (384, 384, 3)
+
+    sys.modules["cv2"] = cv2_mod
+
+
+def test_embed_grayscale(tmpdir, slp_real_data):
+    base_labels = read_labels(slp_real_data)
+    assert base_labels.video[0].shape == (384, 384, 1)
+
+    # Fallback to imageio
+    cv2_mod = sys.modules.pop("cv2")
+
+    labels_path = str(tmpdir / "labels_imageio_gray.pkg.slp")
+    write_labels(labels_path, base_labels, embed="user")
+    labels = read_labels(labels_path)
+    assert labels.video[0].shape == (384, 384, 1)
+
+    sys.modules["cv2"] = cv2_mod
+
 
 def test_lazy_video_read(slp_real_data):
     labels = read_labels(slp_real_data)
