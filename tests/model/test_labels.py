@@ -627,3 +627,8 @@ def test_make_training_splits_save(slp_real_data, tmp_path, embed):
         assert train_.video.filename == labels.video.filename
         assert val_.video.filename == labels.video.filename
         assert test_.video.filename == labels.video.filename
+
+    if embed:
+        for labels_ in [train_, val_, test_]:
+            for lf in labels_:
+                assert lf.image.shape == (384, 384, 1)
