@@ -316,6 +316,7 @@ class Video:
             ]
 
         self.filename = new_filename
+        self.backend_metadata["filename"] = new_filename
 
         if open:
             if self.exists():
