@@ -1989,24 +1989,24 @@
 <h2 id="v0110"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.10">v0.1.10</a><a class="headerlink" href="#v0110" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed">What's Changed<a class="headerlink" href="#whats-changed" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix embedded video lookup by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/122">https://github.com/talmolab/sleap-io/pull/122</a></li>
-<li>Add better support for exporting and loading RGB videos from .pkg.slp files by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/125">https://github.com/talmolab/sleap-io/pull/125</a></li>
-<li>Fix video indexing when embedding from labels that already have embedded data by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/126">https://github.com/talmolab/sleap-io/pull/126</a></li>
+<li>Fix embedded video lookup by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/122">Fix embedded video lookup (#122)</a></strong></li>
+<li>Add better support for exporting and loading RGB videos from .pkg.slp files by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/125">Add better support for exporting and loading RGB videos from .pkg.slp files (#125)</a></strong></li>
+<li>Fix video indexing when embedding from labels that already have embedded data by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/126">Fix video indexing when embedding from labels that already have embedded data (#126)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.9...v0.1.10</p>
 <h2 id="v019"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.9">v0.1.9</a><a class="headerlink" href="#v019" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_1">What's Changed<a class="headerlink" href="#whats-changed_1" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Dependency management by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/118">https://github.com/talmolab/sleap-io/pull/118</a></li>
+<li>Dependency management by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/118">Dependency management (#118)</a></strong></li>
 <li>Drop <code>av</code> as a dependency since it's still a little buggy and doesn't have broad enough platform compatibility.</li>
 <li>Pin <code>ndx-pose</code> &lt; 0.2.0 until #104 is merged in.</li>
 <li>Remove livecov dev tool as it was interfering with VSCode debugging.</li>
-<li>Safer video loading from SLP by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/119">https://github.com/talmolab/sleap-io/pull/119</a></li>
+<li>Safer video loading from SLP by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/119">Safer video loading from SLP (#119)</a></strong></li>
 <li>Added <code>sio.io.utils.is_file_accessible</code> to check for readability by actually reading a byte. This catches permission and other esoteric filesystem errors (addresses #116).</li>
 <li>Explicit control over whether video files should be opened when loading labels with:<code>sio.load_slp(..., open_videos=False)</code></li>
 <li>Explicit control over whether backend is auto-initialized when creating or using <code>Video</code> objects with <code>Video(..., open_backend=False)</code>.</li>
 <li>More sanitization of filenames to posix/forward-slash safe forms when reading and writing SLP files.</li>
-<li>Fix split calculation and allow for not embedding by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/120">https://github.com/talmolab/sleap-io/pull/120</a></li>
+<li>Fix split calculation and allow for not embedding by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/120">Fix split calculation and allow for not embedding (#120)</a></strong></li>
 <li><strong>Fix</strong>: The function now correctly splits the labels into training, validation, and test sets based on the specified proportions (fixes #117). Previously, the validation fraction was being computed incorrectly in cases where its relative fraction was <code>1.0</code> after taking out the train split.</li>
 <li><strong>Enhancement</strong>: <code>Labels.make_training_splits(..., embed=False)</code>. Previously, the function would always embed the images, which could be slow for large projects. With this change, the <code>embed</code> parameter is introduced, allowing the user to choose whether to embed the images or save the labels with references to the source video files.</li>
 </ul>
@@ -2014,36 +2014,36 @@
 <h2 id="v018"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.8">v0.1.8</a><a class="headerlink" href="#v018" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_2">What's Changed<a class="headerlink" href="#whats-changed_2" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix docs by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/108">https://github.com/talmolab/sleap-io/pull/108</a></li>
-<li>Support NumPy &gt; 2.0 and Python 3.12 by @lochhh in <a href="https://github.com/talmolab/sleap-io/pull/115">https://github.com/talmolab/sleap-io/pull/115</a></li>
+<li>Fix docs by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/108">Fix docs (#108)</a></strong></li>
+<li>Support NumPy &gt; 2.0 and Python 3.12 by @lochhh in <strong><a href="https://github.com/talmolab/sleap-io/pull/115">Support NumPy &gt; 2.0 and Python 3.12 (#115)</a></strong></li>
 </ul>
 <h2 id="new-contributors">New Contributors<a class="headerlink" href="#new-contributors" title="Permanent link">&para;</a></h2>
 <ul>
-<li>@lochhh made their first contribution in <a href="https://github.com/talmolab/sleap-io/pull/115">https://github.com/talmolab/sleap-io/pull/115</a></li>
+<li>@lochhh made their first contribution in <strong><a href="https://github.com/talmolab/sleap-io/pull/115">Support NumPy &gt; 2.0 and Python 3.12 (#115)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.7...v0.1.8</p>
 <h2 id="v017"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.7">v0.1.7</a><a class="headerlink" href="#v017" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_3">What's Changed<a class="headerlink" href="#whats-changed_3" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Path sanitization hotfix by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/107">https://github.com/talmolab/sleap-io/pull/107</a></li>
+<li>Path sanitization hotfix by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/107">Path sanitization hotfix (#107)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.6...v0.1.7</p>
 <h2 id="v016"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.6">v0.1.6</a><a class="headerlink" href="#v016" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_4">What's Changed<a class="headerlink" href="#whats-changed_4" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Grayscale property passthrough by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/99">https://github.com/talmolab/sleap-io/pull/99</a></li>
+<li>Grayscale property passthrough by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/99">Grayscale property passthrough (#99)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.5...v0.1.6</p>
 <h2 id="v015"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.5">v0.1.5</a><a class="headerlink" href="#v015" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_5">What's Changed<a class="headerlink" href="#whats-changed_5" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>Labels.split</code> and <code>Labels.make_training_splits</code> by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/98">https://github.com/talmolab/sleap-io/pull/98</a></li>
+<li><code>Labels.split</code> and <code>Labels.make_training_splits</code> by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/98"><code>Labels.split</code> and <code>Labels.make_training_splits</code> (#98)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.4...v0.1.5</p>
 <h2 id="v014"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.4">v0.1.4</a><a class="headerlink" href="#v014" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_6">What's Changed<a class="headerlink" href="#whats-changed_6" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Add support for embedding images in .pkg.slp by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/91">https://github.com/talmolab/sleap-io/pull/91</a></li>
+<li>Add support for embedding images in .pkg.slp by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/91">Add support for embedding images in .pkg.slp (#91)</a></strong></li>
 <li>Saving SLP files with embedded images will re-save the embedded images.</li>
 <li>Embed images into SLP files with:<ul>
 <li><code>labels.save("labels.pkg.slp", embed="user")</code> to embed frames with user-labeled instances (<code>Instance</code>)</li>
@@ -2051,7 +2051,7 @@
 <li><code>labels.save("labels.pkg.slp", embed="source")</code> to restore the source video ("unembed")</li>
 </ul>
 </li>
-<li>Better reprs and QOL by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/96">https://github.com/talmolab/sleap-io/pull/96</a></li>
+<li>Better reprs and QOL by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/96">Better reprs and QOL (#96)</a></strong></li>
 <li>Better <code>__repr__</code>s for <code>Skeleton</code>, <code>LabeledFrame</code>, <code>Labels</code>, <code>Instance</code>, <code>PredictedInstance</code></li>
 <li><code>Labels.append()</code> and <code>Labels.extend()</code> to add <code>LabeledFrame</code>s now will update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents.</li>
 <li><code>Labels.update()</code> to manually update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents of <code>Labels.labeled_frames</code> and <code>Labels.suggestions</code>.</li>
@@ -2065,7 +2065,7 @@
 <h2 id="v013"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.3">v0.1.3</a><a class="headerlink" href="#v013" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_7">What's Changed<a class="headerlink" href="#whats-changed_7" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Add support for embedding images in .pkg.slp by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/91">https://github.com/talmolab/sleap-io/pull/91</a></li>
+<li>Add support for embedding images in .pkg.slp by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/91">Add support for embedding images in .pkg.slp (#91)</a></strong></li>
 <li>Saving SLP files with embedded images will re-save the embedded images.</li>
 <li>Embed images into SLP files with:<ul>
 <li><code>labels.save("labels.pkg.slp", embed="user")</code> to embed frames with user-labeled instances (<code>Instance</code>)</li>
@@ -2073,7 +2073,7 @@
 <li><code>labels.save("labels.pkg.slp", embed="source")</code> to restore the source video ("unembed")</li>
 </ul>
 </li>
-<li>Better reprs and QOL by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/96">https://github.com/talmolab/sleap-io/pull/96</a></li>
+<li>Better reprs and QOL by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/96">Better reprs and QOL (#96)</a></strong></li>
 <li>Better <code>__repr__</code>s for <code>Skeleton</code>, <code>LabeledFrame</code>, <code>Labels</code>, <code>Instance</code>, <code>PredictedInstance</code></li>
 <li><code>Labels.append()</code> and <code>Labels.extend()</code> to add <code>LabeledFrame</code>s now will update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents.</li>
 <li><code>Labels.update()</code> to manually update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents of <code>Labels.labeled_frames</code> and <code>Labels.suggestions</code>.</li>
@@ -2086,30 +2086,30 @@
 <h2 id="v012"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.2">v0.1.2</a><a class="headerlink" href="#v012" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_8">What's Changed<a class="headerlink" href="#whats-changed_8" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix suggestions deserialization by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/95">https://github.com/talmolab/sleap-io/pull/95</a></li>
+<li>Fix suggestions deserialization by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/95">Fix suggestions deserialization (#95)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.1...v0.1.2</p>
 <h2 id="v011"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.1">v0.1.1</a><a class="headerlink" href="#v011" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_9">What's Changed<a class="headerlink" href="#whats-changed_9" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Create docs pages by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/87">https://github.com/talmolab/sleap-io/pull/87</a></li>
-<li>Add <code>ImageVideo</code> backend by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/88">https://github.com/talmolab/sleap-io/pull/88</a></li>
-<li>Add <code>SuggestionFrame</code> by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/89">https://github.com/talmolab/sleap-io/pull/89</a></li>
-<li>Implement <code>ImageVideo</code> support in SLP by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/90">https://github.com/talmolab/sleap-io/pull/90</a></li>
-<li>Bump to v0.1.1 by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/93">https://github.com/talmolab/sleap-io/pull/93</a></li>
+<li>Create docs pages by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/87">Create docs pages (#87)</a></strong></li>
+<li>Add <code>ImageVideo</code> backend by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/88">Add <code>ImageVideo</code> backend (#88)</a></strong></li>
+<li>Add <code>SuggestionFrame</code> by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/89">Add <code>SuggestionFrame</code> (#89)</a></strong></li>
+<li>Implement <code>ImageVideo</code> support in SLP by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/90">Implement <code>ImageVideo</code> support in SLP (#90)</a></strong></li>
+<li>Bump to v0.1.1 by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/93">Bump to v0.1.1 (#93)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.0...v0.1.1</p>
 <h2 id="v010"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.1.0">v0.1.0</a><a class="headerlink" href="#v010" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_10">What's Changed<a class="headerlink" href="#whats-changed_10" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Add skeleton utilities by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/76">https://github.com/talmolab/sleap-io/pull/76</a></li>
+<li>Add skeleton utilities by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/76">Add skeleton utilities (#76)</a></strong></li>
 <li><code>Skeleton.add_node</code>: Add a node by name or object.</li>
 <li><code>Skeleton.add_edge</code>: Add an edge by lists of names or objects.</li>
 <li>
 <p><code>Skeleton.add_symmetry</code>: Add a symmetry edge by lists of names or objects.</p>
 </li>
 <li>
-<p>Update CI and versions by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/77">https://github.com/talmolab/sleap-io/pull/77</a></p>
+<p>Update CI and versions by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/77">Update CI and versions (#77)</a></strong></p>
 </li>
 <li>Update dependency ranges (see below)</li>
 <li>Update action workflow versions</li>
@@ -2122,22 +2122,22 @@
 <p>Enable pure conda-forge dependency setup</p>
 </li>
 <li>
-<p>Bump to v0.1.0 by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/78">https://github.com/talmolab/sleap-io/pull/78</a></p>
+<p>Bump to v0.1.0 by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/78">Bump to v0.1.0 (#78)</a></strong></p>
 </li>
 <li>
-<p>Fix multi-skeleton loading by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/79">https://github.com/talmolab/sleap-io/pull/79</a></p>
+<p>Fix multi-skeleton loading by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/79">Fix multi-skeleton loading (#79)</a></strong></p>
 </li>
 <li>
 <p>Fixes #71.</p>
 </li>
 <li>
-<p>Add high level APIs by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/80">https://github.com/talmolab/sleap-io/pull/80</a></p>
+<p>Add high level APIs by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/80">Add high level APIs (#80)</a></strong></p>
 </li>
 <li>
 <p>Add <code>load_video</code> and <code>load_file</code> high level APIs (#48)</p>
 </li>
 <li>
-<p>Labels QOL enhancements by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/81">https://github.com/talmolab/sleap-io/pull/81</a></p>
+<p>Labels QOL enhancements by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/81">Labels QOL enhancements (#81)</a></strong></p>
 </li>
 <li><code>LabeledFrame.remove_predictions</code>: Remove predicted instances from a labeled frame.</li>
 <li><code>LabeledFrame.remove_empty_instances</code>: Remove instances with no visible points from a labeled frame.</li>
@@ -2148,7 +2148,7 @@
 <p><code>Labels.__getitem__</code>: Now supports lists, slices, numpy arrays, tuples of <code>(Video, frame_idx)</code> and <code>Video</code>.</p>
 </li>
 <li>
-<p>Video QOL enhancements by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/82">https://github.com/talmolab/sleap-io/pull/82</a></p>
+<p>Video QOL enhancements by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/82">Video QOL enhancements (#82)</a></strong></p>
 </li>
 <li><code>Video.is_open</code>: Checks if the video exists and the backend is set.</li>
 <li><code>Video.open</code>: Opens or restarts the backend for reading.</li>
@@ -2166,141 +2166,141 @@
 <h2 id="v0014"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.14">v0.0.14</a><a class="headerlink" href="#v0014" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_11">What's Changed<a class="headerlink" href="#whats-changed_11" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix importing in Python 3.7 by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/75">https://github.com/talmolab/sleap-io/pull/75</a></li>
+<li>Fix importing in Python 3.7 by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/75">Fix importing in Python 3.7 (#75)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.13...v0.0.14</p>
 <h2 id="v0013"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.13">v0.0.13</a><a class="headerlink" href="#v0013" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_12">What's Changed<a class="headerlink" href="#whats-changed_12" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Add sdist build by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/74">https://github.com/talmolab/sleap-io/pull/74</a></li>
+<li>Add sdist build by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/74">Add sdist build (#74)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.12...v0.0.13</p>
 <h2 id="v0012"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.12">v0.0.12</a><a class="headerlink" href="#v0012" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_13">What's Changed<a class="headerlink" href="#whats-changed_13" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Add support for the Kumar Lab's JABS format by @SkepticRaven in <a href="https://github.com/talmolab/sleap-io/pull/63">https://github.com/talmolab/sleap-io/pull/63</a></li>
-<li>Fix multi-video serialization in SLP by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/72">https://github.com/talmolab/sleap-io/pull/72</a></li>
+<li>Add support for the Kumar Lab's JABS format by @SkepticRaven in <strong><a href="https://github.com/talmolab/sleap-io/pull/63">Add support for the Kumar Lab's JABS format (#63)</a></strong></li>
+<li>Fix multi-video serialization in SLP by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/72">Fix multi-video serialization in SLP (#72)</a></strong></li>
 </ul>
 <h2 id="new-contributors_1">New Contributors<a class="headerlink" href="#new-contributors_1" title="Permanent link">&para;</a></h2>
 <ul>
-<li>@SkepticRaven made their first contribution in <a href="https://github.com/talmolab/sleap-io/pull/63">https://github.com/talmolab/sleap-io/pull/63</a></li>
+<li>@SkepticRaven made their first contribution in <strong><a href="https://github.com/talmolab/sleap-io/pull/63">Add support for the Kumar Lab's JABS format (#63)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.11...v0.0.12</p>
 <h2 id="v0011"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.11">v0.0.11</a><a class="headerlink" href="#v0011" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_14">What's Changed<a class="headerlink" href="#whats-changed_14" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Video handle persistence by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/64">https://github.com/talmolab/sleap-io/pull/64</a></li>
-<li>Bump to 0.0.11 by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/66">https://github.com/talmolab/sleap-io/pull/66</a></li>
+<li>Video handle persistence by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/64">Video handle persistence (#64)</a></strong></li>
+<li>Bump to 0.0.11 by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/66">Bump to 0.0.11 (#66)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.10...v0.0.11</p>
 <h2 id="v0010"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.10">v0.0.10</a><a class="headerlink" href="#v0010" title="Permanent link">&para;</a></h2>
 <p>This is a hotfix to get around installing in older environments with numpy &lt;1.20.</p>
 <h2 id="whats-changed_15">What's Changed<a class="headerlink" href="#whats-changed_15" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fallback on import newer numpy.testing module by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/65">https://github.com/talmolab/sleap-io/pull/65</a></li>
+<li>Fallback on import newer numpy.testing module by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/65">Fallback on import newer numpy.testing module (#65)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.9...v0.0.10</p>
 <h2 id="v009"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.9">v0.0.9</a><a class="headerlink" href="#v009" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_16">What's Changed<a class="headerlink" href="#whats-changed_16" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix serialization for negative anchors metadata field in SLP files by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/59">https://github.com/talmolab/sleap-io/pull/59</a></li>
-<li>Fix edge unpacking by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/60">https://github.com/talmolab/sleap-io/pull/60</a></li>
-<li>Bump to v0.0.9 and update usage docs by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/61">https://github.com/talmolab/sleap-io/pull/61</a></li>
+<li>Fix serialization for negative anchors metadata field in SLP files by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/59">Fix serialization for negative anchors metadata field in SLP files (#59)</a></strong></li>
+<li>Fix edge unpacking by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/60">Fix edge unpacking (#60)</a></strong></li>
+<li>Bump to v0.0.9 and update usage docs by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/61">Bump to v0.0.9 and update usage docs (#61)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.8...v0.0.9</p>
 <h2 id="v008"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.8">v0.0.8</a><a class="headerlink" href="#v008" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_17">What's Changed<a class="headerlink" href="#whats-changed_17" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix docstring for LabeledFrame.predicted_instances by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/43">https://github.com/talmolab/sleap-io/pull/43</a></li>
-<li>Parse skeleton symmetries from SLP files by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/53">https://github.com/talmolab/sleap-io/pull/53</a></li>
-<li>Add Labels.skeleton convenience attribute by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/54">https://github.com/talmolab/sleap-io/pull/54</a></li>
-<li>Write SLP files by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/55">https://github.com/talmolab/sleap-io/pull/55</a></li>
-<li>Create video backend automatically if filename exists. by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/56">https://github.com/talmolab/sleap-io/pull/56</a></li>
+<li>Fix docstring for LabeledFrame.predicted_instances by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/43">Fix docstring for LabeledFrame.predicted_instances (#43)</a></strong></li>
+<li>Parse skeleton symmetries from SLP files by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/53">Parse skeleton symmetries from SLP files (#53)</a></strong></li>
+<li>Add Labels.skeleton convenience attribute by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/54">Add Labels.skeleton convenience attribute (#54)</a></strong></li>
+<li>Write SLP files by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/55">Write SLP files (#55)</a></strong></li>
+<li>Create video backend automatically if filename exists. by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/56">Create video backend automatically if filename exists. (#56)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.7...v0.0.8</p>
 <h2 id="v007"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.7">v0.0.7</a><a class="headerlink" href="#v007" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_18">What's Changed<a class="headerlink" href="#whats-changed_18" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Pin imageio version by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/39">https://github.com/talmolab/sleap-io/pull/39</a></li>
-<li>Fix detection of embedded images when loading SLP files by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/40">https://github.com/talmolab/sleap-io/pull/40</a></li>
+<li>Pin imageio version by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/39">Pin imageio version (#39)</a></strong></li>
+<li>Fix detection of embedded images when loading SLP files by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/40">Fix detection of embedded images when loading SLP files (#40)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.6...v0.0.7</p>
 <h2 id="v006"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.6">v0.0.6</a><a class="headerlink" href="#v006" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_19">What's Changed<a class="headerlink" href="#whats-changed_19" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Add from predicted parsing by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/37">https://github.com/talmolab/sleap-io/pull/37</a></li>
+<li>Add from predicted parsing by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/37">Add from predicted parsing (#37)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.5...v0.0.6</p>
 <h2 id="v005"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.5">v0.0.5</a><a class="headerlink" href="#v005" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_20">What's Changed<a class="headerlink" href="#whats-changed_20" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Basic path resolution by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/36">https://github.com/talmolab/sleap-io/pull/36</a></li>
+<li>Basic path resolution by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/36">Basic path resolution (#36)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.4...v0.0.5</p>
 <h2 id="v004"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.4">v0.0.4</a><a class="headerlink" href="#v004" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_21">What's Changed<a class="headerlink" href="#whats-changed_21" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix build by including readme correctly in pyproject.toml by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/34">https://github.com/talmolab/sleap-io/pull/34</a></li>
-<li>Add Labels.find and Labels.video by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/35">https://github.com/talmolab/sleap-io/pull/35</a></li>
+<li>Fix build by including readme correctly in pyproject.toml by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/34">Fix build by including readme correctly in pyproject.toml (#34)</a></strong></li>
+<li>Add Labels.find and Labels.video by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/35">Add Labels.find and Labels.video (#35)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.3...v0.0.4</p>
 <h2 id="v003"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.3">v0.0.3</a><a class="headerlink" href="#v003" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_22">What's Changed<a class="headerlink" href="#whats-changed_22" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Update CI by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/32">https://github.com/talmolab/sleap-io/pull/32</a></li>
+<li>Update CI by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/32">Update CI (#32)</a></strong></li>
 <li>Switch to using <code>pyproject.toml</code> alone instead of <code>setup.cfg</code>.</li>
 <li>Remove <code>mypy</code> type enforcement -- this is too strict for a library intended to be this flexible.</li>
 <li>Use micromamba in GitHub Actions workflow instead of miniconda</li>
-<li>Video backends by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/31">https://github.com/talmolab/sleap-io/pull/31</a></li>
+<li>Video backends by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/31">Video backends (#31)</a></strong></li>
 <li>This PR implements the core video backends for media files, HDF5 and embedded images.</li>
-<li>Bump version by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/33">https://github.com/talmolab/sleap-io/pull/33</a></li>
+<li>Bump version by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/33">Bump version (#33)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.2...v0.0.3</p>
 <h2 id="v002"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.2">v0.0.2</a><a class="headerlink" href="#v002" title="Permanent link">&para;</a></h2>
 <h2 id="whats-changed_23">What's Changed<a class="headerlink" href="#whats-changed_23" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fix version and readme badge by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/19">https://github.com/talmolab/sleap-io/pull/19</a></li>
-<li>Add NWB support III - provenance writing by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/17">https://github.com/talmolab/sleap-io/pull/17</a></li>
-<li>Propagated extracted backend dict to video object by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/18">https://github.com/talmolab/sleap-io/pull/18</a></li>
-<li>Change equality semantics for Points and Instances by @quantumdot in <a href="https://github.com/talmolab/sleap-io/pull/21">https://github.com/talmolab/sleap-io/pull/21</a></li>
-<li>Metadata not correctly propagated to nwb bug by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/23">https://github.com/talmolab/sleap-io/pull/23</a></li>
-<li>Add LabelStudio project support by @quantumdot in <a href="https://github.com/talmolab/sleap-io/pull/26">https://github.com/talmolab/sleap-io/pull/26</a></li>
-<li>Add propagation of start time when writing nwbfile by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/29">https://github.com/talmolab/sleap-io/pull/29</a></li>
-<li>Refactoring pre v0.0.2 by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/27">https://github.com/talmolab/sleap-io/pull/27</a></li>
+<li>Fix version and readme badge by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/19">Fix version and readme badge (#19)</a></strong></li>
+<li>Add NWB support III - provenance writing by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/17">Add NWB support III - provenance writing (#17)</a></strong></li>
+<li>Propagated extracted backend dict to video object by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/18">Propagated extracted backend dict to video object (#18)</a></strong></li>
+<li>Change equality semantics for Points and Instances by @quantumdot in <strong><a href="https://github.com/talmolab/sleap-io/pull/21">Change equality semantics for Points and Instances (#21)</a></strong></li>
+<li>Metadata not correctly propagated to nwb bug by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/23">Metadata not correctly propagated to nwb bug (#23)</a></strong></li>
+<li>Add LabelStudio project support by @quantumdot in <strong><a href="https://github.com/talmolab/sleap-io/pull/26">Add LabelStudio project support (#26)</a></strong></li>
+<li>Add propagation of start time when writing nwbfile by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/29">Add propagation of start time when writing nwbfile (#29)</a></strong></li>
+<li>Refactoring pre v0.0.2 by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/27">Refactoring pre v0.0.2 (#27)</a></strong></li>
 <li>High-level API cleaned up to <code>load_nwb</code>, <code>save_nwb</code>, <code>load_labelstudio</code>, <code>save_labelstudio</code></li>
 <li>Basic NWB loading support</li>
 <li>Add Label Studio functionality for inferring nodes.</li>
 </ul>
 <h2 id="new-contributors_2">New Contributors<a class="headerlink" href="#new-contributors_2" title="Permanent link">&para;</a></h2>
 <ul>
-<li>@quantumdot made their first contribution in <a href="https://github.com/talmolab/sleap-io/pull/21">https://github.com/talmolab/sleap-io/pull/21</a></li>
+<li>@quantumdot made their first contribution in <strong><a href="https://github.com/talmolab/sleap-io/pull/21">Change equality semantics for Points and Instances (#21)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.1...v0.0.2</p>
 <h2 id="v001"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.1">v0.0.1</a><a class="headerlink" href="#v001" title="Permanent link">&para;</a></h2>
 <p>Initial stable release of the package.</p>
 <h2 id="whats-changed_24">What's Changed<a class="headerlink" href="#whats-changed_24" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Initial setup by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/1">https://github.com/talmolab/sleap-io/pull/1</a></li>
-<li>Docstring linting and contributor guide by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/4">https://github.com/talmolab/sleap-io/pull/4</a></li>
-<li>Create sleap-io structures by @davidasamy in <a href="https://github.com/talmolab/sleap-io/pull/2">https://github.com/talmolab/sleap-io/pull/2</a></li>
-<li>Read SLP files by @davidasamy in <a href="https://github.com/talmolab/sleap-io/pull/3">https://github.com/talmolab/sleap-io/pull/3</a></li>
-<li>Initial refactor by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/5">https://github.com/talmolab/sleap-io/pull/5</a></li>
-<li>Performance fixes by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/6">https://github.com/talmolab/sleap-io/pull/6</a></li>
-<li>Added dunder <code>__repr__</code> to labels object by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/8">https://github.com/talmolab/sleap-io/pull/8</a></li>
-<li>Add fix for PR CI and add a test by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/9">https://github.com/talmolab/sleap-io/pull/9</a></li>
-<li>Add write utilities by @roomrys in <a href="https://github.com/talmolab/sleap-io/pull/11">https://github.com/talmolab/sleap-io/pull/11</a></li>
-<li>Add nwb support I by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/12">https://github.com/talmolab/sleap-io/pull/12</a></li>
-<li>Add Labels.numpy and organize fixtures by @roomrys in <a href="https://github.com/talmolab/sleap-io/pull/13">https://github.com/talmolab/sleap-io/pull/13</a></li>
-<li>Add NWB support II by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/15">https://github.com/talmolab/sleap-io/pull/15</a></li>
-<li>Add tests and functionality for loading provenance data by @h-mayorquin in <a href="https://github.com/talmolab/sleap-io/pull/14">https://github.com/talmolab/sleap-io/pull/14</a></li>
-<li>Build workflow by @talmo in <a href="https://github.com/talmolab/sleap-io/pull/16">https://github.com/talmolab/sleap-io/pull/16</a></li>
+<li>Initial setup by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/1">Initial setup (#1)</a></strong></li>
+<li>Docstring linting and contributor guide by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/4">Docstring linting and contributor guide (#4)</a></strong></li>
+<li>Create sleap-io structures by @davidasamy in <strong><a href="https://github.com/talmolab/sleap-io/pull/2">Create sleap-io structures (#2)</a></strong></li>
+<li>Read SLP files by @davidasamy in <strong><a href="https://github.com/talmolab/sleap-io/pull/3">Read SLP files (#3)</a></strong></li>
+<li>Initial refactor by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/5">Initial refactor (#5)</a></strong></li>
+<li>Performance fixes by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/6">Performance fixes (#6)</a></strong></li>
+<li>Added dunder <code>__repr__</code> to labels object by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/8">Added dunder <code>__repr__</code> to labels object (#8)</a></strong></li>
+<li>Add fix for PR CI and add a test by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/9">Add fix for PR CI and add a test (#9)</a></strong></li>
+<li>Add write utilities by @roomrys in <strong><a href="https://github.com/talmolab/sleap-io/pull/11">Add write utilities (#11)</a></strong></li>
+<li>Add nwb support I by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/12">Add nwb support I (#12)</a></strong></li>
+<li>Add Labels.numpy and organize fixtures by @roomrys in <strong><a href="https://github.com/talmolab/sleap-io/pull/13">Add Labels.numpy and organize fixtures (#13)</a></strong></li>
+<li>Add NWB support II by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/15">Add NWB support II (#15)</a></strong></li>
+<li>Add tests and functionality for loading provenance data by @h-mayorquin in <strong><a href="https://github.com/talmolab/sleap-io/pull/14">Add tests and functionality for loading provenance data (#14)</a></strong></li>
+<li>Build workflow by @talmo in <strong><a href="https://github.com/talmolab/sleap-io/pull/16">Build workflow (#16)</a></strong></li>
 </ul>
 <h2 id="new-contributors_3">New Contributors<a class="headerlink" href="#new-contributors_3" title="Permanent link">&para;</a></h2>
 <ul>
-<li>@talmo made their first contribution in <a href="https://github.com/talmolab/sleap-io/pull/1">https://github.com/talmolab/sleap-io/pull/1</a></li>
-<li>@davidasamy made their first contribution in <a href="https://github.com/talmolab/sleap-io/pull/2">https://github.com/talmolab/sleap-io/pull/2</a></li>
-<li>@h-mayorquin made their first contribution in <a href="https://github.com/talmolab/sleap-io/pull/8">https://github.com/talmolab/sleap-io/pull/8</a></li>
-<li>@roomrys made their first contribution in <a href="https://github.com/talmolab/sleap-io/pull/11">https://github.com/talmolab/sleap-io/pull/11</a></li>
+<li>@talmo made their first contribution in <strong><a href="https://github.com/talmolab/sleap-io/pull/1">Initial setup (#1)</a></strong></li>
+<li>@davidasamy made their first contribution in <strong><a href="https://github.com/talmolab/sleap-io/pull/2">Create sleap-io structures (#2)</a></strong></li>
+<li>@h-mayorquin made their first contribution in <strong><a href="https://github.com/talmolab/sleap-io/pull/8">Added dunder <code>__repr__</code> to labels object (#8)</a></strong></li>
+<li>@roomrys made their first contribution in <strong><a href="https://github.com/talmolab/sleap-io/pull/11">Add write utilities (#11)</a></strong></li>
 </ul>
 <p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/commits/v0.0.1</p>
 
