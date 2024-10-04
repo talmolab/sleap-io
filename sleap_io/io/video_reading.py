@@ -1,4 +1,4 @@
-"""Backends for reading and writing videos."""
+"""Backends for reading videos."""
 
 from __future__ import annotations
 from pathlib import Path

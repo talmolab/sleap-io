@@ -39,7 +39,7 @@ import simplejson as json
 import pytest
 from pathlib import Path
 import shutil
-from sleap_io.io.video import ImageVideo, HDF5Video, MediaVideo
+from sleap_io.io.video_reading import ImageVideo, HDF5Video, MediaVideo
 import sys
 
 

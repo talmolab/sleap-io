@@ -1,6 +1,6 @@
 """Tests for methods in the sleap_io.io.video file."""
 
-from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video, ImageVideo
+from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
 import numpy as np
 from numpy.testing import assert_equal
 import h5py

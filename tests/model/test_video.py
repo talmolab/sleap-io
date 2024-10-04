@@ -1,7 +1,7 @@
 """Tests for methods in the sleap_io.model.video file."""
 
 from sleap_io import Video
-from sleap_io.io.video import MediaVideo, ImageVideo
+from sleap_io.io.video_reading import MediaVideo, ImageVideo
 import numpy as np
 import pytest
 from pathlib import Path
