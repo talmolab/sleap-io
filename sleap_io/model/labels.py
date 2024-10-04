@@ -473,6 +473,13 @@ class Labels:
             video_map: Alternative input of dictionary where keys are the old videos and
                 values are the new videos.
         """
+        if (
+            old_videos is None
+            and new_videos is not None
+            and len(new_videos) == len(self.videos)
+        ):
+            old_videos = self.videos
+
         if video_map is None:
             video_map = {o: n for o, n in zip(old_videos, new_videos)}
 
@@ -485,6 +492,9 @@ class Labels:
         for sf in self.suggestions:
             if sf.video in video_map:
                 sf.video = video_map[sf.video]
+
+        # Update the list of videos.
+        self.videos = [video_map.get(video, video) for video in self.videos]
 
     def replace_filenames(
         self,
