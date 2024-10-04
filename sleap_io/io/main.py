@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 from sleap_io import Labels, Skeleton, Video
-from sleap_io.io import slp, nwb, labelstudio, jabs
+from sleap_io.io import slp, nwb, labelstudio, jabs, video_writing
 from typing import Optional, Union
 from pathlib import Path
+import numpy as np
 
 
 def load_slp(filename: str, open_videos: bool = True) -> Labels:
@@ -147,6 +148,33 @@ def load_video(filename: str, **kwargs) -> Video:
         A `Video` object.
     """
     return Video.from_filename(filename, **kwargs)
+
+
+def save_video(frames: np.ndarray | Video, filename: str | Path, **kwargs):
+    """Write a list of frames to a video file.
+
+    Args:
+        frames: Sequence of frames to write to video. Each frame should be a 2D or 3D
+            numpy array with dimensions (height, width) or (height, width, channels).
+        filename: Path to output video file.
+        fps: Frames per second. Defaults to 30.
+        pixelformat: Pixel format for video. Defaults to "yuv420p".
+        codec: Codec to use for encoding. Defaults to "libx264".
+        crf: Constant rate factor to control lossiness of video. Values go from 2 to 32,
+            with numbers in the 18 to 30 range being most common. Lower values mean less
+            compressed/higher quality. Defaults to 25. No effect if codec is not
+            "libx264".
+        preset: H264 encoding preset. Defaults to "superfast". No effect if codec is not
+            "libx264".
+        output_params: Additional output parameters for FFMPEG. This should be a list of
+            strings corresponding to command line arguments for FFMPEG and libx264. Use
+            `ffmpeg -h encoder=libx264` to see all options for libx264 output_params.
+
+    See also: `sio.VideoWriter`
+    """
+    with video_writing.VideoWriter(filename, **kwargs) as writer:
+        for frame in frames:
+            writer(frame)
 
 
 def load_file(

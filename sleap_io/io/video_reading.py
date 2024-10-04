@@ -1,4 +1,4 @@
-"""Backends for reading and writing videos."""
+"""Backends for reading videos."""
 
 from __future__ import annotations
 from pathlib import Path
@@ -193,6 +193,17 @@ class VideoBackend:
         """Return number of frames in the video."""
         return self.shape[0]
 
+    def has_frame(self, frame_idx: int) -> bool:
+        """Check if a frame index is contained in the video.
+
+        Args:
+            frame_idx: Index of frame to check.
+
+        Returns:
+            `True` if the index is contained in the video, otherwise `False`.
+        """
+        return frame_idx < len(self)
+
     def get_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
 
@@ -212,6 +223,9 @@ class VideoBackend:
 
         See also: `get_frames`
         """
+        if not self.has_frame(frame_idx):
+            raise IndexError(f"Frame index {frame_idx} out of range.")
+
         img = self._read_frame(frame_idx)
 
         if self.grayscale is None:
@@ -619,6 +633,20 @@ class HDF5Video(VideoBackend):
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
         return img
+
+    def has_frame(self, frame_idx: int) -> bool:
+        """Check if a frame index is contained in the video.
+
+        Args:
+            frame_idx: Index of frame to check.
+
+        Returns:
+            `True` if the index is contained in the video, otherwise `False`.
+        """
+        if self.frame_map:
+            return frame_idx in self.frame_map
+        else:
+            return frame_idx < len(self)
 
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.

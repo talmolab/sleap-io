@@ -6,6 +6,8 @@
 
 ::: sleap_io.load_video
 
+::: sleap_io.save_video
+
 ::: sleap_io.load_slp
 
 ::: sleap_io.save_slp

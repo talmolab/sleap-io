@@ -23,6 +23,9 @@ from sleap_io.io.main import (
     load_jabs,
     save_jabs,
     load_video,
+    save_video,
     load_file,
     save_file,
 )
+from sleap_io.io.video_reading import VideoBackend
+from sleap_io.io.video_writing import VideoWriter

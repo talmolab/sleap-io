@@ -11,6 +11,7 @@ from sleap_io.io.main import (
     load_jabs,
     save_jabs,
     load_video,
+    save_video,
     load_file,
     save_file,
 )
@@ -104,3 +105,13 @@ def test_load_save_file_invalid():
 
     with pytest.raises(ValueError):
         save_file(Labels(), "invalid_file.ext")
+
+
+def test_save_video(centered_pair_low_quality_video, tmp_path):
+    imgs = centered_pair_low_quality_video[:4]
+    save_video(imgs, tmp_path / "output.mp4")
+    vid = load_video(tmp_path / "output.mp4")
+    assert vid.shape == (4, 384, 384, 1)
+    save_video(vid, tmp_path / "output2.mp4")
+    vid2 = load_video(tmp_path / "output2.mp4")
+    assert vid2.shape == (4, 384, 384, 1)

@@ -20,7 +20,7 @@ from sleap_io import (
     LabeledFrame,
     Labels,
 )
-from sleap_io.io.video import VideoBackend, ImageVideo, MediaVideo, HDF5Video
+from sleap_io.io.video_reading import VideoBackend, ImageVideo, MediaVideo, HDF5Video
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset, is_file_accessible
 from enum import IntEnum
 from pathlib import Path

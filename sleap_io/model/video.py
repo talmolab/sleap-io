@@ -8,7 +8,7 @@ from __future__ import annotations
 import attrs
 from typing import Tuple, Optional, Optional
 import numpy as np
-from sleap_io.io.video import VideoBackend, MediaVideo, HDF5Video, ImageVideo
+from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
 from sleap_io.io.utils import is_file_accessible
 from pathlib import Path
 
