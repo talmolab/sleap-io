@@ -150,7 +150,16 @@ def load_video(filename: str, **kwargs) -> Video:
     return Video.from_filename(filename, **kwargs)
 
 
-def save_video(frames: np.ndarray | Video, filename: str | Path, **kwargs):
+def save_video(
+    frames: np.ndarray | Video,
+    filename: str | Path,
+    fps: float = 30,
+    pixelformat: str = "yuv420p",
+    codec: str = "libx264",
+    crf: int = 25,
+    preset: str = "superfast",
+    output_params: list | None = None,
+):
     """Write a list of frames to a video file.
 
     Args:
@@ -172,7 +181,18 @@ def save_video(frames: np.ndarray | Video, filename: str | Path, **kwargs):
 
     See also: `sio.VideoWriter`
     """
-    with video_writing.VideoWriter(filename, **kwargs) as writer:
+    if output_params is None:
+        output_params = []
+
+    with video_writing.VideoWriter(
+        filename,
+        fps=fps,
+        pixelformat=pixelformat,
+        codec=codec,
+        crf=crf,
+        preset=preset,
+        output_params=output_params,
+    ) as writer:
         for frame in frames:
             writer(frame)
 

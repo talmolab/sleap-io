@@ -56,6 +56,7 @@ plugins:
   - gen-files:
       scripts:
         - scripts/gen_ref_pages.py
+        - scripts/gen_changelog.py
   - literate-nav:
       nav_file: SUMMARY.md
   - section-index
@@ -83,7 +84,7 @@ markdown_extensions:
   - md_in_html
   - toc:
       permalink: true
-      toc_depth: 3
+      toc_depth: 2
 
   # Python Markdown Extensions
   - pymdownx.arithmatex:
@@ -149,7 +150,8 @@ copyright: >
 
 nav:
   - Overview: index.md
-  - Changelog: https://github.com/talmolab/sleap-io/releases
+  - Changelog: changelog.md
+  - Releases: https://github.com/talmolab/sleap-io/releases
   - Core API:
     - Model: model.md
     - Formats: formats.md
