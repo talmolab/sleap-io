@@ -1,0 +1,1937 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://io.sleap.ai/0.1.11/changelog/">
+      
+      
+      
+      
+      <link rel="icon" href="../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+    
+    
+      
+        <title>Changelog - sleap-io documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.8c3ca2c6.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../css/mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-V7MWLE7LXW"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-V7MWLE7LXW",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-V7MWLE7LXW",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>if("undefined"!=typeof __md_analytics){var consent=__md_get("__consent");consent&&consent.analytics&&__md_analytics()}</script>
+  
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="sleap-io documentation" class="md-header__button md-logo" aria-label="sleap-io documentation" data-md-component="logo">
+      
+  <img src="../assets/sleap-logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            sleap-io documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/talmolab/sleap-io" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="sleap-io documentation" class="md-nav__button md-logo" aria-label="sleap-io documentation" data-md-component="logo">
+      
+  <img src="../assets/sleap-logo.png" alt="logo">
+
+    </a>
+    sleap-io documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/talmolab/sleap-io" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/talmolab/sleap-io/releases" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Core API
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Core API
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formats/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Formats
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Full API
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Full API
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/sleap_io/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    sleap_io
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            sleap_io
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_1" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/sleap_io/io/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    io
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_1" id="__nav_4_1_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            io
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/jabs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    jabs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/labelstudio/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    labelstudio
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/main/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    main
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/nwb/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    nwb
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/slp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    slp
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    utils
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/video_reading/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    video_reading
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/video_writing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    video_writing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_2" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/sleap_io/model/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    model
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_2" id="__nav_4_1_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1_2">
+            <span class="md-nav__icon md-icon"></span>
+            model
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/instance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/labeled_frame/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    labeled_frame
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/skeleton/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    skeleton
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/suggestions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    suggestions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/video/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    video
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/version/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    version
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#v0110" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.10
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v019" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.9
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v018" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-contributors" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Contributors
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v017" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.7
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v016" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.6
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v015" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.5
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v014" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.4
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v013" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.3
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v012" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.2
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v011" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v010" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.1.0
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes-on-dependency-pins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notes on dependency pins
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v0014" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.14
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v0013" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.13
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v0012" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.12
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-contributors_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Contributors
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v0011" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.11
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v0010" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.10
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v009" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.9
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v008" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_17" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v007" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.7
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_18" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v006" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.6
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_19" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v005" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.5
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_20" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v004" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.4
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_21" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v003" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.3
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_22" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v002" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.2
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_23" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-contributors_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Contributors
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v001" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.0.1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-changed_24" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Changed
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-contributors_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Contributors
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v0110">v0.1.10<a class="headerlink" href="#v0110" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed">What's Changed<a class="headerlink" href="#whats-changed" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix embedded video lookup by @talmo in https://github.com/talmolab/sleap-io/pull/122</li>
+<li>Add better support for exporting and loading RGB videos from .pkg.slp files by @talmo in https://github.com/talmolab/sleap-io/pull/125</li>
+<li>Fix video indexing when embedding from labels that already have embedded data by @talmo in https://github.com/talmolab/sleap-io/pull/126</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.9...v0.1.10</p>
+<h2 id="v019">v0.1.9<a class="headerlink" href="#v019" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_1">What's Changed<a class="headerlink" href="#whats-changed_1" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Dependency management by @talmo in https://github.com/talmolab/sleap-io/pull/118</li>
+<li>Drop <code>av</code> as a dependency since it's still a little buggy and doesn't have broad enough platform compatibility.</li>
+<li>Pin <code>ndx-pose</code> &lt; 0.2.0 until #104 is merged in.</li>
+<li>Remove livecov dev tool as it was interfering with VSCode debugging.</li>
+<li>Safer video loading from SLP by @talmo in https://github.com/talmolab/sleap-io/pull/119</li>
+<li>Added <code>sio.io.utils.is_file_accessible</code> to check for readability by actually reading a byte. This catches permission and other esoteric filesystem errors (addresses #116).</li>
+<li>Explicit control over whether video files should be opened when loading labels with:<code>sio.load_slp(..., open_videos=False)</code></li>
+<li>Explicit control over whether backend is auto-initialized when creating or using <code>Video</code> objects with <code>Video(..., open_backend=False)</code>.</li>
+<li>More sanitization of filenames to posix/forward-slash safe forms when reading and writing SLP files.</li>
+<li>Fix split calculation and allow for not embedding by @talmo in https://github.com/talmolab/sleap-io/pull/120</li>
+<li><strong>Fix</strong>: The function now correctly splits the labels into training, validation, and test sets based on the specified proportions (fixes #117). Previously, the validation fraction was being computed incorrectly in cases where its relative fraction was <code>1.0</code> after taking out the train split.</li>
+<li><strong>Enhancement</strong>: <code>Labels.make_training_splits(..., embed=False)</code>. Previously, the function would always embed the images, which could be slow for large projects. With this change, the <code>embed</code> parameter is introduced, allowing the user to choose whether to embed the images or save the labels with references to the source video files.</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.8...v0.1.9</p>
+<h2 id="v018">v0.1.8<a class="headerlink" href="#v018" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_2">What's Changed<a class="headerlink" href="#whats-changed_2" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix docs by @talmo in https://github.com/talmolab/sleap-io/pull/108</li>
+<li>Support NumPy &gt; 2.0 and Python 3.12 by @lochhh in https://github.com/talmolab/sleap-io/pull/115</li>
+</ul>
+<h2 id="new-contributors">New Contributors<a class="headerlink" href="#new-contributors" title="Permanent link">&para;</a></h2>
+<ul>
+<li>@lochhh made their first contribution in https://github.com/talmolab/sleap-io/pull/115</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.7...v0.1.8</p>
+<h2 id="v017">v0.1.7<a class="headerlink" href="#v017" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_3">What's Changed<a class="headerlink" href="#whats-changed_3" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Path sanitization hotfix by @talmo in https://github.com/talmolab/sleap-io/pull/107</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.6...v0.1.7</p>
+<h2 id="v016">v0.1.6<a class="headerlink" href="#v016" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_4">What's Changed<a class="headerlink" href="#whats-changed_4" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Grayscale property passthrough by @talmo in https://github.com/talmolab/sleap-io/pull/99</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.5...v0.1.6</p>
+<h2 id="v015">v0.1.5<a class="headerlink" href="#v015" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_5">What's Changed<a class="headerlink" href="#whats-changed_5" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Labels.split</code> and <code>Labels.make_training_splits</code> by @talmo in https://github.com/talmolab/sleap-io/pull/98</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.4...v0.1.5</p>
+<h2 id="v014">v0.1.4<a class="headerlink" href="#v014" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_6">What's Changed<a class="headerlink" href="#whats-changed_6" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Add support for embedding images in .pkg.slp by @talmo in https://github.com/talmolab/sleap-io/pull/91</li>
+<li>Saving SLP files with embedded images will re-save the embedded images.</li>
+<li>Embed images into SLP files with:<ul>
+<li><code>labels.save("labels.pkg.slp", embed="user")</code> to embed frames with user-labeled instances (<code>Instance</code>)</li>
+<li><code>labels.save("labels.pkg.slp", embed="user+suggestion")</code> to embed frames with user-labeled instances and suggestion frames (useful for inference after training)</li>
+<li><code>labels.save("labels.pkg.slp", embed="source")</code> to restore the source video ("unembed")</li>
+</ul>
+</li>
+<li>Better reprs and QOL by @talmo in https://github.com/talmolab/sleap-io/pull/96</li>
+<li>Better <code>__repr__</code>s for <code>Skeleton</code>, <code>LabeledFrame</code>, <code>Labels</code>, <code>Instance</code>, <code>PredictedInstance</code></li>
+<li><code>Labels.append()</code> and <code>Labels.extend()</code> to add <code>LabeledFrame</code>s now will update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents.</li>
+<li><code>Labels.update()</code> to manually update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents of <code>Labels.labeled_frames</code> and <code>Labels.suggestions</code>.</li>
+<li><code>Labels.replace_filenames()</code>: multiple methods for replacing all video filenames across the project (#85).</li>
+<li><code>Skeleton.edge_names</code> to return list of edges as tuples of string names</li>
+<li>Added docstrings to <code>sio.load_video</code> and related high level <code>Video</code> APIs to clarify supported file formats.</li>
+<li>Syntactic sugar: try to initialize video backend with <code>Video(filename)</code> construction (#94)</li>
+</ul>
+<p><strong>Note:</strong> This is a re-release of v0.1.3 which had a borked deployment.</p>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.2...v0.1.4</p>
+<h2 id="v013">v0.1.3<a class="headerlink" href="#v013" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_7">What's Changed<a class="headerlink" href="#whats-changed_7" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Add support for embedding images in .pkg.slp by @talmo in https://github.com/talmolab/sleap-io/pull/91</li>
+<li>Saving SLP files with embedded images will re-save the embedded images.</li>
+<li>Embed images into SLP files with:<ul>
+<li><code>labels.save("labels.pkg.slp", embed="user")</code> to embed frames with user-labeled instances (<code>Instance</code>)</li>
+<li><code>labels.save("labels.pkg.slp", embed="user+suggestion")</code> to embed frames with user-labeled instances and suggestion frames (useful for inference after training)</li>
+<li><code>labels.save("labels.pkg.slp", embed="source")</code> to restore the source video ("unembed")</li>
+</ul>
+</li>
+<li>Better reprs and QOL by @talmo in https://github.com/talmolab/sleap-io/pull/96</li>
+<li>Better <code>__repr__</code>s for <code>Skeleton</code>, <code>LabeledFrame</code>, <code>Labels</code>, <code>Instance</code>, <code>PredictedInstance</code></li>
+<li><code>Labels.append()</code> and <code>Labels.extend()</code> to add <code>LabeledFrame</code>s now will update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents.</li>
+<li><code>Labels.update()</code> to manually update <code>Labels.tracks</code>, <code>Labels.skeletons</code> and <code>Labels.videos</code> with contents of <code>Labels.labeled_frames</code> and <code>Labels.suggestions</code>.</li>
+<li><code>Labels.replace_filenames()</code>: multiple methods for replacing all video filenames across the project (#85).</li>
+<li><code>Skeleton.edge_names</code> to return list of edges as tuples of string names</li>
+<li>Added docstrings to <code>sio.load_video</code> and related high level <code>Video</code> APIs to clarify supported file formats.</li>
+<li>Syntactic sugar: try to initialize video backend with <code>Video(filename)</code> construction (#94)</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.2...v0.1.3</p>
+<h2 id="v012">v0.1.2<a class="headerlink" href="#v012" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_8">What's Changed<a class="headerlink" href="#whats-changed_8" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix suggestions deserialization by @talmo in https://github.com/talmolab/sleap-io/pull/95</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.1...v0.1.2</p>
+<h2 id="v011">v0.1.1<a class="headerlink" href="#v011" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_9">What's Changed<a class="headerlink" href="#whats-changed_9" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Create docs pages by @talmo in https://github.com/talmolab/sleap-io/pull/87</li>
+<li>Add <code>ImageVideo</code> backend by @talmo in https://github.com/talmolab/sleap-io/pull/88</li>
+<li>Add <code>SuggestionFrame</code> by @talmo in https://github.com/talmolab/sleap-io/pull/89</li>
+<li>Implement <code>ImageVideo</code> support in SLP by @talmo in https://github.com/talmolab/sleap-io/pull/90</li>
+<li>Bump to v0.1.1 by @talmo in https://github.com/talmolab/sleap-io/pull/93</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.1.0...v0.1.1</p>
+<h2 id="v010">v0.1.0<a class="headerlink" href="#v010" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_10">What's Changed<a class="headerlink" href="#whats-changed_10" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Add skeleton utilities by @talmo in https://github.com/talmolab/sleap-io/pull/76</li>
+<li><code>Skeleton.add_node</code>: Add a node by name or object.</li>
+<li><code>Skeleton.add_edge</code>: Add an edge by lists of names or objects.</li>
+<li>
+<p><code>Skeleton.add_symmetry</code>: Add a symmetry edge by lists of names or objects.</p>
+</li>
+<li>
+<p>Update CI and versions by @talmo in https://github.com/talmolab/sleap-io/pull/77</p>
+</li>
+<li>Update dependency ranges (see below)</li>
+<li>Update action workflow versions</li>
+<li>Enable M1 mac runners</li>
+<li>Expand python version range to 3.7-3.12<ul>
+<li>Note: Python 3.7 is no longer tested in CI due to lack of conda-forge compatability.</li>
+</ul>
+</li>
+<li>
+<p>Enable pure conda-forge dependency setup</p>
+</li>
+<li>
+<p>Bump to v0.1.0 by @talmo in https://github.com/talmolab/sleap-io/pull/78</p>
+</li>
+<li>
+<p>Fix multi-skeleton loading by @talmo in https://github.com/talmolab/sleap-io/pull/79</p>
+</li>
+<li>
+<p>Fixes #71.</p>
+</li>
+<li>
+<p>Add high level APIs by @talmo in https://github.com/talmolab/sleap-io/pull/80</p>
+</li>
+<li>
+<p>Add <code>load_video</code> and <code>load_file</code> high level APIs (#48)</p>
+</li>
+<li>
+<p>Labels QOL enhancements by @talmo in https://github.com/talmolab/sleap-io/pull/81</p>
+</li>
+<li><code>LabeledFrame.remove_predictions</code>: Remove predicted instances from a labeled frame.</li>
+<li><code>LabeledFrame.remove_empty_instances</code>: Remove instances with no visible points from a labeled frame.</li>
+<li><code>Labels.save</code>: Instance-level convenience wrapper for <code>sio.save_file</code>.</li>
+<li><code>Labels.clean</code>: Remove unused or empty frames, instances, videos, skeletons and tracks.</li>
+<li><code>Labels.remove_predictions</code>: Remove predicted instances from all labeled frames (#69).</li>
+<li>
+<p><code>Labels.__getitem__</code>: Now supports lists, slices, numpy arrays, tuples of <code>(Video, frame_idx)</code> and <code>Video</code>.</p>
+</li>
+<li>
+<p>Video QOL enhancements by @talmo in https://github.com/talmolab/sleap-io/pull/82</p>
+</li>
+<li><code>Video.is_open</code>: Checks if the video exists and the backend is set.</li>
+<li><code>Video.open</code>: Opens or restarts the backend for reading.</li>
+<li><code>Video.close</code>: Closes the backend for reading.</li>
+<li><code>Video.exists</code>: Check if the filename for the video exists.</li>
+<li><code>Video.replace_filename</code>: Replace the filename and restart the backend.</li>
+</ul>
+<h2 id="notes-on-dependency-pins">Notes on dependency pins<a class="headerlink" href="#notes-on-dependency-pins" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>ffmpeg &lt; 6.1</code> due to https://github.com/imageio/imageio-ffmpeg/issues/99</li>
+<li><code>h5py &gt;= 3.8.0</code> due to https://github.com/h5py/h5py/issues/2118</li>
+<li><code>python &gt;= 3.8</code> due to <code>h5py &gt;= 3.8.0</code> (we still support <code>python==3.7</code> via pip but this is not longer in CI)</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.14...v0.1.0</p>
+<h2 id="v0014">v0.0.14<a class="headerlink" href="#v0014" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_11">What's Changed<a class="headerlink" href="#whats-changed_11" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix importing in Python 3.7 by @talmo in https://github.com/talmolab/sleap-io/pull/75</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.13...v0.0.14</p>
+<h2 id="v0013">v0.0.13<a class="headerlink" href="#v0013" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_12">What's Changed<a class="headerlink" href="#whats-changed_12" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Add sdist build by @talmo in https://github.com/talmolab/sleap-io/pull/74</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.12...v0.0.13</p>
+<h2 id="v0012">v0.0.12<a class="headerlink" href="#v0012" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_13">What's Changed<a class="headerlink" href="#whats-changed_13" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Add support for the Kumar Lab's JABS format by @SkepticRaven in https://github.com/talmolab/sleap-io/pull/63</li>
+<li>Fix multi-video serialization in SLP by @talmo in https://github.com/talmolab/sleap-io/pull/72</li>
+</ul>
+<h2 id="new-contributors_1">New Contributors<a class="headerlink" href="#new-contributors_1" title="Permanent link">&para;</a></h2>
+<ul>
+<li>@SkepticRaven made their first contribution in https://github.com/talmolab/sleap-io/pull/63</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.11...v0.0.12</p>
+<h2 id="v0011">v0.0.11<a class="headerlink" href="#v0011" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_14">What's Changed<a class="headerlink" href="#whats-changed_14" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Video handle persistence by @talmo in https://github.com/talmolab/sleap-io/pull/64</li>
+<li>Bump to 0.0.11 by @talmo in https://github.com/talmolab/sleap-io/pull/66</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.10...v0.0.11</p>
+<h2 id="v0010">v0.0.10<a class="headerlink" href="#v0010" title="Permanent link">&para;</a></h2>
+<p>This is a hotfix to get around installing in older environments with numpy &lt;1.20.</p>
+<h2 id="whats-changed_15">What's Changed<a class="headerlink" href="#whats-changed_15" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fallback on import newer numpy.testing module by @talmo in https://github.com/talmolab/sleap-io/pull/65</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.9...v0.0.10</p>
+<h2 id="v009">v0.0.9<a class="headerlink" href="#v009" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_16">What's Changed<a class="headerlink" href="#whats-changed_16" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix serialization for negative anchors metadata field in SLP files by @talmo in https://github.com/talmolab/sleap-io/pull/59</li>
+<li>Fix edge unpacking by @talmo in https://github.com/talmolab/sleap-io/pull/60</li>
+<li>Bump to v0.0.9 and update usage docs by @talmo in https://github.com/talmolab/sleap-io/pull/61</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.8...v0.0.9</p>
+<h2 id="v008">v0.0.8<a class="headerlink" href="#v008" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_17">What's Changed<a class="headerlink" href="#whats-changed_17" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix docstring for LabeledFrame.predicted_instances by @talmo in https://github.com/talmolab/sleap-io/pull/43</li>
+<li>Parse skeleton symmetries from SLP files by @talmo in https://github.com/talmolab/sleap-io/pull/53</li>
+<li>Add Labels.skeleton convenience attribute by @talmo in https://github.com/talmolab/sleap-io/pull/54</li>
+<li>Write SLP files by @talmo in https://github.com/talmolab/sleap-io/pull/55</li>
+<li>Create video backend automatically if filename exists. by @talmo in https://github.com/talmolab/sleap-io/pull/56</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.7...v0.0.8</p>
+<h2 id="v007">v0.0.7<a class="headerlink" href="#v007" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_18">What's Changed<a class="headerlink" href="#whats-changed_18" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Pin imageio version by @talmo in https://github.com/talmolab/sleap-io/pull/39</li>
+<li>Fix detection of embedded images when loading SLP files by @talmo in https://github.com/talmolab/sleap-io/pull/40</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.6...v0.0.7</p>
+<h2 id="v006">v0.0.6<a class="headerlink" href="#v006" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_19">What's Changed<a class="headerlink" href="#whats-changed_19" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Add from predicted parsing by @talmo in https://github.com/talmolab/sleap-io/pull/37</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.5...v0.0.6</p>
+<h2 id="v005">v0.0.5<a class="headerlink" href="#v005" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_20">What's Changed<a class="headerlink" href="#whats-changed_20" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Basic path resolution by @talmo in https://github.com/talmolab/sleap-io/pull/36</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.4...v0.0.5</p>
+<h2 id="v004">v0.0.4<a class="headerlink" href="#v004" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_21">What's Changed<a class="headerlink" href="#whats-changed_21" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix build by including readme correctly in pyproject.toml by @talmo in https://github.com/talmolab/sleap-io/pull/34</li>
+<li>Add Labels.find and Labels.video by @talmo in https://github.com/talmolab/sleap-io/pull/35</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.3...v0.0.4</p>
+<h2 id="v003">v0.0.3<a class="headerlink" href="#v003" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_22">What's Changed<a class="headerlink" href="#whats-changed_22" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Update CI by @talmo in https://github.com/talmolab/sleap-io/pull/32</li>
+<li>Switch to using <code>pyproject.toml</code> alone instead of <code>setup.cfg</code>.</li>
+<li>Remove <code>mypy</code> type enforcement -- this is too strict for a library intended to be this flexible.</li>
+<li>Use micromamba in GitHub Actions workflow instead of miniconda</li>
+<li>Video backends by @talmo in https://github.com/talmolab/sleap-io/pull/31</li>
+<li>This PR implements the core video backends for media files, HDF5 and embedded images.</li>
+<li>Bump version by @talmo in https://github.com/talmolab/sleap-io/pull/33</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.2...v0.0.3</p>
+<h2 id="v002">v0.0.2<a class="headerlink" href="#v002" title="Permanent link">&para;</a></h2>
+<h2 id="whats-changed_23">What's Changed<a class="headerlink" href="#whats-changed_23" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fix version and readme badge by @talmo in https://github.com/talmolab/sleap-io/pull/19</li>
+<li>Add NWB support III - provenance writing by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/17</li>
+<li>Propagated extracted backend dict to video object by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/18</li>
+<li>Change equality semantics for Points and Instances by @quantumdot in https://github.com/talmolab/sleap-io/pull/21</li>
+<li>Metadata not correctly propagated to nwb bug by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/23</li>
+<li>Add LabelStudio project support by @quantumdot in https://github.com/talmolab/sleap-io/pull/26</li>
+<li>Add propagation of start time when writing nwbfile by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/29</li>
+<li>Refactoring pre v0.0.2 by @talmo in https://github.com/talmolab/sleap-io/pull/27</li>
+<li>High-level API cleaned up to <code>load_nwb</code>, <code>save_nwb</code>, <code>load_labelstudio</code>, <code>save_labelstudio</code></li>
+<li>Basic NWB loading support</li>
+<li>Add Label Studio functionality for inferring nodes.</li>
+</ul>
+<h2 id="new-contributors_2">New Contributors<a class="headerlink" href="#new-contributors_2" title="Permanent link">&para;</a></h2>
+<ul>
+<li>@quantumdot made their first contribution in https://github.com/talmolab/sleap-io/pull/21</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/compare/v0.0.1...v0.0.2</p>
+<h2 id="v001">v0.0.1<a class="headerlink" href="#v001" title="Permanent link">&para;</a></h2>
+<p>Initial stable release of the package.</p>
+<h2 id="whats-changed_24">What's Changed<a class="headerlink" href="#whats-changed_24" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Initial setup by @talmo in https://github.com/talmolab/sleap-io/pull/1</li>
+<li>Docstring linting and contributor guide by @talmo in https://github.com/talmolab/sleap-io/pull/4</li>
+<li>Create sleap-io structures by @davidasamy in https://github.com/talmolab/sleap-io/pull/2</li>
+<li>Read SLP files by @davidasamy in https://github.com/talmolab/sleap-io/pull/3</li>
+<li>Initial refactor by @talmo in https://github.com/talmolab/sleap-io/pull/5</li>
+<li>Performance fixes by @talmo in https://github.com/talmolab/sleap-io/pull/6</li>
+<li>Added dunder <code>__repr__</code> to labels object by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/8</li>
+<li>Add fix for PR CI and add a test by @talmo in https://github.com/talmolab/sleap-io/pull/9</li>
+<li>Add write utilities by @roomrys in https://github.com/talmolab/sleap-io/pull/11</li>
+<li>Add nwb support I by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/12</li>
+<li>Add Labels.numpy and organize fixtures by @roomrys in https://github.com/talmolab/sleap-io/pull/13</li>
+<li>Add NWB support II by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/15</li>
+<li>Add tests and functionality for loading provenance data by @h-mayorquin in https://github.com/talmolab/sleap-io/pull/14</li>
+<li>Build workflow by @talmo in https://github.com/talmolab/sleap-io/pull/16</li>
+</ul>
+<h2 id="new-contributors_3">New Contributors<a class="headerlink" href="#new-contributors_3" title="Permanent link">&para;</a></h2>
+<ul>
+<li>@talmo made their first contribution in https://github.com/talmolab/sleap-io/pull/1</li>
+<li>@davidasamy made their first contribution in https://github.com/talmolab/sleap-io/pull/2</li>
+<li>@h-mayorquin made their first contribution in https://github.com/talmolab/sleap-io/pull/8</li>
+<li>@roomrys made their first contribution in https://github.com/talmolab/sleap-io/pull/11</li>
+</ul>
+<p><strong>Full Changelog</strong>: https://github.com/talmolab/sleap-io/commits/v0.0.1</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2022 - 2024 Talmo Lab – <a href="#__consent">Change cookie settings</a>
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        <div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/talmolab" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://twitter.com/talmop" target="_blank" rel="noopener" title="twitter.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M389.2 48h70.6L305.6 224.2 487 464H345L233.7 318.6 106.5 464H35.8l164.9-188.5L26.8 48h145.6l100.5 132.9zm-24.8 373.8h39.1L151.1 88h-42z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+      <div class="md-consent" data-md-component="consent" id="__consent" hidden>
+        <div class="md-consent__overlay"></div>
+        <aside class="md-consent__inner">
+          <form class="md-consent__form md-grid md-typeset" name="consent">
+            
+
+  
+    
+  
+
+
+  
+    
+  
+
+
+
+
+<h4>Cookie consent</h4>
+<p>We use cookies to recognize your repeated visits and preferences, as well as to measure the effectiveness of our documentation and whether users find what they're searching for. With your consent, you're helping us to make our documentation better.</p>
+<input class="md-toggle" type="checkbox" id="__settings" >
+<div class="md-consent__settings">
+  <ul class="task-list">
+    
+      
+      
+        
+        
+      
+      <li class="task-list-item">
+        <label class="task-list-control">
+          <input type="checkbox" name="analytics" checked>
+          <span class="task-list-indicator"></span>
+          Google Analytics
+        </label>
+      </li>
+    
+      
+      
+        
+        
+      
+      <li class="task-list-item">
+        <label class="task-list-control">
+          <input type="checkbox" name="github" checked>
+          <span class="task-list-indicator"></span>
+          GitHub
+        </label>
+      </li>
+    
+  </ul>
+</div>
+<div class="md-consent__controls">
+  
+    
+      <button class="md-button md-button--primary">Accept</button>
+    
+    
+    
+  
+    
+    
+      <button type="reset" class="md-button md-button--primary">Reject</button>
+    
+    
+  
+    
+    
+    
+      <label class="md-button" for="__settings">Manage settings</label>
+    
+  
+</div>
+          </form>
+        </aside>
+      </div>
+      <script>var consent=__md_get("__consent");if(consent)for(var input of document.forms.consent.elements)input.name&&(input.checked=consent[input.name]||!1);else"file:"!==location.protocol&&setTimeout((function(){document.querySelector("[data-md-component=consent]").hidden=!1}),250);var form=document.forms.consent;for(var action of["submit","reset"])form.addEventListener(action,(function(e){if(e.preventDefault(),"reset"===e.type)for(var n of document.forms.consent.elements)n.name&&(n.checked=!1);__md_set("__consent",Object.fromEntries(Array.from(new FormData(form).keys()).map((function(e){return[e,!0]})))),location.hash="",location.reload()}))</script>
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      
+    
+  </body>
+</html>
