@@ -356,15 +356,15 @@ def test_labels_remove_predictions(slp_real_data):
 def test_replace_videos(slp_real_data):
     labels = load_slp(slp_real_data)
     assert labels.video.filename == "tests/data/videos/centered_pair_low_quality.mp4"
-    labels.replace_videos(
-        old_videos=[labels.video], new_videos=[Video.from_filename("fake.mp4")]
-    )
+    labels.replace_videos(new_videos=[Video.from_filename("fake.mp4")])
 
     for lf in labels:
         assert lf.video.filename == "fake.mp4"
 
     for sf in labels.suggestions:
         assert sf.video.filename == "fake.mp4"
+
+    assert labels.video.filename == "fake.mp4"
 
 
 def test_replace_filenames():
