@@ -212,6 +212,12 @@ class VideoBackend:
 
         See also: `get_frames`
         """
+        if frame_idx >= len(self):
+            raise IndexError(f"Frame index {frame_idx} out of range.")
+
+        if frame_idx < 0:
+            frame_idx = frame_idx % len(self)
+
         img = self._read_frame(frame_idx)
 
         if self.grayscale is None:

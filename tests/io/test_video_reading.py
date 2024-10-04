@@ -1,4 +1,4 @@
-"""Tests for methods in the sleap_io.io.video file."""
+"""Tests for methods in the sleap_io.io.video_reading file."""
 
 from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
 import numpy as np
@@ -55,6 +55,9 @@ def test_get_frame(centered_pair_low_quality_path):
     assert_equal(backend[:3], backend.get_frames(np.arange(3)))
     assert_equal(backend[-3:], backend.get_frames(range(1097, 1100)))
     assert_equal(backend[-3:-1], backend.get_frames(range(1097, 1099)))
+
+    with pytest.raises(IndexError):
+        backend.get_frame(1100)
 
 
 @pytest.mark.parametrize("keep_open", [False, True])
