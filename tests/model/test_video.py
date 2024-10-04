@@ -115,6 +115,7 @@ def test_video_replace_filename(
     video.replace_filename("test.mp4")
     assert video.exists() is False
     assert video.is_open is False
+    assert video.backend_metadata["filename"] == "test.mp4"
 
     video.replace_filename(centered_pair_low_quality_path, open=False)
     assert video.exists() is True
