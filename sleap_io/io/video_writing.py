@@ -73,6 +73,7 @@ class VideoWriter:
             format="FFMPEG",
             fps=self.fps,
             codec=self.codec,
+            pixelformat=self.pixelformat,
             output_params=self.build_output_params(),
         )
 
