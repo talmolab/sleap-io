@@ -256,6 +256,7 @@ def save_file(
         save_labelstudio(labels, filename, **kwargs)
     elif format == "jabs":
         pose_version = kwargs.pop("pose_version", 5)
-        save_jabs(labels, pose_version, filename, **kwargs)
+        root_folder = kwargs.pop("root_folder", filename)
+        save_jabs(labels, pose_version=pose_version, root_folder=root_folder)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
