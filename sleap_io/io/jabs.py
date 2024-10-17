@@ -262,7 +262,14 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
     # If there is metadata available for the video, use that
     if video.shape:
         num_frames = max(num_frames, video.shape[0])
-    num_keypoints = [len(x.nodes) for x in all_labels.skeletons if x.name == "Mouse"][0]
+    if len(all_labels.skeletons) == 1:
+        skeleton = all_labels.skeleton
+    elif len(all_labels.skeletons) > 1:
+        skeleton = [x for x in all_labels.skeletons if x.name == "Mouse"]
+        if len(skeleton) == 0:
+            raise ValueError("No mouse skeleton found in labels.")
+        skeleton = skeleton[0]
+    num_keypoints = len(skeleton.nodes)
     num_mice = get_max_ids_in_video(labels, key="Mouse")
     # Note that this 1-indexes identities
     track_2_idx = {

@@ -2,8 +2,8 @@
 
 import numpy as np
 import h5py
-
-from sleap_io import Labels, Instance
+import pytest
+from sleap_io import Labels, Instance, Skeleton
 from sleap_io.io.jabs import (
     read_labels,
     convert_labels,
@@ -26,6 +26,14 @@ def test_label_conversions(jabs_real_data_v5):
 
     jabs_labels = convert_labels(slp_labels, slp_labels.videos[0])
     assert isinstance(jabs_labels, dict)
+
+    slp_labels.skeletons.append(Skeleton(["a", "b"], name="test"))
+    jabs_labels = convert_labels(slp_labels, slp_labels.videos[0])
+    assert isinstance(jabs_labels, dict)
+
+    slp_labels.skeletons.pop(0)
+    with pytest.raises(ValueError):
+        convert_labels(slp_labels, slp_labels.videos[0])
 
 
 def test_tracklets_to_v3(jabs_real_data_v5):
