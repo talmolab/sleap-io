@@ -238,6 +238,8 @@ class Video:
             with h5py.File(self.filename, "r") as f:
                 return dataset in f
 
+        return True
+
     @property
     def is_open(self) -> bool:
         """Check if the video backend is open."""
