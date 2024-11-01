@@ -308,6 +308,39 @@ class Instance:
                 pts[self.skeleton.index(node)] = point.numpy()
         return pts
 
+    def update_skeleton(self):
+        """Update the points dictionary to match the skeleton.
+
+        Points associated with nodes that are no longer in the skeleton will be removed.
+
+        Additionally, the keys of the points dictionary will be ordered to match the
+        order of the nodes in the skeleton.
+
+        Notes:
+            This method is useful when the skeleton has been updated (e.g., nodes
+            removed or reordered).
+
+            However, it is recommended to use `Labels`-level methods (e.g.,
+            `Labels.remove_nodes()`) when manipulating the skeleton as these will
+            automatically call this method on every instance.
+
+            It is NOT necessary to call this method after renaming nodes.
+        """
+        # Create a new dictionary to hold the updated points
+        new_points = {}
+
+        # Iterate over the nodes in the skeleton
+        for node in self.skeleton.nodes:
+            # Get the point associated with the node
+            point = self.points.get(node, None)
+
+            # If the point is not None, add it to the new dictionary
+            if point is not None:
+                new_points[node] = point
+
+        # Update the points dictionary
+        self.points = new_points
+
 
 @define
 class PredictedInstance(Instance):

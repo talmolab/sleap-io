@@ -542,10 +542,10 @@ class Skeleton:
             changes.
 
             It is recommended to use the `Labels.remove_nodes()` method which will
-            update all contained to reflect the changes made to the skeleton.
+            update all contained instances to reflect the changes made to the skeleton.
 
             To manually update instances after this method is called, call
-            `instance.update_skeleton()` on each instance that uses this skeleton.
+            `Instance.update_skeleton()` on each instance that uses this skeleton.
         """
         self.remove_nodes([node])
 
@@ -556,16 +556,29 @@ class Skeleton:
             new_order: A list of node names, indices, or `Node` objects specifying the
                 new order of the nodes.
 
+        Raises:
+            ValueError: If the new order of nodes is not the same length as the current
+                nodes.
+
         Notes:
             This method should always be used when reordering nodes in the skeleton as
             it handles updating the lookup caches necessary for indexing nodes by name.
 
-            After reordering, instances using this skeleton do NOT need to be updated as
+        Warning:
+            After reordering, instances using this skeleton do not need to be updated as
             the nodes are stored by reference in the skeleton.
 
-        Raises:
-            ValueError: If the new order of nodes is not the same length as the current
-                nodes.
+            However, the order that points are stored in the instances will not be
+            updated to match the new order of the nodes in the skeleton. This should not
+            matter unless the ordering of the keys in the `Instance.points` dictionary
+            is used instead of relying on the skeleton node order.
+
+            To make sure these are aligned, it is recommended to use the
+            `Labels.reorder_nodes()` method which will update all contained instances to
+            reflect the changes made to the skeleton.
+
+            To manually update instances after this method is called, call
+            `Instance.update_skeleton()` on each instance that uses this skeleton.
         """
         if len(new_order) != len(self.nodes):
             raise ValueError(
