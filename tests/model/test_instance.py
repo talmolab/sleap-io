@@ -164,3 +164,69 @@ def test_predicted_instance():
         str(inst) == "PredictedInstance(points=[[0.0, 1.0], [2.0, 3.0]], track=None, "
         "score=0.60, tracking_score=None)"
     )
+
+
+def test_instance_update_skeleton():
+    skel = Skeleton(["A", "B", "C"])
+    inst = Instance.from_numpy([[0, 0], [1, 1], [2, 2]], skeleton=skel)
+
+    # No need to update on rename
+    skel.rename_nodes({"A": "X", "B": "Y", "C": "Z"})
+    assert inst["X"].x == 0
+    assert inst["Y"].x == 1
+    assert inst["Z"].x == 2
+    assert_equal(inst.numpy(), [[0, 0], [1, 1], [2, 2]])
+
+    # Remove a node from the skeleton
+    Y = skel["Y"]
+    skel.remove_node("Y")
+    assert Y not in skel
+
+    with pytest.raises(KeyError):
+        inst.numpy()  # .numpy() breaks without update
+    assert Y in inst.points  # and the points dict still has the old key
+    inst.update_skeleton()
+    assert Y not in inst.points  # after update, the old key is gone
+    assert_equal(inst.numpy(), [[0, 0], [2, 2]])
+
+    # Reorder nodes
+    skel.reorder_nodes(["Z", "X"])
+    assert_equal(inst.numpy(), [[2, 2], [0, 0]])  # .numpy() works without update
+    assert (
+        list(inst.points.keys()) != skel.nodes
+    )  # but the points dict still has the old order
+    inst.update_skeleton()
+    assert list(inst.points.keys()) == skel.nodes  # after update, the order is correct
+
+
+def test_instance_replace_skeleton():
+    # Full replacement
+    old_skel = Skeleton(["A", "B", "C"])
+    inst = Instance.from_numpy([[0, 0], [1, 1], [2, 2]], skeleton=old_skel)
+    new_skel = Skeleton(["X", "Y", "Z"])
+    inst.replace_skeleton(new_skel, node_map={"A": "X", "B": "Y", "C": "Z"})
+    assert inst.skeleton == new_skel
+    assert_equal(inst.numpy(), [[0, 0], [1, 1], [2, 2]])
+    assert list(inst.points.keys()) == new_skel.nodes
+
+    # Partial replacement
+    old_skel = Skeleton(["A", "B", "C"])
+    inst = Instance.from_numpy([[0, 0], [1, 1], [2, 2]], skeleton=old_skel)
+    new_skel = Skeleton(["X", "C", "Y"])
+    inst.replace_skeleton(new_skel)
+    assert inst.skeleton == new_skel
+    assert_equal(inst.numpy(), [[np.nan, np.nan], [2, 2], [np.nan, np.nan]])
+    assert new_skel["C"] in inst.points
+    assert old_skel["A"] not in inst.points
+    assert old_skel["C"] not in inst.points
+
+    # Fast path with reverse node map
+    old_skel = Skeleton(["A", "B", "C"])
+    inst = Instance.from_numpy([[0, 0], [1, 1], [2, 2]], skeleton=old_skel)
+    new_skel = Skeleton(["X", "Y", "Z"])
+    rev_node_map = {
+        new_node: old_node for new_node, old_node in zip(new_skel.nodes, old_skel.nodes)
+    }
+    inst.replace_skeleton(new_skel, rev_node_map=rev_node_map)
+    assert inst.skeleton == new_skel
+    assert_equal(inst.numpy(), [[0, 0], [1, 1], [2, 2]])

@@ -13,6 +13,7 @@ training models) and predictions (inference results).
 
 from __future__ import annotations
 from sleap_io import (
+    Skeleton,
     LabeledFrame,
     Instance,
     PredictedInstance,
@@ -20,11 +21,11 @@ from sleap_io import (
     Track,
     SuggestionFrame,
 )
+from sleap_io.model.skeleton import NodeOrIndex
 from attrs import define, field
-from typing import Union, Optional, Any
+from typing import Iterator, Union, Optional, Any
 import numpy as np
 from pathlib import Path
-from sleap_io.model.skeleton import Skeleton
 from copy import deepcopy
 
 
@@ -458,6 +459,187 @@ class Labels:
     def user_labeled_frames(self) -> list[LabeledFrame]:
         """Return all labeled frames with user (non-predicted) instances."""
         return [lf for lf in self.labeled_frames if lf.has_user_instances]
+
+    @property
+    def instances(self) -> Iterator[Instance]:
+        """Return an iterator over all instances within all labeled frames."""
+        return (instance for lf in self.labeled_frames for instance in lf.instances)
+
+    def rename_nodes(
+        self,
+        name_map: dict[NodeOrIndex, str] | list[str],
+        skeleton: Skeleton | None = None,
+    ):
+        """Rename nodes in the skeleton.
+
+        Args:
+            name_map: A dictionary mapping old node names to new node names. Keys can be
+                specified as `Node` objects, integer indices, or string names. Values
+                must be specified as string names.
+
+                If a list of strings is provided of the same length as the current
+                nodes, the nodes will be renamed to the names in the list in order.
+            skeleton: `Skeleton` to update. If `None` (the default), assumes there is
+                only one skeleton in the labels and raises `ValueError` otherwise.
+
+        Raises:
+            ValueError: If the new node names exist in the skeleton, if the old node
+                names are not found in the skeleton, or if there is more than one
+                skeleton in the `Labels` but it is not specified.
+
+        Notes:
+            This method is recommended over `Skeleton.rename_nodes` as it will update
+            all instances in the labels to reflect the new node names.
+
+        Example:
+            >>> labels = Labels(skeletons=[Skeleton(["A", "B", "C"])])
+            >>> labels.rename_nodes({"A": "X", "B": "Y", "C": "Z"})
+            >>> labels.skeleton.node_names
+            ["X", "Y", "Z"]
+            >>> labels.rename_nodes(["a", "b", "c"])
+            >>> labels.skeleton.node_names
+            ["a", "b", "c"]
+        """
+        if skeleton is None:
+            if len(self.skeletons) != 1:
+                raise ValueError(
+                    "Skeleton must be specified when there is more than one skeleton in "
+                    "the labels."
+                )
+            skeleton = self.skeleton
+
+        skeleton.rename_nodes(name_map)
+
+    def remove_nodes(self, nodes: list[NodeOrIndex], skeleton: Skeleton | None = None):
+        """Remove nodes from the skeleton.
+
+        Args:
+            nodes: A list of node names, indices, or `Node` objects to remove.
+            skeleton: `Skeleton` to update. If `None` (the default), assumes there is
+                only one skeleton in the labels and raises `ValueError` otherwise.
+
+        Raises:
+            ValueError: If the nodes are not found in the skeleton, or if there is more
+                than one skeleton in the `Labels` but it is not specified.
+
+        Notes:
+            This method should always be used when removing nodes from the skeleton as
+            it handles updating the lookup caches necessary for indexing nodes by name,
+            and updating instances to reflect the changes made to the skeleton.
+
+            Any edges and symmetries that are connected to the removed nodes will also
+            be removed.
+        """
+        if skeleton is None:
+            if len(self.skeletons) != 1:
+                raise ValueError(
+                    "Skeleton must be specified when there is more than one skeleton "
+                    "in the labels."
+                )
+            skeleton = self.skeleton
+
+        skeleton.remove_nodes(nodes)
+
+        for inst in self.instances:
+            if inst.skeleton == skeleton:
+                inst.update_skeleton()
+
+    def reorder_nodes(
+        self, new_order: list[NodeOrIndex], skeleton: Skeleton | None = None
+    ):
+        """Reorder nodes in the skeleton.
+
+        Args:
+            new_order: A list of node names, indices, or `Node` objects specifying the
+                new order of the nodes.
+            skeleton: `Skeleton` to update. If `None` (the default), assumes there is
+                only one skeleton in the labels and raises `ValueError` otherwise.
+
+        Raises:
+            ValueError: If the new order of nodes is not the same length as the current
+                nodes, or if there is more than one skeleton in the `Labels` but it is
+                not specified.
+
+        Notes:
+            This method handles updating the lookup caches necessary for indexing nodes
+            by name, as well as updating instances to reflect the changes made to the
+            skeleton.
+        """
+        if skeleton is None:
+            if len(self.skeletons) != 1:
+                raise ValueError(
+                    "Skeleton must be specified when there is more than one skeleton "
+                    "in the labels."
+                )
+            skeleton = self.skeleton
+
+        skeleton.reorder_nodes(new_order)
+
+        for inst in self.instances:
+            if inst.skeleton == skeleton:
+                inst.update_skeleton()
+
+    def replace_skeleton(
+        self,
+        new_skeleton: Skeleton,
+        old_skeleton: Skeleton | None = None,
+        node_map: dict[NodeOrIndex, NodeOrIndex] | None = None,
+    ):
+        """Replace the skeleton in the labels.
+
+        Args:
+            new_skeleton: The new `Skeleton` to replace the old skeleton with.
+            old_skeleton: The old `Skeleton` to replace. If `None` (the default),
+                assumes there is only one skeleton in the labels and raises `ValueError`
+                otherwise.
+            node_map: Dictionary mapping nodes in the old skeleton to nodes in the new
+                skeleton. Keys and values can be specified as `Node` objects, integer
+                indices, or string names. If not provided, only nodes with identical
+                names will be mapped. Points associated with unmapped nodes will be
+                removed.
+
+        Raises:
+            ValueError: If there is more than one skeleton in the `Labels` but it is not
+                specified.
+
+        Warning:
+            This method will replace the skeleton in all instances in the labels that
+            have the old skeleton. **All point data associated with nodes not in the
+            `node_map` will be lost.**
+        """
+        if old_skeleton is None:
+            if len(self.skeletons) != 1:
+                raise ValueError(
+                    "Old skeleton must be specified when there is more than one "
+                    "skeleton in the labels."
+                )
+            old_skeleton = self.skeleton
+
+        if node_map is None:
+            node_map = {}
+            for old_node in old_skeleton.nodes:
+                for new_node in new_skeleton.nodes:
+                    if old_node.name == new_node.name:
+                        node_map[old_node] = new_node
+                        break
+        else:
+            node_map = {
+                old_skeleton.require_node(
+                    old, add_missing=False
+                ): new_skeleton.require_node(new, add_missing=False)
+                for old, new in node_map.items()
+            }
+
+        # Make new -> old mapping for nodes for efficiency.
+        rev_node_map = {new: old for old, new in node_map.items()}
+
+        # Replace the skeleton in the instances.
+        for inst in self.instances:
+            if inst.skeleton == old_skeleton:
+                inst.replace_skeleton(new_skeleton, rev_node_map=rev_node_map)
+
+        # Replace the skeleton in the labels.
+        self.skeletons[self.skeletons.index(old_skeleton)] = new_skeleton
 
     def replace_videos(
         self,
