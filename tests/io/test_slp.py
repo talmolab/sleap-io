@@ -92,8 +92,8 @@ def test_read_skeleton(centered_pair):
     assert len(skeleton.nodes) == 24
     assert len(skeleton.edges) == 23
     assert len(skeleton.symmetries) == 20
-    assert Node("wingR") in skeleton.symmetries[0].nodes
-    assert Node("wingL") in skeleton.symmetries[0].nodes
+    assert "wingR" in skeleton.symmetry_names[0]
+    assert "wingL" in skeleton.symmetry_names[0]
 
 
 def test_read_videos_pkg(slp_minimal_pkg):
@@ -157,7 +157,10 @@ def test_write_metadata(centered_pair, tmp_path):
     assert saved_skeletons[0].name == labels.skeletons[0].name
     assert saved_skeletons[0].node_names == labels.skeletons[0].node_names
     assert saved_skeletons[0].edge_inds == labels.skeletons[0].edge_inds
-    assert saved_skeletons[0].flipped_node_inds == labels.skeletons[0].flipped_node_inds
+    assert (
+        saved_skeletons[0].get_flipped_node_inds()
+        == labels.skeletons[0].get_flipped_node_inds()
+    )
 
 
 def test_write_lfs(centered_pair, slp_real_data, tmp_path):
@@ -224,8 +227,8 @@ def test_load_multi_skeleton(tmpdir):
     assert loaded_skels[1].node_names == ["n3", "n4"]
     assert loaded_skels[0].edge_inds == [(0, 1)]
     assert loaded_skels[1].edge_inds == [(0, 1)]
-    assert loaded_skels[0].flipped_node_inds == [1, 0]
-    assert loaded_skels[1].flipped_node_inds == [1, 0]
+    assert loaded_skels[0].get_flipped_node_inds() == [1, 0]
+    assert loaded_skels[1].get_flipped_node_inds() == [1, 0]
 
 
 def test_slp_imgvideo(tmpdir, slp_imgvideo):
