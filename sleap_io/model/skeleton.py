@@ -91,23 +91,21 @@ class Skeleton:
         name: A descriptive name for the `Skeleton`.
     """
 
-    def _update_node_map(self, attr, nodes):
-        """Callback for maintaining node name/index to `Node` map."""
-        self._node_name_map = {node.name: node for node in nodes}
-        self._node_ind_map = {node: i for i, node in enumerate(nodes)}
-
-    nodes: list[Node] = field(factory=list, on_setattr=_update_node_map)
+    nodes: list[Node] = field(
+        factory=list,
+        on_setattr=lambda self, attr, new_nodes: self.rebuild_cache(nodes=new_nodes),
+    )
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
     name: Optional[str] = None
-    _node_name_map: dict[str, Node] = field(init=False, repr=False, eq=False)
-    _node_ind_map: dict[Node, int] = field(init=False, repr=False, eq=False)
+    _name_to_node_cache: dict[str, Node] = field(init=False, repr=False, eq=False)
+    _node_to_ind_cache: dict[Node, int] = field(init=False, repr=False, eq=False)
 
     def __attrs_post_init__(self):
         """Ensure nodes are `Node`s, edges are `Edge`s, and `Node` map is updated."""
         self._convert_nodes()
         self._convert_edges()
-        self._update_node_map(None, self.nodes)
+        self.rebuild_cache()
 
     def _convert_nodes(self):
         """Convert nodes to `Node` objects if needed."""
@@ -151,6 +149,31 @@ class Skeleton:
                 dst = self.nodes[dst]
 
             self.edges[i] = Edge(src, dst)
+
+    def rebuild_cache(self, nodes: list[Node] | None = None):
+        """Rebuild the node name/index to `Node` map caches.
+
+        Args:
+            nodes: A list of `Node` objects to update the cache with. If not provided,
+                the cache will be updated with the current nodes in the skeleton. If
+                nodes are provided, the cache will be updated with the provided nodes,
+                but the current nodes in the skeleton will not be updated. Default is
+                `None`.
+
+        Notes:
+            This function should be called when nodes or node list is mutated to update
+            the lookup caches for indexing nodes by name or `Node` object.
+
+            This is done automatically when nodes are added or removed from the skeleton
+            using the convenience methods in this class.
+
+            This method only needs to be used when manually mutating nodes or the node
+            list directly.
+        """
+        if nodes is None:
+            nodes = self.nodes
+        self._name_to_node_cache = {node.name: node for node in nodes}
+        self._node_to_ind_cache = {node: i for i, node in enumerate(nodes)}
 
     @property
     def node_names(self) -> list[str]:
@@ -229,9 +252,9 @@ class Skeleton:
     def index(self, node: Node | str) -> int:
         """Return the index of a node specified as a `Node` or string name."""
         if type(node) == str:
-            return self.index(self._node_name_map[node])
+            return self.index(self._name_to_node_cache[node])
         elif type(node) == Node:
-            return self._node_ind_map[node]
+            return self._node_to_ind_cache[node]
         else:
             raise IndexError(f"Invalid indexing argument for skeleton: {node}")
 
@@ -240,9 +263,18 @@ class Skeleton:
         if type(idx) == int:
             return self.nodes[idx]
         elif type(idx) == str:
-            return self._node_name_map[idx]
+            return self._name_to_node_cache[idx]
         else:
             raise IndexError(f"Invalid indexing argument for skeleton: {idx}")
+
+    def __contains__(self, node: Node | str) -> bool:
+        """Check if a node is in the skeleton."""
+        if type(node) == str:
+            return node in self._name_to_node_cache
+        elif type(node) == Node:
+            return node in self.nodes
+        else:
+            return False
 
     def add_node(self, node: Node | str):
         """Add a `Node` to the skeleton.
@@ -250,14 +282,26 @@ class Skeleton:
         Args:
             node: A `Node` object or a string name to create a new node.
         """
-        node_name = node.name if type(node) == Node else node
-        if node_name in self._node_name_map:
-            raise ValueError(f"Node '{node_name}' already exists in the skeleton.")
+        if node in self:
+            raise ValueError(f"Node '{node}' already exists in the skeleton.")
+
         if type(node) == str:
             node = Node(node)
-        if node not in self.nodes:
-            self.nodes.append(node)
-        self._update_node_map(None, self.nodes)
+
+        self.nodes.append(node)
+
+        # Atomic update of the cache.
+        self._name_to_node_cache[node.name] = node
+        self._node_to_ind_cache[node] = len(self.nodes) - 1
+
+    def add_nodes(self, nodes: list[Node | str]):
+        """Add multiple `Node`s to the skeleton.
+
+        Args:
+            nodes: A list of `Node` objects or string names to create new nodes.
+        """
+        for node in nodes:
+            self.add_node(node)
 
     def add_edge(self, src: Edge | Node | str = None, dst: Node | str = None):
         """Add an `Edge` to the skeleton.
@@ -375,15 +419,15 @@ class Skeleton:
             if type(old_name) == int:
                 old_name = self.nodes[old_name].name
 
-            if old_name not in self._node_name_map:
+            if old_name not in self._name_to_node_cache:
                 raise ValueError(f"Node '{old_name}' not found in the skeleton.")
-            if new_name in self._node_name_map:
+            if new_name in self._name_to_node_cache:
                 raise ValueError(f"Node '{new_name}' already exists in the skeleton.")
 
-            node = self._node_name_map[old_name]
+            node = self._name_to_node_cache[old_name]
             node.name = new_name
-            self._node_name_map[new_name] = node
-            del self._node_name_map[old_name]
+            self._name_to_node_cache[new_name] = node
+            del self._name_to_node_cache[old_name]
 
     def rename_node(self, old_name: str | int | Node, new_name: str):
         """Rename a single node in the skeleton.
@@ -394,3 +438,44 @@ class Skeleton:
             new_name: The new name for the node.
         """
         self.rename_nodes({old_name: new_name})
+
+    def remove_nodes(self, nodes: list[str | int | Node]):
+        """Remove nodes from the skeleton.
+
+        Args:
+            nodes: A list of node names, indices, or `Node` objects to remove.
+
+        Notes:
+            This method should always be used when removing nodes from the skeleton as
+            it handles updating the lookup caches necessary for indexing nodes by name.
+
+            It also removes any edges and symmetries that are connected to the removed
+            nodes.
+        """
+        # Standardize input and make a pre-mutation copy before keys are changed.
+        rm_node_inds = [
+            self.index(node) if type(node) != int else node for node in nodes
+        ]
+        rm_node_objs = [self.nodes[ind] for ind in rm_node_inds]
+
+        # Remove nodes from the skeleton.
+        for node in rm_node_objs:
+            self.nodes.remove(node)
+            del self._name_to_node_cache[node.name]
+
+        # Update node index map.
+        self.rebuild_cache()
+
+        # Remove edges connected to the removed nodes.
+        self.edges = [
+            edge
+            for edge in self.edges
+            if edge.source not in rm_node_objs and edge.destination not in rm_node_objs
+        ]
+
+        # Remove symmetries connected to the removed nodes.
+        self.symmetries = [
+            symmetry
+            for symmetry in self.symmetries
+            if symmetry.nodes.isdisjoint(rm_node_objs)
+        ]

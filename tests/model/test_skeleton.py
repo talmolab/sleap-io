@@ -104,16 +104,24 @@ def test_add_node():
     skel = Skeleton()
     skel.add_node("A")
     assert skel.node_names == ["A"]
+    assert "A" in skel
+    assert skel.index("A") == 0
 
-    skel.add_node(Node("B"))
+    B = Node("B")
+    skel.add_node(B)
     assert skel.node_names == ["A", "B"]
+    assert B in skel
+    assert "B" in skel
+    assert skel.index("B") == 1
 
     skel.add_node("C")
     assert skel.node_names == ["A", "B", "C"]
 
     with pytest.raises(ValueError):
         skel.add_node("B")
-        assert skel.node_names == ["A", "B", "C"]
+
+    skel.add_nodes(["D", "E"])
+    assert skel.node_names == ["A", "B", "C", "D", "E"]
 
 
 def test_add_edge():
