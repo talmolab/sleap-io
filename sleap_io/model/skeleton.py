@@ -329,3 +329,58 @@ class Skeleton:
         symmetry = Symmetry({self.nodes[node1], self.nodes[node2]})
         if symmetry not in self.symmetries:
             self.symmetries.append(symmetry)
+
+    def rename_nodes(self, name_map: dict[str | int | Node, str] | list[str]):
+        """Rename nodes in the skeleton.
+
+        Args:
+            name_map: A dictionary mapping old node names to new node names. Keys can be
+                specified as `Node` objects, integer indices, or string names. Values
+                must be specified as string names.
+
+                If a list of strings is provided of the same length as the current
+                nodes, the nodes will be renamed to the names in the list in order.
+
+        Notes:
+            This method should always be used when renaming nodes in the skeleton as it
+            handles updating the lookup caches necessary for indexing nodes by name.
+
+            After renaming, instances using this skeleton do NOT need to be updated as
+            the nodes are stored by reference in the skeleton.
+
+        Example:
+            >>> skel = Skeleton(["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
+            >>> skel.rename_nodes({"A": "X", "B": "Y", "C": "Z"})
+            >>> skel.node_names
+            ["X", "Y", "Z"]
+            >>> skel.rename_nodes(["a", "b", "c"])
+            >>> skel.node_names
+            ["a", "b", "c"]
+
+        Raises:
+            ValueError: If the new node names exist in the skeleton or if the old node
+                names are not found in the skeleton.
+        """
+        if type(name_map) == list:
+            if len(name_map) != len(self.nodes):
+                raise ValueError(
+                    "List of new node names must be the same length as the current "
+                    "nodes."
+                )
+            name_map = {node: name for node, name in zip(self.nodes, name_map)}
+
+        for old_name, new_name in name_map.items():
+            if type(old_name) == Node:
+                old_name = old_name.name
+            if type(new_name) == int:
+                new_name = self.nodes[new_name].name
+
+            if old_name not in self._node_name_map:
+                raise ValueError(f"Node '{old_name}' not found in the skeleton.")
+            if new_name in self._node_name_map:
+                raise ValueError(f"Node '{new_name}' already exists in the skeleton.")
+
+            node = self._node_name_map[old_name]
+            node.name = new_name
+            self._node_name_map[new_name] = node
+            del self._node_name_map[old_name]

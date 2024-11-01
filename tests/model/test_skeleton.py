@@ -153,3 +153,19 @@ def test_add_symmetry():
     # Add new symmetry with node names
     skel.add_symmetry("E", "F")
     assert skel.symmetry_inds == [(0, 1), (2, 3), (4, 5)]
+
+
+def test_rename_nodes():
+    """Test renaming nodes in the skeleton."""
+    skel = Skeleton(["A", "B", "C"])
+    skel.rename_nodes({"A": "X", "B": "Y", "C": "Z"})
+    assert skel.node_names == ["X", "Y", "Z"]
+
+    skel.rename_nodes(["a", "b", "c"])
+    assert skel.node_names == ["a", "b", "c"]
+
+    with pytest.raises(ValueError):
+        skel.rename_nodes({"a": "b"})
+
+    with pytest.raises(ValueError):
+        skel.rename_nodes({"d": "e"})
