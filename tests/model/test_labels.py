@@ -633,3 +633,35 @@ def test_make_training_splits_save(slp_real_data, tmp_path, embed):
         for labels_ in [train_, val_, test_]:
             for lf in labels_:
                 assert lf.image.shape == (384, 384, 1)
+
+
+def test_labels_instances():
+    labels = Labels()
+    labels.append(
+        LabeledFrame(
+            video=Video("test.mp4"),
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=Skeleton(["A", "B"])
+                )
+            ],
+        )
+    )
+    assert len(list(labels.instances)) == 1
+
+    labels.append(
+        LabeledFrame(
+            video=labels.video,
+            frame_idx=1,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=labels.skeleton
+                ),
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=labels.skeleton
+                ),
+            ],
+        )
+    )
+    assert len(list(labels.instances)) == 3

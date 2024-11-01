@@ -21,7 +21,7 @@ from sleap_io import (
     SuggestionFrame,
 )
 from attrs import define, field
-from typing import Union, Optional, Any
+from typing import Iterator, Union, Optional, Any
 import numpy as np
 from pathlib import Path
 from sleap_io.model.skeleton import Skeleton
@@ -458,6 +458,11 @@ class Labels:
     def user_labeled_frames(self) -> list[LabeledFrame]:
         """Return all labeled frames with user (non-predicted) instances."""
         return [lf for lf in self.labeled_frames if lf.has_user_instances]
+
+    @property
+    def instances(self) -> Iterator[Instance]:
+        """Return an iterator over all instances within all labeled frames."""
+        return (instance for lf in self.labeled_frames for instance in lf.instances)
 
     def replace_videos(
         self,
