@@ -11,7 +11,7 @@ from typing import Optional, Tuple, Union
 import numpy as np
 
 
-@define(frozen=True, cache_hash=True)
+@define(eq=False)
 class Node:
     """A landmark type within a `Skeleton`.
 
@@ -171,8 +171,41 @@ class Skeleton:
         return [(edge.source.name, edge.destination.name) for edge in self.edges]
 
     @property
-    def flipped_node_inds(self) -> list[int]:
-        """Returns node indices that should be switched when horizontally flipping."""
+    def symmetry_inds(self) -> list[Tuple[int, int]]:
+        """Symmetry indices as a list of 2-tuples."""
+        return [
+            tuple(sorted((self.index(symmetry[0]), self.index(symmetry[1]))))
+            for symmetry in self.symmetries
+        ]
+
+    @property
+    def symmetry_names(self) -> list[str, str]:
+        """Symmetry names as a list of 2-tuples with string node names."""
+        return [
+            (self.nodes[i].name, self.nodes[j].name) for (i, j) in self.symmetry_inds
+        ]
+
+    def get_flipped_node_inds(self) -> list[int]:
+        """Returns node indices that should be switched when horizontally flipping.
+
+        This is useful as a lookup table for flipping the landmark coordinates when
+        doing data augmentation.
+
+        Example:
+            >>> skel = Skeleton(["A", "B_left", "B_right", "C", "D_left", "D_right"])
+            >>> skel.add_symmetry("B_left", "B_right")
+            >>> skel.add_symmetry("D_left", "D_right")
+            >>> skel.flipped_node_inds
+            [0, 2, 1, 3, 5, 4]
+            >>> pose = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
+            >>> pose[skel.flipped_node_inds]
+            array([[0, 0],
+                   [2, 2],
+                   [1, 1],
+                   [3, 3],
+                   [5, 5],
+                   [4, 4]])
+        """
         flip_idx = np.arange(len(self.nodes))
         if len(self.symmetries) > 0:
             symmetry_inds = np.array(
@@ -217,11 +250,14 @@ class Skeleton:
         Args:
             node: A `Node` object or a string name to create a new node.
         """
+        node_name = node.name if type(node) == Node else node
+        if node_name in self._node_name_map:
+            raise ValueError(f"Node '{node_name}' already exists in the skeleton.")
         if type(node) == str:
             node = Node(node)
         if node not in self.nodes:
             self.nodes.append(node)
-            self._update_node_map(None, self.nodes)
+        self._update_node_map(None, self.nodes)
 
     def add_edge(self, src: Edge | Node | str = None, dst: Node | str = None):
         """Add an `Edge` to the skeleton.
@@ -268,9 +304,10 @@ class Skeleton:
             node2: The second `Node` or name of the second node.
         """
         if type(node1) == Symmetry:
-            if node1 not in self.symmetries:
-                self.symmetries.append(node1)
-                for node in node1.nodes:
+            symmetry = node1
+            if symmetry not in self.symmetries:
+                self.symmetries.append(symmetry)
+                for node in symmetry.nodes:
                     if node not in self.nodes:
                         self.add_node(node)
             return

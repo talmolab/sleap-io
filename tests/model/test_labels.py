@@ -20,14 +20,15 @@ from pathlib import Path
 
 def test_labels():
     """Test methods in the `Labels` data structure."""
+    skel = Skeleton(["A", "B"])
     labels = Labels(
         [
             LabeledFrame(
                 video=Video(filename="test"),
                 frame_idx=0,
                 instances=[
-                    Instance([[0, 1], [2, 3]], skeleton=Skeleton(["A", "B"])),
-                    PredictedInstance([[4, 5], [6, 7]], skeleton=Skeleton(["A", "B"])),
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    PredictedInstance([[4, 5], [6, 7]], skeleton=skel),
                 ],
             )
         ]
