@@ -7,7 +7,7 @@ differently depending on the underlying pose model.
 
 from __future__ import annotations
 from attrs import define, field
-from typing import Optional, Tuple, Union
+from typing import TypeAlias
 import numpy as np
 
 
@@ -71,6 +71,9 @@ class Symmetry:
                 return node
 
 
+NodeOrIndex: TypeAlias = Node | str | int
+
+
 @define
 class Skeleton:
     """A description of a set of landmark types and connections between them.
@@ -97,7 +100,7 @@ class Skeleton:
     )
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
-    name: Optional[str] = None
+    name: str | None = None
     _name_to_node_cache: dict[str, Node] = field(init=False, repr=False, eq=False)
     _node_to_ind_cache: dict[Node, int] = field(init=False, repr=False, eq=False)
 
@@ -181,7 +184,7 @@ class Skeleton:
         return [node.name for node in self.nodes]
 
     @property
-    def edge_inds(self) -> list[Tuple[int, int]]:
+    def edge_inds(self) -> list[tuple[int, int]]:
         """Edges indices as a list of 2-tuples."""
         return [
             (self.nodes.index(edge.source), self.nodes.index(edge.destination))
@@ -194,7 +197,7 @@ class Skeleton:
         return [(edge.source.name, edge.destination.name) for edge in self.edges]
 
     @property
-    def symmetry_inds(self) -> list[Tuple[int, int]]:
+    def symmetry_inds(self) -> list[tuple[int, int]]:
         """Symmetry indices as a list of 2-tuples."""
         return [
             tuple(sorted((self.index(symmetry[0]), self.index(symmetry[1]))))
@@ -258,7 +261,7 @@ class Skeleton:
         else:
             raise IndexError(f"Invalid indexing argument for skeleton: {node}")
 
-    def __getitem__(self, idx: int | str) -> Node:
+    def __getitem__(self, idx: NodeOrIndex) -> Node:
         """Return a `Node` when indexing by name or integer."""
         if type(idx) == int:
             return self.nodes[idx]
@@ -267,14 +270,16 @@ class Skeleton:
         else:
             raise IndexError(f"Invalid indexing argument for skeleton: {idx}")
 
-    def __contains__(self, node: Node | str) -> bool:
+    def __contains__(self, node: NodeOrIndex) -> bool:
         """Check if a node is in the skeleton."""
         if type(node) == str:
             return node in self._name_to_node_cache
         elif type(node) == Node:
             return node in self.nodes
+        elif type(node) == int:
+            return 0 <= node < len(self.nodes)
         else:
-            return False
+            raise ValueError(f"Invalid node type for skeleton: {node}")
 
     def add_node(self, node: Node | str):
         """Add a `Node` to the skeleton.
@@ -303,78 +308,84 @@ class Skeleton:
         for node in nodes:
             self.add_node(node)
 
-    def add_edge(self, src: Edge | Node | str = None, dst: Node | str = None):
+    def require_node(self, node: NodeOrIndex) -> Node:
+        """Return a `Node` if it exists in the skeleton, otherwise add it.
+
+        Args:
+            node: A `Node` object, name or index.
+
+        Returns:
+            The `Node` object.
+        """
+        if node not in self:
+            self.add_node(node)
+        if type(node) == Node:
+            return node
+        return self[node]
+
+    def add_edge(
+        self,
+        src: NodeOrIndex | Edge | tuple[NodeOrIndex, NodeOrIndex],
+        dst: NodeOrIndex | None = None,
+    ):
         """Add an `Edge` to the skeleton.
 
         Args:
-            src: The source `Node` or name of the source node.
-            dst: The destination `Node` or name of the destination node.
+            src: The source node specified as a `Node`, name or index.
+            dst: The destination node specified as a `Node`, name or index.
         """
+        edge = None
+        if type(src) == tuple:
+            src, dst = src
+
+        if isinstance(src, NodeOrIndex):
+            if not isinstance(dst, NodeOrIndex):
+                raise ValueError("Destination node must be specified.")
+
+            src = self.require_node(src)
+            dst = self.require_node(dst)
+            edge = Edge(src, dst)
+
         if type(src) == Edge:
             edge = src
-            if edge not in self.edges:
-                self.edges.append(edge)
-            if edge.source not in self.nodes:
-                self.add_node(edge.source)
-            if edge.destination not in self.nodes:
-                self.add_node(edge.destination)
-            return
 
-        if type(src) == str or type(src) == Node:
-            try:
-                src = self.index(src)
-            except KeyError:
-                self.add_node(src)
-                src = self.index(src)
-
-        if type(dst) == str or type(dst) == Node:
-            try:
-                dst = self.index(dst)
-            except KeyError:
-                self.add_node(dst)
-                dst = self.index(dst)
-
-        edge = Edge(self.nodes[src], self.nodes[dst])
         if edge not in self.edges:
             self.edges.append(edge)
 
+    def add_edges(self, edges: list[Edge | tuple[NodeOrIndex, NodeOrIndex]]):
+        """Add multiple `Edge`s to the skeleton.
+
+        Args:
+            edges: A list of `Edge` objects or 2-tuples of source and destination nodes.
+        """
+        for edge in edges:
+            self.add_edge(edge)
+
     def add_symmetry(
-        self, node1: Symmetry | Node | str = None, node2: Node | str = None
+        self, node1: Symmetry | NodeOrIndex = None, node2: NodeOrIndex | None = None
     ):
         """Add a symmetry relationship to the skeleton.
 
         Args:
-            node1: The first `Node` or name of the first node.
-            node2: The second `Node` or name of the second node.
+            node1: The first node specified as a `Node`, name or index. If a `Symmetry`
+                object is provided, it will be added directly to the skeleton.
+            node2: The second node specified as a `Node`, name or index.
         """
+        symmetry = None
         if type(node1) == Symmetry:
             symmetry = node1
-            if symmetry not in self.symmetries:
-                self.symmetries.append(symmetry)
-                for node in symmetry.nodes:
-                    if node not in self.nodes:
-                        self.add_node(node)
-            return
+            node1, node2 = symmetry
 
-        if type(node1) == str or type(node1) == Node:
-            try:
-                node1 = self.index(node1)
-            except KeyError:
-                self.add_node(node1)
-                node1 = self.index(node1)
+        node1 = self.require_node(node1)
+        node2 = self.require_node(node2)
 
-        if type(node2) == str or type(node2) == Node:
-            try:
-                node2 = self.index(node2)
-            except KeyError:
-                self.add_node(node2)
-                node2 = self.index(node2)
+        if symmetry is None:
+            symmetry = Symmetry({node1, node2})
 
-        symmetry = Symmetry({self.nodes[node1], self.nodes[node2]})
         if symmetry not in self.symmetries:
             self.symmetries.append(symmetry)
 
-    def rename_nodes(self, name_map: dict[str | int | Node, str] | list[str]):
+    def rename_nodes(self, name_map: dict[NodeOrIndex, str] | list[str]):
         """Rename nodes in the skeleton.
 
         Args:
@@ -429,7 +440,7 @@ class Skeleton:
             self._name_to_node_cache[new_name] = node
             del self._name_to_node_cache[old_name]
 
-    def rename_node(self, old_name: str | int | Node, new_name: str):
+    def rename_node(self, old_name: NodeOrIndex, new_name: str):
         """Rename a single node in the skeleton.
 
         Args:
@@ -439,7 +450,7 @@ class Skeleton:
         """
         self.rename_nodes({old_name: new_name})
 
-    def remove_nodes(self, nodes: list[str | int | Node]):
+    def remove_nodes(self, nodes: list[NodeOrIndex]):
         """Remove nodes from the skeleton.
 
         Args:

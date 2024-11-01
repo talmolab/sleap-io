@@ -142,6 +142,9 @@ def test_add_edge():
     skel.add_edge("D", "A")
     assert skel.edge_inds == [(0, 1), (1, 0), (0, 2), (3, 0)]
 
+    skel.add_edges([("D", "E"), ("E", "A")])
+    assert skel.edge_inds == [(0, 1), (1, 0), (0, 2), (3, 0), (3, 4), (4, 0)]
+
 
 def test_add_symmetry():
     skel = Skeleton(["A", "B"])
