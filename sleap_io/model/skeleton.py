@@ -71,7 +71,7 @@ class Symmetry:
                 return node
 
 
-NodeOrIndex = Node | str | int  # type: typing.TypeAlias
+NodeOrIndex = typing.Union[Node, str, int]
 # NodeOrIndex: TypeAlias = Node | str | int  # py >= 3.10
 # type NodeOrIndex = Node | str | int  # py >= 3.12
 
