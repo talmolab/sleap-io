@@ -716,3 +716,34 @@ def test_labels_reorder_nodes(slp_real_data):
     labels.skeletons.append(Skeleton())
     with pytest.raises(ValueError):
         labels.reorder_nodes(["head", "abdomen"])
+
+
+def test_labels_replace_skeleton(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+    inst = labels[0][0]
+    assert_allclose(inst.numpy(), [[91.886988, 204.018843], [151.536969, 159.825034]])
+
+    # Replace with full mapping
+    new_skel = Skeleton(["ABDOMEN", "HEAD"])
+    labels.replace_skeleton(new_skel, node_map={"abdomen": "ABDOMEN", "head": "HEAD"})
+    assert labels.skeleton == new_skel
+    inst = labels[0][0]
+    assert inst.skeleton == new_skel
+    assert_allclose(inst.numpy(), [[151.536969, 159.825034], [91.886988, 204.018843]])
+
+    # Replace with partial (inferred) mapping
+    new_skel = Skeleton(["x", "ABDOMEN"])
+    labels.replace_skeleton(new_skel)
+    assert labels.skeleton == new_skel
+    inst = labels[0][0]
+    assert inst.skeleton == new_skel
+    assert_allclose(inst.numpy(), [[np.nan, np.nan], [151.536969, 159.825034]])
+
+    # Replace with no mapping
+    new_skel = Skeleton(["front", "back"])
+    labels.replace_skeleton(new_skel)
+    assert labels.skeleton == new_skel
+    inst = labels[0][0]
+    assert inst.skeleton == new_skel
+    assert_allclose(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan]])

@@ -583,6 +583,68 @@ class Labels:
             if inst.skeleton == skeleton:
                 inst.update_skeleton()
 
+    def replace_skeleton(
+        self,
+        new_skeleton: Skeleton,
+        old_skeleton: Skeleton | None = None,
+        node_map: dict[NodeOrIndex, NodeOrIndex] | None = None,
+    ):
+        """Replace the skeleton in the labels.
+
+        Args:
+            new_skeleton: The new `Skeleton` to replace the old skeleton with.
+            old_skeleton: The old `Skeleton` to replace. If `None` (the default),
+                assumes there is only one skeleton in the labels and raises `ValueError`
+                otherwise.
+            node_map: Dictionary mapping nodes in the old skeleton to nodes in the new
+                skeleton. Keys and values can be specified as `Node` objects, integer
+                indices, or string names. If not provided, only nodes with identical
+                names will be mapped. Points associated with unmapped nodes will be
+                removed.
+
+        Raises:
+            ValueError: If there is more than one skeleton in the `Labels` but it is not
+                specified.
+
+        Warning:
+            This method will replace the skeleton in all instances in the labels that
+            have the old skeleton. **All point data associated with nodes not in the
+            `node_map` will be lost.**
+        """
+        if old_skeleton is None:
+            if len(self.skeletons) != 1:
+                raise ValueError(
+                    "Old skeleton must be specified when there is more than one "
+                    "skeleton in the labels."
+                )
+            old_skeleton = self.skeleton
+
+        if node_map is None:
+            node_map = {}
+            for old_node in old_skeleton.nodes:
+                for new_node in new_skeleton.nodes:
+                    if old_node.name == new_node.name:
+                        node_map[old_node] = new_node
+                        break
+        else:
+            node_map = {
+                old_skeleton.require_node(
+                    old, add_missing=False
+                ): new_skeleton.require_node(new, add_missing=False)
+                for old, new in node_map.items()
+            }
+
+        # Make new -> old mapping for nodes for efficiency.
+        rev_node_map = {new: old for old, new in node_map.items()}
+
+        # Replace the skeleton in the instances.
+        for inst in self.instances:
+            if inst.skeleton == old_skeleton:
+                inst.replace_skeleton(new_skeleton, rev_node_map=rev_node_map)
+
+        # Replace the skeleton in the labels.
+        self.skeletons[self.skeletons.index(old_skeleton)] = new_skeleton
+
     def replace_videos(
         self,
         old_videos: list[Video] | None = None,
