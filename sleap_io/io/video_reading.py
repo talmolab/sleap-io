@@ -397,16 +397,21 @@ class MediaVideo(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
+        failed = False
         if self.plugin == "opencv":
             if self.reader.get(cv2.CAP_PROP_POS_FRAMES) != frame_idx:
                 self.reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            _, img = self.reader.read()
+            success, img = self.reader.read()
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
             if self.keep_open:
                 img = self.reader.read(index=frame_idx)
             else:
                 with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
                     img = reader.read(index=frame_idx)
+
+        success = (not failed) and (img is not None)
+        if not success:
+            raise IndexError(f"Failed to read frame index {frame_idx}.")
         return img
 
     def _read_frames(self, frame_inds: list) -> np.ndarray:
@@ -580,16 +585,31 @@ class HDF5Video(VideoBackend):
         """Shape of a single frame in the video as `(height, width, channels)`."""
         with h5py.File(self.filename, "r") as f:
             ds = f[self.dataset]
+
+            img_shape = None
             if "height" in ds.attrs:
+                # Try to get shape from the attributes.
                 img_shape = (
                     ds.attrs["height"],
                     ds.attrs["width"],
                     ds.attrs["channels"],
                 )
-            else:
+
+                if img_shape[0] == 0 or img_shape[1] == 0:
+                    # Invalidate the shape if the attributes are zero.
+                    img_shape = None
+
+            if img_shape is None and self.image_format == "hdf5" and ds.ndim == 4:
+                # Use the dataset shape if just stored as a rank-4 array.
                 img_shape = ds.shape[1:]
-        if self.input_format == "channels_first":
-            img_shape = img_shape[::-1]
+
+                if self.input_format == "channels_first":
+                    img_shape = img_shape[::-1]
+
+        if img_shape is None:
+            # Fall back to reading a test frame.
+            return super().img_shape
+
         return int(img_shape[0]), int(img_shape[1]), int(img_shape[2])
 
     def read_test_frame(self) -> np.ndarray:

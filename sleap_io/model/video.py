@@ -11,6 +11,7 @@ import numpy as np
 from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
 from sleap_io.io.utils import is_file_accessible
 from pathlib import Path
+import h5py
 
 
 @attrs.define(eq=False)
@@ -205,12 +206,14 @@ class Video:
                 )
         return self.backend[inds]
 
-    def exists(self, check_all: bool = False) -> bool:
+    def exists(self, check_all: bool = False, dataset: str | None = None) -> bool:
         """Check if the video file exists and is accessible.
 
         Args:
             check_all: If `True`, check that all filenames in a list exist. If `False`
                 (the default), check that the first filename exists.
+            dataset: Name of dataset in HDF5 file. If specified, this will function will
+                return `False` if the dataset does not exist.
 
         Returns:
             `True` if the file exists and is accessible, `False` otherwise.
@@ -223,7 +226,28 @@ class Video:
                 return True
             else:
                 return is_file_accessible(self.filename[0])
-        return is_file_accessible(self.filename)
+
+        file_is_accessible = is_file_accessible(self.filename)
+        if not file_is_accessible:
+            return False
+
+        if dataset is None or dataset == "":
+            dataset = self.backend_metadata.get("dataset", None)
+
+        if dataset is not None and dataset != "":
+            has_dataset = False
+            if (
+                self.backend is not None
+                and type(self.backend) == HDF5Video
+                and self.backend._open_reader is not None
+            ):
+                has_dataset = dataset in self.backend._open_reader
+            else:
+                with h5py.File(self.filename, "r") as f:
+                    has_dataset = dataset in f
+            return has_dataset
+
+        return True
 
     @property
     def is_open(self) -> bool:
@@ -261,9 +285,6 @@ class Video:
         if filename is not None:
             self.replace_filename(filename, open=False)
 
-        if not self.exists():
-            raise FileNotFoundError(f"Video file not found: {self.filename}")
-
         # Try to remember values from previous backend if available and not specified.
         if self.backend is not None:
             if dataset is None:
@@ -279,6 +300,12 @@ class Video:
                     grayscale = self.backend_metadata["grayscale"]
                 elif "shape" in self.backend_metadata:
                     grayscale = self.backend_metadata["shape"][-1] == 1
+
+        if not self.exists(dataset=dataset):
+            msg = f"Video does not exist or is inaccessible: {self.filename}"
+            if dataset is not None:
+                msg += f" (dataset: {dataset})"
+            raise FileNotFoundError(msg)
 
         # Close previous backend if open.
         self.close()
