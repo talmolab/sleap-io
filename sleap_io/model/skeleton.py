@@ -74,7 +74,7 @@ class Symmetry:
 NodeOrIndex: TypeAlias = Node | str | int
 
 
-@define
+@define(eq=False)
 class Skeleton:
     """A description of a set of landmark types and connections between them.
 
@@ -420,6 +420,10 @@ class Skeleton:
                 If a list of strings is provided of the same length as the current
                 nodes, the nodes will be renamed to the names in the list in order.
 
+        Raises:
+            ValueError: If the new node names exist in the skeleton or if the old node
+                names are not found in the skeleton.
+
         Notes:
             This method should always be used when renaming nodes in the skeleton as it
             handles updating the lookup caches necessary for indexing nodes by name.
@@ -436,10 +440,6 @@ class Skeleton:
             >>> skel.rename_nodes(["a", "b", "c"])
             >>> skel.node_names
             ["a", "b", "c"]
-
-        Raises:
-            ValueError: If the new node names exist in the skeleton or if the old node
-                names are not found in the skeleton.
         """
         if type(name_map) == list:
             if len(name_map) != len(self.nodes):
@@ -482,8 +482,8 @@ class Skeleton:
             nodes: A list of node names, indices, or `Node` objects to remove.
 
         Notes:
-            This method should always be used when removing nodes from the skeleton as
-            it handles updating the lookup caches necessary for indexing nodes by name.
+            This method handles updating the lookup caches necessary for indexing nodes
+            by name.
 
             Any edges and symmetries that are connected to the removed nodes will also
             be removed.
@@ -531,8 +531,8 @@ class Skeleton:
                 or `Node` object.
 
         Notes:
-            This method should always be used when removing nodes from the skeleton as
-            it handles updating the lookup caches necessary for indexing nodes by name.
+            This method handles updating the lookup caches necessary for indexing nodes
+            by name.
 
             Any edges and symmetries that are connected to the removed node will also be
             removed.
@@ -561,8 +561,8 @@ class Skeleton:
                 nodes.
 
         Notes:
-            This method should always be used when reordering nodes in the skeleton as
-            it handles updating the lookup caches necessary for indexing nodes by name.
+            This method handles updating the lookup caches necessary for indexing nodes
+            by name.
 
         Warning:
             After reordering, instances using this skeleton do not need to be updated as

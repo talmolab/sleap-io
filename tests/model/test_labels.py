@@ -1,6 +1,6 @@
 """Test methods and functions in the sleap_io.model.labels file."""
 
-from numpy.testing import assert_equal
+from numpy.testing import assert_equal, assert_allclose
 import pytest
 from sleap_io import (
     Video,
@@ -665,3 +665,54 @@ def test_labels_instances():
         )
     )
     assert len(list(labels.instances)) == 3
+
+
+def test_labels_rename_nodes(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+
+    labels.rename_nodes({"head": "front", "abdomen": "back"})
+    assert labels.skeleton.node_names == ["front", "back"]
+
+    labels.skeletons.append(Skeleton(["A", "B"]))
+    with pytest.raises(ValueError):
+        labels.rename_nodes({"A": "a", "B": "b"})
+    labels.rename_nodes({"A": "a", "B": "b"}, skeleton=labels.skeletons[1])
+    assert labels.skeletons[1].node_names == ["a", "b"]
+
+
+def test_labels_remove_nodes(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+    assert_allclose(
+        labels[0][0].numpy(), [[91.886988, 204.018843], [151.536969, 159.825034]]
+    )
+
+    labels.remove_nodes(["head"])
+    assert labels.skeleton.node_names == ["abdomen"]
+    assert_allclose(labels[0][0].numpy(), [[151.536969, 159.825034]])
+
+    for inst in labels.instances:
+        assert inst.numpy().shape == (1, 2)
+
+    labels.skeletons.append(Skeleton())
+    with pytest.raises(ValueError):
+        labels.remove_nodes(["head"])
+
+
+def test_labels_reorder_nodes(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+    assert_allclose(
+        labels[0][0].numpy(), [[91.886988, 204.018843], [151.536969, 159.825034]]
+    )
+
+    labels.reorder_nodes(["abdomen", "head"])
+    assert labels.skeleton.node_names == ["abdomen", "head"]
+    assert_allclose(
+        labels[0][0].numpy(), [[151.536969, 159.825034], [91.886988, 204.018843]]
+    )
+
+    labels.skeletons.append(Skeleton())
+    with pytest.raises(ValueError):
+        labels.reorder_nodes(["head", "abdomen"])
