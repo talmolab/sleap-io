@@ -165,7 +165,29 @@ def test_rename_nodes():
     assert skel.node_names == ["a", "b", "c"]
 
     with pytest.raises(ValueError):
+        skel.rename_nodes(["a1", "b1"])
+
+    with pytest.raises(ValueError):
         skel.rename_nodes({"a": "b"})
 
     with pytest.raises(ValueError):
         skel.rename_nodes({"d": "e"})
+
+
+def test_rename_node():
+    """Test renaming a single node in the skeleton."""
+    skel = Skeleton(["A", "B", "C"])
+    skel.rename_node("A", "X")
+    assert skel.node_names == ["X", "B", "C"]
+
+    skel.rename_node(1, "Y")
+    assert skel.node_names == ["X", "Y", "C"]
+
+    skel.rename_node(skel.nodes[2], "Z")
+    assert skel.node_names == ["X", "Y", "Z"]
+
+    with pytest.raises(ValueError):
+        skel.rename_node("X", "Y")
+
+    with pytest.raises(ValueError):
+        skel.rename_node("D", "E")

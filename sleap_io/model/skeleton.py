@@ -372,8 +372,8 @@ class Skeleton:
         for old_name, new_name in name_map.items():
             if type(old_name) == Node:
                 old_name = old_name.name
-            if type(new_name) == int:
-                new_name = self.nodes[new_name].name
+            if type(old_name) == int:
+                old_name = self.nodes[old_name].name
 
             if old_name not in self._node_name_map:
                 raise ValueError(f"Node '{old_name}' not found in the skeleton.")
@@ -384,3 +384,13 @@ class Skeleton:
             node.name = new_name
             self._node_name_map[new_name] = node
             del self._node_name_map[old_name]
+
+    def rename_node(self, old_name: str | int | Node, new_name: str):
+        """Rename a single node in the skeleton.
+
+        Args:
+            old_name: The name of the node to rename. Can also be specified as an
+                integer index or `Node` object.
+            new_name: The new name for the node.
+        """
+        self.rename_nodes({old_name: new_name})
