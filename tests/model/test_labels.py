@@ -1,6 +1,6 @@
 """Test methods and functions in the sleap_io.model.labels file."""
 
-from numpy.testing import assert_equal
+from numpy.testing import assert_equal, assert_allclose
 import pytest
 from sleap_io import (
     Video,
@@ -633,3 +633,117 @@ def test_make_training_splits_save(slp_real_data, tmp_path, embed):
         for labels_ in [train_, val_, test_]:
             for lf in labels_:
                 assert lf.image.shape == (384, 384, 1)
+
+
+def test_labels_instances():
+    labels = Labels()
+    labels.append(
+        LabeledFrame(
+            video=Video("test.mp4"),
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=Skeleton(["A", "B"])
+                )
+            ],
+        )
+    )
+    assert len(list(labels.instances)) == 1
+
+    labels.append(
+        LabeledFrame(
+            video=labels.video,
+            frame_idx=1,
+            instances=[
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=labels.skeleton
+                ),
+                Instance.from_numpy(
+                    np.array([[0, 1], [2, 3]]), skeleton=labels.skeleton
+                ),
+            ],
+        )
+    )
+    assert len(list(labels.instances)) == 3
+
+
+def test_labels_rename_nodes(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+
+    labels.rename_nodes({"head": "front", "abdomen": "back"})
+    assert labels.skeleton.node_names == ["front", "back"]
+
+    labels.skeletons.append(Skeleton(["A", "B"]))
+    with pytest.raises(ValueError):
+        labels.rename_nodes({"A": "a", "B": "b"})
+    labels.rename_nodes({"A": "a", "B": "b"}, skeleton=labels.skeletons[1])
+    assert labels.skeletons[1].node_names == ["a", "b"]
+
+
+def test_labels_remove_nodes(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+    assert_allclose(
+        labels[0][0].numpy(), [[91.886988, 204.018843], [151.536969, 159.825034]]
+    )
+
+    labels.remove_nodes(["head"])
+    assert labels.skeleton.node_names == ["abdomen"]
+    assert_allclose(labels[0][0].numpy(), [[151.536969, 159.825034]])
+
+    for inst in labels.instances:
+        assert inst.numpy().shape == (1, 2)
+
+    labels.skeletons.append(Skeleton())
+    with pytest.raises(ValueError):
+        labels.remove_nodes(["head"])
+
+
+def test_labels_reorder_nodes(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+    assert_allclose(
+        labels[0][0].numpy(), [[91.886988, 204.018843], [151.536969, 159.825034]]
+    )
+
+    labels.reorder_nodes(["abdomen", "head"])
+    assert labels.skeleton.node_names == ["abdomen", "head"]
+    assert_allclose(
+        labels[0][0].numpy(), [[151.536969, 159.825034], [91.886988, 204.018843]]
+    )
+
+    labels.skeletons.append(Skeleton())
+    with pytest.raises(ValueError):
+        labels.reorder_nodes(["head", "abdomen"])
+
+
+def test_labels_replace_skeleton(slp_real_data):
+    labels = load_slp(slp_real_data)
+    assert labels.skeleton.node_names == ["head", "abdomen"]
+    inst = labels[0][0]
+    assert_allclose(inst.numpy(), [[91.886988, 204.018843], [151.536969, 159.825034]])
+
+    # Replace with full mapping
+    new_skel = Skeleton(["ABDOMEN", "HEAD"])
+    labels.replace_skeleton(new_skel, node_map={"abdomen": "ABDOMEN", "head": "HEAD"})
+    assert labels.skeleton == new_skel
+    inst = labels[0][0]
+    assert inst.skeleton == new_skel
+    assert_allclose(inst.numpy(), [[151.536969, 159.825034], [91.886988, 204.018843]])
+
+    # Replace with partial (inferred) mapping
+    new_skel = Skeleton(["x", "ABDOMEN"])
+    labels.replace_skeleton(new_skel)
+    assert labels.skeleton == new_skel
+    inst = labels[0][0]
+    assert inst.skeleton == new_skel
+    assert_allclose(inst.numpy(), [[np.nan, np.nan], [151.536969, 159.825034]])
+
+    # Replace with no mapping
+    new_skel = Skeleton(["front", "back"])
+    labels.replace_skeleton(new_skel)
+    assert labels.skeleton == new_skel
+    inst = labels[0][0]
+    assert inst.skeleton == new_skel
+    assert_allclose(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan]])

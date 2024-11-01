@@ -11,6 +11,7 @@ from __future__ import annotations
 from attrs import define, validators, field, cmp_using
 from typing import ClassVar, Optional, Union, cast
 from sleap_io import Skeleton, Node
+from sleap_io.model.skeleton import NodeOrIndex
 import numpy as np
 import math
 
@@ -307,6 +308,90 @@ class Instance:
             if point.visible:
                 pts[self.skeleton.index(node)] = point.numpy()
         return pts
+
+    def update_skeleton(self):
+        """Update the points dictionary to match the skeleton.
+
+        Points associated with nodes that are no longer in the skeleton will be removed.
+
+        Additionally, the keys of the points dictionary will be ordered to match the
+        order of the nodes in the skeleton.
+
+        Notes:
+            This method is useful when the skeleton has been updated (e.g., nodes
+            removed or reordered).
+
+            However, it is recommended to use `Labels`-level methods (e.g.,
+            `Labels.remove_nodes()`) when manipulating the skeleton as these will
+            automatically call this method on every instance.
+        """
+        # Create a new dictionary to hold the updated points
+        new_points = {}
+
+        # Iterate over the nodes in the skeleton
+        for node in self.skeleton.nodes:
+            # Get the point associated with the node
+            point = self.points.get(node, None)
+
+            # If the point is not None, add it to the new dictionary
+            if point is not None:
+                new_points[node] = point
+
+        # Update the points dictionary
+        self.points = new_points
+
+    def replace_skeleton(
+        self,
+        new_skeleton: Skeleton,
+        node_map: dict[NodeOrIndex, NodeOrIndex] | None = None,
+        rev_node_map: dict[NodeOrIndex, NodeOrIndex] | None = None,
+    ):
+        """Replace the skeleton associated with the instance.
+
+        The points dictionary will be updated to match the new skeleton.
+
+        Args:
+            new_skeleton: The new `Skeleton` to associate with the instance.
+            node_map: Dictionary mapping nodes in the old skeleton to nodes in the new
+                skeleton. Keys and values can be specified as `Node` objects, integer
+                indices, or string names. If not provided, only nodes with identical
+                names will be mapped. Points associated with unmapped nodes will be
+                removed.
+            rev_node_map: Dictionary mapping nodes in the new skeleton to nodes in the
+                old skeleton. This is used internally when calling from
+                `Labels.replace_skeleton()` as it is more efficient to compute this
+                mapping once and pass it to all instances. No validation is done on this
+                mapping, so nodes are expected to be `Node` objects.
+        """
+        if rev_node_map is None:
+            if node_map is None:
+                node_map = {}
+                for old_node in self.skeleton.nodes:
+                    for new_node in new_skeleton.nodes:
+                        if old_node.name == new_node.name:
+                            node_map[old_node] = new_node
+                            break
+            else:
+                node_map = {
+                    self.skeleton.require_node(
+                        old, add_missing=False
+                    ): new_skeleton.require_node(new, add_missing=False)
+                    for old, new in node_map.items()
+                }
+
+            # Make new -> old mapping for nodes
+            rev_node_map = {new: old for old, new in node_map.items()}
+
+        # Build new points list with mapped nodes
+        new_points = {}
+        for new_node in new_skeleton.nodes:
+            old_node = rev_node_map.get(new_node, None)
+            if old_node is not None and old_node in self.points:
+                new_points[new_node] = self.points[old_node]
+
+        # Update the skeleton and points
+        self.skeleton = new_skeleton
+        self.points = new_points
 
 
 @define
