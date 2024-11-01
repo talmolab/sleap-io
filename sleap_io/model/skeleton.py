@@ -7,7 +7,7 @@ differently depending on the underlying pose model.
 
 from __future__ import annotations
 from attrs import define, field
-from typing import TypeAlias
+import typing
 import numpy as np
 
 
@@ -71,7 +71,9 @@ class Symmetry:
                 return node
 
 
-NodeOrIndex: TypeAlias = Node | str | int
+NodeOrIndex = Node | str | int  # type: typing.TypeAlias
+# NodeOrIndex: TypeAlias = Node | str | int  # py >= 3.10
+# type NodeOrIndex = Node | str | int  # py >= 3.12
 
 
 @define(eq=False)
