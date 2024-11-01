@@ -231,12 +231,21 @@ class Video:
         if not file_is_accessible:
             return False
 
-        if dataset is None:
+        if dataset is None or dataset == "":
             dataset = self.backend_metadata.get("dataset", None)
 
-        if dataset is not None:
-            with h5py.File(self.filename, "r") as f:
-                return dataset in f
+        if dataset is not None and dataset != "":
+            has_dataset = False
+            if (
+                self.backend is not None
+                and type(self.backend) == HDF5Video
+                and self.backend._open_reader is not None
+            ):
+                has_dataset = dataset in self.backend._open_reader
+            else:
+                with h5py.File(self.filename, "r") as f:
+                    has_dataset = dataset in f
+            return has_dataset
 
         return True
 
