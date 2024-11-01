@@ -94,9 +94,14 @@ class Skeleton:
         name: A descriptive name for the `Skeleton`.
     """
 
+    def _nodes_on_setattr(self, attr, new_nodes):
+        """Callback to update caches when nodes are set."""
+        self.rebuild_cache(nodes=new_nodes)
+        return new_nodes
+
     nodes: list[Node] = field(
         factory=list,
-        on_setattr=lambda self, attr, new_nodes: self.rebuild_cache(nodes=new_nodes),
+        on_setattr=_nodes_on_setattr,
     )
     edges: list[Edge] = field(factory=list)
     symmetries: list[Symmetry] = field(factory=list)
@@ -286,12 +291,19 @@ class Skeleton:
 
         Args:
             node: A `Node` object or a string name to create a new node.
+
+        Raises:
+            ValueError: If the node already exists in the skeleton or if the node is
+                not specified as a `Node` or string.
         """
         if node in self:
             raise ValueError(f"Node '{node}' already exists in the skeleton.")
 
         if type(node) == str:
             node = Node(node)
+
+        if type(node) != Node:
+            raise ValueError(f"Invalid node type: {node} ({type(node)})")
 
         self.nodes.append(node)
 
@@ -308,19 +320,31 @@ class Skeleton:
         for node in nodes:
             self.add_node(node)
 
-    def require_node(self, node: NodeOrIndex) -> Node:
-        """Return a `Node` if it exists in the skeleton, otherwise add it.
+    def require_node(self, node: NodeOrIndex, add_missing: bool = True) -> Node:
+        """Return a `Node` object, handling indexing and adding missing nodes.
 
         Args:
             node: A `Node` object, name or index.
+            add_missing: If `True`, missing nodes will be added to the skeleton. If
+                `False`, an error will be raised if the node is not found. Default is
+                `True`.
 
         Returns:
             The `Node` object.
+
+        Raises:
+            IndexError: If the node is not found in the skeleton and `add_missing` is
+                `False`.
         """
         if node not in self:
-            self.add_node(node)
+            if add_missing:
+                self.add_node(node)
+            else:
+                raise IndexError(f"Node '{node}' not found in the skeleton.")
+
         if type(node) == Node:
             return node
+
         return self[node]
 
     def add_edge(
@@ -400,8 +424,9 @@ class Skeleton:
             This method should always be used when renaming nodes in the skeleton as it
             handles updating the lookup caches necessary for indexing nodes by name.
 
-            After renaming, instances using this skeleton do NOT need to be updated as
-            the nodes are stored by reference in the skeleton.
+            After renaming, instances using this skeleton **do NOT need to be updated**
+            as the nodes are stored by reference in the skeleton, so changes are
+            reflected automatically.
 
         Example:
             >>> skel = Skeleton(["A", "B", "C"], edges=[("A", "B"), ("B", "C")])
@@ -460,22 +485,26 @@ class Skeleton:
             This method should always be used when removing nodes from the skeleton as
             it handles updating the lookup caches necessary for indexing nodes by name.
 
-            It also removes any edges and symmetries that are connected to the removed
-            nodes.
+            Any edges and symmetries that are connected to the removed nodes will also
+            be removed.
+
+        Warning:
+            **This method does NOT update instances** that use this skeleton to reflect
+            changes.
+
+            It is recommended to use the `Labels.remove_nodes()` method which will
+            update all contained to reflect the changes made to the skeleton.
+
+            To manually update instances after this method is called, call
+            `instance.update_nodes()` on each instance that uses this skeleton.
         """
         # Standardize input and make a pre-mutation copy before keys are changed.
-        rm_node_inds = [
-            self.index(node) if type(node) != int else node for node in nodes
-        ]
-        rm_node_objs = [self.nodes[ind] for ind in rm_node_inds]
+        rm_node_objs = [self.require_node(node, add_missing=False) for node in nodes]
 
         # Remove nodes from the skeleton.
         for node in rm_node_objs:
             self.nodes.remove(node)
             del self._name_to_node_cache[node.name]
-
-        # Update node index map.
-        self.rebuild_cache()
 
         # Remove edges connected to the removed nodes.
         self.edges = [
@@ -490,3 +519,58 @@ class Skeleton:
             for symmetry in self.symmetries
             if symmetry.nodes.isdisjoint(rm_node_objs)
         ]
+
+        # Update node index map.
+        self.rebuild_cache()
+
+    def remove_node(self, node: NodeOrIndex):
+        """Remove a single node from the skeleton.
+
+        Args:
+            node: The node to remove. Can be specified as a string name, integer index,
+                or `Node` object.
+
+        Notes:
+            This method should always be used when removing nodes from the skeleton as
+            it handles updating the lookup caches necessary for indexing nodes by name.
+
+            Any edges and symmetries that are connected to the removed node will also be
+            removed.
+
+        Warning:
+            **This method does NOT update instances** that use this skeleton to reflect
+            changes.
+
+            It is recommended to use the `Labels.remove_nodes()` method which will
+            update all contained to reflect the changes made to the skeleton.
+
+            To manually update instances after this method is called, call
+            `instance.update_skeleton()` on each instance that uses this skeleton.
+        """
+        self.remove_nodes([node])
+
+    def reorder_nodes(self, new_order: list[NodeOrIndex]):
+        """Reorder nodes in the skeleton.
+
+        Args:
+            new_order: A list of node names, indices, or `Node` objects specifying the
+                new order of the nodes.
+
+        Notes:
+            This method should always be used when reordering nodes in the skeleton as
+            it handles updating the lookup caches necessary for indexing nodes by name.
+
+            After reordering, instances using this skeleton do NOT need to be updated as
+            the nodes are stored by reference in the skeleton.
+
+        Raises:
+            ValueError: If the new order of nodes is not the same length as the current
+                nodes.
+        """
+        if len(new_order) != len(self.nodes):
+            raise ValueError(
+                "New order of nodes must be the same length as the current nodes."
+            )
+
+        new_nodes = [self.require_node(node, add_missing=False) for node in new_order]
+        self.nodes = new_nodes

@@ -175,30 +175,71 @@ def test_rename_nodes():
     skel.rename_nodes(["a", "b", "c"])
     assert skel.node_names == ["a", "b", "c"]
 
+    skel.rename_node("a", "A")
+    assert skel.node_names == ["A", "b", "c"]
+
+    # Incorrect length when passing a list
     with pytest.raises(ValueError):
         skel.rename_nodes(["a1", "b1"])
 
+    # Target node already exists
     with pytest.raises(ValueError):
-        skel.rename_nodes({"a": "b"})
+        skel.rename_nodes({"b": "c"})
 
+    # Source node doesn't exist
     with pytest.raises(ValueError):
         skel.rename_nodes({"d": "e"})
 
 
-def test_rename_node():
-    """Test renaming a single node in the skeleton."""
+def test_remove_nodes():
+    skel = Skeleton(["A", "B", "C", "D", "EL", "ER"])
+    skel.add_edges([("A", "B"), ("B", "C"), ("B", "D")])
+    skel.add_symmetry("EL", "ER")
+    assert skel.edge_inds == [(0, 1), (1, 2), (1, 3)]
+    assert skel.symmetry_inds == [(4, 5)]
+
+    skel.remove_nodes(["A", "C"])
+    assert skel.node_names == ["B", "D", "EL", "ER"]
+    assert skel.index("B") == 0
+    assert skel.index("D") == 1
+    assert skel.index("EL") == 2
+    assert skel.index("ER") == 3
+    assert "A" not in skel
+    assert "C" not in skel
+    assert skel.edge_inds == [(0, 1)]
+    assert skel.edge_names == [("B", "D")]
+    assert skel.symmetry_inds == [(2, 3)]
+
+    skel.remove_node("B")
+    assert skel.node_names == ["D", "EL", "ER"]
+    assert skel.edge_inds == []
+    assert skel.symmetry_inds == [(1, 2)]
+
+    skel.remove_node("ER")
+    assert skel.node_names == ["D", "EL"]
+    assert skel.symmetry_inds == []
+
+    with pytest.raises(IndexError):
+        skel.remove_nodes(["ER"])
+
+
+def test_reorder_nodes():
     skel = Skeleton(["A", "B", "C"])
-    skel.rename_node("A", "X")
-    assert skel.node_names == ["X", "B", "C"]
+    skel.add_edges([("A", "B"), ("B", "C")])
+    assert skel.edge_inds == [(0, 1), (1, 2)]
 
-    skel.rename_node(1, "Y")
-    assert skel.node_names == ["X", "Y", "C"]
+    skel.reorder_nodes(["C", "A", "B"])
+    assert skel.node_names == ["C", "A", "B"]
+    assert skel.index("C") == 0
+    assert skel.index("A") == 1
+    assert skel.index("B") == 2
+    assert skel.edge_names == [("A", "B"), ("B", "C")]
+    assert skel.edge_inds == [(1, 2), (2, 0)]
 
-    skel.rename_node(skel.nodes[2], "Z")
-    assert skel.node_names == ["X", "Y", "Z"]
-
+    # Incorrect length
     with pytest.raises(ValueError):
-        skel.rename_node("X", "Y")
+        skel.reorder_nodes(["C", "A"])
 
-    with pytest.raises(ValueError):
-        skel.rename_node("D", "E")
+    # Node not in skeleton
+    with pytest.raises(IndexError):
+        skel.reorder_nodes(["C", "A", "X"])
