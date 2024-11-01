@@ -510,10 +510,6 @@ class Labels:
 
         skeleton.rename_nodes(name_map)
 
-        for inst in self.instances:
-            if inst.skeleton == skeleton:
-                inst.update_skeleton()
-
     def remove_nodes(self, nodes: list[NodeOrIndex], skeleton: Skeleton | None = None):
         """Remove nodes from the skeleton.
 
