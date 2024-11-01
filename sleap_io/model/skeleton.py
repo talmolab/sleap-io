@@ -76,6 +76,20 @@ NodeOrIndex = typing.Union[Node, str, int]
 # type NodeOrIndex = Node | str | int  # py >= 3.12
 
 
+def is_node_or_index(obj: typing.Any) -> bool:
+    """Check if an object is a `Node`, string name or integer index.
+
+    Args:
+        obj: The object to check.
+
+    Notes:
+        This is mainly for backwards compatibility with Python versions < 3.10 where
+        generics can't be used with `isinstance`. In newer Python, this is equivalent
+        to `isinstance(obj, NodeOrIndex)`.
+    """
+    return isinstance(obj, (Node, str, int))
+
+
 @define(eq=False)
 class Skeleton:
     """A description of a set of landmark types and connections between them.
@@ -364,8 +378,8 @@ class Skeleton:
         if type(src) == tuple:
             src, dst = src
 
-        if isinstance(src, NodeOrIndex):
-            if not isinstance(dst, NodeOrIndex):
+        if is_node_or_index(src):
+            if not is_node_or_index(dst):
                 raise ValueError("Destination node must be specified.")
 
             src = self.require_node(src)
