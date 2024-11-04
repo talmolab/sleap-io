@@ -759,3 +759,9 @@ def test_labels_trim(centered_pair, tmpdir):
     assert trimmed_labels.video.shape == (100, 384, 384, 1)
     assert trimmed_labels[0].frame_idx == 0
     assert_equal(trimmed_labels[0].numpy(), labels[(labels.video, 100)].numpy())
+
+    labels.videos.append(Video.from_filename("fake.mp4"))
+    with pytest.raises(ValueError):
+        labels.trim(new_path, np.arange(100, 200))
+
+    labels.trim(new_path, np.arange(100, 200), video=0)

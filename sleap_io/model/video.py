@@ -71,7 +71,6 @@ class Video:
 
     def __deepcopy__(self, memo):
         """Deep copy the video object."""
-
         if id(self) in memo:
             return memo[id(self)]
 
