@@ -315,18 +315,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
+  <a href="#features" class="md-nav__link">
     <span class="md-ellipsis">
-      Installation
+      Features
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
-      Usage
+      Installation
     </span>
   </a>
   
@@ -1055,18 +1055,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
+  <a href="#features" class="md-nav__link">
     <span class="md-ellipsis">
-      Installation
+      Features
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
-      Usage
+      Installation
     </span>
   </a>
   
@@ -1120,6 +1120,23 @@
 package that aims to provide functionality for interacting with pose tracking-related
 data structures and file formats with minimal dependencies. This package <em>does not</em>
 have any functionality related to labeling, training, or inference.</p>
+<h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
+<p>The main purpose of this library is to provide utilities to load/save from different
+<a href="formats/">formats</a> for pose data and standardize them into our common <a href="model/">Data Model</a>.</p>
+<ul>
+<li>Read/write labels in <a href="formats/#sleap_io.load_slp">SLP</a>, <a href="formats/#sleap_io.load_nwb">NWB</a>, <a href="formats/#sleap_io.load_jabs">JABS</a> and <a href="formats/#sleap_io.load_labelstudio">LabelStudio</a>.</li>
+<li><a href="formats/#sleap_io.load_video">Read videos in any format</a>, work them in a <a href="model/#sleap_io.Video">numpy-like interface</a> whether the video files are accessible or not, and <a href="formats/#sleap_io.save_video">easily save them out</a>.</li>
+</ul>
+<p>This enables ease-of-use through format-agnostic operations that make it easy to work
+with pose data, including utilities for common tasks. Some of these include:</p>
+<ul>
+<li><a href="examples/#create-labels-from-raw-data">Create labels from a custom format</a></li>
+<li><a href="examples/#convert-labels-to-raw-arrays">Convert labels to numpy arrays for analysis</a></li>
+<li><a href="examples/#fix-video-paths">Fix video paths in the labels</a></li>
+<li><a href="examples/#make-trainingvalidationtest-splits">Make training/validation/test splits</a></li>
+<li><a href="examples/#replace-skeleton">Replace a skeleton</a></li>
+</ul>
+<p>See <a href="examples/">Examples</a> for more usage examples and recipes.</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip install sleap-io
 </code></pre></div>
@@ -1131,8 +1148,6 @@ have any functionality related to labeling, training, or inference.</p>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip install -e .[dev]
 </code></pre></div></p>
-<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
-<p>See <a href="examples/">Examples</a> for usage examples and recipes.</p>
 <h2 id="support">Support<a class="headerlink" href="#support" title="Permanent link">&para;</a></h2>
 <p>For technical inquiries specific to this package, please <a href="https://github.com/talmolab/sleap-io/issues">open an Issue</a>
 with a description of your problem or request.</p>
