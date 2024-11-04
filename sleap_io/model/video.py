@@ -69,6 +69,32 @@ class Video:
                 # prevent the user from building the Video object entirely.
                 pass
 
+    def __deepcopy__(self, memo):
+        """Deep copy the video object."""
+
+        if id(self) in memo:
+            return memo[id(self)]
+
+        reopen = False
+        if self.is_open:
+            reopen = True
+            self.close()
+
+        new_video = Video(
+            filename=self.filename,
+            backend=None,
+            backend_metadata=self.backend_metadata,
+            source_video=self.source_video,
+            open_backend=self.open_backend,
+        )
+
+        memo[id(self)] = new_video
+
+        if reopen:
+            self.open()
+
+        return new_video
+
     @classmethod
     def from_filename(
         cls,
