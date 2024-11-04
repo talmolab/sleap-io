@@ -1,0 +1,37 @@
+# Docs build
+name: Docs
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  docs:
+    name: Docs
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+            miniforge-version: latest
+            conda-solver: "libmamba"
+            environment-file: environment.yml
+            activate-environment: sleap-io
+
+      - name: Print environment info
+        shell: bash -l {0}
+        run: |
+            which python
+            conda info
+            conda list
+            pip freeze
+
+      - name: Build and upload docs (release)
+        if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
+        shell: bash -l {0}
+        run: |
+            mike deploy --update-aliases --allow-empty --push --verbose "${{ github.event.release.tag_name }}" latest
