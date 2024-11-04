@@ -754,6 +754,47 @@ class Labels:
                                 new_prefix / fn.relative_to(old_prefix)
                             )
 
+    def extract(
+        self, inds: list[int] | list[tuple[Video, int]] | np.ndarray, copy: bool = True
+    ) -> Labels:
+        """Extract a set of frames into a new Labels object.
+
+        Args:
+            inds: Indices of labeled frames. Can be specified as a list of array of
+                integer indices of labeled frames or tuples of Video and frame indices.
+            copy: If `True` (the default), return a copy of the frames and containing
+                objects. Otherwise, return a reference to the data.
+
+        Returns:
+            A new `Labels` object containing the selected labels.
+
+        Notes:
+            This copies the labeled frames and their associated data, including
+            skeletons and tracks, and tries to maintain the relative ordering.
+
+            This also copies the provenance and inserts an extra key: `"source_labels"`
+            with the path to the current labels, if available.
+
+            It does NOT copy suggested frames.
+        """
+        lfs = self[inds]
+
+        if copy:
+            lfs = deepcopy(lfs)
+        labels = Labels(lfs)
+
+        # Try to keep the lists in the same order.
+        track_to_ind = {track.name: ind for ind, track in enumerate(self.tracks)}
+        labels.tracks = sorted(labels.tracks, key=lambda x: track_to_ind[x.name])
+
+        skel_to_ind = {skel.name: ind for ind, skel in enumerate(self.skeletons)}
+        labels.skeletons = sorted(labels.skeletons, key=lambda x: skel_to_ind[x.name])
+
+        labels.provenance = deepcopy(labels.provenance)
+        labels.provenance["source_labels"] = self.provenance.get("filename", None)
+
+        return labels
+
     def split(self, n: int | float, seed: int | None = None) -> tuple[Labels, Labels]:
         """Separate the labels into random splits.
 
@@ -796,14 +837,8 @@ class Labels:
         else:
             inds2 = np.setdiff1d(np.arange(n0), inds1)
 
-        split1, split2 = self[inds1], self[inds2]
-        split1, split2 = deepcopy(split1), deepcopy(split2)
-        split1, split2 = Labels(split1), Labels(split2)
-
-        split1.provenance = self.provenance
-        split2.provenance = self.provenance
-        split1.provenance["source_labels"] = self.provenance.get("filename", None)
-        split2.provenance["source_labels"] = self.provenance.get("filename", None)
+        split1 = self.extract(inds1, copy=True)
+        split2 = self.extract(inds2, copy=True)
 
         return split1, split2
 
@@ -883,6 +918,14 @@ class Labels:
         else:
             labels_val = labels_rest
 
+        # Update provenance.
+        source_labels = self.provenance.get("filename", None)
+        labels_train.provenance["source_labels"] = source_labels
+        if n_val is not None:
+            labels_val.provenance["source_labels"] = source_labels
+        if n_test is not None:
+            labels_test.provenance["source_labels"] = source_labels
+
         # Save.
         if save_dir is not None:
             save_dir = Path(save_dir)
@@ -901,3 +944,68 @@ class Labels:
             return labels_train, labels_val
         else:
             return labels_train, labels_val, labels_test
+
+    def trim(
+        self,
+        save_path: str | Path,
+        frame_inds: list[int] | np.ndarray,
+        video: Video | int | None = None,
+        video_kwargs: dict[str, Any] | None = None,
+    ) -> Labels:
+        """Trim the labels to a subset of frames and videos accordingly.
+
+        Args:
+            save_path: Path to the trimmed labels SLP file. Video will be saved with the
+                same base name but with .mp4 extension.
+            frame_inds: Frame indices to save. Can be specified as a list or array of
+                frame integers.
+            video: Video or integer index of the video to trim. Does not need to be
+                specified for single-video projects.
+            video_kwargs: A dictionary of keyword arguments to provide to
+                `sio.save_video` for video compression.
+
+        Returns:
+            The resulting labels object referencing the trimmed data.
+
+        Notes:
+            This will remove any data outside of the trimmed frames, save new videos,
+            and adjust the frame indices to match the newly trimmed videos.
+        """
+        if video is None:
+            if len(self.videos) == 1:
+                video = self.video
+            else:
+                raise ValueError(
+                    "Video needs to be specified when trimming multi-video projects."
+                )
+        if type(video) == int:
+            video = self.videos[video]
+
+        # Write trimmed clip.
+        save_path = Path(save_path)
+        video_path = save_path.with_suffix(".mp4")
+        fidx0, fidx1 = np.min(frame_inds), np.max(frame_inds)
+        new_video = video.save(
+            video_path,
+            frame_inds=np.arange(fidx0, fidx1 + 1),
+            video_kwargs=video_kwargs,
+        )
+
+        # Get frames in range.
+        # TODO: Create an optimized search function for this access pattern.
+        inds = []
+        for ind, lf in enumerate(self):
+            if lf.video == video and lf.frame_idx >= fidx0 and lf.frame_idx <= fidx1:
+                inds.append(ind)
+        trimmed_labels = self.extract(inds, copy=True)
+
+        # Adjust video and frame indices.
+        trimmed_labels.videos = [new_video]
+        for lf in trimmed_labels:
+            lf.video = new_video
+            lf.frame_idx = lf.frame_idx - fidx0
+
+        # Save.
+        trimmed_labels.save(save_path)
+
+        return trimmed_labels

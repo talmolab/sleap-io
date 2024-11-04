@@ -6,9 +6,10 @@ a video and its components used in SLEAP.
 
 from __future__ import annotations
 import attrs
-from typing import Tuple, Optional, Optional
+from typing import Tuple, Optional, Optional, Any
 import numpy as np
 from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
+from sleap_io.io.video_writing import VideoWriter
 from sleap_io.io.utils import is_file_accessible
 from pathlib import Path
 import h5py
@@ -67,6 +68,31 @@ class Video:
                 # If we can't open the backend, just ignore it for now so we don't
                 # prevent the user from building the Video object entirely.
                 pass
+
+    def __deepcopy__(self, memo):
+        """Deep copy the video object."""
+        if id(self) in memo:
+            return memo[id(self)]
+
+        reopen = False
+        if self.is_open:
+            reopen = True
+            self.close()
+
+        new_video = Video(
+            filename=self.filename,
+            backend=None,
+            backend_metadata=self.backend_metadata,
+            source_video=self.source_video,
+            open_backend=self.open_backend,
+        )
+
+        memo[id(self)] = new_video
+
+        if reopen:
+            self.open()
+
+        return new_video
 
     @classmethod
     def from_filename(
@@ -321,6 +347,19 @@ class Video:
     def close(self):
         """Close the video backend."""
         if self.backend is not None:
+            # Try to remember values from previous backend if available and not
+            # specified.
+            try:
+                self.backend_metadata["dataset"] = getattr(
+                    self.backend, "dataset", None
+                )
+                self.backend_metadata["grayscale"] = getattr(
+                    self.backend, "grayscale", None
+                )
+                self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
+            except:
+                pass
+
             del self.backend
             self.backend = None
 
@@ -350,3 +389,31 @@ class Video:
                 self.open()
             else:
                 self.close()
+
+    def save(
+        self,
+        save_path: str | Path,
+        frame_inds: list[int] | np.ndarray | None = None,
+        video_kwargs: dict[str, Any] | None = None,
+    ) -> Video:
+        """Save video frames to a new video file.
+
+        Args:
+            save_path: Path to the new video file. Should end in MP4.
+            frame_inds: Frame indices to save. Can be specified as a list or array of
+                frame integers. If not specified, saves all video frames.
+            video_kwargs: A dictionary of keyword arguments to provide to
+                `sio.save_video` for video compression.
+
+        Returns:
+            A new `Video` object pointing to the new video file.
+        """
+        video_kwargs = {} if video_kwargs is None else video_kwargs
+        frame_inds = np.arange(len(self)) if frame_inds is None else frame_inds
+
+        with VideoWriter(save_path, **video_kwargs) as vw:
+            for frame_ind in frame_inds:
+                vw(self[frame_ind])
+
+        new_video = Video.from_filename(save_path, grayscale=self.grayscale)
+        return new_video

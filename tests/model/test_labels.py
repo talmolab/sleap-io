@@ -747,3 +747,21 @@ def test_labels_replace_skeleton(slp_real_data):
     inst = labels[0][0]
     assert inst.skeleton == new_skel
     assert_allclose(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan]])
+
+
+def test_labels_trim(centered_pair, tmpdir):
+    labels = load_slp(centered_pair)
+
+    new_path = tmpdir / "trimmed.slp"
+    trimmed_labels = labels.trim(new_path, np.arange(100, 200))
+    assert len(trimmed_labels) == 100
+    assert trimmed_labels.video.filename == Path(new_path).with_suffix(".mp4")
+    assert trimmed_labels.video.shape == (100, 384, 384, 1)
+    assert trimmed_labels[0].frame_idx == 0
+    assert_equal(trimmed_labels[0].numpy(), labels[(labels.video, 100)].numpy())
+
+    labels.videos.append(Video.from_filename("fake.mp4"))
+    with pytest.raises(ValueError):
+        labels.trim(new_path, np.arange(100, 200))
+
+    labels.trim(new_path, np.arange(100, 200), video=0)
