@@ -1,0 +1,62 @@
+# Docs build
+name: Docs
+
+on:
+  release:
+    types:
+      - published
+  push:
+    # branches:
+    #   - main
+    paths:
+      - "sleap_io/**"
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+
+jobs:
+  docs:
+    name: Docs
+    runs-on: "ubuntu-latest"
+    permissions:
+      # Give the default GITHUB_TOKEN write permission to commit and push the
+      # added or changed files to the repository.
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for all branches
+
+      - name: Setup Conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+            miniforge-version: latest
+            conda-solver: "libmamba"
+            environment-file: environment.yml
+            activate-environment: sleap-io
+
+      - name: Print environment info
+        shell: bash -l {0}
+        run: |
+            which python
+            conda info
+            conda list
+            pip freeze
+
+      - name: Setup Git user
+        run: |
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build and upload docs (release)
+        if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
+        shell: bash -l {0}
+        run: |
+            mike deploy --update-aliases --allow-empty --push "${{ github.event.release.tag_name }}" latest
+
+      - name: Build and upload docs (dev)
+        if: ${{ github.event_name == 'push' }}
+        shell: bash -l {0}
+        run: |
+            mike deploy --update-aliases --allow-empty --push dev
