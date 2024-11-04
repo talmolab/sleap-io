@@ -6,9 +6,10 @@ a video and its components used in SLEAP.
 
 from __future__ import annotations
 import attrs
-from typing import Tuple, Optional, Optional
+from typing import Tuple, Optional, Optional, Any
 import numpy as np
 from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
+from sleap_io.io.video_writing import VideoWriter
 from sleap_io.io.utils import is_file_accessible
 from pathlib import Path
 import h5py
@@ -321,6 +322,19 @@ class Video:
     def close(self):
         """Close the video backend."""
         if self.backend is not None:
+            # Try to remember values from previous backend if available and not
+            # specified.
+            try:
+                self.backend_metadata["dataset"] = getattr(
+                    self.backend, "dataset", None
+                )
+                self.backend_metadata["grayscale"] = getattr(
+                    self.backend, "grayscale", None
+                )
+                self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
+            except:
+                pass
+
             del self.backend
             self.backend = None
 
