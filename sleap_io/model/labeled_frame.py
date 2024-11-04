@@ -27,7 +27,7 @@ class LabeledFrame:
     """
 
     video: Video
-    frame_idx: int
+    frame_idx: int = field(converter=int)
     instances: list[Union[Instance, PredictedInstance]] = field(factory=list)
 
     def __len__(self) -> int:
