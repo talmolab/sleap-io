@@ -150,7 +150,7 @@ copyright: >
 
 nav:
   - Overview: index.md
-  - Exampels: examples.md
+  - Examples: examples.md
   - Changelog: changelog.md
   - Releases: https://github.com/talmolab/sleap-io/releases
   - Core API:
