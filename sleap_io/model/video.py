@@ -390,3 +390,31 @@ class Video:
                 self.open()
             else:
                 self.close()
+
+    def save(
+        self,
+        save_path: str | Path,
+        frame_inds: list[int] | np.ndarray | None = None,
+        video_kwargs: dict[str, Any] | None = None,
+    ) -> Video:
+        """Save video frames to a new video file.
+
+        Args:
+            save_path: Path to the new video file. Should end in MP4.
+            frame_inds: Frame indices to save. Can be specified as a list or array of
+                frame integers. If not specified, saves all video frames.
+            video_kwargs: A dictionary of keyword arguments to provide to
+                `sio.save_video` for video compression.
+
+        Returns:
+            A new `Video` object pointing to the new video file.
+        """
+        video_kwargs = {} if video_kwargs is None else video_kwargs
+        frame_inds = np.arange(len(self)) if frame_inds is None else frame_inds
+
+        with VideoWriter(save_path, **video_kwargs) as vw:
+            for frame_ind in frame_inds:
+                vw(self[frame_ind])
+
+        new_video = Video.from_filename(save_path, grayscale=self.grayscale)
+        return new_video
