@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for all branches
 
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v3
@@ -44,8 +46,8 @@ jobs:
 
       - name: Setup Git user
         run: |
-            git config --global user.name "GitHub Actions"
-            git config --global user.email "actions@github.com"
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Build and upload docs (release)
         if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
