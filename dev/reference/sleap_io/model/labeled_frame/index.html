@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1056,6 +1056,36 @@
 
 
 
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame" href="#sleap_io.model.labeled_frame.LabeledFrame">LabeledFrame</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Labeled data for a single frame of a video.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1135,6 +1165,156 @@
 two <code>LabeledFrame</code> instances with the same attributes will NOT be considered
 equal in a set or dict.</p>
 </details>
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.__getitem__" href="#sleap_io.model.labeled_frame.LabeledFrame.__getitem__">__getitem__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the <code>Instance</code> at <code>key</code> index in the <code>instances</code> list.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.__iter__" href="#sleap_io.model.labeled_frame.LabeledFrame.__iter__">__iter__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Iterate over <code>Instance</code>s in <code>instances</code> list.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.__len__" href="#sleap_io.model.labeled_frame.LabeledFrame.__len__">__len__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the number of instances in the frame.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.numpy" href="#sleap_io.model.labeled_frame.LabeledFrame.numpy">numpy</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return all instances in the frame as a numpy array.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.remove_empty_instances" href="#sleap_io.model.labeled_frame.LabeledFrame.remove_empty_instances">remove_empty_instances</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Remove all instances with no visible points.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.remove_predictions" href="#sleap_io.model.labeled_frame.LabeledFrame.remove_predictions">remove_predictions</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Remove all <code>PredictedInstance</code> objects from the frame.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.has_predicted_instances" href="#sleap_io.model.labeled_frame.LabeledFrame.has_predicted_instances">has_predicted_instances</a></code></td>
+            <td>
+                  <code>bool</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return True if the frame has any predicted instances.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.has_user_instances" href="#sleap_io.model.labeled_frame.LabeledFrame.has_user_instances">has_user_instances</a></code></td>
+            <td>
+                  <code>bool</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return True if the frame has any user-labeled instances.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.image" href="#sleap_io.model.labeled_frame.LabeledFrame.image">image</a></code></td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return the image of the frame as a numpy array.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.predicted_instances" href="#sleap_io.model.labeled_frame.LabeledFrame.predicted_instances">predicted_instances</a></code></td>
+            <td>
+                  <code>list[<a class="autorefs autorefs-internal" title="sleap_io.Instance" href="../../../../model/#sleap_io.Instance">Instance</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Frame instances that are predicted by a model (<code>PredictedInstance</code> objects).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.unused_predictions" href="#sleap_io.model.labeled_frame.LabeledFrame.unused_predictions">unused_predictions</a></code></td>
+            <td>
+                  <code>list[<a class="autorefs autorefs-internal" title="sleap_io.Instance" href="../../../../model/#sleap_io.Instance">Instance</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return a list of "unused" <code>PredictedInstance</code> objects in frame.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labeled_frame.LabeledFrame.user_instances" href="#sleap_io.model.labeled_frame.LabeledFrame.user_instances">user_instances</a></code></td>
+            <td>
+                  <code>list[<a class="autorefs autorefs-internal" title="sleap_io.Instance" href="../../../../model/#sleap_io.Instance">Instance</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Frame instances that are user-labeled (<code>Instance</code> objects).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
               <details class="quote">
                 <summary>Source code in <code>sleap_io/model/labeled_frame.py</code></summary>
                 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-14" name="__codelineno-0-14"></a><a href="#__codelineno-0-14"><span class="linenos" data-linenos=" 14 "></span></a><span class="nd">@define</span><span class="p">(</span><span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -1763,7 +1943,7 @@ equal in a set or dict.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

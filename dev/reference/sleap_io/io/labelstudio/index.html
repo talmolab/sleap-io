@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1064,6 +1064,100 @@
 </details>
 
 
+
+
+
+
+
+
+<p><span class="doc-section-title">Functions:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.build_relation_map" href="#sleap_io.io.labelstudio.build_relation_map">build_relation_map</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Build a two-way relationship map between annotations.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.convert_labels" href="#sleap_io.io.labelstudio.convert_labels">convert_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Convert a <code>Labels</code> object into Label Studio-formatted annotations.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.filter_and_index" href="#sleap_io.io.labelstudio.filter_and_index">filter_and_index</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Filter annotations based on the type field and index them by ID.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.infer_nodes" href="#sleap_io.io.labelstudio.infer_nodes">infer_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Parse the loaded JSON tasks to create a minimal skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.parse_tasks" href="#sleap_io.io.labelstudio.parse_tasks">parse_tasks</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read Label Studio style annotations from a file and return a <code>Labels</code> object.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.read_labels" href="#sleap_io.io.labelstudio.read_labels">read_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read Label Studio style annotations from a file and return a <code>Labels</code> object.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.task_to_labeled_frame" href="#sleap_io.io.labelstudio.task_to_labeled_frame">task_to_labeled_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Parse annotations from an entry.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.video_from_task" href="#sleap_io.io.labelstudio.video_from_task">video_from_task</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Given a Label Studio task, retrieve video information.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.labelstudio.write_labels" href="#sleap_io.io.labelstudio.write_labels">write_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Convert and save a SLEAP <code>Labels</code> object to a Label Studio <code>.json</code> file.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1100,7 +1194,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>annotations</code></td>
+            <td>
+                <code>annotations</code>
+            </td>
             <td>
                   <code><span title="typing.Iterable">Iterable</span>[dict]</code>
             </td>
@@ -1193,7 +1289,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -1373,7 +1471,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>annotations</code></td>
+            <td>
+                <code>annotations</code>
+            </td>
             <td>
                   <code><span title="typing.Iterable">Iterable</span>[dict]</code>
             </td>
@@ -1387,7 +1487,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>annot_type</code></td>
+            <td>
+                <code>annot_type</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1475,7 +1577,9 @@ will survive, and annotations are indexed by ID.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>tasks</code></td>
+            <td>
+                <code>tasks</code>
+            </td>
             <td>
                   <code><span title="typing.List">List</span>[<span title="typing.Dict">Dict</span>]</code>
             </td>
@@ -1574,7 +1678,9 @@ will survive, and annotations are indexed by ID.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>tasks</code></td>
+            <td>
+                <code>tasks</code>
+            </td>
             <td>
                   <code><span title="typing.List">List</span>[<span title="typing.Dict">Dict</span>]</code>
             </td>
@@ -1588,7 +1694,9 @@ will survive, and annotations are indexed by ID.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a></code>
             </td>
@@ -1684,7 +1792,9 @@ will survive, and annotations are indexed by ID.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels_path</code></td>
+            <td>
+                <code>labels_path</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1698,7 +1808,9 @@ will survive, and annotations are indexed by ID.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>, <span title="typing.List">List</span>[str]]]</code>
             </td>
@@ -1802,7 +1914,9 @@ the skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>task</code></td>
+            <td>
+                <code>task</code>
+            </td>
             <td>
                   <code>dict</code>
             </td>
@@ -1816,7 +1930,9 @@ the skeleton.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a></code>
             </td>
@@ -1830,7 +1946,9 @@ the skeleton.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>key</code></td>
+            <td>
+                <code>key</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1966,7 +2084,9 @@ the skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>task</code></td>
+            <td>
+                <code>task</code>
+            </td>
             <td>
                   <code>dict</code>
             </td>
@@ -2055,7 +2175,9 @@ the skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -2069,7 +2191,9 @@ the skeleton.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2281,7 +2405,7 @@ the skeleton.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

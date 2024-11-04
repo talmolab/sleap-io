@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1054,6 +1054,60 @@
 
 
 
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video" href="#sleap_io.io.video_reading.HDF5Video">HDF5Video</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Video backend for reading videos stored in HDF5 files.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.ImageVideo" href="#sleap_io.io.video_reading.ImageVideo">ImageVideo</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Video backend for reading videos stored as image files.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.MediaVideo" href="#sleap_io.io.video_reading.MediaVideo">MediaVideo</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Video backend for reading videos stored as common media files.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend" href="#sleap_io.io.video_reading.VideoBackend">VideoBackend</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Base class for video backends.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1213,6 +1267,118 @@ and only used when reading embedded image datasets.</p>
               <div class="doc-md-description">
                 <p>Format of the images in the embedded dataset. This is metadata and
 only used when reading embedded image datasets.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.__attrs_post_init__" href="#sleap_io.io.video_reading.HDF5Video.__attrs_post_init__">__attrs_post_init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Auto-detect dataset and frame map heuristically.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.decode_embedded" href="#sleap_io.io.video_reading.HDF5Video.decode_embedded">decode_embedded</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Decode an embedded image string into a numpy array.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.has_frame" href="#sleap_io.io.video_reading.HDF5Video.has_frame">has_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Check if a frame index is contained in the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.read_test_frame" href="#sleap_io.io.video_reading.HDF5Video.read_test_frame">read_test_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read a single frame from the video to test for grayscale.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.embedded_frame_inds" href="#sleap_io.io.video_reading.HDF5Video.embedded_frame_inds">embedded_frame_inds</a></code></td>
+            <td>
+                  <code>list[int]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return the frame indices of the embedded images.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.has_embedded_images" href="#sleap_io.io.video_reading.HDF5Video.has_embedded_images">has_embedded_images</a></code></td>
+            <td>
+                  <code>bool</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return True if the dataset contains embedded images.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.img_shape" href="#sleap_io.io.video_reading.HDF5Video.img_shape">img_shape</a></code></td>
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[int, int, int]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Shape of a single frame in the video as <code>(height, width, channels)</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.HDF5Video.num_frames" href="#sleap_io.io.video_reading.HDF5Video.num_frames">num_frames</a></code></td>
+            <td>
+                  <code>int</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of frames in the video.</p>
               </div>
             </td>
           </tr>
@@ -1703,7 +1869,9 @@ only used when reading embedded image datasets.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>img_string</code></td>
+            <td>
+                <code>img_string</code>
+            </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span></code>
             </td>
@@ -1804,7 +1972,9 @@ to apply grayscale conversion rather than calling this function directly.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>frame_idx</code></td>
+            <td>
+                <code>frame_idx</code>
+            </td>
             <td>
                   <code>int</code>
             </td>
@@ -1947,6 +2117,61 @@ to apply grayscale conversion rather than calling this function directly.</p>
             <td>
               <div class="doc-md-description">
                 <p>Whether to force grayscale. If None, autodetect on first frame load.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.ImageVideo.find_images" href="#sleap_io.io.video_reading.ImageVideo.find_images">find_images</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Find images in a folder and return a list of filenames.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.ImageVideo.num_frames" href="#sleap_io.io.video_reading.ImageVideo.num_frames">num_frames</a></code></td>
+            <td>
+                  <code>int</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of frames in the video.</p>
               </div>
             </td>
           </tr>
@@ -2167,6 +2392,51 @@ enhance the performance of reading multiple frames.</p>
               <div class="doc-md-description">
                 <p>Video plugin to use. One of "opencv", "FFMPEG", or "pyav". If <code>None</code>,
 will use the first available plugin in the order listed above.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.MediaVideo.num_frames" href="#sleap_io.io.video_reading.MediaVideo.num_frames">num_frames</a></code></td>
+            <td>
+                  <code>int</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of frames in the video.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.MediaVideo.reader" href="#sleap_io.io.video_reading.MediaVideo.reader">reader</a></code></td>
+            <td>
+                  <code>object</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return the reader object for the video, caching if necessary.</p>
               </div>
             </td>
           </tr>
@@ -2467,6 +2737,150 @@ constructor to create a backend instance.</p>
 If False, will close the reader after each call. If True (the default), it
 will keep the reader open and cache it for subsequent calls which may
 enhance the performance of reading multiple frames.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.__getitem__" href="#sleap_io.io.video_reading.VideoBackend.__getitem__">__getitem__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return a single frame or a list of frames from the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.__len__" href="#sleap_io.io.video_reading.VideoBackend.__len__">__len__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return number of frames in the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.detect_grayscale" href="#sleap_io.io.video_reading.VideoBackend.detect_grayscale">detect_grayscale</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Detect whether the video is grayscale.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.from_filename" href="#sleap_io.io.video_reading.VideoBackend.from_filename">from_filename</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Create a VideoBackend from a filename.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.get_frame" href="#sleap_io.io.video_reading.VideoBackend.get_frame">get_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read a single frame from the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.get_frames" href="#sleap_io.io.video_reading.VideoBackend.get_frames">get_frames</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read a list of frames from the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.has_frame" href="#sleap_io.io.video_reading.VideoBackend.has_frame">has_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Check if a frame index is contained in the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.read_test_frame" href="#sleap_io.io.video_reading.VideoBackend.read_test_frame">read_test_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read a single frame from the video to test for grayscale.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.frames" href="#sleap_io.io.video_reading.VideoBackend.frames">frames</a></code></td>
+            <td>
+                  <code>int</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of frames in the video.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.img_shape" href="#sleap_io.io.video_reading.VideoBackend.img_shape">img_shape</a></code></td>
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[int, int, int]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Shape of a single frame in the video.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.num_frames" href="#sleap_io.io.video_reading.VideoBackend.num_frames">num_frames</a></code></td>
+            <td>
+                  <code>int</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of frames in the video. Must be implemented in subclasses.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_reading.VideoBackend.shape" href="#sleap_io.io.video_reading.VideoBackend.shape">shape</a></code></td>
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[int, int, int, int]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Shape of the video as a tuple of <code>(frames, height, width, channels)</code>.</p>
               </div>
             </td>
           </tr>
@@ -2860,7 +3274,9 @@ cached and returned on subsequent calls.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>ind</code></td>
+            <td>
+                <code>ind</code>
+            </td>
             <td>
                   <code>int | list[int] | slice</code>
             </td>
@@ -2987,7 +3403,9 @@ last channels are not exactly the same.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>test_img</code></td>
+            <td>
+                <code>test_img</code>
+            </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span> | None</code>
             </td>
@@ -3086,7 +3504,9 @@ attribute of the class.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str | list[str]</code>
             </td>
@@ -3100,7 +3520,9 @@ attribute of the class.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>dataset</code></td>
+            <td>
+                <code>dataset</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[str]</code>
             </td>
@@ -3114,7 +3536,9 @@ attribute of the class.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>grayscale</code></td>
+            <td>
+                <code>grayscale</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[bool]</code>
             </td>
@@ -3129,7 +3553,9 @@ load.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>keep_open</code></td>
+            <td>
+                <code>keep_open</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -3261,7 +3687,9 @@ which may enhance the performance of reading multiple frames.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>frame_idx</code></td>
+            <td>
+                <code>frame_idx</code>
+            </td>
             <td>
                   <code>int</code>
             </td>
@@ -3377,7 +3805,9 @@ individually using <code>get_frame</code>.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>frame_inds</code></td>
+            <td>
+                <code>frame_inds</code>
+            </td>
             <td>
                   <code>list[int]</code>
             </td>
@@ -3491,7 +3921,9 @@ will be automatically set based on the first frame read.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>frame_idx</code></td>
+            <td>
+                <code>frame_idx</code>
+            </td>
             <td>
                   <code>int</code>
             </td>
@@ -3765,7 +4197,7 @@ frame is not available in a given backend.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1061,6 +1061,36 @@ training models) and predictions (inference results).</p>
 
 
 
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels" href="#sleap_io.model.labels.Labels">Labels</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pose data for a set of videos that have user labels and/or predictions.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1176,6 +1206,278 @@ about where the dataset came from.</p>
   <p><code>Video</code>s in contain <code>LabeledFrame</code>s, and <code>Skeleton</code>s and <code>Track</code>s in contained
 <code>Instance</code>s are added to the respective lists automatically.</p>
 </details>
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.__attrs_post_init__" href="#sleap_io.model.labels.Labels.__attrs_post_init__">__attrs_post_init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Append videos, skeletons, and tracks seen in <code>labeled_frames</code> to <code>Labels</code>.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.__getitem__" href="#sleap_io.model.labels.Labels.__getitem__">__getitem__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return one or more labeled frames based on indexing criteria.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.__iter__" href="#sleap_io.model.labels.Labels.__iter__">__iter__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Iterate over <code>labeled_frames</code> list when calling iter method on <code>Labels</code>.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.__len__" href="#sleap_io.model.labels.Labels.__len__">__len__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return number of labeled frames.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.__repr__" href="#sleap_io.model.labels.Labels.__repr__">__repr__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return a readable representation of the labels.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.__str__" href="#sleap_io.model.labels.Labels.__str__">__str__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return a readable representation of the labels.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.append" href="#sleap_io.model.labels.Labels.append">append</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Append a labeled frame to the labels.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.clean" href="#sleap_io.model.labels.Labels.clean">clean</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Remove empty frames, unused skeletons, tracks and videos.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.extend" href="#sleap_io.model.labels.Labels.extend">extend</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Append a labeled frame to the labels.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.extract" href="#sleap_io.model.labels.Labels.extract">extract</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Extract a set of frames into a new Labels object.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.find" href="#sleap_io.model.labels.Labels.find">find</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Search for labeled frames given video and/or frame index.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.make_training_splits" href="#sleap_io.model.labels.Labels.make_training_splits">make_training_splits</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Make splits for training with embedded images.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.numpy" href="#sleap_io.model.labels.Labels.numpy">numpy</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Construct a numpy array from instance points.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.remove_nodes" href="#sleap_io.model.labels.Labels.remove_nodes">remove_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Remove nodes from the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.remove_predictions" href="#sleap_io.model.labels.Labels.remove_predictions">remove_predictions</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Remove all predicted instances from the labels.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.rename_nodes" href="#sleap_io.model.labels.Labels.rename_nodes">rename_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Rename nodes in the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.reorder_nodes" href="#sleap_io.model.labels.Labels.reorder_nodes">reorder_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Reorder nodes in the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.replace_filenames" href="#sleap_io.model.labels.Labels.replace_filenames">replace_filenames</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Replace video filenames.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.replace_skeleton" href="#sleap_io.model.labels.Labels.replace_skeleton">replace_skeleton</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Replace the skeleton in the labels.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.replace_videos" href="#sleap_io.model.labels.Labels.replace_videos">replace_videos</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Replace videos and update all references.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.save" href="#sleap_io.model.labels.Labels.save">save</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Save labels to file in specified format.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.split" href="#sleap_io.model.labels.Labels.split">split</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Separate the labels into random splits.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.trim" href="#sleap_io.model.labels.Labels.trim">trim</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Trim the labels to a subset of frames and videos accordingly.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.update" href="#sleap_io.model.labels.Labels.update">update</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Update data structures based on contents.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.instances" href="#sleap_io.model.labels.Labels.instances">instances</a></code></td>
+            <td>
+                  <code><span title="typing.Iterator">Iterator</span>[<a class="autorefs autorefs-internal" title="sleap_io.Instance" href="../../../../model/#sleap_io.Instance">Instance</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return an iterator over all instances within all labeled frames.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.skeleton" href="#sleap_io.model.labels.Labels.skeleton">skeleton</a></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return the skeleton if there is only a single skeleton in the labels.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.user_labeled_frames" href="#sleap_io.model.labels.Labels.user_labeled_frames">user_labeled_frames</a></code></td>
+            <td>
+                  <code>list[<a class="autorefs autorefs-internal" title="sleap_io.LabeledFrame" href="../../../../model/#sleap_io.LabeledFrame">LabeledFrame</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return all labeled frames with user (non-predicted) instances.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.labels.Labels.video" href="#sleap_io.model.labels.Labels.video">video</a></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return the video if there is only a single video in the labels.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
               <details class="quote">
                 <summary>Source code in <code>sleap_io/model/labels.py</code></summary>
                 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-32" name="__codelineno-0-32"></a><a href="#__codelineno-0-32"><span class="linenos" data-linenos="  32 "></span></a><span class="nd">@define</span>
@@ -2461,7 +2763,9 @@ about where the dataset came from.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>lf</code></td>
+            <td>
+                <code>lf</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.LabeledFrame" href="../../../../model/#sleap_io.LabeledFrame">LabeledFrame</a></code>
             </td>
@@ -2475,7 +2779,9 @@ about where the dataset came from.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>update</code></td>
+            <td>
+                <code>update</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2546,7 +2852,9 @@ skeletons from the contents.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>frames</code></td>
+            <td>
+                <code>frames</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2560,7 +2868,9 @@ skeletons from the contents.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>empty_instances</code></td>
+            <td>
+                <code>empty_instances</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2575,7 +2885,9 @@ visible points.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeletons</code></td>
+            <td>
+                <code>skeletons</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2589,7 +2901,9 @@ visible points.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>tracks</code></td>
+            <td>
+                <code>tracks</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2603,7 +2917,9 @@ visible points.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>videos</code></td>
+            <td>
+                <code>videos</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2713,7 +3029,9 @@ visible points.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>lfs</code></td>
+            <td>
+                <code>lfs</code>
+            </td>
             <td>
                   <code>list[<a class="autorefs autorefs-internal" title="sleap_io.LabeledFrame" href="../../../../model/#sleap_io.LabeledFrame">LabeledFrame</a>]</code>
             </td>
@@ -2727,7 +3045,9 @@ visible points.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>update</code></td>
+            <td>
+                <code>update</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2799,7 +3119,9 @@ skeletons from the contents.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>inds</code></td>
+            <td>
+                <code>inds</code>
+            </td>
             <td>
                   <code>list[int] | list[tuple[<a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a>, int]] | <span title="numpy.ndarray">ndarray</span></code>
             </td>
@@ -2814,7 +3136,9 @@ integer indices of labeled frames or tuples of Video and frame indices.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>copy</code></td>
+            <td>
+                <code>copy</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2937,7 +3261,9 @@ with the path to the current labels, if available.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>video</code></td>
+            <td>
+                <code>video</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a></code>
             </td>
@@ -2951,7 +3277,9 @@ with the path to the current labels, if available.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>frame_idx</code></td>
+            <td>
+                <code>frame_idx</code>
+            </td>
             <td>
                   <code>int | list[int] | None</code>
             </td>
@@ -2967,7 +3295,9 @@ range. If not specific, then we'll return all labeled frames for video.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>return_new</code></td>
+            <td>
+                <code>return_new</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -3089,7 +3419,9 @@ which case it contains new (empty) <code>LabeledFrame</code> objects with <code>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>n_train</code></td>
+            <td>
+                <code>n_train</code>
+            </td>
             <td>
                   <code>int | float</code>
             </td>
@@ -3103,7 +3435,9 @@ which case it contains new (empty) <code>LabeledFrame</code> objects with <code>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>n_val</code></td>
+            <td>
+                <code>n_val</code>
+            </td>
             <td>
                   <code>int | float | None</code>
             </td>
@@ -3120,7 +3454,9 @@ training split.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>n_test</code></td>
+            <td>
+                <code>n_test</code>
+            </td>
             <td>
                   <code>int | float | None</code>
             </td>
@@ -3135,7 +3471,9 @@ test split will not be saved.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>save_dir</code></td>
+            <td>
+                <code>save_dir</code>
+            </td>
             <td>
                   <code>str | <span title="pathlib.Path">Path</span> | None</code>
             </td>
@@ -3149,7 +3487,9 @@ test split will not be saved.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>seed</code></td>
+            <td>
+                <code>seed</code>
+            </td>
             <td>
                   <code>int | None</code>
             </td>
@@ -3163,7 +3503,9 @@ test split will not be saved.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>embed</code></td>
+            <td>
+                <code>embed</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -3362,7 +3704,9 @@ frames with user labeled data (the source labels are not affected).</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>video</code></td>
+            <td>
+                <code>video</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a>, int]]</code>
             </td>
@@ -3377,7 +3721,9 @@ default), uses the first video.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>untracked</code></td>
+            <td>
+                <code>untracked</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -3393,7 +3739,9 @@ arbitrary order.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>return_confidence</code></td>
+            <td>
+                <code>return_confidence</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -3565,7 +3913,9 @@ function primarily for single-video prediction results.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>nodes</code></td>
+            <td>
+                <code>nodes</code>
+            </td>
             <td>
                   <code>list[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>]</code>
             </td>
@@ -3579,7 +3929,9 @@ function primarily for single-video prediction results.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a> | None</code>
             </td>
@@ -3696,7 +4048,9 @@ be removed.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>clean</code></td>
+            <td>
+                <code>clean</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -3770,7 +4124,9 @@ frames or instances with no visible points.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>name_map</code></td>
+            <td>
+                <code>name_map</code>
+            </td>
             <td>
                   <code>dict[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>, str] | list[str]</code>
             </td>
@@ -3788,7 +4144,9 @@ nodes, the nodes will be renamed to the names in the list in order.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a> | None</code>
             </td>
@@ -3931,7 +4289,9 @@ labels.skeleton.node_names
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>new_order</code></td>
+            <td>
+                <code>new_order</code>
+            </td>
             <td>
                   <code>list[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>]</code>
             </td>
@@ -3946,7 +4306,9 @@ new order of the nodes.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a> | None</code>
             </td>
@@ -4063,7 +4425,9 @@ skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>new_filenames</code></td>
+            <td>
+                <code>new_filenames</code>
+            </td>
             <td>
                   <code>list[str | <span title="pathlib.Path">Path</span>] | None</code>
             </td>
@@ -4078,7 +4442,9 @@ number of videos in the labels.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>filename_map</code></td>
+            <td>
+                <code>filename_map</code>
+            </td>
             <td>
                   <code>dict[str | <span title="pathlib.Path">Path</span>, str | <span title="pathlib.Path">Path</span>] | None</code>
             </td>
@@ -4093,7 +4459,9 @@ number of videos in the labels.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>prefix_map</code></td>
+            <td>
+                <code>prefix_map</code>
+            </td>
             <td>
                   <code>dict[str | <span title="pathlib.Path">Path</span>, str | <span title="pathlib.Path">Path</span>] | None</code>
             </td>
@@ -4223,7 +4591,9 @@ number of videos in the labels.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>new_skeleton</code></td>
+            <td>
+                <code>new_skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a></code>
             </td>
@@ -4237,7 +4607,9 @@ number of videos in the labels.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>old_skeleton</code></td>
+            <td>
+                <code>old_skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a> | None</code>
             </td>
@@ -4253,7 +4625,9 @@ otherwise.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>node_map</code></td>
+            <td>
+                <code>node_map</code>
+            </td>
             <td>
                   <code>dict[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>, <span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>] | None</code>
             </td>
@@ -4399,7 +4773,9 @@ have the old skeleton. <strong>All point data associated with nodes not in the
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>old_videos</code></td>
+            <td>
+                <code>old_videos</code>
+            </td>
             <td>
                   <code>list[<a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a>] | None</code>
             </td>
@@ -4413,7 +4789,9 @@ have the old skeleton. <strong>All point data associated with nodes not in the
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>new_videos</code></td>
+            <td>
+                <code>new_videos</code>
+            </td>
             <td>
                   <code>list[<a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a>] | None</code>
             </td>
@@ -4427,7 +4805,9 @@ have the old skeleton. <strong>All point data associated with nodes not in the
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>video_map</code></td>
+            <td>
+                <code>video_map</code>
+            </td>
             <td>
                   <code>dict[<a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a>, <a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a>] | None</code>
             </td>
@@ -4514,7 +4894,9 @@ values are the new videos.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -4528,7 +4910,9 @@ values are the new videos.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>format</code></td>
+            <td>
+                <code>format</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[str]</code>
             </td>
@@ -4544,7 +4928,9 @@ inferred from the file extension. Available formats are <code>"slp"</code>,
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>embed</code></td>
+            <td>
+                <code>embed</code>
+            </td>
             <td>
                   <code>bool | str | list[tuple[<a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a>, int]] | None</code>
             </td>
@@ -4635,7 +5021,9 @@ video will be restored if available.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>n</code></td>
+            <td>
+                <code>n</code>
+            </td>
             <td>
                   <code>int | float</code>
             </td>
@@ -4651,7 +5039,9 @@ a fraction of the total labeled frames.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>seed</code></td>
+            <td>
+                <code>seed</code>
+            </td>
             <td>
                   <code>int | None</code>
             </td>
@@ -4778,7 +5168,9 @@ assigned to both splits.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>save_path</code></td>
+            <td>
+                <code>save_path</code>
+            </td>
             <td>
                   <code>str | <span title="pathlib.Path">Path</span></code>
             </td>
@@ -4793,7 +5185,9 @@ same base name but with .mp4 extension.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>frame_inds</code></td>
+            <td>
+                <code>frame_inds</code>
+            </td>
             <td>
                   <code>list[int] | <span title="numpy.ndarray">ndarray</span></code>
             </td>
@@ -4808,7 +5202,9 @@ frame integers.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>video</code></td>
+            <td>
+                <code>video</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a> | int | None</code>
             </td>
@@ -4823,7 +5219,9 @@ specified for single-video projects.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>video_kwargs</code></td>
+            <td>
+                <code>video_kwargs</code>
+            </td>
             <td>
                   <code>dict[str, <span title="typing.Any">Any</span>] | None</code>
             </td>
@@ -5166,7 +5564,7 @@ labeled frames, instances and suggestions.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

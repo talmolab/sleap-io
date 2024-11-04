@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1054,6 +1054,116 @@
 
 
 
+
+
+
+
+
+
+<p><span class="doc-section-title">Functions:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.convert_labels" href="#sleap_io.io.jabs.convert_labels">convert_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Convert a <code>Labels</code> object into JABS-formatted annotations.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.get_max_ids_in_video" href="#sleap_io.io.jabs.get_max_ids_in_video">get_max_ids_in_video</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Determine the maximum number of identities that exist at the same time.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.make_simple_skeleton" href="#sleap_io.io.jabs.make_simple_skeleton">make_simple_skeleton</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Create a <code>Skeleton</code> with a requested number of nodes attached in a line.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.prediction_to_instance" href="#sleap_io.io.jabs.prediction_to_instance">prediction_to_instance</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Create an <code>Instance</code> from prediction data.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.read_labels" href="#sleap_io.io.jabs.read_labels">read_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read JABS style pose from a file and return a <code>Labels</code> object.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.tracklets_to_v3" href="#sleap_io.io.jabs.tracklets_to_v3">tracklets_to_v3</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Changes identity tracklets to the v3 format specifications.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.write_jabs_v2" href="#sleap_io.io.jabs.write_jabs_v2">write_jabs_v2</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write JABS pose file v2 data to file.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.write_jabs_v3" href="#sleap_io.io.jabs.write_jabs_v3">write_jabs_v3</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write JABS pose file v3 data to file.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.write_jabs_v4" href="#sleap_io.io.jabs.write_jabs_v4">write_jabs_v4</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write JABS pose file v4 data to file.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.write_jabs_v5" href="#sleap_io.io.jabs.write_jabs_v5">write_jabs_v5</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write JABS pose file v5 data to file.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.jabs.write_labels" href="#sleap_io.io.jabs.write_labels">write_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Convert and save a SLEAP <code>Labels</code> object to a JABS pose file.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1090,7 +1200,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>all_labels</code></td>
+            <td>
+                <code>all_labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -1104,7 +1216,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>video</code></td>
+            <td>
+                <code>video</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a></code>
             </td>
@@ -1259,7 +1373,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a>]</code>
             </td>
@@ -1273,7 +1389,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>key</code></td>
+            <td>
+                <code>key</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1362,7 +1480,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>name</code></td>
+            <td>
+                <code>name</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1376,7 +1496,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>num_points</code></td>
+            <td>
+                <code>num_points</code>
+            </td>
             <td>
                   <code>int</code>
             </td>
@@ -1462,7 +1584,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>data</code></td>
+            <td>
+                <code>data</code>
+            </td>
             <td>
                   <code><span title="typing.Union">Union</span>[<span title="numpy.ndarray">ndarray</span>[<span title="numpy.uint16">uint16</span>], <span title="numpy.ndarray">ndarray</span>[<span title="numpy.float32">float32</span>]]</code>
             </td>
@@ -1476,7 +1600,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>confidence</code></td>
+            <td>
+                <code>confidence</code>
+            </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span>[<span title="numpy.float32">float32</span>]</code>
             </td>
@@ -1490,7 +1616,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a></code>
             </td>
@@ -1504,7 +1632,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>track</code></td>
+            <td>
+                <code>track</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Track" href="../../../../model/#sleap_io.Track">Track</a></code>
             </td>
@@ -1615,7 +1745,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels_path</code></td>
+            <td>
+                <code>labels_path</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1629,7 +1761,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>skeleton</code></td>
+            <td>
+                <code>skeleton</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="sleap_io.Skeleton" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>]</code>
             </td>
@@ -1814,7 +1948,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>tracklet_matrix</code></td>
+            <td>
+                <code>tracklet_matrix</code>
+            </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span></code>
             </td>
@@ -1925,7 +2061,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>data</code></td>
+            <td>
+                <code>data</code>
+            </td>
             <td>
                   <code>dict</code>
             </td>
@@ -1939,7 +2077,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2016,7 +2156,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>data</code></td>
+            <td>
+                <code>data</code>
+            </td>
             <td>
                   <code>dict</code>
             </td>
@@ -2030,7 +2172,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2129,7 +2273,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>data</code></td>
+            <td>
+                <code>data</code>
+            </td>
             <td>
                   <code>dict</code>
             </td>
@@ -2143,7 +2289,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2241,7 +2389,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>data</code></td>
+            <td>
+                <code>data</code>
+            </td>
             <td>
                   <code>dict</code>
             </td>
@@ -2255,7 +2405,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2329,7 +2481,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -2343,7 +2497,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>pose_version</code></td>
+            <td>
+                <code>pose_version</code>
+            </td>
             <td>
                   <code>int</code>
             </td>
@@ -2357,7 +2513,9 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>root_folder</code></td>
+            <td>
+                <code>root_folder</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2585,7 +2743,7 @@ TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should b
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1056,6 +1056,36 @@ a video and its components used in SLEAP.</p>
 
 
 
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video" href="#sleap_io.model.video.Video">Video</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>Video</code> class used by sleap to represent videos and data associated with them.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1172,6 +1202,171 @@ the file.</p>
 two <code>Video</code> instances with the same attributes will NOT be considered equal in a
 set or dict.</p>
 </details>        <p>See also: VideoBackend</p>
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.__attrs_post_init__" href="#sleap_io.model.video.Video.__attrs_post_init__">__attrs_post_init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Post init syntactic sugar.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.__deepcopy__" href="#sleap_io.model.video.Video.__deepcopy__">__deepcopy__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Deep copy the video object.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.__getitem__" href="#sleap_io.model.video.Video.__getitem__">__getitem__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the frames of the video at the given indices.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.__len__" href="#sleap_io.model.video.Video.__len__">__len__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the length of the video as the number of frames.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.__repr__" href="#sleap_io.model.video.Video.__repr__">__repr__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Informal string representation (for print or format).</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.__str__" href="#sleap_io.model.video.Video.__str__">__str__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Informal string representation (for print or format).</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.close" href="#sleap_io.model.video.Video.close">close</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Close the video backend.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.exists" href="#sleap_io.model.video.Video.exists">exists</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Check if the video file exists and is accessible.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.from_filename" href="#sleap_io.model.video.Video.from_filename">from_filename</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Create a Video from a filename.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.open" href="#sleap_io.model.video.Video.open">open</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Open the video backend for reading.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.replace_filename" href="#sleap_io.model.video.Video.replace_filename">replace_filename</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Update the filename of the video, optionally opening the backend.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.save" href="#sleap_io.model.video.Video.save">save</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Save video frames to a new video file.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.grayscale" href="#sleap_io.model.video.Video.grayscale">grayscale</a></code></td>
+            <td>
+                  <code>bool | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return whether the video is grayscale.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.is_open" href="#sleap_io.model.video.Video.is_open">is_open</a></code></td>
+            <td>
+                  <code>bool</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Check if the video backend is open.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.video.Video.shape" href="#sleap_io.model.video.Video.shape">shape</a></code></td>
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[int, int, int, int] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Return the shape of the video as (num_frames, height, width, channels).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
               <details class="quote">
                 <summary>Source code in <code>sleap_io/model/video.py</code></summary>
@@ -1761,7 +1956,9 @@ this will return None.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>inds</code></td>
+            <td>
+                <code>inds</code>
+            </td>
             <td>
                   <code>int | list[int] | slice</code>
             </td>
@@ -1983,7 +2180,9 @@ of indices is provided.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>check_all</code></td>
+            <td>
+                <code>check_all</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -1998,7 +2197,9 @@ of indices is provided.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>dataset</code></td>
+            <td>
+                <code>dataset</code>
+            </td>
             <td>
                   <code>str | None</code>
             </td>
@@ -2118,7 +2319,9 @@ return <code>False</code> if the dataset does not exist.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str | list[str]</code>
             </td>
@@ -2135,7 +2338,9 @@ expected. If filename is a folder, it will be searched for images.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>dataset</code></td>
+            <td>
+                <code>dataset</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[str]</code>
             </td>
@@ -2149,7 +2354,9 @@ expected. If filename is a folder, it will be searched for images.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>grayscale</code></td>
+            <td>
+                <code>grayscale</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[bool]</code>
             </td>
@@ -2164,7 +2371,9 @@ load.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>keep_open</code></td>
+            <td>
+                <code>keep_open</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2181,7 +2390,9 @@ which may enhance the performance of reading multiple frames.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>source_video</code></td>
+            <td>
+                <code>source_video</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="sleap_io.model.video.Video" href="#sleap_io.model.video.Video">Video</a>]</code>
             </td>
@@ -2298,7 +2509,9 @@ another video.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[str]</code>
             </td>
@@ -2313,7 +2526,9 @@ the video object.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>dataset</code></td>
+            <td>
+                <code>dataset</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[str]</code>
             </td>
@@ -2327,7 +2542,9 @@ the video object.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>grayscale</code></td>
+            <td>
+                <code>grayscale</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[str]</code>
             </td>
@@ -2342,7 +2559,9 @@ load.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>keep_open</code></td>
+            <td>
+                <code>keep_open</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2467,7 +2686,9 @@ specified.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>new_filename</code></td>
+            <td>
+                <code>new_filename</code>
+            </td>
             <td>
                   <code>str | <span title="pathlib.Path">Path</span> | list[str] | list[<span title="pathlib.Path">Path</span>]</code>
             </td>
@@ -2481,7 +2702,9 @@ specified.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>open</code></td>
+            <td>
+                <code>open</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -2558,7 +2781,9 @@ the new filename does not exist, no error is raised.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>save_path</code></td>
+            <td>
+                <code>save_path</code>
+            </td>
             <td>
                   <code>str | <span title="pathlib.Path">Path</span></code>
             </td>
@@ -2572,7 +2797,9 @@ the new filename does not exist, no error is raised.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>frame_inds</code></td>
+            <td>
+                <code>frame_inds</code>
+            </td>
             <td>
                   <code>list[int] | <span title="numpy.ndarray">ndarray</span> | None</code>
             </td>
@@ -2587,7 +2814,9 @@ frame integers. If not specified, saves all video frames.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>video_kwargs</code></td>
+            <td>
+                <code>video_kwargs</code>
+            </td>
             <td>
                   <code>dict[str, <span title="typing.Any">Any</span>] | None</code>
             </td>
@@ -2844,7 +3073,7 @@ frame integers. If not specified, saves all video frames.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

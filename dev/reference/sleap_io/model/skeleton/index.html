@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1057,6 +1057,81 @@ differently depending on the underlying pose model.</p>
 
 
 
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Edge" href="#sleap_io.model.skeleton.Edge">Edge</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>A connection between two <code>Node</code> objects within a <code>Skeleton</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Node" href="#sleap_io.model.skeleton.Node">Node</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>A landmark type within a <code>Skeleton</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton" href="#sleap_io.model.skeleton.Skeleton">Skeleton</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>A description of a set of landmark types and connections between them.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Symmetry" href="#sleap_io.model.skeleton.Symmetry">Symmetry</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>A relationship between a pair of nodes denoting their left/right pairing.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Functions:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.is_node_or_index" href="#sleap_io.model.skeleton.is_node_or_index">is_node_or_index</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Check if an object is a <code>Node</code>, string name or integer index.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1119,6 +1194,36 @@ tree.</p>
           </tr>
       </tbody>
     </table>
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Edge.__getitem__" href="#sleap_io.model.skeleton.Edge.__getitem__">__getitem__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the source <code>Node</code> (<code>idx</code> is 0) or destination <code>Node</code> (<code>idx</code> is 1).</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
 
               <details class="quote">
                 <summary>Source code in <code>sleap_io/model/skeleton.py</code></summary>
@@ -1240,6 +1345,15 @@ eye".</p>
       </tbody>
     </table>
 
+
+
+
+
+
+
+
+
+
               <details class="quote">
                 <summary>Source code in <code>sleap_io/model/skeleton.py</code></summary>
                 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-14" name="__codelineno-0-14"></a><a href="#__codelineno-0-14"><span class="linenos" data-linenos="14 "></span></a><span class="nd">@define</span><span class="p">(</span><span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -1353,6 +1467,249 @@ indices of symmetric landmarks.</p>
             <td>
               <div class="doc-md-description">
                 <p>A descriptive name for the <code>Skeleton</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.__attrs_post_init__" href="#sleap_io.model.skeleton.Skeleton.__attrs_post_init__">__attrs_post_init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Ensure nodes are <code>Node</code>s, edges are <code>Edge</code>s, and <code>Node</code> map is updated.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.__contains__" href="#sleap_io.model.skeleton.Skeleton.__contains__">__contains__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Check if a node is in the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.__getitem__" href="#sleap_io.model.skeleton.Skeleton.__getitem__">__getitem__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return a <code>Node</code> when indexing by name or integer.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.__len__" href="#sleap_io.model.skeleton.Skeleton.__len__">__len__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the number of nodes in the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.__repr__" href="#sleap_io.model.skeleton.Skeleton.__repr__">__repr__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return a readable representation of the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.add_edge" href="#sleap_io.model.skeleton.Skeleton.add_edge">add_edge</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Add an <code>Edge</code> to the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.add_edges" href="#sleap_io.model.skeleton.Skeleton.add_edges">add_edges</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Add multiple <code>Edge</code>s to the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.add_node" href="#sleap_io.model.skeleton.Skeleton.add_node">add_node</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Add a <code>Node</code> to the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.add_nodes" href="#sleap_io.model.skeleton.Skeleton.add_nodes">add_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Add multiple <code>Node</code>s to the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.add_symmetry" href="#sleap_io.model.skeleton.Skeleton.add_symmetry">add_symmetry</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Add a symmetry relationship to the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.get_flipped_node_inds" href="#sleap_io.model.skeleton.Skeleton.get_flipped_node_inds">get_flipped_node_inds</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Returns node indices that should be switched when horizontally flipping.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.index" href="#sleap_io.model.skeleton.Skeleton.index">index</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the index of a node specified as a <code>Node</code> or string name.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.rebuild_cache" href="#sleap_io.model.skeleton.Skeleton.rebuild_cache">rebuild_cache</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Rebuild the node name/index to <code>Node</code> map caches.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.remove_node" href="#sleap_io.model.skeleton.Skeleton.remove_node">remove_node</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Remove a single node from the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.remove_nodes" href="#sleap_io.model.skeleton.Skeleton.remove_nodes">remove_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Remove nodes from the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.rename_node" href="#sleap_io.model.skeleton.Skeleton.rename_node">rename_node</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Rename a single node in the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.rename_nodes" href="#sleap_io.model.skeleton.Skeleton.rename_nodes">rename_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Rename nodes in the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.reorder_nodes" href="#sleap_io.model.skeleton.Skeleton.reorder_nodes">reorder_nodes</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Reorder nodes in the skeleton.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.require_node" href="#sleap_io.model.skeleton.Skeleton.require_node">require_node</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return a <code>Node</code> object, handling indexing and adding missing nodes.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.edge_inds" href="#sleap_io.model.skeleton.Skeleton.edge_inds">edge_inds</a></code></td>
+            <td>
+                  <code>list[tuple[int, int]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Edges indices as a list of 2-tuples.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.edge_names" href="#sleap_io.model.skeleton.Skeleton.edge_names">edge_names</a></code></td>
+            <td>
+                  <code>list[str, str]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Edge names as a list of 2-tuples with string node names.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.node_names" href="#sleap_io.model.skeleton.Skeleton.node_names">node_names</a></code></td>
+            <td>
+                  <code>list[str]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Names of the nodes associated with this skeleton as a list of strings.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.symmetry_inds" href="#sleap_io.model.skeleton.Skeleton.symmetry_inds">symmetry_inds</a></code></td>
+            <td>
+                  <code>list[tuple[int, int]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Symmetry indices as a list of 2-tuples.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Skeleton.symmetry_names" href="#sleap_io.model.skeleton.Skeleton.symmetry_names">symmetry_names</a></code></td>
+            <td>
+                  <code>list[str, str]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Symmetry names as a list of 2-tuples with string node names.</p>
               </div>
             </td>
           </tr>
@@ -2155,7 +2512,9 @@ indices of symmetric landmarks.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>src</code></td>
+            <td>
+                <code>src</code>
+            </td>
             <td>
                   <code><span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span> | <a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Edge" href="#sleap_io.model.skeleton.Edge">Edge</a> | tuple[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>, <span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>]</code>
             </td>
@@ -2169,7 +2528,9 @@ indices of symmetric landmarks.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>dst</code></td>
+            <td>
+                <code>dst</code>
+            </td>
             <td>
                   <code><span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span> | None</code>
             </td>
@@ -2247,7 +2608,9 @@ indices of symmetric landmarks.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>edges</code></td>
+            <td>
+                <code>edges</code>
+            </td>
             <td>
                   <code>list[<a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Edge" href="#sleap_io.model.skeleton.Edge">Edge</a> | tuple[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>, <span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>]]</code>
             </td>
@@ -2305,7 +2668,9 @@ indices of symmetric landmarks.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>node</code></td>
+            <td>
+                <code>node</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Node" href="#sleap_io.model.skeleton.Node">Node</a> | str</code>
             </td>
@@ -2403,7 +2768,9 @@ not specified as a <code>Node</code> or string.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>nodes</code></td>
+            <td>
+                <code>nodes</code>
+            </td>
             <td>
                   <code>list[<a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Node" href="#sleap_io.model.skeleton.Node">Node</a> | str]</code>
             </td>
@@ -2461,7 +2828,9 @@ not specified as a <code>Node</code> or string.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>node1</code></td>
+            <td>
+                <code>node1</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Symmetry" href="#sleap_io.model.skeleton.Symmetry">Symmetry</a> | <span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span></code>
             </td>
@@ -2476,7 +2845,9 @@ object is provided, it will be added directly to the skeleton.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>node2</code></td>
+            <td>
+                <code>node2</code>
+            </td>
             <td>
                   <code><span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span> | None</code>
             </td>
@@ -2655,7 +3026,9 @@ array([[0, 0],
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>nodes</code></td>
+            <td>
+                <code>nodes</code>
+            </td>
             <td>
                   <code>list[<a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Node" href="#sleap_io.model.skeleton.Node">Node</a>] | None</code>
             </td>
@@ -2743,7 +3116,9 @@ list directly.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>node</code></td>
+            <td>
+                <code>node</code>
+            </td>
             <td>
                   <code><span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span></code>
             </td>
@@ -2837,7 +3212,9 @@ update all contained instances to reflect the changes made to the skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>nodes</code></td>
+            <td>
+                <code>nodes</code>
+            </td>
             <td>
                   <code>list[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>]</code>
             </td>
@@ -2952,7 +3329,9 @@ update all contained to reflect the changes made to the skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>old_name</code></td>
+            <td>
+                <code>old_name</code>
+            </td>
             <td>
                   <code><span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span></code>
             </td>
@@ -2967,7 +3346,9 @@ integer index or <code>Node</code> object.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>new_name</code></td>
+            <td>
+                <code>new_name</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -3026,7 +3407,9 @@ integer index or <code>Node</code> object.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>name_map</code></td>
+            <td>
+                <code>name_map</code>
+            </td>
             <td>
                   <code>dict[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>, str] | list[str]</code>
             </td>
@@ -3185,7 +3568,9 @@ skel.node_names
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>new_order</code></td>
+            <td>
+                <code>new_order</code>
+            </td>
             <td>
                   <code>list[<span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span>]</code>
             </td>
@@ -3319,7 +3704,9 @@ reflect the changes made to the skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>node</code></td>
+            <td>
+                <code>node</code>
+            </td>
             <td>
                   <code><span title="sleap_io.model.skeleton.NodeOrIndex">NodeOrIndex</span></code>
             </td>
@@ -3333,7 +3720,9 @@ reflect the changes made to the skeleton.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>add_missing</code></td>
+            <td>
+                <code>add_missing</code>
+            </td>
             <td>
                   <code>bool</code>
             </td>
@@ -3481,6 +3870,44 @@ reflect the changes made to the skeleton.</p>
       </tbody>
     </table>
 
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Symmetry.__getitem__" href="#sleap_io.model.skeleton.Symmetry.__getitem__">__getitem__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return the first node.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.skeleton.Symmetry.__iter__" href="#sleap_io.model.skeleton.Symmetry.__iter__">__iter__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Iterate over the symmetric nodes.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
               <details class="quote">
                 <summary>Source code in <code>sleap_io/model/skeleton.py</code></summary>
                 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-53" name="__codelineno-0-53"></a><a href="#__codelineno-0-53"><span class="linenos" data-linenos="53 "></span></a><span class="nd">@define</span>
@@ -3602,7 +4029,9 @@ reflect the changes made to the skeleton.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>obj</code></td>
+            <td>
+                <code>obj</code>
+            </td>
             <td>
                   <code><span title="typing.Any">Any</span></code>
             </td>
@@ -3818,7 +4247,7 @@ to <code>isinstance(obj, NodeOrIndex)</code>.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

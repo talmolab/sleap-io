@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1054,6 +1054,36 @@
 
 
 
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter" href="#sleap_io.io.video_writing.VideoWriter">VideoWriter</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Simple video writer using imageio and FFMPEG.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1186,6 +1216,84 @@ closed after writing. For example:</p>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">writer</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
 </code></pre></div>
 </details>
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter.__call__" href="#sleap_io.io.video_writing.VideoWriter.__call__">__call__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write a frame to the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter.__enter__" href="#sleap_io.io.video_writing.VideoWriter.__enter__">__enter__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Context manager entry.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter.__exit__" href="#sleap_io.io.video_writing.VideoWriter.__exit__">__exit__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Context manager exit.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter.build_output_params" href="#sleap_io.io.video_writing.VideoWriter.build_output_params">build_output_params</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Build the output parameters for FFMPEG.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter.close" href="#sleap_io.io.video_writing.VideoWriter.close">close</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Close the video writer.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter.open" href="#sleap_io.io.video_writing.VideoWriter.open">open</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Open the video writer.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.video_writing.VideoWriter.write_frame" href="#sleap_io.io.video_writing.VideoWriter.write_frame">write_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write a frame to the video.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
               <details class="quote">
                 <summary>Source code in <code>sleap_io/io/video_writing.py</code></summary>
                 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-13" name="__codelineno-0-13"></a><a href="#__codelineno-0-13"><span class="linenos" data-linenos=" 13 "></span></a><span class="nd">@attrs</span><span class="o">.</span><span class="n">define</span>
@@ -1336,7 +1444,9 @@ closed after writing. For example:</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>frame</code></td>
+            <td>
+                <code>frame</code>
+            </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span></code>
             </td>
@@ -1543,7 +1653,9 @@ dimensions (height, width) or (height, width, channels).</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>frame</code></td>
+            <td>
+                <code>frame</code>
+            </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span></code>
             </td>
@@ -1761,7 +1873,7 @@ dimensions (height, width) or (height, width, channels).</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.0253249f.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -1054,6 +1054,100 @@
 
 
 
+
+
+
+
+
+
+<p><span class="doc-section-title">Functions:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.append_nwb" href="#sleap_io.io.nwb.append_nwb">append_nwb</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Append a SLEAP <code>Labels</code> object to an existing NWB data file.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.append_nwb_data" href="#sleap_io.io.nwb.append_nwb_data">append_nwb_data</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Append data from a Labels object to an in-memory nwb file.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.build_pose_estimation_container_for_track" href="#sleap_io.io.nwb.build_pose_estimation_container_for_track">build_pose_estimation_container_for_track</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Create a PoseEstimation container for a track.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.build_track_pose_estimation_list" href="#sleap_io.io.nwb.build_track_pose_estimation_list">build_track_pose_estimation_list</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Build a list of PoseEstimationSeries from tracks.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.convert_predictions_to_dataframe" href="#sleap_io.io.nwb.convert_predictions_to_dataframe">convert_predictions_to_dataframe</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Convert predictions data to a Pandas dataframe.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.get_processing_module_for_video" href="#sleap_io.io.nwb.get_processing_module_for_video">get_processing_module_for_video</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Auxiliary function to create a processing module.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.get_timestamps" href="#sleap_io.io.nwb.get_timestamps">get_timestamps</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return a vector of timestamps for a <code>PoseEstimationSeries</code>.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.read_nwb" href="#sleap_io.io.nwb.read_nwb">read_nwb</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Read an NWB formatted file to a SLEAP <code>Labels</code> object.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="sleap_io.io.nwb.write_nwb" href="#sleap_io.io.nwb.write_nwb">write_nwb</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write labels to an nwb file and save it to the nwbfile_path given.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+
   <div class="doc doc-children">
 
 
@@ -1090,7 +1184,9 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -1104,7 +1200,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>filename</code></td>
+            <td>
+                <code>filename</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1118,7 +1216,9 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>pose_estimation_metadata</code></td>
+            <td>
+                <code>pose_estimation_metadata</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[dict]</code>
             </td>
@@ -1189,7 +1289,9 @@ for details.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -1203,7 +1305,9 @@ for details.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>nwbfile</code></td>
+            <td>
+                <code>nwbfile</code>
+            </td>
             <td>
                   <code><span title="pynwb.NWBFile">NWBFile</span></code>
             </td>
@@ -1217,7 +1321,9 @@ for details.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>pose_estimation_metadata</code></td>
+            <td>
+                <code>pose_estimation_metadata</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[dict]</code>
             </td>
@@ -1369,7 +1475,9 @@ see https://github.com/rly/ndx-pose for a full list or arguments.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels_data_df</code></td>
+            <td>
+                <code>labels_data_df</code>
+            </td>
             <td>
                   <code><span title="pandas.DataFrame">DataFrame</span></code>
             </td>
@@ -1384,7 +1492,9 @@ to the predicted instances associated to this labels object.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -1398,7 +1508,9 @@ to the predicted instances associated to this labels object.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>track_name</code></td>
+            <td>
+                <code>track_name</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1412,7 +1524,9 @@ to the predicted instances associated to this labels object.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>video</code></td>
+            <td>
+                <code>video</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Video" href="../../../../model/#sleap_io.Video">Video</a></code>
             </td>
@@ -1558,7 +1672,9 @@ node.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>track_data_df</code></td>
+            <td>
+                <code>track_data_df</code>
+            </td>
             <td>
                   <code><span title="pandas.DataFrame">DataFrame</span></code>
             </td>
@@ -1700,7 +1816,9 @@ One for each node.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -1870,7 +1988,9 @@ And it is indexed by the frames.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>processing_module_name</code></td>
+            <td>
+                <code>processing_module_name</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -1884,7 +2004,9 @@ And it is indexed by the frames.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>nwbfile</code></td>
+            <td>
+                <code>nwbfile</code>
+            </td>
             <td>
                   <code><span title="pynwb.NWBFile">NWBFile</span></code>
             </td>
@@ -2007,7 +2129,9 @@ And it is indexed by the frames.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>path</code></td>
+            <td>
+                <code>path</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2185,7 +2309,9 @@ And it is indexed by the frames.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code>labels</code></td>
+            <td>
+                <code>labels</code>
+            </td>
             <td>
                   <code><a class="autorefs autorefs-internal" title="sleap_io.Labels" href="../../../../model/#sleap_io.Labels">Labels</a></code>
             </td>
@@ -2199,7 +2325,9 @@ And it is indexed by the frames.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>nwbfile_path</code></td>
+            <td>
+                <code>nwbfile_path</code>
+            </td>
             <td>
                   <code>str</code>
             </td>
@@ -2213,7 +2341,9 @@ And it is indexed by the frames.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>nwb_file_kwargs</code></td>
+            <td>
+                <code>nwb_file_kwargs</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[dict]</code>
             </td>
@@ -2234,7 +2364,9 @@ https://pynwb.readthedocs.io/en/stable/pynwb.file.html#pynwb.file.NWBFile</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code>pose_estimation_metadata</code></td>
+            <td>
+                <code>pose_estimation_metadata</code>
+            </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[dict]</code>
             </td>
@@ -2499,7 +2631,7 @@ see https://github.com/rly/ndx-pose for a full list or arguments.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>
