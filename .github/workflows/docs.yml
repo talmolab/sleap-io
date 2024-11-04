@@ -5,6 +5,14 @@ on:
   release:
     types:
       - published
+  push:
+    # branches:
+    #   - main
+    paths:
+      - "sleap_io/**"
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
 
 jobs:
   docs:
@@ -35,3 +43,9 @@ jobs:
         shell: bash -l {0}
         run: |
             mike deploy --update-aliases --allow-empty --push --verbose "${{ github.event.release.tag_name }}" latest
+
+      - name: Build and upload docs (dev)
+        if: ${{ github.event_name == 'push' }}
+        shell: bash -l {0}
+        run: |
+            mike deploy --update-aliases --allow-empty --push --verbose dev
