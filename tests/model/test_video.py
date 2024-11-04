@@ -77,7 +77,7 @@ def test_video_open_close(centered_pair_low_quality_path, centered_pair_frame_pa
     video.close()
     assert video.is_open is False
     assert video.backend is None
-    assert video.shape is None
+    assert video.shape == (1100, 384, 384, 1)
 
     video.open()
     assert video.is_open is True
