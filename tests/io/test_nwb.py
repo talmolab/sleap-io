@@ -4,6 +4,7 @@ import datetime
 
 import numpy as np
 from pynwb import NWBFile, NWBHDF5IO
+from pynwb.file import Subject
 
 from sleap_io import load_slp
 from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps
@@ -28,16 +29,30 @@ def test_typical_case_append(nwbfile, slp_typical):
     labels = load_slp(slp_typical)
     nwbfile = append_nwb_data(labels, nwbfile)
 
-    # Test matching number of processing modules
+    # Test that behavior module exists
+    assert 'behavior' in nwbfile.processing
+    behavior_pm = nwbfile.processing['behavior']
+    
+    # Test that Skeletons container exists and has correct skeleton
+    assert 'Skeletons' in behavior_pm.data_interfaces
+    skeletons_container = behavior_pm.data_interfaces['Skeletons']
+    assert len(skeletons_container.skeletons) == len(labels.skeletons)
+    
+    # Test matching number of video processing modules
     number_of_videos = len(labels.videos)
-    assert len(nwbfile.processing) == number_of_videos
+    video_modules = [mod for mod in nwbfile.processing.keys() if 'SLEAP_VIDEO' in mod]
+    assert len(video_modules) == number_of_videos
 
-    # Test processing module naming
+    # Test processing module naming and content
     video_index = 0
     video = labels.videos[video_index]
     video_path = Path(video.filename)
     processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
     assert processing_module_name in nwbfile.processing
+
+    # Test device creation
+    device_name = f'camera_{video_index}'
+    assert device_name in nwbfile.devices
 
     processing_module = nwbfile.processing[processing_module_name]
     all_containers = processing_module.data_interfaces
@@ -48,11 +63,15 @@ def test_typical_case_append(nwbfile, slp_typical):
 
     # Test that the skeleton nodes are stored as nodes in containers
     pose_estimation_container = all_containers[container_name]
-    expected_node_names = [node.name for node in labels.skeletons[0]]
-    assert expected_node_names == pose_estimation_container.nodes
+    expected_skeleton_name = labels.skeletons[0].name
+    assert pose_estimation_container.skeleton.name == expected_skeleton_name
+    
+    # Test that skeleton nodes match
+    expected_node_names = labels.skeletons[0].node_names
+    assert expected_node_names == pose_estimation_container.skeleton.nodes
 
     # Test that each PoseEstimationSeries is named as a node
-    for node_name in pose_estimation_container.nodes:
+    for node_name in pose_estimation_container.skeleton.nodes:
         assert node_name in pose_estimation_container.pose_estimation_series
 
 
@@ -122,8 +141,7 @@ def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
     # Test that the value of scorer was overwritten
     for pose_estimation_container in processing_module.data_interfaces.values():
         assert pose_estimation_container.scorer == "overwritten_value"
-        all_nodes = pose_estimation_container.nodes
-        for node in all_nodes:
+        for node in pose_estimation_container.skeleton.nodes:
             pose_estimation_series = pose_estimation_container[node]
             if pose_estimation_series.rate:
                 assert pose_estimation_series.rate == expected_sampling_rate
@@ -133,10 +151,15 @@ def test_complex_case_append(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
     labels.clean(tracks=True)
     nwbfile = append_nwb_data(labels, nwbfile)
-
-    # Test matching number of processing modules
+    
+    # Test Skeletons container
+    assert 'behavior' in nwbfile.processing
+    behavior_pm = nwbfile.processing['behavior']
+    assert 'Skeletons' in behavior_pm.data_interfaces
+    
+    # Test matching number of processing modules plus the skeletonw
     number_of_videos = len(labels.videos)
-    assert len(nwbfile.processing) == number_of_videos
+    assert len(nwbfile.processing) == number_of_videos + 1
 
     # Test processing module naming
     video_index = 0
@@ -156,15 +179,17 @@ def test_complex_case_append(nwbfile, centered_pair):
         expected_track_name = f"track={track.name}"
         assert expected_track_name in extracted_container_names
 
-    # Test one PoseEstimation container
     container_name = "track=1"
     pose_estimation_container = all_containers[container_name]
-    # Test that the skeleton nodes are store as nodes in containers
-    expected_node_names = [node.name for node in labels.skeletons[0]]
-    assert expected_node_names == pose_estimation_container.nodes
+    
+    # Test skeleton reference and nodes
+    expected_skeleton_name = labels.skeletons[0].name
+    assert pose_estimation_container.skeleton.name == expected_skeleton_name
+    expected_node_names = labels.skeletons[0].node_names
+    assert expected_node_names == pose_estimation_container.skeleton.nodes
 
-    # Test that each PoseEstimationSeries is named as a node
-    for node_name in pose_estimation_container.nodes:
+    # Test pose estimation series
+    for node_name in pose_estimation_container.skeleton.nodes:
         assert node_name in pose_estimation_container.pose_estimation_series
 
 
@@ -232,10 +257,15 @@ def test_typical_case_write(slp_typical, tmp_path):
 
     with NWBHDF5IO(str(nwbfile_path), "r") as io:
         nwbfile = io.read()
-
-        # Test matching number of processing modules
+        
+        # Test Skeletons container exists
+        assert 'behavior' in nwbfile.processing
+        assert 'Skeletons' in nwbfile.processing['behavior'].data_interfaces
+        
+        # Test video modules
         number_of_videos = len(labels.videos)
-        assert len(nwbfile.processing) == number_of_videos
+        video_modules = [mod for mod in nwbfile.processing.keys() if 'SLEAP_VIDEO' in mod]
+        assert len(video_modules) == number_of_videos
 
 
 def test_get_timestamps(nwbfile, centered_pair):
@@ -243,7 +273,6 @@ def test_get_timestamps(nwbfile, centered_pair):
     labels.clean(tracks=True)
     nwbfile = append_nwb_data(labels, nwbfile)
     processing = nwbfile.processing["SLEAP_VIDEO_000_centered_pair_low_quality"]
-    assert True
 
     # explicit timestamps
     series = processing["track=1"]["head"]
