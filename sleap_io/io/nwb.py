@@ -497,6 +497,8 @@ def build_pose_estimation_container_for_track(
         labels (Labels): A general labels object
         track_name (str): The name of the track in labels.tracks
         video (Video): The video to which data belongs to
+        pose_estimation_metadata: (dict) Metadata for pose estimation. See `append_nwb_data`
+        skeleton_map: Mapping of skeleton names to NWB Skeleton objects
         skeleton_map: Mapping of skeleton names to NWB Skeleton objects
         devices: Optional list of recording devices
     Returns:
