@@ -30,17 +30,17 @@ def test_typical_case_append(nwbfile, slp_typical):
     nwbfile = append_nwb_data(labels, nwbfile)
 
     # Test that behavior module exists
-    assert 'behavior' in nwbfile.processing
-    behavior_pm = nwbfile.processing['behavior']
-    
+    assert "behavior" in nwbfile.processing
+    behavior_pm = nwbfile.processing["behavior"]
+
     # Test that Skeletons container exists and has correct skeleton
-    assert 'Skeletons' in behavior_pm.data_interfaces
-    skeletons_container = behavior_pm.data_interfaces['Skeletons']
+    assert "Skeletons" in behavior_pm.data_interfaces
+    skeletons_container = behavior_pm.data_interfaces["Skeletons"]
     assert len(skeletons_container.skeletons) == len(labels.skeletons)
-    
+
     # Test matching number of video processing modules
     number_of_videos = len(labels.videos)
-    video_modules = [mod for mod in nwbfile.processing.keys() if 'SLEAP_VIDEO' in mod]
+    video_modules = [mod for mod in nwbfile.processing.keys() if "SLEAP_VIDEO" in mod]
     assert len(video_modules) == number_of_videos
 
     # Test processing module naming and content
@@ -51,7 +51,7 @@ def test_typical_case_append(nwbfile, slp_typical):
     assert processing_module_name in nwbfile.processing
 
     # Test device creation
-    device_name = f'camera_{video_index}'
+    device_name = f"camera_{video_index}"
     assert device_name in nwbfile.devices
 
     processing_module = nwbfile.processing[processing_module_name]
@@ -65,7 +65,7 @@ def test_typical_case_append(nwbfile, slp_typical):
     pose_estimation_container = all_containers[container_name]
     expected_skeleton_name = labels.skeletons[0].name
     assert pose_estimation_container.skeleton.name == expected_skeleton_name
-    
+
     # Test that skeleton nodes match
     expected_node_names = labels.skeletons[0].node_names
     assert expected_node_names == pose_estimation_container.skeleton.nodes
@@ -151,12 +151,12 @@ def test_complex_case_append(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
     labels.clean(tracks=True)
     nwbfile = append_nwb_data(labels, nwbfile)
-    
+
     # Test Skeletons container
-    assert 'behavior' in nwbfile.processing
-    behavior_pm = nwbfile.processing['behavior']
-    assert 'Skeletons' in behavior_pm.data_interfaces
-    
+    assert "behavior" in nwbfile.processing
+    behavior_pm = nwbfile.processing["behavior"]
+    assert "Skeletons" in behavior_pm.data_interfaces
+
     # Test matching number of processing modules plus the skeletonw
     number_of_videos = len(labels.videos)
     assert len(nwbfile.processing) == number_of_videos + 1
@@ -181,7 +181,7 @@ def test_complex_case_append(nwbfile, centered_pair):
 
     container_name = "track=1"
     pose_estimation_container = all_containers[container_name]
-    
+
     # Test skeleton reference and nodes
     expected_skeleton_name = labels.skeletons[0].name
     assert pose_estimation_container.skeleton.name == expected_skeleton_name
@@ -257,14 +257,16 @@ def test_typical_case_write(slp_typical, tmp_path):
 
     with NWBHDF5IO(str(nwbfile_path), "r") as io:
         nwbfile = io.read()
-        
+
         # Test Skeletons container exists
-        assert 'behavior' in nwbfile.processing
-        assert 'Skeletons' in nwbfile.processing['behavior'].data_interfaces
-        
+        assert "behavior" in nwbfile.processing
+        assert "Skeletons" in nwbfile.processing["behavior"].data_interfaces
+
         # Test video modules
         number_of_videos = len(labels.videos)
-        video_modules = [mod for mod in nwbfile.processing.keys() if 'SLEAP_VIDEO' in mod]
+        video_modules = [
+            mod for mod in nwbfile.processing.keys() if "SLEAP_VIDEO" in mod
+        ]
         assert len(video_modules) == number_of_videos
 
 

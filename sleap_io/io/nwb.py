@@ -9,6 +9,7 @@ import re
 
 import pandas as pd  # type: ignore[import]
 import numpy as np
+
 try:
     from numpy.typing import ArrayLike
 except ImportError:
@@ -103,6 +104,7 @@ def get_timestamps(series: PoseEstimationSeries) -> np.ndarray:
     else:
         return np.arange(series.data.shape[0]) * series.rate + series.starting_time
 
+
 def read_nwb(path: str) -> Labels:
     """Read an NWB formatted file to a SLEAP `Labels` object.
 
@@ -117,13 +119,15 @@ def read_nwb(path: str) -> Labels:
         nwb_file_processing = read_nwbfile.processing
 
         # Get list of videos
-        video_keys: List[str] = [key for key in nwb_file_processing.keys() if "SLEAP_VIDEO" in key]
+        video_keys: List[str] = [
+            key for key in nwb_file_processing.keys() if "SLEAP_VIDEO" in key
+        ]
         video_tracks = dict()
 
         # Get track keys from first video's processing module
         test_processing_module: ProcessingModule = nwb_file_processing[video_keys[0]]
         track_keys: List[str] = list(test_processing_module.fields["data_interfaces"])
-        
+
         # Get first track's skeleton
         test_pose_estimation: PoseEstimation = test_processing_module[track_keys[0]]
         skeleton = test_pose_estimation.skeleton
@@ -140,8 +144,7 @@ def read_nwb(path: str) -> Labels:
                 for node_name in skeleton.nodes:
                     pose_estimation_series = pose_estimation[node_name]
                     timestamps = np.union1d(
-                        timestamps,
-                        get_timestamps(pose_estimation_series)
+                        timestamps, get_timestamps(pose_estimation_series)
                     )
             timestamps = np.sort(timestamps)
 
@@ -151,14 +154,13 @@ def read_nwb(path: str) -> Labels:
             n_nodes = len(skeleton.nodes)
             tracks_numpy = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, np.float32)
             confidence = np.full((n_frames, n_tracks, n_nodes), np.nan, np.float32)
-            
+
             for track_idx, track_key in enumerate(_track_keys):
                 pose_estimation = processing_module[track_key]
                 for node_idx, node_name in enumerate(skeleton.nodes):
                     pose_estimation_series = pose_estimation[node_name]
                     frame_inds = np.searchsorted(
-                        timestamps,
-                        get_timestamps(pose_estimation_series)
+                        timestamps, get_timestamps(pose_estimation_series)
                     )
                     tracks_numpy[frame_inds, track_idx, node_idx, :] = (
                         pose_estimation_series.data[:]
@@ -185,12 +187,14 @@ def read_nwb(path: str) -> Labels:
         video = Video(filename=video_fn)
         n_frames, n_tracks, n_nodes, _ = tracks_numpy.shape
         tracks = [Track(name=f"track{track_idx}") for track_idx in range(n_tracks)]
-        
+
         for frame_idx, (frame_pts, frame_confs) in enumerate(
             zip(tracks_numpy, confidence)
         ):
             insts: List[Union[Instance, PredictedInstance]] = []
-            for track, (inst_pts, inst_confs) in zip(tracks, zip(frame_pts, frame_confs)):
+            for track, (inst_pts, inst_confs) in zip(
+                tracks, zip(frame_pts, frame_confs)
+            ):
                 if np.isnan(inst_pts).all():
                     continue
                 insts.append(
@@ -206,54 +210,54 @@ def read_nwb(path: str) -> Labels:
                 lfs.append(
                     LabeledFrame(video=video, frame_idx=frame_idx, instances=insts)
                 )
-                
+
     labels = Labels(lfs)
     labels.provenance["filename"] = path
     return labels
+
 
 def create_skeleton_container(
     labels: Labels,
     nwbfile: NWBFile,
 ) -> Dict[str, Skeleton]:
     """Create NWB skeleton containers from SLEAP skeletons.
-    
+
     Args:
         labels: SLEAP Labels object containing skeleton definitions
         nwbfile: NWB file to add skeletons to
-        
+
     Returns:
         Dictionary mapping skeleton names to NWB Skeleton objects
     """
     skeleton_map = {}
     nwb_skeletons = []
-    
+
     # Get or create behavior processing module
-    behavior_pm = nwbfile.processing.get('behavior')
+    behavior_pm = nwbfile.processing.get("behavior")
     if behavior_pm is None:
         behavior_pm = nwbfile.create_processing_module(
-            name='behavior',
-            description='processed behavioral data'
+            name="behavior", description="processed behavioral data"
         )
-    
+
     # Check if Skeletons container already exists
     existing_skeletons = None
-    if 'Skeletons' in behavior_pm.data_interfaces:
-        existing_skeletons = behavior_pm.data_interfaces['Skeletons']
+    if "Skeletons" in behavior_pm.data_interfaces:
+        existing_skeletons = behavior_pm.data_interfaces["Skeletons"]
         # Add existing skeletons to our map
         for skeleton in existing_skeletons.skeletons:
             skeleton_map[skeleton.name] = skeleton
-    
+
     # Create new skeletons for ones that don't exist yet
     for sleap_skeleton in labels.skeletons:
         if sleap_skeleton.name not in skeleton_map:
             nwb_skeleton = Skeleton(
                 name=sleap_skeleton.name,
                 nodes=sleap_skeleton.node_names,
-                edges=np.array(sleap_skeleton.edge_inds, dtype='uint8'),
+                edges=np.array(sleap_skeleton.edge_inds, dtype="uint8"),
             )
             nwb_skeletons.append(nwb_skeleton)
             skeleton_map[sleap_skeleton.name] = nwb_skeleton
-    
+
     # If we have new skeletons to add
     if nwb_skeletons:
         if existing_skeletons is None:
@@ -264,9 +268,8 @@ def create_skeleton_container(
             # Add new skeletons to existing container
             for skeleton in nwb_skeletons:
                 existing_skeletons.add_skeleton(skeleton)
-    
-    return skeleton_map
 
+    return skeleton_map
 
 
 def write_nwb(
@@ -315,8 +318,6 @@ def write_nwb(
         "session_start_time", datetime.datetime.now(datetime.timezone.utc)
     )
     identifier = nwb_file_kwargs.get("identifier", str(uuid.uuid1()))
-    
-
 
     nwb_file_kwargs.update(
         session_description=session_description,
@@ -326,17 +327,11 @@ def write_nwb(
 
     nwbfile = NWBFile(**nwb_file_kwargs)
 
-        
     # Create skeleton containers first
     skeleton_map = create_skeleton_container(labels, nwbfile)
-    
+
     # Then append pose data
-    nwbfile = append_nwb_data(
-        labels,
-        nwbfile,
-        pose_estimation_metadata,
-        skeleton_map
-    )
+    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata, skeleton_map)
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
         io.write(nwbfile)
@@ -375,7 +370,7 @@ def append_nwb_data(
     pose_estimation_metadata = pose_estimation_metadata or dict()
     if skeleton_map is None:
         skeleton_map = create_skeleton_container(labels=labels, nwbfile=nwbfile)
-    
+
     # Extract default metadata
     provenance = labels.provenance
     default_metadata = dict(scorer=str(provenance))
@@ -394,9 +389,9 @@ def append_nwb_data(
 
         # Create device for the video
         device = nwbfile.create_device(
-            name=f'camera_{video_index}',
-            description=f'Camera for {video_path.name}',
-            manufacturer='Unknown'
+            name=f"camera_{video_index}",
+            description=f"Camera for {video_path.name}",
+            manufacturer="Unknown",
         )
 
         # Propagate video metadata
@@ -511,8 +506,7 @@ def build_pose_estimation_container_for_track(
     # Assuming only one skeleton per track
     skeleton_name = all_track_skeletons[0]
     sleap_skeleton = next(
-        skeleton for skeleton in labels.skeletons 
-        if skeleton.name == skeleton_name
+        skeleton for skeleton in labels.skeletons if skeleton.name == skeleton_name
     )
     nwb_skeleton = skeleton_map[skeleton_name]
 
@@ -552,14 +546,14 @@ def build_pose_estimation_container_for_track(
 
     return pose_estimation_container
 
+
 def build_track_pose_estimation_list(
-    track_data_df: pd.DataFrame,
-    timestamps: ArrayLike
+    track_data_df: pd.DataFrame, timestamps: ArrayLike
 ) -> List[PoseEstimationSeries]:
     """Build a list of PoseEstimationSeries from tracks.
 
     Args:
-        track_data_df: A pandas DataFrame containing the trajectories 
+        track_data_df: A pandas DataFrame containing the trajectories
             for all the nodes associated with a specific track.
         timestamps: Array of timestamps for the data points
 
@@ -610,8 +604,7 @@ def build_track_pose_estimation_list(
             # Video sample rates are ints but nwb expect floats
             rate = float(int(rate))
             pose_estimation_kwargs.update(
-                rate=rate,
-                starting_time=timestamps_for_data[0]
+                rate=rate, starting_time=timestamps_for_data[0]
             )
         else:
             pose_estimation_kwargs.update(timestamps=timestamps_for_data)
