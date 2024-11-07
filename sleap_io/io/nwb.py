@@ -131,8 +131,15 @@ def read_nwb(path: str) -> Labels:
         # Get first track's skeleton
         test_pose_estimation: PoseEstimation = test_processing_module[track_keys[0]]
         skeleton = test_pose_estimation.skeleton
+        skeleton_nodes = skeleton.nodes[:]
+        skeleton_edges = skeleton.edges[:]
 
-        for processing_module in nwb_file_processing.values():
+        # Filtering out behavior module with skeletons
+        pose_estimation_container_modules = [
+            nwb_file_processing[key] for key in video_keys
+        ]
+
+        for processing_module in pose_estimation_container_modules:
             # Get track keys
             _track_keys: List[str] = list(processing_module.fields["data_interfaces"])
             is_tracked: bool = re.sub("[0-9]+", "", _track_keys[0]) == "track"
@@ -177,8 +184,8 @@ def read_nwb(path: str) -> Labels:
 
     # Create SLEAP skeleton from NWB skeleton
     sleap_skeleton = SleapSkeleton(
-        nodes=skeleton.nodes,
-        edges=skeleton.edges.tolist(),
+        nodes=skeleton_nodes,
+        edges=skeleton_edges.tolist(),
     )
 
     # Add instances to labeled frames
@@ -244,8 +251,9 @@ def create_skeleton_container(
     if "Skeletons" in behavior_pm.data_interfaces:
         existing_skeletons = behavior_pm.data_interfaces["Skeletons"]
         # Add existing skeletons to our map
-        for skeleton in existing_skeletons.skeletons:
-            skeleton_map[skeleton.name] = skeleton
+        for skeleton_name in existing_skeletons.skeletons:
+            nwb_skeleton = existing_skeletons.skeletons[skeleton_name]
+            skeleton_map[skeleton_name] = nwb_skeleton
 
     # Create new skeletons for ones that don't exist yet
     for sleap_skeleton in labels.skeletons:
@@ -387,12 +395,15 @@ def append_nwb_data(
             processing_module_name, nwbfile
         )
 
-        # Create device for the video
-        device = nwbfile.create_device(
-            name=f"camera_{video_index}",
-            description=f"Camera for {video_path.name}",
-            manufacturer="Unknown",
-        )
+        device_name = f"camera_{video_index}"
+        if device_name in nwbfile.devices:
+            device = nwbfile.devices[device_name]
+        else:
+            device = nwbfile.create_device(
+                name=device_name,
+                description=f"Camera for {video_path.name}",
+                manufacturer="Unknown",
+            )
 
         # Propagate video metadata
         default_metadata["original_videos"] = [f"{video.filename}"]  # type: ignore
