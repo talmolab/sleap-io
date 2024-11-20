@@ -9,7 +9,6 @@ from sleap_io.model.camera import Camera
 
 def test_camera_name():
     """Test camera name converter always converts to string."""
-
     # During initialization
     camera = Camera(name=12)
     assert camera.name == "12"
@@ -25,7 +24,6 @@ def test_camera_name():
 
 def test_camera_matrix():
     """Test camera matrix converter and validator."""
-
     matrix_list = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     matrix_array = np.array(matrix_list)
 
@@ -48,7 +46,6 @@ def test_camera_matrix():
 
 def test_camera_distortions():
     """Test camera distortion converter and validator."""
-
     distortions_unraveled = [[1], [2], [3], [4], [5]]
     distortions_raveled = np.array(distortions_unraveled).ravel()
 
@@ -68,7 +65,6 @@ def test_camera_distortions():
 
 def test_camera_size():
     """Test camera size converter and validator."""
-
     size = (100, 200)
 
     # During initialization
@@ -96,7 +92,6 @@ def construct_extrinsic_matrix(rvec, tvec):
     Returns:
         Extrinsic matrix of camera of size (4, 4) and type float64.
     """
-
     extrinsic_matrix = np.eye(4)
     extrinsic_matrix[:3, :3] = cv2.Rodrigues(np.array(rvec))[0]
     extrinsic_matrix[:3, 3] = tvec
@@ -106,7 +101,6 @@ def construct_extrinsic_matrix(rvec, tvec):
 
 def test_camera_rvec():
     """Test camera rotation vector converter and validator."""
-
     rvec = [1, 2, 3]
 
     # During initialization
@@ -138,7 +132,6 @@ def test_camera_rvec():
 
 def test_camera_tvec():
     """Test camera translation vector converter and validator."""
-
     tvec = [1, 2, 3]
 
     # During initialization
@@ -167,7 +160,6 @@ def test_camera_tvec():
 
 def test_camera_extrinsic_matrix():
     """Test camera extrinsic matrix method."""
-
     # During initialization
 
     # ... with rvec and tvec
@@ -207,7 +199,6 @@ def test_camera_extrinsic_matrix():
 # TODO: Remove when implement triangulation without aniposelib
 def test_camera_aliases():
     """Test camera aliases for attributes."""
-
     camera = Camera(
         matrix=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
         dist=[[1], [2], [3], [4], [5]],
@@ -226,7 +217,6 @@ def test_camera_aliases():
 
 def test_camera_undistort_points():
     """Test camera undistort points method."""
-
     camera = Camera(
         matrix=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         dist=[[0], [0], [0], [0], [0]],
@@ -246,7 +236,6 @@ def test_camera_undistort_points():
 
 def test_camera_project():
     """Test camera project method."""
-
     camera = Camera(
         matrix=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         dist=[[0], [0], [0], [0], [0]],

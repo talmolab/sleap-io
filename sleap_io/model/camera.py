@@ -59,7 +59,6 @@ class Camera:
         Raises:
             ValueError: If attribute shape is not as expected.
         """
-
         # Define metadata for each attribute
         attr_metadata = {
             "matrix": {"shape": (3, 3), "type": np.ndarray},
@@ -87,7 +86,6 @@ class Camera:
 
     def __attrs_post_init__(self):
         """Initialize extrinsic matrix from rotation and translation vectors."""
-
         # Initialize extrinsic matrix
         self._extrinsic_matrix = np.eye(4, dtype="float64")
         self._extrinsic_matrix[:3, :3] = cv2.Rodrigues(self._rvec)[0]
@@ -100,7 +98,6 @@ class Camera:
         Returns:
             Rotation vector of camera of size 3.
         """
-
         return self._rvec
 
     @rvec.setter
@@ -123,7 +120,6 @@ class Camera:
         Returns:
             Translation vector of camera of size 3.
         """
-
         return self._tvec
 
     @tvec.setter
@@ -133,7 +129,6 @@ class Camera:
         Args:
             value: Translation vector of size 3.
         """
-
         self._tvec = value
 
         # Update extrinsic matrix
@@ -146,7 +141,6 @@ class Camera:
         Returns:
             Extrinsic matrix of camera of size 4 x 4.
         """
-
         return self._extrinsic_matrix
 
     @extrinsic_matrix.setter
@@ -156,7 +150,6 @@ class Camera:
         Args:
             value: Extrinsic matrix of size 4 x 4.
         """
-
         self._extrinsic_matrix = value
 
         # Update rotation and translation vectors
@@ -172,7 +165,6 @@ class Camera:
         Returns:
             Undistorted points of shape (N, 2).
         """
-
         shape = points.shape
         points = points.reshape(-1, 1, 2)
         out = cv2.undistortPoints(points, self.matrix, self.dist)
@@ -187,7 +179,6 @@ class Camera:
         Returns:
             Projected 2D points of shape (N, 1, 2).
         """
-
         points = points.reshape(-1, 1, 3)
         out, _ = cv2.projectPoints(
             points,
@@ -211,7 +202,6 @@ class Camera:
         Raises:
             AttributeError: If attribute does not exist.
         """
-
         if name in self.__attrs_attrs__:
             return getattr(self, name)
 
