@@ -4,7 +4,8 @@ import cv2
 import numpy as np
 import pytest
 
-from sleap_io.model.camera import Camera
+from sleap_io.model.camera import Camera, CameraGroup, RecordingSession
+from sleap_io.model.video import Video
 
 
 def test_camera_name():
@@ -196,25 +197,6 @@ def test_camera_extrinsic_matrix():
     np.testing.assert_array_equal(camera.tvec, tvec)
 
 
-# TODO: Remove when implement triangulation without aniposelib
-def test_camera_aliases():
-    """Test camera aliases for attributes."""
-    camera = Camera(
-        matrix=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-        dist=[[1], [2], [3], [4], [5]],
-        size=(100, 200),
-        rvec=[1, 2, 3],
-        tvec=[1, 2, 3],
-        name="camera",
-    )
-
-    # Test __getattr__ aliases
-    assert camera.get_name() == camera.name
-    np.testing.assert_array_equal(
-        camera.get_extrinsic_matrix(), camera.extrinsic_matrix
-    )
-
-
 def test_camera_undistort_points():
     """Test camera undistort points method."""
     camera = Camera(
@@ -250,5 +232,40 @@ def test_camera_project():
     assert projected_points.shape == (points.shape[0], 1, 2)
 
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+def test_camera_get_video():
+    """Test camera get video method."""
+    camera = Camera()
+    camera_group = CameraGroup(cameras=[camera])
+
+    # Test with no video
+    session = RecordingSession(camera_group=camera_group)
+    video = camera.get_video(session)
+    assert video is None
+
+    # Test with video
+    video = Video(filename="not/a/file.mp4")
+    session.add_video(video=video, camera=camera)
+    assert camera.get_video(session) is video
+
+    # Remove video
+    session.remove_video(video)
+    assert camera.get_video(session) is None
+
+
+# TODO: Remove when implement triangulation without aniposelib
+def test_camera_aliases():
+    """Test camera aliases for attributes."""
+    camera = Camera(
+        matrix=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+        dist=[[1], [2], [3], [4], [5]],
+        size=(100, 200),
+        rvec=[1, 2, 3],
+        tvec=[1, 2, 3],
+        name="camera",
+    )
+
+    # Test __getattr__ aliases
+    assert camera.get_name() == camera.name
+    np.testing.assert_array_equal(
+        camera.get_extrinsic_matrix(), camera.extrinsic_matrix
+    )
