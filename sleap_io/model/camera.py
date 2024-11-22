@@ -7,8 +7,88 @@ import cv2
 import numpy as np
 from attrs import define, field
 
+from sleap_io.model.video import Video
+
 
 @define
+class CameraGroup:
+    """A group of cameras used to record a multi-view `RecordingSession`.
+
+    Attributes:
+        cameras: List of `Camera` objects in the group.
+    """
+
+    cameras: list[Camera] = field(factory=list)
+
+
+@define(eq=False)  # Set eq to false to make class hashable
+class RecordingSession:
+    """A recording session with multiple cameras.
+
+    Attributes:
+        camera_group: `CameraGroup` object containing cameras in the session.
+        _video_by_camera: Dictionary mapping `Camera` to `Video`.
+        _camera_by_video: Dictionary mapping `Video` to `Camera`.
+    """
+
+    camera_group: CameraGroup = field(factory=CameraGroup)
+    _video_by_camera: dict[Camera, Video] = field(factory=dict)
+    _camera_by_video: dict[Video, Camera] = field(factory=dict)
+
+    def get_video(self, camera: Camera) -> Video | None:
+        """Get `Video` associated with `Camera`.
+
+        Args:
+            camera: Camera to get video
+
+        Returns:
+            Video associated with camera or None if not found
+        """
+        return self._video_by_camera.get(camera, None)
+
+    def add_video(self, video: Video, camera: Camera):
+        """Add `Video` to `RecordingSession` and mapping to `Camera`.
+
+        Args:
+            video: `Video` object to add to `RecordingSession`.
+            camera: `Camera` object to associate with `Video`.
+
+        Raises:
+            ValueError: If `Camera` is not in associated `CameraGroup`.
+            ValueError: If `Video` is not a `Video` object.
+        """
+        # Raise ValueError if camera is not in associated camera group
+        self.camera_group.cameras.index(camera)
+
+        # Raise ValueError if `Video` is not a `Video` object
+        if not isinstance(video, Video):
+            raise ValueError(
+                f"Expected `Video` object, but received {type(video)} object."
+            )
+
+        # Add camera to video mapping
+        self._video_by_camera[camera] = video
+
+        # Add video to camera mapping
+        self._camera_by_video[video] = camera
+
+    def remove_video(self, video: Video):
+        """Remove `Video` from `RecordingSession` and mapping to `Camera`.
+
+        Args:
+            video: `Video` object to remove from `RecordingSession`.
+
+        Raises:
+            ValueError: If `Video` is not in associated `RecordingSession`.
+        """
+        # Remove video from camera mapping
+        camera = self._camera_by_video.pop(video)
+
+        # Remove camera from video mapping
+        self._video_by_camera.pop(camera)
+
+
+@define(eq=False)  # Set eq to false to make class hashable
 class Camera:
     """A camera used to record in a multi-view `RecordingSession`.
 
@@ -22,6 +102,7 @@ class Camera:
         tvec: Translation vector of size (3,) and type float64.
         extrinsic_matrix: Extrinsic matrix of camera of size (4, 4) and type float64.
         name: Camera name.
+        _video_by_session: Dictionary mapping `RecordingSession` to `Video`.
     """
 
     matrix: np.ndarray = field(
@@ -188,6 +269,17 @@ class Camera:
             self.dist,
         )
         return out
+
+    def get_video(self, session: RecordingSession) -> Video | None:
+        """Get video associated with recording session.
+
+        Args:
+            session: Recording session to get video for.
+
+        Returns:
+            Video associated with recording session or None if not found.
+        """
+        return session.get_video(camera=self)
 
     # TODO: Remove this when we implement triangulation without aniposelib
     def __getattr__(self, name: str):
