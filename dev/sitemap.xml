@@ -2,102 +2,102 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://io.sleap.ai/dev/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/changelog/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/examples/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/formats/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/model/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/SUMMARY/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/version/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/jabs/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/labelstudio/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/main/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/nwb/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/slp/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/utils/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/video_reading/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/video_writing/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/camera/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/instance/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/labeled_frame/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/labels/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/skeleton/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/suggestions/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/video/</loc>
-         <lastmod>2024-11-20</lastmod>
+         <lastmod>2024-11-22</lastmod>
     </url>
 </urlset>
