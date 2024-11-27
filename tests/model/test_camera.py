@@ -252,6 +252,61 @@ def test_camera_get_video():
     assert camera.get_video(session) is None
 
 
+def test_camera_group_cameras():
+    """Test camera group cameras method."""
+    camera1 = Camera(name="camera1")
+    camera2 = Camera(name="camera2")
+    camera_group = CameraGroup(cameras=[camera1, camera2])
+
+    assert camera_group.cameras == [camera1, camera2]
+
+    camera_group = CameraGroup()
+    assert camera_group.cameras == []
+
+
+def test_camera_group_triangulation():
+    """Test camera group triangulation using 3-4-5 triangle on xy-plane."""
+
+    # Define special 3-4-5 triangle
+    a = 3
+    b = 4
+    c = 5
+
+    # Angles opposite to sides a, b, and c in radians
+    angle_a = np.arccos((b**2 + c**2 - a**2) / (2 * b * c))  # 36.87 degrees
+
+    # Define camera origin and world point
+    camera1_origin = np.array([0, a, 0])
+    camera2_origin = np.array([0, -a, 0])
+    point_world = np.array([b, 0, 0])
+
+    # Define rotation and translation vectors
+    rvec_1 = np.array([0, 0, 1]) * angle_a  # axis-angle representation
+    rvec_2 = -rvec_1  # Opposite rotation
+    rotation_matrix_1 = cv2.Rodrigues(rvec_1)[0]
+    rotation_matrix_2 = cv2.Rodrigues(rvec_2)[0]
+    tvec_1 = -rotation_matrix_1 @ camera1_origin  # Rotated camera origin
+    tvec_2 = -rotation_matrix_2 @ camera2_origin  # Rotated camera origin
+
+    # Transform point from world to camera frame
+    point_cam1 = rotation_matrix_1 @ point_world + tvec_1
+    point_cam2 = rotation_matrix_2 @ point_world + tvec_2
+    np.testing.assert_array_almost_equal(point_cam1, np.array([c, 0, 0]), decimal=5)
+    np.testing.assert_array_almost_equal(point_cam2, np.array([c, 0, 0]), decimal=5)
+
+    # Define camera group
+    camera_1 = Camera(rvec=rvec_1, tvec=tvec_1)
+    camera_2 = Camera(rvec=rvec_2, tvec=tvec_2)
+    camera_group = CameraGroup(cameras=[camera_1, camera_2])
+
+    # Triangulate point from two camera views
+    points = np.array([[[c, 0]], [[c, 0]]])
+    points_3d = camera_group.triangulate(points=points)
+    np.testing.assert_array_almost_equal(
+        points_3d[:, :-1], np.array([[b, 0]]), decimal=5
+    )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
+
+
 # TODO: Remove when implement triangulation without aniposelib
 def test_camera_aliases():
     """Test camera aliases for attributes."""

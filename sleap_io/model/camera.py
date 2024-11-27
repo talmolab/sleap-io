@@ -2,12 +2,67 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import attrs
 import cv2
 import numpy as np
 from attrs import define, field
 
 from sleap_io.model.video import Video
+
+
+def triangulate_dlt_vectorized(
+    points: np.ndarray, projection_matrices: np.ndarray
+) -> np.ndarray:
+    """Triangulate 3D points from multiple camera views using Direct Linear Transform.
+
+    Args:
+        points: Array of N 2D points from each camera view M of shape (M, N, 2).
+        projection_matrices: Array of (3, 4) projection matrices for each camera M of
+            shape (M, 3, 4).
+
+    Returns:
+        Triangulated 3D points of shape (N, 3).
+    """
+    n_cameras, n_points, _ = points.shape
+
+    # Flatten points to shape needed for multiplication
+    points_flattened = points.reshape(n_cameras, 2 * n_points, 1, order="C")
+
+    # Create row selector matrix to select correct rows from projection matrix
+    row_selector = np.zeros((n_cameras * n_points, 2, 2))
+    row_selector[:, 0, 0] = -1  # Negate 1st row of projection matrix for x
+    row_selector[:, 1, 1] = -1  # Negate 2nd row of projection matrix for y
+    row_selector = row_selector.reshape(n_cameras, 2 * n_points, 2, order="C")
+
+    # Concatenate row selector and points matrices to shape (M, 2N, 3)
+    left_matrix = np.concatenate((row_selector, points_flattened), axis=2)
+
+    # Get A (stacked in a weird way) of shape (M, 2N, 4)
+    a_stacked = np.matmul(left_matrix, projection_matrices)
+
+    # Reorganize A to shape (N, 2M, 4) s.t. each 3D point has A of shape 2M x 4
+    a = (
+        a_stacked.reshape(n_cameras, n_points, 2, 4)
+        .transpose(1, 0, 2, 3)
+        .reshape(n_points, 2 * n_cameras, 4)
+    )
+
+    # Remove rows with NaNs before SVD which may result in a ragged A (hence for loop)
+    points_3d = []
+    for a_slice in a:
+        nan_mask = np.isnan(a_slice)
+        a_no_nan = a_slice[~nan_mask].reshape(-1, 4, order="C")
+
+        _, _, vh = np.linalg.svd(a_no_nan)
+
+        point_3d = vh[-1, :-1] / vh[-1, -1]
+        points_3d.append(point_3d)
+
+    points_3d = np.array(points_3d)
+
+    return points_3d
 
 
 @define
@@ -19,6 +74,61 @@ class CameraGroup:
     """
 
     cameras: list[Camera] = field(factory=list)
+
+    def triangulate(
+        self,
+        points: np.ndarray,
+        triangulation_func: Callable[
+            [np.ndarray, np.ndarray], np.ndarray
+        ] = triangulate_dlt_vectorized,
+    ) -> np.ndarray:
+        """Triangulate N 2D points from multiple camera views M.
+
+        Args:
+            points: Array of 2D points from each camera view of shape (M, N, 2).
+            triangulation_func: Function to use for triangulation. The
+            triangulation_func should take the following arguments:
+                - points: Array of undistorted 2D points from each camera view of shape
+                    (M, N, 2).
+                - projection_matrices: Array of (3, 4) projection matrices for each of
+                    the M cameras of shape (M, 3, 4) - note that points are undistorted.
+                and return the triangulated 3D points of shape (N, 3).
+            Default is vectorized DLT.
+
+        Returns:
+            Triangulated 3D points of shape (N, 3).
+        """
+        n_cameras, n_points, _ = points.shape
+        if n_cameras != len(self.cameras):
+            raise ValueError(
+                f"Expected points to have shape (M, N, 2) where M = {len(self.cameras)}"
+                f" is the number of cameras in the group, but received shape "
+                f"{points.shape}"
+            )
+
+        # Convert points to float64 to control precision
+        points = points.astype("float64")
+
+        # Undistort points
+        for cam_idx, camera in enumerate(self.cameras):
+            cam_points = camera.undistort_points(points[cam_idx])
+            points[cam_idx] = cam_points
+
+        # Since points are undistorted, use extrinsic matrices as projection matrices
+        projection_matrices = np.array(
+            [camera.extrinsic_matrix[:3] for camera in self.cameras]
+        )
+
+        # Triangulate points using provided function
+        points_3d = triangulation_func(points, projection_matrices)
+        n_points_returned = points_3d.shape[0]
+        if n_points_returned != n_points:
+            raise ValueError(
+                f"Expected triangulation function to return {n_points} 3D points, but "
+                f"received {n_points_returned} 3D points."
+            )
+
+        return points_3d
 
 
 @define(eq=False)  # Set eq to false to make class hashable
