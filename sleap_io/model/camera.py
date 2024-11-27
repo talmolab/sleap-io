@@ -248,7 +248,7 @@ class Camera:
         """
         shape = points.shape
         points = points.reshape(-1, 1, 2)
-        out = cv2.undistortPoints(points, self.matrix, self.dist)
+        out = cv2.undistortPoints(points.astype("float64"), self.matrix, self.dist)
         return out.reshape(shape)
 
     def project(self, points: np.ndarray) -> np.ndarray:
