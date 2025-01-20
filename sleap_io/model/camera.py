@@ -159,6 +159,41 @@ class CameraGroup:
 
         return points_3d.reshape(*points_shape[1:-1], 3)
 
+    def project(self, points: np.ndarray) -> np.ndarray:
+        """Project 3D points to 2D using camera group.
+
+        Args:
+            points: 3D points to project of shape (..., 3). where "..." is any number
+                of dimensions (including 0).
+
+        Returns:
+            Projected 2D points of shape (M, ..., 2) where M is the number of
+            cameras and "..." matches the "..." dimensions of the input points array.
+        """
+        # Validate points in
+        points = points.astype(np.float64)
+        points_shape = points.shape
+        try:
+            # Check if points are 3D
+            if points_shape[-1] != 3:
+                raise ValueError
+        except Exception as e:
+            raise ValueError(
+                "Expected points to be an array of 3D points of shape (..., 3) "
+                "where '...' is any number of non-zero dimensions, but received shape "
+                f"{points_shape}.\n\n{e}"
+            )
+
+        # Project 3D points to 2D for each camera
+        n_cameras = len(self.cameras)
+        n_points = np.prod(points_shape[:-1])
+        projected_points = np.zeros((n_cameras, n_points, 2))
+        for cam_idx, camera in enumerate(self.cameras):
+            cam_points = camera.project(points)
+            projected_points[cam_idx] = cam_points.reshape(n_points, 2)
+
+        return projected_points.reshape(n_cameras, *points_shape[:-1], 2)
+
 
 @define(eq=False)  # Set eq to false to make class hashable
 class RecordingSession:
