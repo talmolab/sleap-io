@@ -585,33 +585,3 @@ class Camera:
         )
 
         return camera
-
-    # TODO: Remove this when we implement triangulation without aniposelib
-    def __getattr__(self, name: str):
-        """Get attribute by name.
-
-        Args:
-            name: Name of attribute to get.
-
-        Returns:
-            Value of attribute.
-
-        Raises:
-            AttributeError: If attribute does not exist.
-        """
-        if name in self.__attrs_attrs__:
-            return getattr(self, name)
-
-        # The aliases for methods called when triangulate with sleap_anipose
-        method_aliases = {
-            "get_name": self.name,
-            "get_extrinsic_matrix": self.extrinsic_matrix,
-        }
-
-        def return_callable_method_alias():
-            return method_aliases[name]
-
-        if name in method_aliases:
-            return return_callable_method_alias
-
-        raise AttributeError(f"'Camera' object has no attribute or method '{name}'")

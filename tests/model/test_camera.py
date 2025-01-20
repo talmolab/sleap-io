@@ -420,22 +420,3 @@ def test_camera_group_project(camera_group_345: CameraGroup):
     np.testing.assert_array_almost_equal(
         points, np.array([[[[[c, 0]]]], [[[[c, 0]]]]]), decimal=5
     )
-
-
-# TODO: Remove when implement triangulation without aniposelib
-def test_camera_aliases():
-    """Test camera aliases for attributes."""
-    camera = Camera(
-        matrix=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-        dist=[[1], [2], [3], [4], [5]],
-        size=(100, 200),
-        rvec=[1, 2, 3],
-        tvec=[1, 2, 3],
-        name="camera",
-    )
-
-    # Test __getattr__ aliases
-    assert camera.get_name() == camera.name
-    np.testing.assert_array_equal(
-        camera.get_extrinsic_matrix(), camera.extrinsic_matrix
-    )
