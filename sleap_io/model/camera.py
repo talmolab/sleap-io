@@ -120,7 +120,6 @@ class CameraGroup:
             Triangulated 3D points of shape (..., 3) where "..." is any number of
             dimensions and matches the "..." dimensions of the input points array.
         """
-
         # Validate points in
         points_shape = points.shape
         try:
