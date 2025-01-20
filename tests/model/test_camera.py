@@ -298,6 +298,35 @@ def test_camera_group_triangulation(camera_group_345: CameraGroup):
     )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
 
 
+def test_camera_group_project(camera_group_345: CameraGroup):
+    """Test camera group project method using 3-4-5 triangle on xy-plane."""
+    camera_group = camera_group_345
+
+    # Define special 3-4-5 triangle
+    b = 4
+    c = 5
+
+    # Define 3D point
+    n_points = 1
+    points_3d = np.array([[b, 0, 1]])
+    assert points_3d.shape == (n_points, 3)
+
+    # Project points from world to camera frame
+    points = camera_group.project(points_3d)
+    assert points.shape == (len(camera_group.cameras), n_points, 2)
+    np.testing.assert_array_almost_equal(
+        points, np.array([[[c, 0]], [[c, 0]]]), decimal=5
+    )
+
+    # Project with arbitrary points shape (1, 1, N, 3)
+    points_3d = points_3d.reshape(1, 1, n_points, 3)
+    points = camera_group.project(points_3d)
+    assert points.shape == (len(camera_group.cameras), 1, 1, n_points, 2)
+    np.testing.assert_array_almost_equal(
+        points, np.array([[[[[c, 0]]]], [[[[c, 0]]]]]), decimal=5
+    )
+
+
 # TODO: Remove when implement triangulation without aniposelib
 def test_camera_aliases():
     """Test camera aliases for attributes."""
