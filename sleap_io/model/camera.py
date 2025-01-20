@@ -255,12 +255,25 @@ class Camera:
         """Project 3D points to 2D using camera matrix and distortion coefficients.
 
         Args:
-            points: 3D points to project of shape (N, 3) or (N, 1, 3).
+            points: 3D points to project of shape (..., 3) where "..." is any number of
+                dimensions (including 0).
 
         Returns:
-            Projected 2D points of shape (N, 1, 2).
+            Projected 2D points of shape (..., 2) where "..." is the same as the input
+            "..." dimensions.
         """
-        points = points.reshape(-1, 1, 3)
+        # Validate points in
+        points_shape = points.shape
+        try:
+            if points_shape[-1] != 3:
+                raise ValueError
+            points = points.reshape(-1, 1, 3)
+        except Exception as e:
+            raise ValueError(
+                "Expected points to be an array of 3D points of shape (..., 3) where "
+                "'...' is any number of non-zero dimensions, but received shape "
+                f"{points_shape}.\n\n{e}"
+            )
         out, _ = cv2.projectPoints(
             points,
             self.rvec,
@@ -268,7 +281,7 @@ class Camera:
             self.matrix,
             self.dist,
         )
-        return out
+        return out.reshape(*points_shape[:-1], 2)
 
     def get_video(self, session: RecordingSession) -> Video | None:
         """Get video associated with recording session.
