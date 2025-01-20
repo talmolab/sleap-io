@@ -197,6 +197,42 @@ def test_camera_extrinsic_matrix():
     np.testing.assert_array_equal(camera.tvec, tvec)
 
 
+def test_camera_from_dict_to_dict():
+    """Test camera from_dict method."""
+
+    # Define camera dictionary
+    name = "back"
+    size = [1280, 1024]
+    matrix = [
+        [762.513822135494, 0.0, 639.5],
+        [0.0, 762.513822135494, 511.5],
+        [0.0, 0.0, 1.0],
+    ]
+    distortions = [-0.2868458380166852, 0.0, 0.0, 0.0, 0.0]
+    rotation = [0.3571857188780474, 0.8879473292757126, 1.6832001677006176]
+    translation = [-555.4577842902744, -294.43494957092884, -190.82196458369515]
+    camera_dict = {
+        "name": name,
+        "size": size,
+        "matrix": matrix,
+        "distortions": distortions,
+        "rotation": rotation,
+        "translation": translation,
+    }
+
+    # Test camera from_dict
+    camera = Camera.from_dict(camera_dict)
+    assert camera.name == "back"
+    assert camera.size == tuple(size)
+    np.testing.assert_array_almost_equal(camera.matrix, np.array(matrix))
+    np.testing.assert_array_almost_equal(camera.dist, np.array(distortions))
+    np.testing.assert_array_almost_equal(camera.rvec, np.array(rotation))
+    np.testing.assert_array_almost_equal(camera.tvec, np.array(translation))
+
+    # Test camera to_dict
+    assert camera.to_dict() == camera_dict
+
+
 def test_camera_undistort_points():
     """Test camera undistort points method."""
     camera = Camera(
