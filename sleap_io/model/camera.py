@@ -53,11 +53,16 @@ def triangulate_dlt_vectorized(
     points_3d = []
     for a_slice in a:
         nan_mask = np.isnan(a_slice)
-        a_no_nan = a_slice[~nan_mask].reshape(-1, 4, order="C")
+        if np.all(nan_mask):
+            # If all rows are NaN, set point to NaN
+            point_3d = np.full(3, np.nan)
+            # TODO: Also filter out if ony 2 rows (a single point) is non-nan
+        else:
+            a_no_nan = a_slice[~nan_mask].reshape(-1, 4, order="C")
 
-        _, _, vh = np.linalg.svd(a_no_nan)
+            _, _, vh = np.linalg.svd(a_no_nan)
 
-        point_3d = vh[-1, :-1] / vh[-1, -1]
+            point_3d = vh[-1, :-1] / vh[-1, -1]
         points_3d.append(point_3d)
 
     points_3d = np.array(points_3d)
