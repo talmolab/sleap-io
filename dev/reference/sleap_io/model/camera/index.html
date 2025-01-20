@@ -1317,14 +1317,6 @@ type float64.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.camera.Camera.__getattr__" href="#sleap_io.model.camera.Camera.__getattr__">__getattr__</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Get attribute by name.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="sleap_io.model.camera.Camera.from_dict" href="#sleap_io.model.camera.Camera.from_dict">from_dict</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -1680,36 +1672,6 @@ type float64.</p>
 <a id="__codelineno-0-585" name="__codelineno-0-585"></a><a href="#__codelineno-0-585"><span class="linenos" data-linenos="585 "></span></a>        <span class="p">)</span>
 <a id="__codelineno-0-586" name="__codelineno-0-586"></a><a href="#__codelineno-0-586"><span class="linenos" data-linenos="586 "></span></a>
 <a id="__codelineno-0-587" name="__codelineno-0-587"></a><a href="#__codelineno-0-587"><span class="linenos" data-linenos="587 "></span></a>        <span class="k">return</span> <span class="n">camera</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588"></a><a href="#__codelineno-0-588"><span class="linenos" data-linenos="588 "></span></a>
-<a id="__codelineno-0-589" name="__codelineno-0-589"></a><a href="#__codelineno-0-589"><span class="linenos" data-linenos="589 "></span></a>    <span class="c1"># TODO: Remove this when we implement triangulation without aniposelib</span>
-<a id="__codelineno-0-590" name="__codelineno-0-590"></a><a href="#__codelineno-0-590"><span class="linenos" data-linenos="590 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a><a href="#__codelineno-0-591"><span class="linenos" data-linenos="591 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get attribute by name.</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592"></a><a href="#__codelineno-0-592"><span class="linenos" data-linenos="592 "></span></a>
-<a id="__codelineno-0-593" name="__codelineno-0-593"></a><a href="#__codelineno-0-593"><span class="linenos" data-linenos="593 "></span></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594"></a><a href="#__codelineno-0-594"><span class="linenos" data-linenos="594 "></span></a><span class="sd">            name: Name of attribute to get.</span>
-<a id="__codelineno-0-595" name="__codelineno-0-595"></a><a href="#__codelineno-0-595"><span class="linenos" data-linenos="595 "></span></a>
-<a id="__codelineno-0-596" name="__codelineno-0-596"></a><a href="#__codelineno-0-596"><span class="linenos" data-linenos="596 "></span></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-597" name="__codelineno-0-597"></a><a href="#__codelineno-0-597"><span class="linenos" data-linenos="597 "></span></a><span class="sd">            Value of attribute.</span>
-<a id="__codelineno-0-598" name="__codelineno-0-598"></a><a href="#__codelineno-0-598"><span class="linenos" data-linenos="598 "></span></a>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">            AttributeError: If attribute does not exist.</span>
-<a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a>        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__attrs_attrs__</span><span class="p">:</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a>            <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a>        <span class="c1"># The aliases for methods called when triangulate with sleap_anipose</span>
-<a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a>        <span class="n">method_aliases</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a>            <span class="s2">&quot;get_name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608"></a><a href="#__codelineno-0-608"><span class="linenos" data-linenos="608 "></span></a>            <span class="s2">&quot;get_extrinsic_matrix&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">extrinsic_matrix</span><span class="p">,</span>
-<a id="__codelineno-0-609" name="__codelineno-0-609"></a><a href="#__codelineno-0-609"><span class="linenos" data-linenos="609 "></span></a>        <span class="p">}</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a><a href="#__codelineno-0-610"><span class="linenos" data-linenos="610 "></span></a>
-<a id="__codelineno-0-611" name="__codelineno-0-611"></a><a href="#__codelineno-0-611"><span class="linenos" data-linenos="611 "></span></a>        <span class="k">def</span><span class="w"> </span><span class="nf">return_callable_method_alias</span><span class="p">():</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612"></a><a href="#__codelineno-0-612"><span class="linenos" data-linenos="612 "></span></a>            <span class="k">return</span> <span class="n">method_aliases</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613"></a><a href="#__codelineno-0-613"><span class="linenos" data-linenos="613 "></span></a>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a><a href="#__codelineno-0-614"><span class="linenos" data-linenos="614 "></span></a>        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">method_aliases</span><span class="p">:</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>            <span class="k">return</span> <span class="n">return_callable_method_alias</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a><a href="#__codelineno-0-616"><span class="linenos" data-linenos="616 "></span></a>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a><a href="#__codelineno-0-617"><span class="linenos" data-linenos="617 "></span></a>        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;Camera&#39; object has no attribute or method &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
 </code></pre></div>
               </details>
 
@@ -1881,131 +1843,6 @@ type float64.</p>
 <a id="__codelineno-0-406" name="__codelineno-0-406"></a><a href="#__codelineno-0-406"><span class="linenos" data-linenos="406 "></span></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_extrinsic_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;float64&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-407" name="__codelineno-0-407"></a><a href="#__codelineno-0-407"><span class="linenos" data-linenos="407 "></span></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_extrinsic_matrix</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">Rodrigues</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_rvec</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
 <a id="__codelineno-0-408" name="__codelineno-0-408"></a><a href="#__codelineno-0-408"><span class="linenos" data-linenos="408 "></span></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_extrinsic_matrix</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tvec</span>
-</code></pre></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="sleap_io.model.camera.Camera.__getattr__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getattr__</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
-
-<a href="#sleap_io.model.camera.Camera.__getattr__" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Get attribute by name.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>name</code>
-            </td>
-            <td>
-                  <code>str</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Name of attribute to get.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Value of attribute.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code>AttributeError</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If attribute does not exist.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-            <details class="quote">
-              <summary>Source code in <code>sleap_io/model/camera.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-590" name="__codelineno-0-590"></a><a href="#__codelineno-0-590"><span class="linenos" data-linenos="590 "></span></a><span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a><a href="#__codelineno-0-591"><span class="linenos" data-linenos="591 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Get attribute by name.</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592"></a><a href="#__codelineno-0-592"><span class="linenos" data-linenos="592 "></span></a>
-<a id="__codelineno-0-593" name="__codelineno-0-593"></a><a href="#__codelineno-0-593"><span class="linenos" data-linenos="593 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594"></a><a href="#__codelineno-0-594"><span class="linenos" data-linenos="594 "></span></a><span class="sd">        name: Name of attribute to get.</span>
-<a id="__codelineno-0-595" name="__codelineno-0-595"></a><a href="#__codelineno-0-595"><span class="linenos" data-linenos="595 "></span></a>
-<a id="__codelineno-0-596" name="__codelineno-0-596"></a><a href="#__codelineno-0-596"><span class="linenos" data-linenos="596 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-597" name="__codelineno-0-597"></a><a href="#__codelineno-0-597"><span class="linenos" data-linenos="597 "></span></a><span class="sd">        Value of attribute.</span>
-<a id="__codelineno-0-598" name="__codelineno-0-598"></a><a href="#__codelineno-0-598"><span class="linenos" data-linenos="598 "></span></a>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">        AttributeError: If attribute does not exist.</span>
-<a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a>    <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__attrs_attrs__</span><span class="p">:</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a>        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a>    <span class="c1"># The aliases for methods called when triangulate with sleap_anipose</span>
-<a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a>    <span class="n">method_aliases</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a>        <span class="s2">&quot;get_name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608"></a><a href="#__codelineno-0-608"><span class="linenos" data-linenos="608 "></span></a>        <span class="s2">&quot;get_extrinsic_matrix&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">extrinsic_matrix</span><span class="p">,</span>
-<a id="__codelineno-0-609" name="__codelineno-0-609"></a><a href="#__codelineno-0-609"><span class="linenos" data-linenos="609 "></span></a>    <span class="p">}</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a><a href="#__codelineno-0-610"><span class="linenos" data-linenos="610 "></span></a>
-<a id="__codelineno-0-611" name="__codelineno-0-611"></a><a href="#__codelineno-0-611"><span class="linenos" data-linenos="611 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">return_callable_method_alias</span><span class="p">():</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612"></a><a href="#__codelineno-0-612"><span class="linenos" data-linenos="612 "></span></a>        <span class="k">return</span> <span class="n">method_aliases</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613"></a><a href="#__codelineno-0-613"><span class="linenos" data-linenos="613 "></span></a>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a><a href="#__codelineno-0-614"><span class="linenos" data-linenos="614 "></span></a>    <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">method_aliases</span><span class="p">:</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>        <span class="k">return</span> <span class="n">return_callable_method_alias</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a><a href="#__codelineno-0-616"><span class="linenos" data-linenos="616 "></span></a>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a><a href="#__codelineno-0-617"><span class="linenos" data-linenos="617 "></span></a>    <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;Camera&#39; object has no attribute or method &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
