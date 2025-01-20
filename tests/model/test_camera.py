@@ -225,11 +225,11 @@ def test_camera_project():
 
     points = np.random.rand(10, 3)
     projected_points = camera.project(points)
-    assert projected_points.shape == (points.shape[0], 1, 2)
+    assert projected_points.shape == (*points.shape[:-1], 2)
 
     points = np.random.rand(10, 1, 3)
     projected_points = camera.project(points)
-    assert projected_points.shape == (points.shape[0], 1, 2)
+    assert projected_points.shape == (*points.shape[:-1], 2)
 
 
 def test_camera_get_video():
