@@ -87,34 +87,59 @@ class CameraGroup:
             [np.ndarray, np.ndarray], np.ndarray
         ] = triangulate_dlt_vectorized,
     ) -> np.ndarray:
-        """Triangulate N 2D points from multiple camera views M.
+        """Triangulate 2D points from multiple camera views M.
+
+        This function reshapes the input `points` to shape (M, N, 2) where M is the
+        number of camera views and N is the number of 2D points to triangulate. The
+        points are then undistorted so that we can use the extrinsic matrices of the
+        cameras as projection matrices to call `triangulation_func` and triangulate
+        the 3D points.
 
         Args:
-            points: Array of 2D points from each camera view of shape (M, N, 2).
+            points: Array of 2D points from each camera view of shape (M, ..., 2) where
+                M is the number of camera views and "..." is any number of dimensions
+                (including 0).
             triangulation_func: Function to use for triangulation. The
             triangulation_func should take the following arguments:
                 - points: Array of undistorted 2D points from each camera view of shape
-                    (M, N, 2).
+                    (M, N, 2) where M is the number of cameras and N is the number of
+                    points.
                 - projection_matrices: Array of (3, 4) projection matrices for each of
                     the M cameras of shape (M, 3, 4) - note that points are undistorted.
                 and return the triangulated 3D points of shape (N, 3).
             Default is vectorized DLT.
 
+
+        Raises:
+            ValueError: If points are not of shape (M, ..., 2).
+            ValueError: If number of cameras M do not match number of cameras in group.
+            ValueError: If number of points returned by triangulation function does not
+                match number of points in input.
+
         Returns:
-            Triangulated 3D points of shape (N, 3).
+            Triangulated 3D points of shape (..., 3) where "..." is any number of
+            dimensions and matches the "..." dimensions of the input points array.
         """
-        n_cameras, n_points, _ = points.shape
-        if n_cameras != len(self.cameras):
+
+        # Validate points in
+        points_shape = points.shape
+        try:
+            n_cameras = points_shape[0]
+            if n_cameras != len(self.cameras):
+                raise ValueError
+            if 2 != points.shape[-1]:
+                raise ValueError
+            if len(points_shape) != 3:
+                points = points.reshape(n_cameras, -1, 2)
+        except Exception as e:
             raise ValueError(
-                f"Expected points to have shape (M, N, 2) where M = {len(self.cameras)}"
-                f" is the number of cameras in the group, but received shape "
-                f"{points.shape}"
+                "Expected points to be an array of 2D points from each camera view of "
+                f"shape (M, ..., 2) where M = {len(self.cameras)} and '...' is any "
+                f"number of dimensions, but received shape {points_shape}.\n\n{e}"
             )
-
-        # Convert points to float64 to control precision
-        points = points.astype("float64")
-
+        n_points = points.shape[1]
         # Undistort points
+        points = points.astype("float64")  # Ensure float64 for opencv undistort
         for cam_idx, camera in enumerate(self.cameras):
             cam_points = camera.undistort_points(points[cam_idx])
             points[cam_idx] = cam_points
@@ -133,7 +158,7 @@ class CameraGroup:
                 f"received {n_points_returned} 3D points."
             )
 
-        return points_3d
+        return points_3d.reshape(*points_shape[1:-1], 3)
 
 
 @define(eq=False)  # Set eq to false to make class hashable
