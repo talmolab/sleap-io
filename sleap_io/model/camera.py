@@ -138,6 +138,7 @@ class CameraGroup:
                 f"number of dimensions, but received shape {points_shape}.\n\n{e}"
             )
         n_points = points.shape[1]
+
         # Undistort points
         points = points.astype("float64")  # Ensure float64 for opencv undistort
         for cam_idx, camera in enumerate(self.cameras):
