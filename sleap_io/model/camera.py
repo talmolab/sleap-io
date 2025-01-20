@@ -271,26 +271,26 @@ class RecordingSession:
     _camera_by_video: dict[Video, Camera] = field(factory=dict)
 
     def get_video(self, camera: Camera) -> Video | None:
-        """Get `Video` associated with `Camera`.
+        """Get `Video` associated with `camera`.
 
         Args:
-            camera: Camera to get video
+            camera: `Camera` to get `Video`
 
         Returns:
-            Video associated with camera or None if not found
+            `Video` associated with `camera` or None if not found
         """
         return self._video_by_camera.get(camera, None)
 
     def add_video(self, video: Video, camera: Camera):
-        """Add `Video` to `RecordingSession` and mapping to `Camera`.
+        """Add `video` to `RecordingSession` and mapping to `camera`.
 
         Args:
             video: `Video` object to add to `RecordingSession`.
-            camera: `Camera` object to associate with `Video`.
+            camera: `Camera` object to associate with `video`.
 
         Raises:
-            ValueError: If `Camera` is not in associated `CameraGroup`.
-            ValueError: If `Video` is not a `Video` object.
+            ValueError: If `camera` is not in associated `CameraGroup`.
+            ValueError: If `video` is not a `Video` object.
         """
         # Raise ValueError if camera is not in associated camera group
         self.camera_group.cameras.index(camera)
@@ -308,13 +308,13 @@ class RecordingSession:
         self._camera_by_video[video] = camera
 
     def remove_video(self, video: Video):
-        """Remove `Video` from `RecordingSession` and mapping to `Camera`.
+        """Remove `video` from `RecordingSession` and mapping to `Camera`.
 
         Args:
             video: `Video` object to remove from `RecordingSession`.
 
         Raises:
-            ValueError: If `Video` is not in associated `RecordingSession`.
+            ValueError: If `video` is not in associated `RecordingSession`.
         """
         # Remove video from camera mapping
         camera = self._camera_by_video.pop(video)
@@ -331,7 +331,7 @@ class Camera:
         matrix: Intrinsic camera matrix of size (3, 3) and type float64.
         dist: Radial-tangential distortion coefficients [k_1, k_2, p_1, p_2, k_3] of
             size (5,) and type float64.
-        size: Image size of camera in pixels of size (2,) and type int.
+        size: Image size (width, height) of camera in pixels of size (2,) and type int.
         rvec: Rotation vector in unnormalized axis-angle representation of size (3,) and
             type float64.
         tvec: Translation vector of size (3,) and type float64.
@@ -396,7 +396,7 @@ class Camera:
         if np.shape(value) != expected_shape:
             raise ValueError(
                 f"{attribute.name} must be a {expected_type} of size {expected_shape}, "
-                f"but recieved shape: {np.shape(value)} and type: {type(value)} for "
+                f"but received shape: {np.shape(value)} and type: {type(value)} for "
                 f"value: {value}"
             )
 
