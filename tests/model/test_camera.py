@@ -264,46 +264,37 @@ def test_camera_group_cameras():
     assert camera_group.cameras == []
 
 
-def test_camera_group_triangulation():
+def test_camera_group_triangulation(camera_group_345: CameraGroup):
     """Test camera group triangulation using 3-4-5 triangle on xy-plane."""
 
+    camera_group = camera_group_345
+
     # Define special 3-4-5 triangle
-    a = 3
     b = 4
     c = 5
 
-    # Angles opposite to sides a, b, and c in radians
-    angle_a = np.arccos((b**2 + c**2 - a**2) / (2 * b * c))  # 36.87 degrees
-
-    # Define camera origin and world point
-    camera1_origin = np.array([0, a, 0])
-    camera2_origin = np.array([0, -a, 0])
-    point_world = np.array([b, 0, 0])
-
-    # Define rotation and translation vectors
-    rvec_1 = np.array([0, 0, 1]) * angle_a  # axis-angle representation
-    rvec_2 = -rvec_1  # Opposite rotation
-    rotation_matrix_1 = cv2.Rodrigues(rvec_1)[0]
-    rotation_matrix_2 = cv2.Rodrigues(rvec_2)[0]
-    tvec_1 = -rotation_matrix_1 @ camera1_origin  # Rotated camera origin
-    tvec_2 = -rotation_matrix_2 @ camera2_origin  # Rotated camera origin
-
-    # Transform point from world to camera frame
-    point_cam1 = rotation_matrix_1 @ point_world + tvec_1
-    point_cam2 = rotation_matrix_2 @ point_world + tvec_2
-    np.testing.assert_array_almost_equal(point_cam1, np.array([c, 0, 0]), decimal=5)
-    np.testing.assert_array_almost_equal(point_cam2, np.array([c, 0, 0]), decimal=5)
-
-    # Define camera group
-    camera_1 = Camera(rvec=rvec_1, tvec=tvec_1)
-    camera_2 = Camera(rvec=rvec_2, tvec=tvec_2)
-    camera_group = CameraGroup(cameras=[camera_1, camera_2])
-
-    # Triangulate point from two camera views
+    # Triangulate point from two camera views with shape (M, N=1, 2)
     points = np.array([[[c, 0]], [[c, 0]]])
     points_3d = camera_group.triangulate(points=points)
+    assert points_3d.shape == (1, 3)  # == (*points.shape[1:-1], 3)
     np.testing.assert_array_almost_equal(
         points_3d[:, :-1], np.array([[b, 0]]), decimal=5
+    )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
+
+    # Triangulate points with shape (M, 2)
+    points = points.reshape(-1, 2)
+    points_3d = camera_group.triangulate(points=points)
+    assert points_3d.shape == (3,)  # == (*points.shape[1:-1], 3)
+    np.testing.assert_array_almost_equal(
+        points_3d[:-1], np.array([b, 0]), decimal=5
+    )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
+
+    # Triangulate points with shape (M, L=1, N=1, 2)
+    points = points.reshape(points.shape[0], 1, 1, 2)
+    points_3d = camera_group.triangulate(points=points)
+    assert points_3d.shape == (1, 1, 3)  # == (*points.shape[1:-1], 3)
+    np.testing.assert_array_almost_equal(
+        points_3d[:, :, :-1], np.array([[[b, 0]]]), decimal=5
     )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
 
 
