@@ -63,3 +63,9 @@ def camera_group_345():
     camera_group = sleap_io.CameraGroup(cameras=[camera_1, camera_2])
 
     return camera_group
+
+
+@pytest.fixture
+def calibration_toml_path():
+    """Path to a TOML file containing camera calibration data."""
+    return "tests/data/camera/calibration.toml"
