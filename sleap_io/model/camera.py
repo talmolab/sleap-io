@@ -7,6 +7,7 @@ from collections.abc import Callable
 import attrs
 import cv2
 import numpy as np
+import toml
 from attrs import define, field
 
 from sleap_io.model.video import Video
@@ -193,6 +194,66 @@ class CameraGroup:
             projected_points[cam_idx] = cam_points.reshape(n_points, 2)
 
         return projected_points.reshape(n_cameras, *points_shape[:-1], 2)
+
+    @classmethod
+    def from_dict(cls, calibration_dict: dict) -> CameraGroup:
+        """Create `CameraGroup` from calibration dictionary.
+
+        Args:
+            calibration_dict: Dictionary containing calibration information for cameras.
+
+        Returns:
+            `CameraGroup` object created from calibration dictionary.
+        """
+        cameras = []
+        for dict_name, camera_dict in calibration_dict.items():
+            if dict_name == "metadata":
+                continue
+            camera = Camera.from_dict(camera_dict)
+            cameras.append(camera)
+
+        camera_group = cls(cameras=cameras)
+
+        return camera_group
+
+    def to_dict(self) -> dict:
+        """Convert `CameraGroup` to dictionary.
+
+        Returns:
+            Dictionary containing camera group information with the following keys:
+            - cam_n: Camera dictionary containing information for camera at index "n"
+                with the following keys:
+                - name: Camera name.
+                - size: Image size (height, width) of camera in pixels of size (2,) and
+                    type int.
+                - matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+                - distortions: Radial-tangential distortion coefficients
+                    [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+                - rotation: Rotation vector in unnormalized axis-angle representation of
+                    size (3,) and type float64.
+                - translation: Translation vector of size (3,) and type float64.
+        """
+        calibration_dict = {}
+        for cam_idx, camera in enumerate(self.cameras):
+            camera_dict = camera.to_dict()
+            calibration_dict[f"cam_{cam_idx}"] = camera_dict
+
+        return calibration_dict
+
+    @classmethod
+    def load(cls, filename: str) -> CameraGroup:
+        """Load `CameraGroup` from JSON file.
+
+        Args:
+            filename: Path to JSON file to load `CameraGroup` from.
+
+        Returns:
+            `CameraGroup` object loaded from JSON file.
+        """
+        calibration_dict = toml.load(filename)
+        camera_group = cls.from_dict(calibration_dict)
+
+        return camera_group
 
 
 @define(eq=False)  # Set eq to false to make class hashable
