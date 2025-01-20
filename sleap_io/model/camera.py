@@ -270,6 +270,26 @@ class RecordingSession:
     _video_by_camera: dict[Camera, Video] = field(factory=dict)
     _camera_by_video: dict[Video, Camera] = field(factory=dict)
 
+    @property
+    def videos(self) -> list[Video]:
+        """Get list of `Video` objects in `RecordingSession`.
+
+        Returns:
+            List of `Video` objects in `RecordingSession`.
+        """
+        return list(self._video_by_camera.values())
+
+    def get_camera(self, video: Video) -> Camera | None:
+        """Get `Camera` associated with `video`.
+
+        Args:
+            video: `Video` to get `Camera`
+
+        Returns:
+            `Camera` associated with `video` or None if not found
+        """
+        return self._camera_by_video.get(video, None)
+
     def get_video(self, camera: Camera) -> Video | None:
         """Get `Video` associated with `camera`.
 
