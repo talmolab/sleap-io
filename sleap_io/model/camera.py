@@ -529,6 +529,63 @@ class Camera:
         """
         return session.get_video(camera=self)
 
+    def to_dict(self) -> dict:
+        """Convert `Camera` to dictionary.
+
+        Returns:
+            Dictionary containing camera information with the following keys:
+            - name: Camera name.
+            - size: Image size (width, height) of camera in pixels of size (2,) and
+                type int.
+            - matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+            - distortions: Radial-tangential distortion coefficients
+                [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+            - rotation: Rotation vector in unnormalized axis-angle representation of
+                size (3,) and type float64.
+            - translation: Translation vector of size (3,) and type float64.
+        """
+        camera_dict = {
+            "name": self.name,
+            "size": list(self.size),
+            "matrix": self.matrix.tolist(),
+            "distortions": self.dist.tolist(),
+            "rotation": self.rvec.tolist(),
+            "translation": self.tvec.tolist(),
+        }
+
+        return camera_dict
+
+    @classmethod
+    def from_dict(cls, camera_dict: dict) -> Camera:
+        """Create `Camera` from dictionary.
+
+        Args:
+            camera_dict: Dictionary containing camera information with the following
+                keys:
+                - name: Camera name.
+                - size: Image size (width, height) of camera in pixels of size (2,) and
+                    type int.
+                - matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+                - distortions: Radial-tangential distortion coefficients
+                    [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+                - rotation: Rotation vector in unnormalized axis-angle representation of
+                    size (3,) and type float64.
+                - translation: Translation vector of size (3,) and type float64.
+
+        Returns:
+            `Camera` object created from dictionary.
+        """
+        camera = cls(
+            name=camera_dict["name"],
+            size=camera_dict["size"],
+            matrix=camera_dict["matrix"],
+            dist=camera_dict["distortions"],
+            rvec=camera_dict["rotation"],
+            tvec=camera_dict["translation"],
+        )
+
+        return camera
+
     # TODO: Remove this when we implement triangulation without aniposelib
     def __getattr__(self, name: str):
         """Get attribute by name.
