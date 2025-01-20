@@ -264,6 +264,65 @@ def test_camera_group_cameras():
     assert camera_group.cameras == []
 
 
+def test_camera_group_from_dict_to_dict():
+    """Test camera group from_dict and to_dict methods."""
+
+    # Define template camera dictionary
+    size = [1280, 1024]
+    matrix = np.eye(3).tolist()
+    distortions = np.zeros(5).tolist()
+    rotation = np.zeros(3).tolist()
+    translation = np.zeros(3).tolist()
+    camera_dict_template = {
+        "size": size,
+        "matrix": matrix,
+        "distortions": distortions,
+        "rotation": rotation,
+        "translation": translation,
+    }
+
+    camera_group_dict = {}
+    n_cameras = 3
+    for i in range(n_cameras):
+        camera_dict = camera_dict_template.copy()
+        camera_dict["name"] = f"camera{i}"
+        camera_group_dict[f"cam_{i}"] = camera_dict
+
+    camera_group_0 = CameraGroup.from_dict(camera_group_dict)
+    camera_group_dict_0: dict = camera_group_0.to_dict()
+    assert camera_group_dict == camera_group_dict_0
+    assert len(camera_group_0.cameras) == 3
+    for i in range(n_cameras):
+        assert camera_group_0.cameras[i].name == f"camera{i}"
+        assert camera_group_0.cameras[i].size == tuple(size)
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].matrix, np.array(matrix)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].dist, np.array(distortions)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].rvec, np.array(rotation)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].tvec, np.array(translation)
+        )
+
+
+def test_camera_group_load(calibration_toml_path: str):
+    """Test camera group load method."""
+
+    camera_group = CameraGroup.load(calibration_toml_path)
+    assert len(camera_group.cameras) == 8
+
+    for camera, name in zip(
+        camera_group.cameras,
+        ["back", "backL", "mid", "midL", "side", "sideL", "top", "topL"],
+    ):
+        assert camera.name == name
+        assert camera.size == (1280, 1024)
+
+
 def test_camera_group_triangulation(camera_group_345: CameraGroup):
     """Test camera group triangulation using 3-4-5 triangle on xy-plane."""
 
