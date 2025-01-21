@@ -323,15 +323,15 @@ class Camera:
 
         Returns:
             Dictionary containing camera information with the following keys:
-            - name: Camera name.
-            - size: Image size (width, height) of camera in pixels of size (2,) and
-                type int.
-            - matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-            - distortions: Radial-tangential distortion coefficients
+            name: Camera name.
+            size: Image size (width, height) of camera in pixels of size (2,) and type
+                int.
+            matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+            distortions: Radial-tangential distortion coefficients
                 [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-            - rotation: Rotation vector in unnormalized axis-angle representation of
-                size (3,) and type float64.
-            - translation: Translation vector of size (3,) and type float64.
+            rotation: Rotation vector in unnormalized axis-angle representation of size
+                (3,) and type float64.
+            translation: Translation vector of size (3,) and type float64.
         """
         camera_dict = {
             "name": self.name,
@@ -351,15 +351,15 @@ class Camera:
         Args:
             camera_dict: Dictionary containing camera information with the following
                 keys:
-                - name: Camera name.
-                - size: Image size (width, height) of camera in pixels of size (2,) and
+                name: Camera name.
+                size: Image size (width, height) of camera in pixels of size (2,) and
                     type int.
-                - matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-                - distortions: Radial-tangential distortion coefficients
+                matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+                distortions: Radial-tangential distortion coefficients
                     [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-                - rotation: Rotation vector in unnormalized axis-angle representation of
+                rotation: Rotation vector in unnormalized axis-angle representation of
                     size (3,) and type float64.
-                - translation: Translation vector of size (3,) and type float64.
+                translation: Translation vector of size (3,) and type float64.
 
         Returns:
             `Camera` object created from dictionary.
