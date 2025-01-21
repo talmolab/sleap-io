@@ -140,6 +140,7 @@ class CameraGroup:
         n_points = points.shape[1]
 
         # Undistort points
+        points_dtype = points.dtype
         points = points.astype("float64")  # Ensure float64 for opencv undistort
         for cam_idx, camera in enumerate(self.cameras):
             cam_points = camera.undistort_points(points[cam_idx])
@@ -159,7 +160,9 @@ class CameraGroup:
                 f"received {n_points_returned} 3D points."
             )
 
-        return points_3d.reshape(*points_shape[1:-1], 3)
+        # Reshape to (N, 3) and cast to the original dtype.
+        points_3d = points_3d.reshape(*points_shape[1:-1], 3).astype(points_dtype)
+        return points_3d
 
     def project(self, points: np.ndarray) -> np.ndarray:
         """Project 3D points to 2D using camera group.
@@ -175,6 +178,7 @@ class CameraGroup:
         # Validate points in
         points = points.astype(np.float64)
         points_shape = points.shape
+        points_dtype = points.dtype
         try:
             # Check if points are 3D
             if points_shape[-1] != 3:
@@ -194,7 +198,7 @@ class CameraGroup:
             cam_points = camera.project(points)
             projected_points[cam_idx] = cam_points.reshape(n_points, 2)
 
-        return projected_points.reshape(n_cameras, *points_shape[:-1], 2)
+        return projected_points.reshape(n_cameras, *points_shape[:-1], 2).astype(points_dtype)
 
     @classmethod
     def from_dict(cls, calibration_dict: dict) -> CameraGroup:
