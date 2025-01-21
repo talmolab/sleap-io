@@ -259,6 +259,10 @@ def test_camera_project():
         dist=[[0], [0], [0], [0], [0]],
     )
 
+    # Test with incorrect input shape
+    with pytest.raises(ValueError):
+        camera.project(np.random.rand(10, 1, 2))
+
     points_dtype = np.int32
     points = np.random.rand(10, 3).astype(points_dtype)
     projected_points = camera.project(points)
@@ -290,6 +294,86 @@ def test_camera_get_video():
     # Remove video
     session.remove_video(video)
     assert camera.get_video(session) is None
+
+
+def test_recording_session_videos():
+    """Test `RecordingSession.videos` property."""
+    camera_1 = Camera()
+    camera_2 = Camera()
+    camera_group = CameraGroup(cameras=[camera_1, camera_2])
+
+    # Test with no videos
+    session = RecordingSession(camera_group=camera_group)
+    assert session.videos == []
+
+    # Test with a single videos
+    video = Video(filename="not/a/file.mp4")
+    session.add_video(video=video, camera=camera_2)
+    assert session.videos == [video]
+
+    # Test with multiple videos
+    video_2 = Video(filename="not/a/file2.mp4")
+    session.add_video(video=video_2, camera=camera_1)
+    assert session.videos == [video, video_2]
+
+
+def test_recording_session_get_camera():
+    """Test `RecordingSession.get_camera` method."""
+    camera_1 = Camera(name="camera_1")
+    camera_2 = Camera(name="camera_2")
+    camera_group = CameraGroup(cameras=[camera_1, camera_2])
+
+    # Test with not a `Video` object
+    session = RecordingSession(camera_group=camera_group)
+    assert session.get_camera("not_a_video") is None
+
+    # Test with a `Video` object, but no videos
+    video_1 = Video(filename="not/a/file.mp4")
+    assert session.get_camera(video_1) is None
+
+    # Test with a `Video` object and a video
+    session.add_video(video=video_1, camera=camera_1)
+    assert session.get_camera(video_1) is camera_1
+
+    # Test with a `Video` object and multiple videos
+    video_2 = Video(filename="not/a/file2.mp4")
+    session.add_video(video=video_2, camera=camera_2)
+    assert session.get_camera(video_1) is camera_1
+    assert session.get_camera(video_2) is camera_2
+
+
+def test_recording_session_add_video():
+    """Test `RecordingSession.add_video` method."""
+    camera_group = CameraGroup()
+    session = RecordingSession(camera_group=camera_group)
+    camera_1 = Camera()
+    camera_2 = Camera()
+    video_1 = Video(filename="not/a/file.mp4")
+    video_2 = Video(filename="not/a/file2.mp4")
+
+    # Test with `Camera` object not in `camera_group`
+    with pytest.raises(ValueError):
+        session.add_video(video=video_1, camera=camera_1)
+    assert session._video_by_camera == {}
+    assert session._camera_by_video == {}
+
+    # Test with not isinstance(`video`, `Video`)
+    with pytest.raises(ValueError):
+        session.add_video(video="not_a_video", camera=camera_1)
+    assert session._video_by_camera == {}
+    assert session._camera_by_video == {}
+
+    # Test with `Camera` object in `camera_group`
+    camera_group.cameras.append(camera_1)
+    session.add_video(video=video_1, camera=camera_1)
+    assert session._video_by_camera == {camera_1: video_1}
+    assert session._camera_by_video == {video_1: camera_1}
+
+    # Test with multiple videos
+    camera_group.cameras.append(camera_2)
+    session.add_video(video=video_2, camera=camera_2)
+    assert session._video_by_camera == {camera_1: video_1, camera_2: video_2}
+    assert session._camera_by_video == {video_1: camera_1, video_2: camera_2}
 
 
 def test_camera_group_cameras():
