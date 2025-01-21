@@ -375,7 +375,7 @@ def test_recording_session_add_video():
     assert session._video_by_camera == {camera_1: video_1, camera_2: video_2}
     assert session._camera_by_video == {video_1: camera_1, video_2: camera_2}
 
-    
+
 def test_camera_group_cameras():
     """Test camera group cameras method."""
     camera1 = Camera(name="camera1")

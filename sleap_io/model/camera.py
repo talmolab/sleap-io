@@ -265,6 +265,7 @@ class CameraGroup:
 
         return camera_group
 
+
 @define(eq=False)  # Set eq to false to make class hashable
 class RecordingSession:
     """A recording session with multiple cameras.
