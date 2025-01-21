@@ -102,12 +102,13 @@ class CameraGroup:
                 number of dimensions (including 0).
             triangulation_func: Function to use for triangulation. The
             triangulation_func should take the following arguments:
-                - points: Array of undistorted 2D points from each camera view of dtype
+                points: Array of undistorted 2D points from each camera view of dtype
                     float64 and shape (M, N, 2) where M is the number of cameras and N
                     is the number of points.
-                - projection_matrices: Array of (3, 4) projection matrices for each of
-                    the M cameras of shape (M, 3, 4) - note that points are undistorted.
-                and return the triangulated 3D points of shape (N, 3).
+                projection_matrices: Array of (3, 4) projection matrices for each of the
+                    M cameras of shape (M, 3, 4) - note that points are undistorted.
+                and return the triangulated 3D points of shape (N, 3) where N is the
+                number of points.
             Default is vectorized DLT.
 
 
@@ -230,17 +231,17 @@ class CameraGroup:
 
         Returns:
             Dictionary containing camera group information with the following keys:
-            - cam_n: Camera dictionary containing information for camera at index "n"
-                with the following keys:
-                - name: Camera name.
-                - size: Image size (height, width) of camera in pixels of size (2,) and
-                    type int.
-                - matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-                - distortions: Radial-tangential distortion coefficients
-                    [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-                - rotation: Rotation vector in unnormalized axis-angle representation of
-                    size (3,) and type float64.
-                - translation: Translation vector of size (3,) and type float64.
+                cam_n: Camera dictionary containing information for camera at index "n"
+                    with the following keys:
+                    name: Camera name.
+                    size: Image size (height, width) of camera in pixels of size (2,)
+                        and type int.
+                    matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+                    distortions: Radial-tangential distortion coefficients
+                        [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+                    rotation: Rotation vector in unnormalized axis-angle representation
+                        of size (3,) and type float64.
+                    translation: Translation vector of size (3,) and type float64.
         """
         calibration_dict = {}
         for cam_idx, camera in enumerate(self.cameras):
