@@ -129,6 +129,7 @@ class Skeleton:
         """Ensure nodes are `Node`s, edges are `Edge`s, and `Node` map is updated."""
         self._convert_nodes()
         self._convert_edges()
+        self._convert_symmetries()
         self.rebuild_cache()
 
     def _convert_nodes(self):
@@ -173,6 +174,44 @@ class Skeleton:
                 dst = self.nodes[dst]
 
             self.edges[i] = Edge(src, dst)
+
+    def _convert_symmetries(self):
+        """Convert list of symmetric node names or integers to `Symmetry` objects."""
+        if isinstance(self.symmetries, np.ndarray):
+            self.symmetries = self.symmetries.tolist()
+
+        node_names = self.node_names
+        for i, symmetry in enumerate(self.symmetries):
+            if type(symmetry) == Symmetry:
+                continue
+            node1, node2 = symmetry
+            if type(node1) == str:
+                try:
+                    node1 = node_names.index(node1)
+                except ValueError:
+                    raise ValueError(
+                        f"Node '{node1}' specified in the symmetry list is not in the "
+                        "nodes."
+                    )
+            if type(node1) == int or (
+                np.isscalar(node1) and np.issubdtype(node1.dtype, np.integer)
+            ):
+                node1 = self.nodes[node1]
+
+            if type(node2) == str:
+                try:
+                    node2 = node_names.index(node2)
+                except ValueError:
+                    raise ValueError(
+                        f"Node '{node2}' specified in the symmetry list is not in the "
+                        "nodes."
+                    )
+            if type(node2) == int or (
+                np.isscalar(node2) and np.issubdtype(node2.dtype, np.integer)
+            ):
+                node2 = self.nodes[node2]
+
+            self.symmetries[i] = Symmetry({node1, node2})
 
     def rebuild_cache(self, nodes: list[Node] | None = None):
         """Rebuild the node name/index to `Node` map caches.
@@ -424,6 +463,17 @@ class Skeleton:
 
         if symmetry not in self.symmetries:
             self.symmetries.append(symmetry)
+
+    def add_symmetries(
+        self, symmetries: list[Symmetry | tuple[NodeOrIndex, NodeOrIndex]]
+    ):
+        """Add multiple `Symmetry` relationships to the skeleton.
+
+        Args:
+            symmetries: A list of `Symmetry` objects or 2-tuples of symmetric nodes.
+        """
+        for symmetry in symmetries:
+            self.add_symmetry(*symmetry)
 
     def rename_nodes(self, name_map: dict[NodeOrIndex, str] | list[str]):
         """Rename nodes in the skeleton.

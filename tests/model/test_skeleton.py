@@ -54,6 +54,15 @@ def test_skeleton():
     with pytest.raises(ValueError):
         Skeleton(["A", "B"], edges=[("A", "C")])
 
+    skel = Skeleton(["A", "B"], symmetries=[("A", "B")])
+    assert skel.symmetry_inds == [(0, 1)]
+
+    with pytest.raises(ValueError):
+        Skeleton(["A", "B"], symmetries=[("a", "B")])
+
+    with pytest.raises(ValueError):
+        Skeleton(["A", "B"], symmetries=[("A", "b")])
+
 
 def test_skeleton_node_map():
     """Test `Skeleton` node map returns correct nodes."""
@@ -164,6 +173,11 @@ def test_add_symmetry():
     # Add new symmetry with node names
     skel.add_symmetry("E", "F")
     assert skel.symmetry_inds == [(0, 1), (2, 3), (4, 5)]
+
+    # Add symmetries
+    skel.add_nodes(["GL", "GR", "HL", "HR"])
+    skel.add_symmetries([("GL", "GR"), ("HL", "HR")])
+    assert skel.symmetry_inds == [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]
 
 
 def test_rename_nodes():
