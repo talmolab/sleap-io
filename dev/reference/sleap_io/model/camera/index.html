@@ -1625,15 +1625,15 @@ type float64.</p>
 <a id="__codelineno-0-568" name="__codelineno-0-568"></a><a href="#__codelineno-0-568"><span class="linenos" data-linenos="568 "></span></a>
 <a id="__codelineno-0-569" name="__codelineno-0-569"></a><a href="#__codelineno-0-569"><span class="linenos" data-linenos="569 "></span></a><span class="sd">        Returns:</span>
 <a id="__codelineno-0-570" name="__codelineno-0-570"></a><a href="#__codelineno-0-570"><span class="linenos" data-linenos="570 "></span></a><span class="sd">            Dictionary containing camera information with the following keys:</span>
-<a id="__codelineno-0-571" name="__codelineno-0-571"></a><a href="#__codelineno-0-571"><span class="linenos" data-linenos="571 "></span></a><span class="sd">            - name: Camera name.</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572"></a><a href="#__codelineno-0-572"><span class="linenos" data-linenos="572 "></span></a><span class="sd">            - size: Image size (width, height) of camera in pixels of size (2,) and</span>
-<a id="__codelineno-0-573" name="__codelineno-0-573"></a><a href="#__codelineno-0-573"><span class="linenos" data-linenos="573 "></span></a><span class="sd">                type int.</span>
-<a id="__codelineno-0-574" name="__codelineno-0-574"></a><a href="#__codelineno-0-574"><span class="linenos" data-linenos="574 "></span></a><span class="sd">            - matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
-<a id="__codelineno-0-575" name="__codelineno-0-575"></a><a href="#__codelineno-0-575"><span class="linenos" data-linenos="575 "></span></a><span class="sd">            - distortions: Radial-tangential distortion coefficients</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a><a href="#__codelineno-0-571"><span class="linenos" data-linenos="571 "></span></a><span class="sd">            name: Camera name.</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a><a href="#__codelineno-0-572"><span class="linenos" data-linenos="572 "></span></a><span class="sd">            size: Image size (width, height) of camera in pixels of size (2,) and type</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a><a href="#__codelineno-0-573"><span class="linenos" data-linenos="573 "></span></a><span class="sd">                int.</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a><a href="#__codelineno-0-574"><span class="linenos" data-linenos="574 "></span></a><span class="sd">            matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a><a href="#__codelineno-0-575"><span class="linenos" data-linenos="575 "></span></a><span class="sd">            distortions: Radial-tangential distortion coefficients</span>
 <a id="__codelineno-0-576" name="__codelineno-0-576"></a><a href="#__codelineno-0-576"><span class="linenos" data-linenos="576 "></span></a><span class="sd">                [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.</span>
-<a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a><span class="sd">            - rotation: Rotation vector in unnormalized axis-angle representation of</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a><span class="sd">                size (3,) and type float64.</span>
-<a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a><span class="sd">            - translation: Translation vector of size (3,) and type float64.</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a><span class="sd">            rotation: Rotation vector in unnormalized axis-angle representation of size</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a><span class="sd">                (3,) and type float64.</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a><span class="sd">            translation: Translation vector of size (3,) and type float64.</span>
 <a id="__codelineno-0-580" name="__codelineno-0-580"></a><a href="#__codelineno-0-580"><span class="linenos" data-linenos="580 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
 <a id="__codelineno-0-581" name="__codelineno-0-581"></a><a href="#__codelineno-0-581"><span class="linenos" data-linenos="581 "></span></a>        <span class="n">camera_dict</span> <span class="o">=</span> <span class="p">{</span>
 <a id="__codelineno-0-582" name="__codelineno-0-582"></a><a href="#__codelineno-0-582"><span class="linenos" data-linenos="582 "></span></a>            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
@@ -1653,15 +1653,15 @@ type float64.</p>
 <a id="__codelineno-0-596" name="__codelineno-0-596"></a><a href="#__codelineno-0-596"><span class="linenos" data-linenos="596 "></span></a><span class="sd">        Args:</span>
 <a id="__codelineno-0-597" name="__codelineno-0-597"></a><a href="#__codelineno-0-597"><span class="linenos" data-linenos="597 "></span></a><span class="sd">            camera_dict: Dictionary containing camera information with the following</span>
 <a id="__codelineno-0-598" name="__codelineno-0-598"></a><a href="#__codelineno-0-598"><span class="linenos" data-linenos="598 "></span></a><span class="sd">                keys:</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">                - name: Camera name.</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">                - size: Image size (width, height) of camera in pixels of size (2,) and</span>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">                name: Camera name.</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">                size: Image size (width, height) of camera in pixels of size (2,) and</span>
 <a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a><span class="sd">                    type int.</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a><span class="sd">                - matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a><span class="sd">                - distortions: Radial-tangential distortion coefficients</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a><span class="sd">                matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a><span class="sd">                distortions: Radial-tangential distortion coefficients</span>
 <a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a><span class="sd">                    [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.</span>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a><span class="sd">                - rotation: Rotation vector in unnormalized axis-angle representation of</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a><span class="sd">                rotation: Rotation vector in unnormalized axis-angle representation of</span>
 <a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a><span class="sd">                    size (3,) and type float64.</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a><span class="sd">                - translation: Translation vector of size (3,) and type float64.</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a><span class="sd">                translation: Translation vector of size (3,) and type float64.</span>
 <a id="__codelineno-0-608" name="__codelineno-0-608"></a><a href="#__codelineno-0-608"><span class="linenos" data-linenos="608 "></span></a>
 <a id="__codelineno-0-609" name="__codelineno-0-609"></a><a href="#__codelineno-0-609"><span class="linenos" data-linenos="609 "></span></a><span class="sd">        Returns:</span>
 <a id="__codelineno-0-610" name="__codelineno-0-610"></a><a href="#__codelineno-0-610"><span class="linenos" data-linenos="610 "></span></a><span class="sd">            `Camera` object created from dictionary.</span>
@@ -1893,15 +1893,15 @@ type float64.</p>
               <div class="doc-md-description">
                 <p>Dictionary containing camera information with the following
 keys:
-- name: Camera name.
-- size: Image size (width, height) of camera in pixels of size (2,) and
+name: Camera name.
+size: Image size (width, height) of camera in pixels of size (2,) and
     type int.
-- matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-- distortions: Radial-tangential distortion coefficients
+matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+distortions: Radial-tangential distortion coefficients
     [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-- rotation: Rotation vector in unnormalized axis-angle representation of
+rotation: Rotation vector in unnormalized axis-angle representation of
     size (3,) and type float64.
-- translation: Translation vector of size (3,) and type float64.</p>
+translation: Translation vector of size (3,) and type float64.</p>
               </div>
             </td>
             <td>
@@ -1943,15 +1943,15 @@ keys:
 <a id="__codelineno-0-596" name="__codelineno-0-596"></a><a href="#__codelineno-0-596"><span class="linenos" data-linenos="596 "></span></a><span class="sd">    Args:</span>
 <a id="__codelineno-0-597" name="__codelineno-0-597"></a><a href="#__codelineno-0-597"><span class="linenos" data-linenos="597 "></span></a><span class="sd">        camera_dict: Dictionary containing camera information with the following</span>
 <a id="__codelineno-0-598" name="__codelineno-0-598"></a><a href="#__codelineno-0-598"><span class="linenos" data-linenos="598 "></span></a><span class="sd">            keys:</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">            - name: Camera name.</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">            - size: Image size (width, height) of camera in pixels of size (2,) and</span>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">            name: Camera name.</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">            size: Image size (width, height) of camera in pixels of size (2,) and</span>
 <a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a><span class="sd">                type int.</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a><span class="sd">            - matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a><span class="sd">            - distortions: Radial-tangential distortion coefficients</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a><span class="sd">            matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a><span class="sd">            distortions: Radial-tangential distortion coefficients</span>
 <a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a><span class="sd">                [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.</span>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a><span class="sd">            - rotation: Rotation vector in unnormalized axis-angle representation of</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a><span class="sd">            rotation: Rotation vector in unnormalized axis-angle representation of</span>
 <a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a><span class="sd">                size (3,) and type float64.</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a><span class="sd">            - translation: Translation vector of size (3,) and type float64.</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a><span class="sd">            translation: Translation vector of size (3,) and type float64.</span>
 <a id="__codelineno-0-608" name="__codelineno-0-608"></a><a href="#__codelineno-0-608"><span class="linenos" data-linenos="608 "></span></a>
 <a id="__codelineno-0-609" name="__codelineno-0-609"></a><a href="#__codelineno-0-609"><span class="linenos" data-linenos="609 "></span></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-610" name="__codelineno-0-610"></a><a href="#__codelineno-0-610"><span class="linenos" data-linenos="610 "></span></a><span class="sd">        `Camera` object created from dictionary.</span>
@@ -2199,15 +2199,15 @@ is the same as the "..." dimensions of <code>points</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>Dictionary containing camera information with the following keys:
-- name: Camera name.
-- size: Image size (width, height) of camera in pixels of size (2,) and
-    type int.
-- matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-- distortions: Radial-tangential distortion coefficients
+name: Camera name.
+size: Image size (width, height) of camera in pixels of size (2,) and type
+    int.
+matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+distortions: Radial-tangential distortion coefficients
     [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-- rotation: Rotation vector in unnormalized axis-angle representation of
-    size (3,) and type float64.
-- translation: Translation vector of size (3,) and type float64.</p>
+rotation: Rotation vector in unnormalized axis-angle representation of size
+    (3,) and type float64.
+translation: Translation vector of size (3,) and type float64.</p>
               </div>
             </td>
           </tr>
@@ -2221,15 +2221,15 @@ is the same as the "..." dimensions of <code>points</code>.</p>
 <a id="__codelineno-0-568" name="__codelineno-0-568"></a><a href="#__codelineno-0-568"><span class="linenos" data-linenos="568 "></span></a>
 <a id="__codelineno-0-569" name="__codelineno-0-569"></a><a href="#__codelineno-0-569"><span class="linenos" data-linenos="569 "></span></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-570" name="__codelineno-0-570"></a><a href="#__codelineno-0-570"><span class="linenos" data-linenos="570 "></span></a><span class="sd">        Dictionary containing camera information with the following keys:</span>
-<a id="__codelineno-0-571" name="__codelineno-0-571"></a><a href="#__codelineno-0-571"><span class="linenos" data-linenos="571 "></span></a><span class="sd">        - name: Camera name.</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572"></a><a href="#__codelineno-0-572"><span class="linenos" data-linenos="572 "></span></a><span class="sd">        - size: Image size (width, height) of camera in pixels of size (2,) and</span>
-<a id="__codelineno-0-573" name="__codelineno-0-573"></a><a href="#__codelineno-0-573"><span class="linenos" data-linenos="573 "></span></a><span class="sd">            type int.</span>
-<a id="__codelineno-0-574" name="__codelineno-0-574"></a><a href="#__codelineno-0-574"><span class="linenos" data-linenos="574 "></span></a><span class="sd">        - matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
-<a id="__codelineno-0-575" name="__codelineno-0-575"></a><a href="#__codelineno-0-575"><span class="linenos" data-linenos="575 "></span></a><span class="sd">        - distortions: Radial-tangential distortion coefficients</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a><a href="#__codelineno-0-571"><span class="linenos" data-linenos="571 "></span></a><span class="sd">        name: Camera name.</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a><a href="#__codelineno-0-572"><span class="linenos" data-linenos="572 "></span></a><span class="sd">        size: Image size (width, height) of camera in pixels of size (2,) and type</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a><a href="#__codelineno-0-573"><span class="linenos" data-linenos="573 "></span></a><span class="sd">            int.</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a><a href="#__codelineno-0-574"><span class="linenos" data-linenos="574 "></span></a><span class="sd">        matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a><a href="#__codelineno-0-575"><span class="linenos" data-linenos="575 "></span></a><span class="sd">        distortions: Radial-tangential distortion coefficients</span>
 <a id="__codelineno-0-576" name="__codelineno-0-576"></a><a href="#__codelineno-0-576"><span class="linenos" data-linenos="576 "></span></a><span class="sd">            [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.</span>
-<a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a><span class="sd">        - rotation: Rotation vector in unnormalized axis-angle representation of</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a><span class="sd">            size (3,) and type float64.</span>
-<a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a><span class="sd">        - translation: Translation vector of size (3,) and type float64.</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a><span class="sd">        rotation: Rotation vector in unnormalized axis-angle representation of size</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a><span class="sd">            (3,) and type float64.</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a><span class="sd">        translation: Translation vector of size (3,) and type float64.</span>
 <a id="__codelineno-0-580" name="__codelineno-0-580"></a><a href="#__codelineno-0-580"><span class="linenos" data-linenos="580 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-581" name="__codelineno-0-581"></a><a href="#__codelineno-0-581"><span class="linenos" data-linenos="581 "></span></a>    <span class="n">camera_dict</span> <span class="o">=</span> <span class="p">{</span>
 <a id="__codelineno-0-582" name="__codelineno-0-582"></a><a href="#__codelineno-0-582"><span class="linenos" data-linenos="582 "></span></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
