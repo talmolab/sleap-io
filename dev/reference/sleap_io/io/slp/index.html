@@ -842,27 +842,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../model/camera/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    camera
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../model/instance/" class="md-nav__link">
         
   
@@ -2057,7 +2036,7 @@ when the video files are not available).</p>
 <a id="__codelineno-0-90" name="__codelineno-0-90"></a><a href="#__codelineno-0-90"><span class="linenos" data-linenos=" 90 "></span></a>            <span class="n">dataset</span> <span class="o">=</span> <span class="n">backend_metadata</span><span class="p">[</span><span class="s2">&quot;dataset&quot;</span><span class="p">]</span>
 <a id="__codelineno-0-91" name="__codelineno-0-91"></a><a href="#__codelineno-0-91"><span class="linenos" data-linenos=" 91 "></span></a>            <span class="k">if</span> <span class="n">dataset</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;/video&quot;</span><span class="p">):</span>
 <a id="__codelineno-0-92" name="__codelineno-0-92"></a><a href="#__codelineno-0-92"><span class="linenos" data-linenos=" 92 "></span></a>                <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[:</span><span class="o">-</span><span class="mi">6</span><span class="p">]</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93"></a><a href="#__codelineno-0-93"><span class="linenos" data-linenos=" 93 "></span></a>            <span class="k">if</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a><a href="#__codelineno-0-93"><span class="linenos" data-linenos=" 93 "></span></a>            <span class="k">if</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="n">f</span> <span class="ow">and</span> <span class="s2">&quot;source_video&quot;</span> <span class="ow">in</span> <span class="n">f</span><span class="p">[</span><span class="n">dataset</span><span class="p">]:</span>
 <a id="__codelineno-0-94" name="__codelineno-0-94"></a><a href="#__codelineno-0-94"><span class="linenos" data-linenos=" 94 "></span></a>                <span class="n">source_video_json</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span>
 <a id="__codelineno-0-95" name="__codelineno-0-95"></a><a href="#__codelineno-0-95"><span class="linenos" data-linenos=" 95 "></span></a>                    <span class="n">f</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dataset</span><span class="si">}</span><span class="s2">/source_video&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;json&quot;</span><span class="p">]</span>
 <a id="__codelineno-0-96" name="__codelineno-0-96"></a><a href="#__codelineno-0-96"><span class="linenos" data-linenos=" 96 "></span></a>                <span class="p">)</span>
