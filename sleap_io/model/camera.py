@@ -56,7 +56,7 @@ def triangulate_dlt_vectorized(
     for a_slice in a:
         # Check that we have at least 2 views worth of non-nan points.
         nan_mask = np.isnan(a_slice)  # 2M x 4
-        has_enough_matches = np.all(~nan_mask, axis=1).sum(axis=1) >= 4
+        has_enough_matches = np.all(~nan_mask, axis=1).sum() >= 4  # Need 2 (x, y) pairs
 
         point_3d = np.full(3, np.nan)
         if has_enough_matches:
