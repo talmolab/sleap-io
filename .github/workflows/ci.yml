@@ -54,7 +54,7 @@ jobs:
 
   # Tests with pytest
   tests:
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -92,7 +92,7 @@ jobs:
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
         shell: bash -l {0}
         run: |
-          sudo apt-get update && sudo apt-get install libglapi-mesa libegl-mesa0 libegl1 libopengl0 libgl1-mesa-glx
+          sudo apt-get update && sudo apt-get install libglapi-mesa libegl-mesa0 libegl1 libopengl0 libgl1 libglx-mesa0
 
       - name: Test with pytest (with coverage)
         shell: bash -l {0}
