@@ -90,7 +90,7 @@ def make_video(
             dataset = backend_metadata["dataset"]
             if dataset.endswith("/video"):
                 dataset = dataset[:-6]
-            if dataset in f:
+            if dataset in f and "source_video" in f[dataset]:
                 source_video_json = json.loads(
                     f[f"{dataset}/source_video"].attrs["json"]
                 )
