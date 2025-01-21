@@ -369,17 +369,23 @@ def test_camera_group_triangulation(camera_group_345: CameraGroup):
     c = 5
 
     # Triangulate point from two camera views with shape (M, N=1, 2)
-    points = np.array([[[c, 0]], [[c, 0]]])
+    points_dtype = np.int8
+    points = np.array([[[c, 0]], [[c, 0]]]).astype(points_dtype)
     points_3d = camera_group.triangulate(points=points)
     assert points_3d.shape == (1, 3)  # == (*points.shape[1:-1], 3)
+    assert points.dtype == points_dtype
+    assert points_3d.dtype == points_dtype
     np.testing.assert_array_almost_equal(
         points_3d[:, :-1], np.array([[b, 0]]), decimal=5
     )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
 
     # Triangulate points with shape (M, 2)
-    points = points.reshape(-1, 2)
+    points_dtype = np.float32
+    points = points.reshape(-1, 2).astype(points_dtype)
     points_3d = camera_group.triangulate(points=points)
     assert points_3d.shape == (3,)  # == (*points.shape[1:-1], 3)
+    assert points.dtype == points_dtype
+    assert points_3d.dtype == points_dtype
     np.testing.assert_array_almost_equal(
         points_3d[:-1], np.array([b, 0]), decimal=5
     )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
@@ -388,6 +394,7 @@ def test_camera_group_triangulation(camera_group_345: CameraGroup):
     points = points.reshape(points.shape[0], 1, 1, 2)
     points_3d = camera_group.triangulate(points=points)
     assert points_3d.shape == (1, 1, 3)  # == (*points.shape[1:-1], 3)
+    assert points_3d.dtype == points.dtype
     np.testing.assert_array_almost_equal(
         points_3d[:, :, :-1], np.array([[[b, 0]]]), decimal=5
     )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
@@ -407,16 +414,23 @@ def test_camera_group_project(camera_group_345: CameraGroup):
     assert points_3d.shape == (n_points, 3)
 
     # Project points from world to camera frame
+    points_3d_dtype = np.int8
+    points_3d = points_3d.astype(points_3d_dtype)
     points = camera_group.project(points_3d)
     assert points.shape == (len(camera_group.cameras), n_points, 2)
+    assert points_3d.dtype == points_3d_dtype
+    assert points.dtype == points_3d.dtype
     np.testing.assert_array_almost_equal(
         points, np.array([[[c, 0]], [[c, 0]]]), decimal=5
     )
 
     # Project with arbitrary points shape (1, 1, N, 3)
-    points_3d = points_3d.reshape(1, 1, n_points, 3)
+    points_3d_dtype = np.float32
+    points_3d = points_3d.reshape(1, 1, n_points, 3).astype(points_3d_dtype)
     points = camera_group.project(points_3d)
     assert points.shape == (len(camera_group.cameras), 1, 1, n_points, 2)
+    assert points_3d.dtype == points_3d_dtype
+    assert points.dtype == points_3d.dtype
     np.testing.assert_array_almost_equal(
         points, np.array([[[[[c, 0]]]], [[[[c, 0]]]]]), decimal=5
     )
