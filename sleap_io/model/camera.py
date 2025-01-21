@@ -56,13 +56,13 @@ def triangulate_dlt_vectorized(
         # Check that we have at least 2 views worth of non-nan points.
         nan_mask = np.isnan(a_slice)  # 2M x 4
         has_enough_matches = np.all(~nan_mask, axis=1).sum(axis=1) >= 4
-        
+
         point_3d = np.full(3, np.nan)
         if has_enough_matches:
             a_no_nan = a_slice[~nan_mask].reshape(-1, 4, order="C")
             _, _, vh = np.linalg.svd(a_no_nan)
             point_3d = vh[-1, :-1] / vh[-1, -1]
-            
+
         points_3d.append(point_3d)
 
     points_3d = np.array(points_3d)
@@ -197,7 +197,9 @@ class CameraGroup:
             cam_points = camera.project(points)
             projected_points[cam_idx] = cam_points.reshape(n_points, 2)
 
-        return projected_points.reshape(n_cameras, *points_shape[:-1], 2).astype(points_dtype)
+        return projected_points.reshape(n_cameras, *points_shape[:-1], 2).astype(
+            points_dtype
+        )
 
     @classmethod
     def from_dict(cls, calibration_dict: dict) -> CameraGroup:
