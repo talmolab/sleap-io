@@ -456,6 +456,16 @@ def test_camera_group_triangulation(camera_group_345: CameraGroup):
     b = 4
     c = 5
 
+    # Test with incorrect input shape along camera axis
+    points = np.random.rand(1, 1, 2)
+    with pytest.raises(ValueError):
+        camera_group.triangulate(points=points)
+
+    # Test with incorrect input shape along point-dimension axis
+    points = np.random.rand(len(camera_group.cameras), 1, 3)
+    with pytest.raises(ValueError):
+        camera_group.triangulate(points=points)
+
     # Triangulate point from two camera views with shape (M, N=1, 2)
     points_dtype = np.int8
     points = np.array([[[c, 0]], [[c, 0]]]).astype(points_dtype)
@@ -487,6 +497,13 @@ def test_camera_group_triangulation(camera_group_345: CameraGroup):
         points_3d[:, :, :-1], np.array([[[b, 0]]]), decimal=5
     )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
 
+    # Triangulate with triangulate_func that returns incorrect shape
+    def triangulation_func(points, camera_group):
+        return np.random.rand(5, 5)
+
+    with pytest.raises(ValueError):
+        camera_group.triangulate(points=points, triangulation_func=triangulation_func)
+
 
 def test_camera_group_project(camera_group_345: CameraGroup):
     """Test camera group project method using 3-4-5 triangle on xy-plane."""
@@ -495,6 +512,11 @@ def test_camera_group_project(camera_group_345: CameraGroup):
     # Define special 3-4-5 triangle
     b = 4
     c = 5
+
+    # Test with incorrect input shape along point-dimension axis
+    points = np.random.rand(1)
+    with pytest.raises(ValueError):
+        camera_group.project(points=points)
 
     # Define 3D point
     n_points = 1
