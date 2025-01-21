@@ -259,13 +259,17 @@ def test_camera_project():
         dist=[[0], [0], [0], [0], [0]],
     )
 
-    points = np.random.rand(10, 3)
+    points_dtype = np.int32
+    points = np.random.rand(10, 3).astype(points_dtype)
     projected_points = camera.project(points)
+    assert points.dtype == points_dtype
+    assert projected_points.dtype == points_dtype
     assert projected_points.shape == (*points.shape[:-1], 2)
 
     points = np.random.rand(10, 1, 3)
     projected_points = camera.project(points)
     assert projected_points.shape == (*points.shape[:-1], 2)
+    assert projected_points.dtype == points.dtype
 
 
 def test_camera_get_video():
