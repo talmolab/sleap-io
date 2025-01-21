@@ -19,12 +19,13 @@ def triangulate_dlt_vectorized(
     """Triangulate 3D points from multiple camera views using Direct Linear Transform.
 
     Args:
-        points: Array of N 2D points from each camera view M of shape (M, N, 2).
+        points: Array of N 2D points from each camera view M of dtype float64 and shape
+            (M, N, 2) where N is the number of points.
         projection_matrices: Array of (3, 4) projection matrices for each camera M of
             shape (M, 3, 4).
 
     Returns:
-        Triangulated 3D points of shape (N, 3).
+        Triangulated 3D points of shape (N, 3) where N is the number of points.
     """
     n_cameras, n_points, _ = points.shape
 
@@ -96,14 +97,14 @@ class CameraGroup:
         the 3D points.
 
         Args:
-            points: Array of 2D points from each camera view of shape (M, ..., 2) where
-                M is the number of camera views and "..." is any number of dimensions
-                (including 0).
+            points: Array of 2D points from each camera view of any dtype and shape
+                (M, ..., 2) where M is the number of camera views and "..." is any
+                number of dimensions (including 0).
             triangulation_func: Function to use for triangulation. The
             triangulation_func should take the following arguments:
-                - points: Array of undistorted 2D points from each camera view of shape
-                    (M, N, 2) where M is the number of cameras and N is the number of
-                    points.
+                - points: Array of undistorted 2D points from each camera view of dtype
+                    float64 and shape (M, N, 2) where M is the number of cameras and N
+                    is the number of points.
                 - projection_matrices: Array of (3, 4) projection matrices for each of
                     the M cameras of shape (M, 3, 4) - note that points are undistorted.
                 and return the triangulated 3D points of shape (N, 3).
@@ -117,8 +118,9 @@ class CameraGroup:
                 match number of points in input.
 
         Returns:
-            Triangulated 3D points of shape (..., 3) where "..." is any number of
-            dimensions and matches the "..." dimensions of the input points array.
+            Triangulated 3D points of same dtype as `points` and shape (..., 3) where
+            "..." is any number of dimensions and matches the "..." dimensions of
+            `points`.
         """
         # Validate points in
         points_shape = points.shape
@@ -167,17 +169,16 @@ class CameraGroup:
         """Project 3D points to 2D using camera group.
 
         Args:
-            points: 3D points to project of shape (..., 3). where "..." is any number
-                of dimensions (including 0).
+            points: 3D points to project of any dtype and shape (..., 3). where "..." is
+                any number of dimensions (including 0).
 
         Returns:
-            Projected 2D points of shape (M, ..., 2) where M is the number of
-            cameras and "..." matches the "..." dimensions of the input points array.
+            Projected 2D points of same dtype as `points` and shape (M, ..., 2)
+            where M is the number of cameras and "..." matches the "..." dimensions of
+            `points`.
         """
         # Validate points in
-        points = points.astype(np.float64)
         points_shape = points.shape
-        points_dtype = points.dtype
         try:
             # Check if points are 3D
             if points_shape[-1] != 3:
@@ -190,6 +191,8 @@ class CameraGroup:
             )
 
         # Project 3D points to 2D for each camera
+        points_dtype = points.dtype
+        points = points.astype(np.float64)  # Ensure float for opencv project
         n_cameras = len(self.cameras)
         n_points = np.prod(points_shape[:-1])
         projected_points = np.zeros((n_cameras, n_points, 2))
