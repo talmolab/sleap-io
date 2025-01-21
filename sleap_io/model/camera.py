@@ -53,17 +53,16 @@ def triangulate_dlt_vectorized(
     # Remove rows with NaNs before SVD which may result in a ragged A (hence for loop)
     points_3d = []
     for a_slice in a:
-        nan_mask = np.isnan(a_slice)
-        if np.all(nan_mask):
-            # If all rows are NaN, set point to NaN
-            point_3d = np.full(3, np.nan)
-            # TODO: Also filter out if ony 2 rows (a single point) is non-nan
-        else:
+        # Check that we have at least 2 views worth of non-nan points.
+        nan_mask = np.isnan(a_slice)  # 2M x 4
+        has_enough_matches = np.all(~nan_mask, axis=1).sum(axis=1) >= 4
+        
+        point_3d = np.full(3, np.nan)
+        if has_enough_matches:
             a_no_nan = a_slice[~nan_mask].reshape(-1, 4, order="C")
-
             _, _, vh = np.linalg.svd(a_no_nan)
-
             point_3d = vh[-1, :-1] / vh[-1, -1]
+            
         points_3d.append(point_3d)
 
     points_3d = np.array(points_3d)
