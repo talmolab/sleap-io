@@ -376,20 +376,171 @@ def test_recording_session_add_video():
     assert session._camera_by_video == {video_1: camera_1, video_2: camera_2}
 
 
-# TODO: Remove when implement triangulation without aniposelib
-def test_camera_aliases():
-    """Test camera aliases for attributes."""
-    camera = Camera(
-        matrix=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-        dist=[[1], [2], [3], [4], [5]],
-        size=(100, 200),
-        rvec=[1, 2, 3],
-        tvec=[1, 2, 3],
-        name="camera",
+def test_camera_group_cameras():
+    """Test camera group cameras method."""
+    camera1 = Camera(name="camera1")
+    camera2 = Camera(name="camera2")
+    camera_group = CameraGroup(cameras=[camera1, camera2])
+
+    assert camera_group.cameras == [camera1, camera2]
+
+    camera_group = CameraGroup()
+    assert camera_group.cameras == []
+
+
+def test_camera_group_from_dict_to_dict():
+    """Test camera group from_dict and to_dict methods."""
+
+    # Define template camera dictionary
+    size = [1280, 1024]
+    matrix = np.eye(3).tolist()
+    distortions = np.zeros(5).tolist()
+    rotation = np.zeros(3).tolist()
+    translation = np.zeros(3).tolist()
+    camera_dict_template = {
+        "size": size,
+        "matrix": matrix,
+        "distortions": distortions,
+        "rotation": rotation,
+        "translation": translation,
+    }
+
+    camera_group_dict = {}
+    n_cameras = 3
+    for i in range(n_cameras):
+        camera_dict = camera_dict_template.copy()
+        camera_dict["name"] = f"camera{i}"
+        camera_group_dict[f"cam_{i}"] = camera_dict
+
+    camera_group_0 = CameraGroup.from_dict(camera_group_dict)
+    camera_group_dict_0: dict = camera_group_0.to_dict()
+    assert camera_group_dict == camera_group_dict_0
+    assert len(camera_group_0.cameras) == 3
+    for i in range(n_cameras):
+        assert camera_group_0.cameras[i].name == f"camera{i}"
+        assert camera_group_0.cameras[i].size == tuple(size)
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].matrix, np.array(matrix)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].dist, np.array(distortions)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].rvec, np.array(rotation)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].tvec, np.array(translation)
+        )
+
+
+def test_camera_group_load(calibration_toml_path: str):
+    """Test camera group load method."""
+
+    camera_group = CameraGroup.load(calibration_toml_path)
+    assert len(camera_group.cameras) == 8
+
+    for camera, name in zip(
+        camera_group.cameras,
+        ["back", "backL", "mid", "midL", "side", "sideL", "top", "topL"],
+    ):
+        assert camera.name == name
+        assert camera.size == (1280, 1024)
+
+
+def test_camera_group_triangulation(camera_group_345: CameraGroup):
+    """Test camera group triangulation using 3-4-5 triangle on xy-plane."""
+
+    camera_group = camera_group_345
+
+    # Define special 3-4-5 triangle
+    b = 4
+    c = 5
+
+    # Test with incorrect input shape along camera axis
+    points = np.random.rand(1, 1, 2)
+    with pytest.raises(ValueError):
+        camera_group.triangulate(points=points)
+
+    # Test with incorrect input shape along point-dimension axis
+    points = np.random.rand(len(camera_group.cameras), 1, 3)
+    with pytest.raises(ValueError):
+        camera_group.triangulate(points=points)
+
+    # Triangulate point from two camera views with shape (M, N=1, 2)
+    points_dtype = np.int8
+    points = np.array([[[c, 0]], [[c, 0]]]).astype(points_dtype)
+    points_3d = camera_group.triangulate(points=points)
+    assert points_3d.shape == (1, 3)  # == (*points.shape[1:-1], 3)
+    assert points.dtype == points_dtype
+    assert points_3d.dtype == points_dtype
+    np.testing.assert_array_almost_equal(
+        points_3d[:, :-1], np.array([[b, 0]]), decimal=5
+    )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
+
+    # Triangulate points with shape (M, 2)
+    points_dtype = np.float32
+    points = points.reshape(-1, 2).astype(points_dtype)
+    points_3d = camera_group.triangulate(points=points)
+    assert points_3d.shape == (3,)  # == (*points.shape[1:-1], 3)
+    assert points.dtype == points_dtype
+    assert points_3d.dtype == points_dtype
+    np.testing.assert_array_almost_equal(
+        points_3d[:-1], np.array([b, 0]), decimal=5
+    )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
+
+    # Triangulate points with shape (M, L=1, N=1, 2)
+    points = points.reshape(points.shape[0], 1, 1, 2)
+    points_3d = camera_group.triangulate(points=points)
+    assert points_3d.shape == (1, 1, 3)  # == (*points.shape[1:-1], 3)
+    assert points_3d.dtype == points.dtype
+    np.testing.assert_array_almost_equal(
+        points_3d[:, :, :-1], np.array([[[b, 0]]]), decimal=5
+    )  # z-coordinate is ambiguous since we only define 2D points on x-y plane
+
+    # Triangulate with triangulate_func that returns incorrect shape
+    def triangulation_func(points, camera_group):
+        return np.random.rand(5, 5)
+
+    with pytest.raises(ValueError):
+        camera_group.triangulate(points=points, triangulation_func=triangulation_func)
+
+
+def test_camera_group_project(camera_group_345: CameraGroup):
+    """Test camera group project method using 3-4-5 triangle on xy-plane."""
+    camera_group = camera_group_345
+
+    # Define special 3-4-5 triangle
+    b = 4
+    c = 5
+
+    # Test with incorrect input shape along point-dimension axis
+    points = np.random.rand(1)
+    with pytest.raises(ValueError):
+        camera_group.project(points=points)
+
+    # Define 3D point
+    n_points = 1
+    points_3d = np.array([[b, 0, 1]])
+    assert points_3d.shape == (n_points, 3)
+
+    # Project points from world to camera frame
+    points_3d_dtype = np.int8
+    points_3d = points_3d.astype(points_3d_dtype)
+    points = camera_group.project(points_3d)
+    assert points.shape == (len(camera_group.cameras), n_points, 2)
+    assert points_3d.dtype == points_3d_dtype
+    assert points.dtype == points_3d.dtype
+    np.testing.assert_array_almost_equal(
+        points, np.array([[[c, 0]], [[c, 0]]]), decimal=5
     )
 
-    # Test __getattr__ aliases
-    assert camera.get_name() == camera.name
-    np.testing.assert_array_equal(
-        camera.get_extrinsic_matrix(), camera.extrinsic_matrix
+    # Project with arbitrary points shape (1, 1, N, 3)
+    points_3d_dtype = np.float32
+    points_3d = points_3d.reshape(1, 1, n_points, 3).astype(points_3d_dtype)
+    points = camera_group.project(points_3d)
+    assert points.shape == (len(camera_group.cameras), 1, 1, n_points, 2)
+    assert points_3d.dtype == points_3d_dtype
+    assert points.dtype == points_3d.dtype
+    np.testing.assert_array_almost_equal(
+        points, np.array([[[[[c, 0]]]], [[[[c, 0]]]]]), decimal=5
     )
