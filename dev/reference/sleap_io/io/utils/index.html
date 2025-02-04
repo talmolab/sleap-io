@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.50">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.2">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.a40c8224.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.d7758b05.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -276,6 +276,7 @@
   
   <span class="md-ellipsis">
     Overview
+    
   </span>
   
 
@@ -296,6 +297,7 @@
   
   <span class="md-ellipsis">
     Examples
+    
   </span>
   
 
@@ -316,6 +318,7 @@
   
   <span class="md-ellipsis">
     Changelog
+    
   </span>
   
 
@@ -336,6 +339,7 @@
   
   <span class="md-ellipsis">
     Releases
+    
   </span>
   
 
@@ -371,6 +375,7 @@
   
   <span class="md-ellipsis">
     Core API
+    
   </span>
   
 
@@ -396,6 +401,7 @@
   
   <span class="md-ellipsis">
     Model
+    
   </span>
   
 
@@ -417,6 +423,7 @@
   
   <span class="md-ellipsis">
     Formats
+    
   </span>
   
 
@@ -462,6 +469,7 @@
   
   <span class="md-ellipsis">
     Full API
+    
   </span>
   
 
@@ -503,6 +511,7 @@
   
   <span class="md-ellipsis">
     sleap_io
+    
   </span>
   
 
@@ -550,6 +559,7 @@
   
   <span class="md-ellipsis">
     io
+    
   </span>
   
 
@@ -581,6 +591,7 @@
   
   <span class="md-ellipsis">
     jabs
+    
   </span>
   
 
@@ -602,6 +613,7 @@
   
   <span class="md-ellipsis">
     labelstudio
+    
   </span>
   
 
@@ -623,6 +635,7 @@
   
   <span class="md-ellipsis">
     main
+    
   </span>
   
 
@@ -644,6 +657,7 @@
   
   <span class="md-ellipsis">
     nwb
+    
   </span>
   
 
@@ -665,6 +679,7 @@
   
   <span class="md-ellipsis">
     slp
+    
   </span>
   
 
@@ -693,6 +708,7 @@
   
   <span class="md-ellipsis">
     utils
+    
   </span>
   
 
@@ -704,6 +720,7 @@
   
   <span class="md-ellipsis">
     utils
+    
   </span>
   
 
@@ -752,6 +769,7 @@
   
   <span class="md-ellipsis">
     video_reading
+    
   </span>
   
 
@@ -773,6 +791,7 @@
   
   <span class="md-ellipsis">
     video_writing
+    
   </span>
   
 
@@ -816,6 +835,7 @@
   
   <span class="md-ellipsis">
     model
+    
   </span>
   
 
@@ -847,6 +867,7 @@
   
   <span class="md-ellipsis">
     camera
+    
   </span>
   
 
@@ -868,6 +889,7 @@
   
   <span class="md-ellipsis">
     instance
+    
   </span>
   
 
@@ -889,6 +911,7 @@
   
   <span class="md-ellipsis">
     labeled_frame
+    
   </span>
   
 
@@ -910,6 +933,7 @@
   
   <span class="md-ellipsis">
     labels
+    
   </span>
   
 
@@ -931,6 +955,7 @@
   
   <span class="md-ellipsis">
     skeleton
+    
   </span>
   
 
@@ -952,6 +977,7 @@
   
   <span class="md-ellipsis">
     suggestions
+    
   </span>
   
 
@@ -973,6 +999,7 @@
   
   <span class="md-ellipsis">
     video
+    
   </span>
   
 
@@ -1002,6 +1029,7 @@
   
   <span class="md-ellipsis">
     version
+    
   </span>
   
 
@@ -1072,6 +1100,7 @@
               <article class="md-content__inner md-typeset">
                 
                   
+
 
   
   
@@ -1182,6 +1211,105 @@
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="sleap_io.io.utils._overwrite_hdf5_dataset" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">_overwrite_hdf5_dataset</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.utils._overwrite_hdf5_dataset" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Overwrite dataset in HDF5 file.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>f</code>
+            </td>
+            <td>
+                  <code><span title="typing.Union">Union</span>[<span title="h5py.File">File</span>, <span title="h5py.Group">Group</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Handle to HDF5 file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>dataset</code>
+            </td>
+            <td>
+                  <code>str</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to a dataset.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Data to write to dataset.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/utils.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-25" name="__codelineno-0-25"></a><a href="#__codelineno-0-25"><span class="linenos" data-linenos="25 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">_overwrite_hdf5_dataset</span><span class="p">(</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26"></a><a href="#__codelineno-0-26"><span class="linenos" data-linenos="26 "></span></a>    <span class="n">f</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">,</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">],</span> <span class="n">dataset</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27"></a><a href="#__codelineno-0-27"><span class="linenos" data-linenos="27 "></span></a><span class="p">):</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a><a href="#__codelineno-0-28"><span class="linenos" data-linenos="28 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overwrite dataset in HDF5 file.</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a><a href="#__codelineno-0-29"><span class="linenos" data-linenos="29 "></span></a>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a><a href="#__codelineno-0-30"><span class="linenos" data-linenos="30 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a><a href="#__codelineno-0-31"><span class="linenos" data-linenos="31 "></span></a><span class="sd">        f: Handle to HDF5 file.</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a><a href="#__codelineno-0-32"><span class="linenos" data-linenos="32 "></span></a><span class="sd">        dataset: Path to a dataset.</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a><a href="#__codelineno-0-33"><span class="linenos" data-linenos="33 "></span></a><span class="sd">        data: Data to write to dataset.</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a><a href="#__codelineno-0-34"><span class="linenos" data-linenos="34 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a><a href="#__codelineno-0-35"><span class="linenos" data-linenos="35 "></span></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><a href="#__codelineno-0-36"><span class="linenos" data-linenos="36 "></span></a>        <span class="k">del</span> <span class="n">f</span><span class="p">[</span><span class="n">dataset</span><span class="p">]</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><a href="#__codelineno-0-37"><span class="linenos" data-linenos="37 "></span></a>    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a><a href="#__codelineno-0-38"><span class="linenos" data-linenos="38 "></span></a>        <span class="k">pass</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><a href="#__codelineno-0-39"><span class="linenos" data-linenos="39 "></span></a>    <span class="n">f</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -2125,7 +2253,7 @@ corresponding to either sub group paths or the datasets as arrays.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.60a45f97.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.f13b1293.min.js"></script>
       
     
   </body>

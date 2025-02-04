@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.50">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.2">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.a40c8224.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.d7758b05.min.css">
       
         
         <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
@@ -276,6 +276,7 @@
   
   <span class="md-ellipsis">
     Overview
+    
   </span>
   
 
@@ -296,6 +297,7 @@
   
   <span class="md-ellipsis">
     Examples
+    
   </span>
   
 
@@ -316,6 +318,7 @@
   
   <span class="md-ellipsis">
     Changelog
+    
   </span>
   
 
@@ -336,6 +339,7 @@
   
   <span class="md-ellipsis">
     Releases
+    
   </span>
   
 
@@ -371,6 +375,7 @@
   
   <span class="md-ellipsis">
     Core API
+    
   </span>
   
 
@@ -396,6 +401,7 @@
   
   <span class="md-ellipsis">
     Model
+    
   </span>
   
 
@@ -417,6 +423,7 @@
   
   <span class="md-ellipsis">
     Formats
+    
   </span>
   
 
@@ -462,6 +469,7 @@
   
   <span class="md-ellipsis">
     Full API
+    
   </span>
   
 
@@ -503,6 +511,7 @@
   
   <span class="md-ellipsis">
     sleap_io
+    
   </span>
   
 
@@ -548,6 +557,7 @@
   
   <span class="md-ellipsis">
     io
+    
   </span>
   
 
@@ -579,6 +589,7 @@
   
   <span class="md-ellipsis">
     jabs
+    
   </span>
   
 
@@ -600,6 +611,7 @@
   
   <span class="md-ellipsis">
     labelstudio
+    
   </span>
   
 
@@ -621,6 +633,7 @@
   
   <span class="md-ellipsis">
     main
+    
   </span>
   
 
@@ -642,6 +655,7 @@
   
   <span class="md-ellipsis">
     nwb
+    
   </span>
   
 
@@ -663,6 +677,7 @@
   
   <span class="md-ellipsis">
     slp
+    
   </span>
   
 
@@ -684,6 +699,7 @@
   
   <span class="md-ellipsis">
     utils
+    
   </span>
   
 
@@ -705,6 +721,7 @@
   
   <span class="md-ellipsis">
     video_reading
+    
   </span>
   
 
@@ -726,6 +743,7 @@
   
   <span class="md-ellipsis">
     video_writing
+    
   </span>
   
 
@@ -771,6 +789,7 @@
   
   <span class="md-ellipsis">
     model
+    
   </span>
   
 
@@ -802,6 +821,7 @@
   
   <span class="md-ellipsis">
     camera
+    
   </span>
   
 
@@ -823,6 +843,7 @@
   
   <span class="md-ellipsis">
     instance
+    
   </span>
   
 
@@ -844,6 +865,7 @@
   
   <span class="md-ellipsis">
     labeled_frame
+    
   </span>
   
 
@@ -865,6 +887,7 @@
   
   <span class="md-ellipsis">
     labels
+    
   </span>
   
 
@@ -886,6 +909,7 @@
   
   <span class="md-ellipsis">
     skeleton
+    
   </span>
   
 
@@ -907,6 +931,7 @@
   
   <span class="md-ellipsis">
     suggestions
+    
   </span>
   
 
@@ -935,6 +960,7 @@
   
   <span class="md-ellipsis">
     video
+    
   </span>
   
 
@@ -946,6 +972,7 @@
   
   <span class="md-ellipsis">
     video
+    
   </span>
   
 
@@ -1002,6 +1029,7 @@
   
   <span class="md-ellipsis">
     version
+    
   </span>
   
 
@@ -1072,6 +1100,7 @@
               <article class="md-content__inner md-typeset">
                 
                   
+
 
   
   
@@ -2159,6 +2188,41 @@ of indices is provided.</p>
 <div class="doc doc-object doc-function">
 
 
+<h4 id="sleap_io.model.video.Video._get_shape" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">_get_shape</span><span class="p">()</span></code>
+
+<a href="#sleap_io.model.video.Video._get_shape" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the shape of the video as (num_frames, height, width, channels).</p>
+<p>This suppresses errors related to querying the backend for the video shape, such
+as when it has not been set or when the video file is not found.</p>
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/model/video.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-149" name="__codelineno-0-149"></a><a href="#__codelineno-0-149"><span class="linenos" data-linenos="149 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">_get_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-150" name="__codelineno-0-150"></a><a href="#__codelineno-0-150"><span class="linenos" data-linenos="150 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the shape of the video as (num_frames, height, width, channels).</span>
+<a id="__codelineno-0-151" name="__codelineno-0-151"></a><a href="#__codelineno-0-151"><span class="linenos" data-linenos="151 "></span></a>
+<a id="__codelineno-0-152" name="__codelineno-0-152"></a><a href="#__codelineno-0-152"><span class="linenos" data-linenos="152 "></span></a><span class="sd">    This suppresses errors related to querying the backend for the video shape, such</span>
+<a id="__codelineno-0-153" name="__codelineno-0-153"></a><a href="#__codelineno-0-153"><span class="linenos" data-linenos="153 "></span></a><span class="sd">    as when it has not been set or when the video file is not found.</span>
+<a id="__codelineno-0-154" name="__codelineno-0-154"></a><a href="#__codelineno-0-154"><span class="linenos" data-linenos="154 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a><a href="#__codelineno-0-155"><span class="linenos" data-linenos="155 "></span></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-156" name="__codelineno-0-156"></a><a href="#__codelineno-0-156"><span class="linenos" data-linenos="156 "></span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-0-157" name="__codelineno-0-157"></a><a href="#__codelineno-0-157"><span class="linenos" data-linenos="157 "></span></a>    <span class="k">except</span><span class="p">:</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><a href="#__codelineno-0-158"><span class="linenos" data-linenos="158 "></span></a>        <span class="k">if</span> <span class="s2">&quot;shape&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend_metadata</span><span class="p">:</span>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a><a href="#__codelineno-0-159"><span class="linenos" data-linenos="159 "></span></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend_metadata</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a><a href="#__codelineno-0-160"><span class="linenos" data-linenos="160 "></span></a>        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="sleap_io.model.video.Video.close" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">close</span><span class="p">()</span></code>
 
@@ -3114,7 +3178,7 @@ frame integers. If not specified, saves all video frames.</p>
     <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../../../../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.60a45f97.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.f13b1293.min.js"></script>
       
     
   </body>
