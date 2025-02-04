@@ -10,6 +10,7 @@ import numpy as np
 import toml
 from attrs import define, field
 
+from sleap_io.model.instance import Instance
 from sleap_io.model.video import Video
 
 
@@ -264,6 +265,125 @@ class CameraGroup:
         camera_group = cls.from_dict(calibration_dict)
 
         return camera_group
+
+
+@define(eq=False)  # Set eq to false to make class hashable
+class InstanceGroup:
+    """A group of instances in a `FrameGroup`.
+
+    Attributes:
+        instances: List of `Instance` objects in the group.
+    """
+
+    _name: str = field(converter=attrs.converters.optional(str))
+    _instance_by_camcorder: dict[Camera, Instance] = field(factory=dict)
+    _score: float | None = field(
+        default=None, validator=attrs.validators.optional(float)
+    )
+    _triangulation: np.ndarray | None = field(
+        default=None, validator=attrs.validators.optional(np.ndarray)
+    )
+
+    @property
+    def name(self) -> str:
+        """Get name of `InstanceGroup`.
+
+        Returns:
+            Name of `InstanceGroup`.
+        """
+        return self._name
+
+    @name.setter
+    def name(self, name: str):
+        """Set name of `InstanceGroup`.
+
+        Args:
+            name: Name to set for `InstanceGroup`.
+        """
+        # TODO (LM): Unique name validation
+        self._name = name
+
+    @property
+    def instances(self) -> list[Instance]:
+        """Get list of `Instance` objects in `InstanceGroup`.
+
+        Returns:
+            List of `Instance` objects in `InstanceGroup`.
+        """
+        return list(self._instance_by_camcorder.values())
+
+    @property
+    def cameras(self) -> list[Camera]:
+        """Get list of `Camera` objects in `InstanceGroup`.
+
+        Returns:
+            List of `Camera` objects in `InstanceGroup`.
+        """
+        return list(self._instance_by_camcorder.keys())
+
+    @property
+    def score(self) -> float | None:
+        """Get score of `InstanceGroup`.
+
+        Returns:
+            Score of `InstanceGroup`.
+        """
+        return self._score
+
+    @score.setter
+    def score(self, score: float):
+        """Set score of `InstanceGroup`.
+
+        Args:
+            score: Score to set for `InstanceGroup`.
+        """
+        # Validate score through attrs validator
+        self._score = score
+
+        # Set score for each instance in group
+        for instance in self.instances:
+            if hasattr(instance, "score"):
+                instance.score = score
+
+    @property
+    def triangulation(self) -> np.ndarray | None:
+        """Get triangulated 3D points of `InstanceGroup`.
+
+        Returns:
+            Triangulated 3D points of `InstanceGroup`.
+        """
+        return self._triangulation
+
+    @triangulation.setter
+    def triangulation(self, points: np.ndarray):
+        """Set triangulated 3D points of `InstanceGroup`.
+
+        Args:
+            points: Triangulated 3D points to set for `InstanceGroup`.
+        """
+        # Validate points in
+        points_shape = points.shape
+        try:
+            # Check if points are 3D points
+            if points_shape[-1] != 3:
+                raise ValueError
+
+            # Ensure points have 2 dimensions and 1st dimension is number points.
+            n_points = len(self.instances[0])
+            if len(points_shape) > 2:
+                raise ValueError
+            elif len(points_shape) == 2 and points_shape[0] != n_points:
+                raise ValueError
+            elif len(points_shape) == 1 and n_points != 1:
+                raise ValueError
+            points = points.reshape(-1, 3)
+        except Exception as e:
+            raise ValueError(
+                "Expected points to be an array of 3D points of shape (N, 3) where N is"
+                f" the number of 3D points, but received shape {points_shape}.\n\n{e}"
+            )
+
+        self._triangulation = points
 
 
 @define(eq=False)  # Set eq to false to make class hashable
