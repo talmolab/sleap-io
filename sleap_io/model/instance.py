@@ -301,11 +301,16 @@ class Instance:
             points=points, skeleton=skeleton, track=track  # type: ignore[arg-type]
         )
 
-    def numpy(self) -> np.ndarray:
-        """Return the instance points as a numpy array."""
+    def numpy(self, invisible_as_nan: bool = True) -> np.ndarray:
+        """Return the instance points as a numpy array.
+
+        Args:
+            invisible_as_nan: If True, points that are not visible will be returned as
+                `np.nan`.
+        """
         pts = np.full((len(self.skeleton), 2), np.nan)
         for node, point in self.points.items():
-            if point.visible:
+            if point.visible or not invisible_as_nan:
                 pts[self.skeleton.index(node)] = point.numpy()
         return pts
 
@@ -478,11 +483,20 @@ class PredictedInstance(Instance):
             track=track,
         )
 
-    def numpy(self, scores: bool = False) -> np.ndarray:
-        """Return the instance points as a numpy array."""
+    def numpy(self, scores: bool = False, invisible_as_nan: bool = True) -> np.ndarray:
+        """Return the instance points as a numpy array.
+
+        Args:
+            scores: If True, the point scores will be included in the output, resulting
+                in an array of shape `(n_nodes, 3)` with the scores in the third column.
+                If False, only the coordinates will be returned, resulting in an array
+                of shape `(n_nodes, 2)`.
+            invisible_as_nan: If True, points that are not visible will be returned as
+                `np.nan`.
+        """
         pts = np.full((len(self.skeleton), 3), np.nan)
         for node, point in self.points.items():
-            if point.visible:
+            if point.visible or not invisible_as_nan:
                 pts[self.skeleton.index(node)] = point.numpy()
         if not scores:
             pts = pts[:, :2]

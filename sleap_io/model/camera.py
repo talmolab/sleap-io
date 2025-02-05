@@ -10,7 +10,7 @@ import numpy as np
 import toml
 from attrs import define, field
 
-from sleap_io.model.instance import Instance
+from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.video import Video
 
 
@@ -295,6 +295,41 @@ class InstanceGroup:
         return list(self._instance_by_camcorder.values())
 
     @property
+    def _template_instance(self) -> PredictedInstance | None:
+        """Get template `PredictedInstance` from `InstanceGroup`.
+
+        Returns:
+            Template `PredictedInstance` from `InstanceGroup`.
+
+        Raises:
+            ValueError: If no instances in group (and trying to access template).
+        """
+        if self._instance is None:
+            # Create template instance from first instance in group.
+            if len(self.instances) > 0:
+                instance = self.instances[0]
+                skeleton = instance.skeleton
+                points = np.full((len(skeleton.nodes), 2), np.nan)
+                point_scores = np.full((len(skeleton.nodes),), np.nan)
+                instance_score = np.nan
+
+                self._instance = PredictedInstance.from_numpy(
+                    points=points,
+                    point_scores=point_scores,
+                    instance_score=instance_score,
+                    skeleton=skeleton,
+                    tracking_score=None,
+                    track=None,
+                )
+            else:
+                # Raise ValueError if no instances in group.
+                raise ValueError(
+                    f"No instances in group {self} to create template instance from."
+                )
+
+        return self._instance
+
+    @property
     def cameras(self) -> list[Camera]:
         """Get list of `Camera` objects in `InstanceGroup`.
 
@@ -366,6 +401,66 @@ class InstanceGroup:
             )
 
         self._triangulation = points
+
+    def get_instance(self, camera: Camera) -> Instance | None:
+        """Get `Instance` associated with `camera`.
+
+        Args:
+            camera: `Camera` to get `Instance` for.
+
+        Returns:
+            `Instance` associated with `camera` or None if not found.
+        """
+        return self._instance_by_camcorder.get(camera, None)
+
+    def numpy(
+        self,
+        cams_to_include: list[Camera],
+        pred_as_nan: bool = False,
+        invisible_as_nan: bool = True,
+        undistort: bool = False,
+    ) -> np.ndarray:
+        """Convert `InstanceGroup` to numpy array.
+
+        Args:
+            cams_to_include: List of `Camera` objects to include in numpy array. Points
+                will be returned in the order of the cameras in this list. If there is
+                no instance for a camera in this list, a template (all NaN) instance
+                will be used.
+            pred_as_nan: If True, set predicted instances to NaN.
+            invisible_as_nan: If True, set invisible/occluded points to NaN.
+            undistort: If True, undistort points before converting to numpy array.
+
+        Returns:
+            Numpy array of shape (C, N, 3) where C is the number of cameras and N is the
+            number of nodes in each instance.
+        """
+
+        instance_numpys: list[np.ndarray] = []  # len(C) x N x 2
+        for cam in cams_to_include:
+            instance = self.get_instance(cam)
+
+            # Determine whether to use a template (all NaN) instance.
+            instance_is_missing = instance is None
+            instance_as_nan = pred_as_nan and isinstance(instance, PredictedInstance)
+            use_template_instance = instance_is_missing or instance_as_nan
+
+            # Add the template instance if the instance is missing.
+            if use_template_instance:
+                instance: PredictedInstance = self._template_instance  # All NaN points.
+
+            # Convert instance to numpy array.
+            instance_numpy: np.ndarray = instance.numpy(
+                invisible_as_nan=invisible_as_nan
+            )  # N x 2
+
+            # Undistort points if requested.
+            if undistort:
+                instance_numpy = cam.undistort_points(points=instance_numpy)
+
+            instance_numpys.append(instance_numpy)
+
+        return np.stack(instance_numpys, axis=0)  # C x N x 2
 
 
 @define(eq=False)  # Set eq to false to make class hashable
