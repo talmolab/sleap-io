@@ -8,10 +8,148 @@ import attrs
 import cv2
 import numpy as np
 import toml
+import warnings
 from attrs import define, field
 
 from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.video import Video
+
+
+def compute_instance_area(points: np.ndarray) -> np.ndarray:
+    """Compute the area of the bounding box of a set of keypoints.
+
+    Args:
+        points: A numpy array of coordinates.
+
+    Returns:
+        The area of the bounding box of the points.
+    """
+    if points.ndim == 2:
+        points = np.expand_dims(points, axis=0)
+
+    min_pt = np.nanmin(points, axis=-2)
+    max_pt = np.nanmax(points, axis=-2)
+
+    return np.prod(max_pt - min_pt, axis=-1)
+
+
+def compute_oks(
+    points_gt: np.ndarray,
+    points_pr: np.ndarray,
+    scale: float | None = None,
+    stddev: float = 0.025,
+    use_cocoeval: bool = True,
+) -> np.ndarray:
+    """Compute the object keypoints similarity between sets of points.
+
+    Notes:
+        It's important to set the stddev appropriately when accounting for the
+        difficulty of each keypoint type. For reference, the median value for
+        all keypoint types in COCO is 0.072. The "easiest" keypoint is the left
+        eye, with stddev of 0.025, since it is easy to precisely locate the
+        eyes when labeling. The "hardest" keypoint is the left hip, with stddev
+        of 0.107, since it's hard to locate the left hip bone without external
+        anatomical features and since it is often occluded by clothing.
+
+        The implementation here is based off of the descriptions in:
+        Ronch & Perona. "Benchmarking and Error Diagnosis in Multi-Instance Pose
+        Estimation." ICCV (2017).
+
+    Args:
+        points_gt: Ground truth instances of shape (n_gt, n_nodes, n_ed),
+            where n_nodes is the number of body parts/keypoint types, and n_ed
+            is the number of Euclidean dimensions (typically 2 or 3). Keypoints
+            that are missing/not visible should be represented as NaNs.
+        points_pr: Predicted instance of shape (n_pr, n_nodes, n_ed).
+        use_cocoeval: Indicates whether the OKS score is calculated like cocoeval
+            method or not. True indicating the score is calculated using the
+            cocoeval method (widely used and the code can be found here at
+            https://github.com/cocodataset/cocoapi/blob/8c9bcc3cf640524c4c20a9c40e89cb6a2f2fa0e9/PythonAPI/pycocotools/cocoeval.py#L192C5-L233C20)
+            and False indicating the score is calculated using the method exactly
+            as given in the paper referenced in the Notes below.
+        scale: Size scaling factor to use when weighing the scores, typically
+            the area of the bounding box of the instance (in pixels). This
+            should be of the length n_gt. If a scalar is provided, the same
+            number is used for all ground truth instances. If set to None, the
+            bounding box area of the ground truth instances will be calculated.
+        stddev: The standard deviation associated with the spread in the
+            localization accuracy of each node/keypoint type. This should be of
+            the length n_nodes. "Easier" keypoint types will have lower values
+            to reflect the smaller spread expected in localizing it.
+
+    Returns:
+        The object keypoints similarity between every pair of ground truth and
+        predicted instance, a numpy array of of shape (n_gt, n_pr) in the range
+        of [0, 1.0], with 1.0 denoting a perfect match.
+    """
+    if points_gt.ndim == 2:
+        points_gt = np.expand_dims(points_gt, axis=0)
+    if points_pr.ndim == 2:
+        points_pr = np.expand_dims(points_pr, axis=0)
+
+    if scale is None:
+        scale = compute_instance_area(points_gt)
+
+    n_gt, n_nodes, n_ed = points_gt.shape  # n_ed = 2 or 3 (euclidean dimensions)
+    n_pr = points_pr.shape[0]
+
+    # If scalar scale was provided, use the same for each ground truth instance.
+    if np.isscalar(scale):
+        scale = np.full(n_gt, scale)
+
+    # If scalar standard deviation was provided, use the same for each node.
+    if np.isscalar(stddev):
+        stddev = np.full(n_nodes, stddev)
+
+    # Compute displacement between each pair.
+    displacement = np.reshape(points_gt, (n_gt, 1, n_nodes, n_ed)) - np.reshape(
+        points_pr, (1, n_pr, n_nodes, n_ed)
+    )
+    assert displacement.shape == (n_gt, n_pr, n_nodes, n_ed)
+
+    # Convert to pairwise Euclidean distances.
+    distance = (displacement**2).sum(axis=-1)  # (n_gt, n_pr, n_nodes)
+    assert distance.shape == (n_gt, n_pr, n_nodes)
+
+    # Compute the normalization factor per keypoint.
+    if use_cocoeval:
+        # If use_cocoeval is True, then compute normalization factor according to cocoeval.
+        spread_factor = (2 * stddev) ** 2
+        scale_factor = 2 * (scale + np.spacing(1))
+    else:
+        # If use_cocoeval is False, then compute normalization factor according to the paper.
+        spread_factor = stddev**2
+        scale_factor = 2 * ((scale + np.spacing(1)) ** 2)
+    normalization_factor = np.reshape(spread_factor, (1, 1, n_nodes)) * np.reshape(
+        scale_factor, (n_gt, 1, 1)
+    )
+    assert normalization_factor.shape == (n_gt, 1, n_nodes)
+
+    # Since a "miss" is considered as KS < 0.5, we'll set the
+    # distances for predicted points that are missing to inf.
+    missing_pr = np.any(np.isnan(points_pr), axis=-1)  # (n_pr, n_nodes)
+    assert missing_pr.shape == (n_pr, n_nodes)
+    distance[:, missing_pr] = np.inf
+
+    # Compute the keypoint similarity as per the top of Eq. 1.
+    ks = np.exp(-(distance / normalization_factor))  # (n_gt, n_pr, n_nodes)
+    assert ks.shape == (n_gt, n_pr, n_nodes)
+
+    # Set the KS for missing ground truth points to 0.
+    # This is equivalent to the visibility delta function of the bottom
+    # of Eq. 1.
+    missing_gt = np.any(np.isnan(points_gt), axis=-1)  # (n_gt, n_nodes)
+    assert missing_gt.shape == (n_gt, n_nodes)
+    ks[np.expand_dims(missing_gt, axis=1)] = 0
+
+    # Compute the OKS.
+    n_visible_gt = np.sum(
+        (~missing_gt).astype("float64"), axis=-1, keepdims=True
+    )  # (n_gt, 1)
+    oks = np.sum(ks, axis=-1) / n_visible_gt
+    assert oks.shape == (n_gt, n_pr)
+
+    return oks
 
 
 def triangulate_dlt_vectorized(
@@ -342,17 +480,17 @@ class InstanceGroup:
     def score(self) -> float | None:
         """Get reprojection score of the `InstanceGroup`.
 
+        The score is the average OKS for all ground and projected point pairs in the
+        `InstanceGroup`.
+
         Returns:
             Score of `InstanceGroup`.
         """
         return self._score
 
     @score.setter
-    def score(self, score: float):
-        """Set score of `InstanceGroup`.
-
-        This function sets the score for the `InstanceGroup` and then sets the score for
-        each `Instance` in the group.
+    def score(self, score: float | None):
+        """Set the reprojection score of the `InstanceGroup`.
 
         Args:
             score: Score to set for `InstanceGroup`.
@@ -364,6 +502,49 @@ class InstanceGroup:
         for instance in self.instances:
             if hasattr(instance, "score"):
                 instance.score = score
+
+    @property
+    def point_scores(self) -> np.ndarray | None:
+        """Get point scores of `InstanceGroup`.
+
+        Returns:
+            Point scores of `InstanceGroup` as np.ndarray of shape (N,) where N is the
+            number of nodes in each `Instance` or None if not set.
+        """
+        return self._point_scores
+
+    @point_scores.setter
+    def point_scores(self, point_scores: np.ndarray | None):
+        """Set point scores of `InstanceGroup`.
+
+        Args:
+            point_scores: Point scores to set for `InstanceGroup`.
+        """
+        if point_scores is None:
+            self._point_scores = None
+            return
+
+        # Ensure point scores have correct shape.
+        point_scores = point_scores.flatten()
+        try:
+            n_points = len(self._template_instance)
+            if point_scores.shape != (n_points,):
+                raise ValueError
+        except Exception as e:
+            raise ValueError(
+                "Expected point scores to be np.ndarray of shape (N,) or (1, N) where N"
+                " is the number of nodes in each `Instance`, but received shape "
+                f"{point_scores.shape}.\n\n{e}"
+            )
+
+        # Set point scores for all instances in group.
+        self._point_scores = point_scores
+        for instance in self.instances:
+            if hasattr(instance, "score"):
+                instance.point_scores = point_scores
+
+        # Now set the score for the group.
+        self.score = np.nanmean(point_scores)
 
     @property
     def triangulation(self) -> np.ndarray | None:
@@ -380,6 +561,10 @@ class InstanceGroup:
 
         Args:
             points: Triangulated 3D points to set for `InstanceGroup`.
+
+        Raises:
+            ValueError: If `points` are not of shape (N, 3) where N is the number of
+                nodes in each `Instance`.
         """
         # Validate points in
         points_shape = points.shape
@@ -415,6 +600,62 @@ class InstanceGroup:
             `Instance` associated with `camera` or None if not found.
         """
         return self._instance_by_camcorder.get(camera, None)
+
+    def update_points(self, points: np.ndarray, cams_to_include: list[Camera]):
+        """Update points of `Instance`s in group using triangulated 3D points.
+
+        This function updates points for `Instance`s at select `Camera`s in the group
+        using the projected 3D points. If the `Instance` does not exist for a `Camera`,
+        the `Camera` is skipped and a warning is given (a new `Instance` is NOT created)
+        . If the `Instance` exists, the points are updated.
+
+        Args:
+            points: Triangulated 3D points to update or insert in instances of shape
+                (N, 3) where N is the number of points.
+            cams_to_include: List of `Camera` objects to update or insert points for.
+
+        Raises:
+            ValueError: If `points` does not have shape (N, 3) where N is the number of
+                nodes in each `Instance`.
+
+        Warning: If no `Instance` found for `Camera` in `InstanceGroup`.
+        """
+        # Validate the points using triangulation setter (possibly raising ValueError).
+        self.triangulation = points
+
+        # For calculating OKS.
+        n_views = len(cams_to_include)
+        n_nodes = len(self._template_instance)
+        oks_scores = np.full((n_views, n_nodes), np.nan)
+
+        # Get the projected 2D points for the cameras.
+        for cam_idx, cam in enumerate(cams_to_include):
+            # Get instance for camera or create a new instance if it doesn't exist.
+            instance = self.get_instance(cam)
+            if instance is None:
+                warnings.warn(
+                    f"No instance found for camera {cam} in group {self}. Cannot update"
+                    " points. Skipping..."
+                )
+                continue
+
+            # Get the projected 2D points for the camera.
+            points_projected = cam.project(points)  # N x 2
+
+            # Compute the OKS score for the instance if it is a ground truth instance
+            if not isinstance(instance, PredictedInstance):
+                gt_points = instance.numpy()  # N x 2
+                instance_oks = compute_oks(
+                    gt_points,
+                    points_projected,
+                )  # 1 x N
+                oks_scores[cam_idx] = instance_oks
+
+            # Update points for instance.
+            instance.points = points_projected
+
+        # Set the OKS scores for the group (and update `PredictedInstance.score`s).
+        self.point_scores = oks_scores
 
     def numpy(
         self,

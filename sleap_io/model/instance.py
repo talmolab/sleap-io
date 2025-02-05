@@ -79,9 +79,18 @@ class Point:
             and (self.complete == other.complete)
         )
 
-    def numpy(self) -> np.ndarray:
-        """Return the coordinates as a numpy array of shape `(2,)`."""
-        return np.array([self.x, self.y]) if self.visible else np.full((2,), np.nan)
+    def numpy(self, invisible_as_nan: bool = True) -> np.ndarray:
+        """Return the coordinates as a numpy array of shape `(2,)`.
+
+        Args:
+            invisible_as_nan: If True, points that are not visible will be returned as
+                `np.nan`.
+
+        Returns:
+            A numpy array of shape `(2,)` with the `x` and `y` values.
+        """
+        return_nan = self.visible or not invisible_as_nan
+        return np.array([self.x, self.y]) if return_nan else np.full((2,), np.nan)
 
 
 @define
@@ -101,11 +110,20 @@ class PredictedPoint(Point):
 
     score: float = 0.0
 
-    def numpy(self) -> np.ndarray:
-        """Return the coordinates and score as a numpy array of shape `(3,)`."""
+    def numpy(self, invisible_as_nan: bool = True) -> np.ndarray:
+        """Return the coordinates and score as a numpy array of shape `(3,)`.
+
+        Args:
+            invisible_as_nan: If True, points that are not visible will be returned as
+                `np.nan`.
+
+        Returns:
+            A numpy array of shape `(3,)` with the `x`, `y`, and `score` values.
+        """
+        return_nan = self.visible or not invisible_as_nan
         return (
             np.array([self.x, self.y, self.score])
-            if self.visible
+            if return_nan
             else np.full((3,), np.nan)
         )
 
@@ -307,11 +325,15 @@ class Instance:
         Args:
             invisible_as_nan: If True, points that are not visible will be returned as
                 `np.nan`.
+
+        Returns:
+            A numpy array of shape `(n_nodes, 2)` with the `x` and `y` values.
         """
         pts = np.full((len(self.skeleton), 2), np.nan)
         for node, point in self.points.items():
-            if point.visible or not invisible_as_nan:
-                pts[self.skeleton.index(node)] = point.numpy()
+            pts[self.skeleton.index(node)] = point.numpy(
+                invisible_as_nan=invisible_as_nan
+            )
         return pts
 
     def update_skeleton(self):
@@ -440,6 +462,28 @@ class PredictedInstance(Instance):
             f"score={score}, tracking_score={tracking_score})"
         )
 
+    @property
+    def point_scores(self) -> np.ndarray:
+        """Return the point scores as a numpy array of shape `(n_nodes,)`."""
+        instance_numpy: np.ndarray = self.numpy(scores=True)
+        return instance_numpy[2]
+
+    @point_scores.setter
+    def point_scores(self, point_scores: np.ndarray):
+        """Set the point scores from a numpy array of shape `(n_nodes,)`."""
+        # Check the shape of the input
+        point_scores = point_scores.flatten()
+        if point_scores.shape != (len(self.skeleton),):
+            raise ValueError(
+                f"Point scores must be a 1D array of shape (n_nodes,), but received "
+                f"{point_scores.shape}."
+            )
+
+        # Update the point scores
+        for node, score in zip(self.skeleton.nodes, point_scores):
+            point = self.points[node]
+            point.score = score
+
     @classmethod
     def from_numpy(  # type: ignore[override]
         cls,
@@ -493,11 +537,15 @@ class PredictedInstance(Instance):
                 of shape `(n_nodes, 2)`.
             invisible_as_nan: If True, points that are not visible will be returned as
                 `np.nan`.
+        Returns:
+            A numpy array of shape `(n_nodes, 3)` or `(n_nodes, 2)` with the `x`, `y`,
+            and (optionally) `score` values.
         """
         pts = np.full((len(self.skeleton), 3), np.nan)
         for node, point in self.points.items():
-            if point.visible or not invisible_as_nan:
-                pts[self.skeleton.index(node)] = point.numpy()
+            pts[self.skeleton.index(node)] = point.numpy(
+                invisible_as_nan=invisible_as_nan
+            )
         if not scores:
             pts = pts[:, :2]
         return pts
