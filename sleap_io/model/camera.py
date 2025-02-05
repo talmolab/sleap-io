@@ -340,7 +340,7 @@ class InstanceGroup:
 
     @property
     def score(self) -> float | None:
-        """Get score of `InstanceGroup`.
+        """Get reprojection score of the `InstanceGroup`.
 
         Returns:
             Score of `InstanceGroup`.
@@ -350,6 +350,9 @@ class InstanceGroup:
     @score.setter
     def score(self, score: float):
         """Set score of `InstanceGroup`.
+
+        This function sets the score for the `InstanceGroup` and then sets the score for
+        each `Instance` in the group.
 
         Args:
             score: Score to set for `InstanceGroup`.
