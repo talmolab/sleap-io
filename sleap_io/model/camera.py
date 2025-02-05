@@ -272,10 +272,11 @@ class InstanceGroup:
     """A group of instances in a `FrameGroup`.
 
     Attributes:
-        instances: List of `Instance` objects in the group.
+        metadata: Dictionary containing metadata for `InstanceGroup` (anything that is
+            useful information, but not used in ths codebase).
     """
 
-    _name: str = field(converter=attrs.converters.optional(str))
+    metadata: dict = field(factory=dict)
     _instance_by_camcorder: dict[Camera, Instance] = field(factory=dict)
     _score: float | None = field(
         default=None, validator=attrs.validators.optional(float)
@@ -283,25 +284,6 @@ class InstanceGroup:
     _triangulation: np.ndarray | None = field(
         default=None, validator=attrs.validators.optional(np.ndarray)
     )
-
-    @property
-    def name(self) -> str:
-        """Get name of `InstanceGroup`.
-
-        Returns:
-            Name of `InstanceGroup`.
-        """
-        return self._name
-
-    @name.setter
-    def name(self, name: str):
-        """Set name of `InstanceGroup`.
-
-        Args:
-            name: Name to set for `InstanceGroup`.
-        """
-        # TODO (LM): Unique name validation
-        self._name = name
 
     @property
     def instances(self) -> list[Instance]:
