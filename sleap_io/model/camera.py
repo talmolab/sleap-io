@@ -9,10 +9,14 @@ import cv2
 import numpy as np
 import toml
 from attrs import define, field
+from attrs.validators import instance_of
 
+from sleap_io.model.instance import Instance
+from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.video import Video
 
 
+# TODO(LM): Move to algorithms in another repo.
 def triangulate_dlt_vectorized(
     points: np.ndarray, projection_matrices: np.ndarray
 ) -> np.ndarray:
@@ -80,7 +84,9 @@ class CameraGroup:
     """
 
     cameras: list[Camera] = field(factory=list)
+    metadata: dict = field(factory=dict)  # TODO(LM): Add metadata to CameraGroup
 
+    # TODO: Remove this method (should be a util function in another repo).
     def triangulate(
         self,
         points: np.ndarray,
@@ -166,6 +172,7 @@ class CameraGroup:
         points_3d = points_3d.reshape(*points_shape[1:-1], 3).astype(points_dtype)
         return points_3d
 
+    # TODO: Remove this method (should be a util function in another repo).
     def project(self, points: np.ndarray) -> np.ndarray:
         """Project 3D points to 2D using camera group.
 
@@ -277,8 +284,10 @@ class RecordingSession:
     """
 
     camera_group: CameraGroup = field(factory=CameraGroup)
+    metadata: dict = field(factory=dict)
     _video_by_camera: dict[Camera, Video] = field(factory=dict)
     _camera_by_video: dict[Video, Camera] = field(factory=dict)
+    _frame_group_by_frame_idx: dict[int, FrameGroup] = field(factory=dict)
 
     @property
     def videos(self) -> list[Video]:
@@ -352,6 +361,153 @@ class RecordingSession:
         # Remove camera from video mapping
         self._video_by_camera.pop(camera)
 
+    def to_dict(
+        self,
+        video_to_idx: dict[Video, int],
+        labeled_frame_to_idx: dict[LabeledFrame, int],
+    ) -> dict:
+        """Unstructure `RecordingSession` to an invertible dictionary.
+
+        Args:
+            video_to_idx: Dictionary of `Video` to index in `Labels.videos`.
+            labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
+                `Labels.labeled_frames`.
+
+        Returns:
+            Dictionary of "calibration" and "camcorder_to_video_idx_map" needed to
+            restructure a `RecordingSession`.
+        """
+
+        # Unstructure `CameraCluster` and `metadata`
+        calibration_dict = self.camera_group.to_dict()
+
+        # Store camcorder-to-video indices map where key is camcorder index
+        # and value is video index from `Labels.videos`
+        camera_to_video_idx_map = {}
+        for cam_idx, camera in enumerate(self.camera_group.cameras):
+            # Skip if Camcorder is not linked to any Video
+            if camera not in self._video_by_camera:
+                continue
+
+            # Get video index from `Labels.videos`
+            video = self._video_by_camera[camera]
+            video_idx = video_to_idx.get(video, None)
+
+            if video_idx is not None:
+                camera_to_video_idx_map[str(cam_idx)] = str(video_idx)
+            else:
+                print(
+                    f"Video {video} not found in `Labels.videos`. "
+                    "Not saving to `RecordingSession` serialization."
+                )
+
+        # Store frame groups by frame index
+        frame_group_dicts = []
+        if len(labeled_frame_to_idx) > 0:  # Don't save if skipping labeled frames
+            for frame_group in self._frame_group_by_frame_idx.values():
+                # Only save `FrameGroup` if it has `InstanceGroup`s
+                if len(frame_group.instance_groups) > 0:
+                    frame_group_dict = frame_group.to_dict(
+                        labeled_frame_to_idx=labeled_frame_to_idx
+                    )
+                    frame_group_dicts.append(frame_group_dict)
+
+        return {
+            "calibration": calibration_dict,
+            "camcorder_to_video_idx_map": camera_to_video_idx_map,
+            "frame_group_dicts": frame_group_dicts,
+        }
+
+    @classmethod
+    def load(
+        cls,
+        filename,
+        metadata: dict | None = None,
+    ) -> "RecordingSession":
+        """Loads cameras as `Camcorder`s from a calibration.toml file.
+
+        Args:
+            filename: Path to calibration.toml file.
+            metadata: Dictionary of metadata.
+
+        Returns:
+            `RecordingSession` object.
+        """
+
+        camera_group: CameraGroup = CameraGroup.load(filename)
+        return cls(
+            camera_group=camera_group,
+            metadata=(metadata or {}),
+        )
+
+    @classmethod
+    def from_calibration_dict(cls, calibration_dict: dict) -> "RecordingSession":
+        """Loads cameras as `Camcorder`s from a calibration dictionary.
+
+        Args:
+            calibration_dict: Dictionary of calibration data.
+
+        Returns:
+            `RecordingSession` object.
+        """
+
+        camera_group: CameraGroup = CameraGroup.from_dict(
+            calibration_dict=calibration_dict,
+        )
+        return cls(camera_group=camera_group)
+
+    @classmethod
+    def from_dict(
+        cls,
+        session_dict: dict,
+        videos: list[Video],
+        labeled_frames: list[LabeledFrame],
+    ) -> RecordingSession:
+        """Restructure `RecordingSession` from an invertible dictionary.
+
+        Args:
+            session_dict: Dictionary of "calibration" and "camcorder_to_video_idx_map"
+                needed to fully restructure a `RecordingSession`.
+            videos_list: List containing `Video` objects (expected `Labels.videos`).
+            labeled_frames_list: List containing `LabeledFrame` objects (expected
+                `Labels.labeled_frames`).
+
+        Returns:
+            `RecordingSession` object.
+        """
+
+        # Restructure `RecordingSession` without `Video` to `Camcorder` mapping
+        calibration_dict = session_dict["calibration"]
+        session: RecordingSession = RecordingSession.from_calibration_dict(
+            calibration_dict
+        )
+
+        # Retrieve all `Camcorder` and `Video` objects, then add to `RecordingSession`
+        camcorder_to_video_idx_map = session_dict["camcorder_to_video_idx_map"]
+        for cam_idx, video_idx in camcorder_to_video_idx_map.items():
+            camcorder = session.camera_group.cameras[int(cam_idx)]
+            video = videos[int(video_idx)]
+            session.add_video(video, camcorder)
+
+        # Reconstruct all `FrameGroup` objects and add to `RecordingSession`
+        frame_group_dicts = session_dict.get("frame_group_dicts", [])
+        for frame_group_dict in frame_group_dicts:
+
+            try:
+                # Add `FrameGroup` to `RecordingSession`
+                FrameGroup.from_dict(
+                    frame_group_dict=frame_group_dict,
+                    session=session,
+                    labeled_frames_list=labeled_frames,
+                )
+            except ValueError as e:
+                print(
+                    f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping..."
+                    f"\n{e}"
+                )
+
+        return session
+
 
 @define(eq=False)  # Set eq to false to make class hashable
 class Camera:
@@ -388,6 +544,7 @@ class Camera:
     )
     name: str = field(default=None, converter=attrs.converters.optional(str))
     _extrinsic_matrix: np.ndarray = field(init=False)
+    metadata: dict = field(factory=dict)
 
     @matrix.validator
     @dist.validator
@@ -619,3 +776,259 @@ class Camera:
         )
 
         return camera
+
+
+@define(eq=False)  # Set eq to false to make class hashable
+class InstanceGroup:
+    """Defines a group of instances across the same frame index.
+
+    Attributes:
+        dummy_instance: Optional `PredictedInstance` object to fill in for missing
+            instances.
+        cameras: List of `Camcorder` objects that have an `Instance` associated.
+        instances: List of `Instance` objects.
+        instance_by_camcorder: Dictionary of `Instance` objects by `Camcorder`.
+        score: Optional score for the `InstanceGroup`. Setting the score will also
+            update the score for all `instances` already in the `InstanceGroup`. The
+            score for `instances` will not be updated upon initialization.
+    """
+
+    _instance_by_camcorder: dict[Camera, Instance] = field(factory=dict)
+    _dummy_instance: Instance | None = field(default=None)
+    camera_cluster: CameraGroup | None = field(default=None)
+    _score: float | None = field(default=None)
+    _points: np.ndarray | None = field(default=None)
+    metadata: dict = field(factory=dict)
+
+    def to_dict(
+        self, instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]]
+    ) -> dict[str, str | dict[str, str]]:
+        """Converts the `InstanceGroup` to a dictionary.
+
+        Args:
+            instance_to_lf_and_inst_idx: Dictionary mapping `Instance` objects to
+                `LabeledFrame` indices (in `Labels.labeled_frames`) and `Instance`
+                indices (in containing `LabeledFrame.instances`).
+
+        Returns:
+            Dictionary of the `InstanceGroup` with items:
+                - camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camcorder` indices
+                    (in `InstanceGroup.camera_cluster.cameras`) to both `LabeledFrame`
+                    and `Instance` indices (from `instance_to_lf_and_inst_idx`).
+        """
+
+        camcorder_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = {
+            str(self.camera_cluster.cameras.index(cam)): instance_to_lf_and_inst_idx[
+                instance
+            ]
+            for cam, instance in self._instance_by_camcorder.items()
+        }
+
+        instance_group_dict = {
+            "camcorder_to_lf_and_inst_idx_map": camcorder_to_lf_and_inst_idx_map,
+        }
+        if self._score is not None:
+            instance_group_dict["score"] = str(round(self._score, 4))
+
+        return instance_group_dict
+
+    @classmethod
+    def from_instance_by_camcorder_dict(
+        cls,
+        instance_by_camcorder: dict[Camera, Instance],
+        score: float | None = None,
+    ) -> InstanceGroup | None:
+        """Creates an `InstanceGroup` object from a dictionary.
+
+        Args:
+            instance_by_camcorder: Dictionary with `Camcorder` keys and `Instance` values.
+            score: Optional score for the `InstanceGroup`. This will NOT update the
+                score of the `Instance`s within the `InstanceGroup`. Default is None.
+
+        Raises:
+            ValueError: If the `InstanceGroup` name is already in use.
+
+        Returns:
+            `InstanceGroup` object or None if no "real" (determined by `frame_idx` other
+            than None) instances found.
+        """
+
+        # Ensure not to mutate the original dictionary
+        instance_by_camcorder_copy = instance_by_camcorder.copy()
+
+        return cls(
+            instance_by_camcorder=instance_by_camcorder_copy,
+            score=score,
+        )
+
+    @classmethod
+    def from_dict(
+        cls,
+        instance_group_dict: dict,
+        labeled_frames_list: list[LabeledFrame],
+        camera_group: CameraGroup,
+    ):
+        """Creates an `InstanceGroup` object from a dictionary.
+
+        Args:
+            instance_group_dict: Dictionary with keys for name and
+                camcorder_to_lf_and_inst_idx_map.
+            name_registry: Set of names to check for uniqueness.
+            labeled_frames_list: List of `LabeledFrame` objects (expecting
+                `Labels.labeled_frames`).
+            camera_group: `CameraGroup` object.
+
+        Returns:
+            `InstanceGroup` object.
+        """
+
+        # Get the score (if available)
+        score = (
+            float(instance_group_dict["score"])
+            if "score" in instance_group_dict
+            else None
+        )
+
+        # Get the `Instance` objects
+        camcorder_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = (
+            instance_group_dict["camcorder_to_lf_and_inst_idx_map"]
+        )
+
+        instance_by_camcorder: dict[Camera, Instance] = {}
+        for cam_idx, (lf_idx, inst_idx) in camcorder_to_lf_and_inst_idx_map.items():
+            # Retrieve the `Camera`
+            camera = camera_group.cameras[int(cam_idx)]
+
+            # Retrieve the `Instance` from the `LabeledFrame
+            labeled_frame = labeled_frames_list[int(lf_idx)]
+            instance = labeled_frame.instances[int(inst_idx)]
+
+            # Link the `Instance` to the `Camera`
+            instance_by_camcorder[camera] = instance
+
+        return cls.from_instance_by_camcorder_dict(
+            instance_by_camcorder=instance_by_camcorder,
+            score=score,
+        )
+
+
+@define(eq=False)  # Set eq to false to make class hashable
+class FrameGroup:
+    """Defines a group of `InstanceGroups` across views at the same frame index.
+
+    Attributes:
+        frame_idx: Frame index for the `FrameGroup`.
+        session: `RecordingSession` object that the `FrameGroup` is in.
+        instance_groups: List of `InstanceGroup`s in the `FrameGroup`.
+        labeled_frames: List of `LabeledFrame`s in the `FrameGroup`.
+        cameras: List of `Camcorder`s that have `LabeledFrame`s.
+    """
+
+    # Instance attributes
+    frame_idx: int = field(validator=instance_of(int))
+    metadata: dict = field(factory=dict)
+    _instance_groups: list[InstanceGroup] = field(
+        factory=list, validator=instance_of(list)
+    )  # Akin to `LabeledFrame.instances`
+
+    # "Hidden" instance attributes
+
+    # TODO(LM): This dict should be updated each time a LabeledFrame is added/removed
+    # from the Labels object. Or if a video is added/removed from the RecordingSession.
+    _labeled_frame_by_cam: dict[Camera, LabeledFrame] = field(factory=dict)
+    _instances_by_cam: dict[Camera, set[Instance]] = field(factory=dict)
+
+    @property
+    def labeled_frames(self) -> list[LabeledFrame]:
+        """List of `LabeledFrame`s."""
+        # TODO(LM): Revisit whether we need to return a list instead of a view object
+        return list(self._labeled_frame_by_cam.values())
+
+    @property
+    def instance_groups(self) -> list[InstanceGroup]:
+        """List of `InstanceGroup`s."""
+        return self._instance_groups
+
+    @instance_groups.setter
+    def instance_groups(self, instance_groups: list[InstanceGroup]):
+        """Setter for `instance_groups` that updates `LabeledFrame`s and `Instance`s."""
+
+        instance_groups_to_remove = set(self.instance_groups) - set(instance_groups)
+        instance_groups_to_add = set(instance_groups) - set(self.instance_groups)
+
+        # Update the `_labeled_frame_by_cam` and `_instances_by_cam` dictionary
+        for instance_group in instance_groups_to_remove:
+            self.remove_instance_group(instance_group=instance_group)
+
+        for instance_group in instance_groups_to_add:
+            self.add_instance_group(instance_group=instance_group)
+
+    def add_instance_group(self, instance_group: InstanceGroup):
+        """Add an `InstanceGroup` to the `FrameGroup`."""
+
+        # Handle underlying dictionary updates
+        ...
+
+    def remove_instance_group(self, instance_group: InstanceGroup):
+        """Remove an `InstanceGroup` from the `FrameGroup`."""
+
+        # Handle underlying dictionary updates
+        ...
+
+    def to_dict(
+        self,
+        labeled_frame_to_idx: dict[LabeledFrame, int],
+    ) -> dict[str, int | list[dict[str]]]:
+        """Convert `FrameGroup` to a dictionary.
+
+        Args:
+            labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
+                `Labels.labeled_frames`.
+        """
+
+        # Create dictionary of `Instance` to `LabeledFrame` index (in
+        # `Labels.labeled_frames`) and `Instance` index in `LabeledFrame.instances``.
+        instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]] = {
+            inst: (str(labeled_frame_to_idx[labeled_frame]), str(inst_idx))
+            for labeled_frame in self.labeled_frames
+            for inst_idx, inst in enumerate(labeled_frame.instances)
+        }
+
+        frame_group_dict = {
+            "instance_groups": [
+                instance_group.to_dict(
+                    instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
+                )
+                for instance_group in self._instance_groups
+            ],
+        }
+
+        return frame_group_dict
+
+    @classmethod
+    def from_dict(
+        cls,
+        frame_group_dict: dict[str],
+        labeled_frames_list: list[LabeledFrame],
+    ):
+        """Convert dictionary to `FrameGroup` object.
+
+        Args:
+            frame_group_dict: Dictionary of `FrameGroup` object.
+            labeled_frames_list: List of `LabeledFrame` objects (expecting
+                `Labels.labeled_frames`).
+
+        Returns:
+            `FrameGroup` object.
+        """
+
+        # Get `InstanceGroup` objects
+        instance_groups = []
+        for instance_group_dict in frame_group_dict["instance_groups"]:
+            instance_group = InstanceGroup.from_dict(
+                instance_group_dict=instance_group_dict,
+                labeled_frames_list=labeled_frames_list,
+            )
+            instance_groups.append(instance_group)
+
+        return cls(instance_groups=instance_groups)
