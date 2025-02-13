@@ -394,7 +394,7 @@ class Instance:
         self.points = new_points
 
 
-@define
+@define(eq=False)
 class PredictedInstance(Instance):
     """A `PredictedInstance` is an `Instance` that was predicted using a model.
 
