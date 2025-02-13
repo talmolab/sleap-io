@@ -870,6 +870,9 @@ class InstanceGroup:
         Returns:
             `InstanceGroup` object.
         """
+        # Avoid mutating the dictionary
+        instance_group_dict = instance_group_dict.copy()
+
         # Get the `Instance` objects
         camera_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = (
             instance_group_dict.pop("camera_to_lf_and_inst_idx_map")
