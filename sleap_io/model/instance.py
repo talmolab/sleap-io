@@ -180,7 +180,7 @@ def _compare_points(
     return True
 
 
-@define(auto_attribs=True, slots=True, eq=True)
+@define(auto_attribs=True, slots=True, eq=False)
 class Instance:
     """This class represents a ground truth instance such as an animal.
 
