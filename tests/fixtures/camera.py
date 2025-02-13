@@ -8,6 +8,33 @@ import sleap_io
 
 
 @pytest.fixture
+def instance_group_345(camera_group_345):
+    """`InstanceGroup` using `Camera`s from `camera_group_345`.
+
+    Returns:
+        `InstanceGroup`: Instance group with an `Instance` at each camera view.
+    """
+    camera_group: sleap_io.CameraGroup = camera_group_345
+
+    skeleton = sleap_io.Skeleton(["A", "B"])
+    instance_by_camcorder = {
+        cam: sleap_io.Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+        for cam in camera_group.cameras
+    }
+    score = 0.5
+    points = np.random.rand(10, 3)
+    metadata = {"whatever we want of native type": 72137}
+    instance_group = sleap_io.InstanceGroup(
+        instance_by_camcorder=instance_by_camcorder,
+        score=score,
+        points=points,
+        metadata=metadata,
+    )
+
+    return instance_group
+
+
+@pytest.fixture
 def camera_group_345():
     """`CameraGroup` with 3-4-5 triangle configuration.
 
