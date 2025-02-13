@@ -698,7 +698,7 @@ def test_frame_group_init(camera_group_345: CameraGroup):
 
     # Test with non-defaults
     instance_groups = [InstanceGroup(), InstanceGroup()]
-    labeled_frame_by_cam = {
+    labeled_frame_by_camera = {
         cam: LabeledFrame(
             frame_idx=frame_idx,
             video=Video(filename="test"),
@@ -709,12 +709,12 @@ def test_frame_group_init(camera_group_345: CameraGroup):
     frame_group = FrameGroup(
         frame_idx=frame_idx,
         instance_groups=instance_groups,
-        labeled_frame_by_cam=labeled_frame_by_cam,
+        labeled_frame_by_camera=labeled_frame_by_camera,
         metadata=metadata,
     )
     assert frame_group.frame_idx == frame_idx
     assert frame_group._instance_groups == instance_groups
-    assert frame_group._labeled_frame_by_camera == labeled_frame_by_cam
+    assert frame_group._labeled_frame_by_camera == labeled_frame_by_camera
     assert frame_group.metadata == metadata
 
 
