@@ -915,76 +915,46 @@ class FrameGroup:
 
     Attributes:
         frame_idx: Frame index for the `FrameGroup`.
-        session: `RecordingSession` object that the `FrameGroup` is in.
         instance_groups: List of `InstanceGroup`s in the `FrameGroup`.
         labeled_frames: List of `LabeledFrame`s in the `FrameGroup`.
-        cameras: List of `Camcorder`s that have `LabeledFrame`s.
+        metadata: Metadata for the `FrameGroup` that is provided but not deserialized.
     """
 
-    # Instance attributes
-    frame_idx: int = field(validator=instance_of(int))
-    metadata: dict = field(factory=dict)
+    frame_idx: int = field(converter=int)
     _instance_groups: list[InstanceGroup] = field(
         factory=list, validator=instance_of(list)
-    )  # Akin to `LabeledFrame.instances`
-
-    # "Hidden" instance attributes
-
-    # TODO(LM): This dict should be updated each time a LabeledFrame is added/removed
-    # from the Labels object. Or if a video is added/removed from the RecordingSession.
-    _labeled_frame_by_cam: dict[Camera, LabeledFrame] = field(factory=dict)
-    _instances_by_cam: dict[Camera, set[Instance]] = field(factory=dict)
+    )
+    _labeled_frame_by_camera: dict[Camera, LabeledFrame] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
     def labeled_frames(self) -> list[LabeledFrame]:
         """List of `LabeledFrame`s."""
-        # TODO(LM): Revisit whether we need to return a list instead of a view object
-        return list(self._labeled_frame_by_cam.values())
-
-    @property
-    def instance_groups(self) -> list[InstanceGroup]:
-        """List of `InstanceGroup`s."""
-        return self._instance_groups
-
-    @instance_groups.setter
-    def instance_groups(self, instance_groups: list[InstanceGroup]):
-        """Setter for `instance_groups` that updates `LabeledFrame`s and `Instance`s."""
-
-        instance_groups_to_remove = set(self.instance_groups) - set(instance_groups)
-        instance_groups_to_add = set(instance_groups) - set(self.instance_groups)
-
-        # Update the `_labeled_frame_by_cam` and `_instances_by_cam` dictionary
-        for instance_group in instance_groups_to_remove:
-            self.remove_instance_group(instance_group=instance_group)
-
-        for instance_group in instance_groups_to_add:
-            self.add_instance_group(instance_group=instance_group)
-
-    def add_instance_group(self, instance_group: InstanceGroup):
-        """Add an `InstanceGroup` to the `FrameGroup`."""
-
-        # Handle underlying dictionary updates
-        ...
-
-    def remove_instance_group(self, instance_group: InstanceGroup):
-        """Remove an `InstanceGroup` from the `FrameGroup`."""
-
-        # Handle underlying dictionary updates
-        ...
+        return list(self._labeled_frame_by_camera.values())
 
     def to_dict(
         self,
         labeled_frame_to_idx: dict[LabeledFrame, int],
+        camera_group: CameraGroup,
     ) -> dict[str, int | list[dict[str]]]:
         """Convert `FrameGroup` to a dictionary.
 
         Args:
             labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
                 `Labels.labeled_frames`.
-        """
+            camera_group: `CameraGroup` object that determines the order of the
+                `Camcorder` objects when converting to a dictionary.
 
+        Returns:
+            Dictionary of the `FrameGroup` with items:
+                - instance_groups: List of dictionaries for each `InstanceGroup` in the
+                    `FrameGroup`.
+                - frame_idx: Frame index for the `FrameGroup`.
+        """
         # Create dictionary of `Instance` to `LabeledFrame` index (in
-        # `Labels.labeled_frames`) and `Instance` index in `LabeledFrame.instances``.
+        # `Labels.labeled_frames`) and `Instance` index in `LabeledFrame.instances`.
         instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]] = {
             inst: (str(labeled_frame_to_idx[labeled_frame]), str(inst_idx))
             for labeled_frame in self.labeled_frames
@@ -995,10 +965,14 @@ class FrameGroup:
             "instance_groups": [
                 instance_group.to_dict(
                     instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
+                    camera_group=camera_group,
                 )
                 for instance_group in self._instance_groups
             ],
         }
+        frame_group_dict["frame_idx"] = str(self.frame_idx)
+        if len(self.metadata) > 0:
+            frame_group_dict.update(self.metadata)
 
         return frame_group_dict
 
@@ -1006,7 +980,8 @@ class FrameGroup:
     def from_dict(
         cls,
         frame_group_dict: dict[str],
-        labeled_frames_list: list[LabeledFrame],
+        labeled_frames: list[LabeledFrame],
+        camera_group: CameraGroup,
     ):
         """Convert dictionary to `FrameGroup` object.
 
@@ -1014,18 +989,48 @@ class FrameGroup:
             frame_group_dict: Dictionary of `FrameGroup` object.
             labeled_frames_list: List of `LabeledFrame` objects (expecting
                 `Labels.labeled_frames`).
+            camera_group: `CameraGroup` object used to retrieve `Camera` objects.
 
         Returns:
             `FrameGroup` object.
         """
+        # Avoid mutating the dictionary
+        frame_group_dict = frame_group_dict.copy()
+
+        # Get the frame index
+        frame_idx = frame_group_dict.pop("frame_idx")
 
         # Get `InstanceGroup` objects
+        instance_groups_info = frame_group_dict.pop("instance_groups")
         instance_groups = []
-        for instance_group_dict in frame_group_dict["instance_groups"]:
+        labeled_frame_by_camera = {}
+        for instance_group_dict in instance_groups_info:
             instance_group = InstanceGroup.from_dict(
                 instance_group_dict=instance_group_dict,
-                labeled_frames_list=labeled_frames_list,
+                labeled_frames=labeled_frames,
+                camera_group=camera_group,
             )
             instance_groups.append(instance_group)
 
-        return cls(instance_groups=instance_groups)
+            # Also retrieve the `LabeledFrame` by `Camera`. We do this for each
+            # `InstanceGroup` to ensure that we have don't miss a `LabeledFrame`.
+            camera_to_lf_and_inst_idx_map = instance_group_dict[
+                "camera_to_lf_and_inst_idx_map"
+            ]
+            for cam_idx, (lf_idx, _) in camera_to_lf_and_inst_idx_map.items():
+                # Retrieve the `Camera`
+                camera = camera_group.cameras[int(cam_idx)]
+
+                # Retrieve the `LabeledFrame`
+                labeled_frame = labeled_frames[int(lf_idx)]
+                labeled_frame_by_camera[camera] = labeled_frame
+
+        # Metadata contains any information that the class doesn't deserialize.
+        metadata = frame_group_dict  # Remaining keys are metadata.
+
+        return cls(
+            frame_idx=frame_idx,
+            instance_groups=instance_groups,
+            labeled_frame_by_camera=labeled_frame_by_camera,
+            metadata=metadata,
+        )
