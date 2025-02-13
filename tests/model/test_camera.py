@@ -4,7 +4,10 @@ import cv2
 import numpy as np
 import pytest
 
-from sleap_io.model.camera import Camera, CameraGroup, RecordingSession
+from sleap_io.model.camera import Camera, CameraGroup, InstanceGroup, RecordingSession
+from sleap_io.model.instance import Instance
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 
 
@@ -544,3 +547,102 @@ def test_camera_group_project(camera_group_345: CameraGroup):
     np.testing.assert_array_almost_equal(
         points, np.array([[[[[c, 0]]]], [[[[c, 0]]]]]), decimal=5
     )
+
+
+def test_instance_group_init(
+    camera_group_345: CameraGroup,
+):
+    """Test instance group initialization."""
+    camera_group = camera_group_345
+
+    # Test with defaults
+    instance_group = InstanceGroup()
+    assert instance_group._instance_by_camcorder == {}
+    assert instance_group._score is None
+    assert instance_group._points is None
+    assert instance_group.metadata == {}
+
+    # Test with non-defaults
+    skeleton = Skeleton(["A", "B"])
+    instance_by_camcorder = {
+        cam: Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+        for cam in camera_group.cameras
+    }
+    score = 0.5
+    points = np.random.rand(10, 3).astype(np.float32)
+    assert points.dtype == np.float32
+    metadata = {"observation": 72137}
+    instance_group = InstanceGroup(
+        instance_by_camcorder=instance_by_camcorder,
+        score=score,
+        points=points,
+        metadata=metadata,
+    )
+    assert instance_group._instance_by_camcorder == instance_by_camcorder
+    assert instance_group._score == score
+    assert instance_group._points.dtype == np.float64
+    assert np.array_equal(instance_group._points, points.astype(np.float64))
+    assert instance_group.metadata == metadata
+
+
+def test_instance_group_to_dict_from_dict(
+    instance_group_345: InstanceGroup, camera_group_345: CameraGroup
+):
+    """Test InstanceGroup to_dict and from_dict methods."""
+    instance_group = instance_group_345
+
+    # Create necessary serialized objects
+
+    def new_labeled_frame(inst: Instance | None = None):
+        video = Video(filename="test")
+        if inst is None:
+            inst = Instance([[8, 9], [10, 11]], skeleton=Skeleton(["A", "B"]))
+        return LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[
+                inst,
+                Instance([[4, 5], [6, 7]], skeleton=Skeleton(["A", "B"])),
+            ],
+        )
+
+    # Create labeled frames, with some irrelevant frames just because
+    labeled_frames = []
+    for inst in instance_group._instance_by_camcorder.values():
+        labeled_frames.append(new_labeled_frame(inst))
+        labeled_frames.append(new_labeled_frame())
+
+    # Create our instance_to_lf_and_inst_idx dictionary
+    instance_to_lf_and_inst_idx = {
+        inst: (inst_idx * 2, 0)  # inst_idx * 2 because we have irrelevant frames
+        for inst_idx, inst in enumerate(instance_group._instance_by_camcorder.values())
+    }
+
+    # Test to_dict
+
+    instance_group_dict = instance_group.to_dict(
+        instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
+        camera_group=camera_group_345,
+    )
+    assert instance_group_dict["score"] == str(instance_group._score)
+    assert np.array_equal(instance_group_dict["points"], instance_group._points)
+
+    # Test from_dict
+
+    instance_group_0 = InstanceGroup.from_dict(
+        instance_group_dict,
+        labeled_frames=labeled_frames,
+        camera_group=camera_group_345,
+    )
+    assert instance_group_0._score == instance_group._score
+    assert np.array_equal(instance_group_0._points, instance_group._points)
+    assert instance_group_0.metadata == instance_group.metadata
+    assert len(instance_group_0._instance_by_camcorder) == len(
+        instance_group._instance_by_camcorder
+    )
+    for (cam, inst), (cam_0, inst_0) in zip(
+        instance_group._instance_by_camcorder.items(),
+        instance_group_0._instance_by_camcorder.items(),
+    ):
+        assert inst == inst_0
+        assert cam == cam_0
