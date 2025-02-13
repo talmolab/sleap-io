@@ -56,15 +56,15 @@ def instance_group_345(camera_group_345):
     camera_group: sleap_io.CameraGroup = camera_group_345
 
     skeleton = sleap_io.Skeleton(["A", "B"])
-    instance_by_camcorder = {
+    instance_by_camera = {
         cam: sleap_io.Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
         for cam in camera_group.cameras
     }
     score = 0.5
     points = np.random.rand(10, 3)
-    metadata = {"whatever we want of native type": 72137}
+    metadata = {"whatever we want of native type": 72317}
     instance_group = sleap_io.InstanceGroup(
-        instance_by_camcorder=instance_by_camcorder,
+        instance_by_camera=instance_by_camera,
         score=score,
         points=points,
         metadata=metadata,

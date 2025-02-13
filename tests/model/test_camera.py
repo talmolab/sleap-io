@@ -552,7 +552,11 @@ def test_camera_group_project(camera_group_345: CameraGroup):
 def test_instance_group_init(
     camera_group_345: CameraGroup,
 ):
-    """Test instance group initialization."""
+    """Test instance group initialization.
+
+    Args:
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
     camera_group = camera_group_345
 
     # Test with defaults
@@ -588,12 +592,23 @@ def test_instance_group_init(
 def test_instance_group_to_dict_from_dict(
     instance_group_345: InstanceGroup, camera_group_345: CameraGroup
 ):
-    """Test InstanceGroup to_dict and from_dict methods."""
+    """Test InstanceGroup to_dict and from_dict methods.
+
+    Args:
+        instance_group_345: Instance group with an `Instance` at each camera view.
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
     instance_group = instance_group_345
 
-    # Create necessary serialized objects
+    # Create necessary helper objects.
 
     def new_labeled_frame(inst: Instance | None = None):
+        """Create a new labeled frame with or without the specified instance.
+
+        Args:
+            inst: Instance to include in the labeled frame. If None, a new instance is
+                created instead.
+        """
         video = Video(filename="test")
         if inst is None:
             inst = Instance([[8, 9], [10, 11]], skeleton=Skeleton(["A", "B"]))
@@ -606,19 +621,19 @@ def test_instance_group_to_dict_from_dict(
             ],
         )
 
-    # Create labeled frames, with some irrelevant frames just because
+    # Create labeled frames, with some irrelevant frames to make mapping more complex
     labeled_frames = []
     for inst in instance_group._instance_by_camera.values():
         labeled_frames.append(new_labeled_frame(inst))
         labeled_frames.append(new_labeled_frame())
 
-    # Create our instance_to_lf_and_inst_idx dictionary
+    # Create our instance_to_lf_and_inst_idx dictionary.
     instance_to_lf_and_inst_idx = {
         inst: (inst_idx * 2, 0)  # inst_idx * 2 because we have irrelevant frames
         for inst_idx, inst in enumerate(instance_group._instance_by_camera.values())
     }
 
-    # Test to_dict
+    # Test to_dict.
 
     instance_group_dict = instance_group.to_dict(
         instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
@@ -627,7 +642,7 @@ def test_instance_group_to_dict_from_dict(
     assert instance_group_dict["score"] == str(instance_group._score)
     assert np.array_equal(instance_group_dict["points"], instance_group._points)
 
-    # Test from_dict
+    # Test from_dict.
 
     instance_group_0 = InstanceGroup.from_dict(
         instance_group_dict,
@@ -640,6 +655,8 @@ def test_instance_group_to_dict_from_dict(
     assert len(instance_group_0._instance_by_camera) == len(
         instance_group._instance_by_camera
     )
+
+    # Check the instances and cameras are the same.
     for (cam, inst), (cam_0, inst_0) in zip(
         instance_group._instance_by_camera.items(),
         instance_group_0._instance_by_camera.items(),
