@@ -787,13 +787,13 @@ class InstanceGroup:
             instances.
         cameras: List of `Camcorder` objects that have an `Instance` associated.
         instances: List of `Instance` objects.
-        instance_by_camcorder: Dictionary of `Instance` objects by `Camcorder`.
+        instance_by_camera: Dictionary of `Instance` objects by `Camcorder`.
         score: Optional score for the `InstanceGroup`. Setting the score will also
             update the score for all `instances` already in the `InstanceGroup`. The
             score for `instances` will not be updated upon initialization.
     """
 
-    _instance_by_camcorder: dict[Camera, Instance] = field(
+    _instance_by_camera: dict[Camera, Instance] = field(
         factory=dict, validator=instance_of(dict)
     )
     _score: float | None = field(
@@ -821,18 +821,18 @@ class InstanceGroup:
 
         Returns:
             Dictionary of the `InstanceGroup` with items:
-                - camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camcorder` indices
+                - camera_to_lf_and_inst_idx_map: Dictionary mapping `Camcorder` indices
                     (in `InstanceGroup.camera_cluster.cameras`) to both `LabeledFrame`
                     and `Instance` indices (from `instance_to_lf_and_inst_idx`).
         """
-        camcorder_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = {
+        camera_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = {
             str(camera_group.cameras.index(cam)): instance_to_lf_and_inst_idx[instance]
-            for cam, instance in self._instance_by_camcorder.items()
+            for cam, instance in self._instance_by_camera.items()
         }
 
-        # Only required key is camcorder_to_lf_and_inst_idx_map
+        # Only required key is camera_to_lf_and_inst_idx_map
         instance_group_dict = {
-            "camcorder_to_lf_and_inst_idx_map": camcorder_to_lf_and_inst_idx_map,
+            "camera_to_lf_and_inst_idx_map": camera_to_lf_and_inst_idx_map,
         }
 
         # Optionally add score, points, and metadata if they are non-default values
@@ -856,7 +856,7 @@ class InstanceGroup:
 
         Args:
             instance_group_dict: Dictionary with the following necessary keys:
-                camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camcorder` indices
+                camera_to_lf_and_inst_idx_map: Dictionary mapping `Camcorder` indices
                     to a tuple of `LabeledFrame` index (in `labeled_frames`) and
                     `Instance` index (in containing `LabeledFrame.instances`).
                 and optional keys:
@@ -871,12 +871,12 @@ class InstanceGroup:
             `InstanceGroup` object.
         """
         # Get the `Instance` objects
-        camcorder_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = (
-            instance_group_dict.pop("camcorder_to_lf_and_inst_idx_map")
+        camera_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = (
+            instance_group_dict.pop("camera_to_lf_and_inst_idx_map")
         )
 
-        instance_by_camcorder: dict[Camera, Instance] = {}
-        for cam_idx, (lf_idx, inst_idx) in camcorder_to_lf_and_inst_idx_map.items():
+        instance_by_camera: dict[Camera, Instance] = {}
+        for cam_idx, (lf_idx, inst_idx) in camera_to_lf_and_inst_idx_map.items():
             # Retrieve the `Camera`
             camera = camera_group.cameras[int(cam_idx)]
 
@@ -885,7 +885,7 @@ class InstanceGroup:
             instance = labeled_frame.instances[int(inst_idx)]
 
             # Link the `Instance` to the `Camera`
-            instance_by_camcorder[camera] = instance
+            instance_by_camera[camera] = instance
 
         # Get all optional attributes
         score = None
@@ -899,7 +899,7 @@ class InstanceGroup:
         metadata = instance_group_dict  # Remaining keys are metadata.
 
         return cls(
-            instance_by_camcorder=instance_by_camcorder,
+            instance_by_camera=instance_by_camera,
             score=score,
             points=points,
             metadata=metadata,

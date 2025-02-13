@@ -557,28 +557,28 @@ def test_instance_group_init(
 
     # Test with defaults
     instance_group = InstanceGroup()
-    assert instance_group._instance_by_camcorder == {}
+    assert instance_group._instance_by_camera == {}
     assert instance_group._score is None
     assert instance_group._points is None
     assert instance_group.metadata == {}
 
     # Test with non-defaults
     skeleton = Skeleton(["A", "B"])
-    instance_by_camcorder = {
+    instance_by_camera = {
         cam: Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
         for cam in camera_group.cameras
     }
     score = 0.5
     points = np.random.rand(10, 3).astype(np.float32)
     assert points.dtype == np.float32
-    metadata = {"observation": 72137}
+    metadata = {"observation": 72317}
     instance_group = InstanceGroup(
-        instance_by_camcorder=instance_by_camcorder,
+        instance_by_camera=instance_by_camera,
         score=score,
         points=points,
         metadata=metadata,
     )
-    assert instance_group._instance_by_camcorder == instance_by_camcorder
+    assert instance_group._instance_by_camera == instance_by_camera
     assert instance_group._score == score
     assert instance_group._points.dtype == np.float64
     assert np.array_equal(instance_group._points, points.astype(np.float64))
@@ -608,14 +608,14 @@ def test_instance_group_to_dict_from_dict(
 
     # Create labeled frames, with some irrelevant frames just because
     labeled_frames = []
-    for inst in instance_group._instance_by_camcorder.values():
+    for inst in instance_group._instance_by_camera.values():
         labeled_frames.append(new_labeled_frame(inst))
         labeled_frames.append(new_labeled_frame())
 
     # Create our instance_to_lf_and_inst_idx dictionary
     instance_to_lf_and_inst_idx = {
         inst: (inst_idx * 2, 0)  # inst_idx * 2 because we have irrelevant frames
-        for inst_idx, inst in enumerate(instance_group._instance_by_camcorder.values())
+        for inst_idx, inst in enumerate(instance_group._instance_by_camera.values())
     }
 
     # Test to_dict
@@ -637,12 +637,12 @@ def test_instance_group_to_dict_from_dict(
     assert instance_group_0._score == instance_group._score
     assert np.array_equal(instance_group_0._points, instance_group._points)
     assert instance_group_0.metadata == instance_group.metadata
-    assert len(instance_group_0._instance_by_camcorder) == len(
-        instance_group._instance_by_camcorder
+    assert len(instance_group_0._instance_by_camera) == len(
+        instance_group._instance_by_camera
     )
     for (cam, inst), (cam_0, inst_0) in zip(
-        instance_group._instance_by_camcorder.items(),
-        instance_group_0._instance_by_camcorder.items(),
+        instance_group._instance_by_camera.items(),
+        instance_group_0._instance_by_camera.items(),
     ):
         assert inst == inst_0
         assert cam == cam_0
