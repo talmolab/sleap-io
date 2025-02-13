@@ -6,7 +6,13 @@ import cv2
 import numpy as np
 import pytest
 
-from sleap_io.model.camera import Camera, CameraGroup, InstanceGroup, RecordingSession
+from sleap_io.model.camera import (
+    Camera,
+    CameraGroup,
+    FrameGroup,
+    InstanceGroup,
+    RecordingSession,
+)
 from sleap_io.model.instance import Instance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.skeleton import Skeleton
@@ -670,3 +676,107 @@ def test_instance_group_to_dict_from_dict(
     assert instance_group_dict.get("points", None) is not None
     assert instance_group_dict.get("score", None) is not None
     assert instance_group_dict.get("camera_to_lf_and_inst_idx_map", None) is not None
+
+
+def test_frame_group_init(camera_group_345: CameraGroup):
+    """Test frame group initialization.
+
+    Args:
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
+    # Need frame index
+    with pytest.raises(TypeError):
+        frame_group = FrameGroup()
+
+    # Test with frame index and defaults
+    frame_idx = 0
+    frame_group = FrameGroup(frame_idx=frame_idx)
+    assert frame_group.frame_idx == 0
+    assert frame_group._instance_groups == []
+    assert frame_group._labeled_frame_by_camera == {}
+    assert frame_group.metadata == {}
+
+    # Test with non-defaults
+    instance_groups = [InstanceGroup(), InstanceGroup()]
+    labeled_frame_by_cam = {
+        cam: LabeledFrame(
+            frame_idx=frame_idx,
+            video=Video(filename="test"),
+        )
+        for cam in camera_group_345.cameras
+    }
+    metadata = {"observation": 72317}
+    frame_group = FrameGroup(
+        frame_idx=frame_idx,
+        instance_groups=instance_groups,
+        labeled_frame_by_cam=labeled_frame_by_cam,
+        metadata=metadata,
+    )
+    assert frame_group.frame_idx == frame_idx
+    assert frame_group._instance_groups == instance_groups
+    assert frame_group._labeled_frame_by_camera == labeled_frame_by_cam
+    assert frame_group.metadata == metadata
+
+
+def test_frame_group_to_dict_from_dict(
+    frame_group_345: FrameGroup, camera_group_345: CameraGroup
+):
+    """Test FrameGroup to_dict and from_dict methods.
+
+    Args:
+        frame_group_345: Frame group with an `InstanceGroup` at each camera view.
+        camera_group_345: Camera group with 3-4-5 triangle configuration
+    """
+    frame_group = frame_group_345
+    camera_group = camera_group_345
+
+    # Create necessary helper objects.
+
+    # Create labeled frames, with some irrelevant frames to make mapping more complex.
+    labeled_frames = []
+    for lf in frame_group.labeled_frames:
+        labeled_frames.append(lf)
+        labeled_frames.append(
+            LabeledFrame(video=Video(filename="test"), frame_idx=lf.frame_idx)
+        )
+    labeled_frame_to_idx = {lf: idx for idx, lf in enumerate(labeled_frames)}
+
+    # Test to_dict.
+
+    frame_group_dict = frame_group.to_dict(
+        labeled_frame_to_idx=labeled_frame_to_idx, camera_group=camera_group
+    )
+    assert frame_group_dict["frame_idx"] == str(frame_group.frame_idx)
+
+    # Test from_dict.
+
+    frame_group_0 = FrameGroup.from_dict(
+        frame_group_dict=frame_group_dict,
+        labeled_frames=labeled_frames,
+        camera_group=camera_group,
+    )
+    assert frame_group_0.frame_idx == frame_group.frame_idx
+    assert len(frame_group_0._instance_groups) == len(frame_group._instance_groups)
+    assert len(frame_group_0._labeled_frame_by_camera) == len(
+        frame_group._labeled_frame_by_camera
+    )
+    assert frame_group_0.metadata == frame_group.metadata
+
+    # Check the cameras and labeled frames are the same.
+    for (cam, lf), (cam_0, lf_0) in zip(
+        frame_group._labeled_frame_by_camera.items(),
+        frame_group_0._labeled_frame_by_camera.items(),
+    ):
+        assert cam == cam_0
+        assert lf == lf_0
+
+    # Check the instance groups are the same.
+    for instance_group, instance_group_0 in zip(
+        frame_group._instance_groups, frame_group_0._instance_groups
+    ):
+        for (cam, inst), (cam_0, inst_0) in zip(
+            instance_group._instance_by_camera.items(),
+            instance_group_0._instance_by_camera.items(),
+        ):
+            assert inst == inst_0
+            assert cam == cam_0
