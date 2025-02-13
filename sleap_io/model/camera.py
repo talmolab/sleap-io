@@ -377,7 +377,6 @@ class RecordingSession:
             Dictionary of "calibration" and "camcorder_to_video_idx_map" needed to
             restructure a `RecordingSession`.
         """
-
         # Unstructure `CameraCluster` and `metadata`
         calibration_dict = self.camera_group.to_dict()
 
@@ -433,7 +432,6 @@ class RecordingSession:
         Returns:
             `RecordingSession` object.
         """
-
         camera_group: CameraGroup = CameraGroup.load(filename)
         return cls(
             camera_group=camera_group,
@@ -450,7 +448,6 @@ class RecordingSession:
         Returns:
             `RecordingSession` object.
         """
-
         camera_group: CameraGroup = CameraGroup.from_dict(
             calibration_dict=calibration_dict,
         )
@@ -475,7 +472,6 @@ class RecordingSession:
         Returns:
             `RecordingSession` object.
         """
-
         # Restructure `RecordingSession` without `Video` to `Camcorder` mapping
         calibration_dict = session_dict["calibration"]
         session: RecordingSession = RecordingSession.from_calibration_dict(
