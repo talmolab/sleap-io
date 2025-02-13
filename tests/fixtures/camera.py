@@ -1,5 +1,7 @@
 """Fixtures that return `CameraGroup` and related objects."""
 
+from __future__ import annotations
+
 import cv2
 import numpy as np
 import pytest

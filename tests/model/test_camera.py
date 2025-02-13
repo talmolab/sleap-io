@@ -1,5 +1,7 @@
 """Tests for methods in the sleap_io.model.instance file."""
 
+from __future__ import annotations
+
 import cv2
 import numpy as np
 import pytest
