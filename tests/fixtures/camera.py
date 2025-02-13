@@ -10,17 +10,15 @@ import sleap_io
 
 
 @pytest.fixture
-def frame_group_345(camera_group_345, instance_group_345):
+def frame_group_345(instance_group_345):
     """`FrameGroup` using `camera_group_345` and `instance_group_345` from fixtures.
 
     Args:
-        camera_group_345: `CameraGroup` with 3-4-5 triangle configuration.
         instance_group_345: `InstanceGroup` using `Camera`s from `camera_group_345`.
 
     Returns:
         `FrameGroup`: Frame group with an `LabeledFrame` at each camera view.
     """
-    camera_group: sleap_io.CameraGroup = camera_group_345
     instance_group: sleap_io.InstanceGroup = instance_group_345
 
     frame_idx = 0
