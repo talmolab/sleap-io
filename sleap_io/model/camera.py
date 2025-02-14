@@ -83,8 +83,8 @@ class CameraGroup:
         cameras: List of `Camera` objects in the group.
     """
 
-    cameras: list[Camera] = field(factory=list)
-    metadata: dict = field(factory=dict)  # TODO(LM): Add metadata to CameraGroup
+    cameras: list[Camera] = field(factory=list, validator=instance_of(list))
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     # TODO: Remove this method (should be a util function in another repo).
     def triangulate(
@@ -223,13 +223,15 @@ class CameraGroup:
             `CameraGroup` object created from calibration dictionary.
         """
         cameras = []
+        metadata = {}
         for dict_name, camera_dict in calibration_dict.items():
             if dict_name == "metadata":
+                metadata = camera_dict
                 continue
             camera = Camera.from_dict(camera_dict)
             cameras.append(camera)
 
-        camera_group = cls(cameras=cameras)
+        camera_group = cls(cameras=cameras, metadata=metadata)
 
         return camera_group
 
@@ -249,11 +251,15 @@ class CameraGroup:
                     rotation: Rotation vector in unnormalized axis-angle representation
                         of size (3,) and type float64.
                     translation: Translation vector of size (3,) and type float64.
+                metadata: Dictionary of metadata.
         """
         calibration_dict = {}
         for cam_idx, camera in enumerate(self.cameras):
             camera_dict = camera.to_dict()
             calibration_dict[f"cam_{cam_idx}"] = camera_dict
+
+        if len(self.metadata) > 0:
+            calibration_dict["metadata"] = self.metadata
 
         return calibration_dict
 
