@@ -12,7 +12,13 @@ from sleap_io.model.instance import (
 )
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.labeled_frame import LabeledFrame
-from sleap_io.model.camera import Camera, CameraGroup, FrameGroup, InstanceGroup
+from sleap_io.model.camera import (
+    Camera,
+    CameraGroup,
+    FrameGroup,
+    InstanceGroup,
+    RecordingSession,
+)
 from sleap_io.model.labels import Labels
 from sleap_io.io.main import (
     load_slp,
