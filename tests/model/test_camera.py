@@ -5,6 +5,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 import pytest
+import toml
 
 from sleap_io.model.camera import (
     Camera,
@@ -800,3 +801,226 @@ def test_frame_group_to_dict_from_dict(
         ):
             assert inst == inst_0
             assert cam == cam_0
+
+
+def test_recording_session_init(camera_group_345: CameraGroup):
+    """Test recording session initialization.
+
+    Args:
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
+    # Test with defaults
+    session = RecordingSession()
+    assert session._video_by_camera == {}
+    assert session._camera_by_video == {}
+    assert session._frame_group_by_frame_idx == {}
+    assert session.metadata == {}
+
+    # Test with non-defaults
+    camera_group = camera_group_345
+    video_by_camera = {cam: Video(filename="test") for cam in camera_group.cameras}
+    camera_by_video = {video: cam for cam, video in video_by_camera.items()}
+    frame_group_by_frame_idx = {
+        frame_idx: FrameGroup(frame_idx=frame_idx) for frame_idx in range(10)
+    }
+    metadata = {"observation": 72317}
+    session = RecordingSession(
+        camera_group=camera_group,
+        video_by_camera=video_by_camera,
+        camera_by_video=camera_by_video,
+        frame_group_by_frame_idx=frame_group_by_frame_idx,
+        metadata=metadata,
+    )
+    assert session.camera_group == camera_group
+    assert session._video_by_camera == video_by_camera
+    assert session._camera_by_video == camera_by_video
+    assert session._frame_group_by_frame_idx == frame_group_by_frame_idx
+    assert session.metadata == metadata
+
+
+def test_recording_session_load(calibration_toml_path: str):
+    """Test recording session load method.
+
+    Args:
+        calibration_toml_path: Path to calibration toml file.
+    """
+
+    session = RecordingSession.load(calibration_toml_path)
+    assert len(session.camera_group.cameras) == 8
+    assert len(session._video_by_camera) == 0
+    assert len(session._camera_by_video) == 0
+    assert len(session._frame_group_by_frame_idx) == 0
+    assert session.metadata == {}
+
+    cameras_dict: dict = toml.load(calibration_toml_path)
+    cameras_dict_metadata = cameras_dict.pop("metadata")
+    key_to_attr_map = {
+        "size": "size",
+        "matrix": "matrix",
+        "distortions": "dist",
+        "rotation": "rvec",
+        "translation": "tvec",
+    }
+    assert len(session.camera_group.cameras) == len(cameras_dict)
+    for camera, camera_dict in zip(session.camera_group.cameras, cameras_dict.values()):
+        for key, value in camera_dict.items():
+            attr = key_to_attr_map.get(key, key)
+            attr_value = getattr(camera, attr)
+
+            # Always serialized to a list, so convert to correct type before comparison.
+            attr_type = type(attr_value)
+            if attr_type == np.ndarray:
+                np.testing.assert_array_almost_equal(attr_value, np.array(value))
+            else:
+                assert attr_value == attr_type(value)
+
+
+def test_recording_session_from_calibration_dict(calibration_toml_path: str):
+    """Test recording session from_calibration_dict method.
+
+    Args:
+        calibration_toml_path: Path to calibration toml file.
+    """
+    cameras_dict: dict = toml.load(calibration_toml_path)
+    cameras_dict_metadata = cameras_dict.pop("metadata")
+    session = RecordingSession.from_calibration_dict(cameras_dict)
+    assert len(session.camera_group.cameras) == len(cameras_dict)
+    assert len(session._video_by_camera) == 0
+    assert len(session._camera_by_video) == 0
+    assert len(session._frame_group_by_frame_idx) == 0
+    assert session.metadata == {}
+
+    key_to_attr_map = {
+        "size": "size",
+        "matrix": "matrix",
+        "distortions": "dist",
+        "rotation": "rvec",
+        "translation": "tvec",
+    }
+    assert len(session.camera_group.cameras) == len(cameras_dict)
+    for camera, camera_dict in zip(session.camera_group.cameras, cameras_dict.values()):
+        for key, value in camera_dict.items():
+            attr = key_to_attr_map.get(key, key)
+            attr_value = getattr(camera, attr)
+
+            # Always serialized to a list, so convert to correct type before comparison.
+            attr_type = type(attr_value)
+            if attr_type == np.ndarray:
+                np.testing.assert_array_almost_equal(attr_value, np.array(value))
+            else:
+                assert attr_value == attr_type(value)
+
+
+def assert_cameras_equal(camera: Camera, camera_0: Camera):
+    """Compare two cameras.
+
+    Args:
+        camera: First camera.
+        camera_0: Second camera.
+
+    Raises:
+        AssertionError: If the cameras are not equal.
+    """
+    camera_state = camera.__getstate__()
+    camera_state_0 = camera_0.__getstate__()
+    for key, value in camera_state.items():
+        if value is None:
+            assert camera_state_0[key] is None
+        elif isinstance(value, np.ndarray):
+            np.testing.assert_array_equal(camera_state_0[key], value)
+        else:
+            assert camera_state_0[key] == value
+
+
+def test_recording_session_to_dict_from_dict(recording_session_345: RecordingSession):
+    """Test recording session to_dict and from_dict methods.
+
+    Args:
+        frame_group_345: Frame group with an `InstanceGroup` at each camera view.
+    """
+    session = recording_session_345
+    frame_group = session._frame_group_by_frame_idx[0]
+
+    # Create necessary helper objects.
+
+    # Create labeled frames, with some irrelevant frames to make mapping more complex.
+    labeled_frames = []
+    for lf in frame_group.labeled_frames:
+        labeled_frames.append(lf)
+        labeled_frames.append(
+            LabeledFrame(video=Video(filename="test"), frame_idx=lf.frame_idx)
+        )
+    labeled_frame_to_idx = {lf: idx for idx, lf in enumerate(labeled_frames)}
+
+    # Create videos list and index mapping.
+    videos = []
+    for video in session.videos:
+        videos.append(video)
+        videos.append(Video(filename="test"))
+    video_to_idx = {video: idx for idx, video in enumerate(videos)}
+
+    # Test to_dict.
+
+    session_dict = session.to_dict(
+        labeled_frame_to_idx=labeled_frame_to_idx, video_to_idx=video_to_idx
+    )
+    assert len(session_dict["frame_group_dicts"]) == len(
+        session._frame_group_by_frame_idx
+    )
+
+    # Test from_dict.
+
+    session_0: RecordingSession = RecordingSession.from_dict(
+        session_dict=session_dict,
+        labeled_frames=labeled_frames,
+        videos=videos,
+    )
+    assert len(session_0.camera_group.cameras) == len(session.camera_group.cameras)
+    assert len(session_0._video_by_camera) == len(session._video_by_camera)
+    assert len(session_0._camera_by_video) == len(session._camera_by_video)
+    assert len(session_0._frame_group_by_frame_idx) == len(
+        session._frame_group_by_frame_idx
+    )
+    assert session_0.metadata == session.metadata
+
+    # Check the cameras and videos are the same.
+    for (video, camera), (video_0, camera_0) in zip(
+        session._camera_by_video.items(), session_0._camera_by_video.items()
+    ):
+        assert video == video_0
+        assert session._video_by_camera[camera] == video
+        assert session_0._video_by_camera[camera_0] == video_0
+        assert_cameras_equal(camera, camera_0)
+
+    # Check the frame groups are the same.
+    for (frame_idx, frame_group), (frame_idx_0, frame_group_0) in zip(
+        session._frame_group_by_frame_idx.items(),
+        session_0._frame_group_by_frame_idx.items(),
+    ):
+        assert frame_idx == frame_idx_0
+        assert frame_group.frame_idx == frame_idx
+        assert frame_group.frame_idx == frame_group_0.frame_idx
+        assert len(frame_group._instance_groups) == len(frame_group_0._instance_groups)
+        assert len(frame_group._labeled_frame_by_camera) == len(
+            frame_group_0._labeled_frame_by_camera
+        )
+        assert frame_group.metadata == frame_group_0.metadata
+
+        # Check the cameras and labeled frames are the same.
+        for (camera, lf), (camera_0, lf_0) in zip(
+            frame_group._labeled_frame_by_camera.items(),
+            frame_group_0._labeled_frame_by_camera.items(),
+        ):
+            assert lf == lf_0
+            assert_cameras_equal(camera, camera_0)
+
+        # Check the instance groups are the same.
+        for instance_group, instance_group_0 in zip(
+            frame_group._instance_groups, frame_group_0._instance_groups
+        ):
+            for (cam, inst), (cam_0, inst_0) in zip(
+                instance_group._instance_by_camera.items(),
+                instance_group_0._instance_by_camera.items(),
+            ):
+                assert inst == inst_0
+                assert_cameras_equal(cam, cam_0)
