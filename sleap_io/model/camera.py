@@ -281,13 +281,23 @@ class RecordingSession:
         camera_group: `CameraGroup` object containing cameras in the session.
         _video_by_camera: Dictionary mapping `Camera` to `Video`.
         _camera_by_video: Dictionary mapping `Video` to `Camera`.
+        _frame_group_by_frame_idx: Dictionary mapping frame index to `FrameGroup`.
+        metadata: Dictionary of metadata.
     """
 
-    camera_group: CameraGroup = field(factory=CameraGroup)
-    metadata: dict = field(factory=dict)
-    _video_by_camera: dict[Camera, Video] = field(factory=dict)
-    _camera_by_video: dict[Video, Camera] = field(factory=dict)
-    _frame_group_by_frame_idx: dict[int, FrameGroup] = field(factory=dict)
+    camera_group: CameraGroup = field(
+        factory=CameraGroup, validator=instance_of(CameraGroup)
+    )
+    _video_by_camera: dict[Camera, Video] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    _camera_by_video: dict[Video, Camera] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    _frame_group_by_frame_idx: dict[int, FrameGroup] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
     def videos(self) -> list[Video]:
@@ -380,7 +390,7 @@ class RecordingSession:
         # Unstructure `CameraCluster` and `metadata`
         calibration_dict = self.camera_group.to_dict()
 
-        # Store camcorder-to-video indices map where key is camcorder index
+        # Store camera-to-video indices map where key is camera index
         # and value is video index from `Labels.videos`
         camera_to_video_idx_map = {}
         for cam_idx, camera in enumerate(self.camera_group.cameras):
@@ -407,15 +417,20 @@ class RecordingSession:
                 # Only save `FrameGroup` if it has `InstanceGroup`s
                 if len(frame_group.instance_groups) > 0:
                     frame_group_dict = frame_group.to_dict(
-                        labeled_frame_to_idx=labeled_frame_to_idx
+                        labeled_frame_to_idx=labeled_frame_to_idx,
+                        camera_group=self.camera_group,
                     )
                     frame_group_dicts.append(frame_group_dict)
 
-        return {
+        session_dict = {
             "calibration": calibration_dict,
             "camcorder_to_video_idx_map": camera_to_video_idx_map,
             "frame_group_dicts": frame_group_dicts,
         }
+        if len(self.metadata) > 0:
+            session_dict.update(self.metadata)
+
+        return session_dict
 
     @classmethod
     def load(
@@ -463,8 +478,12 @@ class RecordingSession:
         """Restructure `RecordingSession` from an invertible dictionary.
 
         Args:
-            session_dict: Dictionary of "calibration" and "camcorder_to_video_idx_map"
-                needed to fully restructure a `RecordingSession`.
+            session_dict: Dictionary with keys:
+                calibration: Dictionary containing calibration information for cameras.
+                camcorder_to_video_idx_map: Dictionary mapping camera index to video
+                    index.
+                frame_group_dicts: List of dictionaries containing `FrameGroup`
+                    information.
             videos_list: List containing `Video` objects (expected `Labels.videos`).
             labeled_frames_list: List containing `LabeledFrame` objects (expected
                 `Labels.labeled_frames`).
@@ -472,35 +491,45 @@ class RecordingSession:
         Returns:
             `RecordingSession` object.
         """
+        # Avoid modifying original dictionary
+        session_dict = session_dict.copy()
+
         # Restructure `RecordingSession` without `Video` to `Camcorder` mapping
-        calibration_dict = session_dict["calibration"]
+        calibration_dict = session_dict.pop("calibration")
         session: RecordingSession = RecordingSession.from_calibration_dict(
             calibration_dict
         )
 
         # Retrieve all `Camcorder` and `Video` objects, then add to `RecordingSession`
-        camcorder_to_video_idx_map = session_dict["camcorder_to_video_idx_map"]
+        camcorder_to_video_idx_map = session_dict.pop("camcorder_to_video_idx_map")
         for cam_idx, video_idx in camcorder_to_video_idx_map.items():
-            camcorder = session.camera_group.cameras[int(cam_idx)]
+            camera = session.camera_group.cameras[int(cam_idx)]
             video = videos[int(video_idx)]
-            session.add_video(video, camcorder)
+            session.add_video(video, camera)
 
         # Reconstruct all `FrameGroup` objects and add to `RecordingSession`
-        frame_group_dicts = session_dict.get("frame_group_dicts", [])
+        frame_group_dicts = []
+        if "frame_group_dicts" in session_dict:
+            frame_group_dicts = session_dict.pop("frame_group_dicts")
+        frame_group_by_frame_idx = {}
         for frame_group_dict in frame_group_dicts:
-
             try:
                 # Add `FrameGroup` to `RecordingSession`
-                FrameGroup.from_dict(
+                frame_group = FrameGroup.from_dict(
                     frame_group_dict=frame_group_dict,
-                    session=session,
-                    labeled_frames_list=labeled_frames,
+                    labeled_frames=labeled_frames,
+                    camera_group=session.camera_group,
                 )
+                frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
             except ValueError as e:
                 print(
                     f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping..."
                     f"\n{e}"
                 )
+        session._frame_group_by_frame_idx = frame_group_by_frame_idx
+
+        # Add remaining metadata to `RecordingSession`
+        session.metadata = session_dict
 
         return session
 
