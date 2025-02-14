@@ -548,7 +548,7 @@ class Camera:
         tvec: Translation vector of size (3,) and type float64.
         extrinsic_matrix: Extrinsic matrix of camera of size (4, 4) and type float64.
         name: Camera name.
-        _video_by_session: Dictionary mapping `RecordingSession` to `Video`.
+        metadata: Dictionary of metadata.
     """
 
     matrix: np.ndarray = field(
@@ -569,7 +569,7 @@ class Camera:
     )
     name: str = field(default=None, converter=attrs.converters.optional(str))
     _extrinsic_matrix: np.ndarray = field(init=False)
-    metadata: dict = field(factory=dict)
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @matrix.validator
     @dist.validator
@@ -773,6 +773,10 @@ class Camera:
             "translation": self.tvec.tolist(),
         }
 
+        # Add metadata if it exists.
+        if len(self.metadata) > 0:
+            camera_dict.update(self.metadata)
+
         return camera_dict
 
     @classmethod
@@ -795,16 +799,23 @@ class Camera:
         Returns:
             `Camera` object created from dictionary.
         """
-        name = camera_dict["name"]
-        size = camera_dict["size"]
+        # Avoid mutating the dictionary.
+        camera_dict = camera_dict.copy()
+
+        # Get all attributes we deserialize.
+        name = camera_dict.pop("name")
+        size = camera_dict.pop("size")
         camera = cls(
             name=name if len(name) > 0 else None,
             size=size if len(size) > 0 else None,
-            matrix=camera_dict["matrix"],
-            dist=camera_dict["distortions"],
-            rvec=camera_dict["rotation"],
-            tvec=camera_dict["translation"],
+            matrix=camera_dict.pop("matrix"),
+            dist=camera_dict.pop("distortions"),
+            rvec=camera_dict.pop("rotation"),
+            tvec=camera_dict.pop("translation"),
         )
+
+        # Add remaining metadata to `Camera`
+        camera.metadata = camera_dict
 
         return camera
 
