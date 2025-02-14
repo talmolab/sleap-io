@@ -243,6 +243,26 @@ def test_camera_from_dict_to_dict():
     # Test camera to_dict
     assert camera.to_dict() == camera_dict
 
+    # Test when Camera has None for optional attributes
+
+    camera = Camera(rvec=rotation, tvec=translation)
+    assert camera.name is None
+    assert camera.size is None
+
+    # Test to_dict
+    camera_dict = camera.to_dict()
+    assert camera_dict["name"] == ""
+    assert camera_dict["size"] == ""
+    assert camera_dict["matrix"] == camera.matrix.tolist()
+    assert camera_dict["distortions"] == camera.dist.tolist()
+    assert camera_dict["rotation"] == camera.rvec.tolist()
+    assert camera_dict["translation"] == camera.tvec.tolist()
+
+    # Test from_dict
+    camera_0 = Camera.from_dict(camera_dict)
+    assert camera_0.name is None
+    assert camera_0.size is None
+
 
 def test_camera_undistort_points():
     """Test camera undistort points method."""
