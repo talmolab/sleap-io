@@ -932,6 +932,11 @@ class FrameGroup:
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
+    def instance_groups(self) -> list[InstanceGroup]:
+        """List of `InstanceGroup`s."""
+        return self._instance_groups
+
+    @property
     def labeled_frames(self) -> list[LabeledFrame]:
         """List of `LabeledFrame`s."""
         return list(self._labeled_frame_by_camera.values())
