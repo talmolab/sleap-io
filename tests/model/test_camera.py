@@ -446,8 +446,11 @@ def test_camera_group_from_dict_to_dict():
         camera_dict = camera_dict_template.copy()
         camera_dict["name"] = f"camera{i}"
         camera_group_dict[f"cam_{i}"] = camera_dict
+    metadata = {"extra_key": "extra_value", 444: 555}
+    camera_group_dict["metadata"] = metadata
 
     camera_group_0 = CameraGroup.from_dict(camera_group_dict)
+    assert camera_group_0.metadata == metadata
     camera_group_dict_0: dict = camera_group_0.to_dict()
     assert camera_group_dict == camera_group_dict_0
     assert len(camera_group_0.cameras) == 3
