@@ -10,6 +10,39 @@ import sleap_io
 
 
 @pytest.fixture
+def recording_session_345(camera_group_345, frame_group_345):
+    """`RecordingSession` using `camera_group_345` and `frame_group_345` from fixtures.
+
+    Args:
+        camera_group_345: `CameraGroup` with 3-4-5 triangle configuration.
+        frame_group_345: `FrameGroup` using `camera_group_345`.
+
+    Returns:
+        `RecordingSession`: Recording session with a single frame group.
+    """
+    camera_group: sleap_io.CameraGroup = camera_group_345
+    frame_group: sleap_io.FrameGroup = frame_group_345
+
+    video_by_camera = {}
+    camera_by_video = {}
+    for camera, labeled_frame in frame_group._labeled_frame_by_camera.items():
+        video = labeled_frame.video
+        video_by_camera[camera] = video
+        camera_by_video[video] = camera
+
+    metadata = {7.2317: 72317}
+    recording_session = sleap_io.RecordingSession(
+        camera_group=camera_group,
+        frame_group_by_frame_idx={frame_group.frame_idx: frame_group},
+        video_by_camera=video_by_camera,
+        camera_by_video=camera_by_video,
+        metadata=metadata,
+    )
+
+    return recording_session
+
+
+@pytest.fixture
 def frame_group_345(instance_group_345):
     """`FrameGroup` using `camera_group_345` and `instance_group_345` from fixtures.
 
