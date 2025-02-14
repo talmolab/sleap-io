@@ -731,9 +731,13 @@ class Camera:
                 (3,) and type float64.
             translation: Translation vector of size (3,) and type float64.
         """
+        # Handle optional attributes
+        name = "" if self.name is None else self.name
+        size = "" if self.size is None else list(self.size)
+
         camera_dict = {
-            "name": self.name,
-            "size": list(self.size),
+            "name": name,
+            "size": size,
             "matrix": self.matrix.tolist(),
             "distortions": self.dist.tolist(),
             "rotation": self.rvec.tolist(),
@@ -762,9 +766,11 @@ class Camera:
         Returns:
             `Camera` object created from dictionary.
         """
+        name = camera_dict["name"]
+        size = camera_dict["size"]
         camera = cls(
-            name=camera_dict["name"],
-            size=camera_dict["size"],
+            name=name if len(name) > 0 else None,
+            size=size if len(size) > 0 else None,
             matrix=camera_dict["matrix"],
             dist=camera_dict["distortions"],
             rvec=camera_dict["rotation"],
