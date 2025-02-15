@@ -1013,9 +1013,25 @@ class FrameGroup:
         return self._instance_groups
 
     @property
+    def cameras(self) -> list[Camera]:
+        """List of `Camera` objects."""
+        return list(self._labeled_frame_by_camera.keys())
+
+    @property
     def labeled_frames(self) -> list[LabeledFrame]:
         """List of `LabeledFrame`s."""
         return list(self._labeled_frame_by_camera.values())
+
+    def get_frame(self, camera: Camera) -> LabeledFrame | None:
+        """Get `LabeledFrame` associated with `camera`.
+
+        Args:
+            camera: `Camera` to get `LabeledFrame`.
+
+        Returns:
+            `LabeledFrame` associated with `camera` or None if not found.
+        """
+        return self._labeled_frame_by_camera.get(camera, None)
 
     def to_dict(
         self,
