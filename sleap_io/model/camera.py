@@ -81,6 +81,7 @@ class CameraGroup:
 
     Attributes:
         cameras: List of `Camera` objects in the group.
+        metadata: Dictionary of metadata.
     """
 
     cameras: list[Camera] = field(factory=list, validator=instance_of(list))
@@ -285,9 +286,8 @@ class RecordingSession:
 
     Attributes:
         camera_group: `CameraGroup` object containing cameras in the session.
-        _video_by_camera: Dictionary mapping `Camera` to `Video`.
-        _camera_by_video: Dictionary mapping `Video` to `Camera`.
-        _frame_group_by_frame_idx: Dictionary mapping frame index to `FrameGroup`.
+        frame_groups: Dictionary mapping frame index to `FrameGroup`.
+        videos: List of `Video` objects linked to cameras in the session.
         metadata: Dictionary of metadata.
     """
 
@@ -409,7 +409,7 @@ class RecordingSession:
         # and value is video index from `Labels.videos`
         camera_to_video_idx_map = {}
         for cam_idx, camera in enumerate(self.camera_group.cameras):
-            # Skip if Camcorder is not linked to any Video
+            # Skip if Camera is not linked to any Video
             if camera not in self._video_by_camera:
                 continue
 
@@ -453,7 +453,7 @@ class RecordingSession:
         filename,
         metadata: dict | None = None,
     ) -> "RecordingSession":
-        """Loads cameras as `Camcorder`s from a calibration.toml file.
+        """Loads cameras as `Camera`s from a calibration.toml file.
 
         Args:
             filename: Path to calibration.toml file.
@@ -470,7 +470,7 @@ class RecordingSession:
 
     @classmethod
     def from_calibration_dict(cls, calibration_dict: dict) -> "RecordingSession":
-        """Loads cameras as `Camcorder`s from a calibration dictionary.
+        """Loads cameras as `Camera`s from a calibration dictionary.
 
         Args:
             calibration_dict: Dictionary of calibration data.
@@ -509,13 +509,13 @@ class RecordingSession:
         # Avoid modifying original dictionary
         session_dict = session_dict.copy()
 
-        # Restructure `RecordingSession` without `Video` to `Camcorder` mapping
+        # Restructure `RecordingSession` without `Video` to `Camera` mapping
         calibration_dict = session_dict.pop("calibration")
         session: RecordingSession = RecordingSession.from_calibration_dict(
             calibration_dict
         )
 
-        # Retrieve all `Camcorder` and `Video` objects, then add to `RecordingSession`
+        # Retrieve all `Camera` and `Video` objects, then add to `RecordingSession`
         camcorder_to_video_idx_map = session_dict.pop("camcorder_to_video_idx_map")
         for cam_idx, video_idx in camcorder_to_video_idx_map.items():
             camera = session.camera_group.cameras[int(cam_idx)]
@@ -840,14 +840,13 @@ class InstanceGroup:
     """Defines a group of instances across the same frame index.
 
     Attributes:
-        dummy_instance: Optional `PredictedInstance` object to fill in for missing
-            instances.
-        cameras: List of `Camcorder` objects that have an `Instance` associated.
-        instances: List of `Instance` objects.
-        instance_by_camera: Dictionary of `Instance` objects by `Camcorder`.
+        instances: List of `Instance` objects in the group.
+        cameras: List of `Camera` objects that have an `Instance` associated.
         score: Optional score for the `InstanceGroup`. Setting the score will also
             update the score for all `instances` already in the `InstanceGroup`. The
             score for `instances` will not be updated upon initialization.
+        points: Optional 3D points for the `InstanceGroup`.
+        metadata: Dictionary of metadata.
     """
 
     _instance_by_camera: dict[Camera, Instance] = field(
@@ -895,11 +894,11 @@ class InstanceGroup:
                 `LabeledFrame` indices (in `Labels.labeled_frames`) and `Instance`
                 indices (in containing `LabeledFrame.instances`).
             camera_group: `CameraGroup` object that determines the order of the
-                `Camcorder` objects when converting to a dictionary.
+                `Camera` objects when converting to a dictionary.
 
         Returns:
             Dictionary of the `InstanceGroup` with items:
-                - camera_to_lf_and_inst_idx_map: Dictionary mapping `Camcorder` indices
+                - camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camera` indices
                     (in `InstanceGroup.camera_cluster.cameras`) to both `LabeledFrame`
                     and `Instance` indices (from `instance_to_lf_and_inst_idx`).
         """
@@ -908,7 +907,7 @@ class InstanceGroup:
             for cam, instance in self._instance_by_camera.items()
         }
 
-        # Only required key is camera_to_lf_and_inst_idx_map
+        # Only required key is camcorder_to_lf_and_inst_idx_map
         instance_group_dict = {
             "camcorder_to_lf_and_inst_idx_map": camera_to_lf_and_inst_idx_map,
         }
@@ -934,7 +933,7 @@ class InstanceGroup:
 
         Args:
             instance_group_dict: Dictionary with the following necessary keys:
-                camera_to_lf_and_inst_idx_map: Dictionary mapping `Camcorder` indices
+                camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camera` indices
                     to a tuple of `LabeledFrame` index (in `labeled_frames`) and
                     `Instance` index (in containing `LabeledFrame.instances`).
                 and optional keys:
@@ -994,6 +993,7 @@ class FrameGroup:
     Attributes:
         frame_idx: Frame index for the `FrameGroup`.
         instance_groups: List of `InstanceGroup`s in the `FrameGroup`.
+        cameras: List of `Camera` objects linked to `LabeledFrame`s in the `FrameGroup`.
         labeled_frames: List of `LabeledFrame`s in the `FrameGroup`.
         metadata: Metadata for the `FrameGroup` that is provided but not deserialized.
     """
@@ -1044,7 +1044,7 @@ class FrameGroup:
             labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
                 `Labels.labeled_frames`.
             camera_group: `CameraGroup` object that determines the order of the
-                `Camcorder` objects when converting to a dictionary.
+                `Camera` objects when converting to a dictionary.
 
         Returns:
             Dictionary of the `FrameGroup` with items:
