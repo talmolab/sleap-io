@@ -1096,8 +1096,7 @@ class FrameGroup:
         # Avoid mutating the dictionary
         frame_group_dict = frame_group_dict.copy()
 
-        # Get the frame index
-        frame_idx = frame_group_dict.pop("frame_idx")
+        frame_idx = None
 
         # Get `InstanceGroup` objects
         instance_groups_info = frame_group_dict.pop("instance_groups")
@@ -1123,6 +1122,13 @@ class FrameGroup:
                 # Retrieve the `LabeledFrame`
                 labeled_frame = labeled_frames[int(lf_idx)]
                 labeled_frame_by_camera[camera] = labeled_frame
+
+                # We can get the frame index from the `LabeledFrame` if any.
+                frame_idx = labeled_frame.frame_idx
+
+        # Get the frame index explicitly from the dictionary if it exists.
+        if "frame_idx" in frame_group_dict:
+            frame_idx = frame_group_dict.pop("frame_idx")
 
         # Metadata contains any information that the class doesn't deserialize.
         metadata = frame_group_dict  # Remaining keys are metadata.
