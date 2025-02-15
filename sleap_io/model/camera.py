@@ -862,6 +862,27 @@ class InstanceGroup:
     )
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
+    @property
+    def instances(self) -> list[Instance]:
+        """List of `Instance` objects."""
+        return list(self._instance_by_camera.values())
+
+    @property
+    def cameras(self) -> list[Camera]:
+        """List of `Camera` objects."""
+        return list(self._instance_by_camera.keys())
+
+    def get_instance(self, camera: Camera) -> Instance | None:
+        """Get `Instance` associated with `camera`.
+
+        Args:
+            camera: `Camera` to get `Instance`.
+
+        Returns:
+            `Instance` associated with `camera` or None if not found.
+        """
+        return self._instance_by_camera.get(camera, None)
+
     def to_dict(
         self,
         instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]],
