@@ -910,7 +910,7 @@ class InstanceGroup:
 
         # Only required key is camera_to_lf_and_inst_idx_map
         instance_group_dict = {
-            "camera_to_lf_and_inst_idx_map": camera_to_lf_and_inst_idx_map,
+            "camcorder_to_lf_and_inst_idx_map": camera_to_lf_and_inst_idx_map,
         }
 
         # Optionally add score, points, and metadata if they are non-default values
@@ -953,7 +953,7 @@ class InstanceGroup:
 
         # Get the `Instance` objects
         camera_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = (
-            instance_group_dict.pop("camera_to_lf_and_inst_idx_map")
+            instance_group_dict.pop("camcorder_to_lf_and_inst_idx_map")
         )
 
         instance_by_camera: dict[Camera, Instance] = {}
@@ -1098,7 +1098,7 @@ class FrameGroup:
             # Also retrieve the `LabeledFrame` by `Camera`. We do this for each
             # `InstanceGroup` to ensure that we have don't miss a `LabeledFrame`.
             camera_to_lf_and_inst_idx_map = instance_group_dict[
-                "camera_to_lf_and_inst_idx_map"
+                "camcorder_to_lf_and_inst_idx_map"
             ]
             for cam_idx, (lf_idx, _) in camera_to_lf_and_inst_idx_map.items():
                 # Retrieve the `Camera`

@@ -702,7 +702,7 @@ def test_instance_group_to_dict_from_dict(
     # Check that the dictionary was not mutated.
     assert instance_group_dict.get("points", None) is not None
     assert instance_group_dict.get("score", None) is not None
-    assert instance_group_dict.get("camera_to_lf_and_inst_idx_map", None) is not None
+    assert instance_group_dict.get("camcorder_to_lf_and_inst_idx_map", None) is not None
 
 
 def test_frame_group_init(camera_group_345: CameraGroup):
