@@ -19,6 +19,7 @@ from sleap_io import (
     PredictedInstance,
     LabeledFrame,
     Labels,
+    RecordingSession,
 )
 from sleap_io.io.video_reading import VideoBackend, ImageVideo, MediaVideo, HDF5Video
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset, is_file_accessible
@@ -1038,6 +1039,63 @@ def write_lfs(labels_path: str, labels: Labels):
         )
 
 
+def read_sessions(
+    labels_path: str, videos: list[Video], labeled_frames: list[LabeledFrame]
+) -> list[RecordingSession]:
+    """Read `RecordingSession` dataset in a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: A list of `Video` objects.
+        labeled_frames: A list of `LabeledFrame` objects.
+
+    Returns:
+        A list of `RecordingSession` objects.
+    """
+    try:
+        sessions = read_hdf5_dataset(labels_path, "sessions_json")
+    except KeyError:
+        return []
+    sessions = [json.loads(x) for x in sessions]
+    session_objects = []
+    for session in sessions:
+        session_objects.append(
+            RecordingSession.from_dict(session, videos, labeled_frames)
+        )
+    return session_objects
+
+
+def write_sessions(
+    labels_path: str,
+    sessions: list[RecordingSession],
+    videos: list[Video],
+    labeled_frames: list[LabeledFrame],
+):
+    """Write `RecordingSession` metadata to a SLEAP labels file.
+
+    Creates a new dataset "sessions_json" in the `labels_path` file to store the
+    sessions data.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        sessions: A list of `RecordingSession` objects to store the metadata for.
+        videos: A list of `Video` objects.
+        labeled_frames: A list of `LabeledFrame` objects.
+    """
+    sessions_json = []
+    if len(sessions) > 0:
+        labeled_frame_to_idx = {lf: i for i, lf in enumerate(labeled_frames)}
+        video_to_idx = {video: i for i, video in enumerate(videos)}
+    for session in sessions:
+        session_json = session.to_dict(
+            video_to_idx=video_to_idx, labeled_frame_to_idx=labeled_frame_to_idx
+        )
+        sessions_json.append(np.bytes_(json.dumps(session_json, separators=(",", ":"))))
+
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("sessions_json", data=sessions_json, maxshape=(None,))
+
+
 def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     """Read a SLEAP labels file.
 
@@ -1074,12 +1132,15 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
             )
         )
 
+    sessions = read_sessions(labels_path, videos, labeled_frames)
+
     labels = Labels(
         labeled_frames=labeled_frames,
         videos=videos,
         skeletons=skeletons,
         tracks=tracks,
         suggestions=suggestions,
+        sessions=sessions,
         provenance=provenance,
     )
     labels.provenance["filename"] = labels_path
@@ -1120,5 +1181,6 @@ def write_labels(
     write_videos(labels_path, labels.videos, restore_source=(embed == "source"))
     write_tracks(labels_path, labels.tracks)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
+    write_sessions(labels_path, labels.sessions, labels.videos, labels.labeled_frames)
     write_metadata(labels_path, labels)
     write_lfs(labels_path, labels)
