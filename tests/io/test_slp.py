@@ -13,6 +13,11 @@ from sleap_io import (
     PredictedInstance,
     Labels,
     SuggestionFrame,
+    Camera,
+    CameraGroup,
+    FrameGroup,
+    InstanceGroup,
+    RecordingSession,
 )
 from sleap_io.io.slp import (
     read_videos,
@@ -32,8 +37,10 @@ from sleap_io.io.slp import (
     write_labels,
     read_suggestions,
     write_suggestions,
+    read_sessions,
+    write_sessions,
 )
-from sleap_io.io.utils import read_hdf5_dataset
+from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 import numpy as np
 import simplejson as json
 import pytest
@@ -84,6 +91,30 @@ def test_read_instances_from_predicted(slp_real_data):
     assert len(lf.unused_predictions) == 0
 
 
+def test_read_labels_multiview(slp_multiview):
+    labels = read_labels(slp_multiview)
+    assert type(labels) == Labels
+    assert len(labels.sessions) == 1
+    assert isinstance(labels.sessions[0], RecordingSession)
+
+    session = labels.sessions[0]
+    for video in session.videos:
+        assert isinstance(video, Video)
+        assert video in labels.videos
+
+    for frame_group in session.frame_groups.values():
+        assert isinstance(frame_group, FrameGroup)
+        for labeled_frame in frame_group.labeled_frames:
+            assert isinstance(labeled_frame, LabeledFrame)
+            assert labeled_frame in labels.labeled_frames
+
+        for instance_group in frame_group.instance_groups:
+            assert isinstance(instance_group, InstanceGroup)
+            for instance in instance_group.instances:
+                assert isinstance(instance, Instance)
+                assert instance in labels.instances
+
+
 def test_read_skeleton(centered_pair):
     skeletons = read_skeletons(centered_pair)
     assert len(skeletons) == 1
@@ -102,6 +133,125 @@ def test_read_videos_pkg(slp_minimal_pkg):
     video = videos[0]
     assert video.shape == (1, 384, 384, 1)
     assert video.backend.dataset == "video0/video"
+
+
+def assert_matches_slp_multiview(
+    sessions: list[RecordingSession],
+    videos: list[Video],
+    labeled_frames: list[LabeledFrame],
+    instances_labels: set[Instance],
+):
+    """Assert that the data loaded from the .slp file is as expected.
+
+    Each assert statement confirms that the data in `sessions` matches the data we
+    expect to find in the `slp_multiview` fixture.
+
+    Args:
+        sessions: The list of RecordingSession objects.
+        videos: The list of Video objects in the .slp file.
+        labeled_frames: The list of LabeledFrame objects in the .slp file.
+        instances_labels: The set of Instance objects in the .slp file.
+
+    Raises:
+        AssertionError: If the data in `sessions` does not match the expected data.
+    """
+    assert len(sessions) == 1
+
+    session = sessions[0]
+    assert isinstance(session, RecordingSession)
+
+    camera_group = session.camera_group
+    assert isinstance(camera_group, CameraGroup)
+    n_cameras = len(camera_group.cameras)
+    assert n_cameras == 8
+
+    # Test video to camera linking.
+    for video in session.videos:
+        assert isinstance(video, Video)
+        assert video in videos
+
+        camera = session.get_camera(video)
+        assert isinstance(camera, Camera)
+        assert camera.name in str(video.filename)
+        assert camera in camera_group.cameras
+
+        assert session.get_video(camera) is video
+
+    # Test frame groups.
+    frame_groups = session.frame_groups
+    assert len(frame_groups) == 3
+    for frame_idx, frame_group in frame_groups.items():
+        assert isinstance(frame_group, FrameGroup)
+        assert frame_group.frame_idx == frame_idx
+
+        # Test labeled frames to camera linking.
+        cameras = frame_group.cameras
+        n_cameras_in_frame = len(cameras)
+        assert len(frame_group.labeled_frames) == n_cameras_in_frame
+        for labeled_frame, camera in zip(
+            frame_group.labeled_frames, frame_group.cameras
+        ):
+            assert isinstance(labeled_frame, LabeledFrame)
+            assert labeled_frame in labeled_frames
+            assert labeled_frame.frame_idx == frame_idx
+
+            assert isinstance(camera, Camera)
+            assert camera in camera_group.cameras
+            assert frame_group.get_frame(camera) is labeled_frame
+
+        # Test instance groups.
+        assert len(frame_group.instance_groups) == 2
+        for instance_group in frame_group.instance_groups:
+            assert isinstance(instance_group, InstanceGroup)
+
+            instances = instance_group.instances
+            n_instances = len(instances)
+            assert n_instances == 6 or n_instances == 8
+
+            # Test instance to camera linking.
+            cameras = instance_group.cameras
+            assert len(cameras) == n_instances
+            for camera, instance in zip(cameras, instances):
+                assert isinstance(camera, Camera)
+                assert camera in camera_group.cameras
+
+                assert isinstance(instance, Instance)
+                assert instance_group.get_instance(camera) is instance
+                assert instance in instances_labels
+
+
+def test_read_sessions(slp_multiview):
+    labels_path = slp_multiview
+
+    # Retrieve necessary data from the .slp file.
+
+    # Read the videos list from the .slp file.
+    videos = read_videos(labels_path, open_backend=False)
+
+    # Read the Labeled_frames from the .slp file.
+    tracks = read_tracks(labels_path)
+    skeletons = read_skeletons(labels_path)
+    points = read_points(labels_path)
+    pred_points = read_pred_points(labels_path)
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    instances_labels = read_instances(
+        labels_path, skeletons, tracks, points, pred_points, format_id
+    )
+    frames = read_hdf5_dataset(labels_path, "frames")
+    labeled_frames = []
+    for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
+        labeled_frames.append(
+            LabeledFrame(
+                video=videos[video_id],
+                frame_idx=int(frame_idx),
+                instances=instances_labels[instance_id_start:instance_id_end],
+            )
+        )
+
+    # Test read_sessions.
+
+    sessions = read_sessions(labels_path, videos, labeled_frames)
+    assert_matches_slp_multiview(sessions, videos, labeled_frames, instances_labels)
 
 
 def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
@@ -201,6 +351,36 @@ def test_write_labels(centered_pair, slp_real_data, tmp_path):
         assert saved_labels.skeleton.name == labels.skeleton.name
         assert saved_labels.skeleton.node_names == labels.skeleton.node_names
         assert len(saved_labels.suggestions) == len(labels.suggestions)
+
+
+def test_write_sessions(slp_multiview, tmp_path):
+    labels = read_labels(slp_multiview)
+    sessions = labels.sessions
+    videos = labels.videos
+    labeled_frames = labels.labeled_frames
+    write_sessions(tmp_path / "test.slp", sessions, videos, labeled_frames)
+
+    saved_sessions = read_sessions(tmp_path / "test.slp", videos, labeled_frames)
+    assert_matches_slp_multiview(
+        saved_sessions, videos, labeled_frames, set(labels.instances)
+    )
+
+
+def test_slp_multiview_round_trip(slp_multiview, tmp_path):
+    labels = read_labels(slp_multiview)
+    sessions = labels.sessions
+    assert_matches_slp_multiview(
+        sessions, labels.videos, labels.labeled_frames, set(labels.instances)
+    )
+
+    write_labels(tmp_path / "test.slp", labels)
+    saved_labels = read_labels(tmp_path / "test.slp")
+    assert_matches_slp_multiview(
+        saved_labels.sessions,
+        saved_labels.videos,
+        saved_labels.labeled_frames,
+        set(saved_labels.instances),
+    )
 
 
 def test_load_multi_skeleton(tmpdir):
