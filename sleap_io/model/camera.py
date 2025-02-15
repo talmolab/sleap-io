@@ -306,6 +306,15 @@ class RecordingSession:
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
+    def frame_groups(self) -> dict[int, FrameGroup]:
+        """Get dictionary of `FrameGroup` objects by frame index.
+
+        Returns:
+            Dictionary of `FrameGroup` objects by frame index.
+        """
+        return self._frame_group_by_frame_idx
+
+    @property
     def videos(self) -> list[Video]:
         """Get list of `Video` objects in `RecordingSession`.
 
