@@ -119,7 +119,7 @@ def test_predicted_instance():
     inst = PredictedInstance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
     assert_equal(inst.numpy(scores=True), [[0, 1, 0], [2, 3, 0]])
-    inst["A"]["visibility"] = False
+    inst["A"]["visible"] = False
     assert_equal(inst.numpy(), [[np.nan, np.nan], [2, 3]])
     assert_equal(inst.numpy(invisible_as_nan=False), [[0, 1], [2, 3]])
 
