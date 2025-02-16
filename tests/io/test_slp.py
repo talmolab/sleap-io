@@ -8,8 +8,6 @@ from sleap_io import (
     Instance,
     LabeledFrame,
     Track,
-    Point,
-    PredictedPoint,
     PredictedInstance,
     Labels,
     SuggestionFrame,

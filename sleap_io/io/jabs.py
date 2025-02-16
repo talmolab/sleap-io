@@ -16,7 +16,6 @@ from sleap_io import (
     Node,
     Edge,
     Symmetry,
-    Point,
     Video,
     Skeleton,
     Track,
@@ -214,10 +213,10 @@ def prediction_to_instance(
     for i, cur_node in enumerate(skeleton.nodes):
         # confidence of 0 indicates no keypoint predicted for instance
         if confidence[i] > 0:
-            points[cur_node] = Point(
+            points[cur_node] = (
                 data[i, 0],
                 data[i, 1],
-                visible=True,
+                True,
             )
 
     if not points:
