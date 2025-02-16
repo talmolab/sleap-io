@@ -13,8 +13,6 @@ from sleap_io import (
     Node,
     Track,
     SuggestionFrame,
-    Point,
-    PredictedPoint,
     Instance,
     PredictedInstance,
     LabeledFrame,
@@ -784,44 +782,38 @@ def write_metadata(labels_path: str, labels: Labels):
         grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
 
 
-def read_points(labels_path: str) -> list[Point]:
-    """Read `Point` dataset from a SLEAP labels file.
+def read_points(labels_path: str) -> np.ndarray:
+    """Read points dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
 
     Returns:
-        A list of `Point` objects.
+        A structured array of point data.
     """
     pts = read_hdf5_dataset(labels_path, "points")
-    return [
-        Point(x=x, y=y, visible=visible, complete=complete)
-        for x, y, visible, complete in pts
-    ]
+    return pts
 
 
-def read_pred_points(labels_path: str) -> list[PredictedPoint]:
-    """Read `PredictedPoint` dataset from a SLEAP labels file.
+def read_pred_points(labels_path: str) -> np.ndarray:
+    """Read predicted points dataset from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
 
     Returns:
-        A list of `PredictedPoint` objects.
+        A structured array of predicted point data.
     """
     pred_pts = read_hdf5_dataset(labels_path, "pred_points")
-    return [
-        PredictedPoint(x=x, y=y, visible=visible, complete=complete, score=score)
-        for x, y, visible, complete, score in pred_pts
-    ]
+    return pred_pts
 
 
 def read_instances(
     labels_path: str,
     skeletons: list[Skeleton],
     tracks: list[Track],
-    points: list[Point],
-    pred_points: list[PredictedPoint],
+    points: np.ndarray,
+    pred_points: np.ndarray,
     format_id: float,
 ) -> list[Union[Instance, PredictedInstance]]:
     """Read `Instance` dataset in a SLEAP labels file.
@@ -830,8 +822,9 @@ def read_instances(
         labels_path: A string path to the SLEAP labels file.
         skeletons: A list of `Skeleton` objects (see `read_skeletons`).
         tracks: A list of `Track` objects (see `read_tracks`).
-        points: A list of `Point` objects (see `read_points`).
-        pred_points: A list of `PredictedPoint` objects (see `read_pred_points`).
+        points: A structured array of point data (see `read_points`).
+        pred_points: A structured array of predicted point data (see
+            `read_pred_points`).
         format_id: The format version identifier used to specify the format of the input
             file.
 
@@ -856,7 +849,7 @@ def read_instances(
                 point_id_end,
             ) = instance_data
             tracking_score = np.zeros_like(instance_score)
-        else:
+        elif format_id >= 1.2:
             (
                 instance_id,
                 instance_type,
@@ -870,22 +863,37 @@ def read_instances(
                 tracking_score,
             ) = instance_data
 
+        skeleton = skeletons[skeleton_id]
+        track = tracks[track_id] if track_id >= 0 else None
+
         if instance_type == InstanceType.USER:
-            instances[instance_id] = Instance(
-                points=points[point_id_start:point_id_end],  # type: ignore[arg-type]
-                skeleton=skeletons[skeleton_id],
-                track=tracks[track_id] if track_id >= 0 else None,
+            pts_data = points[point_id_start:point_id_end]
+            inst = Instance(
+                np.column_stack([pts_data["x"], pts_data["y"]]),
+                skeleton=skeleton,
+                track=track,
+                tracking_score=tracking_score,
             )
-            if from_predicted >= 0:
-                from_predicted_pairs.append((instance_id, from_predicted))
+            inst.points["visible"] = pts_data["visible"]
+            inst.points["complete"] = pts_data["complete"]
+            instances[instance_id] = inst
+
         elif instance_type == InstanceType.PREDICTED:
-            instances[instance_id] = PredictedInstance(
-                points=pred_points[point_id_start:point_id_end],  # type: ignore[arg-type]
-                skeleton=skeletons[skeleton_id],
-                track=tracks[track_id] if track_id >= 0 else None,
+            pts_data = pred_points[point_id_start:point_id_end]
+            inst = PredictedInstance(
+                np.column_stack([pts_data["x"], pts_data["y"]]),
+                skeleton=skeleton,
+                track=track,
                 score=instance_score,
                 tracking_score=tracking_score,
             )
+            inst.points["score"] = pts_data["score"]
+            inst.points["visible"] = pts_data["visible"]
+            inst.points["complete"] = pts_data["complete"]
+            instances[instance_id] = inst
+
+        if from_predicted >= 0:
+            from_predicted_pairs.append((instance_id, from_predicted))
 
     # Link instances based on from_predicted field.
     for instance_id, from_predicted in from_predicted_pairs:
@@ -950,16 +958,17 @@ def write_lfs(labels_path: str, labels: Labels):
             from_predicted = -1
             if inst.from_predicted:
                 to_link.append((instance_id, inst.from_predicted))
+            score = 0.0
 
             if type(inst) == Instance:
                 instance_type = InstanceType.USER
-                score = np.nan
-                tracking_score = np.nan
+                tracking_score = inst.tracking_score
                 point_id_start = len(points)
 
-                for node in inst.skeleton.nodes:
-                    pt = inst.points[node]
-                    points.append([pt.x, pt.y, pt.visible, pt.complete])
+                for pt in inst.points:
+                    points.append(
+                        [pt["xy"][0], pt["xy"][1], pt["visible"], pt["complete"]]
+                    )
 
                 point_id_end = len(points)
 
@@ -969,10 +978,15 @@ def write_lfs(labels_path: str, labels: Labels):
                 tracking_score = inst.tracking_score
                 point_id_start = len(predicted_points)
 
-                for node in inst.skeleton.nodes:
-                    pt = inst.points[node]
+                for pt in inst.points:
                     predicted_points.append(
-                        [pt.x, pt.y, pt.visible, pt.complete, pt.score]
+                        [
+                            pt["xy"][0],
+                            pt["xy"][1],
+                            pt["visible"],
+                            pt["complete"],
+                            pt["score"],
+                        ]
                     )
 
                 point_id_end = len(predicted_points)

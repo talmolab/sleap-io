@@ -101,11 +101,16 @@ def test_labeled_frame_unused_predictions():
     )
     lf1.instances.append(
         PredictedInstance.from_numpy(
-            [[0, 0], [0, 0]], [1, 1], 1, skeleton=skel, track=track
+            [[0, 0], [0, 0]], skeleton=skel, point_scores=[1, 1], score=1, track=track
         )
     )
     lf1.instances.append(
-        PredictedInstance.from_numpy([[1, 1], [1, 1]], [1, 1], 1, skeleton=skel)
+        PredictedInstance.from_numpy(
+            [[1, 1], [1, 1]],
+            skeleton=skel,
+            point_scores=[1, 1],
+            score=1,
+        )
     )
 
     assert len(lf1.unused_predictions) == 1
@@ -113,12 +118,16 @@ def test_labeled_frame_unused_predictions():
 
     lf2 = LabeledFrame(video=video, frame_idx=1)
     lf2.instances.append(
-        PredictedInstance.from_numpy([[0, 0], [0, 0]], [1, 1], 1, skeleton=skel)
+        PredictedInstance.from_numpy(
+            [[0, 0], [0, 0]], skeleton=skel, point_scores=[1, 1], score=1
+        )
     )
     lf2.instances.append(Instance.from_numpy([[0, 0], [0, 0]], skeleton=skel))
     lf2.instances[-1].from_predicted = lf2.instances[-2]
     lf2.instances.append(
-        PredictedInstance.from_numpy([[1, 1], [1, 1]], [1, 1], 1, skeleton=skel)
+        PredictedInstance.from_numpy(
+            [[1, 1], [1, 1]], skeleton=skel, point_scores=[1, 1], score=1
+        )
     )
 
     assert len(lf2.unused_predictions) == 1

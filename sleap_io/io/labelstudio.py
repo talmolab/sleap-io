@@ -4,7 +4,7 @@ Some important nomenclature:
   - `tasks`: typically maps to a single frame of data to be annotated, closest
     correspondance is to `LabeledFrame`
   - `annotations`: collection of points, polygons, relations, etc. corresponds to
-    `Instance`s and `Point`s, but a flattened hierarchy
+    `Instance`s, but a flattened hierarchy
 
 """
 
@@ -16,7 +16,7 @@ from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import simplejson as json
 
-from sleap_io import Instance, LabeledFrame, Labels, Node, Point, Skeleton, Video
+from sleap_io import Instance, LabeledFrame, Labels, Node, Skeleton, Video
 
 
 def read_labels(
@@ -146,7 +146,7 @@ def convert_labels(labels: Labels) -> List[dict]:
                 }
             )
 
-            for node, point in instance.points.items():
+            for point in instance.points:
                 point_id = str(uuid.uuid4())
 
                 # add this point
@@ -156,9 +156,9 @@ def convert_labels(labels: Labels) -> List[dict]:
                         "original_height": height,
                         "image_rotation": 0,
                         "value": {
-                            "x": point.x / width * 100,
-                            "y": point.y / height * 100,
-                            "keypointlabels": [node.name],
+                            "x": point["xy"][0] / width * 100,
+                            "y": point["xy"][1] / height * 100,
+                            "keypointlabels": [point["name"]],
                         },
                         "from_name": "keypoint-label",
                         "to_name": "image",
@@ -261,7 +261,7 @@ def task_to_labeled_frame(
             points = {}
             for rel in relations[indv_id]:
                 kpt = keypoints.pop(rel)
-                node = Node(kpt["value"]["keypointlabels"][0])
+                node_name = kpt["value"]["keypointlabels"][0]
                 x_pos = (kpt["value"]["x"] * kpt["original_width"]) / 100
                 y_pos = (kpt["value"]["y"] * kpt["original_height"]) / 100
 
@@ -269,7 +269,7 @@ def task_to_labeled_frame(
                 if math.isnan(x_pos) or math.isnan(y_pos):
                     continue
 
-                points[node] = Point(x_pos, y_pos)
+                points[node_name] = (x_pos, y_pos)
 
             if len(points) > 0:
                 instances.append(Instance(points, skeleton))
@@ -279,11 +279,12 @@ def task_to_labeled_frame(
     # way] and the process is identical
     points = {}
     for _, kpt in keypoints.items():
-        node = Node(kpt["value"]["keypointlabels"][0])
-        points[node] = Point(
+        node_name = kpt["value"]["keypointlabels"][0]
+        if node_name not in skeleton:
+            continue
+        points[node_name] = (
             (kpt["value"]["x"] * kpt["original_width"]) / 100,
             (kpt["value"]["y"] * kpt["original_height"]) / 100,
-            visible=True,
         )
     if len(points) > 0:
         instances.append(Instance(points, skeleton))
