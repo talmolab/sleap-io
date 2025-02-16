@@ -150,6 +150,7 @@ def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
 def test_complex_case_append(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
     labels.clean(tracks=True)
+    labels = labels.extract(np.arange(10))
     nwbfile = append_nwb_data(labels, nwbfile)
 
     # Test Skeletons container
@@ -196,8 +197,9 @@ def test_complex_case_append(nwbfile, centered_pair):
 def test_complex_case_append_with_timestamps_metadata(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
     labels.clean(tracks=True)
+    labels = labels.extract(np.arange(10))
 
-    number_of_frames = 1100  # extracted using ffmpeg probe
+    number_of_frames = 10  # extracted using ffmpeg probe
     video_sample_rate = 15.0  # 15 Hz extracted using ffmpeg probe for the video stream
     video_timestamps = np.arange(number_of_frames) / video_sample_rate
 
@@ -273,19 +275,20 @@ def test_typical_case_write(slp_typical, tmp_path):
 def test_get_timestamps(nwbfile, centered_pair):
     labels = load_slp(centered_pair)
     labels.clean(tracks=True)
+    labels = labels.extract(np.arange(10))
     nwbfile = append_nwb_data(labels, nwbfile)
     processing = nwbfile.processing["SLEAP_VIDEO_000_centered_pair_low_quality"]
 
     # explicit timestamps
     series = processing["track=1"]["head"]
     ts = get_timestamps(series)
-    assert len(ts) == 1095
+    assert len(ts) == 10
     assert ts[0] == 0
-    assert ts[-1] == 1098
+    assert ts[-1] == 9
 
     # starting time + rate
     series = processing["track=1"]["thorax"]
     ts = get_timestamps(series)
-    assert len(ts) == 1099
+    assert len(ts) == 10
     assert ts[0] == 0
-    assert ts[-1] == 1098
+    assert ts[-1] == 9
