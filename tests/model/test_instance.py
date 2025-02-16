@@ -59,6 +59,11 @@ def test_instance():
     assert inst.n_visible == 0
     assert inst.is_empty
 
+    inst = Instance.empty(skeleton=Skeleton(["A", "B", "C"]))
+    assert len(inst) == 3
+    assert inst.n_visible == 0
+    assert_equal(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]])
+
     with pytest.raises(ValueError):
         Instance([[1, 2]], skeleton=Skeleton(["A", "B"]))
 
@@ -100,6 +105,17 @@ def test_instance_convert_points():
     with pytest.raises(ValueError):
         points = Instance._convert_points(None, skeleton=Skeleton(["A", "B"]))
 
+    # Provide partial fields as structured array
+    points = Instance._convert_points(
+        np.array(
+            [([1, 2], True), ([3, 4], False), ([4, 5], True)],
+            dtype=[("xy", float, (2,)), ("visible", bool)],
+        ),
+        skeleton=Skeleton(["A", "B", "C"]),
+    )
+    assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
+    assert_equal(points["visible"], [True, False, True])
+
 
 def test_instance_comparison():
     """Test some properties of `Instance` equality semantics"""
@@ -135,6 +151,14 @@ def test_predicted_instance():
     assert (
         str(inst) == "PredictedInstance(points=[[0.0, 1.0], [2.0, 3.0]], track=None, "
         "score=0.60, tracking_score=None)"
+    )
+
+    inst = PredictedInstance.empty(skeleton=Skeleton(["A", "B", "C"]))
+    assert len(inst) == 3
+    assert inst.n_visible == 0
+    assert_equal(
+        inst.numpy(scores=True),
+        [[np.nan, np.nan, 0], [np.nan, np.nan, 0], [np.nan, np.nan, 0]],
     )
 
 
@@ -182,7 +206,7 @@ def test_predicted_instance_convert_points():
 
     # Else case
     with pytest.raises(ValueError):
-        points = Instance._convert_points(None, skeleton=Skeleton(["A", "B"]))
+        points = PredictedInstance._convert_points(None, skeleton=Skeleton(["A", "B"]))
 
 
 def test_instance_update_skeleton():
