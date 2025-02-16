@@ -166,7 +166,7 @@ class Instance:
                 if len(data) >= 4:
                     points[node]["complete"] = data[3]
 
-        elif points is None:
+        else:
             raise ValueError("points must be a numpy array or dictionary.")
 
         points["name"] = skeleton.node_names
@@ -496,7 +496,7 @@ class PredictedInstance(Instance):
                 if len(data) >= 5:
                     points[node]["complete"] = data[4]
 
-        elif points is None:
+        else:
             raise ValueError("points must be a numpy array or dictionary.")
 
         points["name"] = skeleton.node_names
@@ -551,47 +551,6 @@ class PredictedInstance(Instance):
         Returns:
             An `Instance` object with the specified points.
         """
-        # if (
-        #     points_data.dtype.fields is not None
-        #     and points_data.dtype == cls.ARRAY_DTYPE
-        # ):
-        #     # We got the right dtype, just use it without copying.
-        #     points = points_data
-        # else:
-        #     # Create a new structured array.
-        #     points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
-
-        #     # Fill in the fields.
-        #     if points_data is not None:
-        #         if points_data.dtype.fields is not None:
-        #             # We got a structured array!
-        #             # Try to fill in with the fields available.
-        #             for field_name in cls.ARRAY_DTYPE.names:
-        #                 if field_name in points_data.dtype.names:
-        #                     points[field_name] = points_data[field_name]
-
-        #         else:
-        #             # We got a plain array! Assume it's x and y.
-        #             points["xy"] = points_data[:, :2]
-
-        #             if points_data.shape[1] >= 3:
-        #                 # Assume we have score.
-        #                 points["score"] = points_data[:, 2]
-
-        #             if points_data.shape[1] >= 4:
-        #                 # Assume we have visibility.
-        #                 points["visible"] = points_data[:, 2]
-        #             else:
-        #                 # Default to visibility based on x being NaN.
-        #                 points["visible"] = np.isnan(points_data[:, 0])
-
-        #             if points_data.shape[1] >= 4:
-        #                 # Assume we have completion.
-        #                 points["complete"] = points_data[:, 3]
-
-        # # Set the node names.
-        # points["name"] = skeleton.node_names
-
         points_data = cls._convert_points(points_data, skeleton)
         if point_scores is not None:
             points_data["score"] = point_scores
