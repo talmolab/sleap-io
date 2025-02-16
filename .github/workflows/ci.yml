@@ -68,7 +68,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Cache conda
+        uses: actions/cache@v3
+        env:
+          # Increase this value to reset cache if etc/example-environment.yml has not changed
+          CACHE_NUMBER: 0
+        with:
+          enableCrossOsArchive: true # Use faster GNU tar
+          path: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}  # faster on Windows
+          key:
+            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{
+            hashFiles('environment.yml', 'pyproject.toml') }}
 
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v3
@@ -78,6 +90,8 @@ jobs:
           environment-file: environment.yml
           activate-environment: sleap-io
           python-version: ${{ matrix.python }}
+          use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
+          pkgs-dirs: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}  # faster on Windows
 
       - name: Print environment info
         shell: bash -l {0}
