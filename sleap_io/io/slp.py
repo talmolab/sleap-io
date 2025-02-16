@@ -864,22 +864,26 @@ def read_instances(
         track = tracks[track_id] if track_id >= 0 else None
 
         if instance_type == InstanceType.USER:
-            inst = Instance.empty(skeleton, track=track, tracking_score=tracking_score)
             pts_data = points[point_id_start:point_id_end]
-            inst.points["xy"] = np.column_stack([pts_data["x"], pts_data["y"]])
+            inst = Instance(
+                np.column_stack([pts_data["x"], pts_data["y"]]),
+                skeleton=skeleton,
+                track=track,
+                tracking_score=tracking_score,
+            )
             inst.points["visible"] = pts_data["visible"]
             inst.points["complete"] = pts_data["complete"]
             instances[instance_id] = inst
 
         elif instance_type == InstanceType.PREDICTED:
-            inst = PredictedInstance.empty(
-                skeleton,
+            pts_data = pred_points[point_id_start:point_id_end]
+            inst = PredictedInstance(
+                np.column_stack([pts_data["x"], pts_data["y"]]),
+                skeleton=skeleton,
                 track=track,
                 score=instance_score,
                 tracking_score=tracking_score,
             )
-            pts_data = pred_points[point_id_start:point_id_end]
-            inst.points["xy"] = np.column_stack([pts_data["x"], pts_data["y"]])
             inst.points["score"] = pts_data["score"]
             inst.points["visible"] = pts_data["visible"]
             inst.points["complete"] = pts_data["complete"]
