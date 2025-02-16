@@ -359,6 +359,17 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
     assert type(labels3.video.backend) == MediaVideo
 
 
+def test_embed_empty_video(tmpdir, slp_real_data, centered_pair_frame_paths):
+    base_labels = read_labels(slp_real_data)
+    base_labels.videos.append(Video.from_filename(centered_pair_frame_paths))
+    labels_path = str(tmpdir / "labels.pkg.slp")
+    write_labels(labels_path, base_labels, embed="user")
+    labels = read_labels(labels_path)
+
+    assert labels.videos[0].backend.embedded_frame_inds == [0, 220, 440, 770, 990]
+    assert len(labels.videos) == 2
+
+
 def test_embed_rgb(tmpdir, slp_real_data):
     base_labels = read_labels(slp_real_data)
     base_labels.video.grayscale = False
