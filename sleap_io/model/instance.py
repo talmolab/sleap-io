@@ -116,7 +116,8 @@ class Instance:
         cls, points_data: np.ndarray | dict | list, skeleton: Skeleton
     ) -> np.ndarray:
         """Convert points to a structured numpy array if needed."""
-        points = None
+        # Create a new structured array.
+        points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
 
         if type(points_data) == list:
             # Hopefully this is a list of lists.
@@ -128,42 +129,29 @@ class Instance:
                     f"points must have length {len(skeleton)}, got {len(points_data)}."
                 )
 
-            if (
-                points_data.dtype.fields is not None
-                and points_data.dtype == cls.ARRAY_DTYPE
-            ):
-                # We got the right dtype, just use it without copying.
-                return points_data
+            if points_data.dtype.fields is not None:
+                # We got a structured array!
+                # Try to fill in with the fields available.
+                for field_name in cls.ARRAY_DTYPE.names:
+                    if field_name in points_data.dtype.names:
+                        points[field_name] = points_data[field_name]
             else:
-                # Create a new structured array.
-                points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
+                # We got a plain array! Assume it's x and y.
+                points["xy"] = points_data[:, 0:2]
 
-                # Fill in the fields.
-                if points_data is not None:
-                    if points_data.dtype.fields is not None:
-                        # We got a structured array!
-                        # Try to fill in with the fields available.
-                        for field_name in cls.ARRAY_DTYPE.names:
-                            if field_name in points_data.dtype.names:
-                                points[field_name] = points_data[field_name]
+                if points_data.shape[1] >= 3:
+                    # Assume we have visibility.
+                    points["visible"] = points_data[:, 2]
+                else:
+                    # Default to visibility based on x being NaN.
+                    points["visible"] = ~np.isnan(points_data[:, 0])
 
-                    else:
-                        # We got a plain array! Assume it's x and y.
-                        points["xy"] = points_data[:, 0:2]
-
-                        if points_data.shape[1] >= 3:
-                            # Assume we have visibility.
-                            points["visible"] = points_data[:, 2]
-                        else:
-                            # Default to visibility based on x being NaN.
-                            points["visible"] = ~np.isnan(points_data[:, 0])
-
-                        if points_data.shape[1] >= 4:
-                            # Assume we have completion.
-                            points["complete"] = points_data[:, 3]
+                if points_data.shape[1] >= 4:
+                    # Assume we have completion.
+                    points["complete"] = points_data[:, 3]
 
         elif type(points_data) == dict:
-            points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
+            # We got a dictionary. Assume it's a mapping of nodes to points.
             for node, data in points_data.items():
                 if type(node) == Node or type(node) == str:
                     node = skeleton.index(node)
@@ -262,54 +250,6 @@ class Instance:
         else:
             return self.points["xy"].copy()
 
-    def validate_points(self):
-        """Validate the points array.
-
-        The points array must be a structured numpy array with fields for x, y, score,
-        visible, complete, and score. The fields must have the correct data types and
-        the array must have the correct shape.
-
-        Raises:
-            TypeError: If the points array is not a structured numpy array.
-            ValueError: If the points array does not have the correct fields or data
-                types.
-        """
-
-        if not isinstance(self.points, np.ndarray):
-            raise TypeError(f"points must be a numpy array, got {type(self.points)}")
-
-        if self.points.dtype.fields is None:
-            raise TypeError("points must be a structured array")
-
-        expected_fields = set(self.DTYPE.names)
-        actual_fields = set(self.points.dtype.names)
-
-        if expected_fields != actual_fields:
-            raise ValueError(
-                f"points must have fields {expected_fields}, " f"got {actual_fields}"
-            )
-
-        # Validate field types
-        for field_name in self.DTYPE.names:
-            expected_type = self.DTYPE[field_name]
-            actual_type = self.points.dtype[field_name]
-            if expected_type != actual_type:
-                raise TypeError(
-                    f"Field {field_name} must have dtype {expected_type}, "
-                    f"got {actual_type}"
-                )
-
-        # Validate length.
-        if len(self.points) != len(self.skeleton):
-            raise ValueError(
-                f"points must have length {len(self.skeleton)}, "
-                f"got {len(self.points)}"
-            )
-
-        # Validate alignment with the skeleton.
-        if not all(self.points["name"] == self.skeleton.node_names):
-            raise ValueError("points must have the same node names as the skeleton.")
-
     def __getitem__(self, node: Union[int, str, Node]) -> np.ndarray:
         """Return the point associated with a node."""
         if type(node) != int:
@@ -345,7 +285,6 @@ class Instance:
             names_only: If `True`, only update the node names in the points array. If
                 `False`, the points array will be updated to match the new skeleton.
         """
-
         if names_only:
             # Update the node names.
             self.points["name"] = self.skeleton.node_names
@@ -498,7 +437,8 @@ class PredictedInstance(Instance):
         cls, points_data: np.ndarray | dict | list, skeleton: Skeleton
     ) -> np.ndarray:
         """Convert points to a structured numpy array if needed."""
-        points = None
+        # Create a new structured array.
+        points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
 
         if type(points_data) == list:
             # Hopefully this is a list of lists.
@@ -510,45 +450,34 @@ class PredictedInstance(Instance):
                     f"points must have length {len(skeleton)}, got {len(points_data)}."
                 )
 
-            if (
-                points_data.dtype.fields is not None
-                and points_data.dtype == cls.ARRAY_DTYPE
-            ):
-                # We got the right dtype, just use it without copying.
-                return points_data
+            if points_data.dtype.fields is not None:
+                # We got a structured array!
+                # Try to fill in with the fields available.
+                for field_name in cls.ARRAY_DTYPE.names:
+                    if field_name in points_data.dtype.names:
+                        points[field_name] = points_data[field_name]
+
             else:
-                # Create a new structured array.
-                points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
+                # We got a plain array! Assume it's x and y.
+                points["xy"] = points_data[:, 0:2]
 
-                # Fill in the fields.
-                if points_data is not None:
-                    if points_data.dtype.fields is not None:
-                        # We got a structured array!
-                        # Try to fill in with the fields available.
-                        for field_name in cls.ARRAY_DTYPE.names:
-                            if field_name in points_data.dtype.names:
-                                points[field_name] = points_data[field_name]
+                if points_data.shape[1] >= 3:
+                    # Assume we have score.
+                    points["score"] = points_data[:, 2]
 
-                    else:
-                        # We got a plain array! Assume it's x and y.
-                        points["xy"] = points_data[:, 0:2]
+                if points_data.shape[1] >= 4:
+                    # Assume we have visibility.
+                    points["visible"] = points_data[:, 3]
+                else:
+                    # Default to visibility based on x being NaN.
+                    points["visible"] = ~np.isnan(points_data[:, 0])
 
-                        if points_data.shape[1] >= 3:
-                            # Assume we have score.
-                            points["score"] = points_data[:, 2]
-
-                        if points_data.shape[1] >= 4:
-                            # Assume we have visibility.
-                            points["visible"] = points_data[:, 3]
-                        else:
-                            # Default to visibility based on x being NaN.
-                            points["visible"] = ~np.isnan(points_data[:, 0])
-
-                        if points_data.shape[1] >= 5:
-                            # Assume we have completion.
-                            points["complete"] = points_data[:, 4]
+                if points_data.shape[1] >= 5:
+                    # Assume we have completion.
+                    points["complete"] = points_data[:, 4]
 
         elif type(points_data) == dict:
+            # We got a dictionary. Assume it's a mapping of nodes to points.
             points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
             for node, data in points_data.items():
                 if type(node) == Node or type(node) == str:
