@@ -5,78 +5,11 @@ import numpy as np
 from numpy.testing import assert_equal
 import pytest
 from sleap_io.model.instance import (
-    Point,
-    PredictedPoint,
     Track,
     Instance,
     PredictedInstance,
 )
 from sleap_io import Skeleton
-
-
-def test_point():
-    """Test `Point` object is initialized as expected."""
-    pt = Point(x=1.2, y=3.4, visible=True, complete=True)
-    assert_equal(pt.numpy(), np.array([1.2, 3.4]))
-
-    pt2 = Point(x=1.2, y=3.4, visible=True, complete=True)
-    assert pt == pt2
-
-    pt.visible = False
-    assert_equal(pt.numpy(), np.array([np.nan, np.nan]))
-
-
-def test_close_points():
-    """Test equality of two `Point` objects which have a floating point error."""
-
-    # test points with NAN for coordinates
-    pt1 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
-    pt2 = Point(x=np.nan, y=np.nan, visible=False, complete=False)
-    assert pt1 == pt2
-
-    # test floating point error
-    pt1 = Point(x=135.82268970698718, y=213.22842752594835)
-    pt2 = Point(x=135.82268970698718, y=213.2284275259484)
-    assert pt1 == pt2
-
-    # change allowed tolerance, and check we fail comparison
-    Point.eq_atol = 0
-    Point.eq_rtol = 0
-    assert not pt1 == pt2
-
-    # reset tolerance
-    Point.eq_atol = 1e-08
-    Point.eq_rtol = 0
-
-    # test points with NAN for coordinates
-    pt1 = PredictedPoint(x=np.nan, y=np.nan, visible=False, complete=False)
-    pt2 = PredictedPoint(x=np.nan, y=np.nan, visible=False, complete=False)
-    assert pt1 == pt2
-
-    # test floating point error
-    pt1 = PredictedPoint(x=135.82268970698718, y=213.22842752594835)
-    pt2 = PredictedPoint(x=135.82268970698718, y=213.2284275259484)
-    assert pt1 == pt2
-
-    # change allowed tolerance, and check we fail comparison
-    Point.eq_atol = 0
-    Point.eq_rtol = 0
-    assert not pt1 == pt2
-
-
-def test_predicted_point():
-    """Test `PredictedPoint` is initialized as expected."""
-    ppt1 = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
-    assert ppt1.score == 0.9
-    assert_equal(ppt1.numpy(), np.array([1.2, 3.4, 0.9]))
-
-    ppt2 = PredictedPoint(x=1.2, y=3.4, visible=True, complete=False, score=0.9)
-    assert ppt1 == ppt2
-
-    # Test equivelance of Point and PredictedPoint
-    pt3 = Point(x=1.2, y=3.4, visible=True, complete=False)
-    assert not ppt1 == pt3  # PredictedPoint is not equivalent to Point
-    assert not pt3 == ppt1  # Point is not equivalent to PredictedPoint
 
 
 def test_track():
@@ -88,7 +21,6 @@ def test_instance():
     """Test initialization and methods of `Instance` object."""
     inst = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
-    assert type(inst["A"]) == Point
     assert str(inst) == "Instance(points=[[0.0, 1.0], [2.0, 3.0]], track=None)"
 
     inst.track = Track("trk")
@@ -101,22 +33,25 @@ def test_instance():
     assert_equal(inst.numpy(), [[1, 2], [3, 4]])
     assert len(inst) == 2
     assert inst.n_visible == 2
-    assert_equal(inst[0].numpy(), [1, 2])
-    assert_equal(inst[1].numpy(), [3, 4])
-    assert_equal(inst["A"].numpy(), [1, 2])
-    assert_equal(inst["B"].numpy(), [3, 4])
-    assert_equal(inst[inst.skeleton.nodes[0]].numpy(), [1, 2])
-    assert_equal(inst[inst.skeleton.nodes[1]].numpy(), [3, 4])
+    assert_equal(inst[0]["xy"], [1, 2])
+    assert_equal(inst[1]["xy"], [3, 4])
+    assert_equal(inst["A"]["xy"], [1, 2])
+    assert_equal(inst["B"]["xy"], [3, 4])
+    assert_equal(inst[inst.skeleton.nodes[0]]["xy"], [1, 2])
+    assert_equal(inst[inst.skeleton.nodes[1]]["xy"], [3, 4])
 
     inst = Instance(np.array([[1, 2], [3, 4]]), skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[1, 2], [3, 4]])
 
     inst = Instance.from_numpy([[1, 2], [3, 4]], skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[1, 2], [3, 4]])
+    inst["A"]["visible"] = False
+    assert_equal(inst.numpy(), [[np.nan, np.nan], [3, 4]])
+    assert_equal(inst.numpy(invisible_as_nan=False), [[1, 2], [3, 4]])
 
     inst = Instance([[np.nan, np.nan], [3, 4]], skeleton=Skeleton(["A", "B"]))
-    assert not inst[0].visible
-    assert inst[1].visible
+    assert not inst[0]["visible"]
+    assert inst[1]["visible"]
     assert inst.n_visible == 1
     assert not inst.is_empty
 
@@ -124,11 +59,62 @@ def test_instance():
     assert inst.n_visible == 0
     assert inst.is_empty
 
+    inst = Instance.empty(skeleton=Skeleton(["A", "B", "C"]))
+    assert len(inst) == 3
+    assert inst.n_visible == 0
+    assert_equal(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]])
+
     with pytest.raises(ValueError):
         Instance([[1, 2]], skeleton=Skeleton(["A", "B"]))
 
     with pytest.raises(IndexError):
         inst[None]
+
+
+def test_instance_convert_points():
+    # Unequal number of points and skeleton nodes
+    with pytest.raises(ValueError):
+        Instance._convert_points([[1, 2], [3, 4]], skeleton=Skeleton(["A", "B", "C"]))
+
+    # Provide xy
+    points = Instance._convert_points(
+        [[1, 2], [np.nan, np.nan], [4, 5]], skeleton=Skeleton(["A", "B", "C"])
+    )
+    assert_equal(points["xy"], [[1, 2], [np.nan, np.nan], [4, 5]])
+    assert_equal(points["visible"], [True, False, True])
+
+    # Provide xy, visibility and completion
+    points = Instance._convert_points(
+        [[1, 2, True, False], [3, 4, False, False], [4, 5, True, False]],
+        skeleton=Skeleton(["A", "B", "C"]),
+    )
+    assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
+    assert_equal(points["visible"], [True, False, True])
+    assert_equal(points["complete"], [False, False, False])
+
+    # Provide xy, visibility and completion (as dict)
+    points = Instance._convert_points(
+        {"A": [1, 2, True, False], "B": [3, 4, False, False], "C": [4, 5, True, False]},
+        skeleton=Skeleton(["A", "B", "C"]),
+    )
+    assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
+    assert_equal(points["visible"], [True, False, True])
+    assert_equal(points["complete"], [False, False, False])
+
+    # Else case
+    with pytest.raises(ValueError):
+        points = Instance._convert_points(None, skeleton=Skeleton(["A", "B"]))
+
+    # Provide partial fields as structured array
+    points = Instance._convert_points(
+        np.array(
+            [([1, 2], True), ([3, 4], False), ([4, 5], True)],
+            dtype=[("xy", float, (2,)), ("visible", bool)],
+        ),
+        skeleton=Skeleton(["A", "B", "C"]),
+    )
+    assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
+    assert_equal(points["visible"], [True, False, True])
 
 
 def test_instance_comparison():
@@ -149,15 +135,17 @@ def test_predicted_instance():
     inst = PredictedInstance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
     assert_equal(inst.numpy(scores=True), [[0, 1, 0], [2, 3, 0]])
-    assert type(inst["A"]) == PredictedPoint
+    inst["A"]["visible"] = False
+    assert_equal(inst.numpy(), [[np.nan, np.nan], [2, 3]])
+    assert_equal(inst.numpy(invisible_as_nan=False), [[0, 1], [2, 3]])
 
     inst = PredictedInstance.from_numpy(
-        [[0, 1], [2, 3]], [0.4, 0.5], instance_score=0.6, skeleton=Skeleton(["A", "B"])
+        [[0, 1, 0.4], [2, 3, 0.5]], skeleton=Skeleton(["A", "B"]), score=0.6
     )
     assert_equal(inst.numpy(), [[0, 1], [2, 3]])
     assert_equal(inst.numpy(scores=True), [[0, 1, 0.4], [2, 3, 0.5]])
-    assert inst[0].score == 0.4
-    assert inst[1].score == 0.5
+    assert inst[0]["score"] == 0.4
+    assert inst[1]["score"] == 0.5
     assert inst.score == 0.6
 
     assert (
@@ -165,38 +153,94 @@ def test_predicted_instance():
         "score=0.60, tracking_score=None)"
     )
 
+    inst = PredictedInstance.empty(skeleton=Skeleton(["A", "B", "C"]))
+    assert len(inst) == 3
+    assert inst.n_visible == 0
+    assert_equal(
+        inst.numpy(scores=True),
+        [[np.nan, np.nan, 0], [np.nan, np.nan, 0], [np.nan, np.nan, 0]],
+    )
+
+
+def test_predicted_instance_convert_points():
+    # Unequal number of points and skeleton nodes
+    with pytest.raises(ValueError):
+        PredictedInstance._convert_points(
+            [[1, 2], [3, 4]], skeleton=Skeleton(["A", "B", "C"])
+        )
+
+    # Provide xy
+    points = PredictedInstance._convert_points(
+        [[1, 2], [np.nan, np.nan], [4, 5]], skeleton=Skeleton(["A", "B", "C"])
+    )
+    assert_equal(points["xy"], [[1, 2], [np.nan, np.nan], [4, 5]])
+    assert_equal(points["visible"], [True, False, True])
+
+    # Provide xy, scores, visibility and completion
+    points = PredictedInstance._convert_points(
+        [
+            [1, 2, 0.9, True, False],
+            [3, 4, 0.8, False, False],
+            [4, 5, 0.99, True, False],
+        ],
+        skeleton=Skeleton(["A", "B", "C"]),
+    )
+    assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
+    assert_equal(points["score"], [0.9, 0.8, 0.99])
+    assert_equal(points["visible"], [True, False, True])
+    assert_equal(points["complete"], [False, False, False])
+
+    # Provide xy, score, visibility and completion (as dict)
+    points = PredictedInstance._convert_points(
+        {
+            "A": [1, 2, 0.9, True, False],
+            "B": [3, 4, 0.8, False, False],
+            "C": [4, 5, 0.99, True, False],
+        },
+        skeleton=Skeleton(["A", "B", "C"]),
+    )
+    assert_equal(points["xy"], [[1, 2], [3, 4], [4, 5]])
+    assert_equal(points["score"], [0.9, 0.8, 0.99])
+    assert_equal(points["visible"], [True, False, True])
+    assert_equal(points["complete"], [False, False, False])
+
+    # Else case
+    with pytest.raises(ValueError):
+        points = PredictedInstance._convert_points(None, skeleton=Skeleton(["A", "B"]))
+
 
 def test_instance_update_skeleton():
     skel = Skeleton(["A", "B", "C"])
     inst = Instance.from_numpy([[0, 0], [1, 1], [2, 2]], skeleton=skel)
 
-    # No need to update on rename
+    # Need to update on rename
     skel.rename_nodes({"A": "X", "B": "Y", "C": "Z"})
-    assert inst["X"].x == 0
-    assert inst["Y"].x == 1
-    assert inst["Z"].x == 2
+    assert inst.points["name"].tolist() == ["A", "B", "C"]
+    inst.update_skeleton(names_only=True)
+    assert inst.points["name"].tolist() == ["X", "Y", "Z"]
+    assert inst["X"]["xy"][0] == 0
+    assert inst["Y"]["xy"][0] == 1
+    assert inst["Z"]["xy"][0] == 2
     assert_equal(inst.numpy(), [[0, 0], [1, 1], [2, 2]])
 
     # Remove a node from the skeleton
     Y = skel["Y"]
     skel.remove_node("Y")
     assert Y not in skel
-
-    with pytest.raises(KeyError):
-        inst.numpy()  # .numpy() breaks without update
-    assert Y in inst.points  # and the points dict still has the old key
+    assert inst.points["name"].tolist() == ["X", "Y", "Z"]
     inst.update_skeleton()
-    assert Y not in inst.points  # after update, the old key is gone
+    assert inst.points["name"].tolist() == ["X", "Z"]
     assert_equal(inst.numpy(), [[0, 0], [2, 2]])
 
     # Reorder nodes
     skel.reorder_nodes(["Z", "X"])
-    assert_equal(inst.numpy(), [[2, 2], [0, 0]])  # .numpy() works without update
-    assert (
-        list(inst.points.keys()) != skel.nodes
-    )  # but the points dict still has the old order
+    assert_equal(inst.numpy(), [[0, 0], [2, 2]])
+    assert list(inst.points["name"]) != skel.node_names
     inst.update_skeleton()
-    assert list(inst.points.keys()) == skel.nodes  # after update, the order is correct
+    assert (
+        list(inst.points["name"]) == skel.node_names
+    )  # after update, the order is correct
+    assert_equal(inst.numpy(), [[2, 2], [0, 0]])
 
 
 def test_instance_replace_skeleton():
@@ -204,10 +248,10 @@ def test_instance_replace_skeleton():
     old_skel = Skeleton(["A", "B", "C"])
     inst = Instance.from_numpy([[0, 0], [1, 1], [2, 2]], skeleton=old_skel)
     new_skel = Skeleton(["X", "Y", "Z"])
-    inst.replace_skeleton(new_skel, node_map={"A": "X", "B": "Y", "C": "Z"})
+    inst.replace_skeleton(new_skel, node_names_map={"A": "X", "B": "Y", "C": "Z"})
     assert inst.skeleton == new_skel
     assert_equal(inst.numpy(), [[0, 0], [1, 1], [2, 2]])
-    assert list(inst.points.keys()) == new_skel.nodes
+    assert list(inst.points["name"]) == new_skel.node_names
 
     # Partial replacement
     old_skel = Skeleton(["A", "B", "C"])
@@ -216,17 +260,4 @@ def test_instance_replace_skeleton():
     inst.replace_skeleton(new_skel)
     assert inst.skeleton == new_skel
     assert_equal(inst.numpy(), [[np.nan, np.nan], [2, 2], [np.nan, np.nan]])
-    assert new_skel["C"] in inst.points
-    assert old_skel["A"] not in inst.points
-    assert old_skel["C"] not in inst.points
-
-    # Fast path with reverse node map
-    old_skel = Skeleton(["A", "B", "C"])
-    inst = Instance.from_numpy([[0, 0], [1, 1], [2, 2]], skeleton=old_skel)
-    new_skel = Skeleton(["X", "Y", "Z"])
-    rev_node_map = {
-        new_node: old_node for new_node, old_node in zip(new_skel.nodes, old_skel.nodes)
-    }
-    inst.replace_skeleton(new_skel, rev_node_map=rev_node_map)
-    assert inst.skeleton == new_skel
-    assert_equal(inst.numpy(), [[0, 0], [1, 1], [2, 2]])
+    assert inst.points["name"].tolist() == ["X", "C", "Y"]

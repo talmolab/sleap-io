@@ -1,7 +1,7 @@
 """Data structure for the labels, a top-level container for pose data.
 
 `Label`s contain `LabeledFrame`s, which in turn contain `Instance`s, which contain
-`Point`s.
+points.
 
 This structure also maintains metadata that is common across all child objects such as
 `Track`s, `Video`s, `Skeleton`s and others.
@@ -514,6 +514,11 @@ class Labels:
 
         skeleton.rename_nodes(name_map)
 
+        # Update instances.
+        for inst in self.instances:
+            if inst.skeleton == skeleton:
+                inst.points["name"] = inst.skeleton.node_names
+
     def remove_nodes(self, nodes: list[NodeOrIndex], skeleton: Skeleton | None = None):
         """Remove nodes from the skeleton.
 
@@ -634,13 +639,15 @@ class Labels:
                 for old, new in node_map.items()
             }
 
-        # Make new -> old mapping for nodes for efficiency.
-        rev_node_map = {new: old for old, new in node_map.items()}
+        # Create node name map.
+        node_names_map = {old.name: new.name for old, new in node_map.items()}
 
         # Replace the skeleton in the instances.
         for inst in self.instances:
             if inst.skeleton == old_skeleton:
-                inst.replace_skeleton(new_skeleton, rev_node_map=rev_node_map)
+                inst.replace_skeleton(
+                    new_skeleton=new_skeleton, node_names_map=node_names_map
+                )
 
         # Replace the skeleton in the labels.
         self.skeletons[self.skeletons.index(old_skeleton)] = new_skeleton
