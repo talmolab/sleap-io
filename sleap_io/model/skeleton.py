@@ -9,6 +9,7 @@ from __future__ import annotations
 from attrs import define, field
 import typing
 import numpy as np
+from functools import lru_cache
 
 
 @define(eq=False)
@@ -653,3 +654,75 @@ class Skeleton:
 
         new_nodes = [self.require_node(node, add_missing=False) for node in new_order]
         self.nodes = new_nodes
+
+    def match_nodes(self, other_nodes: list[str, Node]) -> tuple[list[int], list[int]]:
+        """Return the order of nodes in the skeleton.
+
+        Args:
+            other_nodes: A list of node names or `Node` objects.
+
+        Returns:
+            A tuple of `skeleton_inds, `other_inds`.
+
+            `skeleton_inds` contains the indices of the nodes in the skeleton that match
+            the input nodes.
+
+            `other_inds` contains the indices of the input nodes that match the nodes in
+            the skeleton.
+
+            These can be used to reorder point data to match the order of nodes in the
+            skeleton.
+
+        See also: match_nodes_cached
+        """
+        if isinstance(other_nodes, np.ndarray):
+            other_nodes = other_nodes.tolist()
+        if type(other_nodes) != tuple:
+            other_nodes = [x.name if type(x) == Node else x for x in other_nodes]
+
+        skeleton_inds, other_inds = match_nodes_cached(
+            tuple(self.node_names), tuple(other_nodes)
+        )
+
+        return list(skeleton_inds), list(other_inds)
+
+
+@lru_cache
+def match_nodes_cached(
+    node_names_a: tuple[str], node_names_b: tuple[str]
+) -> tuple[tuple[int], tuple[int]]:
+    """Match nodes in two skeletons by name.
+
+    Args:
+        node_names_a: A tuple of node names for the first skeleton.
+        node_names_b: A tuple of node names for the second skeleton.
+
+    Returns:
+        A tuple of `node_inds_a, `node_inds_b` with corresponding indices for the nodes
+        of their intersection.
+
+        The two tuples can be used to reorder point data to match the order of nodes in
+        the first skeleton.
+
+    Notes:
+        This function is cached to avoid recomputing the node matching for the same
+        node names. This is useful when matching nodes between skeletons in a loop or
+        when matching nodes between many instances.
+
+        The indices returned are in the order of the first skeleton.
+    """
+    # Convert lists to numpy arrays if they aren't already.
+    a_arr = np.array(node_names_a)
+    b_arr = np.array(node_names_b)
+
+    # Create a mapping of values to indices for array b.
+    b_index_map = {val: i for i, val in enumerate(b_arr)}
+
+    # Find indices where elements from a exist in b.
+    mask = np.isin(a_arr, b_arr)
+    inds_a = tuple(np.where(mask)[0].tolist())
+
+    # Get corresponding indices in b.
+    inds_b = tuple([b_index_map[val] for val in a_arr[mask]])
+
+    return inds_a, inds_b

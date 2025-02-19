@@ -12,10 +12,6 @@
 
 ::: sleap_io.PredictedInstance
 
-::: sleap_io.Point
-
-::: sleap_io.PredictedPoint
-
 ::: sleap_io.Skeleton
 
 ::: sleap_io.Node

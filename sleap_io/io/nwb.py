@@ -62,9 +62,9 @@ def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
         for node in skeleton.nodes:
             row_dict = dict(
                 frame_idx=labeled_frame.frame_idx,
-                x=instance.points[node].x,
-                y=instance.points[node].y,
-                score=instance.points[node].score,  # type: ignore[attr-defined]
+                x=instance[node]["xy"][0],
+                y=instance[node]["xy"][1],
+                score=instance[node]["score"],
                 node_name=node.name,
                 skeleton_name=skeleton.name,
                 track_name=instance.track.name if instance.track else "untracked",
@@ -206,9 +206,10 @@ def read_nwb(path: str) -> Labels:
                     continue
                 insts.append(
                     PredictedInstance.from_numpy(
-                        points=inst_pts,  # (n_nodes, 2)
-                        point_scores=inst_confs,  # (n_nodes,)
-                        instance_score=inst_confs.mean(),  # ()
+                        points_data=np.column_stack(
+                            [inst_pts, inst_confs]
+                        ),  # (n_nodes, 3)
+                        score=inst_confs.mean(),  # ()
                         skeleton=sleap_skeleton,
                         track=track if is_tracked else None,
                     )
