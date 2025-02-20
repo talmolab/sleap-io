@@ -1331,6 +1331,226 @@ def read_sessions(
     return session_objects
 
 
+def instance_group_to_dict(
+    instance_group,
+    instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]],
+    camera_group: CameraGroup,
+) -> dict[str, str | dict[str, str]]:
+    """Converts the `InstanceGroup` to a dictionary.
+
+    Args:
+        instance_to_lf_and_inst_idx: Dictionary mapping `Instance` objects to
+            `LabeledFrame` indices (in `Labels.labeled_frames`) and `Instance`
+            indices (in containing `LabeledFrame.instances`).
+        camera_group: `CameraGroup` object that determines the order of the
+            `Camera` objects when converting to a dictionary.
+
+    Returns:
+        Dictionary of the `InstanceGroup` with items:
+            - camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camera` indices
+                (in `InstanceGroup.camera_cluster.cameras`) to both `LabeledFrame`
+                and `Instance` indices (from `instance_to_lf_and_inst_idx`).
+    """
+    # TODO(LM): Do not call private attributes outside of class
+
+    camera_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = {
+        str(camera_group.cameras.index(cam)): instance_to_lf_and_inst_idx[instance]
+        for cam, instance in instance_group._instance_by_camera.items()
+    }
+
+    # Only required key is camcorder_to_lf_and_inst_idx_map
+    instance_group_dict = {
+        "camcorder_to_lf_and_inst_idx_map": camera_to_lf_and_inst_idx_map,
+    }
+
+    # Optionally add score, points, and metadata if they are non-default values
+    if instance_group._score is not None:
+        instance_group_dict["score"] = str(round(instance_group._score, 4))
+    if instance_group._points is not None:
+        instance_group_dict["points"] = instance_group._points.tolist()
+    if len(instance_group.metadata) > 0:
+        instance_group_dict.update(instance_group.metadata)
+
+    return instance_group_dict
+
+
+def frame_group_to_dict(
+    frame_group,
+    labeled_frame_to_idx: dict[LabeledFrame, int],
+    camera_group: CameraGroup,
+) -> dict[str, int | list[dict[str]]]:
+    """Convert `FrameGroup` to a dictionary.
+
+    Args:
+        labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
+            `Labels.labeled_frames`.
+        camera_group: `CameraGroup` object that determines the order of the
+            `Camera` objects when converting to a dictionary.
+
+    Returns:
+        Dictionary of the `FrameGroup` with items:
+            - instance_groups: List of dictionaries for each `InstanceGroup` in the
+                `FrameGroup`.
+            - frame_idx: Frame index for the `FrameGroup`.
+    """
+    # Create dictionary of `Instance` to `LabeledFrame` index (in
+    # `Labels.labeled_frames`) and `Instance` index in `LabeledFrame.instances`.
+    instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]] = {
+        inst: (str(labeled_frame_to_idx[labeled_frame]), str(inst_idx))
+        for labeled_frame in frame_group.labeled_frames
+        for inst_idx, inst in enumerate(labeled_frame.instances)
+    }
+
+    frame_group_dict = {
+        "instance_groups": [
+            instance_group_to_dict(
+                instance_group,
+                instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
+                camera_group=camera_group,
+            )
+            # TODO(LM): Do not call private attributes outside of class
+            for instance_group in frame_group._instance_groups
+        ],
+    }
+    frame_group_dict["frame_idx"] = str(frame_group.frame_idx)
+    if len(frame_group.metadata) > 0:
+        frame_group_dict.update(frame_group.metadata)
+
+    return frame_group_dict
+
+
+def camera_to_dict(camera) -> dict:
+    """Convert `Camera` to dictionary.
+
+    Returns:
+        Dictionary containing camera information with the following keys:
+        name: Camera name.
+        size: Image size (width, height) of camera in pixels of size (2,) and type
+            int.
+        matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+        distortions: Radial-tangential distortion coefficients
+            [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+        rotation: Rotation vector in unnormalized axis-angle representation of size
+            (3,) and type float64.
+        translation: Translation vector of size (3,) and type float64.
+    """
+    # Handle optional attributes
+    name = "" if camera.name is None else camera.name
+    size = "" if camera.size is None else list(camera.size)
+
+    camera_dict = {
+        "name": name,
+        "size": size,
+        "matrix": camera.matrix.tolist(),
+        "distortions": camera.dist.tolist(),
+        "rotation": camera.rvec.tolist(),
+        "translation": camera.tvec.tolist(),
+    }
+
+    # Add metadata if it exists.
+    if len(camera.metadata) > 0:
+        camera_dict.update(camera.metadata)
+
+    return camera_dict
+
+
+def camera_group_to_dict(camera_group) -> dict:
+    """Convert `CameraGroup` to dictionary.
+
+    Returns:
+        Dictionary containing camera group information with the following keys:
+            cam_n: Camera dictionary containing information for camera at index "n"
+                with the following keys:
+                name: Camera name.
+                size: Image size (height, width) of camera in pixels of size (2,)
+                    and type int.
+                matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+                distortions: Radial-tangential distortion coefficients
+                    [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+                rotation: Rotation vector in unnormalized axis-angle representation
+                    of size (3,) and type float64.
+                translation: Translation vector of size (3,) and type float64.
+            metadata: Dictionary of metadata.
+    """
+    calibration_dict = {}
+    for cam_idx, camera in enumerate(camera_group.cameras):
+        camera_dict = camera_to_dict(camera)
+        calibration_dict[f"cam_{cam_idx}"] = camera_dict
+
+    if len(camera_group.metadata) > 0:
+        calibration_dict["metadata"] = camera_group.metadata
+
+    return calibration_dict
+
+
+def session_to_dict(
+    session,
+    video_to_idx: dict[Video, int],
+    labeled_frame_to_idx: dict[LabeledFrame, int],
+) -> dict:
+    """Unstructure `RecordingSession` to an invertible dictionary.
+
+    Args:
+        video_to_idx: Dictionary of `Video` to index in `Labels.videos`.
+        labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
+            `Labels.labeled_frames`.
+
+    Returns:
+        Dictionary of "calibration" and "camcorder_to_video_idx_map" needed to
+        restructure a `RecordingSession`.
+    """
+    # Unstructure `CameraCluster` and `metadata`
+    calibration_dict = camera_group_to_dict(session.camera_group)
+
+    # Store camera-to-video indices map where key is camera index
+    # and value is video index from `Labels.videos`
+    camera_to_video_idx_map = {}
+    for cam_idx, camera in enumerate(session.camera_group.cameras):
+        # Skip if Camera is not linked to any Video
+
+        # TODO(LM): Do not call private attributes outside of class
+        if camera not in session._video_by_camera:
+            continue
+
+        # Get video index from `Labels.videos`
+
+        # TODO(LM): Do not call private attributes outside of class
+        video = session._video_by_camera[camera]
+        video_idx = video_to_idx.get(video, None)
+
+        if video_idx is not None:
+            camera_to_video_idx_map[str(cam_idx)] = str(video_idx)
+        else:
+            print(
+                f"Video {video} not found in `Labels.videos`. "
+                "Not saving to `RecordingSession` serialization."
+            )
+
+    # Store frame groups by frame index
+    frame_group_dicts = []
+    if len(labeled_frame_to_idx) > 0:  # Don't save if skipping labeled frames
+        # TODO(LM): Do not call private attributes outside of class
+        for frame_group in session._frame_group_by_frame_idx.values():
+            # Only save `FrameGroup` if it has `InstanceGroup`s
+            if len(frame_group.instance_groups) > 0:
+                frame_group_dict = frame_group_to_dict(
+                    frame_group,
+                    labeled_frame_to_idx=labeled_frame_to_idx,
+                    camera_group=session.camera_group,
+                )
+                frame_group_dicts.append(frame_group_dict)
+
+    session_dict = {
+        "calibration": calibration_dict,
+        "camcorder_to_video_idx_map": camera_to_video_idx_map,
+        "frame_group_dicts": frame_group_dicts,
+    }
+    if len(session.metadata) > 0:
+        session_dict.update(session.metadata)
+
+    return session_dict
+
+
 def write_sessions(
     labels_path: str,
     sessions: list[RecordingSession],
