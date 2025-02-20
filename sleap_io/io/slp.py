@@ -17,6 +17,10 @@ from sleap_io import (
     PredictedInstance,
     LabeledFrame,
     Labels,
+    Camera,
+    CameraGroup,
+    InstanceGroup,
+    FrameGroup,
     RecordingSession,
 )
 from sleap_io.io.video_reading import VideoBackend, ImageVideo, MediaVideo, HDF5Video
@@ -1053,6 +1057,256 @@ def write_lfs(labels_path: str, labels: Labels):
         )
 
 
+def make_instance_group(
+    instance_group_dict: dict,
+    labeled_frames: list[LabeledFrame],
+    camera_group: CameraGroup,
+) -> InstanceGroup:
+    """Creates an `InstanceGroup` object from a dictionary.
+
+    Args:
+        instance_group_dict: Dictionary with the following necessary keys:
+            camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camera` indices
+                to a tuple of `LabeledFrame` index (in `labeled_frames`) and
+                `Instance` index (in containing `LabeledFrame.instances`).
+            and optional keys:
+            score: Score for the `InstanceGroup`.
+            points: 3D points for the `InstanceGroup`.
+            etc. (metadata)
+        labeled_frames: List of `LabeledFrame` objects (expecting
+            `Labels.labeled_frames`) used to retrieve `Instance` objects.
+        camera_group: `CameraGroup` object used to retrieve `Camera` objects.
+
+    Returns:
+        `InstanceGroup` object.
+    """
+    # Avoid mutating the dictionary
+    instance_group_dict = instance_group_dict.copy()
+
+    # Get the `Instance` objects
+    camera_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = instance_group_dict.pop(
+        "camcorder_to_lf_and_inst_idx_map"
+    )
+
+    instance_by_camera: dict[Camera, Instance] = {}
+    for cam_idx, (lf_idx, inst_idx) in camera_to_lf_and_inst_idx_map.items():
+        # Retrieve the `Camera`
+        camera = camera_group.cameras[int(cam_idx)]
+
+        # Retrieve the `Instance` from the `LabeledFrame
+        labeled_frame = labeled_frames[int(lf_idx)]
+        instance = labeled_frame.instances[int(inst_idx)]
+
+        # Link the `Instance` to the `Camera`
+        instance_by_camera[camera] = instance
+
+    # Get all optional attributes
+    score = None
+    if "score" in instance_group_dict:
+        score = instance_group_dict.pop("score")
+    points = None
+    if "points" in instance_group_dict:
+        points = instance_group_dict.pop("points")
+
+    # Metadata contains any information that the class doesn't deserialize.
+    metadata = instance_group_dict  # Remaining keys are metadata.
+
+    return InstanceGroup(
+        instance_by_camera=instance_by_camera,
+        score=score,
+        points=points,
+        metadata=metadata,
+    )
+
+
+def make_frame_group(
+    frame_group_dict: dict[str],
+    labeled_frames: list[LabeledFrame],
+    camera_group: CameraGroup,
+) -> FrameGroup:
+    """Convert dictionary to `FrameGroup` object.
+
+    Args:
+        frame_group_dict: Dictionary of `FrameGroup` object.
+        labeled_frames_list: List of `LabeledFrame` objects (expecting
+            `Labels.labeled_frames`).
+        camera_group: `CameraGroup` object used to retrieve `Camera` objects.
+
+    Returns:
+        `FrameGroup` object.
+    """
+    # Avoid mutating the dictionary
+    frame_group_dict = frame_group_dict.copy()
+
+    frame_idx = None
+
+    # Get `InstanceGroup` objects
+    instance_groups_info = frame_group_dict.pop("instance_groups")
+    instance_groups = []
+    labeled_frame_by_camera = {}
+    for instance_group_dict in instance_groups_info:
+        instance_group = make_instance_group(
+            instance_group_dict=instance_group_dict,
+            labeled_frames=labeled_frames,
+            camera_group=camera_group,
+        )
+        instance_groups.append(instance_group)
+
+        # Also retrieve the `LabeledFrame` by `Camera`. We do this for each
+        # `InstanceGroup` to ensure that we have don't miss a `LabeledFrame`.
+        camera_to_lf_and_inst_idx_map = instance_group_dict[
+            "camcorder_to_lf_and_inst_idx_map"
+        ]
+        for cam_idx, (lf_idx, _) in camera_to_lf_and_inst_idx_map.items():
+            # Retrieve the `Camera`
+            camera = camera_group.cameras[int(cam_idx)]
+
+            # Retrieve the `LabeledFrame`
+            labeled_frame = labeled_frames[int(lf_idx)]
+            labeled_frame_by_camera[camera] = labeled_frame
+
+            # We can get the frame index from the `LabeledFrame` if any.
+            frame_idx = labeled_frame.frame_idx
+
+    # Get the frame index explicitly from the dictionary if it exists.
+    if "frame_idx" in frame_group_dict:
+        frame_idx = frame_group_dict.pop("frame_idx")
+
+    # Metadata contains any information that the class doesn't deserialize.
+    metadata = frame_group_dict  # Remaining keys are metadata.
+
+    return FrameGroup(
+        frame_idx=frame_idx,
+        instance_groups=instance_groups,
+        labeled_frame_by_camera=labeled_frame_by_camera,
+        metadata=metadata,
+    )
+
+
+def make_camera(camera_dict: dict) -> Camera:
+    """Create `Camera` from dictionary.
+
+    Args:
+        camera_dict: Dictionary containing camera information with the following
+            keys:
+            name: Camera name.
+            size: Image size (width, height) of camera in pixels of size (2,) and
+                type int.
+            matrix: Intrinsic camera matrix of size (3, 3) and type float64.
+            distortions: Radial-tangential distortion coefficients
+                [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+            rotation: Rotation vector in unnormalized axis-angle representation of
+                size (3,) and type float64.
+            translation: Translation vector of size (3,) and type float64.
+
+    Returns:
+        `Camera` object created from dictionary.
+    """
+    # Avoid mutating the dictionary.
+    camera_dict = camera_dict.copy()
+
+    # Get all attributes we deserialize.
+    name = camera_dict.pop("name")
+    size = camera_dict.pop("size")
+    camera = Camera(
+        name=name if len(name) > 0 else None,
+        size=size if len(size) > 0 else None,
+        matrix=camera_dict.pop("matrix"),
+        dist=camera_dict.pop("distortions"),
+        rvec=camera_dict.pop("rotation"),
+        tvec=camera_dict.pop("translation"),
+    )
+
+    # Add remaining metadata to `Camera`
+    camera.metadata = camera_dict
+
+    return camera
+
+
+def make_camera_group(calibration_dict: dict) -> CameraGroup:
+    """Create `CameraGroup` from calibration dictionary.
+
+    Args:
+        calibration_dict: Dictionary containing calibration information for cameras.
+
+    Returns:
+        `CameraGroup` object created from calibration dictionary.
+    """
+    cameras = []
+    metadata = {}
+    for dict_name, camera_dict in calibration_dict.items():
+        if dict_name == "metadata":
+            metadata = camera_dict
+            continue
+        camera = make_camera(camera_dict)
+        cameras.append(camera)
+
+    return CameraGroup(cameras=cameras, metadata=metadata)
+
+
+def make_session(
+    session_dict: dict, videos: list[Video], labeled_frames: list[LabeledFrame]
+) -> RecordingSession:
+    """Restructure `RecordingSession` from an invertible dictionary.
+
+    Args:
+        session_dict: Dictionary with keys:
+            calibration: Dictionary containing calibration information for cameras.
+            camcorder_to_video_idx_map: Dictionary mapping camera index to video
+                index.
+            frame_group_dicts: List of dictionaries containing `FrameGroup`
+                information.
+        videos_list: List containing `Video` objects (expected `Labels.videos`).
+        labeled_frames_list: List containing `LabeledFrame` objects (expected
+            `Labels.labeled_frames`).
+
+    Returns:
+        `RecordingSession` object.
+    """
+    # Avoid modifying original dictionary
+    session_dict = session_dict.copy()
+
+    # Restructure `RecordingSession` without `Video` to `Camera` mapping
+    calibration_dict = session_dict.pop("calibration")
+    camera_group = make_camera_group(calibration_dict)
+    session = RecordingSession(camera_group=camera_group)
+
+    # Retrieve all `Camera` and `Video` objects, then add to `RecordingSession`
+    camcorder_to_video_idx_map = session_dict.pop("camcorder_to_video_idx_map")
+    for cam_idx, video_idx in camcorder_to_video_idx_map.items():
+        camera = session.camera_group.cameras[int(cam_idx)]
+        video = videos[int(video_idx)]
+        session.add_video(video, camera)
+
+    # Reconstruct all `FrameGroup` objects and add to `RecordingSession`
+    frame_group_dicts = []
+    if "frame_group_dicts" in session_dict:
+        frame_group_dicts = session_dict.pop("frame_group_dicts")
+    frame_group_by_frame_idx = {}
+    for frame_group_dict in frame_group_dicts:
+        try:
+            # Add `FrameGroup` to `RecordingSession`
+            frame_group = make_frame_group(
+                frame_group_dict=frame_group_dict,
+                labeled_frames=labeled_frames,
+                camera_group=session.camera_group,
+            )
+            frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
+        except ValueError as e:
+            print(
+                f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping..."
+                f"\n{e}"
+            )
+
+    # TODO(LM): Since we are outside of the class, we shouldn't be calling private attrs
+    session._frame_group_by_frame_idx = frame_group_by_frame_idx
+
+    # Add remaining metadata to `RecordingSession`
+    session.metadata = session_dict
+
+    return session
+
+
 def read_sessions(
     labels_path: str, videos: list[Video], labeled_frames: list[LabeledFrame]
 ) -> list[RecordingSession]:
@@ -1073,9 +1327,7 @@ def read_sessions(
     sessions = [json.loads(x) for x in sessions]
     session_objects = []
     for session in sessions:
-        session_objects.append(
-            RecordingSession.from_dict(session, videos, labeled_frames)
-        )
+        session_objects.append(make_session(session, videos, labeled_frames))
     return session_objects
 
 
