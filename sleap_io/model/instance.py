@@ -35,7 +35,7 @@ class Track:
     name: str = ""
 
 
-@define(auto_attribs=True, slots=True, eq=False)
+@attrs.define(auto_attribs=True, slots=True, eq=False)
 class Instance:
     """This class represents a ground truth instance such as an animal.
 
@@ -342,7 +342,7 @@ class Instance:
         self.points["name"] = self.skeleton.node_names
 
 
-@define(eq=False)
+@attrs.define(eq=False)
 class PredictedInstance(Instance):
     """A `PredictedInstance` is an `Instance` that was predicted using a model.
 
