@@ -522,17 +522,17 @@ def test_make_instance_group_and_instance_group_to_dict(
         for inst_idx, inst in enumerate(instance_group._instance_by_camera.values())
     }
 
-    # Test to_dict.
+    # Test to dict
 
     instance_group_dict = instance_group_to_dict(
         instance_group=instance_group,
         instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
         camera_group=camera_group_345,
     )
-    assert instance_group_dict["score"] == str(instance_group._score)
+    assert instance_group_dict["score"] == instance_group._score
     assert np.array_equal(instance_group_dict["points"], instance_group._points)
 
-    # Test from_dict.
+    # Test from dict
 
     instance_group_0 = make_instance_group(
         instance_group_dict,
@@ -590,7 +590,7 @@ def test_make_frame_group_and_frame_group_to_dict(
         labeled_frame_to_idx=labeled_frame_to_idx,
         camera_group=camera_group,
     )
-    assert frame_group_dict["frame_idx"] == str(frame_group.frame_idx)
+    assert frame_group_dict["frame_idx"] == frame_group.frame_idx
 
     # Test from_dict.
 
