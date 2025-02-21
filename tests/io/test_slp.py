@@ -677,7 +677,9 @@ def test_make_session_and_session_to_dict(
     # Test to_dict.
 
     session_dict = session_to_dict(
-        labeled_frame_to_idx=labeled_frame_to_idx, video_to_idx=video_to_idx
+        session=session,
+        labeled_frame_to_idx=labeled_frame_to_idx,
+        video_to_idx=video_to_idx,
     )
     assert len(session_dict["frame_group_dicts"]) == len(
         session._frame_group_by_frame_idx
@@ -996,3 +998,15 @@ def test_video_path_resolution(slp_real_data, tmp_path):
             Path(labels.video.filename).as_posix()
             == "new_fake/path/to/inaccessible.mp4"
         )
+
+
+if __name__ == "__main__":
+
+    ds = "/Users/liezlmaree/Projects/sleap/tests/data/cameras/minimal_session/min_session_frame_groups.slp"
+    ds = "multiview_0.slp"
+    labels = read_labels(ds)
+    print(labels)
+    output = "multiview.slp"
+    write_labels(output, labels)
+    labels = read_labels(output)
+    print(labels)
