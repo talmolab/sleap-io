@@ -410,7 +410,7 @@ def test_make_camera_and_camera_to_dict():
     np.testing.assert_array_almost_equal(camera.tvec, np.array(translation))
     assert camera.metadata == metadata
 
-    # Test camera to_dict
+    # Test camera_to_dict
     assert camera_to_dict(camera) == camera_dict
 
     # Test when Camera has None for optional attributes
@@ -419,7 +419,7 @@ def test_make_camera_and_camera_to_dict():
     assert camera.name is None
     assert camera.size is None
 
-    # Test to_dict
+    # Test camera_to_dict
     camera_dict = camera_to_dict(camera)
     assert camera_dict["name"] == ""
     assert camera_dict["size"] == ""
@@ -428,7 +428,7 @@ def test_make_camera_and_camera_to_dict():
     assert camera_dict["rotation"] == camera.rvec.tolist()
     assert camera_dict["translation"] == camera.tvec.tolist()
 
-    # Test from_dict
+    # Test make_camera
     camera_0 = make_camera(camera_dict)
     assert camera_0.name is None
     assert camera_0.size is None
@@ -585,7 +585,7 @@ def test_make_frame_group_and_frame_group_to_dict(
         )
     labeled_frame_to_idx = {lf: idx for idx, lf in enumerate(labeled_frames)}
 
-    # Test to_dict.
+    # Test frame_group_to_dict.
 
     frame_group_dict = frame_group_to_dict(
         frame_group=frame_group,
@@ -594,7 +594,7 @@ def test_make_frame_group_and_frame_group_to_dict(
     )
     assert frame_group_dict["frame_idx"] == frame_group.frame_idx
 
-    # Test from_dict.
+    # Test make_frame_group.
 
     frame_group_0 = make_frame_group(
         frame_group_dict=frame_group_dict,
@@ -676,7 +676,7 @@ def test_make_session_and_session_to_dict(
         videos.append(Video(filename="test"))
     video_to_idx = {video: idx for idx, video in enumerate(videos)}
 
-    # Test to_dict.
+    # Test session_to_dict.
 
     session_dict = session_to_dict(
         session=session,
@@ -687,7 +687,7 @@ def test_make_session_and_session_to_dict(
         session._frame_group_by_frame_idx
     )
 
-    # Test from_dict.
+    # Test make_session.
 
     session_0: RecordingSession = make_session(
         session_dict=session_dict,
