@@ -7,12 +7,15 @@ from collections.abc import Callable
 import attrs
 import cv2
 import numpy as np
-import toml
 from attrs import define, field
+from attrs.validators import instance_of
 
+from sleap_io.model.instance import Instance
+from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.video import Video
 
 
+# TODO(LM): Move to algorithms in another repo.
 def triangulate_dlt_vectorized(
     points: np.ndarray, projection_matrices: np.ndarray
 ) -> np.ndarray:
@@ -77,10 +80,13 @@ class CameraGroup:
 
     Attributes:
         cameras: List of `Camera` objects in the group.
+        metadata: Dictionary of metadata.
     """
 
-    cameras: list[Camera] = field(factory=list)
+    cameras: list[Camera] = field(factory=list, validator=instance_of(list))
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
 
+    # TODO: Remove this method (should be a util function in another repo).
     def triangulate(
         self,
         points: np.ndarray,
@@ -166,6 +172,7 @@ class CameraGroup:
         points_3d = points_3d.reshape(*points_shape[1:-1], 3).astype(points_dtype)
         return points_3d
 
+    # TODO: Remove this method (should be a util function in another repo).
     def project(self, points: np.ndarray) -> np.ndarray:
         """Project 3D points to 2D using camera group.
 
@@ -205,66 +212,6 @@ class CameraGroup:
             points_dtype
         )
 
-    @classmethod
-    def from_dict(cls, calibration_dict: dict) -> CameraGroup:
-        """Create `CameraGroup` from calibration dictionary.
-
-        Args:
-            calibration_dict: Dictionary containing calibration information for cameras.
-
-        Returns:
-            `CameraGroup` object created from calibration dictionary.
-        """
-        cameras = []
-        for dict_name, camera_dict in calibration_dict.items():
-            if dict_name == "metadata":
-                continue
-            camera = Camera.from_dict(camera_dict)
-            cameras.append(camera)
-
-        camera_group = cls(cameras=cameras)
-
-        return camera_group
-
-    def to_dict(self) -> dict:
-        """Convert `CameraGroup` to dictionary.
-
-        Returns:
-            Dictionary containing camera group information with the following keys:
-                cam_n: Camera dictionary containing information for camera at index "n"
-                    with the following keys:
-                    name: Camera name.
-                    size: Image size (height, width) of camera in pixels of size (2,)
-                        and type int.
-                    matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-                    distortions: Radial-tangential distortion coefficients
-                        [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-                    rotation: Rotation vector in unnormalized axis-angle representation
-                        of size (3,) and type float64.
-                    translation: Translation vector of size (3,) and type float64.
-        """
-        calibration_dict = {}
-        for cam_idx, camera in enumerate(self.cameras):
-            camera_dict = camera.to_dict()
-            calibration_dict[f"cam_{cam_idx}"] = camera_dict
-
-        return calibration_dict
-
-    @classmethod
-    def load(cls, filename: str) -> CameraGroup:
-        """Load `CameraGroup` from JSON file.
-
-        Args:
-            filename: Path to JSON file to load `CameraGroup` from.
-
-        Returns:
-            `CameraGroup` object loaded from JSON file.
-        """
-        calibration_dict = toml.load(filename)
-        camera_group = cls.from_dict(calibration_dict)
-
-        return camera_group
-
 
 @define(eq=False)  # Set eq to false to make class hashable
 class RecordingSession:
@@ -272,13 +219,33 @@ class RecordingSession:
 
     Attributes:
         camera_group: `CameraGroup` object containing cameras in the session.
-        _video_by_camera: Dictionary mapping `Camera` to `Video`.
-        _camera_by_video: Dictionary mapping `Video` to `Camera`.
+        frame_groups: Dictionary mapping frame index to `FrameGroup`.
+        videos: List of `Video` objects linked to cameras in the session.
+        metadata: Dictionary of metadata.
     """
 
-    camera_group: CameraGroup = field(factory=CameraGroup)
-    _video_by_camera: dict[Camera, Video] = field(factory=dict)
-    _camera_by_video: dict[Video, Camera] = field(factory=dict)
+    camera_group: CameraGroup = field(
+        factory=CameraGroup, validator=instance_of(CameraGroup)
+    )
+    _video_by_camera: dict[Camera, Video] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    _camera_by_video: dict[Video, Camera] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    _frame_group_by_frame_idx: dict[int, FrameGroup] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
+
+    @property
+    def frame_groups(self) -> dict[int, FrameGroup]:
+        """Get dictionary of `FrameGroup` objects by frame index.
+
+        Returns:
+            Dictionary of `FrameGroup` objects by frame index.
+        """
+        return self._frame_group_by_frame_idx
 
     @property
     def videos(self) -> list[Video]:
@@ -367,7 +334,7 @@ class Camera:
         tvec: Translation vector of size (3,) and type float64.
         extrinsic_matrix: Extrinsic matrix of camera of size (4, 4) and type float64.
         name: Camera name.
-        _video_by_session: Dictionary mapping `RecordingSession` to `Video`.
+        metadata: Dictionary of metadata.
     """
 
     matrix: np.ndarray = field(
@@ -388,6 +355,7 @@ class Camera:
     )
     name: str = field(default=None, converter=attrs.converters.optional(str))
     _extrinsic_matrix: np.ndarray = field(init=False)
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @matrix.validator
     @dist.validator
@@ -563,59 +531,98 @@ class Camera:
         """
         return session.get_video(camera=self)
 
-    def to_dict(self) -> dict:
-        """Convert `Camera` to dictionary.
 
-        Returns:
-            Dictionary containing camera information with the following keys:
-            name: Camera name.
-            size: Image size (width, height) of camera in pixels of size (2,) and type
-                int.
-            matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-            distortions: Radial-tangential distortion coefficients
-                [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-            rotation: Rotation vector in unnormalized axis-angle representation of size
-                (3,) and type float64.
-            translation: Translation vector of size (3,) and type float64.
-        """
-        camera_dict = {
-            "name": self.name,
-            "size": list(self.size),
-            "matrix": self.matrix.tolist(),
-            "distortions": self.dist.tolist(),
-            "rotation": self.rvec.tolist(),
-            "translation": self.tvec.tolist(),
-        }
+@define(eq=False)  # Set eq to false to make class hashable
+class InstanceGroup:
+    """Defines a group of instances across the same frame index.
 
-        return camera_dict
+    Attributes:
+        instances: List of `Instance` objects in the group.
+        cameras: List of `Camera` objects that have an `Instance` associated.
+        score: Optional score for the `InstanceGroup`. Setting the score will also
+            update the score for all `instances` already in the `InstanceGroup`. The
+            score for `instances` will not be updated upon initialization.
+        points: Optional 3D points for the `InstanceGroup`.
+        metadata: Dictionary of metadata.
+    """
 
-    @classmethod
-    def from_dict(cls, camera_dict: dict) -> Camera:
-        """Create `Camera` from dictionary.
+    _instance_by_camera: dict[Camera, Instance] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    _score: float | None = field(
+        default=None, converter=attrs.converters.optional(float)
+    )
+    _points: np.ndarray | None = field(
+        default=None,
+        converter=attrs.converters.optional(lambda x: np.array(x, dtype="float64")),
+    )
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
+
+    @property
+    def instances(self) -> list[Instance]:
+        """List of `Instance` objects."""
+        return list(self._instance_by_camera.values())
+
+    @property
+    def cameras(self) -> list[Camera]:
+        """List of `Camera` objects."""
+        return list(self._instance_by_camera.keys())
+
+    def get_instance(self, camera: Camera) -> Instance | None:
+        """Get `Instance` associated with `camera`.
 
         Args:
-            camera_dict: Dictionary containing camera information with the following
-                keys:
-                name: Camera name.
-                size: Image size (width, height) of camera in pixels of size (2,) and
-                    type int.
-                matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-                distortions: Radial-tangential distortion coefficients
-                    [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-                rotation: Rotation vector in unnormalized axis-angle representation of
-                    size (3,) and type float64.
-                translation: Translation vector of size (3,) and type float64.
+            camera: `Camera` to get `Instance`.
 
         Returns:
-            `Camera` object created from dictionary.
+            `Instance` associated with `camera` or None if not found.
         """
-        camera = cls(
-            name=camera_dict["name"],
-            size=camera_dict["size"],
-            matrix=camera_dict["matrix"],
-            dist=camera_dict["distortions"],
-            rvec=camera_dict["rotation"],
-            tvec=camera_dict["translation"],
-        )
+        return self._instance_by_camera.get(camera, None)
 
-        return camera
+
+@define(eq=False)  # Set eq to false to make class hashable
+class FrameGroup:
+    """Defines a group of `InstanceGroups` across views at the same frame index.
+
+    Attributes:
+        frame_idx: Frame index for the `FrameGroup`.
+        instance_groups: List of `InstanceGroup`s in the `FrameGroup`.
+        cameras: List of `Camera` objects linked to `LabeledFrame`s in the `FrameGroup`.
+        labeled_frames: List of `LabeledFrame`s in the `FrameGroup`.
+        metadata: Metadata for the `FrameGroup` that is provided but not deserialized.
+    """
+
+    frame_idx: int = field(converter=int)
+    _instance_groups: list[InstanceGroup] = field(
+        factory=list, validator=instance_of(list)
+    )
+    _labeled_frame_by_camera: dict[Camera, LabeledFrame] = field(
+        factory=dict, validator=instance_of(dict)
+    )
+    metadata: dict = field(factory=dict, validator=instance_of(dict))
+
+    @property
+    def instance_groups(self) -> list[InstanceGroup]:
+        """List of `InstanceGroup`s."""
+        return self._instance_groups
+
+    @property
+    def cameras(self) -> list[Camera]:
+        """List of `Camera` objects."""
+        return list(self._labeled_frame_by_camera.keys())
+
+    @property
+    def labeled_frames(self) -> list[LabeledFrame]:
+        """List of `LabeledFrame`s."""
+        return list(self._labeled_frame_by_camera.values())
+
+    def get_frame(self, camera: Camera) -> LabeledFrame | None:
+        """Get `LabeledFrame` associated with `camera`.
+
+        Args:
+            camera: `Camera` to get `LabeledFrame`.
+
+        Returns:
+            `LabeledFrame` associated with `camera` or None if not found.
+        """
+        return self._labeled_frame_by_camera.get(camera, None)

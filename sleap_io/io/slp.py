@@ -290,9 +290,12 @@ def embed_video(
             )
         else:
             if fixed_length:
+                img_bytes_len = 0
+                for img in imgs_data:
+                    img_bytes_len = max(img_bytes_len, len(img))
                 ds = f.create_dataset(
                     f"{group}/video",
-                    shape=(len(imgs_data), max(len(img) for img in imgs_data)),
+                    shape=(len(imgs_data), img_bytes_len),
                     dtype="int8",
                     compression="gzip",
                 )

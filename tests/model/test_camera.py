@@ -1,10 +1,21 @@
 """Tests for methods in the sleap_io.model.instance file."""
 
+from __future__ import annotations
+
 import cv2
 import numpy as np
 import pytest
 
-from sleap_io.model.camera import Camera, CameraGroup, RecordingSession
+from sleap_io.model.camera import (
+    Camera,
+    CameraGroup,
+    FrameGroup,
+    InstanceGroup,
+    RecordingSession,
+)
+from sleap_io.model.instance import Instance
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 
 
@@ -197,42 +208,6 @@ def test_camera_extrinsic_matrix():
     np.testing.assert_array_equal(camera.tvec, tvec)
 
 
-def test_camera_from_dict_to_dict():
-    """Test camera from_dict method."""
-
-    # Define camera dictionary
-    name = "back"
-    size = [1280, 1024]
-    matrix = [
-        [762.513822135494, 0.0, 639.5],
-        [0.0, 762.513822135494, 511.5],
-        [0.0, 0.0, 1.0],
-    ]
-    distortions = [-0.2868458380166852, 0.0, 0.0, 0.0, 0.0]
-    rotation = [0.3571857188780474, 0.8879473292757126, 1.6832001677006176]
-    translation = [-555.4577842902744, -294.43494957092884, -190.82196458369515]
-    camera_dict = {
-        "name": name,
-        "size": size,
-        "matrix": matrix,
-        "distortions": distortions,
-        "rotation": rotation,
-        "translation": translation,
-    }
-
-    # Test camera from_dict
-    camera = Camera.from_dict(camera_dict)
-    assert camera.name == "back"
-    assert camera.size == tuple(size)
-    np.testing.assert_array_almost_equal(camera.matrix, np.array(matrix))
-    np.testing.assert_array_almost_equal(camera.dist, np.array(distortions))
-    np.testing.assert_array_almost_equal(camera.rvec, np.array(rotation))
-    np.testing.assert_array_almost_equal(camera.tvec, np.array(translation))
-
-    # Test camera to_dict
-    assert camera.to_dict() == camera_dict
-
-
 def test_camera_undistort_points():
     """Test camera undistort points method."""
     camera = Camera(
@@ -388,65 +363,6 @@ def test_camera_group_cameras():
     assert camera_group.cameras == []
 
 
-def test_camera_group_from_dict_to_dict():
-    """Test camera group from_dict and to_dict methods."""
-
-    # Define template camera dictionary
-    size = [1280, 1024]
-    matrix = np.eye(3).tolist()
-    distortions = np.zeros(5).tolist()
-    rotation = np.zeros(3).tolist()
-    translation = np.zeros(3).tolist()
-    camera_dict_template = {
-        "size": size,
-        "matrix": matrix,
-        "distortions": distortions,
-        "rotation": rotation,
-        "translation": translation,
-    }
-
-    camera_group_dict = {}
-    n_cameras = 3
-    for i in range(n_cameras):
-        camera_dict = camera_dict_template.copy()
-        camera_dict["name"] = f"camera{i}"
-        camera_group_dict[f"cam_{i}"] = camera_dict
-
-    camera_group_0 = CameraGroup.from_dict(camera_group_dict)
-    camera_group_dict_0: dict = camera_group_0.to_dict()
-    assert camera_group_dict == camera_group_dict_0
-    assert len(camera_group_0.cameras) == 3
-    for i in range(n_cameras):
-        assert camera_group_0.cameras[i].name == f"camera{i}"
-        assert camera_group_0.cameras[i].size == tuple(size)
-        np.testing.assert_array_almost_equal(
-            camera_group_0.cameras[i].matrix, np.array(matrix)
-        )
-        np.testing.assert_array_almost_equal(
-            camera_group_0.cameras[i].dist, np.array(distortions)
-        )
-        np.testing.assert_array_almost_equal(
-            camera_group_0.cameras[i].rvec, np.array(rotation)
-        )
-        np.testing.assert_array_almost_equal(
-            camera_group_0.cameras[i].tvec, np.array(translation)
-        )
-
-
-def test_camera_group_load(calibration_toml_path: str):
-    """Test camera group load method."""
-
-    camera_group = CameraGroup.load(calibration_toml_path)
-    assert len(camera_group.cameras) == 8
-
-    for camera, name in zip(
-        camera_group.cameras,
-        ["back", "backL", "mid", "midL", "side", "sideL", "top", "topL"],
-    ):
-        assert camera.name == name
-        assert camera.size == (1280, 1024)
-
-
 def test_camera_group_triangulation(camera_group_345: CameraGroup):
     """Test camera group triangulation using 3-4-5 triangle on xy-plane."""
 
@@ -544,3 +460,128 @@ def test_camera_group_project(camera_group_345: CameraGroup):
     np.testing.assert_array_almost_equal(
         points, np.array([[[[[c, 0]]]], [[[[c, 0]]]]]), decimal=5
     )
+
+
+def test_instance_group_init(
+    camera_group_345: CameraGroup,
+):
+    """Test instance group initialization.
+
+    Args:
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
+    camera_group = camera_group_345
+
+    # Test with defaults
+    instance_group = InstanceGroup()
+    assert instance_group._instance_by_camera == {}
+    assert instance_group._score is None
+    assert instance_group._points is None
+    assert instance_group.metadata == {}
+
+    # Test with non-defaults
+    skeleton = Skeleton(["A", "B"])
+    instance_by_camera = {
+        cam: Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+        for cam in camera_group.cameras
+    }
+    score = 0.5
+    points = np.random.rand(10, 3).astype(np.float32)
+    assert points.dtype == np.float32
+    metadata = {"observation": 72317}
+    instance_group = InstanceGroup(
+        instance_by_camera=instance_by_camera,
+        score=score,
+        points=points,
+        metadata=metadata,
+    )
+    assert instance_group.instances == list(instance_by_camera.values())
+    assert instance_group.cameras == list(instance_by_camera.keys())
+    assert (
+        instance_group.get_instance(instance_group.cameras[-1])
+        == instance_group.instances[-1]
+    )
+    assert instance_group._score == score
+    assert instance_group._points.dtype == np.float64
+    assert np.array_equal(instance_group._points, points.astype(np.float64))
+    assert instance_group.metadata == metadata
+
+
+def test_frame_group_init(camera_group_345: CameraGroup):
+    """Test frame group initialization.
+
+    Args:
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
+    # Need frame index
+    with pytest.raises(TypeError):
+        frame_group = FrameGroup()
+
+    # Test with frame index and defaults
+    frame_idx = 0
+    frame_group = FrameGroup(frame_idx=frame_idx)
+    assert frame_group.frame_idx == 0
+    assert frame_group.instance_groups == []
+    assert frame_group.cameras == []
+    assert frame_group.labeled_frames == []
+    assert frame_group.metadata == {}
+
+    # Test with non-defaults
+    instance_groups = [InstanceGroup(), InstanceGroup()]
+    labeled_frame_by_camera = {
+        cam: LabeledFrame(
+            frame_idx=frame_idx,
+            video=Video(filename="test"),
+        )
+        for cam in camera_group_345.cameras
+    }
+    metadata = {"observation": 72317}
+    frame_group = FrameGroup(
+        frame_idx=frame_idx,
+        instance_groups=instance_groups,
+        labeled_frame_by_camera=labeled_frame_by_camera,
+        metadata=metadata,
+    )
+    assert frame_group.frame_idx == frame_idx
+    assert frame_group.instance_groups == instance_groups
+    assert frame_group.cameras == list(labeled_frame_by_camera.keys())
+    assert frame_group.labeled_frames == list(labeled_frame_by_camera.values())
+    assert (
+        frame_group.get_frame(frame_group.cameras[-1]) == frame_group.labeled_frames[-1]
+    )
+    assert frame_group.metadata == metadata
+
+
+def test_recording_session_init(camera_group_345: CameraGroup):
+    """Test recording session initialization.
+
+    Args:
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
+    # Test with defaults
+    session = RecordingSession()
+    assert session._video_by_camera == {}
+    assert session._camera_by_video == {}
+    assert session._frame_group_by_frame_idx == {}
+    assert session.metadata == {}
+
+    # Test with non-defaults
+    camera_group = camera_group_345
+    video_by_camera = {cam: Video(filename="test") for cam in camera_group.cameras}
+    camera_by_video = {video: cam for cam, video in video_by_camera.items()}
+    frame_group_by_frame_idx = {
+        frame_idx: FrameGroup(frame_idx=frame_idx) for frame_idx in range(10)
+    }
+    metadata = {"observation": 72317}
+    session = RecordingSession(
+        camera_group=camera_group,
+        video_by_camera=video_by_camera,
+        camera_by_video=camera_by_video,
+        frame_group_by_frame_idx=frame_group_by_frame_idx,
+        metadata=metadata,
+    )
+    assert session.camera_group == camera_group
+    assert session._video_by_camera == video_by_camera
+    assert session._camera_by_video == camera_by_video
+    assert session.frame_groups == frame_group_by_frame_idx
+    assert session.metadata == metadata
