@@ -7,7 +7,6 @@ from collections.abc import Callable
 import attrs
 import cv2
 import numpy as np
-import toml
 from attrs import define, field
 from attrs.validators import instance_of
 
