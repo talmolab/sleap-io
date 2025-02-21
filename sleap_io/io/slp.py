@@ -1353,8 +1353,8 @@ def instance_group_to_dict(
     """
     # TODO(LM): Do not call private attributes outside of class
 
-    camera_to_lf_and_inst_idx_map: dict[str, tuple[str, str]] = {
-        str(camera_group.cameras.index(cam)): instance_to_lf_and_inst_idx[instance]
+    camera_to_lf_and_inst_idx_map: dict[int, tuple[int, int]] = {
+        camera_group.cameras.index(cam): instance_to_lf_and_inst_idx[instance]
         for cam, instance in instance_group._instance_by_camera.items()
     }
 
@@ -1365,7 +1365,7 @@ def instance_group_to_dict(
 
     # Optionally add score, points, and metadata if they are non-default values
     if instance_group._score is not None:
-        instance_group_dict["score"] = str(round(instance_group._score, 4))
+        instance_group_dict["score"] = instance_group._score
     if instance_group._points is not None:
         instance_group_dict["points"] = instance_group._points.tolist()
     instance_group_dict.update(instance_group.metadata)
@@ -1394,8 +1394,8 @@ def frame_group_to_dict(
     """
     # Create dictionary of `Instance` to `LabeledFrame` index (in
     # `Labels.labeled_frames`) and `Instance` index in `LabeledFrame.instances`.
-    instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]] = {
-        inst: (str(labeled_frame_to_idx[labeled_frame]), str(inst_idx))
+    instance_to_lf_and_inst_idx: dict[Instance, tuple[int, int]] = {
+        inst: (labeled_frame_to_idx[labeled_frame], inst_idx)
         for labeled_frame in frame_group.labeled_frames
         for inst_idx, inst in enumerate(labeled_frame.instances)
     }
@@ -1407,11 +1407,10 @@ def frame_group_to_dict(
                 instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
                 camera_group=camera_group,
             )
-            # TODO(LM): Do not call private attributes outside of class
-            for instance_group in frame_group._instance_groups
+            for instance_group in frame_group.instance_groups
         ],
     }
-    frame_group_dict["frame_idx"] = str(frame_group.frame_idx)
+    frame_group_dict["frame_idx"] = frame_group.frame_idx
     frame_group_dict.update(frame_group.metadata)
 
     return frame_group_dict
@@ -1513,7 +1512,7 @@ def session_to_dict(
         video_idx = video_to_idx.get(video, None)
 
         if video_idx is not None:
-            camera_to_video_idx_map[str(cam_idx)] = str(video_idx)
+            camera_to_video_idx_map[cam_idx] = video_idx
         else:
             print(
                 f"Video {video} not found in `Labels.videos`. "
