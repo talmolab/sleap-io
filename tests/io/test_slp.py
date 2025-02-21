@@ -1,5 +1,7 @@
 """Tests for functions in the sleap_io.io.slp file."""
 
+from __future__ import annotations
+
 from sleap_io import (
     Video,
     Skeleton,
