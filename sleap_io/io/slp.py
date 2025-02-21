@@ -1368,8 +1368,7 @@ def instance_group_to_dict(
         instance_group_dict["score"] = str(round(instance_group._score, 4))
     if instance_group._points is not None:
         instance_group_dict["points"] = instance_group._points.tolist()
-    if len(instance_group.metadata) > 0:
-        instance_group_dict.update(instance_group.metadata)
+    instance_group_dict.update(instance_group.metadata)
 
     return instance_group_dict
 
@@ -1413,8 +1412,7 @@ def frame_group_to_dict(
         ],
     }
     frame_group_dict["frame_idx"] = str(frame_group.frame_idx)
-    if len(frame_group.metadata) > 0:
-        frame_group_dict.update(frame_group.metadata)
+    frame_group_dict.update(frame_group.metadata)
 
     return frame_group_dict
 
@@ -1446,10 +1444,7 @@ def camera_to_dict(camera) -> dict:
         "rotation": camera.rvec.tolist(),
         "translation": camera.tvec.tolist(),
     }
-
-    # Add metadata if it exists.
-    if len(camera.metadata) > 0:
-        camera_dict.update(camera.metadata)
+    camera_dict.update(camera.metadata)
 
     return camera_dict
 
@@ -1477,8 +1472,7 @@ def camera_group_to_dict(camera_group) -> dict:
         camera_dict = camera_to_dict(camera)
         calibration_dict[f"cam_{cam_idx}"] = camera_dict
 
-    if len(camera_group.metadata) > 0:
-        calibration_dict["metadata"] = camera_group.metadata
+    calibration_dict["metadata"] = camera_group.metadata.copy()
 
     return calibration_dict
 
@@ -1545,8 +1539,7 @@ def session_to_dict(
         "camcorder_to_video_idx_map": camera_to_video_idx_map,
         "frame_group_dicts": frame_group_dicts,
     }
-    if len(session.metadata) > 0:
-        session_dict.update(session.metadata)
+    session_dict.update(session.metadata)
 
     return session_dict
 
