@@ -1287,14 +1287,16 @@ def make_session(
     # Restructure `RecordingSession` without `Video` to `Camera` mapping
     calibration_dict = session_dict.pop("calibration")
     camera_group = make_camera_group(calibration_dict)
-    session = RecordingSession(camera_group=camera_group)
 
     # Retrieve all `Camera` and `Video` objects, then add to `RecordingSession`
     camcorder_to_video_idx_map = session_dict.pop("camcorder_to_video_idx_map")
+    video_by_camera = {}
+    camera_by_video = {}
     for cam_idx, video_idx in camcorder_to_video_idx_map.items():
-        camera = session.camera_group.cameras[int(cam_idx)]
+        camera = camera_group.cameras[int(cam_idx)]
         video = videos[int(video_idx)]
-        session.add_video(video, camera)
+        video_by_camera[camera] = video
+        camera_by_video[video] = camera
 
     # Reconstruct all `FrameGroup` objects and add to `RecordingSession`
     frame_group_dicts = []
@@ -1307,7 +1309,7 @@ def make_session(
             frame_group = make_frame_group(
                 frame_group_dict=frame_group_dict,
                 labeled_frames=labeled_frames,
-                camera_group=session.camera_group,
+                camera_group=camera_group,
             )
             frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
         except ValueError as e:
@@ -1316,11 +1318,13 @@ def make_session(
                 f"\n{e}"
             )
 
-    # TODO(LM): Since we are outside of the class, we shouldn't be calling private attrs
-    session._frame_group_by_frame_idx = frame_group_by_frame_idx
-
-    # Add remaining metadata to `RecordingSession`
-    session.metadata = session_dict
+    session = RecordingSession(
+        camera_group=camera_group,
+        video_by_camera=video_by_camera,
+        camera_by_video=camera_by_video,
+        frame_group_by_frame_idx=frame_group_by_frame_idx,
+        metadata=session_dict,
+    )
 
     return session
 
@@ -1374,11 +1378,9 @@ def instance_group_to_dict(
                 and `Instance` indices (from `instance_to_lf_and_inst_idx`)
             - Any optional keys containing metadata.
     """
-    # TODO(LM): Do not call private attributes outside of class
-
     camera_to_lf_and_inst_idx_map: dict[int, tuple[int, int]] = {
         camera_group.cameras.index(cam): instance_to_lf_and_inst_idx[instance]
-        for cam, instance in instance_group._instance_by_camera.items()
+        for cam, instance in instance_group.instance_by_camera.items()
     }
 
     # Only required key is camcorder_to_lf_and_inst_idx_map
@@ -1387,10 +1389,10 @@ def instance_group_to_dict(
     }
 
     # Optionally add score, points, and metadata if they are non-default values
-    if instance_group._score is not None:
-        instance_group_dict["score"] = instance_group._score
-    if instance_group._points is not None:
-        instance_group_dict["points"] = instance_group._points.tolist()
+    if instance_group.score is not None:
+        instance_group_dict["score"] = instance_group.score
+    if instance_group.points is not None:
+        instance_group_dict["points"] = instance_group.points.tolist()
     instance_group_dict.update(instance_group.metadata)
 
     return instance_group_dict
@@ -1542,14 +1544,11 @@ def session_to_dict(
     for cam_idx, camera in enumerate(session.camera_group.cameras):
         # Skip if Camera is not linked to any Video
 
-        # TODO(LM): Do not call private attributes outside of class
-        if camera not in session._video_by_camera:
+        if camera not in session.cameras:
             continue
 
         # Get video index from `Labels.videos`
-
-        # TODO(LM): Do not call private attributes outside of class
-        video = session._video_by_camera[camera]
+        video = session.get_video(camera)
         video_idx = video_to_idx.get(video, None)
 
         if video_idx is not None:
@@ -1563,8 +1562,7 @@ def session_to_dict(
     # Store frame groups by frame index
     frame_group_dicts = []
     if len(labeled_frame_to_idx) > 0:  # Don't save if skipping labeled frames
-        # TODO(LM): Do not call private attributes outside of class
-        for frame_group in session._frame_group_by_frame_idx.values():
+        for frame_group in session.frame_groups.values():
             # Only save `FrameGroup` if it has `InstanceGroup`s
             if len(frame_group.instance_groups) > 0:
                 frame_group_dict = frame_group_to_dict(
