@@ -20,6 +20,7 @@ from sleap_io import (
     Video,
     Track,
     SuggestionFrame,
+    RecordingSession,
 )
 from sleap_io.model.skeleton import NodeOrIndex
 from attrs import define, field
@@ -42,6 +43,7 @@ class Labels:
             should generally only contain a single skeleton.
         tracks: A list of `Track`s that are associated with this dataset.
         suggestions: A list of `SuggestionFrame`s that are associated with this dataset.
+        sessions: A list of `RecordingSession`s that are associated with this dataset.
         provenance: Dictionary of arbitrary metadata providing additional information
             about where the dataset came from.
 
@@ -55,6 +57,7 @@ class Labels:
     skeletons: list[Skeleton] = field(factory=list)
     tracks: list[Track] = field(factory=list)
     suggestions: list[SuggestionFrame] = field(factory=list)
+    sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
     def __attrs_post_init__(self):
@@ -128,7 +131,8 @@ class Labels:
             f"videos={len(self.videos)}, "
             f"skeletons={len(self.skeletons)}, "
             f"tracks={len(self.tracks)}, "
-            f"suggestions={len(self.suggestions)}"
+            f"suggestions={len(self.suggestions)}, "
+            f"sessions={len(self.sessions)}"
             ")"
         )
 

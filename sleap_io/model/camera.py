@@ -220,7 +220,8 @@ class RecordingSession:
     Attributes:
         camera_group: `CameraGroup` object containing cameras in the session.
         frame_groups: Dictionary mapping frame index to `FrameGroup`.
-        videos: List of `Video` objects linked to cameras in the session.
+        videos: List of `Video` objects linked to `Camera`s in the session.
+        cameras: List of `Camera` objects linked to `Video`s in the session.
         metadata: Dictionary of metadata.
     """
 
@@ -249,12 +250,21 @@ class RecordingSession:
 
     @property
     def videos(self) -> list[Video]:
-        """Get list of `Video` objects in `RecordingSession`.
+        """Get list of `Video` objects in the `RecordingSession`.
 
         Returns:
             List of `Video` objects in `RecordingSession`.
         """
         return list(self._video_by_camera.values())
+
+    @property
+    def cameras(self) -> list[Camera]:
+        """Get list of `Camera` objects linked to `Video`s in the `RecordingSession`.
+
+        Returns:
+            List of `Camera` objects in `RecordingSession`.
+        """
+        return list(self._video_by_camera.keys())
 
     def get_camera(self, video: Video) -> Camera | None:
         """Get `Camera` associated with `video`.
@@ -537,6 +547,7 @@ class InstanceGroup:
     """Defines a group of instances across the same frame index.
 
     Attributes:
+        instances_by_camera: Dictionary of `Instance` objects by `Camera`.
         instances: List of `Instance` objects in the group.
         cameras: List of `Camera` objects that have an `Instance` associated.
         score: Optional score for the `InstanceGroup`. Setting the score will also
@@ -559,6 +570,11 @@ class InstanceGroup:
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
+    def instance_by_camera(self) -> dict[Camera, Instance]:
+        """Get dictionary of `Instance` objects by `Camera`."""
+        return self._instance_by_camera
+
+    @property
     def instances(self) -> list[Instance]:
         """List of `Instance` objects."""
         return list(self._instance_by_camera.values())
@@ -567,6 +583,16 @@ class InstanceGroup:
     def cameras(self) -> list[Camera]:
         """List of `Camera` objects."""
         return list(self._instance_by_camera.keys())
+
+    @property
+    def score(self) -> float | None:
+        """Get score for `InstanceGroup`."""
+        return self._score
+
+    @property
+    def points(self) -> np.ndarray | None:
+        """Get 3D points for `InstanceGroup`."""
+        return self._points
 
     def get_instance(self, camera: Camera) -> Instance | None:
         """Get `Instance` associated with `camera`.

@@ -76,3 +76,25 @@ def slp_real_data():
 def slp_imgvideo():
     """SLP project with a single image video."""
     return "tests/data/slp/imgvideo.slp"
+
+
+@pytest.fixture
+def slp_multiview():
+    """SLP project with multiple views/videos/cameras of the same scene.
+
+    Labels(
+        labeled_frames=24, videos=8, skeletons=1, tracks=2, suggestions=0, sessions=1
+    )
+    Skeleton(
+        nodes=[
+            "Nose", "Ear_R", "Ear_L", "TTI", "TailTip", "Head", "Trunk", "Tail_0",
+            "Tail_1", "Tail_2", "Shoulder_left", "Shoulder_right", "Haunch_left",
+            "Haunch_right", "Neck"
+        ],
+        edges=[
+            (3, 5), (3, 7), (3, 8), (3, 9), (3, 12), (3, 13), (3, 6), (3, 4), (5, 0),
+            (5, 14), (5, 10), (5, 11), (5, 1), (5, 2)
+        ]
+    )
+    """
+    return "tests/data/slp/multiview.slp"
