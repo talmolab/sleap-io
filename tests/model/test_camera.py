@@ -495,7 +495,12 @@ def test_instance_group_init(
         points=points,
         metadata=metadata,
     )
-    assert instance_group._instance_by_camera == instance_by_camera
+    assert instance_group.instances == list(instance_by_camera.values())
+    assert instance_group.cameras == list(instance_by_camera.keys())
+    assert (
+        instance_group.get_instance(instance_group.cameras[-1])
+        == instance_group.instances[-1]
+    )
     assert instance_group._score == score
     assert instance_group._points.dtype == np.float64
     assert np.array_equal(instance_group._points, points.astype(np.float64))
@@ -516,8 +521,9 @@ def test_frame_group_init(camera_group_345: CameraGroup):
     frame_idx = 0
     frame_group = FrameGroup(frame_idx=frame_idx)
     assert frame_group.frame_idx == 0
-    assert frame_group._instance_groups == []
-    assert frame_group._labeled_frame_by_camera == {}
+    assert frame_group.instance_groups == []
+    assert frame_group.cameras == []
+    assert frame_group.labeled_frames == []
     assert frame_group.metadata == {}
 
     # Test with non-defaults
@@ -537,8 +543,12 @@ def test_frame_group_init(camera_group_345: CameraGroup):
         metadata=metadata,
     )
     assert frame_group.frame_idx == frame_idx
-    assert frame_group._instance_groups == instance_groups
-    assert frame_group._labeled_frame_by_camera == labeled_frame_by_camera
+    assert frame_group.instance_groups == instance_groups
+    assert frame_group.cameras == list(labeled_frame_by_camera.keys())
+    assert frame_group.labeled_frames == list(labeled_frame_by_camera.values())
+    assert (
+        frame_group.get_frame(frame_group.cameras[-1]) == frame_group.labeled_frames[-1]
+    )
     assert frame_group.metadata == metadata
 
 
@@ -573,5 +583,5 @@ def test_recording_session_init(camera_group_345: CameraGroup):
     assert session.camera_group == camera_group
     assert session._video_by_camera == video_by_camera
     assert session._camera_by_video == camera_by_video
-    assert session._frame_group_by_frame_idx == frame_group_by_frame_idx
+    assert session.frame_groups == frame_group_by_frame_idx
     assert session.metadata == metadata
