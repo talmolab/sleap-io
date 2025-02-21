@@ -686,6 +686,9 @@ def test_make_session_and_session_to_dict(
     assert len(session_dict["frame_group_dicts"]) == len(
         session._frame_group_by_frame_idx
     )
+    assert len(session_dict["camcorder_to_video_idx_map"]) == len(
+        session._video_by_camera
+    )
 
     # Test make_session.
 
