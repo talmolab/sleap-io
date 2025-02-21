@@ -1068,14 +1068,15 @@ def make_instance_group(
     """Creates an `InstanceGroup` object from a dictionary.
 
     Args:
-        instance_group_dict: Dictionary with the following necessary keys:
-            camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camera` indices
-                to a tuple of `LabeledFrame` index (in `labeled_frames`) and
-                `Instance` index (in containing `LabeledFrame.instances`).
+        instance_group_dict: Dictionary with the following necessary key:
+            - "camcorder_to_lf_and_inst_idx_map": Dictionary mapping `Camera` indices to
+                a tuple of `LabeledFrame` index (in `labeled_frames`) and `Instance`
+                index (in containing `LabeledFrame.instances`).
             and optional keys:
-            score: Score for the `InstanceGroup`.
-            points: 3D points for the `InstanceGroup`.
-            etc. (metadata)
+            - "score": A float representing the reprojection score for the
+                `InstanceGroup`.
+            - "points": 3D points for the `InstanceGroup`.
+            - Any keys containing metadata.
         labeled_frames: List of `LabeledFrame` objects (expecting
             `Labels.labeled_frames`) used to retrieve `Instance` objects.
         camera_group: `CameraGroup` object used to retrieve `Camera` objects.
@@ -1111,7 +1112,7 @@ def make_instance_group(
     if "points" in instance_group_dict:
         points = instance_group_dict.pop("points")
 
-    # Metadata contains any information that the class doesn't deserialize.
+    # Metadata contains any information that the class does not deserialize.
     metadata = instance_group_dict  # Remaining keys are metadata.
 
     return InstanceGroup(
@@ -1123,14 +1124,21 @@ def make_instance_group(
 
 
 def make_frame_group(
-    frame_group_dict: dict[str],
+    frame_group_dict: dict,
     labeled_frames: list[LabeledFrame],
     camera_group: CameraGroup,
 ) -> FrameGroup:
-    """Convert dictionary to `FrameGroup` object.
+    """Create a `FrameGroup` object from a dictionary.
 
     Args:
-        frame_group_dict: Dictionary of `FrameGroup` object.
+        frame_group_dict: Dictionary representing a `FrameGroup` object with the
+            following necessary key:
+            - "instance_groups": List of dictionaries containing `InstanceGroup`
+                information (see `make_instance_group` for what each dictionary
+                contains).
+            and optional keys:
+            - "frame_idx": Frame index.
+            - Any keys containing metadata.
         labeled_frames_list: List of `LabeledFrame` objects (expecting
             `Labels.labeled_frames`).
         camera_group: `CameraGroup` object used to retrieve `Camera` objects.
@@ -1187,20 +1195,21 @@ def make_frame_group(
 
 
 def make_camera(camera_dict: dict) -> Camera:
-    """Create `Camera` from dictionary.
+    """Create `Camera` from a dictionary.
 
     Args:
         camera_dict: Dictionary containing camera information with the following
-            keys:
-            name: Camera name.
-            size: Image size (width, height) of camera in pixels of size (2,) and
+            necessary keys:
+            - "name": Camera name.
+            - "size": Image size (width, height) of camera in pixels of size (2,) and
                 type int.
-            matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-            distortions: Radial-tangential distortion coefficients
+            - "matrix": Intrinsic camera matrix of size (3, 3) and type float64.
+            - "distortions": Radial-tangential distortion coefficients
                 [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-            rotation: Rotation vector in unnormalized axis-angle representation of
+            - "rotation": Rotation vector in unnormalized axis-angle representation of
                 size (3,) and type float64.
-            translation: Translation vector of size (3,) and type float64.
+            - "translation": Translation vector of size (3,) and type float64.
+            and optional keys containing metadata.
 
     Returns:
         `Camera` object created from dictionary.
@@ -1227,10 +1236,15 @@ def make_camera(camera_dict: dict) -> Camera:
 
 
 def make_camera_group(calibration_dict: dict) -> CameraGroup:
-    """Create `CameraGroup` from calibration dictionary.
+    """Create a `CameraGroup` from a calibration dictionary.
 
     Args:
-        calibration_dict: Dictionary containing calibration information for cameras.
+        calibration_dict: Dictionary containing calibration information for cameras
+            with optional keys:
+            - "metadata": Dictionary containing metadata for the `CameraGroup`.
+            - Arbitrary (but unique) keys for every `Camera`, each containing a
+                dictionary with camera information (see `make_camera` for what each
+                dictionary contains).
 
     Returns:
         `CameraGroup` object created from calibration dictionary.
@@ -1250,15 +1264,16 @@ def make_camera_group(calibration_dict: dict) -> CameraGroup:
 def make_session(
     session_dict: dict, videos: list[Video], labeled_frames: list[LabeledFrame]
 ) -> RecordingSession:
-    """Restructure `RecordingSession` from an invertible dictionary.
+    """Create a `RecordingSession` from a dictionary.
 
     Args:
         session_dict: Dictionary with keys:
-            calibration: Dictionary containing calibration information for cameras.
-            camcorder_to_video_idx_map: Dictionary mapping camera index to video
+            - "calibration": Dictionary containing calibration information for cameras.
+            - "camcorder_to_video_idx_map": Dictionary mapping camera index to video
                 index.
-            frame_group_dicts: List of dictionaries containing `FrameGroup`
-                information.
+            - "frame_group_dicts": List of dictionaries containing `FrameGroup`
+                information. See `make_frame_group` for what each dictionary contains.
+            - Any optional keys containing metadata.
         videos_list: List containing `Video` objects (expected `Labels.videos`).
         labeled_frames_list: List containing `LabeledFrame` objects (expected
             `Labels.labeled_frames`).
@@ -1313,7 +1328,10 @@ def make_session(
 def read_sessions(
     labels_path: str, videos: list[Video], labeled_frames: list[LabeledFrame]
 ) -> list[RecordingSession]:
-    """Read `RecordingSession` dataset in a SLEAP labels file.
+    """Read `RecordingSession` dataset from a SLEAP labels file.
+
+    Expects a "sessions_json" dataset in the `labels_path` file, but will return an
+    empty list if the dataset is not found.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
@@ -1335,24 +1353,26 @@ def read_sessions(
 
 
 def instance_group_to_dict(
-    instance_group,
-    instance_to_lf_and_inst_idx: dict[Instance, tuple[str, str]],
+    instance_group: InstanceGroup,
+    instance_to_lf_and_inst_idx: dict[Instance, tuple[int, int]],
     camera_group: CameraGroup,
-) -> dict[str, str | dict[str, str]]:
-    """Converts the `InstanceGroup` to a dictionary.
+) -> dict:
+    """Convert `instance_group` to a dictionary.
 
     Args:
+        instance_group: `InstanceGroup` object to convert to a dictionary.
         instance_to_lf_and_inst_idx: Dictionary mapping `Instance` objects to
-            `LabeledFrame` indices (in `Labels.labeled_frames`) and `Instance`
-            indices (in containing `LabeledFrame.instances`).
-        camera_group: `CameraGroup` object that determines the order of the
-            `Camera` objects when converting to a dictionary.
+            `LabeledFrame` indices (in `Labels.labeled_frames`) and `Instance` indices
+            (in containing `LabeledFrame.instances`).
+        camera_group: `CameraGroup` object that determines the order of the `Camera`
+            objects when converting to a dictionary.
 
     Returns:
-        Dictionary of the `InstanceGroup` with items:
-            - camcorder_to_lf_and_inst_idx_map: Dictionary mapping `Camera` indices
-                (in `InstanceGroup.camera_cluster.cameras`) to both `LabeledFrame`
-                and `Instance` indices (from `instance_to_lf_and_inst_idx`).
+        Dictionary of the `InstanceGroup` with keys:
+            - "camcorder_to_lf_and_inst_idx_map": Dictionary mapping `Camera` indices
+                (in `InstanceGroup.camera_cluster.cameras`) to a tuple of `LabeledFrame`
+                and `Instance` indices (from `instance_to_lf_and_inst_idx`)
+            - Any optional keys containing metadata.
     """
     # TODO(LM): Do not call private attributes outside of class
 
@@ -1377,23 +1397,26 @@ def instance_group_to_dict(
 
 
 def frame_group_to_dict(
-    frame_group,
+    frame_group: FrameGroup,
     labeled_frame_to_idx: dict[LabeledFrame, int],
     camera_group: CameraGroup,
-) -> dict[str, int | list[dict[str]]]:
-    """Convert `FrameGroup` to a dictionary.
+) -> dict:
+    """Convert `frame_group` to a dictionary.
 
     Args:
+        frame_group: `FrameGroup` object to convert to a dictionary.
         labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
             `Labels.labeled_frames`.
-        camera_group: `CameraGroup` object that determines the order of the
-            `Camera` objects when converting to a dictionary.
+        camera_group: `CameraGroup` object that determines the order of the `Camera`
+            objects when converting to a dictionary.
 
     Returns:
-        Dictionary of the `FrameGroup` with items:
-            - instance_groups: List of dictionaries for each `InstanceGroup` in the
-                `FrameGroup`.
-            - frame_idx: Frame index for the `FrameGroup`.
+        Dictionary of the `FrameGroup` with keys:
+            - "instance_groups": List of dictionaries for each `InstanceGroup` in the
+                `FrameGroup`. See `instance_group_to_dict` for what each dictionary
+                contains.
+            - "frame_idx": Frame index for the `FrameGroup`.
+            - Any optional keys containing metadata.
     """
     # Create dictionary of `Instance` to `LabeledFrame` index (in
     # `Labels.labeled_frames`) and `Instance` index in `LabeledFrame.instances`.
@@ -1419,20 +1442,25 @@ def frame_group_to_dict(
     return frame_group_dict
 
 
-def camera_to_dict(camera) -> dict:
-    """Convert `Camera` to dictionary.
+def camera_to_dict(camera: Camera) -> dict:
+    """Convert `camera` to dictionary.
+
+    Args:
+        camera: `Camera` object to convert to a dictionary.
 
     Returns:
         Dictionary containing camera information with the following keys:
-        name: Camera name.
-        size: Image size (width, height) of camera in pixels of size (2,) and type
-            int.
-        matrix: Intrinsic camera matrix of size (3, 3) and type float64.
-        distortions: Radial-tangential distortion coefficients
-            [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
-        rotation: Rotation vector in unnormalized axis-angle representation of size
-            (3,) and type float64.
-        translation: Translation vector of size (3,) and type float64.
+            - "name": Camera name.
+            - "size": Image size (width, height) of camera in pixels of size (2,) and type
+                int.
+            - "matrix": Intrinsic camera matrix of size (3, 3) and type float64.
+            - "distortions": Radial-tangential distortion coefficients
+                [k_1, k_2, p_1, p_2, k_3] of size (5,) and type float64.
+            - "rotation": Rotation vector in unnormalized axis-angle representation of
+                size (3,) and type float64.
+            - "translation": Translation vector of size (3,) and type float64.
+            - Any optional keys containing metadata.
+
     """
     # Handle optional attributes
     name = "" if camera.name is None else camera.name
@@ -1451,12 +1479,15 @@ def camera_to_dict(camera) -> dict:
     return camera_dict
 
 
-def camera_group_to_dict(camera_group) -> dict:
-    """Convert `CameraGroup` to dictionary.
+def camera_group_to_dict(camera_group: CameraGroup) -> dict:
+    """Convert `camera_group` to dictionary.
+
+    Args:
+        camera_group: `CameraGroup` object to convert to a dictionary.
 
     Returns:
         Dictionary containing camera group information with the following keys:
-            cam_n: Camera dictionary containing information for camera at index "n"
+            - cam_n: Camera dictionary containing information for camera at index "n"
                 with the following keys:
                 name: Camera name.
                 size: Image size (height, width) of camera in pixels of size (2,)
@@ -1467,7 +1498,7 @@ def camera_group_to_dict(camera_group) -> dict:
                 rotation: Rotation vector in unnormalized axis-angle representation
                     of size (3,) and type float64.
                 translation: Translation vector of size (3,) and type float64.
-            metadata: Dictionary of metadata.
+            - "metadata": Dictionary of optional metadata.
     """
     calibration_dict = {}
     for cam_idx, camera in enumerate(camera_group.cameras):
@@ -1480,20 +1511,27 @@ def camera_group_to_dict(camera_group) -> dict:
 
 
 def session_to_dict(
-    session,
+    session: RecordingSession,
     video_to_idx: dict[Video, int],
     labeled_frame_to_idx: dict[LabeledFrame, int],
 ) -> dict:
-    """Unstructure `RecordingSession` to an invertible dictionary.
+    """Convert `RecordingSession` to a dictionary.
 
     Args:
+        session: `RecordingSession` object to convert to a dictionary.
         video_to_idx: Dictionary of `Video` to index in `Labels.videos`.
         labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
             `Labels.labeled_frames`.
 
     Returns:
-        Dictionary of "calibration" and "camcorder_to_video_idx_map" needed to
-        restructure a `RecordingSession`.
+        Dictionary of `RecordingSession` with the following keys:
+            - "calibration": Dictionary containing calibration information for cameras.
+            - "camcorder_to_video_idx_map": Dictionary mapping camera index to video
+                index.
+            - "frame_group_dicts": List of dictionaries containing `FrameGroup`
+                information. See `frame_group_to_dict` for what each dictionary
+                contains.
+            - Any optional keys containing metadata.
     """
     # Unstructure `CameraCluster` and `metadata`
     calibration_dict = camera_group_to_dict(session.camera_group)
@@ -1559,9 +1597,12 @@ def write_sessions(
 
     Args:
         labels_path: A string path to the SLEAP labels file.
-        sessions: A list of `RecordingSession` objects to store the metadata for.
-        videos: A list of `Video` objects.
-        labeled_frames: A list of `LabeledFrame` objects.
+        sessions: A list of `RecordingSession` objects to store in the `labels_path`
+            file.
+        videos: A list of `Video` objects referenced in the `RecordingSession`s
+            (expecting `Labels.videos`).
+        labeled_frames: A list of `LabeledFrame` objects referenced in the
+            `RecordingSession`s (expecting `Labels.labeled_frames`).
     """
     sessions_json = []
     if len(sessions) > 0:
