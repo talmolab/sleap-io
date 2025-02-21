@@ -1573,8 +1573,10 @@ def write_sessions(
         labeled_frame_to_idx = {lf: i for i, lf in enumerate(labeled_frames)}
         video_to_idx = {video: i for i, video in enumerate(videos)}
     for session in sessions:
-        session_json = session.to_dict(
-            video_to_idx=video_to_idx, labeled_frame_to_idx=labeled_frame_to_idx
+        session_json = session_to_dict(
+            session=session,
+            video_to_idx=video_to_idx,
+            labeled_frame_to_idx=labeled_frame_to_idx,
         )
         sessions_json.append(np.bytes_(json.dumps(session_json, separators=(",", ":"))))
 
