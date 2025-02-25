@@ -1,5 +1,7 @@
 """Tests for functions in the sleap_io.io.slp file."""
 
+from __future__ import annotations
+
 from sleap_io import (
     Video,
     Skeleton,
@@ -11,6 +13,11 @@ from sleap_io import (
     PredictedInstance,
     Labels,
     SuggestionFrame,
+    Camera,
+    CameraGroup,
+    FrameGroup,
+    InstanceGroup,
+    RecordingSession,
 )
 from sleap_io.io.slp import (
     read_videos,
@@ -30,8 +37,20 @@ from sleap_io.io.slp import (
     write_labels,
     read_suggestions,
     write_suggestions,
+    make_camera,
+    make_camera_group,
+    make_frame_group,
+    make_instance_group,
+    make_session,
+    camera_to_dict,
+    camera_group_to_dict,
+    frame_group_to_dict,
+    instance_group_to_dict,
+    session_to_dict,
+    read_sessions,
+    write_sessions,
 )
-from sleap_io.io.utils import read_hdf5_dataset
+from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 import numpy as np
 import simplejson as json
 import pytest
@@ -82,6 +101,30 @@ def test_read_instances_from_predicted(slp_real_data):
     assert len(lf.unused_predictions) == 0
 
 
+def test_read_labels_multiview(slp_multiview):
+    labels = read_labels(slp_multiview)
+    assert type(labels) == Labels
+    assert len(labels.sessions) == 1
+    assert isinstance(labels.sessions[0], RecordingSession)
+
+    session = labels.sessions[0]
+    for video in session.videos:
+        assert isinstance(video, Video)
+        assert video in labels.videos
+
+    for frame_group in session.frame_groups.values():
+        assert isinstance(frame_group, FrameGroup)
+        for labeled_frame in frame_group.labeled_frames:
+            assert isinstance(labeled_frame, LabeledFrame)
+            assert labeled_frame in labels.labeled_frames
+
+        for instance_group in frame_group.instance_groups:
+            assert isinstance(instance_group, InstanceGroup)
+            for instance in instance_group.instances:
+                assert isinstance(instance, Instance)
+                assert instance in labels.instances
+
+
 def test_read_skeleton(centered_pair):
     skeletons = read_skeletons(centered_pair)
     assert len(skeletons) == 1
@@ -100,6 +143,125 @@ def test_read_videos_pkg(slp_minimal_pkg):
     video = videos[0]
     assert video.shape == (1, 384, 384, 1)
     assert video.backend.dataset == "video0/video"
+
+
+def assert_matches_slp_multiview(
+    sessions: list[RecordingSession],
+    videos: list[Video],
+    labeled_frames: list[LabeledFrame],
+    instances_labels: set[Instance],
+):
+    """Assert that the data loaded from the .slp file is as expected.
+
+    Each assert statement confirms that the data in `sessions` matches the data we
+    expect to find in the `slp_multiview` fixture.
+
+    Args:
+        sessions: The list of RecordingSession objects.
+        videos: The list of Video objects in the .slp file.
+        labeled_frames: The list of LabeledFrame objects in the .slp file.
+        instances_labels: The set of Instance objects in the .slp file.
+
+    Raises:
+        AssertionError: If the data in `sessions` does not match the expected data.
+    """
+    assert len(sessions) == 1
+
+    session = sessions[0]
+    assert isinstance(session, RecordingSession)
+
+    camera_group = session.camera_group
+    assert isinstance(camera_group, CameraGroup)
+    n_cameras = len(camera_group.cameras)
+    assert n_cameras == 8
+
+    # Test video to camera linking.
+    for video in session.videos:
+        assert isinstance(video, Video)
+        assert video in videos
+
+        camera = session.get_camera(video)
+        assert isinstance(camera, Camera)
+        assert camera.name in str(video.filename)
+        assert camera in camera_group.cameras
+
+        assert session.get_video(camera) is video
+
+    # Test frame groups.
+    frame_groups = session.frame_groups
+    assert len(frame_groups) == 3
+    for frame_idx, frame_group in frame_groups.items():
+        assert isinstance(frame_group, FrameGroup)
+        assert frame_group.frame_idx == frame_idx
+
+        # Test labeled frames to camera linking.
+        cameras = frame_group.cameras
+        n_cameras_in_frame = len(cameras)
+        assert len(frame_group.labeled_frames) == n_cameras_in_frame
+        for labeled_frame, camera in zip(
+            frame_group.labeled_frames, frame_group.cameras
+        ):
+            assert isinstance(labeled_frame, LabeledFrame)
+            assert labeled_frame in labeled_frames
+            assert labeled_frame.frame_idx == frame_idx
+
+            assert isinstance(camera, Camera)
+            assert camera in camera_group.cameras
+            assert frame_group.get_frame(camera) is labeled_frame
+
+        # Test instance groups.
+        assert len(frame_group.instance_groups) == 2
+        for instance_group in frame_group.instance_groups:
+            assert isinstance(instance_group, InstanceGroup)
+
+            instances = instance_group.instances
+            n_instances = len(instances)
+            assert n_instances == 6 or n_instances == 8
+
+            # Test instance to camera linking.
+            cameras = instance_group.cameras
+            assert len(cameras) == n_instances
+            for camera, instance in zip(cameras, instances):
+                assert isinstance(camera, Camera)
+                assert camera in camera_group.cameras
+
+                assert isinstance(instance, Instance)
+                assert instance_group.get_instance(camera) is instance
+                assert instance in instances_labels
+
+
+def test_read_sessions(slp_multiview):
+    labels_path = slp_multiview
+
+    # Retrieve necessary data from the .slp file.
+
+    # Read the videos list from the .slp file.
+    videos = read_videos(labels_path, open_backend=False)
+
+    # Read the Labeled_frames from the .slp file.
+    tracks = read_tracks(labels_path)
+    skeletons = read_skeletons(labels_path)
+    points = read_points(labels_path)
+    pred_points = read_pred_points(labels_path)
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    instances_labels = read_instances(
+        labels_path, skeletons, tracks, points, pred_points, format_id
+    )
+    frames = read_hdf5_dataset(labels_path, "frames")
+    labeled_frames = []
+    for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
+        labeled_frames.append(
+            LabeledFrame(
+                video=videos[video_id],
+                frame_idx=int(frame_idx),
+                instances=instances_labels[instance_id_start:instance_id_end],
+            )
+        )
+
+    # Test read_sessions.
+
+    sessions = read_sessions(labels_path, videos, labeled_frames)
+    assert_matches_slp_multiview(sessions, videos, labeled_frames, instances_labels)
 
 
 def test_write_videos(slp_minimal_pkg, centered_pair, tmp_path):
@@ -199,6 +361,408 @@ def test_write_labels(centered_pair, slp_real_data, tmp_path):
         assert saved_labels.skeleton.name == labels.skeleton.name
         assert saved_labels.skeleton.node_names == labels.skeleton.node_names
         assert len(saved_labels.suggestions) == len(labels.suggestions)
+
+
+def test_write_sessions(slp_multiview, tmp_path):
+    labels = read_labels(slp_multiview)
+    sessions = labels.sessions
+    videos = labels.videos
+    labeled_frames = labels.labeled_frames
+    write_sessions(tmp_path / "test.slp", sessions, videos, labeled_frames)
+
+    saved_sessions = read_sessions(tmp_path / "test.slp", videos, labeled_frames)
+    assert_matches_slp_multiview(
+        saved_sessions, videos, labeled_frames, set(labels.instances)
+    )
+
+
+def test_make_camera_and_camera_to_dict():
+    """Test camera (de)serialization functions."""
+    # Define camera dictionary
+    name = "back"
+    size = [1280, 1024]
+    matrix = [
+        [762.513822135494, 0.0, 639.5],
+        [0.0, 762.513822135494, 511.5],
+        [0.0, 0.0, 1.0],
+    ]
+    distortions = [-0.2868458380166852, 0.0, 0.0, 0.0, 0.0]
+    rotation = [0.3571857188780474, 0.8879473292757126, 1.6832001677006176]
+    translation = [-555.4577842902744, -294.43494957092884, -190.82196458369515]
+    metadata = {"extra_key": "extra_value", 444: 555}
+    camera_dict = {
+        "name": name,
+        "size": size,
+        "matrix": matrix,
+        "distortions": distortions,
+        "rotation": rotation,
+        "translation": translation,
+    }
+    camera_dict.update(metadata)
+
+    # Test make_camera
+    camera = make_camera(camera_dict)
+    assert camera.name == "back"
+    assert camera.size == tuple(size)
+    np.testing.assert_array_almost_equal(camera.matrix, np.array(matrix))
+    np.testing.assert_array_almost_equal(camera.dist, np.array(distortions))
+    np.testing.assert_array_almost_equal(camera.rvec, np.array(rotation))
+    np.testing.assert_array_almost_equal(camera.tvec, np.array(translation))
+    assert camera.metadata == metadata
+
+    # Test camera_to_dict
+    assert camera_to_dict(camera) == camera_dict
+
+    # Test when Camera has None for optional attributes
+
+    camera = Camera(rvec=rotation, tvec=translation)
+    assert camera.name is None
+    assert camera.size is None
+
+    # Test camera_to_dict
+    camera_dict = camera_to_dict(camera)
+    assert camera_dict["name"] == ""
+    assert camera_dict["size"] == ""
+    assert camera_dict["matrix"] == camera.matrix.tolist()
+    assert camera_dict["distortions"] == camera.dist.tolist()
+    assert camera_dict["rotation"] == camera.rvec.tolist()
+    assert camera_dict["translation"] == camera.tvec.tolist()
+
+    # Test make_camera
+    camera_0 = make_camera(camera_dict)
+    assert camera_0.name is None
+    assert camera_0.size is None
+
+
+def test_make_camera_group_and_camera_group_to_dict():
+    """Test camera group (de)serialization functions."""
+    # Define template camera dictionary
+    size = [1280, 1024]
+    matrix = np.eye(3).tolist()
+    distortions = np.zeros(5).tolist()
+    rotation = np.zeros(3).tolist()
+    translation = np.zeros(3).tolist()
+    camera_dict_template = {
+        "size": size,
+        "matrix": matrix,
+        "distortions": distortions,
+        "rotation": rotation,
+        "translation": translation,
+    }
+    camera_group_dict = {}
+    n_cameras = 3
+    for i in range(n_cameras):
+        camera_dict = camera_dict_template.copy()
+        camera_dict["name"] = f"camera{i}"
+        camera_group_dict[f"cam_{i}"] = camera_dict
+    metadata = {"extra_key": "extra_value", 444: 555}
+    camera_group_dict["metadata"] = metadata
+
+    camera_group_0 = make_camera_group(camera_group_dict)
+    assert camera_group_0.metadata == metadata
+    camera_group_dict_0: dict = camera_group_to_dict(camera_group_0)
+    assert camera_group_dict == camera_group_dict_0
+    assert len(camera_group_0.cameras) == 3
+    for i in range(n_cameras):
+        assert camera_group_0.cameras[i].name == f"camera{i}"
+        assert camera_group_0.cameras[i].size == tuple(size)
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].matrix, np.array(matrix)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].dist, np.array(distortions)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].rvec, np.array(rotation)
+        )
+        np.testing.assert_array_almost_equal(
+            camera_group_0.cameras[i].tvec, np.array(translation)
+        )
+
+
+def test_make_instance_group_and_instance_group_to_dict(
+    instance_group_345: InstanceGroup, camera_group_345: CameraGroup
+):
+    """Test InstanceGroup (de)serialization functions.
+
+    Args:
+        instance_group_345: Instance group with an `Instance` at each camera view.
+        camera_group_345: Camera group with 3-4-5 triangle configuration.
+    """
+    instance_group = instance_group_345
+
+    # Create necessary helper objects.
+
+    def new_labeled_frame(inst: Instance | None = None):
+        """Create a new labeled frame with or without the specified instance.
+
+        Args:
+            inst: Instance to include in the labeled frame. If None, a new instance is
+                created instead.
+        """
+        video = Video(filename="test")
+        if inst is None:
+            inst = Instance([[8, 9], [10, 11]], skeleton=Skeleton(["A", "B"]))
+        return LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[
+                inst,
+                Instance([[4, 5], [6, 7]], skeleton=Skeleton(["A", "B"])),
+            ],
+        )
+
+    # Create labeled frames, with some irrelevant frames to make mapping more complex
+    labeled_frames = []
+    for inst in instance_group._instance_by_camera.values():
+        labeled_frames.append(new_labeled_frame(inst))
+        labeled_frames.append(new_labeled_frame())
+
+    # Create our instance_to_lf_and_inst_idx dictionary.
+    instance_to_lf_and_inst_idx = {
+        inst: (inst_idx * 2, 0)  # inst_idx * 2 because we have irrelevant frames
+        for inst_idx, inst in enumerate(instance_group._instance_by_camera.values())
+    }
+
+    # Test to dict
+
+    instance_group_dict = instance_group_to_dict(
+        instance_group=instance_group,
+        instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
+        camera_group=camera_group_345,
+    )
+    assert instance_group_dict["score"] == instance_group._score
+    assert np.array_equal(instance_group_dict["points"], instance_group._points)
+
+    # Test from dict
+
+    instance_group_0 = make_instance_group(
+        instance_group_dict,
+        labeled_frames=labeled_frames,
+        camera_group=camera_group_345,
+    )
+    assert instance_group_0._score == instance_group._score
+    assert np.array_equal(instance_group_0._points, instance_group._points)
+    assert instance_group_0.metadata == instance_group.metadata
+    assert len(instance_group_0._instance_by_camera) == len(
+        instance_group._instance_by_camera
+    )
+
+    # Check the instances and cameras are the same.
+    for (cam, inst), (cam_0, inst_0) in zip(
+        instance_group._instance_by_camera.items(),
+        instance_group_0._instance_by_camera.items(),
+    ):
+        assert inst == inst_0
+        assert cam == cam_0
+
+    # Check that the dictionary was not mutated.
+    assert instance_group_dict.get("points", None) is not None
+    assert instance_group_dict.get("score", None) is not None
+    assert instance_group_dict.get("camcorder_to_lf_and_inst_idx_map", None) is not None
+
+
+def test_make_frame_group_and_frame_group_to_dict(
+    frame_group_345: FrameGroup, camera_group_345: CameraGroup
+):
+    """Test FrameGroup (de)serialization functions.
+
+    Args:
+        frame_group_345: Frame group with an `InstanceGroup` at each camera view.
+        camera_group_345: Camera group with 3-4-5 triangle configuration
+    """
+    frame_group = frame_group_345
+    camera_group = camera_group_345
+
+    # Create necessary helper objects.
+
+    # Create labeled frames, with some irrelevant frames to make mapping more complex.
+    labeled_frames = []
+    for lf in frame_group.labeled_frames:
+        labeled_frames.append(lf)
+        labeled_frames.append(
+            LabeledFrame(video=Video(filename="test"), frame_idx=lf.frame_idx)
+        )
+    labeled_frame_to_idx = {lf: idx for idx, lf in enumerate(labeled_frames)}
+
+    # Test frame_group_to_dict.
+
+    frame_group_dict = frame_group_to_dict(
+        frame_group=frame_group,
+        labeled_frame_to_idx=labeled_frame_to_idx,
+        camera_group=camera_group,
+    )
+    assert frame_group_dict["frame_idx"] == frame_group.frame_idx
+
+    # Test make_frame_group.
+
+    frame_group_0 = make_frame_group(
+        frame_group_dict=frame_group_dict,
+        labeled_frames=labeled_frames,
+        camera_group=camera_group,
+    )
+    assert frame_group_0.frame_idx == frame_group.frame_idx
+    assert len(frame_group_0._instance_groups) == len(frame_group._instance_groups)
+    assert len(frame_group_0._labeled_frame_by_camera) == len(
+        frame_group._labeled_frame_by_camera
+    )
+    assert frame_group_0.metadata == frame_group.metadata
+
+    # Check the cameras and labeled frames are the same.
+    for (cam, lf), (cam_0, lf_0) in zip(
+        frame_group._labeled_frame_by_camera.items(),
+        frame_group_0._labeled_frame_by_camera.items(),
+    ):
+        assert cam == cam_0
+        assert lf == lf_0
+
+    # Check the instance groups are the same.
+    for instance_group, instance_group_0 in zip(
+        frame_group._instance_groups, frame_group_0._instance_groups
+    ):
+        for (cam, inst), (cam_0, inst_0) in zip(
+            instance_group._instance_by_camera.items(),
+            instance_group_0._instance_by_camera.items(),
+        ):
+            assert inst == inst_0
+            assert cam == cam_0
+
+
+def test_make_session_and_session_to_dict(
+    recording_session_345: RecordingSession,
+):
+    """Test recording session (de)serialization functions.
+
+    Args:
+        frame_group_345: Frame group with an `InstanceGroup` at each camera view.
+    """
+
+    def assert_cameras_equal(camera: Camera, camera_0: Camera):
+        """Compare two cameras.
+        Args:
+            camera: First camera.
+            camera_0: Second camera.
+        Raises:
+            AssertionError: If the cameras are not equal.
+        """
+        camera_state = camera.__getstate__()
+        camera_state_0 = camera_0.__getstate__()
+        for key, value in camera_state.items():
+            if value is None:
+                assert camera_state_0[key] is None
+            elif isinstance(value, np.ndarray):
+                np.testing.assert_array_equal(camera_state_0[key], value)
+            else:
+                assert camera_state_0[key] == value
+
+    session = recording_session_345
+    frame_group = session._frame_group_by_frame_idx[0]
+
+    # Create necessary helper objects.
+
+    # Create labeled frames, with some irrelevant frames to make mapping more complex.
+    labeled_frames = []
+    for lf in frame_group.labeled_frames:
+        labeled_frames.append(lf)
+        labeled_frames.append(
+            LabeledFrame(video=Video(filename="test"), frame_idx=lf.frame_idx)
+        )
+    labeled_frame_to_idx = {lf: idx for idx, lf in enumerate(labeled_frames)}
+
+    # Create videos list and index mapping.
+    videos = []
+    for video in session.videos:
+        videos.append(video)
+        videos.append(Video(filename="test"))
+    video_to_idx = {video: idx for idx, video in enumerate(videos)}
+
+    # Test session_to_dict.
+
+    session_dict = session_to_dict(
+        session=session,
+        labeled_frame_to_idx=labeled_frame_to_idx,
+        video_to_idx=video_to_idx,
+    )
+    assert len(session_dict["frame_group_dicts"]) == len(
+        session._frame_group_by_frame_idx
+    )
+    assert len(session_dict["camcorder_to_video_idx_map"]) == len(
+        session._video_by_camera
+    )
+
+    # Test make_session.
+
+    session_0: RecordingSession = make_session(
+        session_dict=session_dict,
+        labeled_frames=labeled_frames,
+        videos=videos,
+    )
+    assert len(session_0.camera_group.cameras) == len(session.camera_group.cameras)
+    assert len(session_0._video_by_camera) == len(session._video_by_camera)
+    assert len(session_0._camera_by_video) == len(session._camera_by_video)
+    assert len(session_0._frame_group_by_frame_idx) == len(
+        session._frame_group_by_frame_idx
+    )
+    assert session_0.metadata == session.metadata
+
+    # Check the cameras and videos are the same.
+    for (video, camera), (video_0, camera_0) in zip(
+        session._camera_by_video.items(), session_0._camera_by_video.items()
+    ):
+        assert video == video_0
+        assert session._video_by_camera[camera] == video
+        assert session_0._video_by_camera[camera_0] == video_0
+        assert_cameras_equal(camera, camera_0)
+
+    # Check the frame groups are the same.
+    for (frame_idx, frame_group), (frame_idx_0, frame_group_0) in zip(
+        session._frame_group_by_frame_idx.items(),
+        session_0._frame_group_by_frame_idx.items(),
+    ):
+        assert frame_idx == frame_idx_0
+        assert frame_group.frame_idx == frame_idx
+        assert frame_group.frame_idx == frame_group_0.frame_idx
+        assert len(frame_group._instance_groups) == len(frame_group_0._instance_groups)
+        assert len(frame_group._labeled_frame_by_camera) == len(
+            frame_group_0._labeled_frame_by_camera
+        )
+        assert frame_group.metadata == frame_group_0.metadata
+
+        # Check the cameras and labeled frames are the same.
+        for (camera, lf), (camera_0, lf_0) in zip(
+            frame_group._labeled_frame_by_camera.items(),
+            frame_group_0._labeled_frame_by_camera.items(),
+        ):
+            assert lf == lf_0
+            assert_cameras_equal(camera, camera_0)
+
+        # Check the instance groups are the same.
+        for instance_group, instance_group_0 in zip(
+            frame_group._instance_groups, frame_group_0._instance_groups
+        ):
+            for (cam, inst), (cam_0, inst_0) in zip(
+                instance_group._instance_by_camera.items(),
+                instance_group_0._instance_by_camera.items(),
+            ):
+                assert inst == inst_0
+                assert_cameras_equal(cam, cam_0)
+
+
+def test_slp_multiview_round_trip(slp_multiview, tmp_path):
+    labels = read_labels(slp_multiview)
+    sessions = labels.sessions
+    assert_matches_slp_multiview(
+        sessions, labels.videos, labels.labeled_frames, set(labels.instances)
+    )
+
+    write_labels(tmp_path / "test.slp", labels)
+    saved_labels = read_labels(tmp_path / "test.slp")
+    assert_matches_slp_multiview(
+        saved_labels.sessions,
+        saved_labels.videos,
+        saved_labels.labeled_frames,
+        set(saved_labels.instances),
+    )
 
 
 def test_load_multi_skeleton(tmpdir):

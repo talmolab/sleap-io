@@ -10,6 +10,7 @@ from sleap_io import (
     LabeledFrame,
     Track,
     SuggestionFrame,
+    RecordingSession,
     load_slp,
     load_video,
 )
@@ -45,9 +46,9 @@ def test_labels():
     for lf_idx, lf in enumerate(labels):
         assert lf == labels[lf_idx]
 
-    assert (
-        str(labels)
-        == "Labels(labeled_frames=1, videos=1, skeletons=1, tracks=0, suggestions=0)"
+    assert str(labels) == (
+        "Labels(labeled_frames=1, videos=1, skeletons=1, tracks=0, suggestions=0, "
+        "sessions=0)"
     )
 
 
@@ -765,3 +766,14 @@ def test_labels_trim(centered_pair, tmpdir):
         labels.trim(new_path, np.arange(100, 200))
 
     labels.trim(new_path, np.arange(100, 200), video=0)
+
+
+def test_labels_sessions():
+    labels = Labels()
+    assert labels.sessions == []
+    labels.__str__()
+
+    session = RecordingSession()
+    labels.sessions.append(session)
+    assert labels.sessions == [session]
+    labels.__str__()
