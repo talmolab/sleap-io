@@ -84,7 +84,8 @@ class PointsArray(np.ndarray):
             - Third column (if present) is interpreted as visible flag
             - Fourth column (if present) is interpreted as complete flag
 
-            If visibility is not provided, it is inferred from NaN values in the x coordinate.
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
         """
         dtype = cls._get_dtype()
 
@@ -124,7 +125,8 @@ class PointsArray(np.ndarray):
         Args:
             points_dict: A dictionary mapping nodes (as Node objects, indices, or
                 strings) to point data. Each point should be an array-like with at least
-                2 elements for x, y coordinates, and optionally visible and complete flags.
+                2 elements for x, y coordinates, and optionally visible and complete
+                flags.
             skeleton: The Skeleton object that defines the nodes.
 
         Returns:
@@ -137,7 +139,8 @@ class PointsArray(np.ndarray):
             - Third value (if present) is treated as visible flag
             - Fourth value (if present) is treated as complete flag
 
-            If visibility is not provided, it is inferred from NaN values in the x coordinate.
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
         """
         points = cls.empty(len(skeleton))
 
@@ -265,8 +268,8 @@ class PredictedPointsArray(PointsArray):
             skeleton: The Skeleton object that defines the nodes.
 
         Returns:
-            PredictedPointsArray: A structured array with the appropriate dtype containing
-                the point data from the dictionary.
+            PredictedPointsArray: A structured array with the appropriate dtype
+                containing the point data from the dictionary.
 
         Notes:
             For each entry in the points_dict:
@@ -275,7 +278,8 @@ class PredictedPointsArray(PointsArray):
             - Fourth value (if present) is treated as visible flag
             - Fifth value (if present) is treated as complete flag
 
-            If visibility is not provided, it is inferred from NaN values in the x coordinate.
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
         """
         points = cls.empty(len(skeleton))
 
@@ -766,7 +770,8 @@ class PredictedInstance(Instance):
 
         Notes:
             This method will update the `PredictedInstance.skeleton` attribute and the
-            `PredictedInstance.points` attribute in place (a copy is made of the points array).
+            `PredictedInstance.points` attribute in place (a copy is made of the points
+            array).
 
             It is recommended to use `Labels.replace_skeleton` instead of this method if
             more flexible node mapping is required.
