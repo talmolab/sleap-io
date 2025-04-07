@@ -504,6 +504,26 @@ class Instance:
 
         return self.points[node]
 
+    def __setitem__(self, node: Union[int, str, Node], value):
+        """Set the point associated with a node.
+
+        Args:
+            node: The node to set the point for. Can be an integer index, string name,
+                or Node object.
+            value: A tuple or array-like of length 2 containing (x, y) coordinates.
+
+        Notes:
+            This sets the point coordinates and marks the point as visible.
+        """
+        if type(node) != int:
+            node = self.skeleton.index(node)
+
+        if len(value) < 2:
+            raise ValueError("Value must have at least 2 elements (x, y)")
+
+        self.points[node]["xy"] = value[:2]
+        self.points[node]["visible"] = True
+
     def __len__(self) -> int:
         """Return the number of points in the instance."""
         return len(self.points)
@@ -792,3 +812,36 @@ class PredictedInstance(Instance):
         new_points[new_node_inds] = self.points[old_node_inds]
         self.points = new_points
         self.points["name"] = self.skeleton.node_names
+
+    def __getitem__(self, node: Union[int, str, Node]) -> np.ndarray:
+        """Return the point associated with a node."""
+        # Inherit from Instance.__getitem__
+        return super().__getitem__(node)
+
+    def __setitem__(self, node: Union[int, str, Node], value):
+        """Set the point associated with a node.
+
+        Args:
+            node: The node to set the point for. Can be an integer index, string name,
+                or Node object.
+            value: A tuple or array-like of length 2 or 3 containing (x, y) coordinates
+                and optionally a confidence score. If the score is not provided, it defaults to 1.0.
+
+        Notes:
+            This sets the point coordinates, score, and marks the point as visible.
+        """
+        if type(node) != int:
+            node = self.skeleton.index(node)
+
+        if len(value) < 2:
+            raise ValueError("Value must have at least 2 elements (x, y)")
+
+        self.points[node]["xy"] = value[:2]
+
+        # Set score if provided, otherwise default to 1.0
+        if len(value) >= 3:
+            self.points[node]["score"] = value[2]
+        else:
+            self.points[node]["score"] = 1.0
+
+        self.points[node]["visible"] = True
