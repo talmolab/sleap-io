@@ -15,6 +15,300 @@ from sleap_io.model.skeleton import NodeOrIndex
 import numpy as np
 
 
+class PointsArray(np.ndarray):
+    """A specialized array for storing instance points data.
+
+    This class ensures that the array always uses the correct dtype and provides
+    convenience methods for working with point data.
+
+    The structured dtype includes the following fields:
+        - xy: A float64 array of shape (2,) containing the x, y coordinates
+        - visible: A boolean indicating if the point is visible
+        - complete: A boolean indicating if the point is complete
+        - name: An object dtype containing the name of the node
+    """
+
+    @classmethod
+    def _get_dtype(cls):
+        """Get the dtype for points array.
+
+        Returns:
+            np.dtype: A structured numpy dtype with fields for xy coordinates,
+                visible flag, complete flag, and node names.
+        """
+        return np.dtype(
+            [
+                ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
+                ("visible", "bool"),
+                ("complete", "bool"),
+                (
+                    "name",
+                    "O",
+                ),  # object dtype to store pointers to python string objects
+            ]
+        )
+
+    @classmethod
+    def empty(cls, length: int) -> "PointsArray":
+        """Create an empty points array with the appropriate dtype.
+
+        Args:
+            length: The number of points (nodes) to allocate in the array.
+
+        Returns:
+            PointsArray: An empty array of the specified length with the appropriate
+                dtype.
+        """
+        dtype = cls._get_dtype()
+        arr = np.empty(length, dtype=dtype).view(cls)
+        return arr
+
+    @classmethod
+    def from_array(cls, array: np.ndarray) -> "PointsArray":
+        """Convert an existing array to a PointsArray with the appropriate dtype.
+
+        Args:
+            array: A numpy array to convert. Can be a structured array or a regular
+                array. If a regular array, it is assumed to have columns for x, y
+                coordinates and optionally visible and complete flags.
+
+        Returns:
+            PointsArray: A structured array view of the input data with the appropriate
+                dtype.
+
+        Notes:
+            If the input is a structured array with fields matching the target dtype,
+            those fields will be copied. Otherwise, a best-effort conversion is made:
+
+            - First two columns (or first 2D element) are interpreted as x, y coords
+            - Third column (if present) is interpreted as visible flag
+            - Fourth column (if present) is interpreted as complete flag
+
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
+        """
+        dtype = cls._get_dtype()
+
+        # If already the right type, just view as PointsArray
+        if isinstance(array, np.ndarray) and array.dtype == dtype:
+            return array.view(cls)
+
+        # Otherwise, create a new array with the right dtype
+        new_array = np.empty(len(array), dtype=dtype).view(cls)
+
+        # Copy available fields
+        if isinstance(array, np.ndarray) and array.dtype.fields is not None:
+            # Structured array, copy matching fields
+            for field_name in dtype.names:
+                if field_name in array.dtype.names:
+                    new_array[field_name] = array[field_name]
+        elif isinstance(array, np.ndarray):
+            # Regular array, assume x, y coordinates
+            new_array["xy"] = array[:, 0:2]
+
+            # Default visibility based on NaN
+            new_array["visible"] = ~np.isnan(array[:, 0])
+
+            # If there are more columns, assume they are visible and complete
+            if array.shape[1] >= 3:
+                new_array["visible"] = array[:, 2].astype(bool)
+
+            if array.shape[1] >= 4:
+                new_array["complete"] = array[:, 3].astype(bool)
+
+        return new_array
+
+    @classmethod
+    def from_dict(cls, points_dict: dict, skeleton: Skeleton) -> "PointsArray":
+        """Create a PointsArray from a dictionary of node points.
+
+        Args:
+            points_dict: A dictionary mapping nodes (as Node objects, indices, or
+                strings) to point data. Each point should be an array-like with at least
+                2 elements for x, y coordinates, and optionally visible and complete
+                flags.
+            skeleton: The Skeleton object that defines the nodes.
+
+        Returns:
+            PointsArray: A structured array with the appropriate dtype containing the
+                point data from the dictionary.
+
+        Notes:
+            For each entry in the points_dict:
+            - First two values are treated as x, y coordinates
+            - Third value (if present) is treated as visible flag
+            - Fourth value (if present) is treated as complete flag
+
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
+        """
+        points = cls.empty(len(skeleton))
+
+        for node, data in points_dict.items():
+            if isinstance(node, (Node, str)):
+                node = skeleton.index(node)
+
+            points[node]["xy"] = data[:2]
+
+            idx = 2
+            if len(data) > idx:
+                points[node]["visible"] = data[idx]
+            else:
+                points[node]["visible"] = ~np.isnan(data[0])
+
+            idx += 1
+            if len(data) > idx:
+                points[node]["complete"] = data[idx]
+
+        return points
+
+
+class PredictedPointsArray(PointsArray):
+    """A specialized array for storing predicted instance points data with scores.
+
+    This extends the PointsArray class to include score information for each point.
+
+    The structured dtype includes the following fields:
+        - xy: A float64 array of shape (2,) containing the x, y coordinates
+        - score: A float64 containing the confidence score for the point
+        - visible: A boolean indicating if the point is visible
+        - complete: A boolean indicating if the point is complete
+        - name: An object dtype containing the name of the node
+    """
+
+    @classmethod
+    def _get_dtype(cls):
+        """Get the dtype for predicted points array with scores.
+
+        Returns:
+            np.dtype: A structured numpy dtype with fields for xy coordinates,
+                score, visible flag, complete flag, and node names.
+        """
+        return np.dtype(
+            [
+                ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
+                ("score", "<f8"),  # 64-bit (8-byte) little-endian double
+                ("visible", "bool"),
+                ("complete", "bool"),
+                (
+                    "name",
+                    "O",
+                ),  # object dtype to store pointers to python string objects
+            ]
+        )
+
+    @classmethod
+    def from_array(cls, array: np.ndarray) -> "PredictedPointsArray":
+        """Convert an existing array to a PredictedPointsArray with the appropriate dtype.
+
+        Args:
+            array: A numpy array to convert. Can be a structured array or a regular
+                array. If a regular array, it is assumed to have columns for x, y
+                coordinates, scores, and optionally visible and complete flags.
+
+        Returns:
+            PredictedPointsArray: A structured array view of the input data with the
+                appropriate dtype.
+
+        Notes:
+            If the input is a structured array with fields matching the target dtype,
+            those fields will be copied. Otherwise, a best-effort conversion is made:
+
+            - First two columns (or first 2D element) are interpreted as x, y coords
+            - Third column (if present) is interpreted as the score
+            - Fourth column (if present) is interpreted as visible flag
+            - Fifth column (if present) is interpreted as complete flag
+
+            If visibility is not provided, it is inferred from NaN values in the x coordinate.
+        """
+        dtype = cls._get_dtype()
+
+        # If already the right type, just view as PredictedPointsArray
+        if isinstance(array, np.ndarray) and array.dtype == dtype:
+            return array.view(cls)
+
+        # Otherwise, create a new array with the right dtype
+        new_array = np.empty(len(array), dtype=dtype).view(cls)
+
+        # Copy available fields
+        if isinstance(array, np.ndarray) and array.dtype.fields is not None:
+            # Structured array, copy matching fields
+            for field_name in dtype.names:
+                if field_name in array.dtype.names:
+                    new_array[field_name] = array[field_name]
+        elif isinstance(array, np.ndarray):
+            # Regular array, assume x, y coordinates
+            new_array["xy"] = array[:, 0:2]
+
+            # Default visibility based on NaN
+            new_array["visible"] = ~np.isnan(array[:, 0])
+
+            # If there's a third column, assume it's the score
+            if array.shape[1] >= 3:
+                new_array["score"] = array[:, 2]
+
+            # If there are more columns, assume they are visible and complete
+            if array.shape[1] >= 4:
+                new_array["visible"] = array[:, 3].astype(bool)
+
+            if array.shape[1] >= 5:
+                new_array["complete"] = array[:, 4].astype(bool)
+
+        return new_array
+
+    @classmethod
+    def from_dict(cls, points_dict: dict, skeleton: Skeleton) -> "PredictedPointsArray":
+        """Create a PredictedPointsArray from a dictionary of node points.
+
+        Args:
+            points_dict: A dictionary mapping nodes (as Node objects, indices, or
+                strings) to point data. Each point should be an array-like with at least
+                2 elements for x, y coordinates, and optionally score, visible, and
+                complete flags.
+            skeleton: The Skeleton object that defines the nodes.
+
+        Returns:
+            PredictedPointsArray: A structured array with the appropriate dtype
+                containing the point data from the dictionary.
+
+        Notes:
+            For each entry in the points_dict:
+            - First two values are treated as x, y coordinates
+            - Third value (if present) is treated as score
+            - Fourth value (if present) is treated as visible flag
+            - Fifth value (if present) is treated as complete flag
+
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
+        """
+        points = cls.empty(len(skeleton))
+
+        for node, data in points_dict.items():
+            if isinstance(node, (Node, str)):
+                node = skeleton.index(node)
+
+            points[node]["xy"] = data[:2]
+
+            # Score is the third element
+            idx = 2
+            if len(data) > idx:
+                points[node]["score"] = data[idx]
+                idx += 1
+
+            # Visibility is the fourth element (or third if no score)
+            if len(data) > idx:
+                points[node]["visible"] = data[idx]
+            else:
+                points[node]["visible"] = ~np.isnan(data[0])
+
+            idx += 1
+            # Completeness is the fifth element (or fourth if no score)
+            if len(data) > idx:
+                points[node]["complete"] = data[idx]
+
+        return points
+
+
 @attrs.define(eq=False)
 class Track:
     """An object that represents the same animal/object across multiple detections.
@@ -62,16 +356,7 @@ class Instance:
             initialized from. This is used with human-in-the-loop workflows.
     """
 
-    ARRAY_DTYPE: ClassVar[np.dtype] = np.dtype(
-        [
-            ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
-            ("visible", "bool"),
-            ("complete", "bool"),
-            ("name", "O"),  # object dtype to store pointers to python string objects
-        ]
-    )
-
-    points: np.ndarray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
+    points: PointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
     skeleton: Skeleton
     track: Optional[Track] = None
     tracking_score: Optional[float] = None
@@ -101,76 +386,33 @@ class Instance:
         Returns:
             An `Instance` with an empty numpy array of shape `(n_nodes,)`.
         """
-        inst = cls(
-            points=np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE),
+        points = PointsArray.empty(len(skeleton))
+        points["name"] = skeleton.node_names
+
+        return cls(
+            points=points,
             skeleton=skeleton,
             track=track,
             tracking_score=tracking_score,
             from_predicted=from_predicted,
         )
-        inst.points["name"] = skeleton.node_names
-        return inst
 
     @classmethod
     def _convert_points(
         cls, points_data: np.ndarray | dict | list, skeleton: Skeleton
-    ) -> np.ndarray:
+    ) -> PointsArray:
         """Convert points to a structured numpy array if needed."""
-        # Create a new structured array.
-        points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
+        if isinstance(points_data, dict):
+            return PointsArray.from_dict(points_data, skeleton)
+        elif isinstance(points_data, (list, np.ndarray)):
+            if isinstance(points_data, list):
+                points_data = np.array(points_data)
 
-        if type(points_data) == list:
-            # Hopefully this is a list of lists.
-            points_data = np.array(points_data)
-
-        if type(points_data) == np.ndarray:
-            if len(points_data) != len(skeleton):
-                raise ValueError(
-                    f"points must have length {len(skeleton)}, got {len(points_data)}."
-                )
-
-            if points_data.dtype.fields is not None:
-                # We got a structured array!
-                # Try to fill in with the fields available.
-                for field_name in cls.ARRAY_DTYPE.names:
-                    if field_name in points_data.dtype.names:
-                        points[field_name] = points_data[field_name]
-            else:
-                # We got a plain array! Assume it's x and y.
-                points["xy"] = points_data[:, 0:2]
-
-                if points_data.shape[1] >= 3:
-                    # Assume we have visibility.
-                    points["visible"] = points_data[:, 2]
-                else:
-                    # Default to visibility based on x being NaN.
-                    points["visible"] = ~np.isnan(points_data[:, 0])
-
-                if points_data.shape[1] >= 4:
-                    # Assume we have completion.
-                    points["complete"] = points_data[:, 3]
-
-        elif type(points_data) == dict:
-            # We got a dictionary. Assume it's a mapping of nodes to points.
-            for node, data in points_data.items():
-                if type(node) == Node or type(node) == str:
-                    node = skeleton.index(node)
-
-                points[node]["xy"] = data[:2]
-
-                if len(data) >= 3:
-                    points[node]["visible"] = data[2]
-                else:
-                    points[node]["visible"] = ~np.isnan(data[0])
-
-                if len(data) >= 4:
-                    points[node]["complete"] = data[3]
-
+            points = PointsArray.from_array(points_data)
+            points["name"] = skeleton.node_names
+            return points
         else:
             raise ValueError("points must be a numpy array or dictionary.")
-
-        points["name"] = skeleton.node_names
-        return points
 
     @classmethod
     def from_numpy(
@@ -220,7 +462,12 @@ class Instance:
 
     def __attrs_post_init__(self):
         """Convert the points array after initialization."""
-        self.points = self._convert_points(self.points, self.skeleton)
+        if not isinstance(self.points, PointsArray):
+            self.points = self._convert_points(self.points, self.skeleton)
+
+        # Ensure points have node names
+        if "name" in self.points.dtype.names and not all(self.points["name"]):
+            self.points["name"] = self.skeleton.node_names
 
     def numpy(
         self,
@@ -256,6 +503,26 @@ class Instance:
             node = self.skeleton.index(node)
 
         return self.points[node]
+
+    def __setitem__(self, node: Union[int, str, Node], value):
+        """Set the point associated with a node.
+
+        Args:
+            node: The node to set the point for. Can be an integer index, string name,
+                or Node object.
+            value: A tuple or array-like of length 2 containing (x, y) coordinates.
+
+        Notes:
+            This sets the point coordinates and marks the point as visible.
+        """
+        if type(node) != int:
+            node = self.skeleton.index(node)
+
+        if len(value) < 2:
+            raise ValueError("Value must have at least 2 elements (x, y)")
+
+        self.points[node]["xy"] = value[:2]
+        self.points[node]["visible"] = True
 
     def __len__(self) -> int:
         """Return the number of points in the instance."""
@@ -294,7 +561,7 @@ class Instance:
         new_node_inds, old_node_inds = self.skeleton.match_nodes(self.points["name"])
 
         # Update the points.
-        new_points = np.empty(len(self.skeleton), dtype=self.ARRAY_DTYPE)
+        new_points = PointsArray.empty(len(self.skeleton))
         new_points[new_node_inds] = self.points[old_node_inds]
         new_points["name"] = self.skeleton.node_names
         self.points = new_points
@@ -336,7 +603,7 @@ class Instance:
         # new_node_inds = np.array(new_node_inds).reshape(-1, 1)
 
         # Update the points.
-        new_points = np.empty(len(self.skeleton), dtype=self.ARRAY_DTYPE)
+        new_points = PointsArray.empty(len(self.skeleton))
         new_points[new_node_inds] = self.points[old_node_inds]
         self.points = new_points
         self.points["name"] = self.skeleton.node_names
@@ -359,17 +626,7 @@ class PredictedInstance(Instance):
             typically the value from the score matrix used in an identity assignment.
     """
 
-    ARRAY_DTYPE: ClassVar[np.dtype] = np.dtype(
-        [
-            ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
-            ("score", "<f8"),  # 64-bit (8-byte) little-endian double
-            ("visible", "bool"),
-            ("complete", "bool"),
-            ("name", "O"),  # object dtype to store pointers to python string objects
-        ]
-    )
-
-    points: np.ndarray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
+    points: PredictedPointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
     skeleton: Skeleton
     score: float = 0.0
     track: Optional[Track] = None
@@ -401,106 +658,35 @@ class PredictedInstance(Instance):
         tracking_score: Optional[float] = None,
         from_predicted: Optional[PredictedInstance] = None,
     ) -> "PredictedInstance":
-        """Create an empty instance with no points.
+        """Create an empty instance with no points."""
+        points = PredictedPointsArray.empty(len(skeleton))
+        points["name"] = skeleton.node_names
 
-        Args:
-            skeleton: The `Skeleton` that this `Instance` is associated with.
-            score: The instance detection or part grouping prediction score. This is a
-                scalar that represents the confidence with which this entire instance
-                was predicted. This may not always be applicable depending on the model
-                type.
-            track: An optional `Track` associated with a unique animal/object across
-                frames or videos.
-            tracking_score: The score associated with the `Track` assignment. This is
-                typically the value from the score matrix used in an identity
-                assignment. This is `None` if the instance is not associated with a
-                track or if the track was assigned manually.
-            from_predicted: The `PredictedInstance` (if any) that this instance was
-                initialized from. This is used with human-in-the-loop workflows.
-
-        Returns:
-            An `PredictedInstance` with an empty numpy array of shape `(n_nodes,)`.
-        """
-        inst = cls(
-            points=np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE),
+        return cls(
+            points=points,
             skeleton=skeleton,
             score=score,
             track=track,
             tracking_score=tracking_score,
             from_predicted=from_predicted,
         )
-        inst.points["name"] = skeleton.node_names
-        return inst
 
     @classmethod
     def _convert_points(
         cls, points_data: np.ndarray | dict | list, skeleton: Skeleton
-    ) -> np.ndarray:
+    ) -> PredictedPointsArray:
         """Convert points to a structured numpy array if needed."""
-        # Create a new structured array.
-        points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
+        if isinstance(points_data, dict):
+            return PredictedPointsArray.from_dict(points_data, skeleton)
+        elif isinstance(points_data, (list, np.ndarray)):
+            if isinstance(points_data, list):
+                points_data = np.array(points_data)
 
-        if type(points_data) == list:
-            # Hopefully this is a list of lists.
-            points_data = np.array(points_data)
-
-        if type(points_data) == np.ndarray:
-            if len(points_data) != len(skeleton):
-                raise ValueError(
-                    f"points must have length {len(skeleton)}, got {len(points_data)}."
-                )
-
-            if points_data.dtype.fields is not None:
-                # We got a structured array!
-                # Try to fill in with the fields available.
-                for field_name in cls.ARRAY_DTYPE.names:
-                    if field_name in points_data.dtype.names:
-                        points[field_name] = points_data[field_name]
-
-            else:
-                # We got a plain array! Assume it's x and y.
-                points["xy"] = points_data[:, 0:2]
-
-                if points_data.shape[1] >= 3:
-                    # Assume we have score.
-                    points["score"] = points_data[:, 2]
-
-                if points_data.shape[1] >= 4:
-                    # Assume we have visibility.
-                    points["visible"] = points_data[:, 3]
-                else:
-                    # Default to visibility based on x being NaN.
-                    points["visible"] = ~np.isnan(points_data[:, 0])
-
-                if points_data.shape[1] >= 5:
-                    # Assume we have completion.
-                    points["complete"] = points_data[:, 4]
-
-        elif type(points_data) == dict:
-            # We got a dictionary. Assume it's a mapping of nodes to points.
-            points = np.empty(len(skeleton), dtype=cls.ARRAY_DTYPE)
-            for node, data in points_data.items():
-                if type(node) == Node or type(node) == str:
-                    node = skeleton.index(node)
-
-                points[node]["xy"] = data[:2]
-
-                if len(data) >= 3:
-                    points[node]["score"] = data[2]
-
-                if len(data) >= 4:
-                    points[node]["visible"] = data[3]
-                else:
-                    points[node]["visible"] = ~np.isnan(data[0])
-
-                if len(data) >= 5:
-                    points[node]["complete"] = data[4]
-
+            points = PredictedPointsArray.from_array(points_data)
+            points["name"] = skeleton.node_names
+            return points
         else:
             raise ValueError("points must be a numpy array or dictionary.")
-
-        points["name"] = skeleton.node_names
-        return points
 
     @classmethod
     def from_numpy(
@@ -513,50 +699,13 @@ class PredictedInstance(Instance):
         tracking_score: Optional[float] = None,
         from_predicted: Optional[PredictedInstance] = None,
     ) -> "PredictedInstance":
-        """Create a predicted instance object from a numpy array.
-
-        Args:
-            points_data: A numpy array of shape `(n_nodes, D)` corresponding to the
-                points of the skeleton. Values of `np.nan` indicate "missing" nodes and
-                will be reflected in the "visible" field.
-
-                If `D == 2`, the array should have columns for x and y.
-                If `D == 3`, the array should have columns for x, y and score.
-                If `D == 4`, the array should have columns for x, y, score and visible.
-                If `D == 5`, the array should have columns for x, y, score, visible and
-                complete.
-
-                If this is provided as a structured array, it will be used without copy
-                if it has the correct dtype. Otherwise, a new structured array will be
-                created reusing the provided data.
-            skeleton: The `Skeleton` that this `Instance` is associated with. It should
-                have `n_nodes` nodes.
-            point_scores: An optional numpy array of shape `(n_nodes,)` with the score
-                associated with each point. This is typically the confidence with which
-                each point was predicted. This is `None` if the scores in the
-                `points_data` array will be used.
-            score: The instance detection or part grouping prediction score. This is a
-                scalar that represents the confidence with which this entire instance
-                was predicted. This may not always be applicable depending on the model
-                type.
-            track: An optional `Track` associated with a unique animal/object across
-                frames or videos.
-            tracking_score: The score associated with the `Track` assignment. This is
-                typically the value from the score matrix used in an identity
-                assignment. This is `None` if the instance is not associated with a
-                track or if the track was assigned manually.
-            from_predicted: The `PredictedInstance` (if any) that this instance was
-                initialized from. This is used with human-in-the-loop workflows.
-
-        Returns:
-            An `Instance` object with the specified points.
-        """
-        points_data = cls._convert_points(points_data, skeleton)
+        """Create a predicted instance object from a numpy array."""
+        points = cls._convert_points(points_data, skeleton)
         if point_scores is not None:
-            points_data["score"] = point_scores
+            points["score"] = point_scores
 
         return cls(
-            points=points_data,
+            points=points,
             skeleton=skeleton,
             score=score,
             track=track,
@@ -603,3 +752,96 @@ class PredictedInstance(Instance):
             return np.column_stack((pts, self.points["score"]))
         else:
             return pts
+
+    def update_skeleton(self, names_only: bool = False):
+        """Update or replace the skeleton associated with the instance.
+
+        Args:
+            names_only: If `True`, only update the node names in the points array. If
+                `False`, the points array will be updated to match the new skeleton.
+        """
+        if names_only:
+            # Update the node names.
+            self.points["name"] = self.skeleton.node_names
+            return
+
+        # Find correspondences.
+        new_node_inds, old_node_inds = self.skeleton.match_nodes(self.points["name"])
+
+        # Update the points.
+        new_points = PredictedPointsArray.empty(len(self.skeleton))
+        new_points[new_node_inds] = self.points[old_node_inds]
+        new_points["name"] = self.skeleton.node_names
+        self.points = new_points
+
+    def replace_skeleton(
+        self,
+        new_skeleton: Skeleton,
+        node_names_map: dict[str, str] | None = None,
+    ):
+        """Replace the skeleton associated with the instance.
+
+        Args:
+            new_skeleton: The new `Skeleton` to associate with the instance.
+            node_names_map: Dictionary mapping nodes in the old skeleton to nodes in the
+                new skeleton. Keys and values should be specified as lists of strings.
+                If not provided, only nodes with identical names will be mapped. Points
+                associated with unmapped nodes will be removed.
+
+        Notes:
+            This method will update the `PredictedInstance.skeleton` attribute and the
+            `PredictedInstance.points` attribute in place (a copy is made of the points
+            array).
+
+            It is recommended to use `Labels.replace_skeleton` instead of this method if
+            more flexible node mapping is required.
+        """
+        # Update skeleton object.
+        self.skeleton = new_skeleton
+
+        # Get node names with replacements from node map if possible.
+        old_node_names = self.points["name"].tolist()
+        if node_names_map is not None:
+            old_node_names = [node_names_map.get(node, node) for node in old_node_names]
+
+        # Find correspondences.
+        new_node_inds, old_node_inds = self.skeleton.match_nodes(old_node_names)
+
+        # Update the points.
+        new_points = PredictedPointsArray.empty(len(self.skeleton))
+        new_points[new_node_inds] = self.points[old_node_inds]
+        self.points = new_points
+        self.points["name"] = self.skeleton.node_names
+
+    def __getitem__(self, node: Union[int, str, Node]) -> np.ndarray:
+        """Return the point associated with a node."""
+        # Inherit from Instance.__getitem__
+        return super().__getitem__(node)
+
+    def __setitem__(self, node: Union[int, str, Node], value):
+        """Set the point associated with a node.
+
+        Args:
+            node: The node to set the point for. Can be an integer index, string name,
+                or Node object.
+            value: A tuple or array-like of length 2 or 3 containing (x, y) coordinates
+                and optionally a confidence score. If the score is not provided, it defaults to 1.0.
+
+        Notes:
+            This sets the point coordinates, score, and marks the point as visible.
+        """
+        if type(node) != int:
+            node = self.skeleton.index(node)
+
+        if len(value) < 2:
+            raise ValueError("Value must have at least 2 elements (x, y)")
+
+        self.points[node]["xy"] = value[:2]
+
+        # Set score if provided, otherwise default to 1.0
+        if len(value) >= 3:
+            self.points[node]["score"] = value[2]
+        else:
+            self.points[node]["score"] = 1.0
+
+        self.points[node]["visible"] = True
