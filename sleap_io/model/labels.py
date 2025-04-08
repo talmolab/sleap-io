@@ -186,9 +186,9 @@ class Labels:
     def numpy(
         self,
         video: Optional[Union[Video, int]] = None,
-        all_frames: bool = True,
         untracked: bool = False,
         return_confidence: bool = False,
+        user_instances: bool = True,
     ) -> np.ndarray:
         """Construct a numpy array from instance points.
 
@@ -200,6 +200,9 @@ class Labels:
                 arbitrary order.
             return_confidence: If `False` (the default), only return points of nodes. If
                 `True`, return the points and scores of nodes.
+            user_instances: If `True` (the default), include user instances when available,
+                preferring them over predicted instances with the same track. If `False`,
+                only include predicted instances.
 
         Returns:
             An array of tracks of shape `(n_frames, n_tracks, n_nodes, 2)` if
@@ -210,7 +213,9 @@ class Labels:
 
             If this is a single instance project, a track does not need to be assigned.
 
-            Only predicted instances (NOT user instances) will be returned.
+            When `user_instances=False`, only predicted instances will be returned.
+            When `user_instances=True`, user instances will be preferred over predicted
+            instances with the same track or if linked via `from_predicted`.
 
         Notes:
             This method assumes that instances have tracks assigned and is intended to
@@ -230,18 +235,24 @@ class Labels:
             last_frame = max(last_frame, lf.frame_idx)
 
         # Figure out the number of tracks based on number of instances in each frame.
-        # First, let's check the max number of predicted instances (regardless of
-        # whether they're tracked.
-        n_preds = 0
+        # Check the max number of instances (predicted or user, depending on settings)
+        n_instances = 0
         for lf in lfs:
-            n_pred_instances = len(lf.predicted_instances)
-            n_preds = max(n_preds, n_pred_instances)
+            if user_instances:
+                # Count max of either user or predicted instances per frame (not their sum)
+                n_frame_instances = max(
+                    len(lf.user_instances), len(lf.predicted_instances)
+                )
+            else:
+                n_frame_instances = len(lf.predicted_instances)
+            n_instances = max(n_instances, n_frame_instances)
 
         # Case 1: We don't care about order because there's only 1 instance per frame,
         # or we're considering untracked instances.
-        untracked = untracked or n_preds == 1
+        is_single_instance = n_instances == 1
+        untracked = untracked or is_single_instance
         if untracked:
-            n_tracks = n_preds
+            n_tracks = n_instances
         else:
             # Case 2: We're considering only tracked instances.
             n_tracks = len(self.tracks)
@@ -254,20 +265,97 @@ class Labels:
             tracks = np.full((n_frames, n_tracks, n_nodes, 3), np.nan, dtype="float32")
         else:
             tracks = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, dtype="float32")
+
         for lf in lfs:
             i = int(lf.frame_idx - first_frame)
+
             if untracked:
-                for j, inst in enumerate(lf.predicted_instances):
-                    tracks[i, j] = inst.numpy(scores=return_confidence)
-            else:
-                tracked_instances = [
-                    inst
-                    for inst in lf.instances
-                    if type(inst) == PredictedInstance and inst.track is not None
-                ]
-                for inst in tracked_instances:
-                    j = self.tracks.index(inst.track)  # type: ignore[arg-type]
-                    tracks[i, j] = inst.numpy(scores=return_confidence)
+                # For untracked instances, fill them in arbitrary order
+                j = 0
+                instances_to_include = []
+
+                # If user instances are preferred, add them first
+                if user_instances and lf.has_user_instances:
+                    # First collect all user instances
+                    for inst in lf.user_instances:
+                        instances_to_include.append(inst)
+
+                    # For the trivial case (single instance per frame), if we found user instances,
+                    # we shouldn't include any predicted instances
+                    if is_single_instance and len(instances_to_include) > 0:
+                        pass  # Skip adding predicted instances
+                    else:
+                        # Add predicted instances that don't have a corresponding user instance
+                        for inst in lf.predicted_instances:
+                            skip = False
+                            for user_inst in lf.user_instances:
+                                # Skip if this predicted instance is linked to a user instance via from_predicted
+                                if (
+                                    hasattr(user_inst, "from_predicted")
+                                    and user_inst.from_predicted == inst
+                                ):
+                                    skip = True
+                                    break
+                                # Skip if user and predicted instances share the same track
+                                if (
+                                    user_inst.track is not None
+                                    and inst.track is not None
+                                    and user_inst.track == inst.track
+                                ):
+                                    skip = True
+                                    break
+                            if not skip:
+                                instances_to_include.append(inst)
+                else:
+                    # If user_instances=False, only include predicted instances
+                    instances_to_include = lf.predicted_instances
+
+                # Now process all the instances we want to include
+                for inst in instances_to_include:
+                    if j < n_tracks:
+                        if return_confidence:
+                            if isinstance(inst, PredictedInstance):
+                                tracks[i, j] = inst.numpy(scores=True)
+                            else:
+                                # For user instances, set confidence to 1.0
+                                points_data = inst.numpy()
+                                confidence = np.ones(
+                                    (points_data.shape[0], 1), dtype="float32"
+                                )
+                                tracks[i, j] = np.hstack((points_data, confidence))
+                        else:
+                            tracks[i, j] = inst.numpy()
+                        j += 1
+            else:  # untracked is False
+                # For tracked instances, organize by track ID
+
+                # Create mapping from track to best instance for this frame
+                track_to_instance = {}
+
+                # First, add predicted instances to the mapping
+                for inst in lf.predicted_instances:
+                    if inst.track is not None:
+                        track_to_instance[inst.track] = inst
+
+                # Then, add user instances to the mapping (if user_instances=True)
+                if user_instances:
+                    for inst in lf.user_instances:
+                        if inst.track is not None:
+                            track_to_instance[inst.track] = inst
+
+                # Process the preferred instances for each track
+                for track in track_to_instance:
+                    inst = track_to_instance[track]
+                    j = self.tracks.index(track)
+
+                    if type(inst) == PredictedInstance:
+                        tracks[i, j] = inst.numpy(scores=return_confidence)
+                    elif type(inst) == Instance:
+                        tracks[i, j, :, :2] = inst.numpy()
+
+                        # If return_confidence is True, add dummy confidence scores
+                        if return_confidence:
+                            tracks[i, j, :, 2] = 1.0
 
         return tracks
 
