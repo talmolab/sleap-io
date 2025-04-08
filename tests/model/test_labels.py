@@ -777,3 +777,182 @@ def test_labels_sessions():
     labels.sessions.append(session)
     assert labels.sessions == [session]
     labels.__str__()
+
+
+def test_labels_numpy_user_instances():
+    """Test the user_instances parameter in Labels.numpy method."""
+    # Create a simple skeleton for testing
+    skeleton = Skeleton(["A", "B"])
+    video = Video(filename="test_video.mp4")
+
+    # Create 3 tracks
+    track1 = Track(name="track1")
+    track2 = Track(name="track2")
+    track3 = Track(name="track3")
+
+    # Create 3 frames with different combinations of user and predicted instances
+    frames = []
+
+    # Frame 0: User and predicted instance with same track (track1)
+    #          Predicted instance with track2
+    lf0 = LabeledFrame(video=video, frame_idx=0)
+    user_inst0 = Instance([[10, 10], [20, 20]], skeleton=skeleton, track=track1)
+    # Create predicted instance with point scores
+    pred_inst0 = PredictedInstance.from_numpy(
+        [[11, 11], [21, 21]],
+        skeleton=skeleton,
+        point_scores=[0.8, 0.8],  # Adding point scores
+        score=0.8,
+        track=track1,
+    )
+    pred_inst1 = PredictedInstance.from_numpy(
+        [[30, 30], [40, 40]],
+        skeleton=skeleton,
+        point_scores=[0.9, 0.9],  # Adding point scores
+        score=0.9,
+        track=track2,
+    )
+    lf0.instances = [user_inst0, pred_inst0, pred_inst1]
+    frames.append(lf0)
+
+    # Frame 1: User instance linked to predicted via from_predicted (no track)
+    #          Another predicted instance with track3
+    lf1 = LabeledFrame(video=video, frame_idx=1)
+    pred_inst2 = PredictedInstance.from_numpy(
+        [[12, 12], [22, 22]],
+        skeleton=skeleton,
+        point_scores=[0.7, 0.7],  # Adding point scores
+        score=0.7,
+    )
+    user_inst1 = Instance([[15, 15], [25, 25]], skeleton=skeleton)
+    user_inst1.from_predicted = pred_inst2
+    pred_inst3 = PredictedInstance.from_numpy(
+        [[35, 35], [45, 45]],
+        skeleton=skeleton,
+        point_scores=[0.85, 0.85],  # Adding point scores
+        score=0.85,
+        track=track3,
+    )
+    lf1.instances = [pred_inst2, user_inst1, pred_inst3]
+    frames.append(lf1)
+
+    # Frame 2: Single user instance and single predicted instance (trivial case)
+    lf2 = LabeledFrame(video=video, frame_idx=2)
+    user_inst2 = Instance([[50, 50], [60, 60]], skeleton=skeleton)
+    pred_inst4 = PredictedInstance.from_numpy(
+        [[55, 55], [65, 65]],
+        skeleton=skeleton,
+        point_scores=[0.95, 0.95],  # Adding point scores
+        score=0.95,
+    )
+    lf2.instances = [user_inst2, pred_inst4]
+    frames.append(lf2)
+
+    # Create labels with all these frames
+    labels = Labels(labeled_frames=frames)
+    labels.tracks = [track1, track2, track3]
+
+    # Test 1: With user_instances=True (default)
+    # For tracked instances
+    tracks = labels.numpy(untracked=False)
+    # Shape should be (3 frames, 3 tracks, 2 nodes, 2 coordinates)
+    assert tracks.shape == (3, 3, 2, 2)
+    # Track1 in frame0 should be the user instance
+    assert_equal(tracks[0, 0], [[10, 10], [20, 20]])
+    # Track2 in frame0 should be the predicted instance
+    assert_equal(tracks[0, 1], [[30, 30], [40, 40]])
+    # Track3 in frame1 should be the predicted instance
+    assert_equal(tracks[1, 2], [[35, 35], [45, 45]])
+
+    # With confidence scores
+    tracks_conf = labels.numpy(untracked=False, return_confidence=True)
+    # Shape should be (3 frames, 3 tracks, 2 nodes, 3 values)
+    assert tracks_conf.shape == (3, 3, 2, 3)
+    # User instance should have confidence 1.0
+    assert_equal(tracks_conf[0, 0, 0, 2], 1.0)
+    assert_equal(tracks_conf[0, 0, 1, 2], 1.0)
+    # Predicted instance should have its original confidence
+    assert_allclose(tracks_conf[0, 1, 0, 2], 0.9)
+
+    # Test 2: For untracked instances
+    untracked = labels.numpy(untracked=True)
+    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted], 2 nodes, 2 coordinates)
+    assert untracked.shape == (3, 2, 2, 2)
+    # Frame0 should have user instance first, then predicted instance track2
+    assert_equal(untracked[0, 0], [[10, 10], [20, 20]])
+    assert_equal(untracked[0, 1], [[30, 30], [40, 40]])
+    # Frame1 should have user instance first, then predicted instance track3
+    assert_equal(untracked[1, 0], [[15, 15], [25, 25]])
+    assert_equal(untracked[1, 1], [[35, 35], [45, 45]])
+    # Frame2 should have both instances
+    assert_equal(untracked[2, 0], [[50, 50], [60, 60]])
+    assert_equal(untracked[2, 1], [[55, 55], [65, 65]])
+
+    # Test 3: with return_confidence=True
+    untracked_conf = labels.numpy(untracked=True, return_confidence=True)
+    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted], 2 nodes, 3 values)
+    assert untracked_conf.shape == (3, 2, 2, 3)
+    # Frame0 should have user instance first, then predicted instance track2
+    assert_equal(untracked_conf[0, 0, 0, 2], 1.0)
+    assert_equal(untracked_conf[0, 0, 1, 2], 1.0)
+    # Predicted instance should have its original confidence
+    assert_allclose(untracked_conf[0, 1, 0, 2], 0.9)
+    # Frame1 should have user instance first, then predicted instance track3
+    assert_equal(untracked_conf[1, 0, 0, 2], 1.0)
+    assert_equal(untracked_conf[1, 0, 1, 2], 1.0)
+    # Predicted instance should have its original confidence
+    assert_allclose(untracked_conf[1, 1, 0, 2], 0.85)
+    # Frame2 should have both instances
+    assert_equal(untracked_conf[2, 0, 0, 2], 1.0)
+    assert_equal(untracked_conf[2, 0, 1, 2], 1.0)
+    assert_allclose(untracked_conf[2, 1, 0, 2], 0.95)
+
+    # Test 4: With user_instances=False
+    # For tracked instances
+    pred_only_tracks = labels.numpy(untracked=False, user_instances=False)
+    # Shape should be (3 frames, 3 tracks, 2 nodes, 2 coordinates)
+    assert pred_only_tracks.shape == (3, 3, 2, 2)
+    # Track1 in frame0 should be the predicted instance now
+    assert_equal(pred_only_tracks[0, 0], [[11, 11], [21, 21]])
+
+    # Test 5: For untracked instances with user_instances=False
+    pred_only_untracked = labels.numpy(untracked=True, user_instances=False)
+    # Shape should be (3 frames, max_predicted_instances_per_frame=2, 2 nodes, 2 coordinates)
+    assert pred_only_untracked.shape == (3, 2, 2, 2)
+    # Frame0 should have both predicted instances
+    assert_equal(pred_only_untracked[0, 0], [[11, 11], [21, 21]])
+    assert_equal(pred_only_untracked[0, 1], [[30, 30], [40, 40]])
+    # Frame1 should have both predicted instances
+    assert_equal(pred_only_untracked[1, 0], [[12, 12], [22, 22]])
+    assert_equal(pred_only_untracked[1, 1], [[35, 35], [45, 45]])
+    # Frame2 should have only one predicted instance
+    assert_equal(pred_only_untracked[2, 0], [[55, 55], [65, 65]])
+    assert np.isnan(pred_only_untracked[2, 1, 0, 0])  # Second slot should be empty
+
+    # Test 6: Single instance project (the trivial case)
+    # Create a single instance project
+    single_frames = []
+    lf_single = LabeledFrame(video=video, frame_idx=0)
+    user_inst_single = Instance([[70, 70], [80, 80]], skeleton=skeleton)
+    pred_inst_single = PredictedInstance.from_numpy(
+        [[75, 75], [85, 85]],
+        skeleton=skeleton,
+        point_scores=[0.9, 0.9],  # Adding point scores
+        score=0.9,
+    )
+    lf_single.instances = [user_inst_single, pred_inst_single]
+    single_frames.append(lf_single)
+
+    labels_single = Labels(labeled_frames=single_frames)
+
+    # For single instance projects, user instances should be preferred
+    single_tracks = labels_single.numpy()
+    # Shape should be (1 frame, 1 instance, 2 nodes, 2 coordinates)
+    assert single_tracks.shape == (1, 1, 2, 2)
+    # Should be the user instance
+    assert_equal(single_tracks[0, 0], [[70, 70], [80, 80]])
+
+    # With user_instances=False
+    single_tracks_pred = labels_single.numpy(user_instances=False)
+    # Should be the predicted instance
+    assert_equal(single_tracks_pred[0, 0], [[75, 75], [85, 85]])
