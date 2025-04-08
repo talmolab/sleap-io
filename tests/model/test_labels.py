@@ -888,7 +888,26 @@ def test_labels_numpy_user_instances():
     assert_equal(untracked[2, 0], [[50, 50], [60, 60]])
     assert_equal(untracked[2, 1], [[55, 55], [65, 65]])
 
-    # Test 3: With user_instances=False
+    # Test 3: with return_confidence=True
+    untracked_conf = labels.numpy(untracked=True, return_confidence=True)
+    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted], 2 nodes, 3 values)
+    assert untracked_conf.shape == (3, 2, 2, 3)
+    # Frame0 should have user instance first, then predicted instance track2
+    assert_equal(untracked_conf[0, 0, 0, 2], 1.0)
+    assert_equal(untracked_conf[0, 0, 1, 2], 1.0)
+    # Predicted instance should have its original confidence
+    assert_allclose(untracked_conf[0, 1, 0, 2], 0.9)
+    # Frame1 should have user instance first, then predicted instance track3
+    assert_equal(untracked_conf[1, 0, 0, 2], 1.0)
+    assert_equal(untracked_conf[1, 0, 1, 2], 1.0)
+    # Predicted instance should have its original confidence
+    assert_allclose(untracked_conf[1, 1, 0, 2], 0.85)
+    # Frame2 should have both instances
+    assert_equal(untracked_conf[2, 0, 0, 2], 1.0)
+    assert_equal(untracked_conf[2, 0, 1, 2], 1.0)
+    assert_allclose(untracked_conf[2, 1, 0, 2], 0.95)
+
+    # Test 4: With user_instances=False
     # For tracked instances
     pred_only_tracks = labels.numpy(untracked=False, user_instances=False)
     # Shape should be (3 frames, 3 tracks, 2 nodes, 2 coordinates)
@@ -896,7 +915,7 @@ def test_labels_numpy_user_instances():
     # Track1 in frame0 should be the predicted instance now
     assert_equal(pred_only_tracks[0, 0], [[11, 11], [21, 21]])
 
-    # Test 4: For untracked instances with user_instances=False
+    # Test 5: For untracked instances with user_instances=False
     pred_only_untracked = labels.numpy(untracked=True, user_instances=False)
     # Shape should be (3 frames, max_predicted_instances_per_frame=2, 2 nodes, 2 coordinates)
     assert pred_only_untracked.shape == (3, 2, 2, 2)
@@ -910,7 +929,7 @@ def test_labels_numpy_user_instances():
     assert_equal(pred_only_untracked[2, 0], [[55, 55], [65, 65]])
     assert np.isnan(pred_only_untracked[2, 1, 0, 0])  # Second slot should be empty
 
-    # Test 5: Single instance project (the trivial case)
+    # Test 6: Single instance project (the trivial case)
     # Create a single instance project
     single_frames = []
     lf_single = LabeledFrame(video=video, frame_idx=0)
