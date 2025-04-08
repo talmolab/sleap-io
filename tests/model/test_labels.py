@@ -872,7 +872,7 @@ def test_labels_numpy_user_instances():
     assert_equal(tracks_conf[0, 0, 0, 2], 1.0)
     assert_equal(tracks_conf[0, 0, 1, 2], 1.0)
     # Predicted instance should have its original confidence
-    assert_equal(tracks_conf[0, 1, 0, 2], 0.9)
+    assert_allclose(tracks_conf[0, 1, 0, 2], 0.9)
 
     # Test 2: For untracked instances
     untracked = labels.numpy(untracked=True)
