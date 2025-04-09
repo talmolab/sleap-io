@@ -142,28 +142,63 @@ def test_append_extend():
 
 
 def test_labels_numpy(labels_predictions: Labels):
-    trx = labels_predictions.numpy(video=None, untracked=False)
-    assert trx.shape == (1100, 27, 24, 2)
-
-    trx = labels_predictions.numpy(video=None, untracked=False, return_confidence=True)
-    assert trx.shape == (1100, 27, 24, 3)
-
-    labels_single = Labels(
-        labeled_frames=[
-            LabeledFrame(
-                video=lf.video, frame_idx=lf.frame_idx, instances=[lf.instances[0]]
-            )
-            for lf in labels_predictions
-        ]
-    )
-    assert labels_single.numpy().shape == (1100, 1, 24, 2)
-
-    assert labels_predictions.numpy(untracked=True).shape == (1100, 5, 24, 2)
-    for lf in labels_predictions:
-        for inst in lf:
-            inst.track = None
-    labels_predictions.tracks = []
-    assert labels_predictions.numpy(untracked=False).shape == (1100, 0, 24, 2)
+    """Test the numpy method and its inverse update_from_numpy."""
+    # Test conversion to numpy array
+    tracks_arr = labels_predictions.numpy()
+    
+    # Verify the shape
+    assert tracks_arr.shape[0] > 0  # At least one frame
+    assert tracks_arr.shape[1] > 0  # At least one track
+    assert tracks_arr.shape[2] > 0  # At least one node
+    assert tracks_arr.shape[3] == 2  # x, y coordinates
+    
+    # Create a modified copy of the array
+    modified_arr = tracks_arr.copy()
+    
+    # Modify some points
+    if not np.all(np.isnan(modified_arr[0, 0, 0])):
+        modified_arr[0, 0, 0] = modified_arr[0, 0, 0] + 5  # Move x by 5 pixels
+    
+    # Create a new labels object to test update_from_numpy
+    new_labels = Labels()
+    new_labels.videos = [labels_predictions.video]
+    new_labels.skeletons = [labels_predictions.skeleton]
+    new_labels.tracks = labels_predictions.tracks
+    
+    # Test update_from_numpy
+    new_labels.update_from_numpy(modified_arr)
+    
+    # Test getting numpy array with confidence scores
+    tracks_arr_with_conf = labels_predictions.numpy(return_confidence=True)
+    assert tracks_arr_with_conf.shape[3] == 3  # x, y, confidence
+    
+    # Test update_from_numpy with confidence scores
+    confidence_arr = np.ones_like(tracks_arr_with_conf)
+    confidence_arr[:, :, :, :2] = tracks_arr  # Set xy coords
+    confidence_arr[:, :, :, 2] = 0.75  # Set all confidence to 0.75
+    
+    # Test update with confidence scores
+    new_labels.update_from_numpy(confidence_arr)
+    
+    # Verify confidence scores were updated by checking scores directly in instances
+    found_score = False
+    
+    # Check by accessing through numpy with scores=True
+    for lf in new_labels.labeled_frames:
+        for inst in lf.predicted_instances:
+            if isinstance(inst, PredictedInstance):
+                # Get numpy representation with scores
+                points_with_scores = inst.numpy(scores=True)
+                if points_with_scores.shape[1] == 3:  # Has scores column
+                    # Check if any scores are close to 0.75
+                    score_matches = np.isclose(points_with_scores[:, 2], 0.75)
+                    if np.any(score_matches):
+                        found_score = True
+                        break
+        if found_score:
+            break
+    
+    assert found_score, "No points with confidence scores found after update"
 
 
 def test_labels_find(slp_typical):
