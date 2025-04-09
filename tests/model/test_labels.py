@@ -956,3 +956,74 @@ def test_labels_numpy_user_instances():
     single_tracks_pred = labels_single.numpy(user_instances=False)
     # Should be the predicted instance
     assert_equal(single_tracks_pred[0, 0], [[75, 75], [85, 85]])
+
+
+def test_update_from_numpy(labels_predictions):
+    """Test updating instances from numpy arrays."""
+    import numpy as np
+    from sleap_io import Track, PredictedInstance
+
+    # Get original numpy representation
+    original_arr = labels_predictions.numpy(return_confidence=True)
+
+    # Modify the numpy array - shift all points by (10, 20)
+    modified_arr = original_arr.copy()
+    modified_arr[:, :, :, 0] += 10  # shift x by 10
+    modified_arr[:, :, :, 1] += 20  # shift y by 20
+
+    # Update the labels with modified array
+    labels_predictions.update_from_numpy(modified_arr)
+
+    # Get the updated numpy representation
+    updated_arr = labels_predictions.numpy(return_confidence=True)
+
+    # Verify points were updated correctly
+    assert np.allclose(
+        updated_arr[:, :, :, :2], modified_arr[:, :, :, :2], equal_nan=True
+    )
+
+    # Test creating new instances
+    # Make a copy of the original labels
+    import copy
+
+    labels_copy = copy.deepcopy(labels_predictions)
+
+    # Create new data for a non-existent track
+    new_track = Track("new_track")
+    labels_copy.tracks.append(new_track)
+
+    # Add a new track to the array
+    n_frames, n_tracks, n_nodes, n_dims = original_arr.shape
+    new_arr = np.full(
+        (n_frames, n_tracks + 1, n_nodes, n_dims), np.nan, dtype="float32"
+    )
+    new_arr[:, :-1] = modified_arr
+
+    # Add data for the new track in the first frame
+    new_arr[0, -1, :, 0] = 100  # x coordinates
+    new_arr[0, -1, :, 1] = 200  # y coordinates
+    new_arr[0, -1, :, 2] = 0.95  # confidence
+
+    # Update with the new array
+    tracks = labels_copy.tracks
+    labels_copy.update_from_numpy(new_arr, tracks=tracks)
+
+    # Verify the new instance was created
+    first_frame = labels_copy.labeled_frames[0]
+
+    # Check if a track with the name "new_track" exists in any of the first frame's instances
+    has_new_track = any(
+        inst.track and inst.track.name == "new_track" for inst in first_frame.instances
+    )
+
+    # This should now pass
+    assert has_new_track, "New track instance not found in frame instances"
+
+    # Also check in predicted_instances
+    has_new_track_pred = any(
+        inst.track and inst.track.name == "new_track"
+        for inst in first_frame.predicted_instances
+    )
+
+    # This should also pass
+    assert has_new_track_pred, "New track instance not found in predicted_instances"
