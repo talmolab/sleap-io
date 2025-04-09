@@ -145,44 +145,44 @@ def test_labels_numpy(labels_predictions: Labels):
     """Test the numpy method and its inverse update_from_numpy."""
     # Test conversion to numpy array
     tracks_arr = labels_predictions.numpy()
-    
+
     # Verify the shape
     assert tracks_arr.shape[0] > 0  # At least one frame
     assert tracks_arr.shape[1] > 0  # At least one track
     assert tracks_arr.shape[2] > 0  # At least one node
     assert tracks_arr.shape[3] == 2  # x, y coordinates
-    
+
     # Create a modified copy of the array
     modified_arr = tracks_arr.copy()
-    
+
     # Modify some points
     if not np.all(np.isnan(modified_arr[0, 0, 0])):
         modified_arr[0, 0, 0] = modified_arr[0, 0, 0] + 5  # Move x by 5 pixels
-    
+
     # Create a new labels object to test update_from_numpy
     new_labels = Labels()
     new_labels.videos = [labels_predictions.video]
     new_labels.skeletons = [labels_predictions.skeleton]
     new_labels.tracks = labels_predictions.tracks
-    
+
     # Test update_from_numpy
     new_labels.update_from_numpy(modified_arr)
-    
+
     # Test getting numpy array with confidence scores
     tracks_arr_with_conf = labels_predictions.numpy(return_confidence=True)
     assert tracks_arr_with_conf.shape[3] == 3  # x, y, confidence
-    
+
     # Test update_from_numpy with confidence scores
     confidence_arr = np.ones_like(tracks_arr_with_conf)
     confidence_arr[:, :, :, :2] = tracks_arr  # Set xy coords
     confidence_arr[:, :, :, 2] = 0.75  # Set all confidence to 0.75
-    
+
     # Test update with confidence scores
     new_labels.update_from_numpy(confidence_arr)
-    
+
     # Verify confidence scores were updated by checking scores directly in instances
     found_score = False
-    
+
     # Check by accessing through numpy with scores=True
     for lf in new_labels.labeled_frames:
         for inst in lf.predicted_instances:
@@ -197,7 +197,7 @@ def test_labels_numpy(labels_predictions: Labels):
                         break
         if found_score:
             break
-    
+
     assert found_score, "No points with confidence scores found after update"
 
 
