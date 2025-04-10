@@ -1305,10 +1305,23 @@ def test_update_from_numpy_special_case():
     # Verify instances were created for both tracks
     assert len(labels[0].instances) == 2, "Should create instances for both tracks"
 
-    # Check if we have instances for both tracks
-    track_names = [inst.track.name for inst in labels[0].instances if inst.track]
-    assert "track1" in track_names, "Should have an instance for track1"
-    assert "new_track" in track_names, "Should have an instance for new_track"
+    # Find instance with track1
+    track1_instance = next(
+        (inst for inst in labels[0].instances if inst.track == track1), None
+    )
+    assert track1_instance is not None, "No instance found for track1"
+    assert np.allclose(
+        track1_instance.numpy()[0], [10.0, 20.0]
+    ), "First track instance not updated correctly"
+
+    # Find instance with track2
+    track2_instance = next(
+        (inst for inst in labels[0].instances if inst.track == track2), None
+    )
+    assert track2_instance is not None, "No instance created for track2"
+    assert np.allclose(
+        track2_instance.numpy()[0], [30.0, 40.0]
+    ), "Second track instance not created correctly"
 
 
 def test_update_from_numpy_confidence_scores():
@@ -1372,8 +1385,6 @@ def test_update_from_numpy_confidence_scores():
 
 def test_update_from_numpy_inferred_tracks():
     """Test update_from_numpy using tracks inferred from labels."""
-    import numpy as np
-    from sleap_io import Labels, Video, Skeleton, Track, LabeledFrame, PredictedInstance
 
     # Create a basic labels object
     labels = Labels()
@@ -1435,8 +1446,6 @@ def test_update_from_numpy_inferred_tracks():
 
 def test_update_from_numpy_special_case_new_track():
     """Test the special case for adding a new track in update_from_numpy."""
-    import numpy as np
-    from sleap_io import Labels, Video, Skeleton, Track, LabeledFrame
 
     # Create a basic labels object
     labels = Labels()
@@ -1448,6 +1457,7 @@ def test_update_from_numpy_special_case_new_track():
     labels.videos.append(video)
     labels.skeletons.append(skeleton)
     labels.tracks.append(track1)
+    labels.tracks.append(new_track)
 
     # Create a frame
     frame = LabeledFrame(video=video, frame_idx=0)
@@ -1464,9 +1474,6 @@ def test_update_from_numpy_special_case_new_track():
     arr[0, 1, 0, 0] = 30.0  # x for first point
     arr[0, 1, 0, 1] = 40.0  # y for first point
     arr[0, 1, 0, 2] = 0.8  # confidence
-
-    # Now add the new track to the tracks list
-    labels.tracks.append(new_track)
 
     # Update with the array - this should trigger the special case
     tracks = labels.tracks
@@ -1492,8 +1499,6 @@ def test_update_from_numpy_special_case_new_track():
 
 def test_update_from_numpy_nan_handling():
     """Test handling of NaN values in update_from_numpy."""
-    import numpy as np
-    from sleap_io import Labels, Video, Skeleton, Track, LabeledFrame, PredictedInstance
 
     # Create a basic labels object
     labels = Labels()
@@ -1558,3 +1563,90 @@ def test_update_from_numpy_nan_handling():
             scores[1], 0.8
         ), "Second point confidence should remain unchanged"
         assert np.isclose(scores[2], 0.98), "Third point confidence should be updated"
+
+
+def test_update_from_numpy_more_tracks_than_provided():
+    """Test the special case in update_from_numpy where array has more tracks than provided track list."""
+    import numpy as np
+    from sleap_io import Labels, Video, Skeleton, Track, LabeledFrame
+
+    # Create a basic labels object
+    labels = Labels()
+    video = Video("test.mp4")
+    skeleton = Skeleton(["A", "B"])
+    track1 = Track("track1")
+    track2 = Track("track2")
+    track3 = Track("track3")  # Will be the last track in provided list
+
+    # Add to labels
+    labels.videos.append(video)
+    labels.skeletons.append(skeleton)
+    labels.tracks.append(track1)
+    labels.tracks.append(track2)
+    labels.tracks.append(track3)
+
+    # Create a frame
+    frame = LabeledFrame(video=video, frame_idx=0)
+    labels.append(frame)
+
+    # Create array with MORE tracks than we'll provide explicitly
+    # Shape: (n_frames=1, n_tracks=3, n_nodes=2, n_dims=3)
+    arr = np.full((1, 3, 2, 3), np.nan, dtype="float32")
+
+    # Data for first track
+    arr[0, 0, 0, 0] = 10.0  # x for first node
+    arr[0, 0, 0, 1] = 20.0  # y for first node
+    arr[0, 0, 0, 2] = 0.8  # confidence
+
+    # Data for second track
+    arr[0, 1, 0, 0] = 30.0  # x for first node
+    arr[0, 1, 0, 1] = 40.0  # y for first node
+    arr[0, 1, 0, 2] = 0.9  # confidence
+
+    # Data for third track in array
+    arr[0, 2, 0, 0] = 50.0  # x for first node
+    arr[0, 2, 0, 1] = 60.0  # y for first node
+    arr[0, 2, 0, 2] = 1.0  # confidence
+
+    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    provided_tracks = [track1, track3]  # Only providing track1 and track3
+
+    # Update with our array - this will trigger the special case
+    labels.update_from_numpy(arr, tracks=provided_tracks)
+
+    # Verify track1's instance was created correctly
+    # First track in provided_tracks matches first column in array
+    track1_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track1.name:
+            track1_instance = inst
+            break
+
+    assert track1_instance is not None, "track1 instance should be created"
+    assert np.allclose(
+        track1_instance.numpy()[0], [10.0, 20.0]
+    ), "Track1 coordinates should match"
+
+    # Verify track3's instance was created correctly
+    track3_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track3.name:
+            track3_instance = inst
+            break
+
+    # Based on how the special case works in the implementation,
+    # track3 (last in provided_tracks) should be assigned the data from arr[0, 1]
+    # (i.e., the second column in the array)
+    assert track3_instance is not None, "track3 instance should be created"
+    assert np.allclose(
+        track3_instance.numpy()[0], [30.0, 40.0]
+    ), "Track3 coordinates should match"
+
+    # Verify there's no extra instance with track2
+    track2_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track2.name:
+            track2_instance = inst
+            break
+
+    assert track2_instance is None, "Should not create an instance for track2"
