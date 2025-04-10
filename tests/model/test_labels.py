@@ -1299,8 +1299,11 @@ def test_update_from_numpy_special_case():
 
     # Update with ONLY the first track in the tracks parameter
     # This will trigger the special case where n_tracks_arr > len(tracks)
-    tracks_subset = [track1, track2]  # Only specifying one track for a two-track array
-    labels.update_from_numpy(arr, tracks=tracks_subset)
+    provided_tracks = [
+        track1,
+        track2,
+    ]  # Only specifying one track for a two-track array
+    labels.update_from_numpy(arr, tracks=provided_tracks)
 
     # Verify instances were created for both tracks
     assert len(labels[0].instances) == 2, "Should create instances for both tracks"
@@ -1567,8 +1570,6 @@ def test_update_from_numpy_nan_handling():
 
 def test_update_from_numpy_more_tracks_than_provided():
     """Test the special case in update_from_numpy where array has more tracks than provided track list."""
-    import numpy as np
-    from sleap_io import Labels, Video, Skeleton, Track, LabeledFrame
 
     # Create a basic labels object
     labels = Labels()
@@ -1650,3 +1651,82 @@ def test_update_from_numpy_more_tracks_than_provided():
             break
 
     assert track2_instance is None, "Should not create an instance for track2"
+
+
+def test_update_from_numpy_special_case_without_confidence():
+    """Test the special case in update_from_numpy where array has more tracks than provided tracks list, without confidence scores."""
+
+    # Create a basic labels object
+    labels = Labels()
+    video = Video("test.mp4")
+    skeleton = Skeleton(["A", "B"])
+    track1 = Track("track1")
+    track2 = Track("track2")  # Will be passed in tracks list
+    track3 = Track("track3")  # Will be used as the new track
+
+    # Add to labels
+    labels.videos.append(video)
+    labels.skeletons.append(skeleton)
+    labels.tracks.append(track1)
+    labels.tracks.append(track2)
+    labels.tracks.append(track3)  # Add to labels.tracks
+
+    # Create a frame
+    frame = LabeledFrame(video=video, frame_idx=0)
+    labels.append(frame)
+
+    # Create array with MORE tracks than we'll provide explicitly
+    # Shape: (n_frames=1, n_tracks=3, n_nodes=2, n_dims=2) - NO CONFIDENCE SCORES
+    arr = np.full((1, 3, 2, 2), np.nan, dtype="float32")
+
+    # Data for first track
+    arr[0, 0, 0, 0] = 10.0  # x for first node
+    arr[0, 0, 0, 1] = 20.0  # y for first node
+
+    # Data for second track
+    arr[0, 1, 0, 0] = 30.0  # x for first node
+    arr[0, 1, 0, 1] = 40.0  # y for first node
+
+    # Data for third track (will be matched with track3, the last in provided_tracks)
+    arr[0, 2, 0, 0] = 50.0  # x for first node
+    arr[0, 2, 0, 1] = 60.0  # y for first node
+
+    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # and ensure we're testing the "else:" branch (no confidence scores)
+    provided_tracks = [track1, track3]  # Only providing track1 and track3
+
+    # Update with our array - this will trigger the special case without confidence
+    labels.update_from_numpy(arr, tracks=provided_tracks)
+
+    # Verify track1's instance was created correctly (first track in provided_tracks)
+    track1_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track1.name:
+            track1_instance = inst
+            break
+
+    assert track1_instance is not None, "track1 instance should be created"
+    assert np.allclose(
+        track1_instance.numpy()[0], [10.0, 20.0]
+    ), "Track1 coordinates should match"
+
+    # Verify track3's instance was created correctly using data from the last column
+    track3_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track3.name:
+            track3_instance = inst
+            break
+
+    assert track3_instance is not None, "track3 instance should be created"
+    assert np.allclose(
+        track3_instance.numpy()[0], [30.0, 40.0]
+    ), "Track3 coordinates should match"
+
+    # Verify that confidence scores were set to 1.0 by default
+    if isinstance(track3_instance, PredictedInstance):
+        # Convert the points to a numpy array with scores
+        points_with_scores = track3_instance.numpy(scores=True)
+        # Check if any scores are close to 1.0 (default value)
+        assert np.isclose(
+            points_with_scores[0, 2], 1.0
+        ), "Default confidence score should be 1.0"
