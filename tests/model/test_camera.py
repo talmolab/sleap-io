@@ -452,3 +452,9 @@ def test_recording_session_init(camera_group_345: CameraGroup):
     assert session._camera_by_video == camera_by_video
     assert session.frame_groups == frame_group_by_frame_idx
     assert session.metadata == metadata
+
+
+def test_recording_session_repr(recording_session_345: RecordingSession):
+    """Test recording session repr method."""
+    session = recording_session_345
+    repr_str = str(session)

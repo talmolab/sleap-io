@@ -149,6 +149,16 @@ class RecordingSession:
         # Remove camera from video mapping
         self._video_by_camera.pop(camera)
 
+    def __repr__(self) -> str:
+        """Return a readable representation of the session."""
+        return (
+            "RecordingSession("
+            f"camera_group={len(self.camera_group.cameras)}cameras,"
+            f"videos={len(self.videos)},"
+            f"frame_groups={len(self.frame_groups)}"
+            ")"
+        )
+
 
 @define(eq=False)  # Set eq to false to make class hashable
 class Camera:
