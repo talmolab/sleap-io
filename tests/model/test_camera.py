@@ -320,6 +320,15 @@ def test_camera_group_cameras():
     assert camera_group.cameras == []
 
 
+def test_camera_group_repr(camera_group_345: CameraGroup):
+    camera_group = camera_group_345
+    repr_str = str(camera_group)
+
+    for cam_idx, camera in enumerate(camera_group.cameras):
+        camera.name = f"camera_{cam_idx}"
+    repr_str = str(camera_group)
+
+
 def test_instance_group_init(
     camera_group_345: CameraGroup,
 ):

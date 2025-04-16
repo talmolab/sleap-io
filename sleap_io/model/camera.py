@@ -27,6 +27,11 @@ class CameraGroup:
     cameras: list[Camera] = field(factory=list, validator=instance_of(list))
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
+    def __repr__(self):
+        """Return a readable representation of the camera group."""
+        camera_names = ",".join([c.name or "None" for c in self.cameras])
+        return f"CameraGroup(cameras={len(self.cameras)}:{camera_names})"
+
 
 @define(eq=False)  # Set eq to false to make class hashable
 class RecordingSession:
