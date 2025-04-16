@@ -359,6 +359,177 @@ class Labels:
 
         return tracks
 
+    @classmethod
+    def from_numpy(
+        cls,
+        tracks_arr: np.ndarray,
+        videos: list[Video],
+        skeletons: list[Skeleton] | Skeleton | None = None,
+        tracks: list[Track] | None = None,
+        first_frame: int = 0,
+        return_confidence: bool = False,
+    ) -> "Labels":
+        """Create a new Labels object from a numpy array of tracks.
+
+        This factory method creates a new Labels object with instances constructed from
+        the provided numpy array. It is the inverse operation of `Labels.numpy()`.
+
+        Args:
+            tracks_arr: A numpy array of tracks, with shape
+                `(n_frames, n_tracks, n_nodes, 2)` or `(n_frames, n_tracks, n_nodes, 3)`,
+                where the last dimension contains the x,y coordinates (and optionally
+                confidence scores).
+            videos: List of Video objects to associate with the labels. At least one video
+                is required.
+            skeletons: Skeleton or list of Skeleton objects to use for the instances.
+                At least one skeleton is required.
+            tracks: List of Track objects corresponding to the second dimension of the
+                array. If not specified, new tracks will be created automatically.
+            first_frame: Frame index to start the labeled frames from. Default is 0.
+            return_confidence: Whether the tracks_arr contains confidence scores in the
+                last dimension. If True, tracks_arr.shape[-1] should be 3.
+
+        Returns:
+            A new Labels object with instances constructed from the numpy array.
+
+        Raises:
+            ValueError: If the array dimensions are invalid, or if no videos or skeletons
+                are provided.
+
+        Examples:
+            >>> import numpy as np
+            >>> from sleap_io import Labels, Video, Skeleton
+            >>> # Create a simple tracking array for 2 frames, 1 track, 2 nodes
+            >>> arr = np.zeros((2, 1, 2, 2))
+            >>> arr[0, 0] = [[10, 20], [30, 40]]  # Frame 0
+            >>> arr[1, 0] = [[15, 25], [35, 45]]  # Frame 1
+            >>> # Create a video and skeleton
+            >>> video = Video(filename="example.mp4")
+            >>> skeleton = Skeleton(["head", "tail"])
+            >>> # Create labels from the array
+            >>> labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+        """
+        # Check dimensions
+        if len(tracks_arr.shape) != 4:
+            raise ValueError(
+                f"Array must have 4 dimensions (n_frames, n_tracks, n_nodes, 2 or 3), "
+                f"but got {tracks_arr.shape}"
+            )
+
+        # Validate videos
+        if not videos:
+            raise ValueError("At least one video must be provided")
+        video = videos[0]  # Use the first video for creating labeled frames
+
+        # Process skeletons input
+        if skeletons is None:
+            raise ValueError("At least one skeleton must be provided")
+        elif isinstance(skeletons, Skeleton):
+            skeletons = [skeletons]
+        elif not skeletons:  # Check for empty list
+            raise ValueError("At least one skeleton must be provided")
+
+        skeleton = skeletons[0]  # Use the first skeleton for creating instances
+        n_nodes = len(skeleton.nodes)
+
+        # Check if tracks_arr contains confidence scores
+        has_confidence = tracks_arr.shape[-1] == 3 or return_confidence
+
+        # Get dimensions
+        n_frames, n_tracks_arr, _ = tracks_arr.shape[:3]
+
+        # Create or validate tracks
+        if tracks is None:
+            # Auto-create tracks if not provided
+            tracks = [Track(f"track_{i}") for i in range(n_tracks_arr)]
+        elif len(tracks) < n_tracks_arr:
+            # Add missing tracks if needed
+            original_len = len(tracks)
+            for i in range(n_tracks_arr - original_len):
+                tracks.append(Track(f"track_{i}"))
+
+        # Create a new empty Labels object
+        labels = cls()
+        labels.videos = list(videos)
+        labels.skeletons = list(skeletons)
+        labels.tracks = list(tracks)
+
+        # Create labeled frames and instances from the array data
+        for i in range(n_frames):
+            frame_idx = i + first_frame
+
+            # Check if this frame has any valid data across all tracks
+            frame_has_valid_data = False
+            for j in range(n_tracks_arr):
+                track_data = tracks_arr[i, j]
+                # Check if at least one node in this track has valid xy coordinates
+                if np.any(~np.isnan(track_data[:, 0])):
+                    frame_has_valid_data = True
+                    break
+
+            # Skip creating a frame if there's no valid data
+            if not frame_has_valid_data:
+                continue
+
+            # Create a new labeled frame
+            labeled_frame = LabeledFrame(video=video, frame_idx=frame_idx)
+            frame_has_valid_instances = False
+
+            # Process each track in this frame
+            for j in range(n_tracks_arr):
+                track = tracks[j]
+                track_data = tracks_arr[i, j]
+
+                # Check if there's any valid data for this track at this frame
+                valid_points = ~np.isnan(track_data[:, 0])
+                if not np.any(valid_points):
+                    continue
+
+                # Create points from numpy data
+                points = track_data[:, :2].copy()
+
+                # Create new instance
+                if has_confidence:
+                    # Get confidence scores
+                    if tracks_arr.shape[-1] == 3:
+                        scores = track_data[:, 2].copy()
+                    else:
+                        scores = np.ones(n_nodes)
+
+                    # Fix NaN scores
+                    scores = np.where(np.isnan(scores), 1.0, scores)
+
+                    # Create instance with confidence scores
+                    new_instance = PredictedInstance.from_numpy(
+                        points_data=points,
+                        skeleton=skeleton,
+                        point_scores=scores,
+                        score=1.0,
+                        track=track,
+                    )
+                else:
+                    # Create instance with default scores
+                    new_instance = PredictedInstance.from_numpy(
+                        points_data=points,
+                        skeleton=skeleton,
+                        point_scores=np.ones(n_nodes),
+                        score=1.0,
+                        track=track,
+                    )
+
+                # Add to frame
+                labeled_frame.instances.append(new_instance)
+                frame_has_valid_instances = True
+
+            # Only add frames that have instances
+            if frame_has_valid_instances:
+                labels.append(labeled_frame, update=False)
+
+        # Update internal references
+        labels.update()
+
+        return labels
+
     @property
     def video(self) -> Video:
         """Return the video if there is only a single video in the labels."""
@@ -617,7 +788,7 @@ class Labels:
 
         Raises:
             ValueError: If the nodes are not found in the skeleton, or if there is more
-                than one skeleton in the `Labels` but it is not specified.
+                than one skeleton in the labels and it is not specified.
 
         Notes:
             This method should always be used when removing nodes from the skeleton as

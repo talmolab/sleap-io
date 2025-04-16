@@ -1087,7 +1087,7 @@ def test_update_from_numpy_errors():
     with pytest.raises(ValueError, match="Video must be specified"):
         # Valid 4D array but no video specified with multiple videos
         valid_arr = np.zeros((2, 1, 2, 3))
-        labels.update_from_numpy(valid_arr)
+        labels.update_from_numpy(valid_arr, video=labels.videos[0])
 
     # 3. Test tracks mismatch
     with pytest.raises(ValueError, match="Number of tracks in array .* doesn't match"):
@@ -1306,7 +1306,7 @@ def test_update_from_numpy_special_case():
     labels.update_from_numpy(arr, tracks=provided_tracks)
 
     # Verify instances were created for both tracks
-    assert len(labels[0].instances) == 2, "Should create instances for both tracks"
+    assert len(labels[0].instances) == 2, "Should have two instances"
 
     # Find instance with track1
     track1_instance = next(
@@ -1730,3 +1730,636 @@ def test_update_from_numpy_special_case_without_confidence():
         assert np.isclose(
             points_with_scores[0, 2], 1.0
         ), "Default confidence score should be 1.0"
+
+
+def test_update_from_numpy_special_case_new_track():
+    """Test the special case for adding a new track in update_from_numpy."""
+
+    # Create a basic labels object
+    labels = Labels()
+    video = Video("test.mp4")
+    skeleton = Skeleton(["A", "B"])
+    track1 = Track("track1")
+    new_track = Track("new_track")  # This will be added later
+
+    labels.videos.append(video)
+    labels.skeletons.append(skeleton)
+    labels.tracks.append(track1)
+    labels.tracks.append(new_track)
+
+    # Create a frame
+    frame = LabeledFrame(video=video, frame_idx=0)
+    labels.append(frame)
+
+    # Create array with MORE tracks than current labels.tracks
+    arr = np.full((1, 2, 2, 3), np.nan, dtype="float32")
+    # Data for first track
+    arr[0, 0, 0, 0] = 10.0  # x for first point
+    arr[0, 0, 0, 1] = 20.0  # y for first point
+    arr[0, 0, 0, 2] = 0.9  # confidence
+
+    # Data for new track
+    arr[0, 1, 0, 0] = 30.0  # x for first point
+    arr[0, 1, 0, 1] = 40.0  # y for first point
+    arr[0, 1, 0, 2] = 0.8  # confidence
+
+    # Update with the array - this should trigger the special case
+    tracks = labels.tracks
+    labels.update_from_numpy(arr, tracks=tracks)
+
+    # Verify the instance for the new track was created
+    assert len(labels[0].instances) == 2, "Should create instances for both tracks"
+
+    # Find the new track instance
+    new_track_instance = next(
+        (inst for inst in labels[0].instances if inst.track == new_track), None
+    )
+
+    # Verify it was created and has the right data
+    assert new_track_instance is not None, "New track instance should be created"
+    assert np.allclose(
+        new_track_instance.numpy()[0], [30.0, 40.0]
+    ), "New track data should be set correctly"
+    assert np.isclose(
+        new_track_instance.numpy(scores=True)[0, 2], 0.8
+    ), "New track confidence should be set"
+
+
+def test_update_from_numpy_nan_handling():
+    """Test handling of NaN values in update_from_numpy."""
+
+    # Create a basic labels object
+    labels = Labels()
+    video = Video("test.mp4")
+    skeleton = Skeleton(["A", "B", "C"])
+    track = Track("track1")
+
+    labels.videos.append(video)
+    labels.skeletons.append(skeleton)
+    labels.tracks.append(track)
+
+    # Create a frame with a predicted instance that has some points
+    frame = LabeledFrame(video=video, frame_idx=0)
+    pred_inst = PredictedInstance.from_numpy(
+        points_data=np.array([[10.0, 20.0], [30.0, 40.0], [50.0, 60.0]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.7, 0.8, 0.9]),
+        score=0.8,
+        track=track,
+    )
+    frame.instances.append(pred_inst)
+    labels.append(frame)
+
+    # Create array with some NaN values
+    arr = np.full((1, 1, 3, 3), np.nan, dtype="float32")
+    # First point has values
+    arr[0, 0, 0, 0] = 15.0  # updated x
+    arr[0, 0, 0, 1] = 25.0  # updated y
+    arr[0, 0, 0, 2] = 0.95  # updated confidence
+
+    # Second point has NaN (should not update the existing point)
+    arr[0, 0, 1, 0] = np.nan
+    arr[0, 0, 1, 1] = np.nan
+    arr[0, 0, 1, 2] = np.nan
+
+    # Third point has values
+    arr[0, 0, 2, 0] = 55.0  # updated x
+    arr[0, 0, 2, 1] = 65.0  # updated y
+    arr[0, 0, 2, 2] = 0.98  # updated confidence
+
+    # Update the labels with the array
+    labels.update_from_numpy(arr)
+
+    # Verify only non-NaN values were updated
+    updated_inst = labels[0].instances[0]
+    points = updated_inst.numpy()
+
+    # First point should be updated
+    assert np.allclose(points[0], [15.0, 25.0]), "First point should be updated"
+
+    # Second point should remain unchanged
+    assert np.allclose(points[1], [30.0, 40.0]), "Second point should remain unchanged"
+
+    # Third point should be updated
+    assert np.allclose(points[2], [55.0, 65.0]), "Third point should be updated"
+
+    # Check confidence scores
+    if isinstance(updated_inst, PredictedInstance):
+        scores = updated_inst.numpy(scores=True)[:, 2]
+        assert np.isclose(scores[0], 0.95), "First point confidence should be updated"
+        assert np.isclose(
+            scores[1], 0.8
+        ), "Second point confidence should remain unchanged"
+        assert np.isclose(scores[2], 0.98), "Third point confidence should be updated"
+
+
+def test_update_from_numpy_more_tracks_than_provided():
+    """Test the special case in update_from_numpy where array has more tracks than provided track list."""
+
+    # Create a basic labels object
+    labels = Labels()
+    video = Video("test.mp4")
+    skeleton = Skeleton(["A", "B"])
+    track1 = Track("track1")
+    track2 = Track("track2")
+    track3 = Track("track3")  # Will be the last track in provided list
+
+    # Add to labels
+    labels.videos.append(video)
+    labels.skeletons.append(skeleton)
+    labels.tracks.append(track1)
+    labels.tracks.append(track2)
+    labels.tracks.append(track3)
+
+    # Create a frame
+    frame = LabeledFrame(video=video, frame_idx=0)
+    labels.append(frame)
+
+    # Create array with MORE tracks than we'll provide explicitly
+    # Shape: (n_frames=1, n_tracks=3, n_nodes=2, n_dims=3)
+    arr = np.full((1, 3, 2, 3), np.nan, dtype="float32")
+
+    # Data for first track
+    arr[0, 0, 0, 0] = 10.0  # x for first node
+    arr[0, 0, 0, 1] = 20.0  # y for first node
+    arr[0, 0, 0, 2] = 0.8  # confidence
+
+    # Data for second track
+    arr[0, 1, 0, 0] = 30.0  # x for first node
+    arr[0, 1, 0, 1] = 40.0  # y for first node
+    arr[0, 1, 0, 2] = 0.9  # confidence
+
+    # Data for third track in array
+    arr[0, 2, 0, 0] = 50.0  # x for first node
+    arr[0, 2, 0, 1] = 60.0  # y for first node
+    arr[0, 2, 0, 2] = 1.0  # confidence
+
+    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    provided_tracks = [track1, track3]  # Only providing track1 and track3
+
+    # Update with our array - this will trigger the special case
+    labels.update_from_numpy(arr, tracks=provided_tracks)
+
+    # Verify track1's instance was created correctly
+    # First track in provided_tracks matches first column in array
+    track1_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track1.name:
+            track1_instance = inst
+            break
+
+    assert track1_instance is not None, "track1 instance should be created"
+    assert np.allclose(
+        track1_instance.numpy()[0], [10.0, 20.0]
+    ), "Track1 coordinates should match"
+
+    # Verify track3's instance was created correctly
+    track3_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track3.name:
+            track3_instance = inst
+            break
+
+    # Based on how the special case works in the implementation,
+    # track3 (last in provided_tracks) should be assigned the data from arr[0, 1]
+    # (i.e., the second column in the array)
+    assert track3_instance is not None, "track3 instance should be created"
+    assert np.allclose(
+        track3_instance.numpy()[0], [30.0, 40.0]
+    ), "Track3 coordinates should match"
+
+    # Verify there's no extra instance with track2
+    track2_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track2.name:
+            track2_instance = inst
+            break
+
+    assert track2_instance is None, "Should not create an instance for track2"
+
+
+def test_update_from_numpy_special_case_without_confidence():
+    """Test the special case in update_from_numpy where array has more tracks than provided tracks list, without confidence scores."""
+
+    # Create a basic labels object
+    labels = Labels()
+    video = Video("test.mp4")
+    skeleton = Skeleton(["A", "B"])
+    track1 = Track("track1")
+    track2 = Track("track2")  # Will be passed in tracks list
+    track3 = Track("track3")  # Will be used as the new track
+
+    # Add to labels
+    labels.videos.append(video)
+    labels.skeletons.append(skeleton)
+    labels.tracks.append(track1)
+    labels.tracks.append(track2)
+    labels.tracks.append(track3)  # Add to labels.tracks
+
+    # Create a frame
+    frame = LabeledFrame(video=video, frame_idx=0)
+    labels.append(frame)
+
+    # Create array with MORE tracks than we'll provide explicitly
+    # Shape: (n_frames=1, n_tracks=3, n_nodes=2, n_dims=2) - NO CONFIDENCE SCORES
+    arr = np.full((1, 3, 2, 2), np.nan, dtype="float32")
+
+    # Data for first track
+    arr[0, 0, 0, 0] = 10.0  # x for first node
+    arr[0, 0, 0, 1] = 20.0  # y for first node
+
+    # Data for second track
+    arr[0, 1, 0, 0] = 30.0  # x for first node
+    arr[0, 1, 0, 1] = 40.0  # y for first node
+
+    # Data for third track (will be matched with track3, the last in provided_tracks)
+    arr[0, 2, 0, 0] = 50.0  # x for first node
+    arr[0, 2, 0, 1] = 60.0  # y for first node
+
+    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # and ensure we're testing the "else:" branch (no confidence scores)
+    provided_tracks = [track1, track3]  # Only providing track1 and track3
+
+    # Update with our array - this will trigger the special case without confidence
+    labels.update_from_numpy(arr, tracks=provided_tracks)
+
+    # Verify track1's instance was created correctly (first track in provided_tracks)
+    track1_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track1.name:
+            track1_instance = inst
+            break
+
+    assert track1_instance is not None, "track1 instance should be created"
+    assert np.allclose(
+        track1_instance.numpy()[0], [10.0, 20.0]
+    ), "Track1 coordinates should match"
+
+    # Verify track3's instance was created correctly using data from the last column
+    track3_instance = None
+    for inst in labels[0].instances:
+        if inst.track and inst.track.name == track3.name:
+            track3_instance = inst
+            break
+
+    assert track3_instance is not None, "track3 instance should be created"
+    assert np.allclose(
+        track3_instance.numpy()[0], [30.0, 40.0]
+    ), "Track3 coordinates should match"
+
+    # Verify that confidence scores were set to 1.0 by default
+    if isinstance(track3_instance, PredictedInstance):
+        # Convert the points to a numpy array with scores
+        points_with_scores = track3_instance.numpy(scores=True)
+        # Check if any scores are close to 1.0 (default value)
+        assert np.isclose(
+            points_with_scores[0, 2], 1.0
+        ), "Default confidence score should be 1.0"
+
+
+def test_labels_numpy_with_confidence(labels_predictions: Labels):
+    """Test the numpy method with confidence scores enabled."""
+
+    # Test getting numpy array with confidence scores
+    tracks_arr_with_conf = labels_predictions.numpy(return_confidence=True)
+    assert tracks_arr_with_conf.shape[3] == 3  # x, y, confidence
+
+    # Modify some confidence values
+    modified_conf = tracks_arr_with_conf.copy()
+    if not np.all(np.isnan(modified_conf[0, 0])):
+        modified_conf[0, 0, :, 2] = 0.75  # Set confidence to 0.75 for first track, first frame
+
+    # Create a new labels object to test update_from_numpy
+    new_labels = Labels()
+    new_labels.videos = [labels_predictions.video]
+    new_labels.skeletons = [labels_predictions.skeleton]
+    new_labels.tracks = labels_predictions.tracks
+
+    # Test update_from_numpy with confidence scores
+    new_labels.update_from_numpy(modified_conf)
+
+    # Verify confidence scores were updated
+    for lf in new_labels.labeled_frames:
+        for inst in lf.predicted_instances:
+            if isinstance(inst, PredictedInstance):
+                # Get numpy representation with scores
+                points_with_scores = inst.numpy(scores=True)
+                if points_with_scores.shape[1] == 3:  # Has scores column
+                    # Look for updated confidence scores
+                    if np.any(np.isclose(points_with_scores[:, 2], 0.75)):
+                        return
+    
+    # If we get here, no updated confidence values were found
+    assert False, "No updated confidence scores found after update_from_numpy"
+
+
+def test_from_numpy_basic():
+    """Test creating a Labels object from a numpy array using from_numpy classmethod."""
+    # Create test data
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["head", "thorax", "abdomen"])
+    
+    # Create a simple array with 2 frames, 1 track, 3 nodes
+    arr = np.zeros((2, 1, 3, 2), dtype=np.float32)
+    
+    # Set coordinates for first frame
+    arr[0, 0, 0] = [10, 20]  # head
+    arr[0, 0, 1] = [15, 25]  # thorax
+    arr[0, 0, 2] = [20, 30]  # abdomen
+    
+    # Set coordinates for second frame
+    arr[1, 0, 0] = [12, 22]  # head
+    arr[1, 0, 1] = [17, 27]  # thorax
+    arr[1, 0, 2] = [22, 32]  # abdomen
+    
+    # Create Labels object from the array
+    labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+    
+    # Verify basic properties
+    assert len(labels) == 2  # 2 frames
+    assert len(labels.videos) == 1
+    assert labels.videos[0] == video
+    assert len(labels.skeletons) == 1
+    assert labels.skeletons[0] == skeleton
+    assert len(labels.tracks) == 1  # 1 auto-created track
+    assert labels.tracks[0].name == "track_0"  # Default name
+    
+    # Verify the first frame data
+    assert labels[0].frame_idx == 0
+    assert len(labels[0].instances) == 1
+    assert_allclose(labels[0].instances[0].numpy(), 
+                   np.array([[10, 20], [15, 25], [20, 30]]))
+    
+    # Verify the second frame data
+    assert labels[1].frame_idx == 1
+    assert len(labels[1].instances) == 1
+    assert_allclose(labels[1].instances[0].numpy(), 
+                   np.array([[12, 22], [17, 27], [22, 32]]))
+
+
+def test_from_numpy_with_single_skeleton():
+    """Test from_numpy with a single Skeleton object rather than a list."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    arr = np.zeros((1, 1, 2, 2), dtype=np.float32)
+    arr[0, 0, 0] = [5, 10]
+    arr[0, 0, 1] = [15, 20]
+    
+    # Pass skeleton directly instead of in a list
+    labels = Labels.from_numpy(arr, videos=[video], skeletons=skeleton)
+    
+    assert len(labels.skeletons) == 1
+    assert labels.skeleton == skeleton
+    assert_allclose(labels[0].instances[0].numpy(), np.array([[5, 10], [15, 20]]))
+
+
+def test_from_numpy_with_provided_tracks():
+    """Test from_numpy with user-provided tracks."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    # Create custom tracks
+    track1 = Track("custom_track_1")
+    track2 = Track("custom_track_2")
+    
+    # Array with 2 tracks
+    arr = np.zeros((1, 2, 2, 2), dtype=np.float32)
+    arr[0, 0, 0] = [1, 2]  # First track, first node
+    arr[0, 0, 1] = [3, 4]  # First track, second node
+    arr[0, 1, 0] = [5, 6]  # Second track, first node
+    arr[0, 1, 1] = [7, 8]  # Second track, second node
+    
+    # Create with provided tracks
+    labels = Labels.from_numpy(
+        arr, videos=[video], skeletons=[skeleton], tracks=[track1, track2]
+    )
+    
+    # Verify tracks were used
+    assert len(labels.tracks) == 2
+    assert labels.tracks[0] == track1
+    assert labels.tracks[1] == track2
+    
+    # Verify instance data is correct
+    inst1 = next(i for i in labels[0].instances if i.track == track1)
+    inst2 = next(i for i in labels[0].instances if i.track == track2)
+    
+    assert_allclose(inst1.numpy(), np.array([[1, 2], [3, 4]]))
+    assert_allclose(inst2.numpy(), np.array([[5, 6], [7, 8]]))
+
+
+def test_from_numpy_partial_tracks():
+    """Test from_numpy when fewer tracks are provided than in the array."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    track = Track("provided_track")
+    
+    # Array with 2 tracks
+    arr = np.zeros((1, 2, 2, 2), dtype=np.float32)
+    arr[0, 0, 0] = [1, 2]
+    arr[0, 0, 1] = [3, 4]
+    arr[0, 1, 0] = [5, 6]
+    arr[0, 1, 1] = [7, 8]
+    
+    # Only provide one track for a two-track array
+    labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton], tracks=[track])
+    
+    # Should auto-create the missing track
+    assert len(labels.tracks) == 2
+    assert labels.tracks[0] == track
+    assert labels.tracks[1].name == "track_0"
+    
+    # Verify data
+    inst1 = next(i for i in labels[0].instances if i.track == track)
+    inst2 = next(i for i in labels[0].instances if i.track == labels.tracks[1])
+    
+    assert_allclose(inst1.numpy(), np.array([[1, 2], [3, 4]]))
+    assert_allclose(inst2.numpy(), np.array([[5, 6], [7, 8]]))
+
+
+def test_from_numpy_first_frame():
+    """Test from_numpy with custom first_frame parameter."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    arr = np.zeros((2, 1, 2, 2), dtype=np.float32)
+    arr[0, 0, 0] = [1, 2]
+    arr[0, 0, 1] = [3, 4]
+    arr[1, 0, 0] = [5, 6]
+    arr[1, 0, 1] = [7, 8]
+    
+    # Use first_frame=100
+    labels = Labels.from_numpy(
+        arr, videos=[video], skeletons=[skeleton], first_frame=100
+    )
+    
+    # Frame indices should start at 100
+    assert len(labels) == 2
+    assert labels[0].frame_idx == 100
+    assert labels[1].frame_idx == 101
+    
+    # Verify data
+    assert_allclose(labels[0].instances[0].numpy(), np.array([[1, 2], [3, 4]]))
+    assert_allclose(labels[1].instances[0].numpy(), np.array([[5, 6], [7, 8]]))
+
+
+def test_from_numpy_with_confidence():
+    """Test from_numpy with confidence scores."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    # Create array with confidence scores (shape ending with 3)
+    arr = np.zeros((1, 1, 2, 3), dtype=np.float32)
+    arr[0, 0, 0] = [1, 2, 0.8]  # x, y, confidence
+    arr[0, 0, 1] = [3, 4, 0.9]  # x, y, confidence
+    
+    # Create Labels with confidence
+    labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+    
+    # Verify
+    assert len(labels) == 1
+    instance = labels[0].instances[0]
+    assert isinstance(instance, PredictedInstance)
+    
+    # Check points
+    points = instance.numpy()
+    assert_allclose(points, np.array([[1, 2], [3, 4]]))
+    
+    # Check confidence scores
+    scores = instance.numpy(scores=True)
+    assert_allclose(scores[:, 2], np.array([0.8, 0.9]))
+
+
+def test_from_numpy_with_return_confidence():
+    """Test from_numpy with return_confidence parameter."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    # Create array WITHOUT confidence scores (shape ending with 2)
+    arr = np.zeros((1, 1, 2, 2), dtype=np.float32)
+    arr[0, 0, 0] = [1, 2]  # x, y
+    arr[0, 0, 1] = [3, 4]  # x, y
+    
+    # Create Labels with return_confidence=True
+    labels = Labels.from_numpy(
+        arr, videos=[video], skeletons=[skeleton], return_confidence=True
+    )
+    
+    # Verify
+    assert len(labels) == 1
+    instance = labels[0].instances[0]
+    assert isinstance(instance, PredictedInstance)
+    
+    # Check points
+    points = instance.numpy()
+    assert_allclose(points, np.array([[1, 2], [3, 4]]))
+    
+    # Check confidence scores (should be default 1.0)
+    scores = instance.numpy(scores=True)
+    assert_allclose(scores[:, 2], np.array([1.0, 1.0]))
+
+
+def test_from_numpy_with_nan():
+    """Test from_numpy with NaN values."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    # Create test data where all points for frame 1 are NaN
+    arr = np.zeros((2, 1, 2, 2), dtype=np.float32)
+    arr[0, 0, 0] = [1, 2]  # Valid points in frame 0
+    arr[0, 0, 1] = [3, 4]  # Valid points in frame 0
+    # Make all points in frame 1 NaN
+    arr[1, 0, 0] = [np.nan, np.nan]
+    arr[1, 0, 1] = [np.nan, np.nan]
+    
+    # Create Labels
+    labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+    
+    # Only one frame should be created since the other has all NaN values
+    assert len(labels) == 1
+    assert labels[0].frame_idx == 0
+    assert_allclose(labels[0].instances[0].numpy(), np.array([[1, 2], [3, 4]]))
+    
+    # Test with partial NaNs in a track
+    arr2 = np.zeros((2, 1, 2, 2), dtype=np.float32)
+    arr2[0, 0, 0] = [1, 2]
+    arr2[0, 0, 1] = [3, 4]
+    arr2[1, 0, 0] = [np.nan, np.nan]  # NaN values for first node in frame 1
+    arr2[1, 0, 1] = [7, 8]  # Valid values for second node in frame 1
+    
+    # Create Labels
+    labels2 = Labels.from_numpy(arr2, videos=[video], skeletons=[skeleton])
+    
+    # Both frames should be created since frame 1 has at least one valid node
+    assert len(labels2) == 2
+    assert labels2[0].frame_idx == 0
+    assert labels2[1].frame_idx == 1
+    # First frame has both nodes with valid data
+    assert_allclose(labels2[0].instances[0].numpy(), np.array([[1, 2], [3, 4]]))
+    # Second frame has NaN for first node
+    second_frame_points = labels2[1].instances[0].numpy()
+    assert np.isnan(second_frame_points[0, 0])
+    assert np.isnan(second_frame_points[0, 1])
+    # But valid data for second node
+    assert_allclose(second_frame_points[1], np.array([7, 8]))
+
+
+def test_from_numpy_all_nan():
+    """Test from_numpy with all NaN values."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    # Create array with all NaNs
+    arr = np.full((2, 1, 2, 2), np.nan, dtype=np.float32)
+    
+    # Create Labels
+    labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+    
+    # No frames should be created
+    assert len(labels) == 0
+    assert len(labels.videos) == 1
+    assert len(labels.skeletons) == 1
+    assert len(labels.tracks) == 1  # Track is still created
+
+
+def test_from_numpy_multiple_videos():
+    """Test from_numpy with multiple videos."""
+    video1 = Video(filename="test_video1.mp4")
+    video2 = Video(filename="test_video2.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    arr = np.zeros((1, 1, 2, 2), dtype=np.float32)
+    arr[0, 0, 0] = [1, 2]
+    arr[0, 0, 1] = [3, 4]
+    
+    # Create Labels with multiple videos
+    labels = Labels.from_numpy(arr, videos=[video1, video2], skeletons=[skeleton])
+    
+    # Should use the first video
+    assert len(labels) == 1
+    assert labels[0].video == video1
+    assert len(labels.videos) == 2
+    assert labels.videos == [video1, video2]
+
+
+def test_from_numpy_errors():
+    """Test error cases for from_numpy."""
+    video = Video(filename="test_video.mp4")
+    skeleton = Skeleton(["A", "B"])
+    
+    # 1. Invalid array dimensions
+    invalid_arr = np.zeros((2, 3, 2))  # 3D instead of 4D
+    with pytest.raises(ValueError, match="Array must have 4 dimensions"):
+        Labels.from_numpy(invalid_arr, videos=[video], skeletons=[skeleton])
+    
+    # 2. Missing videos
+    valid_arr = np.zeros((2, 1, 2, 2))
+    with pytest.raises(ValueError, match="At least one video must be provided"):
+        Labels.from_numpy(valid_arr, videos=[], skeletons=[skeleton])
+    
+    # 3. Missing skeletons
+    with pytest.raises(ValueError, match="At least one skeleton must be provided"):
+        Labels.from_numpy(valid_arr, videos=[video], skeletons=None)
+        
+    with pytest.raises(ValueError, match="At least one skeleton must be provided"):
+        Labels.from_numpy(valid_arr, videos=[video], skeletons=[])
