@@ -431,6 +431,11 @@ def test_frame_group_init(camera_group_345: CameraGroup):
     assert frame_group.metadata == metadata
 
 
+def test_frame_group_repr(frame_group_345: FrameGroup):
+    frame_group = frame_group_345
+    repr_str = str(frame_group)
+
+
 def test_recording_session_init(camera_group_345: CameraGroup):
     """Test recording session initialization.
 

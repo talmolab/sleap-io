@@ -466,3 +466,14 @@ class FrameGroup:
             `LabeledFrame` associated with `camera` or None if not found.
         """
         return self._labeled_frame_by_camera.get(camera, None)
+
+    def __repr__(self) -> str:
+        """Return a readable representation of the frame group."""
+        cameras_str = ",".join([c.name or "None" for c in self.cameras])
+        return (
+            f"FrameGroup("
+            f"frame_idx={self.frame_idx},"
+            f"instance_groups={len(self.instance_groups)},"
+            f"cameras={len(self.cameras)}:{cameras_str}"
+            f")"
+        )
