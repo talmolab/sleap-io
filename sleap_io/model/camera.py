@@ -414,6 +414,11 @@ class InstanceGroup:
         """
         return self._instance_by_camera.get(camera, None)
 
+    def __repr__(self) -> str:
+        """Return a readable representation of the instance group."""
+        cameras_str = ",".join([c.name or "None" for c in self.cameras])
+        return f"InstanceGroup(cameras={len(self.cameras)}:{cameras_str})"
+
 
 @define(eq=False)  # Set eq to false to make class hashable
 class FrameGroup:

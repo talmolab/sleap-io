@@ -381,6 +381,11 @@ def test_instance_group_init(
     assert instance_group.metadata == metadata
 
 
+def test_instance_group_repr(instance_group_345: InstanceGroup):
+    instance_group = instance_group_345
+    repr_str = str(instance_group)
+
+
 def test_frame_group_init(camera_group_345: CameraGroup):
     """Test frame group initialization.
 
