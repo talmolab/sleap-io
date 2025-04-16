@@ -2369,34 +2369,31 @@ def test_from_numpy_errors():
 
     with pytest.raises(ValueError, match="At least one skeleton must be provided"):
         Labels.from_numpy(valid_arr, videos=[video], skeletons=[])
-        
+
 
 def test_from_numpy_partial_nan_track():
     """Test from_numpy with one track having all NaN values in a frame."""
     video = Video(filename="test_video.mp4")
     skeleton = Skeleton(["A", "B"])
-    
+
     # Create test data with 1 frame, 2 tracks, but one track has all NaN values
     arr = np.zeros((1, 2, 2, 2), dtype=np.float32)
-    
+
     # First track has valid values
     arr[0, 0, 0] = [10, 20]  # First track, first node
     arr[0, 0, 1] = [30, 40]  # First track, second node
-    
+
     # Second track has all NaN values
     arr[0, 1, 0] = [np.nan, np.nan]  # Second track, first node
     arr[0, 1, 1] = [np.nan, np.nan]  # Second track, second node
-    
+
     # Create labels from this array
     labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
-    
+
     # Should still create both tracks in the Labels object
     assert len(labels.tracks) == 2
-    
+
     # But only the first track should have an instance in the frame
     assert len(labels[0].instances) == 1
     assert labels[0].instances[0].track == labels.tracks[0]
-    assert_allclose(
-        labels[0].instances[0].numpy(),
-        np.array([[10, 20], [30, 40]])
-    )
+    assert_allclose(labels[0].instances[0].numpy(), np.array([[10, 20], [30, 40]]))
