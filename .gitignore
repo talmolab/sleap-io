@@ -51,6 +51,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 lcov.info
+coverage.json
 
 # Translations
 *.mo
