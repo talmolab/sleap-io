@@ -1087,7 +1087,7 @@ def test_update_from_numpy_errors():
     with pytest.raises(ValueError, match="Video must be specified"):
         # Valid 4D array but no video specified with multiple videos
         valid_arr = np.zeros((2, 1, 2, 3))
-        labels.update_from_numpy(valid_arr, video=labels.videos[0])
+        labels.update_from_numpy(valid_arr)
 
     # 3. Test tracks mismatch
     with pytest.raises(ValueError, match="Number of tracks in array .* doesn't match"):
