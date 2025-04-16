@@ -321,6 +321,35 @@ class Camera:
         """
         return session.get_video(camera=self)
 
+    def __repr__(self) -> str:
+        """Return a readable representation of the camera."""
+        matrix_str = (
+            "identity" if np.array_equal(self.matrix, np.eye(3)) else "non-identity"
+        )
+        dist_str = "zero" if np.array_equal(self.dist, np.zeros(5)) else "non-zero"
+        size_str = "None" if self.size is None else self.size
+        rvec_str = (
+            "zero"
+            if np.array_equal(self.rvec, np.zeros(3))
+            else np.array2string(self.rvec, precision=2, suppress_small=True)
+        )
+        tvec_str = (
+            "zero"
+            if np.array_equal(self.tvec, np.zeros(3))
+            else np.array2string(self.tvec, precision=2, suppress_small=True)
+        )
+        name_str = self.name if self.name is not None else "None"
+        return (
+            "Camera("
+            f"matrix={matrix_str},"
+            f"dist={dist_str},"
+            f"size={size_str},"
+            f"rvec={rvec_str},"
+            f"tvec={tvec_str},"
+            f"name={name_str}"
+            ")"
+        )
+
 
 @define(eq=False)  # Set eq to false to make class hashable
 class InstanceGroup:

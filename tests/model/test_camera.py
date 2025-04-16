@@ -228,6 +228,13 @@ def test_camera_get_video():
     assert camera.get_video(session) is None
 
 
+def test_camera_repr(camera_group_345: CameraGroup):
+    """Test camera repr method."""
+    camera_group = camera_group_345
+    camera = camera_group.cameras[0]
+    repr_str = str(camera)
+
+
 def test_recording_session_videos():
     """Test `RecordingSession.videos` property."""
     camera_1 = Camera()
