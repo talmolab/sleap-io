@@ -29,8 +29,8 @@ class CameraGroup:
 
     def __repr__(self):
         """Return a readable representation of the camera group."""
-        camera_names = ",".join([c.name or "None" for c in self.cameras])
-        return f"CameraGroup(cameras={len(self.cameras)}:{camera_names})"
+        camera_names = ", ".join([c.name or "None" for c in self.cameras])
+        return f"CameraGroup(cameras={len(self.cameras)}:[{camera_names}])"
 
 
 @define(eq=False)  # Set eq to false to make class hashable
@@ -153,8 +153,8 @@ class RecordingSession:
         """Return a readable representation of the session."""
         return (
             "RecordingSession("
-            f"camera_group={len(self.camera_group.cameras)}cameras,"
-            f"videos={len(self.videos)},"
+            f"camera_group={len(self.camera_group.cameras)}cameras, "
+            f"videos={len(self.videos)}, "
             f"frame_groups={len(self.frame_groups)}"
             ")"
         )
@@ -341,11 +341,11 @@ class Camera:
         name_str = self.name if self.name is not None else "None"
         return (
             "Camera("
-            f"matrix={matrix_str},"
-            f"dist={dist_str},"
-            f"size={size_str},"
-            f"rvec={rvec_str},"
-            f"tvec={tvec_str},"
+            f"matrix={matrix_str}, "
+            f"dist={dist_str}, "
+            f"size={size_str}, "
+            f"rvec={rvec_str}, "
+            f"tvec={tvec_str}, "
             f"name={name_str}"
             ")"
         )
@@ -416,8 +416,8 @@ class InstanceGroup:
 
     def __repr__(self) -> str:
         """Return a readable representation of the instance group."""
-        cameras_str = ",".join([c.name or "None" for c in self.cameras])
-        return f"InstanceGroup(cameras={len(self.cameras)}:{cameras_str})"
+        cameras_str = ", ".join([c.name or "None" for c in self.cameras])
+        return f"InstanceGroup(cameras={len(self.cameras)}:[{cameras_str}])"
 
 
 @define(eq=False)  # Set eq to false to make class hashable
@@ -469,11 +469,11 @@ class FrameGroup:
 
     def __repr__(self) -> str:
         """Return a readable representation of the frame group."""
-        cameras_str = ",".join([c.name or "None" for c in self.cameras])
+        cameras_str = ", ".join([c.name or "None" for c in self.cameras])
         return (
             f"FrameGroup("
             f"frame_idx={self.frame_idx},"
             f"instance_groups={len(self.instance_groups)},"
-            f"cameras={len(self.cameras)}:{cameras_str}"
+            f"cameras={len(self.cameras)}:[{cameras_str}]"
             f")"
         )
