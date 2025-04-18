@@ -228,6 +228,13 @@ def test_camera_get_video():
     assert camera.get_video(session) is None
 
 
+def test_camera_repr(camera_group_345: CameraGroup):
+    """Test camera repr method."""
+    camera_group = camera_group_345
+    camera = camera_group.cameras[0]
+    repr_str = str(camera)
+
+
 def test_recording_session_videos():
     """Test `RecordingSession.videos` property."""
     camera_1 = Camera()
@@ -320,6 +327,15 @@ def test_camera_group_cameras():
     assert camera_group.cameras == []
 
 
+def test_camera_group_repr(camera_group_345: CameraGroup):
+    camera_group = camera_group_345
+    repr_str = str(camera_group)
+
+    for cam_idx, camera in enumerate(camera_group.cameras):
+        camera.name = f"camera_{cam_idx}"
+    repr_str = str(camera_group)
+
+
 def test_instance_group_init(
     camera_group_345: CameraGroup,
 ):
@@ -363,6 +379,11 @@ def test_instance_group_init(
     assert instance_group._points.dtype == np.float64
     assert np.array_equal(instance_group._points, points.astype(np.float64))
     assert instance_group.metadata == metadata
+
+
+def test_instance_group_repr(instance_group_345: InstanceGroup):
+    instance_group = instance_group_345
+    repr_str = str(instance_group)
 
 
 def test_frame_group_init(camera_group_345: CameraGroup):
@@ -410,6 +431,11 @@ def test_frame_group_init(camera_group_345: CameraGroup):
     assert frame_group.metadata == metadata
 
 
+def test_frame_group_repr(frame_group_345: FrameGroup):
+    frame_group = frame_group_345
+    repr_str = str(frame_group)
+
+
 def test_recording_session_init(camera_group_345: CameraGroup):
     """Test recording session initialization.
 
@@ -443,3 +469,9 @@ def test_recording_session_init(camera_group_345: CameraGroup):
     assert session._camera_by_video == camera_by_video
     assert session.frame_groups == frame_group_by_frame_idx
     assert session.metadata == metadata
+
+
+def test_recording_session_repr(recording_session_345: RecordingSession):
+    """Test recording session repr method."""
+    session = recording_session_345
+    repr_str = str(session)
