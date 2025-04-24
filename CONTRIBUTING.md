@@ -79,7 +79,7 @@ For more reference see:
 ### Testing
 Testing is done via [`pytest`](https://docs.pytest.org/).
 
-Tests should be created in the [`tests/`](tests) subfolder following the convention `test_{MODULE_NAME}.py` which mimicks the main module organization.
+Tests should be created in the [`tests/`](tests) subfolder following the convention `test_{MODULE_NAME}.py` which mimics the main module organization.
 
 It is highly recommended checking out other existing tests for reference on how these are structured.
 
