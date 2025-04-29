@@ -961,7 +961,7 @@ class Labels:
                 number of videos in the labels.
             filename_map: Dictionary mapping old filenames (keys) to new filenames
                 (values).
-            prefix_map: Dictonary mapping old prefixes (keys) to new prefixes (values).
+            prefix_map: Dictionary mapping old prefixes (keys) to new prefixes (values).
 
         Notes:
             Only one of the argument types can be provided.
