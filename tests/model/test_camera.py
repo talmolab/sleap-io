@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import cv2
 import numpy as np
 import pytest
 
@@ -12,6 +11,7 @@ from sleap_io.model.camera import (
     FrameGroup,
     InstanceGroup,
     RecordingSession,
+    rodrigues_transformation,
 )
 from sleap_io.model.instance import Instance
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -105,7 +105,7 @@ def construct_extrinsic_matrix(rvec, tvec):
         Extrinsic matrix of camera of size (4, 4) and type float64.
     """
     extrinsic_matrix = np.eye(4)
-    extrinsic_matrix[:3, :3] = cv2.Rodrigues(np.array(rvec))[0]
+    extrinsic_matrix[:3, :3] = rodrigues_transformation(np.array(rvec))[0]
     extrinsic_matrix[:3, 3] = tvec
 
     return extrinsic_matrix
@@ -119,27 +119,31 @@ def test_camera_rvec():
     camera = Camera(rvec=rvec)
     np.testing.assert_array_equal(camera.rvec, rvec)
     extrinsic_matrix = construct_extrinsic_matrix(camera.rvec, camera.tvec)
-    np.testing.assert_array_equal(camera.extrinsic_matrix, extrinsic_matrix)
-    np.testing.assert_array_equal(
-        camera.extrinsic_matrix[:3, :3], cv2.Rodrigues(camera.rvec)[0]
+    np.testing.assert_allclose(camera.extrinsic_matrix, extrinsic_matrix, atol=1e-6)
+    np.testing.assert_allclose(
+        camera.extrinsic_matrix[:3, :3], 
+        rodrigues_transformation(camera.rvec)[0], 
+        atol=1e-6
     )
     with pytest.raises(ValueError):
         camera = Camera(rvec=[1, 2])
     np.testing.assert_array_equal(camera.rvec, rvec)
-    np.testing.assert_array_equal(camera.extrinsic_matrix, extrinsic_matrix)
+    np.testing.assert_allclose(camera.extrinsic_matrix, extrinsic_matrix, atol=1e-6)
 
     # Test rvec validator
     camera = Camera()
     camera.rvec = rvec
     np.testing.assert_array_equal(camera.rvec, rvec)
-    np.testing.assert_array_equal(camera.extrinsic_matrix, extrinsic_matrix)
-    np.testing.assert_array_equal(
-        camera.extrinsic_matrix[:3, :3], cv2.Rodrigues(camera.rvec)[0]
+    np.testing.assert_allclose(camera.extrinsic_matrix, extrinsic_matrix, atol=1e-6)
+    np.testing.assert_allclose(
+        camera.extrinsic_matrix[:3, :3], 
+        rodrigues_transformation(camera.rvec)[0], 
+        atol=1e-6
     )
     with pytest.raises(ValueError):
         camera.rvec = [1, 2]
     np.testing.assert_array_equal(camera.rvec, rvec)
-    np.testing.assert_array_equal(camera.extrinsic_matrix, extrinsic_matrix)
+    np.testing.assert_allclose(camera.extrinsic_matrix, extrinsic_matrix, atol=1e-6)
 
 
 def test_camera_tvec():
@@ -180,8 +184,8 @@ def test_camera_extrinsic_matrix():
         tvec=[1, 2, 3],
     )
     extrinsic_matrix = camera.extrinsic_matrix
-    np.testing.assert_array_equal(
-        extrinsic_matrix[:3, :3], cv2.Rodrigues(camera.rvec)[0]
+    np.testing.assert_allclose(
+        extrinsic_matrix[:3, :3], rodrigues_transformation(camera.rvec)[0], atol=1e-6
     )
     np.testing.assert_array_equal(extrinsic_matrix[:3, 3], camera.tvec)
 
@@ -193,19 +197,36 @@ def test_camera_extrinsic_matrix():
     # After initialization
 
     # Setting extrinsic matrix updates rvec and tvec
-    extrinsic_matrix = np.random.rand(4, 4)
-    camera.extrinsic_matrix = extrinsic_matrix
-    rvec = cv2.Rodrigues(camera.extrinsic_matrix[:3, :3])[0]
-    tvec = camera.extrinsic_matrix[:3, 3]
-    np.testing.assert_array_equal(camera.rvec, rvec.ravel())
-    np.testing.assert_array_equal(camera.tvec, tvec)
+    # Use a valid rotation vector and translation vector
+    test_rvec = np.array([0.5, 0.5, 0.5])
+    test_tvec = np.array([1.0, 2.0, 3.0])
+    
+    # Create rotation matrix from test rotation vector
+    valid_rotation = rodrigues_transformation(test_rvec)[0]
+    
+    # Create extrinsic matrix from rotation matrix and translation vector
+    valid_extrinsic = np.eye(4)
+    valid_extrinsic[:3, :3] = valid_rotation
+    valid_extrinsic[:3, 3] = test_tvec
+    
+    camera.extrinsic_matrix = valid_extrinsic
+    
+    # Check that extrinsic matrix is preserved
+    np.testing.assert_allclose(camera.extrinsic_matrix, valid_extrinsic, atol=1e-6)
+    
+    # Check that tvec is preserved exactly
+    np.testing.assert_array_equal(camera.tvec, test_tvec)
+    
+    # Check that rotation matrix part is preserved (allows different rotation vectors)
+    rotation_matrix_from_rvec = rodrigues_transformation(camera.rvec)[0]
+    np.testing.assert_allclose(
+        rotation_matrix_from_rvec, valid_rotation, atol=1e-6
+    )
 
     # Invalid extrinsic matrix doesn't update rvec and tvec or extrinsic matrix
     with pytest.raises(ValueError):
         camera.extrinsic_matrix = np.eye(3)
-    np.testing.assert_array_equal(camera.extrinsic_matrix, extrinsic_matrix)
-    np.testing.assert_array_equal(camera.rvec, rvec.ravel())
-    np.testing.assert_array_equal(camera.tvec, tvec)
+    np.testing.assert_allclose(camera.extrinsic_matrix, valid_extrinsic, atol=1e-6)
 
 
 def test_camera_get_video():
@@ -475,3 +496,78 @@ def test_recording_session_repr(recording_session_345: RecordingSession):
     """Test recording session repr method."""
     session = recording_session_345
     repr_str = str(session)
+
+
+def test_rodrigues_transformation():
+    """Test the Rodrigues transformation implementation."""
+    # Test with rotation vectors
+    test_vectors = [
+        np.array([0, 0, 0], dtype=np.float64),  # Identity
+        np.array([1, 0, 0], dtype=np.float64),  # X-axis rotation
+        np.array([0, 1, 0], dtype=np.float64),  # Y-axis rotation
+        np.array([0, 0, 1], dtype=np.float64),  # Z-axis rotation
+        np.array([0.5, 0.5, 0.5], dtype=np.float64),  # Combined rotation
+    ]
+    
+    # Expected rotation matrices for the test vectors (pre-computed)
+    expected_matrices = [
+        # Identity
+        np.eye(3),
+        
+        # X-axis rotation (angle = 1)
+        np.array([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.5403023, -0.84147098],
+            [0.0, 0.84147098, 0.5403023]
+        ]),
+        
+        # Y-axis rotation (angle = 1)
+        np.array([
+            [0.5403023, 0.0, 0.84147098],
+            [0.0, 1.0, 0.0],
+            [-0.84147098, 0.0, 0.5403023]
+        ]),
+        
+        # Z-axis rotation (angle = 1)
+        np.array([
+            [0.5403023, -0.84147098, 0.0],
+            [0.84147098, 0.5403023, 0.0],
+            [0.0, 0.0, 1.0]
+        ]),
+        
+        # Combined rotation (angle = sqrt(0.75))
+        np.array([
+            [0.76524, -0.322422, 0.557183],
+            [0.557183, 0.76524, -0.322422],
+            [-0.322422, 0.557183, 0.76524]
+        ])
+    ]
+
+    for idx, rvec in enumerate(test_vectors):
+        # Test vector to matrix conversion
+        rotation_matrix, _ = rodrigues_transformation(rvec)
+        np.testing.assert_allclose(rotation_matrix, expected_matrices[idx], atol=1e-6)
+        
+        # Test matrix to vector conversion
+        recovered_rvec, _ = rodrigues_transformation(rotation_matrix)
+        
+        # For zero rotation, the vector should be zero
+        if np.allclose(rvec, 0):
+            np.testing.assert_allclose(recovered_rvec, np.zeros(3), atol=1e-6)
+        else:
+            # For non-zero rotations, the vectors may differ in magnitude but should represent
+            # the same rotation when converted back to matrices
+            recovered_matrix, _ = rodrigues_transformation(recovered_rvec)
+            np.testing.assert_allclose(recovered_matrix, rotation_matrix, atol=1e-6)
+    
+    # Test with invalid input shapes
+    with pytest.raises(ValueError):
+        rodrigues_transformation(np.array([1, 2]))
+    
+    with pytest.raises(ValueError):
+        rodrigues_transformation(np.array([[1, 2], [3, 4]]))
+        
+    # Test with 3x1 column vector input
+    column_vector = np.array([[1], [0], [0]], dtype=np.float64)
+    rotation_matrix, _ = rodrigues_transformation(column_vector)
+    np.testing.assert_allclose(rotation_matrix, expected_matrices[1], atol=1e-6)
