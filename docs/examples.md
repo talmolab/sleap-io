@@ -150,7 +150,7 @@ labels_test = sio.load_file("split1/test.pkg.slp")
 **See also:** [`Labels.make_training_splits`](model.md#sleap_io.Labels.make_training_splits)
 
 
-## Reencode video
+## Re-encode video
 
 Some video formats are not readily seekable at frame-level accuracy. By reencoding them
 with the default settings in our video writer, they will be reliably seekable with
