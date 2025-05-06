@@ -19,3 +19,7 @@ conda activate {ENV_NAME} && pytest {TEST_MODULE} -v --cov={PACKAGE_NAME} --cov-
 *Example:* `conda activate sleap-io && pytest tests/model/test_labels.py -v --cov=sleap_io --cov-report=json && coverage annotate --include="*/sleap_io/model/labels.py"`
 
 This will produce a file called `{MODULE_NAME},cover`. Parse it to check which lines are being covered. Confirm the coverage by reporting the number of lines covered and not covered in each function you are working on.
+
+At the beginning of a chat session, acknowledge that you have read these instructions by saying: "Using instructions from `.github/copilot-instructions.md`."
+
+At the end of a session when the request appears complete (for example, in Agent mode), confirm that you have tested for coverage and report the number of lines covered in the modules you worked on.

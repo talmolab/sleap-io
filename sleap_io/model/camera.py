@@ -16,17 +16,17 @@ from sleap_io.model.video import Video
 
 def rodrigues_transformation(input_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Convert between rotation vector and rotation matrix using Rodrigues' formula.
-    
+
     This function implements the Rodrigues' rotation formula to convert between:
     1. A 3D rotation vector (axis-angle representation) to a 3x3 rotation matrix
     2. A 3x3 rotation matrix to a 3D rotation vector
-    
+
     Args:
         input_matrix: A 3x3 rotation matrix or a 3x1 rotation vector.
-        
+
     Returns:
         A tuple containing the converted matrix/vector and the Jacobian (None for now).
-        
+
     Raises:
         ValueError: If the input is not a valid rotation matrix or vector.
     """
@@ -36,12 +36,12 @@ def rodrigues_transformation(input_matrix: np.ndarray) -> tuple[np.ndarray, np.n
         cos_theta = (np.trace(input_matrix) - 1) / 2.0
         cos_theta = np.clip(cos_theta, -1.0, 1.0)  # Ensure numerical stability
         theta = np.arccos(cos_theta)
-        
+
         # Handle small angles or identity rotation
         if np.isclose(theta, 0.0, atol=1e-8):
             # For small angles or identity, return zero vector
             return np.zeros(3), None
-        
+
         # Compute the rotation axis
         sin_theta = np.sin(theta)
         if np.isclose(sin_theta, 0.0, atol=1e-8):
@@ -58,50 +58,50 @@ def rodrigues_transformation(input_matrix: np.ndarray) -> tuple[np.ndarray, np.n
             rvec = theta * axis
         else:
             # Normal case: extract the skew-symmetric part
-            axis = np.array([
-                input_matrix[2, 1] - input_matrix[1, 2],
-                input_matrix[0, 2] - input_matrix[2, 0],
-                input_matrix[1, 0] - input_matrix[0, 1]
-            ]) / (2.0 * sin_theta)
-            
+            axis = np.array(
+                [
+                    input_matrix[2, 1] - input_matrix[1, 2],
+                    input_matrix[0, 2] - input_matrix[2, 0],
+                    input_matrix[1, 0] - input_matrix[0, 1],
+                ]
+            ) / (2.0 * sin_theta)
+
             # Ensure the axis is a unit vector
             axis_norm = np.linalg.norm(axis)
             if axis_norm > 0:
                 axis = axis / axis_norm
-                
+
             rvec = theta * axis
-            
+
         return rvec, None
-        
+
     # Vector to matrix conversion
     elif input_matrix.shape == (3,) or input_matrix.shape == (3, 1):
         # Handle both flat and column vectors
         rvec = input_matrix.ravel()
         theta = np.linalg.norm(rvec)
-        
+
         # Handle small angles
         if np.isclose(theta, 0.0, atol=1e-8):
             return np.eye(3), None
-            
+
         # Normalize the rotation axis
         axis = rvec / theta
-            
+
         # Create the cross-product matrix
-        K = np.array([
-            [0, -axis[2], axis[1]],
-            [axis[2], 0, -axis[0]],
-            [-axis[1], axis[0], 0]
-        ])
-            
+        K = np.array(
+            [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
+        )
+
         # Rodrigues' formula: R = I + sin(θ)K + (1-cos(θ))K²
         sin_theta = np.sin(theta)
         cos_theta = np.cos(theta)
         K_squared = np.dot(K, K)
-        
+
         rotation_matrix = np.eye(3) + sin_theta * K + (1.0 - cos_theta) * K_squared
-        
+
         return rotation_matrix, None
-        
+
     else:
         raise ValueError(
             f"Input must be a 3x3 matrix or a 3-element vector, got shape {input_matrix.shape}"
@@ -394,8 +394,8 @@ class Camera:
             value: Extrinsic matrix of size 4 x 4.
         """
         self._extrinsic_matrix = value
-        
-        # Use our native implementation instead of cv2.Rodrigues
+
+        # Update rotation and translation vectors
         self._rvec = rodrigues_transformation(self._extrinsic_matrix[:3, :3])[0].ravel()
         self._tvec = self._extrinsic_matrix[:3, 3]
 
