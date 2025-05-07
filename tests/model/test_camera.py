@@ -426,7 +426,7 @@ def test_instance_group_properties():
 
     # Test instance_by_camera property
     instance_by_camera = {camera1: instance1, camera2: instance2}
-    instance_group = InstanceGroup(_instance_by_camera=instance_by_camera)
+    instance_group = InstanceGroup(instance_by_camera=instance_by_camera)
 
     # Check that instance_by_camera returns the right dictionary
     assert instance_group.instance_by_camera is instance_group._instance_by_camera
@@ -435,14 +435,14 @@ def test_instance_group_properties():
     # Test score property
     test_score = 0.95
     instance_group = InstanceGroup(
-        _instance_by_camera=instance_by_camera, _score=test_score
+        instance_by_camera=instance_by_camera, score=test_score
     )
     assert instance_group.score == test_score
 
     # Test points property
     test_points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
     instance_group = InstanceGroup(
-        _instance_by_camera=instance_by_camera, _points=test_points
+        instance_by_camera=instance_by_camera, points=test_points
     )
     assert instance_group.points is instance_group._points
     np.testing.assert_array_equal(instance_group.points, test_points)
@@ -643,3 +643,24 @@ def test_rodrigues_transformation():
     rvec, _ = rodrigues_transformation(pi_rotation_z)
     rotation_matrix, _ = rodrigues_transformation(rvec)
     np.testing.assert_allclose(rotation_matrix, pi_rotation_z, atol=1e-6)
+
+
+def test_recording_session_cameras():
+    """Test `RecordingSession.cameras` property."""
+    camera_1 = Camera(name="camera_1")
+    camera_2 = Camera(name="camera_2")
+    camera_group = CameraGroup(cameras=[camera_1, camera_2])
+
+    # Test with no videos
+    session = RecordingSession(camera_group=camera_group)
+    assert session.cameras == []
+
+    # Test with a single video
+    video_1 = Video(filename="test_video_1.mp4")
+    session.add_video(video=video_1, camera=camera_1)
+    assert session.cameras == [camera_1]
+
+    # Test with multiple videos
+    video_2 = Video(filename="test_video_2.mp4")
+    session.add_video(video=video_2, camera=camera_2)
+    assert session.cameras == [camera_1, camera_2]
