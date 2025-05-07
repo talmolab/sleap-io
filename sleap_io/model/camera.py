@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import attrs
 import numpy as np
 from attrs import define, field
