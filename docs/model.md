@@ -25,3 +25,13 @@
 ::: sleap_io.Video
 
 ::: sleap_io.SuggestionFrame
+
+::: sleap_io.Camera
+
+::: sleap_io.CameraGroup
+
+::: sleap_io.FrameGroup
+
+::: sleap_io.InstanceGroup
+
+::: sleap_io.RecordingSession
