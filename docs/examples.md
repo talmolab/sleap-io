@@ -217,3 +217,30 @@ labels.save("labels_with_new_skeleton.slp")
 ```
 
 **See also:** [`Labels.replace_skeleton`](model.md#sleap_io.Labels.replace_skeleton)
+
+
+## Convert to and from numpy arrays
+
+A common use case is when we have a single video with tracks and we want to apply some temporal filtering operations like interpolation or smoothing. For these, it's much more convenient to work with temporally contiguous arrays rather than the data structures used the our data model.
+
+For this use case, we can leverage [`Labels.numpy`](model.md#sleap_io.Labels.numpy) and [`Labels.update_from_numpy`](model.md#sleap_io.Labels.update_from_numpy):
+
+```py
+import sleap_io as sio
+
+# Load predictions
+labels = sio.load_file("predictions.slp")
+
+# Convert to array of shape (n_frames, n_tracks, n_nodes, xy)
+trx = labels.numpy()
+
+# ... manipulate the array...
+
+# Update the labels with the changes
+labels.update_from_numpy(trx)
+
+# Save the filtered version
+labels.save("predictions.filtered.slp")
+```
+
+For a more full-featured library for processing tracked poses, check out [`movement`](https://movement.neuroinformatics.dev/).
