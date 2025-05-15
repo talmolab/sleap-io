@@ -212,6 +212,10 @@ def video_to_dict(video: Video) -> dict:
         }
 
     elif type(video.backend) == ImageVideo:
+        if video.shape is not None:
+            height, width, channels = video.shape[1:4]
+        else:
+            height, width, channels = None, None, 3
         return {
             "filename": video_filename,
             "backend": {
@@ -219,9 +223,10 @@ def video_to_dict(video: Video) -> dict:
                 "shape": video.shape,
                 "filename": sanitize_filename(video.backend.filename[0]),
                 "filenames": sanitize_filename(video.backend.filename),
-                "dataset": video.backend_metadata.get("dataset", None),
+                "height_": height,
+                "width_": width,
+                "channels_": channels,
                 "grayscale": video.grayscale,
-                "input_format": video.backend_metadata.get("input_format", None),
             },
         }
 
