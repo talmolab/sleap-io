@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.12">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.14">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.2afb09e1.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.342714a4.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
@@ -409,9 +409,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#re-encode-video" class="md-nav__link">
+  <a href="#reencode-video" class="md-nav__link">
     <span class="md-ellipsis">
-      Re-encode video
+      Reencode video
     </span>
   </a>
   
@@ -430,15 +430,6 @@
   <a href="#replace-skeleton" class="md-nav__link">
     <span class="md-ellipsis">
       Replace skeleton
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#convert-to-and-from-numpy-arrays" class="md-nav__link">
-    <span class="md-ellipsis">
-      Convert to and from numpy arrays
     </span>
   </a>
   
@@ -1265,9 +1256,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#re-encode-video" class="md-nav__link">
+  <a href="#reencode-video" class="md-nav__link">
     <span class="md-ellipsis">
-      Re-encode video
+      Reencode video
     </span>
   </a>
   
@@ -1286,15 +1277,6 @@
   <a href="#replace-skeleton" class="md-nav__link">
     <span class="md-ellipsis">
       Replace skeleton
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#convert-to-and-from-numpy-arrays" class="md-nav__link">
-    <span class="md-ellipsis">
-      Convert to and from numpy arrays
     </span>
   </a>
   
@@ -1434,7 +1416,7 @@
 <a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">labels_test</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;split1/test.pkg.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="../model/#sleap_io.Labels.make_training_splits"><code>Labels.make_training_splits</code></a></p>
-<h2 id="re-encode-video">Re-encode video<a class="headerlink" href="#re-encode-video" title="Permanent link">&para;</a></h2>
+<h2 id="reencode-video">Reencode video<a class="headerlink" href="#reencode-video" title="Permanent link">&para;</a></h2>
 <p>Some video formats are not readily seekable at frame-level accuracy. By reencoding them
 with the default settings in our video writer, they will be reliably seekable with
 minimal loss of quality and can be achieved in a single line:</p>
@@ -1485,26 +1467,6 @@ possible. We can do this as follows:</p>
 <a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels_with_new_skeleton.slp&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>See also:</strong> <a href="../model/#sleap_io.Labels.replace_skeleton"><code>Labels.replace_skeleton</code></a></p>
-<h2 id="convert-to-and-from-numpy-arrays">Convert to and from numpy arrays<a class="headerlink" href="#convert-to-and-from-numpy-arrays" title="Permanent link">&para;</a></h2>
-<p>A common use case is when we have a single video with tracks and we want to apply some temporal filtering operations like interpolation or smoothing. For these, it's much more convenient to work with temporally contiguous arrays rather than the data structures used the our data model.</p>
-<p>For this use case, we can leverage <a href="../model/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a> and <a href="../model/#sleap_io.Labels.update_from_numpy"><code>Labels.update_from_numpy</code></a>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Load predictions</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Convert to array of shape (n_frames, n_tracks, n_nodes, xy)</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">trx</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
-<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># ... manipulate the array...</span>
-<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
-<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Update the labels with the changes</span>
-<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">labels</span><span class="o">.</span><span class="n">update_from_numpy</span><span class="p">(</span><span class="n">trx</span><span class="p">)</span>
-<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
-<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># Save the filtered version</span>
-<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;predictions.filtered.slp&quot;</span><span class="p">)</span>
-</code></pre></div>
-<p>For a more full-featured library for processing tracked poses, check out <a href="https://movement.neuroinformatics.dev/"><code>movement</code></a>.</p>
 
 
 
@@ -1671,10 +1633,10 @@ possible. We can do this as follows:</p>
     
     
       
-      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../assets/javascripts/workers/search.f8cc74c7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tracking", "toc.follow", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips", "content.code.select", "content.footnote.tooltips"], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.c8b220af.min.js"></script>
+      <script src="../assets/javascripts/bundle.13a4f30d.min.js"></script>
       
     
   </body>
