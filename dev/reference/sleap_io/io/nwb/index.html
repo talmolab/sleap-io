@@ -1450,7 +1450,7 @@ This can be used to pass the timestamps with the key <code>video_timestamps</cod
 or the sampling rate with key<code>video_sample_rate</code>.</p>
 <p>e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
 or   pose_estimation_metadata["video_sample_rate"] = 15  # In Hz</p>
-<p>2) The other use of this dictionary is to ovewrite sleap-io default
+<p>2) The other use of this dictionary is to overwrite sleap-io default
 arguments for the PoseEstimation container.
 see https://github.com/rly/ndx-pose for a full list or arguments.</p>
               </div>
@@ -1526,7 +1526,7 @@ see https://github.com/rly/ndx-pose for a full list or arguments.</p>
 <a id="__codelineno-0-368" name="__codelineno-0-368"></a><a href="#__codelineno-0-368"><span class="linenos" data-linenos="368 "></span></a><span class="sd">            e.g. pose_estimation_metadata[&quot;video_timestamps&quot;] = np.array(timestamps)</span>
 <a id="__codelineno-0-369" name="__codelineno-0-369"></a><a href="#__codelineno-0-369"><span class="linenos" data-linenos="369 "></span></a><span class="sd">            or   pose_estimation_metadata[&quot;video_sample_rate&quot;] = 15  # In Hz</span>
 <a id="__codelineno-0-370" name="__codelineno-0-370"></a><a href="#__codelineno-0-370"><span class="linenos" data-linenos="370 "></span></a>
-<a id="__codelineno-0-371" name="__codelineno-0-371"></a><a href="#__codelineno-0-371"><span class="linenos" data-linenos="371 "></span></a><span class="sd">            2) The other use of this dictionary is to ovewrite sleap-io default</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a><a href="#__codelineno-0-371"><span class="linenos" data-linenos="371 "></span></a><span class="sd">            2) The other use of this dictionary is to overwrite sleap-io default</span>
 <a id="__codelineno-0-372" name="__codelineno-0-372"></a><a href="#__codelineno-0-372"><span class="linenos" data-linenos="372 "></span></a><span class="sd">            arguments for the PoseEstimation container.</span>
 <a id="__codelineno-0-373" name="__codelineno-0-373"></a><a href="#__codelineno-0-373"><span class="linenos" data-linenos="373 "></span></a><span class="sd">            see https://github.com/rly/ndx-pose for a full list or arguments.</span>
 <a id="__codelineno-0-374" name="__codelineno-0-374"></a><a href="#__codelineno-0-374"><span class="linenos" data-linenos="374 "></span></a><span class="sd">        skeleton_map: Mapping of skeleton names to NWB Skeleton objects.</span>
@@ -1815,7 +1815,7 @@ to the predicted instances associated to this labels object.</p>
 <a id="__codelineno-0-535" name="__codelineno-0-535"></a><a href="#__codelineno-0-535"><span class="linenos" data-linenos="535 "></span></a>    <span class="n">timestamps</span> <span class="o">=</span> <span class="n">pose_estimation_metadata_copy</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;video_timestamps&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 <a id="__codelineno-0-536" name="__codelineno-0-536"></a><a href="#__codelineno-0-536"><span class="linenos" data-linenos="536 "></span></a>    <span class="n">sample_rate</span> <span class="o">=</span> <span class="n">pose_estimation_metadata_copy</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;video_sample_rate&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
 <a id="__codelineno-0-537" name="__codelineno-0-537"></a><a href="#__codelineno-0-537"><span class="linenos" data-linenos="537 "></span></a>    <span class="k">if</span> <span class="n">timestamps</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-538" name="__codelineno-0-538"></a><a href="#__codelineno-0-538"><span class="linenos" data-linenos="538 "></span></a>        <span class="c1"># Keeps backward compatbility.</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a><a href="#__codelineno-0-538"><span class="linenos" data-linenos="538 "></span></a>        <span class="c1"># Keeps backward compatibility.</span>
 <a id="__codelineno-0-539" name="__codelineno-0-539"></a><a href="#__codelineno-0-539"><span class="linenos" data-linenos="539 "></span></a>        <span class="n">timestamps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">track_data_df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="n">sample_rate</span>
 <a id="__codelineno-0-540" name="__codelineno-0-540"></a><a href="#__codelineno-0-540"><span class="linenos" data-linenos="540 "></span></a>    <span class="k">else</span><span class="p">:</span>
 <a id="__codelineno-0-541" name="__codelineno-0-541"></a><a href="#__codelineno-0-541"><span class="linenos" data-linenos="541 "></span></a>        <span class="n">timestamps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">timestamps</span><span class="p">)</span>
@@ -2758,7 +2758,7 @@ This can be used to pass the timestamps with the key <code>video_timestamps</cod
 or the sampling rate with key<code>video_sample_rate</code>.</p>
 <p>e.g. pose_estimation_metadata["video_timestamps"] = np.array(timestamps)
 or   pose_estimation_metadata["video_sample_rate] = 15  # In Hz</p>
-<p>2) The other use of this dictionary is to ovewrite sleap-io default
+<p>2) The other use of this dictionary is to overwrite sleap-io default
 arguments for the PoseEstimation container.
 see https://github.com/rly/ndx-pose for a full list or arguments.</p>
               </div>
@@ -2805,7 +2805,7 @@ see https://github.com/rly/ndx-pose for a full list or arguments.</p>
 <a id="__codelineno-0-313" name="__codelineno-0-313"></a><a href="#__codelineno-0-313"><span class="linenos" data-linenos="313 "></span></a><span class="sd">            e.g. pose_estimation_metadata[&quot;video_timestamps&quot;] = np.array(timestamps)</span>
 <a id="__codelineno-0-314" name="__codelineno-0-314"></a><a href="#__codelineno-0-314"><span class="linenos" data-linenos="314 "></span></a><span class="sd">            or   pose_estimation_metadata[&quot;video_sample_rate] = 15  # In Hz</span>
 <a id="__codelineno-0-315" name="__codelineno-0-315"></a><a href="#__codelineno-0-315"><span class="linenos" data-linenos="315 "></span></a>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a><a href="#__codelineno-0-316"><span class="linenos" data-linenos="316 "></span></a><span class="sd">            2) The other use of this dictionary is to ovewrite sleap-io default</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><a href="#__codelineno-0-316"><span class="linenos" data-linenos="316 "></span></a><span class="sd">            2) The other use of this dictionary is to overwrite sleap-io default</span>
 <a id="__codelineno-0-317" name="__codelineno-0-317"></a><a href="#__codelineno-0-317"><span class="linenos" data-linenos="317 "></span></a><span class="sd">            arguments for the PoseEstimation container.</span>
 <a id="__codelineno-0-318" name="__codelineno-0-318"></a><a href="#__codelineno-0-318"><span class="linenos" data-linenos="318 "></span></a><span class="sd">            see https://github.com/rly/ndx-pose for a full list or arguments.</span>
 <a id="__codelineno-0-319" name="__codelineno-0-319"></a><a href="#__codelineno-0-319"><span class="linenos" data-linenos="319 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
