@@ -261,3 +261,74 @@ def test_instance_replace_skeleton():
     assert inst.skeleton == new_skel
     assert_equal(inst.numpy(), [[np.nan, np.nan], [2, 2], [np.nan, np.nan]])
     assert inst.points["name"].tolist() == ["X", "C", "Y"]
+
+
+def test_instance_setitem():
+    """Test the __setitem__ method of the Instance class."""
+    skel = Skeleton(["A", "B", "C"])
+    inst = Instance.empty(skeleton=skel)
+
+    # Set point by index
+    inst[0] = [1, 2]
+    assert_equal(inst[0]["xy"], [1, 2])
+    assert inst[0]["visible"] == True
+
+    # Set point by node name
+    inst["B"] = [3, 4]
+    assert_equal(inst["B"]["xy"], [3, 4])
+    assert inst["B"]["visible"] == True
+
+    # Set point by Node object
+    node = inst.skeleton.nodes[2]
+    inst[node] = [5, 6]
+    assert_equal(inst[node]["xy"], [5, 6])
+    assert inst[node]["visible"] == True
+
+    # Check all points were set correctly
+    assert_equal(inst.numpy(), [[1, 2], [3, 4], [5, 6]])
+
+    # Test with value that has extra elements (should only use first two)
+    inst["A"] = [7, 8, 9, 10]
+    assert_equal(inst["A"]["xy"], [7, 8])
+
+    # Test with too few elements
+    with pytest.raises(ValueError):
+        inst["A"] = [1]
+
+
+def test_predicted_instance_setitem():
+    """Test the __setitem__ method of the PredictedInstance class."""
+    skel = Skeleton(["A", "B", "C"])
+    inst = PredictedInstance.empty(skeleton=skel)
+
+    # Set point by index without score (should default to 1.0)
+    inst[0] = [1, 2]
+    assert_equal(inst[0]["xy"], [1, 2])
+    assert inst[0]["visible"] == True
+    assert inst[0]["score"] == 1.0
+
+    # Set point by node name with score
+    inst["B"] = [3, 4, 0.75]
+    assert_equal(inst["B"]["xy"], [3, 4])
+    assert inst["B"]["score"] == 0.75
+    assert inst["B"]["visible"] == True
+
+    # Set point by Node object with score
+    node = inst.skeleton.nodes[2]
+    inst[node] = [5, 6, 0.9]
+    assert_equal(inst[node]["xy"], [5, 6])
+    assert inst[node]["score"] == 0.9
+    assert inst[node]["visible"] == True
+
+    # Check numpy output with scores
+    expected = np.array([[1, 2, 1.0], [3, 4, 0.75], [5, 6, 0.9]])
+    assert_equal(inst.numpy(scores=True), expected)
+
+    # Test with value that has extra elements (should only use first three)
+    inst["A"] = [7, 8, 0.6, 10]
+    assert_equal(inst["A"]["xy"], [7, 8])
+    assert inst["A"]["score"] == 0.6
+
+    # Test with too few elements
+    with pytest.raises(ValueError):
+        inst["A"] = [1]
