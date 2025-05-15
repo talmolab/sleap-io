@@ -49,6 +49,7 @@ from sleap_io.io.slp import (
     session_to_dict,
     read_sessions,
     write_sessions,
+    embed_frames,
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 import numpy as np
@@ -58,6 +59,7 @@ from pathlib import Path
 import shutil
 from sleap_io.io.video_reading import ImageVideo, HDF5Video, MediaVideo
 import sys
+import h5py
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -894,6 +896,102 @@ def test_embed(tmpdir, slp_real_data, to_embed):
         assert len(labels.video.backend.embedded_frame_inds) == 10
 
 
+def test_embed_hdf5_format(tmpdir, slp_real_data):
+    """Test embedding frames with HDF5 image format."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = Path(tmpdir / "labels.pkg.slp").as_posix()
+
+    # Get frames to embed
+    frames_to_embed = [
+        (lf.video, lf.frame_idx) for lf in base_labels.user_labeled_frames
+    ]
+
+    # Prepare metadata and process with HDF5 format
+    from sleap_io.io.slp import prepare_frames_to_embed, process_and_embed_frames
+
+    frames_metadata = prepare_frames_to_embed(labels_path, base_labels, frames_to_embed)
+    replaced_videos = process_and_embed_frames(
+        labels_path, frames_metadata, image_format="hdf5"
+    )
+
+    # Update labels and write the rest of the data
+    if len(replaced_videos) > 0:
+        base_labels.replace_videos(video_map=replaced_videos)
+
+    # Write the rest of the data to make a complete SLP file
+    write_videos(labels_path, base_labels.videos)
+    write_tracks(labels_path, base_labels.tracks)
+    write_suggestions(labels_path, base_labels.suggestions, base_labels.videos)
+    write_sessions(
+        labels_path,
+        base_labels.sessions,
+        base_labels.videos,
+        base_labels.labeled_frames,
+    )
+    write_metadata(labels_path, base_labels)
+    write_lfs(labels_path, base_labels)
+
+    # Verify the embedded file
+    labels = read_labels(labels_path)
+    assert type(labels.video.backend) == HDF5Video
+    assert Path(labels.video.filename).as_posix() == labels_path
+
+    # Check the image format
+    with h5py.File(labels_path, "r") as f:
+        assert f["video0/video"].attrs["format"] == "hdf5"
+
+
+def test_embed_variable_length(tmpdir, slp_real_data):
+    """Test embedding frames with variable length datasets."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = Path(tmpdir / "labels_varlen.pkg.slp").as_posix()
+
+    # Use embed_frames with fixed_length=False
+    frames_to_embed = [
+        (lf.video, lf.frame_idx) for lf in base_labels.user_labeled_frames
+    ]
+
+    # First prepare the metadata
+    from sleap_io.io.slp import prepare_frames_to_embed, process_and_embed_frames
+
+    frames_metadata = prepare_frames_to_embed(labels_path, base_labels, frames_to_embed)
+
+    # Process with fixed_length=False
+    replaced_videos = process_and_embed_frames(
+        labels_path, frames_metadata, fixed_length=False
+    )
+
+    # Update labels with the embedded videos
+    if len(replaced_videos) > 0:
+        base_labels.replace_videos(video_map=replaced_videos)
+
+    # Write all the data to make a complete SLP file
+    write_videos(labels_path, base_labels.videos)
+    write_tracks(labels_path, base_labels.tracks)
+    write_suggestions(labels_path, base_labels.suggestions, base_labels.videos)
+    write_sessions(
+        labels_path,
+        base_labels.sessions,
+        base_labels.videos,
+        base_labels.labeled_frames,
+    )
+    write_metadata(labels_path, base_labels)
+    write_lfs(labels_path, base_labels)
+
+    # Verify the embedded file
+    labels = read_labels(labels_path)
+    assert type(labels.video.backend) == HDF5Video
+    assert Path(labels.video.filename).as_posix() == labels_path
+
+    # Check that the frames were properly embedded
+    assert labels.video.backend.embedded_frame_inds == [0, 220, 440, 770, 990]
+
+    # Check that images can be loaded correctly
+    for frame_idx in [0, 220, 440, 770, 990]:
+        img = labels.video[frame_idx]
+        assert img.shape == (384, 384, 1)
+
+
 def test_embed_two_rounds(tmpdir, slp_real_data):
     base_labels = read_labels(slp_real_data)
     labels_path = str(tmpdir / "labels.pkg.slp")
@@ -1014,3 +1112,13 @@ def test_video_path_resolution(slp_real_data, tmp_path):
             Path(labels.video.filename).as_posix()
             == "new_fake/path/to/inaccessible.mp4"
         )
+
+
+def test_embed_invalid_value(tmpdir, slp_real_data):
+    """Test that invalid embed values raise an error."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = Path(tmpdir / "labels.pkg.slp").as_posix()
+
+    # Try an invalid embed value
+    with pytest.raises(ValueError, match="Invalid value for embed"):
+        write_labels(labels_path, base_labels, embed="invalid_value")
