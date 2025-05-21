@@ -29,6 +29,7 @@ from enum import IntEnum
 from pathlib import Path
 import imageio.v3 as iio
 import sys
+from tqdm import tqdm
 
 try:
     import cv2
@@ -411,6 +412,7 @@ def process_and_embed_frames(
     frames_metadata: list[dict],
     image_format: str = "png",
     fixed_length: bool = True,
+    verbose: bool = True,
 ) -> dict[Video, Video]:
     """Process and embed frames into a SLEAP labels file.
 
@@ -425,6 +427,7 @@ def process_and_embed_frames(
         fixed_length: If `True` (the default), the embedded images will be padded to the
             length of the largest image. If `False`, the images will be stored as
             variable length, which is smaller but may not be supported by all readers.
+        verbose: If `True` (the default), display a progress bar for the embedding process.
 
     Returns:
         A dictionary mapping original Video objects to their embedded versions.
@@ -432,8 +435,13 @@ def process_and_embed_frames(
     # Initialize a dictionary to store data by group
     data_by_group = {}
 
-    # Process all frames in a single flat loop
-    for frame_meta in frames_metadata:
+    # Process all frames in a single flat loop with progress bar if verbose
+    frame_iter = (
+        tqdm(frames_metadata, desc="Embedding frames", disable=not verbose)
+        if verbose
+        else frames_metadata
+    )
+    for frame_meta in frame_iter:
         video = frame_meta["video"]
         frame_idx = frame_meta["frame_idx"]
         group = frame_meta["group"]
@@ -552,6 +560,7 @@ def embed_frames(
     labels: Labels,
     embed: list[tuple[Video, int]],
     image_format: str = "png",
+    verbose: bool = True,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -561,6 +570,7 @@ def embed_frames(
         embed: A list of tuples of `(video, frame_idx)` specifying the frames to embed.
         image_format: The image format to use for embedding. Valid formats are "png"
             (the default), "jpg" or "hdf5".
+        verbose: If `True` (the default), display a progress bar for the embedding process.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -568,7 +578,7 @@ def embed_frames(
     """
     frames_metadata = prepare_frames_to_embed(labels_path, labels, embed)
     replaced_videos = process_and_embed_frames(
-        labels_path, frames_metadata, image_format=image_format
+        labels_path, frames_metadata, image_format=image_format, verbose=verbose
     )
 
     if len(replaced_videos) > 0:
@@ -576,7 +586,10 @@ def embed_frames(
 
 
 def embed_videos(
-    labels_path: str, labels: Labels, embed: bool | str | list[tuple[Video, int]]
+    labels_path: str,
+    labels: Labels,
+    embed: bool | str | list[tuple[Video, int]],
+    verbose: bool = True,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -592,6 +605,7 @@ def embed_videos(
 
             If `True` or `"all"`, all labeled frames and suggested frames will be
             embedded.
+        verbose: If `True` (the default), display a progress bar for the embedding process.
 
             If `"source"` is specified, no images will be embedded and the source video
             will be restored if available.
@@ -617,10 +631,15 @@ def embed_videos(
     else:
         raise ValueError(f"Invalid value for embed: {embed}")
 
-    embed_frames(labels_path, labels, embed)
+    embed_frames(labels_path, labels, embed, verbose=verbose)
 
 
-def write_videos(labels_path: str, videos: list[Video], restore_source: bool = False):
+def write_videos(
+    labels_path: str,
+    videos: list[Video],
+    restore_source: bool = False,
+    verbose: bool = True,
+):
     """Write video metadata to a SLEAP labels file.
 
     Args:
@@ -629,6 +648,7 @@ def write_videos(labels_path: str, videos: list[Video], restore_source: bool = F
         restore_source: If `True`, restore source videos if available and will not
             re-embed the embedded images. If `False` (the default), will re-embed images
             that were previously embedded.
+        verbose: If `True` (the default), display a progress bar when embedding frames.
     """
     videos_to_embed = []
     videos_to_write = []
@@ -682,6 +702,7 @@ def write_videos(labels_path: str, videos: list[Video], restore_source: bool = F
             ][
                 0
             ],  # Use the first video's format
+            verbose=verbose,
         )
 
         # Add the embedded videos to the list
@@ -1892,6 +1913,7 @@ def write_labels(
     labels_path: str,
     labels: Labels,
     embed: bool | str | list[tuple[Video, int]] | None = None,
+    verbose: bool = True,
 ):
     """Write a SLEAP labels file.
 
@@ -1912,13 +1934,16 @@ def write_labels(
             will be restored if available.
 
             This argument is only valid for the SLP backend.
+        verbose: If `True` (the default), display a progress bar when embedding frames.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
 
     if embed:
-        embed_videos(labels_path, labels, embed)
-    write_videos(labels_path, labels.videos, restore_source=(embed == "source"))
+        embed_videos(labels_path, labels, embed, verbose=verbose)
+    write_videos(
+        labels_path, labels.videos, restore_source=(embed == "source"), verbose=verbose
+    )
     write_tracks(labels_path, labels.tracks)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_sessions(labels_path, labels.sessions, labels.videos, labels.labeled_frames)

@@ -17,6 +17,7 @@ dependencies:
   - opencv
   - pynwb
   - ndx-pose >=0.2.1
+  - tqdm
   - pytest
   - pytest-cov
   - black
