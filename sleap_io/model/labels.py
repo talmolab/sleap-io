@@ -607,6 +607,7 @@ class Labels:
         filename: str,
         format: Optional[str] = None,
         embed: bool | str | list[tuple[Video, int]] | None = None,
+        verbose: bool = True,
         **kwargs,
     ):
         """Save labels to file in specified format.
@@ -619,6 +620,7 @@ class Labels:
             embed: Frames to embed in the saved labels file. One of `None`, `True`,
                 `"all"`, `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or
                 list of tuples of `(video, frame_idx)`.
+            verbose: If `True` (the default), display a progress bar when embedding frames.
 
                 If `None` is specified (the default) and the labels contains embedded
                 frames, those embedded frames will be re-saved to the new file.
@@ -633,7 +635,7 @@ class Labels:
         """
         from sleap_io import save_file
 
-        save_file(self, filename, format=format, embed=embed, **kwargs)
+        save_file(self, filename, format=format, embed=embed, verbose=verbose, **kwargs)
 
     def clean(
         self,

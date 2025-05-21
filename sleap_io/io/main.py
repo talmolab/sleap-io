@@ -27,6 +27,7 @@ def save_slp(
     labels: Labels,
     filename: str,
     embed: bool | str | list[tuple[Video, int]] | None = None,
+    verbose: bool = True,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -47,8 +48,9 @@ def save_slp(
             will be restored if available.
 
             This argument is only valid for the SLP backend.
+        verbose: If `True` (the default), display a progress bar when embedding frames.
     """
-    return slp.write_labels(filename, labels, embed=embed)
+    return slp.write_labels(filename, labels, embed=embed, verbose=verbose)
 
 
 def load_nwb(filename: str) -> Labels:
@@ -244,7 +246,11 @@ def load_file(
 
 
 def save_file(
-    labels: Labels, filename: str | Path, format: Optional[str] = None, **kwargs
+    labels: Labels,
+    filename: str | Path,
+    format: Optional[str] = None,
+    verbose: bool = True,
+    **kwargs,
 ):
     """Save a file based on the extension.
 
@@ -254,6 +260,8 @@ def save_file(
         format: Optional format to save as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "labelstudio" and
             "jabs".
+        verbose: If `True` (the default), display a progress bar when embedding frames
+            (only applies to the SLP format).
     """
     if isinstance(filename, Path):
         filename = str(filename)
@@ -269,7 +277,7 @@ def save_file(
             format = "jabs"
 
     if format == "slp":
-        save_slp(labels, filename, **kwargs)
+        save_slp(labels, filename, verbose=verbose, **kwargs)
     elif format == "nwb":
         save_nwb(labels, filename, **kwargs)
     elif format == "labelstudio":

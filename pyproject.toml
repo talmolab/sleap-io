@@ -28,7 +28,8 @@ dependencies = [
     "pandas",
     "simplejson",
     "imageio",
-    "imageio-ffmpeg>=0.5.0"]
+    "imageio-ffmpeg>=0.5.0",
+    "tqdm"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
