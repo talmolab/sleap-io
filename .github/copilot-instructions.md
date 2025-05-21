@@ -20,6 +20,12 @@ conda activate {ENV_NAME} && pytest {TEST_MODULE} -v --cov={PACKAGE_NAME} --cov-
 
 This will produce a file called `{MODULE_NAME},cover`. Parse it to check which lines are being covered. Confirm the coverage by reporting the number of lines covered and not covered in each function you are working on.
 
+When writing tests, be sure to use `pytest` best practices, including doing I/O in `tmp_path` directories.
+
+Do not create new test modules unless a new package module was created. Place relevant tests in the corresponding test module in the `tests/` subfolder.
+
+Prefer to create minimal synthetic data for tests, but if needed use real data from **existing** fixtures. Look at other tests, especially in the module you're writing tests in, for examples of how to use existing fixtures or how to create dummy data structures.
+
 At the beginning of a chat session, acknowledge that you have read these instructions by saying: "Using instructions from `.github/copilot-instructions.md`."
 
 At the end of a session when the request appears complete (for example, in Agent mode), confirm that you have tested for coverage and report the number of lines covered in the modules you worked on.
