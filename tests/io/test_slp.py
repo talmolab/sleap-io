@@ -1253,6 +1253,129 @@ def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
         assert mock_write_videos.call_args.kwargs["verbose"] is False
 
 
+def test_format_id_1_3_tracking_score(tmp_path):
+    """Test that FORMAT_ID 1.3 properly handles tracking_score field."""
+    # Create test data with tracking scores
+    skeleton = Skeleton(["A", "B", "C"])
+    track = Track("track1")
+
+    # Create instances with tracking scores
+    inst1 = Instance(
+        [[1, 2], [3, 4], [5, 6]], skeleton=skeleton, track=track, tracking_score=0.95
+    )
+    inst2 = PredictedInstance(
+        [[7, 8], [9, 10], [11, 12]],
+        skeleton=skeleton,
+        track=track,
+        score=0.8,
+        tracking_score=0.75,
+    )
+
+    # Create labeled frames and labels
+    video = Video.from_filename("fake.mp4")
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+    labels = Labels(
+        videos=[video], skeletons=[skeleton], tracks=[track], labeled_frames=[lf]
+    )
+
+    # Save with FORMAT_ID 1.3
+    test_path = tmp_path / "test_format_1_3.slp"
+    write_labels(test_path, labels)
+
+    # Verify FORMAT_ID is 1.3
+    format_id = read_hdf5_attrs(test_path, "metadata", "format_id")
+    assert format_id == 1.3
+
+    # Load and verify tracking scores are preserved
+    loaded_labels = read_labels(test_path)
+    loaded_inst1 = loaded_labels.labeled_frames[0].instances[0]
+    loaded_inst2 = loaded_labels.labeled_frames[0].instances[1]
+
+    assert isinstance(loaded_inst1, Instance)
+    assert loaded_inst1.tracking_score == pytest.approx(0.95)
+
+    assert isinstance(loaded_inst2, PredictedInstance)
+    assert loaded_inst2.tracking_score == pytest.approx(0.75)
+    assert loaded_inst2.score == pytest.approx(0.8)
+
+
+def test_format_id_backward_compatibility(tmp_path):
+    """Test backward compatibility when reading files with older FORMAT_ID."""
+    # Create test data
+    skeleton = Skeleton(["A", "B"])
+    track = Track("track1")
+
+    # Create instances
+    inst = Instance([[1, 2], [3, 4]], skeleton=skeleton, track=track)
+    pred_inst = PredictedInstance(
+        [[5, 6], [7, 8]], skeleton=skeleton, track=track, score=0.9
+    )
+
+    video = Video.from_filename("fake.mp4")
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst, pred_inst])
+    labels = Labels(
+        videos=[video], skeletons=[skeleton], tracks=[track], labeled_frames=[lf]
+    )
+
+    # Save the file
+    test_path = tmp_path / "test_format_old.slp"
+    write_labels(test_path, labels)
+
+    # Manually modify the format_id to simulate an older file
+    with h5py.File(test_path, "r+") as f:
+        f["metadata"].attrs["format_id"] = 1.1
+
+        # Also need to modify the instances dataset to remove tracking_score field
+        # Read existing data
+        instances_data = f["instances"][:]
+
+        # Create new dtype without tracking_score
+        old_dtype = np.dtype(
+            [
+                ("instance_id", "i8"),
+                ("instance_type", "u1"),
+                ("frame_id", "u8"),
+                ("skeleton", "u4"),
+                ("track", "i4"),
+                ("from_predicted", "i8"),
+                ("score", "f4"),
+                ("point_id_start", "u8"),
+                ("point_id_end", "u8"),
+            ]
+        )
+
+        # Copy data to new array without tracking_score
+        old_instances = np.zeros(len(instances_data), dtype=old_dtype)
+        for i, inst_data in enumerate(instances_data):
+            # Copy all fields except tracking_score
+            old_instances[i] = (
+                inst_data["instance_id"],
+                inst_data["instance_type"],
+                inst_data["frame_id"],
+                inst_data["skeleton"],
+                inst_data["track"],
+                inst_data["from_predicted"],
+                inst_data["score"],
+                inst_data["point_id_start"],
+                inst_data["point_id_end"],
+            )
+
+        # Delete and recreate dataset
+        del f["instances"]
+        f.create_dataset("instances", data=old_instances, dtype=old_dtype)
+
+    # Load with older format - tracking_score should default to 0.0
+    loaded_labels = read_labels(test_path)
+    loaded_inst = loaded_labels.labeled_frames[0].instances[0]
+    loaded_pred_inst = loaded_labels.labeled_frames[0].instances[1]
+
+    assert isinstance(loaded_inst, Instance)
+    assert loaded_inst.tracking_score == pytest.approx(0.0)
+
+    assert isinstance(loaded_pred_inst, PredictedInstance)
+    assert loaded_pred_inst.tracking_score == pytest.approx(0.0)
+
+
 def test_save_slp_verbose_propagation(tmp_path):
     """Test that save_slp propagates the verbose parameter to write_labels."""
     # Mock write_labels to verify verbose is correctly passed
