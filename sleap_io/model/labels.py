@@ -638,7 +638,7 @@ class Labels:
         from pathlib import Path
 
         # Check for self-referential save when embed=False
-        if embed is False and (format == "slp" or filename.endswith(".slp")):
+        if embed is False and (format == "slp" or str(filename).endswith(".slp")):
             # Check if any videos have embedded images and would be self-referential
             sanitized_save_path = Path(sanitize_filename(filename)).resolve()
             for video in self.videos:
