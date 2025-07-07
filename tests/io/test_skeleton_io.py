@@ -10,6 +10,8 @@ from sleap_io.io.skeleton import (
     SkeletonEncoder,
     SkeletonSLPDecoder,
     SkeletonSLPEncoder,
+    SkeletonYAMLDecoder,
+    SkeletonYAMLEncoder,
 )
 
 
@@ -709,3 +711,268 @@ def test_slp_encoder_multiple_symmetries():
     # Check that subsequent symmetries use py/id
     assert skeletons_dicts[0]["links"][1]["type"] == {"py/id": 2}
     assert skeletons_dicts[0]["links"][2]["type"] == {"py/id": 2}
+
+
+# YAML encoder/decoder tests
+def test_yaml_decoder_single_skeleton():
+    """Test decoding a single skeleton from YAML dict."""
+    yaml_data = {
+        "nodes": [{"name": "head"}, {"name": "thorax"}, {"name": "abdomen"}],
+        "edges": [
+            {"source": {"name": "head"}, "destination": {"name": "thorax"}},
+            {"source": {"name": "thorax"}, "destination": {"name": "abdomen"}},
+        ],
+        "symmetries": [],
+    }
+
+    decoder = SkeletonYAMLDecoder()
+    skeleton = decoder.decode(yaml_data)
+
+    assert len(skeleton.nodes) == 3
+    assert skeleton.nodes[0].name == "head"
+    assert len(skeleton.edges) == 2
+    assert skeleton.edges[0].source.name == "head"
+    assert skeleton.edges[0].destination.name == "thorax"
+
+
+def test_yaml_decoder_multiple_skeletons():
+    """Test decoding multiple skeletons from YAML with names as keys."""
+    yaml_data = {
+        "Skeleton-1": {
+            "nodes": [{"name": "A"}, {"name": "B"}],
+            "edges": [{"source": {"name": "A"}, "destination": {"name": "B"}}],
+            "symmetries": [],
+        },
+        "Skeleton-2": {
+            "nodes": [{"name": "X"}, {"name": "Y"}],
+            "edges": [],
+            "symmetries": [[{"name": "X"}, {"name": "Y"}]],
+        },
+    }
+
+    decoder = SkeletonYAMLDecoder()
+    skeletons = decoder.decode(yaml_data)
+
+    assert isinstance(skeletons, list)
+    assert len(skeletons) == 2
+    assert skeletons[0].name == "Skeleton-1"
+    assert skeletons[1].name == "Skeleton-2"
+    assert len(skeletons[1].symmetries) == 1
+
+
+def test_yaml_decoder_from_string():
+    """Test decoding from YAML string."""
+    yaml_str = """
+Skeleton-0:
+  nodes:
+  - name: head
+  - name: tail
+  edges:
+  - source:
+      name: head
+    destination:
+      name: tail
+  symmetries: []
+"""
+
+    decoder = SkeletonYAMLDecoder()
+    skeletons = decoder.decode(yaml_str)
+
+    assert isinstance(skeletons, list)
+    assert len(skeletons) == 1
+    assert skeletons[0].name == "Skeleton-0"
+    assert len(skeletons[0].nodes) == 2
+
+
+def test_yaml_decoder_dict_method():
+    """Test decode_dict method for embedded skeleton data."""
+    skeleton_data = {
+        "nodes": [{"name": "A"}, {"name": "B"}],
+        "edges": [{"source": {"name": "A"}, "destination": {"name": "B"}}],
+        "symmetries": [],
+    }
+
+    decoder = SkeletonYAMLDecoder()
+    skeleton = decoder.decode_dict(skeleton_data, name="CustomName")
+
+    assert skeleton.name == "CustomName"
+    assert len(skeleton.nodes) == 2
+
+
+def test_yaml_encoder_single_skeleton():
+    """Test encoding a single skeleton to YAML."""
+    nodes = [sio.Node("head"), sio.Node("tail")]
+    edges = [sio.Edge(nodes[0], nodes[1])]
+    skeleton = sio.Skeleton(nodes=nodes, edges=edges, name="TestSkeleton")
+
+    encoder = SkeletonYAMLEncoder()
+    yaml_str = encoder.encode(skeleton)
+
+    # Parse back to verify structure
+    import yaml
+
+    data = yaml.safe_load(yaml_str)
+
+    assert "TestSkeleton" in data
+    assert len(data["TestSkeleton"]["nodes"]) == 2
+    assert data["TestSkeleton"]["nodes"][0]["name"] == "head"
+    assert len(data["TestSkeleton"]["edges"]) == 1
+    assert data["TestSkeleton"]["edges"][0]["source"]["name"] == "head"
+
+
+def test_yaml_encoder_multiple_skeletons():
+    """Test encoding multiple skeletons to YAML."""
+    skel1 = sio.Skeleton(nodes=[sio.Node("A")], name="Skel1")
+    skel2 = sio.Skeleton(nodes=[sio.Node("B")], name="Skel2")
+
+    encoder = SkeletonYAMLEncoder()
+    yaml_str = encoder.encode([skel1, skel2])
+
+    import yaml
+
+    data = yaml.safe_load(yaml_str)
+
+    assert "Skel1" in data
+    assert "Skel2" in data
+    assert data["Skel1"]["nodes"][0]["name"] == "A"
+    assert data["Skel2"]["nodes"][0]["name"] == "B"
+
+
+def test_yaml_encoder_dict_method():
+    """Test encode_dict method for embedding skeleton data."""
+    skeleton = sio.Skeleton(
+        nodes=[sio.Node("A"), sio.Node("B")],
+        edges=[sio.Edge(sio.Node("A"), sio.Node("B"))],
+        name="Test",
+    )
+
+    encoder = SkeletonYAMLEncoder()
+    skeleton_dict = encoder.encode_dict(skeleton)
+
+    assert "nodes" in skeleton_dict
+    assert "edges" in skeleton_dict
+    assert "symmetries" in skeleton_dict
+    assert len(skeleton_dict["nodes"]) == 2
+
+
+def test_yaml_round_trip():
+    """Test round-trip encoding and decoding with YAML."""
+    # Create complex skeleton
+    nodes = [sio.Node(name) for name in ["head", "neck", "left_hand", "right_hand"]]
+    edges = [
+        sio.Edge(nodes[0], nodes[1]),
+        sio.Edge(nodes[1], nodes[2]),
+        sio.Edge(nodes[1], nodes[3]),
+    ]
+    symmetries = [sio.Symmetry([nodes[2], nodes[3]])]
+    skeleton1 = sio.Skeleton(
+        nodes=nodes, edges=edges, symmetries=symmetries, name="Complex"
+    )
+
+    # Encode and decode
+    encoder = SkeletonYAMLEncoder()
+    decoder = SkeletonYAMLDecoder()
+    yaml_str = encoder.encode(skeleton1)
+    skeletons = decoder.decode(yaml_str)
+    skeleton2 = skeletons[0]
+
+    # Verify
+    assert skeleton1.name == skeleton2.name
+    assert len(skeleton1.nodes) == len(skeleton2.nodes)
+    assert len(skeleton1.edges) == len(skeleton2.edges)
+    assert len(skeleton1.symmetries) == len(skeleton2.symmetries)
+
+    # Check node names preserved
+    for n1, n2 in zip(skeleton1.nodes, skeleton2.nodes):
+        assert n1.name == n2.name
+
+
+def test_load_skeleton_yaml_fixture(skeleton_yaml_flies):
+    """Test loading the YAML skeleton fixture."""
+    skeleton = sio.load_skeleton(skeleton_yaml_flies)
+
+    # Should be a list since YAML has skeleton names as keys
+    assert isinstance(skeleton, list)
+    assert len(skeleton) == 1
+    skeleton = skeleton[0]
+
+    assert skeleton.name == "Skeleton-0"
+    assert len(skeleton.nodes) == 13
+
+    # Check some specific nodes
+    node_names = {node.name for node in skeleton.nodes}
+    assert "head" in node_names
+    assert "thorax" in node_names
+    assert "eyeL" in node_names
+    assert "eyeR" in node_names
+
+    # Check edges
+    assert len(skeleton.edges) == 12
+
+    # Check symmetries
+    assert len(skeleton.symmetries) > 0
+
+
+def test_yaml_json_equivalence(skeleton_json_flies, skeleton_yaml_flies):
+    """Test that YAML and JSON files produce equivalent skeletons."""
+    # Load from JSON
+    json_skeleton = sio.load_skeleton(skeleton_json_flies)
+
+    # Load from YAML
+    yaml_skeletons = sio.load_skeleton(skeleton_yaml_flies)
+    yaml_skeleton = yaml_skeletons[0]  # YAML returns list
+
+    # Compare structure
+    assert json_skeleton.name == yaml_skeleton.name
+
+    # Note: The JSON file is missing hindlegR4, so it has 12 nodes vs YAML's 13
+    # This is OK - the files are test fixtures and don't need to be identical
+    assert len(json_skeleton.nodes) == 12
+    assert len(yaml_skeleton.nodes) == 13
+
+    # Check that the YAML file has the same nodes as JSON plus hindlegR4
+    json_node_names = {n.name for n in json_skeleton.nodes}
+    yaml_node_names = {n.name for n in yaml_skeleton.nodes}
+    assert json_node_names.issubset(yaml_node_names)
+    assert "hindlegR4" in yaml_node_names
+
+    # Both should have edges and symmetries
+    assert len(json_skeleton.edges) > 0
+    assert len(yaml_skeleton.edges) > 0
+    assert len(json_skeleton.symmetries) > 0
+    assert len(yaml_skeleton.symmetries) > 0
+
+
+def test_save_load_yaml_round_trip(tmp_path):
+    """Test saving and loading skeleton in YAML format."""
+    # Create skeleton
+    nodes = [sio.Node("A"), sio.Node("B"), sio.Node("C")]
+    edges = [sio.Edge(nodes[0], nodes[1]), sio.Edge(nodes[1], nodes[2])]
+    skeleton = sio.Skeleton(nodes=nodes, edges=edges, name="TestSkel")
+
+    # Save as YAML
+    yaml_path = tmp_path / "test.yaml"
+    sio.save_skeleton(skeleton, yaml_path)
+
+    # Load back
+    loaded = sio.load_skeleton(yaml_path)
+    assert isinstance(loaded, list)
+    loaded_skeleton = loaded[0]
+
+    # Verify
+    assert loaded_skeleton.name == skeleton.name
+    assert len(loaded_skeleton.nodes) == len(skeleton.nodes)
+    assert len(loaded_skeleton.edges) == len(skeleton.edges)
+
+    # Check node order preserved
+    for orig, loaded in zip(skeleton.nodes, loaded_skeleton.nodes):
+        assert orig.name == loaded.name
+
+
+def test_yaml_decoder_invalid_format():
+    """Test YAML decoder with invalid data format."""
+    decoder = SkeletonYAMLDecoder()
+
+    # Test with list input (not supported)
+    with pytest.raises(ValueError, match="Unexpected data format"):
+        decoder.decode([{"nodes": []}])

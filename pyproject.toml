@@ -29,7 +29,8 @@ dependencies = [
     "simplejson",
     "imageio",
     "imageio-ffmpeg>=0.5.0",
-    "tqdm"]
+    "tqdm",
+    "pyyaml"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
