@@ -49,7 +49,7 @@ def slp_predictions_with_provenance():
 @pytest.fixture
 def skeleton_json_minimal():
     """Minimal skeleton JSON file with 2 nodes and 1 edge.
-    
+
     This skeleton:
     - Has 2 nodes: head and abdomen
     - Has 1 edge connecting head to abdomen
@@ -61,7 +61,7 @@ def skeleton_json_minimal():
 @pytest.fixture
 def skeleton_json_flies():
     """Complex fly skeleton JSON file with 13 nodes, edges and symmetries.
-    
+
     This skeleton:
     - Has 13 nodes representing fly body parts
     - Has multiple edges connecting body parts
