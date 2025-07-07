@@ -207,7 +207,8 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
         use_self_reference = (
             video.backend.has_embedded_images
             and labels_path is not None
-            and Path(video.filename).resolve() == Path(labels_path).resolve()
+            and Path(sanitize_filename(video.filename)).resolve()
+            == Path(sanitize_filename(labels_path)).resolve()
         )
 
         return {
