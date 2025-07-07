@@ -584,3 +584,128 @@ def test_slp_encoder_decoder():
     assert len(decoded_skeletons[1].edges) == 0
     assert len(decoded_skeletons[0].symmetries) == 0
     assert len(decoded_skeletons[1].symmetries) == 1
+
+
+# Edge case tests for missing coverage
+def test_decode_node_direct_format():
+    """Test decoding a node without py/state (direct format)."""
+    # This covers line 168
+    decoder = SkeletonDecoder()
+    node_data = {
+        "py/object": "sleap.skeleton.Node",
+        "name": "direct_node",  # Direct format without py/state
+    }
+    node = decoder._decode_node(node_data)
+    assert node.name == "direct_node"
+
+
+def test_decode_node_not_found_in_all_nodes():
+    """Test node resolution when node is not in all_nodes."""
+    # This covers line 196
+    decoder = SkeletonDecoder()
+    all_nodes = {"existing": sio.Node("existing")}
+    py_id_to_node_name = {}
+
+    node_ref = {
+        "py/object": "sleap.skeleton.Node",
+        "py/state": {"py/tuple": ["new_node", 1.0]},
+    }
+
+    node = decoder._resolve_node_reference(node_ref, all_nodes, py_id_to_node_name)
+    assert node.name == "new_node"
+
+
+def test_decode_py_id_fallback_resolution():
+    """Test py/id resolution through fallback path."""
+    # This covers lines 202-207
+    decoder = SkeletonDecoder()
+    decoder._id_to_object = {}  # Empty cache
+    all_nodes = {"test_node": sio.Node("test_node")}
+    py_id_to_node_name = {5: "test_node"}
+
+    node_ref = {"py/id": 5}
+    node = decoder._resolve_node_reference(node_ref, all_nodes, py_id_to_node_name)
+    assert node.name == "test_node"
+
+
+def test_decode_py_id_not_found():
+    """Test py/id resolution when ID is not found."""
+    # This covers line 207
+    decoder = SkeletonDecoder()
+    decoder._id_to_object = {}
+    all_nodes = {}
+    py_id_to_node_name = {}
+
+    node_ref = {"py/id": 999}
+    with pytest.raises(ValueError, match="py/id 999 not found"):
+        decoder._resolve_node_reference(node_ref, all_nodes, py_id_to_node_name)
+
+
+def test_decode_integer_node_reference():
+    """Test error when integer node reference is used in standalone format."""
+    # This covers lines 208-210
+    decoder = SkeletonDecoder()
+    all_nodes = {}
+    py_id_to_node_name = {}
+
+    with pytest.raises(ValueError, match="Direct index reference not supported: 5"):
+        decoder._resolve_node_reference(5, all_nodes, py_id_to_node_name)
+
+
+def test_decode_unknown_node_reference():
+    """Test error for unknown node reference format."""
+    # This covers line 212
+    decoder = SkeletonDecoder()
+    all_nodes = {}
+    py_id_to_node_name = {}
+
+    with pytest.raises(ValueError, match="Unknown node reference format"):
+        decoder._resolve_node_reference("invalid_format", all_nodes, py_id_to_node_name)
+
+
+def test_decode_edge_type_default():
+    """Test default edge type when not specified."""
+    # This covers line 231
+    decoder = SkeletonDecoder()
+    edge_type = decoder._get_edge_type({})  # Empty dict, no type info
+    assert edge_type == 1  # Default to regular edge
+
+
+def test_encode_edge_with_non_standard_type():
+    """Test encoding edges with non-1 edge types."""
+    # This covers lines 354-363
+    encoder = SkeletonEncoder()
+
+    # Create a mock edge and call _encode_edge with edge_type=2
+    edge = sio.Edge(sio.Node("A"), sio.Node("B"))
+    edge_dict = encoder._encode_edge(edge, 0, edge_type=2)
+
+    # First occurrence should use py/reduce
+    assert "py/reduce" in edge_dict["type"]
+    assert edge_dict["type"]["py/reduce"][1]["py/tuple"][0] == 2
+
+    # Second occurrence should use py/id
+    edge_dict2 = encoder._encode_edge(edge, 1, edge_type=2)
+    assert edge_dict2["type"] == {"py/id": 2}
+
+
+def test_slp_encoder_multiple_symmetries():
+    """Test SLP encoder with multiple symmetries to trigger py/id usage."""
+    # This covers line 589
+    nodes = [sio.Node(f"node{i}") for i in range(6)]
+    symmetries = [
+        sio.Symmetry([nodes[0], nodes[1]]),
+        sio.Symmetry([nodes[2], nodes[3]]),
+        sio.Symmetry([nodes[4], nodes[5]]),
+    ]
+    skeleton = sio.Skeleton(nodes=nodes, symmetries=symmetries, name="multi_sym")
+
+    encoder = SkeletonSLPEncoder()
+    skeletons_dicts, nodes_dicts = encoder.encode_skeletons([skeleton])
+
+    # Check that we have py/reduce for first symmetry
+    assert "py/reduce" in skeletons_dicts[0]["links"][0]["type"]
+
+    # Check that subsequent symmetries use py/id
+    assert skeletons_dicts[0]["links"][1]["type"] == {"py/id": 2}
+    assert skeletons_dicts[0]["links"][2]["type"] == {"py/id": 2}
