@@ -110,3 +110,7 @@ pytest tests/path/to/test_module.py::TestClass::test_method -v
 - CI runs on Ubuntu, Windows, macOS with Python 3.8-3.13
 - All PRs require passing tests and linting
 - Documentation is hosted at https://io.sleap.ai/
+
+## Testing Best Practices
+
+- When adding tests, use global imports at the module-level rather than importing locally within a test function unless strictly needed (e.g., for import checking). Analyze current imports to find the best place to add the import statement and do not duplicate existing imports.

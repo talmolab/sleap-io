@@ -66,7 +66,6 @@ import sys
 import h5py
 from unittest import mock
 from tqdm import tqdm
-import numpy as np
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
