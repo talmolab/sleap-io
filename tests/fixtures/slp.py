@@ -47,6 +47,31 @@ def slp_predictions_with_provenance():
 
 
 @pytest.fixture
+def skeleton_json_minimal():
+    """Minimal skeleton JSON file with 2 nodes and 1 edge.
+
+    This skeleton:
+    - Has 2 nodes: head and abdomen
+    - Has 1 edge connecting head to abdomen
+    - Uses jsonpickle format with py/object and py/state tags
+    """
+    return "tests/data/slp/labels.v002.rel_paths.skeleton.json"
+
+
+@pytest.fixture
+def skeleton_json_flies():
+    """Complex fly skeleton JSON file with 13 nodes, edges and symmetries.
+
+    This skeleton:
+    - Has 13 nodes representing fly body parts
+    - Has multiple edges connecting body parts
+    - Has symmetry relationships between left/right body parts
+    - Uses jsonpickle format with py/id references
+    """
+    return "tests/data/slp/flies13.skeleton.json"
+
+
+@pytest.fixture
 def slp_real_data():
     """A real data example containing predicted and user instances.
 

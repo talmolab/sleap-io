@@ -3,7 +3,8 @@
 from __future__ import annotations
 from sleap_io import Labels, Skeleton, Video
 from sleap_io.io import slp, nwb, labelstudio, jabs, video_writing
-from typing import Optional, Union
+from sleap_io.io.skeleton import SkeletonDecoder, SkeletonEncoder
+from typing import Optional, Union, List
 from pathlib import Path
 import numpy as np
 
@@ -288,3 +289,47 @@ def save_file(
         save_jabs(labels, pose_version=pose_version, root_folder=root_folder)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
+
+
+def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
+    """Load skeleton(s) from a JSON file.
+
+    Args:
+        filename: Path to a skeleton JSON file.
+
+    Returns:
+        A single `Skeleton` or list of `Skeleton` objects.
+
+    Notes:
+        This function loads skeletons from standalone JSON files that use the
+        jsonpickle format. This is different from skeletons stored within .slp files.
+    """
+    if isinstance(filename, Path):
+        filename = str(filename)
+
+    with open(filename, "r") as f:
+        json_data = f.read()
+
+    decoder = SkeletonDecoder()
+    return decoder.decode(json_data)
+
+
+def save_skeleton(skeleton: Union[Skeleton, List[Skeleton]], filename: str | Path):
+    """Save skeleton(s) to a JSON file.
+
+    Args:
+        skeleton: A single `Skeleton` or list of `Skeleton` objects to save.
+        filename: Path to save the skeleton JSON file.
+
+    Notes:
+        This function saves skeletons in the standalone JSON format using jsonpickle
+        encoding. This format is compatible with SLEAP's skeleton JSON files.
+    """
+    if isinstance(filename, Path):
+        filename = str(filename)
+
+    encoder = SkeletonEncoder()
+    json_data = encoder.encode(skeleton)
+
+    with open(filename, "w") as f:
+        f.write(json_data)
