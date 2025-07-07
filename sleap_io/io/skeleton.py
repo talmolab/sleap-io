@@ -447,3 +447,169 @@ class SkeletonEncoder:
         else:
             # Return as-is for non-dict/list types
             return obj
+
+
+class SkeletonSLPDecoder:
+    """Decode skeleton data from SLP format.
+
+    This decoder handles the SLP format used within .slp files, which uses
+    integer indices for node references instead of embedded node objects.
+    """
+
+    def decode_skeletons(self, metadata: dict, node_names: list[str]) -> list[Skeleton]:
+        """Decode skeletons from SLP metadata format.
+
+        Args:
+            metadata: The metadata dict from an SLP file containing skeletons.
+            node_names: Global list of node names from the SLP file.
+
+        Returns:
+            List of Skeleton objects.
+        """
+        skeleton_objects = []
+
+        for skel in metadata["skeletons"]:
+            # Parse out the cattr-based serialization stuff from the skeleton links.
+            edge_inds, symmetry_inds = [], []
+            for link in skel["links"]:
+                if "py/reduce" in link["type"]:
+                    edge_type = link["type"]["py/reduce"][1]["py/tuple"][0]
+                else:
+                    edge_type = link["type"]["py/id"]
+
+                if edge_type == 1:  # 1 -> real edge, 2 -> symmetry edge
+                    edge_inds.append((link["source"], link["target"]))
+                elif edge_type == 2:
+                    symmetry_inds.append((link["source"], link["target"]))
+
+            # Re-index correctly.
+            skeleton_node_inds = [node["id"] for node in skel["nodes"]]
+            sorted_node_names = [node_names[i] for i in skeleton_node_inds]
+
+            # Create nodes.
+            nodes = []
+            for name in sorted_node_names:
+                nodes.append(Node(name=name))
+
+            # Create edges.
+            edge_inds = [
+                (skeleton_node_inds.index(s), skeleton_node_inds.index(d))
+                for s, d in edge_inds
+            ]
+            edges = []
+            for edge in edge_inds:
+                edges.append(Edge(source=nodes[edge[0]], destination=nodes[edge[1]]))
+
+            # Create symmetries.
+            symmetry_inds = [
+                (skeleton_node_inds.index(s), skeleton_node_inds.index(d))
+                for s, d in symmetry_inds
+            ]
+            symmetries = []
+            for symmetry in symmetry_inds:
+                symmetries.append(Symmetry([nodes[symmetry[0]], nodes[symmetry[1]]]))
+
+            # Create the full skeleton.
+            skel = Skeleton(
+                nodes=nodes,
+                edges=edges,
+                symmetries=symmetries,
+                name=skel["graph"]["name"],
+            )
+            skeleton_objects.append(skel)
+
+        return skeleton_objects
+
+
+class SkeletonSLPEncoder:
+    """Encode skeleton data to SLP format.
+
+    This encoder produces the SLP format used within .slp files, which uses
+    integer indices for node references instead of embedded node objects.
+    """
+
+    def encode_skeletons(
+        self, skeletons: list[Skeleton]
+    ) -> tuple[list[dict], list[dict]]:
+        """Serialize a list of Skeleton objects to SLP format.
+
+        Args:
+            skeletons: A list of Skeleton objects.
+
+        Returns:
+            A tuple of (skeletons_dicts, nodes_dicts).
+
+            nodes_dicts is a list of dicts containing the nodes in all the skeletons.
+            skeletons_dicts is a list of dicts containing the skeletons.
+        """
+        # Create global list of nodes with all nodes from all skeletons.
+        nodes_dicts = []
+        node_to_id = {}
+        for skeleton in skeletons:
+            for node in skeleton.nodes:
+                if node not in node_to_id:
+                    node_to_id[node] = len(node_to_id)
+                    nodes_dicts.append({"name": node.name, "weight": 1.0})
+
+        skeletons_dicts = []
+        for skeleton in skeletons:
+            # Build links dicts for normal edges.
+            edges_dicts = []
+            for edge_ind, edge in enumerate(skeleton.edges):
+                if edge_ind == 0:
+                    edge_type = {
+                        "py/reduce": [
+                            {"py/type": "sleap.skeleton.EdgeType"},
+                            {"py/tuple": [1]},  # 1 = real edge, 2 = symmetry edge
+                        ]
+                    }
+                else:
+                    edge_type = {"py/id": 1}
+
+                edges_dicts.append(
+                    {
+                        "edge_insert_idx": edge_ind,
+                        "key": 0,  # Always 0.
+                        "source": node_to_id[edge.source],
+                        "target": node_to_id[edge.destination],
+                        "type": edge_type,
+                    }
+                )
+
+            # Build links dicts for symmetry edges.
+            for symmetry_ind, symmetry in enumerate(skeleton.symmetries):
+                if symmetry_ind == 0:
+                    edge_type = {
+                        "py/reduce": [
+                            {"py/type": "sleap.skeleton.EdgeType"},
+                            {"py/tuple": [2]},  # 1 = real edge, 2 = symmetry edge
+                        ]
+                    }
+                else:
+                    edge_type = {"py/id": 2}
+
+                src, dst = tuple(symmetry.nodes)
+                edges_dicts.append(
+                    {
+                        "key": 0,
+                        "source": node_to_id[src],
+                        "target": node_to_id[dst],
+                        "type": edge_type,
+                    }
+                )
+
+            # Create skeleton dict.
+            skeletons_dicts.append(
+                {
+                    "directed": True,
+                    "graph": {
+                        "name": skeleton.name,
+                        "num_edges_inserted": len(skeleton.edges),
+                    },
+                    "links": edges_dicts,
+                    "multigraph": True,
+                    "nodes": [{"id": node_to_id[node]} for node in skeleton.nodes],
+                }
+            )
+
+        return skeletons_dicts, nodes_dicts

@@ -5,7 +5,12 @@ import json
 import tempfile
 from pathlib import Path
 import sleap_io as sio
-from sleap_io.io.skeleton import SkeletonDecoder, SkeletonEncoder
+from sleap_io.io.skeleton import (
+    SkeletonDecoder,
+    SkeletonEncoder,
+    SkeletonSLPDecoder,
+    SkeletonSLPEncoder,
+)
 
 
 # Basic decoder tests
@@ -523,3 +528,59 @@ def test_edge_type_handling(skeleton_json_flies):
     # For a skeleton with many edges/symmetries, should have some py/id references
     if len(skeleton.edges) > 1 or len(skeleton.symmetries) > 1:
         assert py_id_count > 0
+
+
+# SLP encoder/decoder tests
+def test_slp_encoder_decoder():
+    """Test SLP format encoder and decoder."""
+    # Create test skeletons
+    nodes1 = [sio.Node("head"), sio.Node("neck"), sio.Node("tail")]
+    edges1 = [sio.Edge(nodes1[0], nodes1[1]), sio.Edge(nodes1[1], nodes1[2])]
+    skel1 = sio.Skeleton(nodes=nodes1, edges=edges1, name="skeleton1")
+
+    nodes2 = [sio.Node("left"), sio.Node("right")]
+    symmetry2 = sio.Symmetry([nodes2[0], nodes2[1]])
+    skel2 = sio.Skeleton(nodes=nodes2, symmetries=[symmetry2], name="skeleton2")
+
+    skeletons = [skel1, skel2]
+
+    # Encode to SLP format
+    encoder = SkeletonSLPEncoder()
+    skeletons_dicts, nodes_dicts = encoder.encode_skeletons(skeletons)
+
+    # Check that we get the expected structure
+    assert len(skeletons_dicts) == 2
+    assert len(nodes_dicts) == 5  # 3 + 2 unique nodes
+
+    # Check that node references are integers (SLP format)
+    assert isinstance(skeletons_dicts[0]["links"][0]["source"], int)
+    assert isinstance(skeletons_dicts[0]["links"][0]["target"], int)
+    assert isinstance(skeletons_dicts[1]["links"][0]["source"], int)
+    assert isinstance(skeletons_dicts[1]["links"][0]["target"], int)
+
+    # The exact indices depend on the global node ordering, so we just verify they're valid
+
+    # Create fake metadata for decoder
+    metadata = {"skeletons": skeletons_dicts}
+    node_names = [node["name"] for node in nodes_dicts]
+
+    # Decode back
+    decoder = SkeletonSLPDecoder()
+    decoded_skeletons = decoder.decode_skeletons(metadata, node_names)
+
+    # Verify structure is preserved
+    assert len(decoded_skeletons) == 2
+    assert decoded_skeletons[0].name == "skeleton1"
+    assert decoded_skeletons[1].name == "skeleton2"
+
+    # Check nodes
+    assert len(decoded_skeletons[0].nodes) == 3
+    assert len(decoded_skeletons[1].nodes) == 2
+    assert decoded_skeletons[0].nodes[0].name == "head"
+    assert decoded_skeletons[1].nodes[0].name == "left"
+
+    # Check edges and symmetries
+    assert len(decoded_skeletons[0].edges) == 2
+    assert len(decoded_skeletons[1].edges) == 0
+    assert len(decoded_skeletons[0].symmetries) == 0
+    assert len(decoded_skeletons[1].symmetries) == 1
