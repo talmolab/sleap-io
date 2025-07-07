@@ -31,6 +31,8 @@ from sleap_io.io.main import (
     save_video,
     load_file,
     save_file,
+    load_skeleton,
+    save_skeleton,
 )
 from sleap_io.io.video_reading import VideoBackend
 from sleap_io.io.video_writing import VideoWriter
