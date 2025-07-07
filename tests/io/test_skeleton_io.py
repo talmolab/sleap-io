@@ -972,7 +972,7 @@ def test_save_load_yaml_round_trip(tmp_path):
 def test_yaml_decoder_invalid_format():
     """Test YAML decoder with invalid data format."""
     decoder = SkeletonYAMLDecoder()
-    
+
     # Test with list input (not supported)
     with pytest.raises(ValueError, match="Unexpected data format"):
         decoder.decode([{"nodes": []}])
