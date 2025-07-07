@@ -1474,6 +1474,75 @@ def test_embed_false_behavior(tmp_path):
     assert labels3.video.backend.has_embedded_images
 
 
+def test_mixed_video_scenarios(tmp_path):
+    """Test saving with mixed embedded and non-embedded videos."""
+    # Create test data with multiple videos
+    skeleton = Skeleton(["A", "B"])
+    
+    # Video 1: Regular video
+    video1 = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
+    
+    # Video 2: Will be embedded
+    video2 = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
+    
+    # Create labeled frames for both videos
+    inst1 = Instance([[1, 2], [3, 4]], skeleton=skeleton)
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    
+    inst2 = Instance([[5, 6], [7, 8]], skeleton=skeleton)
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+    
+    labels = Labels(
+        videos=[video1, video2], 
+        skeletons=[skeleton], 
+        labeled_frames=[lf1, lf2]
+    )
+    
+    # Save with only video2 embedded
+    pkg_path = tmp_path / "mixed.pkg.slp"
+    frames_to_embed = [(video2, 0)]
+    write_labels(str(pkg_path), labels, embed=frames_to_embed)
+    
+    # Load and verify
+    loaded = read_labels(str(pkg_path))
+    assert len(loaded.videos) == 2
+    assert type(loaded.videos[0].backend).__name__ == "MediaVideo"
+    assert type(loaded.videos[1].backend).__name__ == "HDF5Video"
+    assert loaded.videos[1].backend.has_embedded_images
+    
+    # Save with embed=False to new file
+    pkg_path2 = tmp_path / "mixed2.pkg.slp"
+    write_labels(str(pkg_path2), loaded, embed=False)
+    
+    # Verify both videos are correctly referenced
+    loaded2 = read_labels(str(pkg_path2))
+    assert len(loaded2.videos) == 2
+    
+    # Video 1 should still be external media
+    assert loaded2.videos[0].filename == video1.filename
+    assert type(loaded2.videos[0].backend).__name__ == "MediaVideo"
+    
+    # Video 2 should restore to source video (since it's available)
+    assert loaded2.videos[1].filename == video2.filename
+    assert type(loaded2.videos[1].backend).__name__ == "MediaVideo"
+    
+    # Test 2: Remove source video from embedded video and save again
+    loaded.videos[1].source_video = None
+    pkg_path3 = tmp_path / "mixed3.pkg.slp"
+    write_labels(str(pkg_path3), loaded, embed=False)
+    
+    loaded3 = read_labels(str(pkg_path3))
+    assert len(loaded3.videos) == 2
+    
+    # Video 1 should still be external media
+    assert loaded3.videos[0].filename == video1.filename
+    assert type(loaded3.videos[0].backend).__name__ == "MediaVideo"
+    
+    # Video 2 should now reference the pkg file (no source video)
+    assert Path(loaded3.videos[1].filename).resolve() == pkg_path.resolve()
+    assert loaded3.videos[1].backend.has_embedded_images
+
+
 def test_self_referential_path_detection(tmp_path):
     """Test that self-referential paths are detected and raise an error."""
     # Create test data
