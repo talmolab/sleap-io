@@ -29,6 +29,7 @@ from enum import IntEnum
 from pathlib import Path
 import imageio.v3 as iio
 import sys
+from tqdm import tqdm
 
 try:
     import cv2
@@ -246,6 +247,9 @@ def embed_video(
 ) -> Video:
     """Embed frames of a video in a SLEAP labels file.
 
+    .. deprecated:: 1.0.0
+        This function is deprecated. Use `process_and_embed_frames` instead.
+
     Args:
         labels_path: A string path to the SLEAP labels file.
         video: A `Video` object to embed in the labels file.
@@ -355,11 +359,208 @@ def embed_video(
     return embedded_video
 
 
+def prepare_frames_to_embed(
+    labels_path: str,
+    labels: Labels,
+    frames_to_embed: list[tuple[Video, int]],
+) -> list[dict]:
+    """Prepare frames to embed by gathering all metadata needed for embedding.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object containing the videos.
+        frames_to_embed: A list of tuples of `(video, frame_idx)` specifying the frames to embed.
+
+    Returns:
+        A list of dictionaries, each containing metadata for a frame to embed:
+            - video: The Video object
+            - frame_idx: The index of the frame to embed
+            - video_ind: The index of the video in labels.videos
+            - group: The HDF5 group to store the embedded data in
+    """
+    # First, group frames by video
+    to_embed_by_video = {}
+    for video, frame_idx in frames_to_embed:
+        if video not in to_embed_by_video:
+            to_embed_by_video[video] = []
+        to_embed_by_video[video].append(frame_idx)
+
+    # Remove duplicates and sort
+    for video in to_embed_by_video:
+        to_embed_by_video[video] = sorted(list(set(to_embed_by_video[video])))
+
+    # Create a list of frame metadata for embedding
+    frames_metadata = []
+    for video, frame_inds in to_embed_by_video.items():
+        video_ind = labels.videos.index(video)
+        group = f"video{video_ind}"
+        for frame_idx in frame_inds:
+            frames_metadata.append(
+                {
+                    "video": video,
+                    "frame_idx": frame_idx,
+                    "video_ind": video_ind,
+                    "group": group,
+                }
+            )
+
+    return frames_metadata
+
+
+def process_and_embed_frames(
+    labels_path: str,
+    frames_metadata: list[dict],
+    image_format: str = "png",
+    fixed_length: bool = True,
+    verbose: bool = True,
+) -> dict[Video, Video]:
+    """Process and embed frames into a SLEAP labels file.
+
+    This function loads, encodes, and writes frames to the HDF5 file in a single loop,
+    making it easier to add progress monitoring.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        frames_metadata: A list of dictionaries with frame metadata from prepare_frames_to_embed.
+        image_format: The image format to use for embedding. Valid formats are "png"
+            (the default), "jpg" or "hdf5".
+        fixed_length: If `True` (the default), the embedded images will be padded to the
+            length of the largest image. If `False`, the images will be stored as
+            variable length, which is smaller but may not be supported by all readers.
+        verbose: If `True` (the default), display a progress bar for the embedding process.
+
+    Returns:
+        A dictionary mapping original Video objects to their embedded versions.
+    """
+    # Initialize a dictionary to store data by group
+    data_by_group = {}
+
+    # Process all frames in a single flat loop with progress bar if verbose
+    frame_iter = (
+        tqdm(frames_metadata, desc="Embedding frames", disable=not verbose)
+        if verbose
+        else frames_metadata
+    )
+    for frame_meta in frame_iter:
+        video = frame_meta["video"]
+        frame_idx = frame_meta["frame_idx"]
+        group = frame_meta["group"]
+
+        # Initialize group data structure if this is the first frame for this group
+        if group not in data_by_group:
+            data_by_group[group] = {
+                "video": video,  # All frames in a group are from the same video
+                "frame_inds": [],
+                "imgs_data": [],
+            }
+
+        # Load the frame
+        frame = video[frame_idx]
+
+        # Encode the frame
+        if image_format == "hdf5":
+            img_data = frame
+        else:
+            if "cv2" in sys.modules:
+                img_data = np.squeeze(
+                    cv2.imencode("." + image_format, frame)[1]
+                ).astype("int8")
+            else:
+                if frame.shape[-1] == 1:
+                    frame = frame.squeeze(axis=-1)
+                img_data = np.frombuffer(
+                    iio.imwrite("<bytes>", frame, extension="." + image_format),
+                    dtype="int8",
+                )
+
+        # Store frame data in the appropriate group
+        data_by_group[group]["imgs_data"].append(img_data)
+        data_by_group[group]["frame_inds"].append(frame_idx)
+
+    # Write all frame data to the HDF5 file
+    replaced_videos = {}
+    with h5py.File(labels_path, "a") as f:
+        for group, data in data_by_group.items():
+            video = data["video"]
+            frame_inds = data["frame_inds"]
+            imgs_data = data["imgs_data"]
+
+            if image_format == "hdf5":
+                f.create_dataset(
+                    f"{group}/video", data=imgs_data, compression="gzip", chunks=True
+                )
+                ds = f[f"{group}/video"]
+            else:
+                if fixed_length:
+                    img_bytes_len = 0
+                    for img in imgs_data:
+                        img_bytes_len = max(img_bytes_len, len(img))
+                    ds = f.create_dataset(
+                        f"{group}/video",
+                        shape=(len(imgs_data), img_bytes_len),
+                        dtype="int8",
+                        compression="gzip",
+                    )
+                    for i, img in enumerate(imgs_data):
+                        ds[i, : len(img)] = img
+                else:
+                    ds = f.create_dataset(
+                        f"{group}/video",
+                        shape=(len(imgs_data),),
+                        dtype=h5py.special_dtype(vlen=np.dtype("int8")),
+                    )
+                    for i, img in enumerate(imgs_data):
+                        ds[i] = img
+
+            # Store metadata
+            ds.attrs["format"] = image_format
+            video_shape = video.shape
+            (
+                ds.attrs["frames"],
+                ds.attrs["height"],
+                ds.attrs["width"],
+                ds.attrs["channels"],
+            ) = video_shape
+
+            # Store frame indices
+            f.create_dataset(f"{group}/frame_numbers", data=frame_inds)
+
+            # Store source video
+            if video.source_video is not None:
+                source_video = video.source_video
+            else:
+                source_video = video
+
+            # Create embedded video object
+            embedded_video = Video(
+                filename=labels_path,
+                backend=VideoBackend.from_filename(
+                    labels_path,
+                    dataset=f"{group}/video",
+                    grayscale=video.grayscale,
+                    keep_open=False,
+                ),
+                source_video=source_video,
+            )
+
+            # Store source video metadata
+            grp = f.require_group(f"{group}/source_video")
+            grp.attrs["json"] = json.dumps(
+                video_to_dict(source_video), separators=(",", ":")
+            )
+
+            # Store the embedded video for return
+            replaced_videos[video] = embedded_video
+
+    return replaced_videos
+
+
 def embed_frames(
     labels_path: str,
     labels: Labels,
     embed: list[tuple[Video, int]],
     image_format: str = "png",
+    verbose: bool = True,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -369,40 +570,26 @@ def embed_frames(
         embed: A list of tuples of `(video, frame_idx)` specifying the frames to embed.
         image_format: The image format to use for embedding. Valid formats are "png"
             (the default), "jpg" or "hdf5".
+        verbose: If `True` (the default), display a progress bar for the embedding process.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
         and `Labels` objects in place.
     """
-    to_embed_by_video = {}
-    for video, frame_idx in embed:
-        if video not in to_embed_by_video:
-            to_embed_by_video[video] = []
-        to_embed_by_video[video].append(frame_idx)
-
-    for video in to_embed_by_video:
-        to_embed_by_video[video] = np.unique(to_embed_by_video[video]).tolist()
-
-    replaced_videos = {}
-    for video, frame_inds in to_embed_by_video.items():
-        video_ind = labels.videos.index(video)
-        embedded_video = embed_video(
-            labels_path,
-            video,
-            group=f"video{video_ind}",
-            frame_inds=frame_inds,
-            image_format=image_format,
-        )
-
-        labels.videos[video_ind] = embedded_video
-        replaced_videos[video] = embedded_video
+    frames_metadata = prepare_frames_to_embed(labels_path, labels, embed)
+    replaced_videos = process_and_embed_frames(
+        labels_path, frames_metadata, image_format=image_format, verbose=verbose
+    )
 
     if len(replaced_videos) > 0:
         labels.replace_videos(video_map=replaced_videos)
 
 
 def embed_videos(
-    labels_path: str, labels: Labels, embed: bool | str | list[tuple[Video, int]]
+    labels_path: str,
+    labels: Labels,
+    embed: bool | str | list[tuple[Video, int]],
+    verbose: bool = True,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -418,6 +605,7 @@ def embed_videos(
 
             If `True` or `"all"`, all labeled frames and suggested frames will be
             embedded.
+        verbose: If `True` (the default), display a progress bar for the embedding process.
 
             If `"source"` is specified, no images will be embedded and the source video
             will be restored if available.
@@ -443,10 +631,15 @@ def embed_videos(
     else:
         raise ValueError(f"Invalid value for embed: {embed}")
 
-    embed_frames(labels_path, labels, embed)
+    embed_frames(labels_path, labels, embed, verbose=verbose)
 
 
-def write_videos(labels_path: str, videos: list[Video], restore_source: bool = False):
+def write_videos(
+    labels_path: str,
+    videos: list[Video],
+    restore_source: bool = False,
+    verbose: bool = True,
+):
     """Write video metadata to a SLEAP labels file.
 
     Args:
@@ -455,31 +648,72 @@ def write_videos(labels_path: str, videos: list[Video], restore_source: bool = F
         restore_source: If `True`, restore source videos if available and will not
             re-embed the embedded images. If `False` (the default), will re-embed images
             that were previously embedded.
+        verbose: If `True` (the default), display a progress bar when embedding frames.
     """
-    video_jsons = []
+    videos_to_embed = []
+    videos_to_write = []
+
+    # First determine which videos need embedding
     for video_ind, video in enumerate(videos):
         if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
             if restore_source:
-                video = video.source_video
+                videos_to_write.append((video_ind, video.source_video))
             else:
-                # If the video has embedded images, embed them images again if we haven't
-                # already.
+                # If the video has embedded images, check if we need to re-embed them
                 already_embedded = False
                 if Path(labels_path).exists():
                     with h5py.File(labels_path, "r") as f:
                         already_embedded = f"video{video_ind}/video" in f
 
-                if not already_embedded:
-                    video = embed_video(
-                        labels_path,
-                        video,
-                        group=f"video{video_ind}",
-                        frame_inds=video.backend.source_inds,
-                        image_format=video.backend.image_format,
-                    )
+                if already_embedded:
+                    videos_to_write.append((video_ind, video))
+                else:
+                    # Collect information for embedding
+                    frames_to_embed = [
+                        (video, frame_idx) for frame_idx in video.backend.source_inds
+                    ]
+                    videos_to_embed.append((video_ind, video, frames_to_embed))
+        else:
+            videos_to_write.append((video_ind, video))
 
+    # Process videos that need embedding
+    if videos_to_embed:
+        # Prepare all frames to embed
+        all_frames_to_embed = []
+        for video_ind, video, frames in videos_to_embed:
+            for frame in frames:
+                all_frames_to_embed.append(frame)
+
+        # Create a temporary Labels object for embedding
+        temp_labels = Labels(
+            videos=[v for _, v, _ in videos_to_embed], labeled_frames=[]
+        )
+
+        # Prepare and embed all frames in a single process
+        frames_metadata = prepare_frames_to_embed(
+            labels_path, temp_labels, all_frames_to_embed
+        )
+        replaced_videos = process_and_embed_frames(
+            labels_path,
+            frames_metadata,
+            image_format=[
+                v.backend.image_format if hasattr(v.backend, "image_format") else "png"
+                for _, v, _ in videos_to_embed
+            ][
+                0
+            ],  # Use the first video's format
+            verbose=verbose,
+        )
+
+        # Add the embedded videos to the list
+        for video_ind, video, _ in videos_to_embed:
+            if video in replaced_videos:
+                videos_to_write.append((video_ind, replaced_videos[video]))
+
+    # Write video metadata
+    video_jsons = []
+    for video_ind, video in sorted(videos_to_write, key=lambda x: x[0]):
         video_json = video_to_dict(video)
-
         video_jsons.append(np.bytes_(json.dumps(video_json, separators=(",", ":"))))
 
     with h5py.File(labels_path, "a") as f:
@@ -1679,6 +1913,7 @@ def write_labels(
     labels_path: str,
     labels: Labels,
     embed: bool | str | list[tuple[Video, int]] | None = None,
+    verbose: bool = True,
 ):
     """Write a SLEAP labels file.
 
@@ -1699,13 +1934,16 @@ def write_labels(
             will be restored if available.
 
             This argument is only valid for the SLP backend.
+        verbose: If `True` (the default), display a progress bar when embedding frames.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
 
     if embed:
-        embed_videos(labels_path, labels, embed)
-    write_videos(labels_path, labels.videos, restore_source=(embed == "source"))
+        embed_videos(labels_path, labels, embed, verbose=verbose)
+    write_videos(
+        labels_path, labels.videos, restore_source=(embed == "source"), verbose=verbose
+    )
     write_tracks(labels_path, labels.tracks)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
     write_sessions(labels_path, labels.sessions, labels.videos, labels.labeled_frames)
