@@ -72,6 +72,20 @@ def skeleton_json_flies():
 
 
 @pytest.fixture
+def skeleton_yaml_flies():
+    """Complex fly skeleton YAML file with 13 nodes, edges and symmetries.
+
+    This skeleton:
+    - Same skeleton as skeleton_json_flies but in YAML format
+    - Uses simplified human-readable YAML format
+    - Has skeleton names as top-level keys
+    - Nodes are simple name lists
+    - Edges and symmetries use node names for references
+    """
+    return "tests/data/slp/flies13.skeleton.yml"
+
+
+@pytest.fixture
 def slp_real_data():
     """A real data example containing predicted and user instances.
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import json
-from typing import Any, Dict, List, Union, Tuple
+from typing import Any, Dict, List, Union, Tuple, Optional
 from sleap_io import Skeleton, Node, Edge, Symmetry
 
 
@@ -613,3 +613,163 @@ class SkeletonSLPEncoder:
             )
 
         return skeletons_dicts, nodes_dicts
+
+
+class SkeletonYAMLDecoder:
+    """Decode skeleton data from simplified YAML format.
+
+    This decoder handles a simplified YAML format that is more human-readable
+    than the jsonpickle format.
+    """
+
+    def decode(self, data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
+        """Decode skeleton(s) from YAML data.
+
+        Args:
+            data: YAML string or pre-parsed dictionary containing skeleton data.
+                  If a dict is provided with skeleton names as keys, returns list.
+                  If a dict is provided with nodes/edges/symmetries, returns single skeleton.
+
+        Returns:
+            A single Skeleton or list of Skeletons depending on input format.
+        """
+        if isinstance(data, str):
+            import yaml
+
+            data = yaml.safe_load(data)
+
+        # Check if this is a single skeleton dict or multiple skeletons
+        if isinstance(data, dict):
+            # If it has nodes/edges keys, it's a single skeleton
+            if "nodes" in data:
+                return self._decode_skeleton(data)
+            else:
+                # Multiple skeletons with names as keys
+                skeletons = []
+                for name, skeleton_data in data.items():
+                    skeleton = self._decode_skeleton(skeleton_data, name)
+                    skeletons.append(skeleton)
+                return skeletons
+
+        raise ValueError(f"Unexpected data format: {type(data)}")
+
+    def decode_dict(self, skeleton_data: Dict, name: str = "Skeleton") -> Skeleton:
+        """Decode a single skeleton from a dictionary.
+
+        This is useful when the skeleton data is embedded in a larger YAML structure.
+
+        Args:
+            skeleton_data: Dictionary containing nodes, edges, and symmetries.
+            name: Name for the skeleton (default: "Skeleton").
+
+        Returns:
+            A Skeleton object.
+        """
+        return self._decode_skeleton(skeleton_data, name)
+
+    def _decode_skeleton(self, data: Dict, name: Optional[str] = None) -> Skeleton:
+        """Decode a single skeleton from dictionary data.
+
+        Args:
+            data: Dictionary containing skeleton data in simplified format.
+            name: Optional name override for the skeleton.
+
+        Returns:
+            A Skeleton object.
+        """
+        # Create nodes
+        nodes = []
+        node_map = {}
+        for node_data in data.get("nodes", []):
+            node = Node(name=node_data["name"])
+            nodes.append(node)
+            node_map[node.name] = node
+
+        # Create edges
+        edges = []
+        for edge_data in data.get("edges", []):
+            source_name = edge_data["source"]["name"]
+            dest_name = edge_data["destination"]["name"]
+            edge = Edge(source=node_map[source_name], destination=node_map[dest_name])
+            edges.append(edge)
+
+        # Create symmetries
+        symmetries = []
+        for sym_data in data.get("symmetries", []):
+            # Each symmetry is a list of 2 node specifications
+            node1_name = sym_data[0]["name"]
+            node2_name = sym_data[1]["name"]
+            symmetry = Symmetry([node_map[node1_name], node_map[node2_name]])
+            symmetries.append(symmetry)
+
+        # Use provided name or get from data
+        if name is None:
+            name = data.get("name", "Skeleton")
+
+        return Skeleton(nodes=nodes, edges=edges, symmetries=symmetries, name=name)
+
+
+class SkeletonYAMLEncoder:
+    """Encode skeleton data to simplified YAML format.
+
+    This encoder produces a human-readable YAML format that is easier to
+    edit manually than the jsonpickle format.
+    """
+
+    def encode(self, skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+        """Encode skeleton(s) to YAML string.
+
+        Args:
+            skeletons: A single Skeleton or list of Skeletons to encode.
+
+        Returns:
+            YAML string with skeleton names as top-level keys.
+        """
+        import yaml
+
+        if isinstance(skeletons, Skeleton):
+            skeletons = [skeletons]
+
+        data = {}
+        for skeleton in skeletons:
+            skeleton_data = self.encode_dict(skeleton)
+            data[skeleton.name] = skeleton_data
+
+        return yaml.dump(data, default_flow_style=False, sort_keys=False)
+
+    def encode_dict(self, skeleton: Skeleton) -> Dict:
+        """Encode a single skeleton to a dictionary.
+
+        This is useful when embedding skeleton data in a larger YAML structure.
+
+        Args:
+            skeleton: Skeleton object to encode.
+
+        Returns:
+            Dictionary with nodes, edges, and symmetries.
+        """
+        # Encode nodes
+        nodes = []
+        for node in skeleton.nodes:
+            nodes.append({"name": node.name})
+
+        # Encode edges
+        edges = []
+        for edge in skeleton.edges:
+            edges.append(
+                {
+                    "source": {"name": edge.source.name},
+                    "destination": {"name": edge.destination.name},
+                }
+            )
+
+        # Encode symmetries
+        symmetries = []
+        for symmetry in skeleton.symmetries:
+            # Convert set to list and encode as pairs
+            node_list = list(symmetry.nodes)
+            symmetries.append(
+                [{"name": node_list[0].name}, {"name": node_list[1].name}]
+            )
+
+        return {"nodes": nodes, "edges": edges, "symmetries": symmetries}

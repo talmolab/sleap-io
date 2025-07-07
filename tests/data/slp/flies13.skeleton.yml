@@ -1,0 +1,85 @@
+Skeleton-0:
+  nodes:
+  - name: head
+  - name: thorax
+  - name: abdomen
+  - name: wingL
+  - name: wingR
+  - name: forelegL4
+  - name: forelegR4
+  - name: midlegL4
+  - name: midlegR4
+  - name: hindlegL4
+  - name: hindlegR4
+  - name: eyeL
+  - name: eyeR
+  edges:
+  - source:
+      name: head
+    destination:
+      name: eyeL
+  - source:
+      name: head
+    destination:
+      name: eyeR
+  - source:
+      name: thorax
+    destination:
+      name: head
+  - source:
+      name: thorax
+    destination:
+      name: abdomen
+  - source:
+      name: thorax
+    destination:
+      name: wingL
+  - source:
+      name: thorax
+    destination:
+      name: wingR
+  - source:
+      name: thorax
+    destination:
+      name: forelegL4
+  - source:
+      name: thorax
+    destination:
+      name: forelegR4
+  - source:
+      name: thorax
+    destination:
+      name: midlegL4
+  - source:
+      name: thorax
+    destination:
+      name: midlegR4
+  - source:
+      name: thorax
+    destination:
+      name: hindlegL4
+  - source:
+      name: thorax
+    destination:
+      name: hindlegR4
+  symmetries:
+  - - name: wingL
+    - name: wingR
+  - - name: wingL
+    - name: wingR
+  - - name: forelegL4
+    - name: forelegR4
+  - - name: forelegL4
+    - name: forelegR4
+  - - name: midlegR4
+    - name: midlegL4
+  - - name: midlegR4
+    - name: midlegL4
+  - - name: hindlegR4
+    - name: hindlegL4
+  - - name: hindlegR4
+    - name: hindlegL4
+  - - name: eyeL
+    - name: eyeR
+  - - name: eyeL
+    - name: eyeR

@@ -3,7 +3,12 @@
 from __future__ import annotations
 from sleap_io import Labels, Skeleton, Video
 from sleap_io.io import slp, nwb, labelstudio, jabs, video_writing
-from sleap_io.io.skeleton import SkeletonDecoder, SkeletonEncoder
+from sleap_io.io.skeleton import (
+    SkeletonDecoder,
+    SkeletonEncoder,
+    SkeletonYAMLDecoder,
+    SkeletonYAMLEncoder,
+)
 from typing import Optional, Union, List
 from pathlib import Path
 import numpy as np
@@ -292,44 +297,62 @@ def save_file(
 
 
 def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
-    """Load skeleton(s) from a JSON file.
+    """Load skeleton(s) from a JSON or YAML file.
 
     Args:
-        filename: Path to a skeleton JSON file.
+        filename: Path to a skeleton JSON or YAML file.
 
     Returns:
         A single `Skeleton` or list of `Skeleton` objects.
 
     Notes:
-        This function loads skeletons from standalone JSON files that use the
-        jsonpickle format. This is different from skeletons stored within .slp files.
+        This function loads skeletons from standalone files. JSON files use the
+        jsonpickle format, while YAML files use a simplified human-readable format.
+        The format is detected based on the file extension.
     """
     if isinstance(filename, Path):
         filename = str(filename)
 
-    with open(filename, "r") as f:
-        json_data = f.read()
-
-    decoder = SkeletonDecoder()
-    return decoder.decode(json_data)
+    # Detect format based on extension
+    if filename.lower().endswith((".yaml", ".yml")):
+        # YAML format
+        with open(filename, "r") as f:
+            yaml_data = f.read()
+        decoder = SkeletonYAMLDecoder()
+        return decoder.decode(yaml_data)
+    else:
+        # JSON format (default)
+        with open(filename, "r") as f:
+            json_data = f.read()
+        decoder = SkeletonDecoder()
+        return decoder.decode(json_data)
 
 
 def save_skeleton(skeleton: Union[Skeleton, List[Skeleton]], filename: str | Path):
-    """Save skeleton(s) to a JSON file.
+    """Save skeleton(s) to a JSON or YAML file.
 
     Args:
         skeleton: A single `Skeleton` or list of `Skeleton` objects to save.
-        filename: Path to save the skeleton JSON file.
+        filename: Path to save the skeleton file.
 
     Notes:
-        This function saves skeletons in the standalone JSON format using jsonpickle
-        encoding. This format is compatible with SLEAP's skeleton JSON files.
+        This function saves skeletons in either JSON or YAML format based on the
+        file extension. JSON files use the jsonpickle format compatible with SLEAP,
+        while YAML files use a simplified human-readable format.
     """
     if isinstance(filename, Path):
         filename = str(filename)
 
-    encoder = SkeletonEncoder()
-    json_data = encoder.encode(skeleton)
-
-    with open(filename, "w") as f:
-        f.write(json_data)
+    # Detect format based on extension
+    if filename.lower().endswith((".yaml", ".yml")):
+        # YAML format
+        encoder = SkeletonYAMLEncoder()
+        yaml_data = encoder.encode(skeleton)
+        with open(filename, "w") as f:
+            f.write(yaml_data)
+    else:
+        # JSON format (default)
+        encoder = SkeletonEncoder()
+        json_data = encoder.encode(skeleton)
+        with open(filename, "w") as f:
+            f.write(json_data)
