@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import json
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Tuple
 from sleap_io import Skeleton, Node, Edge, Symmetry
 
 
@@ -175,3 +175,221 @@ class SkeletonDecoder:
         else:
             # Default to regular edge
             return 1
+
+
+class SkeletonEncoder:
+    """Encode skeleton data to jsonpickle format.
+    
+    This encoder produces the jsonpickle format used by SLEAP for standalone
+    skeleton JSON files, ensuring backward compatibility with existing files.
+    """
+    
+    def __init__(self):
+        """Initialize the encoder."""
+        self._object_to_id: Dict[int, int] = {}  # id(object) -> py/id
+        self._next_id = 1
+        
+    def encode(self, skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+        """Encode skeleton(s) to JSON string.
+        
+        Args:
+            skeletons: A single Skeleton or list of Skeletons to encode.
+            
+        Returns:
+            JSON string in jsonpickle format.
+        """
+        # Reset state for each encode operation
+        self._object_to_id = {}
+        self._next_id = 1
+        
+        # Handle single skeleton or list
+        if isinstance(skeletons, Skeleton):
+            data = self._encode_skeleton(skeletons)
+        else:
+            data = [self._encode_skeleton(skel) for skel in skeletons]
+            
+        # Sort dictionaries recursively for consistency
+        data = self._recursively_sort_dict(data)
+        
+        return json.dumps(data, separators=(", ", ": "))
+    
+    def _encode_skeleton(self, skeleton: Skeleton) -> Dict:
+        """Encode a single skeleton to dictionary format.
+        
+        Args:
+            skeleton: Skeleton object to encode.
+            
+        Returns:
+            Dictionary in jsonpickle format.
+        """
+        # Track nodes and their py/ids
+        node_to_py_id = {}
+        
+        # Encode links (edges and symmetries)
+        links = []
+        
+        # First, process edges to establish node references
+        for i, edge in enumerate(skeleton.edges):
+            # Encode edge
+            edge_dict = self._encode_edge(edge, i, edge_type=1)
+            links.append(edge_dict)
+            
+            # Track node py/ids
+            if edge.source not in node_to_py_id:
+                node_to_py_id[edge.source] = self._get_or_create_py_id(edge.source)
+            if edge.destination not in node_to_py_id:
+                node_to_py_id[edge.destination] = self._get_or_create_py_id(edge.destination)
+        
+        # Then process symmetries
+        for i, symmetry in enumerate(skeleton.symmetries):
+            # Encode symmetry
+            sym_dict = self._encode_symmetry(symmetry, edge_type=2)
+            links.append(sym_dict)
+            
+            # Track node py/ids
+            for node in symmetry.nodes:
+                if node not in node_to_py_id:
+                    node_to_py_id[node] = self._get_or_create_py_id(node)
+        
+        # Create nodes section with py/id references
+        nodes = []
+        for node in skeleton.nodes:
+            if node in node_to_py_id:
+                nodes.append({"id": {"py/id": node_to_py_id[node]}})
+        
+        # Build final skeleton dict
+        return {
+            "directed": True,
+            "graph": {
+                "name": skeleton.name,
+                "num_edges_inserted": len(skeleton.edges)
+            },
+            "links": links,
+            "multigraph": True,
+            "nodes": nodes
+        }
+    
+    def _encode_edge(self, edge: Edge, edge_idx: int, edge_type: int) -> Dict:
+        """Encode an edge to jsonpickle format.
+        
+        Args:
+            edge: Edge object to encode.
+            edge_idx: Index of this edge.
+            edge_type: Type of edge (1 for regular, 2 for symmetry).
+            
+        Returns:
+            Dictionary representing the edge.
+        """
+        # Encode edge type - first occurrence uses py/reduce, subsequent use py/id
+        if edge_type == 1:
+            if not hasattr(self, '_edge_type_1_encoded'):
+                type_dict = {
+                    "py/reduce": [
+                        {"py/type": "sleap.skeleton.EdgeType"},
+                        {"py/tuple": [1]}
+                    ]
+                }
+                self._edge_type_1_encoded = True
+            else:
+                type_dict = {"py/id": 1}
+        else:
+            if not hasattr(self, '_edge_type_2_encoded'):
+                type_dict = {
+                    "py/reduce": [
+                        {"py/type": "sleap.skeleton.EdgeType"},
+                        {"py/tuple": [2]}
+                    ]
+                }
+                self._edge_type_2_encoded = True
+            else:
+                type_dict = {"py/id": 2}
+        
+        return {
+            "edge_insert_idx": edge_idx,
+            "key": 0,
+            "source": self._encode_node(edge.source),
+            "target": self._encode_node(edge.destination),
+            "type": type_dict
+        }
+    
+    def _encode_symmetry(self, symmetry: Symmetry, edge_type: int) -> Dict:
+        """Encode a symmetry to jsonpickle format.
+        
+        Args:
+            symmetry: Symmetry object to encode.
+            edge_type: Type of edge (should be 2 for symmetry).
+            
+        Returns:
+            Dictionary representing the symmetry.
+        """
+        # Get source and target nodes
+        source, target = symmetry.nodes[0], symmetry.nodes[1]
+        
+        # Encode edge type
+        if not hasattr(self, '_edge_type_2_encoded'):
+            type_dict = {
+                "py/reduce": [
+                    {"py/type": "sleap.skeleton.EdgeType"},
+                    {"py/tuple": [2]}
+                ]
+            }
+            self._edge_type_2_encoded = True
+        else:
+            type_dict = {"py/id": 2}
+        
+        return {
+            "key": 0,
+            "source": self._encode_node(source),
+            "target": self._encode_node(target),
+            "type": type_dict
+        }
+    
+    def _encode_node(self, node: Node) -> Dict:
+        """Encode a node to jsonpickle format.
+        
+        Args:
+            node: Node object to encode.
+            
+        Returns:
+            Dictionary with py/object and py/state.
+        """
+        return {
+            "py/object": "sleap.skeleton.Node",
+            "py/state": {
+                "py/tuple": [node.name, 1.0]  # name, weight (always 1.0)
+            }
+        }
+    
+    def _get_or_create_py_id(self, obj: Any) -> int:
+        """Get or create a py/id for an object.
+        
+        Args:
+            obj: Object to get/create ID for.
+            
+        Returns:
+            The py/id integer.
+        """
+        obj_id = id(obj)
+        if obj_id not in self._object_to_id:
+            self._object_to_id[obj_id] = self._next_id
+            self._next_id += 1
+        return self._object_to_id[obj_id]
+    
+    def _recursively_sort_dict(self, obj: Any) -> Any:
+        """Recursively sort dictionary keys for consistent output.
+        
+        Args:
+            obj: Object to sort (dict, list, or other).
+            
+        Returns:
+            Sorted version of the object.
+        """
+        if isinstance(obj, dict):
+            # Sort keys and recursively sort values
+            return {k: self._recursively_sort_dict(v) for k, v in sorted(obj.items())}
+        elif isinstance(obj, list):
+            # Recursively sort list elements
+            return [self._recursively_sort_dict(item) for item in obj]
+        else:
+            # Return as-is for non-dict/list types
+            return obj
