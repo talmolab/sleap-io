@@ -1434,3 +1434,64 @@ def test_save_file_verbose_propagation(tmp_path):
         # Test with verbose=False for SLP format
         save_file(mock_labels, tmp_path / "test.slp", verbose=False)
         assert mock_save_slp.call_args.kwargs["verbose"] is False
+
+
+def test_self_referential_path_detection(tmp_path):
+    """Test that self-referential paths are detected and raise an error."""
+    # Create test data
+    skeleton = Skeleton(["A", "B"])
+    track = Track("track1")
+    video = Video.from_filename("fake.mp4")
+    
+    # Create instance and labeled frame
+    inst = Instance([[1, 2], [3, 4]], skeleton=skeleton, track=track)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(
+        videos=[video], skeletons=[skeleton], tracks=[track], labeled_frames=[lf]
+    )
+    
+    # Create a .pkg.slp file with embedded frames
+    pkg_path = tmp_path / "test.pkg.slp"
+    
+    # Mock embedding to create a video with embedded frames but no source video
+    with h5py.File(pkg_path, "w") as f:
+        # Create minimal structure
+        f.create_dataset("videos_json", data=[])
+        f.create_dataset("tracks_json", data=[])
+        
+    # Create a mock embedded video with minimal HDF5Video backend
+    # We need to use a mock to bypass the actual file reading
+    from unittest.mock import Mock, patch
+    
+    # Create a real HDF5Video instance but mock its file operations
+    with patch("h5py.File"):
+        mock_backend = HDF5Video(
+            filename=str(pkg_path),
+            dataset="video0/video",
+            grayscale=True,
+            keep_open=False
+        )
+        # Manually set properties to simulate embedded video
+        mock_backend.image_format = "png"  # This makes has_embedded_images return True
+        mock_backend.source_inds = [0]  # Mock having one embedded frame
+    
+    embedded_video = Video(
+        filename=str(pkg_path),
+        backend=mock_backend,
+        source_video=None,  # No source video
+    )
+    
+    labels_with_embedded = Labels(
+        videos=[embedded_video], 
+        skeletons=[skeleton], 
+        tracks=[track], 
+        labeled_frames=[lf]
+    )
+    
+    # Try to save over the same file with embed=False (should raise error)
+    with pytest.raises(ValueError, match="Cannot save with restore_source=True"):
+        write_labels(str(pkg_path), labels_with_embedded, embed=False)
+    
+    # Saving to a different file should work
+    pkg_path2 = tmp_path / "test2.pkg.slp"
+    write_labels(str(pkg_path2), labels_with_embedded, embed=False)

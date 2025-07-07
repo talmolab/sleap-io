@@ -649,6 +649,10 @@ def write_videos(
             re-embed the embedded images. If `False` (the default), will re-embed images
             that were previously embedded.
         verbose: If `True` (the default), display a progress bar when embedding frames.
+    
+    Raises:
+        ValueError: If attempting to save with `restore_source=True` when it would create
+            a self-referential path (i.e., the video references the file being saved).
     """
     videos_to_embed = []
     videos_to_write = []
@@ -657,7 +661,20 @@ def write_videos(
     for video_ind, video in enumerate(videos):
         if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
             if restore_source:
-                videos_to_write.append((video_ind, video.source_video))
+                # Check for self-referential path
+                if video.source_video is None:
+                    # No source video available, check if we would reference ourselves
+                    if Path(video.filename).resolve() == Path(labels_path).resolve():
+                        raise ValueError(
+                            f"Cannot save with restore_source=True when overwriting the same "
+                            f"file that contains the embedded video. Use restore_source=False "
+                            f"or save to a different filename."
+                        )
+                    # Reference the current embedded video file
+                    videos_to_write.append((video_ind, video))
+                else:
+                    # Use the source video
+                    videos_to_write.append((video_ind, video.source_video))
             else:
                 # If the video has embedded images, check if we need to re-embed them
                 already_embedded = False
