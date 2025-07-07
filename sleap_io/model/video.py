@@ -328,7 +328,10 @@ class Video:
                     grayscale = self.backend_metadata["shape"][-1] == 1
 
         if not self.exists(dataset=dataset):
-            msg = f"Video does not exist or is inaccessible: {self.filename}"
+            msg = (
+                f"Video does not exist or cannot be opened for reading: "
+                f"{self.filename}"
+            )
             if dataset is not None:
                 msg += f" (dataset: {dataset})"
             raise FileNotFoundError(msg)
