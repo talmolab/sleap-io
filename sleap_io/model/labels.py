@@ -606,7 +606,7 @@ class Labels:
         self,
         filename: str,
         format: Optional[str] = None,
-        embed: bool | str | list[tuple[Video, int]] | None = None,
+        embed: bool | str | list[tuple[Video, int]] | None = False,
         verbose: bool = True,
         **kwargs,
     ):
@@ -622,8 +622,8 @@ class Labels:
                 list of tuples of `(video, frame_idx)`.
             verbose: If `True` (the default), display a progress bar when embedding frames.
 
-                If `None` is specified (the default) and the labels contains embedded
-                frames, those embedded frames will be re-saved to the new file.
+                If `False` is specified (the default), the source video will be
+                restored if available, otherwise the embedded frames will be re-saved.
 
                 If `True` or `"all"`, all labeled frames and suggested frames will be
                 embedded.

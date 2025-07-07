@@ -1939,10 +1939,10 @@ def write_labels(
     if Path(labels_path).exists():
         Path(labels_path).unlink()
 
-    if embed:
+    if embed and embed != False:
         embed_videos(labels_path, labels, embed, verbose=verbose)
     write_videos(
-        labels_path, labels.videos, restore_source=(embed == "source"), verbose=verbose
+        labels_path, labels.videos, restore_source=(embed == "source" or embed is False), verbose=verbose
     )
     write_tracks(labels_path, labels.tracks)
     write_suggestions(labels_path, labels.suggestions, labels.videos)

@@ -26,7 +26,7 @@ def load_slp(filename: str, open_videos: bool = True) -> Labels:
 def save_slp(
     labels: Labels,
     filename: str,
-    embed: bool | str | list[tuple[Video, int]] | None = None,
+    embed: bool | str | list[tuple[Video, int]] | None = False,
     verbose: bool = True,
 ):
     """Save a SLEAP dataset to a `.slp` file.
@@ -38,8 +38,8 @@ def save_slp(
             `"all"`, `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or list
             of tuples of `(video, frame_idx)`.
 
-            If `None` is specified (the default) and the labels contains embedded
-            frames, those embedded frames will be re-saved to the new file.
+            If `False` is specified (the default), the source video will be restored
+            if available, otherwise the embedded frames will be re-saved.
 
             If `True` or `"all"`, all labeled frames and suggested frames will be
             embedded.
