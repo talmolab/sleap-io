@@ -251,11 +251,15 @@ class SkeletonEncoder:
                 if node not in node_to_py_id:
                     node_to_py_id[node] = self._get_or_create_py_id(node)
         
+        # Ensure all skeleton nodes have py/ids
+        for node in skeleton.nodes:
+            if node not in node_to_py_id:
+                node_to_py_id[node] = self._get_or_create_py_id(node)
+        
         # Create nodes section with py/id references
         nodes = []
         for node in skeleton.nodes:
-            if node in node_to_py_id:
-                nodes.append({"id": {"py/id": node_to_py_id[node]}})
+            nodes.append({"id": {"py/id": node_to_py_id[node]}})
         
         # Build final skeleton dict
         return {
@@ -322,8 +326,9 @@ class SkeletonEncoder:
         Returns:
             Dictionary representing the symmetry.
         """
-        # Get source and target nodes
-        source, target = symmetry.nodes[0], symmetry.nodes[1]
+        # Get source and target nodes (convert set to list for ordering)
+        nodes_list = list(symmetry.nodes)
+        source, target = nodes_list[0], nodes_list[1]
         
         # Encode edge type
         if not hasattr(self, '_edge_type_2_encoded'):
