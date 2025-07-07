@@ -51,12 +51,16 @@ jobs:
 
       - name: Build and upload docs (release)
         if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash -l {0}
         run: |
             mike deploy --update-aliases --allow-empty --push "${{ github.event.release.tag_name }}" latest
 
       - name: Build and upload docs (dev)
         if: ${{ github.event_name == 'push' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash -l {0}
         run: |
             mike deploy --update-aliases --allow-empty --push dev
