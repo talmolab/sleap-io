@@ -1436,11 +1436,11 @@ def test_save_file_verbose_propagation(tmp_path):
         assert mock_save_slp.call_args.kwargs["verbose"] is False
 
 
-def test_embed_false_behavior(tmp_path):
+def test_embed_false_behavior(tmp_path, centered_pair_low_quality_video):
     """Test that embed=False restores source videos or references embedded files."""
     # Create test data
     skeleton = Skeleton(["A", "B"])
-    video = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
+    video = centered_pair_low_quality_video
 
     inst = Instance([[1, 2], [3, 4]], skeleton=skeleton)
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
@@ -1474,16 +1474,16 @@ def test_embed_false_behavior(tmp_path):
     assert labels3.video.backend.has_embedded_images
 
 
-def test_mixed_video_scenarios(tmp_path):
+def test_mixed_video_scenarios(tmp_path, centered_pair_low_quality_video):
     """Test saving with mixed embedded and non-embedded videos."""
     # Create test data with multiple videos
     skeleton = Skeleton(["A", "B"])
 
     # Video 1: Regular video
-    video1 = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
+    video1 = centered_pair_low_quality_video
 
     # Video 2: Will be embedded
-    video2 = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
+    video2 = Video.from_filename(centered_pair_low_quality_video.filename)
 
     # Create labeled frames for both videos
     inst1 = Instance([[1, 2], [3, 4]], skeleton=skeleton)
@@ -1541,6 +1541,62 @@ def test_mixed_video_scenarios(tmp_path):
     assert loaded3.videos[1].backend.has_embedded_images
 
 
+def test_save_overwrite_without_embedded(tmp_path, centered_pair_low_quality_video):
+    """Test that saving with embed=False over the same file works when no embedded data."""
+    # Create test data with external video
+    skeleton = Skeleton(["A", "B"])
+    video = centered_pair_low_quality_video
+    
+    inst = Instance([[1, 2], [3, 4]], skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+    
+    # Save to a .slp file without embedding
+    slp_path = tmp_path / "test.slp"
+    labels.save(str(slp_path), embed=False)
+    
+    # Load and verify it's not embedded
+    loaded = read_labels(str(slp_path))
+    assert type(loaded.video.backend).__name__ == "MediaVideo"
+    
+    # Save over the same file with embed=False - should work fine
+    loaded.save(str(slp_path), embed=False)
+    
+    # Verify it still works
+    loaded2 = read_labels(str(slp_path))
+    assert type(loaded2.video.backend).__name__ == "MediaVideo"
+    assert loaded2.video.filename == video.filename
+
+
+def test_save_overwrite_embedded_with_source(tmp_path, centered_pair_low_quality_video):
+    """Test that saving with embed=False over the same file works when embedded data has source."""
+    # Create test data
+    skeleton = Skeleton(["A", "B"])
+    video = centered_pair_low_quality_video
+    
+    inst = Instance([[1, 2], [3, 4]], skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+    
+    # Save with embedding
+    pkg_path = tmp_path / "test.pkg.slp"
+    labels.save(str(pkg_path), embed="user")
+    
+    # Load and verify it's embedded with source video
+    loaded = read_labels(str(pkg_path))
+    assert loaded.video.backend.has_embedded_images
+    assert loaded.video.source_video is not None
+    assert loaded.video.source_video.filename == video.filename
+    
+    # Save over the same file with embed=False - should restore source video
+    loaded.save(str(pkg_path), embed=False)
+    
+    # Verify source video was restored
+    loaded2 = read_labels(str(pkg_path))
+    assert type(loaded2.video.backend).__name__ == "MediaVideo"
+    assert loaded2.video.filename == video.filename
+
+
 def test_self_referential_path_detection(tmp_path):
     """Test that self-referential paths are detected and raise an error."""
     # Create test data
@@ -1594,8 +1650,10 @@ def test_self_referential_path_detection(tmp_path):
     )
 
     # Try to save over the same file with embed=False (should raise error)
-    with pytest.raises(ValueError, match="Cannot save with restore_source=True"):
-        write_labels(str(pkg_path), labels_with_embedded, embed=False)
+    with pytest.raises(
+        ValueError, match="Cannot save with embed=False when overwriting a file"
+    ):
+        labels_with_embedded.save(str(pkg_path), embed=False)
 
     # Saving to a different file should work
     pkg_path2 = tmp_path / "test2.pkg.slp"
