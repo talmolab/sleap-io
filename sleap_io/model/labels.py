@@ -606,7 +606,7 @@ class Labels:
         self,
         filename: str,
         format: Optional[str] = None,
-        embed: bool | str | list[tuple[Video, int]] | None = None,
+        embed: bool | str | list[tuple[Video, int]] | None = False,
         verbose: bool = True,
         **kwargs,
     ):
@@ -622,8 +622,8 @@ class Labels:
                 list of tuples of `(video, frame_idx)`.
             verbose: If `True` (the default), display a progress bar when embedding frames.
 
-                If `None` is specified (the default) and the labels contains embedded
-                frames, those embedded frames will be re-saved to the new file.
+                If `False` is specified (the default), the source video will be
+                restored if available, otherwise the embedded frames will be re-saved.
 
                 If `True` or `"all"`, all labeled frames and suggested frames will be
                 embedded.
@@ -634,6 +634,28 @@ class Labels:
                 This argument is only valid for the SLP backend.
         """
         from sleap_io import save_file
+        from sleap_io.io.slp import sanitize_filename
+        from pathlib import Path
+
+        # Check for self-referential save when embed=False
+        if embed is False and (format == "slp" or str(filename).endswith(".slp")):
+            # Check if any videos have embedded images and would be self-referential
+            sanitized_save_path = Path(sanitize_filename(filename)).resolve()
+            for video in self.videos:
+                if (
+                    hasattr(video.backend, "has_embedded_images")
+                    and video.backend.has_embedded_images
+                    and video.source_video is None
+                ):
+                    sanitized_video_path = Path(
+                        sanitize_filename(video.filename)
+                    ).resolve()
+                    if sanitized_video_path == sanitized_save_path:
+                        raise ValueError(
+                            f"Cannot save with embed=False when overwriting a file that "
+                            f"contains embedded videos. Use labels.save('{filename}', embed=True) "
+                            f"to re-embed the frames, or save to a different filename."
+                        )
 
         save_file(self, filename, format=format, embed=embed, verbose=verbose, **kwargs)
 
