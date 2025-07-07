@@ -205,19 +205,17 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
     elif type(video.backend) == HDF5Video:
         # Determine if we should use self-reference or external reference
         use_self_reference = (
-            video.backend.has_embedded_images and 
-            labels_path is not None and 
-            Path(video.filename).resolve() == Path(labels_path).resolve()
+            video.backend.has_embedded_images
+            and labels_path is not None
+            and Path(video.filename).resolve() == Path(labels_path).resolve()
         )
-        
+
         return {
             "filename": video_filename,
             "backend": {
                 "type": "HDF5Video",
                 "shape": video.shape,
-                "filename": (
-                    "." if use_self_reference else video_filename
-                ),
+                "filename": ("." if use_self_reference else video_filename),
                 "dataset": video.backend.dataset,
                 "input_format": video.backend.input_format,
                 "convert_range": False,
@@ -658,7 +656,7 @@ def write_videos(
             re-embed the embedded images. If `False` (the default), will re-embed images
             that were previously embedded.
         verbose: If `True` (the default), display a progress bar when embedding frames.
-    
+
     Raises:
         ValueError: If attempting to save with `restore_source=True` when it would create
             a self-referential path (i.e., the video references the file being saved).
@@ -1968,7 +1966,10 @@ def write_labels(
     if embed and embed != False:
         embed_videos(labels_path, labels, embed, verbose=verbose)
     write_videos(
-        labels_path, labels.videos, restore_source=(embed == "source" or embed is False), verbose=verbose
+        labels_path,
+        labels.videos,
+        restore_source=(embed == "source" or embed is False),
+        verbose=verbose,
     )
     write_tracks(labels_path, labels.tracks)
     write_suggestions(labels_path, labels.suggestions, labels.videos)

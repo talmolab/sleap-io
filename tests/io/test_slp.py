@@ -1441,33 +1441,33 @@ def test_embed_false_behavior(tmp_path):
     # Create test data
     skeleton = Skeleton(["A", "B"])
     video = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
-    
+
     inst = Instance([[1, 2], [3, 4]], skeleton=skeleton)
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
-    
+
     # Create a .pkg.slp file with embedded frames
     pkg_path = tmp_path / "test.pkg.slp"
     write_labels(str(pkg_path), labels, embed="user")
-    
+
     # Load embedded labels
     embedded_labels = read_labels(str(pkg_path))
     assert embedded_labels.video.backend.has_embedded_images
     assert embedded_labels.video.source_video.filename == str(video.filename)
-    
+
     # Test 1: Save with embed=False when source video is available
     pkg_path2 = tmp_path / "test2.pkg.slp"
     write_labels(str(pkg_path2), embedded_labels, embed=False)
-    
+
     labels2 = read_labels(str(pkg_path2))
     assert labels2.video.filename == str(video.filename)
     assert type(labels2.video.backend).__name__ == "MediaVideo"
-    
+
     # Test 2: Save with embed=False when no source video
     embedded_labels.video.source_video = None
     pkg_path3 = tmp_path / "test3.pkg.slp"
     write_labels(str(pkg_path3), embedded_labels, embed=False)
-    
+
     labels3 = read_labels(str(pkg_path3))
     # Should reference the original embedded file
     assert Path(labels3.video.filename).resolve() == pkg_path.resolve()
@@ -1478,66 +1478,64 @@ def test_mixed_video_scenarios(tmp_path):
     """Test saving with mixed embedded and non-embedded videos."""
     # Create test data with multiple videos
     skeleton = Skeleton(["A", "B"])
-    
+
     # Video 1: Regular video
     video1 = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
-    
+
     # Video 2: Will be embedded
     video2 = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
-    
+
     # Create labeled frames for both videos
     inst1 = Instance([[1, 2], [3, 4]], skeleton=skeleton)
     lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
-    
+
     inst2 = Instance([[5, 6], [7, 8]], skeleton=skeleton)
     lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
-    
+
     labels = Labels(
-        videos=[video1, video2], 
-        skeletons=[skeleton], 
-        labeled_frames=[lf1, lf2]
+        videos=[video1, video2], skeletons=[skeleton], labeled_frames=[lf1, lf2]
     )
-    
+
     # Save with only video2 embedded
     pkg_path = tmp_path / "mixed.pkg.slp"
     frames_to_embed = [(video2, 0)]
     write_labels(str(pkg_path), labels, embed=frames_to_embed)
-    
+
     # Load and verify
     loaded = read_labels(str(pkg_path))
     assert len(loaded.videos) == 2
     assert type(loaded.videos[0].backend).__name__ == "MediaVideo"
     assert type(loaded.videos[1].backend).__name__ == "HDF5Video"
     assert loaded.videos[1].backend.has_embedded_images
-    
+
     # Save with embed=False to new file
     pkg_path2 = tmp_path / "mixed2.pkg.slp"
     write_labels(str(pkg_path2), loaded, embed=False)
-    
+
     # Verify both videos are correctly referenced
     loaded2 = read_labels(str(pkg_path2))
     assert len(loaded2.videos) == 2
-    
+
     # Video 1 should still be external media
     assert loaded2.videos[0].filename == video1.filename
     assert type(loaded2.videos[0].backend).__name__ == "MediaVideo"
-    
+
     # Video 2 should restore to source video (since it's available)
     assert loaded2.videos[1].filename == video2.filename
     assert type(loaded2.videos[1].backend).__name__ == "MediaVideo"
-    
+
     # Test 2: Remove source video from embedded video and save again
     loaded.videos[1].source_video = None
     pkg_path3 = tmp_path / "mixed3.pkg.slp"
     write_labels(str(pkg_path3), loaded, embed=False)
-    
+
     loaded3 = read_labels(str(pkg_path3))
     assert len(loaded3.videos) == 2
-    
+
     # Video 1 should still be external media
     assert loaded3.videos[0].filename == video1.filename
     assert type(loaded3.videos[0].backend).__name__ == "MediaVideo"
-    
+
     # Video 2 should now reference the pkg file (no source video)
     assert Path(loaded3.videos[1].filename).resolve() == pkg_path.resolve()
     assert loaded3.videos[1].backend.has_embedded_images
@@ -1549,56 +1547,56 @@ def test_self_referential_path_detection(tmp_path):
     skeleton = Skeleton(["A", "B"])
     track = Track("track1")
     video = Video.from_filename("fake.mp4")
-    
+
     # Create instance and labeled frame
     inst = Instance([[1, 2], [3, 4]], skeleton=skeleton, track=track)
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels(
         videos=[video], skeletons=[skeleton], tracks=[track], labeled_frames=[lf]
     )
-    
+
     # Create a .pkg.slp file with embedded frames
     pkg_path = tmp_path / "test.pkg.slp"
-    
+
     # Mock embedding to create a video with embedded frames but no source video
     with h5py.File(pkg_path, "w") as f:
         # Create minimal structure
         f.create_dataset("videos_json", data=[])
         f.create_dataset("tracks_json", data=[])
-        
+
     # Create a mock embedded video with minimal HDF5Video backend
     # We need to use a mock to bypass the actual file reading
     from unittest.mock import Mock, patch
-    
+
     # Create a real HDF5Video instance but mock its file operations
     with patch("h5py.File"):
         mock_backend = HDF5Video(
             filename=str(pkg_path),
             dataset="video0/video",
             grayscale=True,
-            keep_open=False
+            keep_open=False,
         )
         # Manually set properties to simulate embedded video
         mock_backend.image_format = "png"  # This makes has_embedded_images return True
         mock_backend.source_inds = [0]  # Mock having one embedded frame
-    
+
     embedded_video = Video(
         filename=str(pkg_path),
         backend=mock_backend,
         source_video=None,  # No source video
     )
-    
+
     labels_with_embedded = Labels(
-        videos=[embedded_video], 
-        skeletons=[skeleton], 
-        tracks=[track], 
-        labeled_frames=[lf]
+        videos=[embedded_video],
+        skeletons=[skeleton],
+        tracks=[track],
+        labeled_frames=[lf],
     )
-    
+
     # Try to save over the same file with embed=False (should raise error)
     with pytest.raises(ValueError, match="Cannot save with restore_source=True"):
         write_labels(str(pkg_path), labels_with_embedded, embed=False)
-    
+
     # Saving to a different file should work
     pkg_path2 = tmp_path / "test2.pkg.slp"
     write_labels(str(pkg_path2), labels_with_embedded, embed=False)
