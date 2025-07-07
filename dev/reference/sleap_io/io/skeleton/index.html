@@ -1226,6 +1226,22 @@
               </div>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code&gt;SkeletonYAMLDecoder&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonYAMLDecoder&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonYAMLDecoder">SkeletonYAMLDecoder</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Decode skeleton data from simplified YAML format.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code&gt;SkeletonYAMLEncoder&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonYAMLEncoder&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonYAMLEncoder">SkeletonYAMLEncoder</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Encode skeleton data to simplified YAML format.</p>
+              </div>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2708,6 +2724,749 @@ skeletons_dicts is a list of dicts containing the skeletons.</p>
 <a id="__codelineno-0-613" name="__codelineno-0-613"></a><a href="#__codelineno-0-613"><span class="linenos" data-linenos="613 "></span></a>        <span class="p">)</span>
 <a id="__codelineno-0-614" name="__codelineno-0-614"></a><a href="#__codelineno-0-614"><span class="linenos" data-linenos="614 "></span></a>
 <a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>    <span class="k">return</span> <span class="n">skeletons_dicts</span><span class="p">,</span> <span class="n">nodes_dicts</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="sleap_io.io.skeleton.SkeletonYAMLDecoder" class="doc doc-heading">
+            <code>SkeletonYAMLDecoder</code>
+
+
+<a href="#sleap_io.io.skeleton.SkeletonYAMLDecoder" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+        <p>Decode skeleton data from simplified YAML format.</p>
+<p>This decoder handles a simplified YAML format that is more human-readable
+than the jsonpickle format.</p>
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;decode&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonYAMLDecoder.decode&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonYAMLDecoder.decode">decode</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Decode skeleton(s) from YAML data.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;decode_dict&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;skeleton_data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;Skeleton&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonYAMLDecoder.decode_dict&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonYAMLDecoder.decode_dict">decode_dict</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Decode a single skeleton from a dictionary.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+              <details class="quote">
+                <summary>Source code in <code>sleap_io/io/skeleton.py</code></summary>
+                <div class="highlight"><pre><span></span><code><a id="__codelineno-0-618" name="__codelineno-0-618"></a><a href="#__codelineno-0-618"><span class="linenos" data-linenos="618 "></span></a><span class="k">class</span><span class="w"> </span><span class="nc">SkeletonYAMLDecoder</span><span class="p">:</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a><a href="#__codelineno-0-619"><span class="linenos" data-linenos="619 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode skeleton data from simplified YAML format.</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620"></a><a href="#__codelineno-0-620"><span class="linenos" data-linenos="620 "></span></a>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a><a href="#__codelineno-0-621"><span class="linenos" data-linenos="621 "></span></a><span class="sd">    This decoder handles a simplified YAML format that is more human-readable</span>
+<a id="__codelineno-0-622" name="__codelineno-0-622"></a><a href="#__codelineno-0-622"><span class="linenos" data-linenos="622 "></span></a><span class="sd">    than the jsonpickle format.</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a><a href="#__codelineno-0-623"><span class="linenos" data-linenos="623 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-624" name="__codelineno-0-624"></a><a href="#__codelineno-0-624"><span class="linenos" data-linenos="624 "></span></a>
+<a id="__codelineno-0-625" name="__codelineno-0-625"></a><a href="#__codelineno-0-625"><span class="linenos" data-linenos="625 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]]:</span>
+<a id="__codelineno-0-626" name="__codelineno-0-626"></a><a href="#__codelineno-0-626"><span class="linenos" data-linenos="626 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Decode skeleton(s) from YAML data.</span>
+<a id="__codelineno-0-627" name="__codelineno-0-627"></a><a href="#__codelineno-0-627"><span class="linenos" data-linenos="627 "></span></a>
+<a id="__codelineno-0-628" name="__codelineno-0-628"></a><a href="#__codelineno-0-628"><span class="linenos" data-linenos="628 "></span></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-629" name="__codelineno-0-629"></a><a href="#__codelineno-0-629"><span class="linenos" data-linenos="629 "></span></a><span class="sd">            data: YAML string or pre-parsed dictionary containing skeleton data.</span>
+<a id="__codelineno-0-630" name="__codelineno-0-630"></a><a href="#__codelineno-0-630"><span class="linenos" data-linenos="630 "></span></a><span class="sd">                  If a dict is provided with skeleton names as keys, returns list.</span>
+<a id="__codelineno-0-631" name="__codelineno-0-631"></a><a href="#__codelineno-0-631"><span class="linenos" data-linenos="631 "></span></a><span class="sd">                  If a dict is provided with nodes/edges/symmetries, returns single skeleton.</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a><a href="#__codelineno-0-632"><span class="linenos" data-linenos="632 "></span></a>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><a href="#__codelineno-0-633"><span class="linenos" data-linenos="633 "></span></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a><a href="#__codelineno-0-634"><span class="linenos" data-linenos="634 "></span></a><span class="sd">            A single Skeleton or list of Skeletons depending on input format.</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><a href="#__codelineno-0-635"><span class="linenos" data-linenos="635 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><a href="#__codelineno-0-636"><span class="linenos" data-linenos="636 "></span></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a><a href="#__codelineno-0-637"><span class="linenos" data-linenos="637 "></span></a>            <span class="kn">import</span><span class="w"> </span><span class="nn">yaml</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a><a href="#__codelineno-0-638"><span class="linenos" data-linenos="638 "></span></a>
+<a id="__codelineno-0-639" name="__codelineno-0-639"></a><a href="#__codelineno-0-639"><span class="linenos" data-linenos="639 "></span></a>            <span class="n">data</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-640" name="__codelineno-0-640"></a><a href="#__codelineno-0-640"><span class="linenos" data-linenos="640 "></span></a>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><a href="#__codelineno-0-641"><span class="linenos" data-linenos="641 "></span></a>        <span class="c1"># Check if this is a single skeleton dict or multiple skeletons</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a><a href="#__codelineno-0-642"><span class="linenos" data-linenos="642 "></span></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+<a id="__codelineno-0-643" name="__codelineno-0-643"></a><a href="#__codelineno-0-643"><span class="linenos" data-linenos="643 "></span></a>            <span class="c1"># If it has nodes/edges keys, it&#39;s a single skeleton</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644"></a><a href="#__codelineno-0-644"><span class="linenos" data-linenos="644 "></span></a>            <span class="k">if</span> <span class="s2">&quot;nodes&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645"></a><a href="#__codelineno-0-645"><span class="linenos" data-linenos="645 "></span></a>                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_skeleton</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a><a href="#__codelineno-0-646"><span class="linenos" data-linenos="646 "></span></a>            <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647"></a><a href="#__codelineno-0-647"><span class="linenos" data-linenos="647 "></span></a>                <span class="c1"># Multiple skeletons with names as keys</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648"></a><a href="#__codelineno-0-648"><span class="linenos" data-linenos="648 "></span></a>                <span class="n">skeletons</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-649" name="__codelineno-0-649"></a><a href="#__codelineno-0-649"><span class="linenos" data-linenos="649 "></span></a>                <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">skeleton_data</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a><a href="#__codelineno-0-650"><span class="linenos" data-linenos="650 "></span></a>                    <span class="n">skeleton</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_skeleton</span><span class="p">(</span><span class="n">skeleton_data</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a>                    <span class="n">skeletons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a>                <span class="k">return</span> <span class="n">skeletons</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a><a href="#__codelineno-0-654"><span class="linenos" data-linenos="654 "></span></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unexpected data format: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655"></a><a href="#__codelineno-0-655"><span class="linenos" data-linenos="655 "></span></a>
+<a id="__codelineno-0-656" name="__codelineno-0-656"></a><a href="#__codelineno-0-656"><span class="linenos" data-linenos="656 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">decode_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skeleton_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Skeleton&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Skeleton</span><span class="p">:</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a><a href="#__codelineno-0-657"><span class="linenos" data-linenos="657 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Decode a single skeleton from a dictionary.</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a><a href="#__codelineno-0-658"><span class="linenos" data-linenos="658 "></span></a>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a><a href="#__codelineno-0-659"><span class="linenos" data-linenos="659 "></span></a><span class="sd">        This is useful when the skeleton data is embedded in a larger YAML structure.</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a><a href="#__codelineno-0-660"><span class="linenos" data-linenos="660 "></span></a>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a><a href="#__codelineno-0-661"><span class="linenos" data-linenos="661 "></span></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a><a href="#__codelineno-0-662"><span class="linenos" data-linenos="662 "></span></a><span class="sd">            skeleton_data: Dictionary containing nodes, edges, and symmetries.</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a><a href="#__codelineno-0-663"><span class="linenos" data-linenos="663 "></span></a><span class="sd">            name: Name for the skeleton (default: &quot;Skeleton&quot;).</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a><a href="#__codelineno-0-664"><span class="linenos" data-linenos="664 "></span></a>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><a href="#__codelineno-0-665"><span class="linenos" data-linenos="665 "></span></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a><a href="#__codelineno-0-666"><span class="linenos" data-linenos="666 "></span></a><span class="sd">            A Skeleton object.</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a><a href="#__codelineno-0-667"><span class="linenos" data-linenos="667 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><a href="#__codelineno-0-668"><span class="linenos" data-linenos="668 "></span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_skeleton</span><span class="p">(</span><span class="n">skeleton_data</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a><a href="#__codelineno-0-669"><span class="linenos" data-linenos="669 "></span></a>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><a href="#__codelineno-0-670"><span class="linenos" data-linenos="670 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_decode_skeleton</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Skeleton</span><span class="p">:</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a><a href="#__codelineno-0-671"><span class="linenos" data-linenos="671 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Decode a single skeleton from dictionary data.</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a><a href="#__codelineno-0-672"><span class="linenos" data-linenos="672 "></span></a>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a><a href="#__codelineno-0-673"><span class="linenos" data-linenos="673 "></span></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a><a href="#__codelineno-0-674"><span class="linenos" data-linenos="674 "></span></a><span class="sd">            data: Dictionary containing skeleton data in simplified format.</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><a href="#__codelineno-0-675"><span class="linenos" data-linenos="675 "></span></a><span class="sd">            name: Optional name override for the skeleton.</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><a href="#__codelineno-0-676"><span class="linenos" data-linenos="676 "></span></a>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a><a href="#__codelineno-0-677"><span class="linenos" data-linenos="677 "></span></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a><a href="#__codelineno-0-678"><span class="linenos" data-linenos="678 "></span></a><span class="sd">            A Skeleton object.</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a><a href="#__codelineno-0-679"><span class="linenos" data-linenos="679 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a><a href="#__codelineno-0-680"><span class="linenos" data-linenos="680 "></span></a>        <span class="c1"># Create nodes</span>
+<a id="__codelineno-0-681" name="__codelineno-0-681"></a><a href="#__codelineno-0-681"><span class="linenos" data-linenos="681 "></span></a>        <span class="n">nodes</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a><a href="#__codelineno-0-682"><span class="linenos" data-linenos="682 "></span></a>        <span class="n">node_map</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a><a href="#__codelineno-0-683"><span class="linenos" data-linenos="683 "></span></a>        <span class="k">for</span> <span class="n">node_data</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nodes&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a><a href="#__codelineno-0-684"><span class="linenos" data-linenos="684 "></span></a>            <span class="n">node</span> <span class="o">=</span> <span class="n">Node</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node_data</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">])</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a><a href="#__codelineno-0-685"><span class="linenos" data-linenos="685 "></span></a>            <span class="n">nodes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a><a href="#__codelineno-0-686"><span class="linenos" data-linenos="686 "></span></a>            <span class="n">node_map</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">node</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a><a href="#__codelineno-0-687"><span class="linenos" data-linenos="687 "></span></a>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a><a href="#__codelineno-0-688"><span class="linenos" data-linenos="688 "></span></a>        <span class="c1"># Create edges</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a><a href="#__codelineno-0-689"><span class="linenos" data-linenos="689 "></span></a>        <span class="n">edges</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a><a href="#__codelineno-0-690"><span class="linenos" data-linenos="690 "></span></a>        <span class="k">for</span> <span class="n">edge_data</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;edges&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a><a href="#__codelineno-0-691"><span class="linenos" data-linenos="691 "></span></a>            <span class="n">source_name</span> <span class="o">=</span> <span class="n">edge_data</span><span class="p">[</span><span class="s2">&quot;source&quot;</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a><a href="#__codelineno-0-692"><span class="linenos" data-linenos="692 "></span></a>            <span class="n">dest_name</span> <span class="o">=</span> <span class="n">edge_data</span><span class="p">[</span><span class="s2">&quot;destination&quot;</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><a href="#__codelineno-0-693"><span class="linenos" data-linenos="693 "></span></a>            <span class="n">edge</span> <span class="o">=</span> <span class="n">Edge</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="n">node_map</span><span class="p">[</span><span class="n">source_name</span><span class="p">],</span> <span class="n">destination</span><span class="o">=</span><span class="n">node_map</span><span class="p">[</span><span class="n">dest_name</span><span class="p">])</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a><a href="#__codelineno-0-694"><span class="linenos" data-linenos="694 "></span></a>            <span class="n">edges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">edge</span><span class="p">)</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a><a href="#__codelineno-0-695"><span class="linenos" data-linenos="695 "></span></a>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><a href="#__codelineno-0-696"><span class="linenos" data-linenos="696 "></span></a>        <span class="c1"># Create symmetries</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a><a href="#__codelineno-0-697"><span class="linenos" data-linenos="697 "></span></a>        <span class="n">symmetries</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a><a href="#__codelineno-0-698"><span class="linenos" data-linenos="698 "></span></a>        <span class="k">for</span> <span class="n">sym_data</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;symmetries&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a><a href="#__codelineno-0-699"><span class="linenos" data-linenos="699 "></span></a>            <span class="c1"># Each symmetry is a list of 2 node specifications</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a><a href="#__codelineno-0-700"><span class="linenos" data-linenos="700 "></span></a>            <span class="n">node1_name</span> <span class="o">=</span> <span class="n">sym_data</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a><a href="#__codelineno-0-701"><span class="linenos" data-linenos="701 "></span></a>            <span class="n">node2_name</span> <span class="o">=</span> <span class="n">sym_data</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a><a href="#__codelineno-0-702"><span class="linenos" data-linenos="702 "></span></a>            <span class="n">symmetry</span> <span class="o">=</span> <span class="n">Symmetry</span><span class="p">([</span><span class="n">node_map</span><span class="p">[</span><span class="n">node1_name</span><span class="p">],</span> <span class="n">node_map</span><span class="p">[</span><span class="n">node2_name</span><span class="p">]])</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a><a href="#__codelineno-0-703"><span class="linenos" data-linenos="703 "></span></a>            <span class="n">symmetries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">symmetry</span><span class="p">)</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a><a href="#__codelineno-0-704"><span class="linenos" data-linenos="704 "></span></a>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a><a href="#__codelineno-0-705"><span class="linenos" data-linenos="705 "></span></a>        <span class="c1"># Use provided name or get from data</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a><a href="#__codelineno-0-706"><span class="linenos" data-linenos="706 "></span></a>        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a><a href="#__codelineno-0-707"><span class="linenos" data-linenos="707 "></span></a>            <span class="n">name</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;Skeleton&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a><a href="#__codelineno-0-708"><span class="linenos" data-linenos="708 "></span></a>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a><a href="#__codelineno-0-709"><span class="linenos" data-linenos="709 "></span></a>        <span class="k">return</span> <span class="n">Skeleton</span><span class="p">(</span><span class="n">nodes</span><span class="o">=</span><span class="n">nodes</span><span class="p">,</span> <span class="n">edges</span><span class="o">=</span><span class="n">edges</span><span class="p">,</span> <span class="n">symmetries</span><span class="o">=</span><span class="n">symmetries</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+</code></pre></div>
+              </details>
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.skeleton.SkeletonYAMLDecoder.decode" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">decode</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.skeleton.SkeletonYAMLDecoder.decode" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Decode skeleton(s) from YAML data.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data</code>
+            </td>
+            <td>
+                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.Dict">Dict</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>YAML string or pre-parsed dictionary containing skeleton data.
+  If a dict is provided with skeleton names as keys, returns list.
+  If a dict is provided with nodes/edges/symmetries, returns single skeleton.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>, <span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A single Skeleton or list of Skeletons depending on input format.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/skeleton.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-625" name="__codelineno-0-625"></a><a href="#__codelineno-0-625"><span class="linenos" data-linenos="625 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]]:</span>
+<a id="__codelineno-0-626" name="__codelineno-0-626"></a><a href="#__codelineno-0-626"><span class="linenos" data-linenos="626 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode skeleton(s) from YAML data.</span>
+<a id="__codelineno-0-627" name="__codelineno-0-627"></a><a href="#__codelineno-0-627"><span class="linenos" data-linenos="627 "></span></a>
+<a id="__codelineno-0-628" name="__codelineno-0-628"></a><a href="#__codelineno-0-628"><span class="linenos" data-linenos="628 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-629" name="__codelineno-0-629"></a><a href="#__codelineno-0-629"><span class="linenos" data-linenos="629 "></span></a><span class="sd">        data: YAML string or pre-parsed dictionary containing skeleton data.</span>
+<a id="__codelineno-0-630" name="__codelineno-0-630"></a><a href="#__codelineno-0-630"><span class="linenos" data-linenos="630 "></span></a><span class="sd">              If a dict is provided with skeleton names as keys, returns list.</span>
+<a id="__codelineno-0-631" name="__codelineno-0-631"></a><a href="#__codelineno-0-631"><span class="linenos" data-linenos="631 "></span></a><span class="sd">              If a dict is provided with nodes/edges/symmetries, returns single skeleton.</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a><a href="#__codelineno-0-632"><span class="linenos" data-linenos="632 "></span></a>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><a href="#__codelineno-0-633"><span class="linenos" data-linenos="633 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a><a href="#__codelineno-0-634"><span class="linenos" data-linenos="634 "></span></a><span class="sd">        A single Skeleton or list of Skeletons depending on input format.</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><a href="#__codelineno-0-635"><span class="linenos" data-linenos="635 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><a href="#__codelineno-0-636"><span class="linenos" data-linenos="636 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a><a href="#__codelineno-0-637"><span class="linenos" data-linenos="637 "></span></a>        <span class="kn">import</span><span class="w"> </span><span class="nn">yaml</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a><a href="#__codelineno-0-638"><span class="linenos" data-linenos="638 "></span></a>
+<a id="__codelineno-0-639" name="__codelineno-0-639"></a><a href="#__codelineno-0-639"><span class="linenos" data-linenos="639 "></span></a>        <span class="n">data</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-640" name="__codelineno-0-640"></a><a href="#__codelineno-0-640"><span class="linenos" data-linenos="640 "></span></a>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><a href="#__codelineno-0-641"><span class="linenos" data-linenos="641 "></span></a>    <span class="c1"># Check if this is a single skeleton dict or multiple skeletons</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a><a href="#__codelineno-0-642"><span class="linenos" data-linenos="642 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+<a id="__codelineno-0-643" name="__codelineno-0-643"></a><a href="#__codelineno-0-643"><span class="linenos" data-linenos="643 "></span></a>        <span class="c1"># If it has nodes/edges keys, it&#39;s a single skeleton</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644"></a><a href="#__codelineno-0-644"><span class="linenos" data-linenos="644 "></span></a>        <span class="k">if</span> <span class="s2">&quot;nodes&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645"></a><a href="#__codelineno-0-645"><span class="linenos" data-linenos="645 "></span></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_skeleton</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a><a href="#__codelineno-0-646"><span class="linenos" data-linenos="646 "></span></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647"></a><a href="#__codelineno-0-647"><span class="linenos" data-linenos="647 "></span></a>            <span class="c1"># Multiple skeletons with names as keys</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648"></a><a href="#__codelineno-0-648"><span class="linenos" data-linenos="648 "></span></a>            <span class="n">skeletons</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-649" name="__codelineno-0-649"></a><a href="#__codelineno-0-649"><span class="linenos" data-linenos="649 "></span></a>            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">skeleton_data</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a><a href="#__codelineno-0-650"><span class="linenos" data-linenos="650 "></span></a>                <span class="n">skeleton</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_skeleton</span><span class="p">(</span><span class="n">skeleton_data</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a>                <span class="n">skeletons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a>            <span class="k">return</span> <span class="n">skeletons</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a><a href="#__codelineno-0-654"><span class="linenos" data-linenos="654 "></span></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unexpected data format: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.skeleton.SkeletonYAMLDecoder.decode_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">decode_dict</span><span class="p">(</span><span class="n">skeleton_data</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;Skeleton&#39;</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.skeleton.SkeletonYAMLDecoder.decode_dict" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Decode a single skeleton from a dictionary.</p>
+<p>This is useful when the skeleton data is embedded in a larger YAML structure.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>skeleton_data</code>
+            </td>
+            <td>
+                  <code><span title="typing.Dict">Dict</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dictionary containing nodes, edges, and symmetries.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>name</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Name for the skeleton (default: "Skeleton").</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;Skeleton&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A Skeleton object.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/skeleton.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-656" name="__codelineno-0-656"></a><a href="#__codelineno-0-656"><span class="linenos" data-linenos="656 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">decode_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skeleton_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Skeleton&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Skeleton</span><span class="p">:</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a><a href="#__codelineno-0-657"><span class="linenos" data-linenos="657 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode a single skeleton from a dictionary.</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a><a href="#__codelineno-0-658"><span class="linenos" data-linenos="658 "></span></a>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a><a href="#__codelineno-0-659"><span class="linenos" data-linenos="659 "></span></a><span class="sd">    This is useful when the skeleton data is embedded in a larger YAML structure.</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a><a href="#__codelineno-0-660"><span class="linenos" data-linenos="660 "></span></a>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a><a href="#__codelineno-0-661"><span class="linenos" data-linenos="661 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a><a href="#__codelineno-0-662"><span class="linenos" data-linenos="662 "></span></a><span class="sd">        skeleton_data: Dictionary containing nodes, edges, and symmetries.</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a><a href="#__codelineno-0-663"><span class="linenos" data-linenos="663 "></span></a><span class="sd">        name: Name for the skeleton (default: &quot;Skeleton&quot;).</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a><a href="#__codelineno-0-664"><span class="linenos" data-linenos="664 "></span></a>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><a href="#__codelineno-0-665"><span class="linenos" data-linenos="665 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a><a href="#__codelineno-0-666"><span class="linenos" data-linenos="666 "></span></a><span class="sd">        A Skeleton object.</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a><a href="#__codelineno-0-667"><span class="linenos" data-linenos="667 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><a href="#__codelineno-0-668"><span class="linenos" data-linenos="668 "></span></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_skeleton</span><span class="p">(</span><span class="n">skeleton_data</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="sleap_io.io.skeleton.SkeletonYAMLEncoder" class="doc doc-heading">
+            <code>SkeletonYAMLEncoder</code>
+
+
+<a href="#sleap_io.io.skeleton.SkeletonYAMLEncoder" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+        <p>Encode skeleton data to simplified YAML format.</p>
+<p>This encoder produces a human-readable YAML format that is easier to
+edit manually than the jsonpickle format.</p>
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;encode&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;skeletons&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonYAMLEncoder.encode&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonYAMLEncoder.encode">encode</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Encode skeleton(s) to YAML string.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;encode_dict&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;skeleton&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonYAMLEncoder.encode_dict&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonYAMLEncoder.encode_dict">encode_dict</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Encode a single skeleton to a dictionary.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+              <details class="quote">
+                <summary>Source code in <code>sleap_io/io/skeleton.py</code></summary>
+                <div class="highlight"><pre><span></span><code><a id="__codelineno-0-712" name="__codelineno-0-712"></a><a href="#__codelineno-0-712"><span class="linenos" data-linenos="712 "></span></a><span class="k">class</span><span class="w"> </span><span class="nc">SkeletonYAMLEncoder</span><span class="p">:</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a><a href="#__codelineno-0-713"><span class="linenos" data-linenos="713 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode skeleton data to simplified YAML format.</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a><a href="#__codelineno-0-714"><span class="linenos" data-linenos="714 "></span></a>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a><a href="#__codelineno-0-715"><span class="linenos" data-linenos="715 "></span></a><span class="sd">    This encoder produces a human-readable YAML format that is easier to</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a><a href="#__codelineno-0-716"><span class="linenos" data-linenos="716 "></span></a><span class="sd">    edit manually than the jsonpickle format.</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a><a href="#__codelineno-0-717"><span class="linenos" data-linenos="717 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a><a href="#__codelineno-0-718"><span class="linenos" data-linenos="718 "></span></a>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a><a href="#__codelineno-0-719"><span class="linenos" data-linenos="719 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skeletons</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a><a href="#__codelineno-0-720"><span class="linenos" data-linenos="720 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode skeleton(s) to YAML string.</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a><a href="#__codelineno-0-721"><span class="linenos" data-linenos="721 "></span></a>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a><a href="#__codelineno-0-722"><span class="linenos" data-linenos="722 "></span></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a><a href="#__codelineno-0-723"><span class="linenos" data-linenos="723 "></span></a><span class="sd">            skeletons: A single Skeleton or list of Skeletons to encode.</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><a href="#__codelineno-0-724"><span class="linenos" data-linenos="724 "></span></a>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a><a href="#__codelineno-0-725"><span class="linenos" data-linenos="725 "></span></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a><a href="#__codelineno-0-726"><span class="linenos" data-linenos="726 "></span></a><span class="sd">            YAML string with skeleton names as top-level keys.</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a><a href="#__codelineno-0-727"><span class="linenos" data-linenos="727 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><a href="#__codelineno-0-728"><span class="linenos" data-linenos="728 "></span></a>        <span class="kn">import</span><span class="w"> </span><span class="nn">yaml</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><a href="#__codelineno-0-729"><span class="linenos" data-linenos="729 "></span></a>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a><a href="#__codelineno-0-730"><span class="linenos" data-linenos="730 "></span></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">skeletons</span><span class="p">,</span> <span class="n">Skeleton</span><span class="p">):</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><a href="#__codelineno-0-731"><span class="linenos" data-linenos="731 "></span></a>            <span class="n">skeletons</span> <span class="o">=</span> <span class="p">[</span><span class="n">skeletons</span><span class="p">]</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a><a href="#__codelineno-0-732"><span class="linenos" data-linenos="732 "></span></a>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a><a href="#__codelineno-0-733"><span class="linenos" data-linenos="733 "></span></a>        <span class="n">data</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a><a href="#__codelineno-0-734"><span class="linenos" data-linenos="734 "></span></a>        <span class="k">for</span> <span class="n">skeleton</span> <span class="ow">in</span> <span class="n">skeletons</span><span class="p">:</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><a href="#__codelineno-0-735"><span class="linenos" data-linenos="735 "></span></a>            <span class="n">skeleton_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><a href="#__codelineno-0-736"><span class="linenos" data-linenos="736 "></span></a>            <span class="n">data</span><span class="p">[</span><span class="n">skeleton</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">skeleton_data</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><a href="#__codelineno-0-737"><span class="linenos" data-linenos="737 "></span></a>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a><a href="#__codelineno-0-738"><span class="linenos" data-linenos="738 "></span></a>        <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">default_flow_style</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a><a href="#__codelineno-0-739"><span class="linenos" data-linenos="739 "></span></a>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a><a href="#__codelineno-0-740"><span class="linenos" data-linenos="740 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">encode_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skeleton</span><span class="p">:</span> <span class="n">Skeleton</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a><a href="#__codelineno-0-741"><span class="linenos" data-linenos="741 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode a single skeleton to a dictionary.</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a><a href="#__codelineno-0-742"><span class="linenos" data-linenos="742 "></span></a>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a><a href="#__codelineno-0-743"><span class="linenos" data-linenos="743 "></span></a><span class="sd">        This is useful when embedding skeleton data in a larger YAML structure.</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a><a href="#__codelineno-0-744"><span class="linenos" data-linenos="744 "></span></a>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a><a href="#__codelineno-0-745"><span class="linenos" data-linenos="745 "></span></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a><a href="#__codelineno-0-746"><span class="linenos" data-linenos="746 "></span></a><span class="sd">            skeleton: Skeleton object to encode.</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a><a href="#__codelineno-0-747"><span class="linenos" data-linenos="747 "></span></a>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a><a href="#__codelineno-0-748"><span class="linenos" data-linenos="748 "></span></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a><a href="#__codelineno-0-749"><span class="linenos" data-linenos="749 "></span></a><span class="sd">            Dictionary with nodes, edges, and symmetries.</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a><a href="#__codelineno-0-750"><span class="linenos" data-linenos="750 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a><a href="#__codelineno-0-751"><span class="linenos" data-linenos="751 "></span></a>        <span class="c1"># Encode nodes</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a><a href="#__codelineno-0-752"><span class="linenos" data-linenos="752 "></span></a>        <span class="n">nodes</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a><a href="#__codelineno-0-753"><span class="linenos" data-linenos="753 "></span></a>        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a><a href="#__codelineno-0-754"><span class="linenos" data-linenos="754 "></span></a>            <span class="n">nodes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">})</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a><a href="#__codelineno-0-755"><span class="linenos" data-linenos="755 "></span></a>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a><a href="#__codelineno-0-756"><span class="linenos" data-linenos="756 "></span></a>        <span class="c1"># Encode edges</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a><a href="#__codelineno-0-757"><span class="linenos" data-linenos="757 "></span></a>        <span class="n">edges</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a><a href="#__codelineno-0-758"><span class="linenos" data-linenos="758 "></span></a>        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">edges</span><span class="p">:</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a><a href="#__codelineno-0-759"><span class="linenos" data-linenos="759 "></span></a>            <span class="n">edges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a><a href="#__codelineno-0-760"><span class="linenos" data-linenos="760 "></span></a>                <span class="p">{</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a><a href="#__codelineno-0-761"><span class="linenos" data-linenos="761 "></span></a>                    <span class="s2">&quot;source&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">edge</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">name</span><span class="p">},</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a><a href="#__codelineno-0-762"><span class="linenos" data-linenos="762 "></span></a>                    <span class="s2">&quot;destination&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">edge</span><span class="o">.</span><span class="n">destination</span><span class="o">.</span><span class="n">name</span><span class="p">},</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a><a href="#__codelineno-0-763"><span class="linenos" data-linenos="763 "></span></a>                <span class="p">}</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a><a href="#__codelineno-0-764"><span class="linenos" data-linenos="764 "></span></a>            <span class="p">)</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a><a href="#__codelineno-0-765"><span class="linenos" data-linenos="765 "></span></a>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a><a href="#__codelineno-0-766"><span class="linenos" data-linenos="766 "></span></a>        <span class="c1"># Encode symmetries</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a><a href="#__codelineno-0-767"><span class="linenos" data-linenos="767 "></span></a>        <span class="n">symmetries</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a><a href="#__codelineno-0-768"><span class="linenos" data-linenos="768 "></span></a>        <span class="k">for</span> <span class="n">symmetry</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">symmetries</span><span class="p">:</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a><a href="#__codelineno-0-769"><span class="linenos" data-linenos="769 "></span></a>            <span class="c1"># Convert set to list and encode as pairs</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a><a href="#__codelineno-0-770"><span class="linenos" data-linenos="770 "></span></a>            <span class="n">node_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">symmetry</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a><a href="#__codelineno-0-771"><span class="linenos" data-linenos="771 "></span></a>            <span class="n">symmetries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a><a href="#__codelineno-0-772"><span class="linenos" data-linenos="772 "></span></a>                <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">node_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">node_list</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">}]</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a><a href="#__codelineno-0-773"><span class="linenos" data-linenos="773 "></span></a>            <span class="p">)</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a><a href="#__codelineno-0-774"><span class="linenos" data-linenos="774 "></span></a>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a><a href="#__codelineno-0-775"><span class="linenos" data-linenos="775 "></span></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;nodes&quot;</span><span class="p">:</span> <span class="n">nodes</span><span class="p">,</span> <span class="s2">&quot;edges&quot;</span><span class="p">:</span> <span class="n">edges</span><span class="p">,</span> <span class="s2">&quot;symmetries&quot;</span><span class="p">:</span> <span class="n">symmetries</span><span class="p">}</span>
+</code></pre></div>
+              </details>
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.skeleton.SkeletonYAMLEncoder.encode" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">encode</span><span class="p">(</span><span class="n">skeletons</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.skeleton.SkeletonYAMLEncoder.encode" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Encode skeleton(s) to YAML string.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>skeletons</code>
+            </td>
+            <td>
+                  <code><span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>, <span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A single Skeleton or list of Skeletons to encode.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>YAML string with skeleton names as top-level keys.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/skeleton.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-719" name="__codelineno-0-719"></a><a href="#__codelineno-0-719"><span class="linenos" data-linenos="719 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skeletons</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a><a href="#__codelineno-0-720"><span class="linenos" data-linenos="720 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode skeleton(s) to YAML string.</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a><a href="#__codelineno-0-721"><span class="linenos" data-linenos="721 "></span></a>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a><a href="#__codelineno-0-722"><span class="linenos" data-linenos="722 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a><a href="#__codelineno-0-723"><span class="linenos" data-linenos="723 "></span></a><span class="sd">        skeletons: A single Skeleton or list of Skeletons to encode.</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><a href="#__codelineno-0-724"><span class="linenos" data-linenos="724 "></span></a>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a><a href="#__codelineno-0-725"><span class="linenos" data-linenos="725 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a><a href="#__codelineno-0-726"><span class="linenos" data-linenos="726 "></span></a><span class="sd">        YAML string with skeleton names as top-level keys.</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a><a href="#__codelineno-0-727"><span class="linenos" data-linenos="727 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><a href="#__codelineno-0-728"><span class="linenos" data-linenos="728 "></span></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">yaml</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><a href="#__codelineno-0-729"><span class="linenos" data-linenos="729 "></span></a>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a><a href="#__codelineno-0-730"><span class="linenos" data-linenos="730 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">skeletons</span><span class="p">,</span> <span class="n">Skeleton</span><span class="p">):</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><a href="#__codelineno-0-731"><span class="linenos" data-linenos="731 "></span></a>        <span class="n">skeletons</span> <span class="o">=</span> <span class="p">[</span><span class="n">skeletons</span><span class="p">]</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a><a href="#__codelineno-0-732"><span class="linenos" data-linenos="732 "></span></a>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a><a href="#__codelineno-0-733"><span class="linenos" data-linenos="733 "></span></a>    <span class="n">data</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a><a href="#__codelineno-0-734"><span class="linenos" data-linenos="734 "></span></a>    <span class="k">for</span> <span class="n">skeleton</span> <span class="ow">in</span> <span class="n">skeletons</span><span class="p">:</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><a href="#__codelineno-0-735"><span class="linenos" data-linenos="735 "></span></a>        <span class="n">skeleton_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode_dict</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><a href="#__codelineno-0-736"><span class="linenos" data-linenos="736 "></span></a>        <span class="n">data</span><span class="p">[</span><span class="n">skeleton</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">skeleton_data</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><a href="#__codelineno-0-737"><span class="linenos" data-linenos="737 "></span></a>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a><a href="#__codelineno-0-738"><span class="linenos" data-linenos="738 "></span></a>    <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">default_flow_style</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.skeleton.SkeletonYAMLEncoder.encode_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">encode_dict</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.skeleton.SkeletonYAMLEncoder.encode_dict" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Encode a single skeleton to a dictionary.</p>
+<p>This is useful when embedding skeleton data in a larger YAML structure.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>skeleton</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Skeleton object to encode.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Dict">Dict</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dictionary with nodes, edges, and symmetries.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/skeleton.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-740" name="__codelineno-0-740"></a><a href="#__codelineno-0-740"><span class="linenos" data-linenos="740 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">encode_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skeleton</span><span class="p">:</span> <span class="n">Skeleton</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a><a href="#__codelineno-0-741"><span class="linenos" data-linenos="741 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode a single skeleton to a dictionary.</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a><a href="#__codelineno-0-742"><span class="linenos" data-linenos="742 "></span></a>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a><a href="#__codelineno-0-743"><span class="linenos" data-linenos="743 "></span></a><span class="sd">    This is useful when embedding skeleton data in a larger YAML structure.</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a><a href="#__codelineno-0-744"><span class="linenos" data-linenos="744 "></span></a>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a><a href="#__codelineno-0-745"><span class="linenos" data-linenos="745 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a><a href="#__codelineno-0-746"><span class="linenos" data-linenos="746 "></span></a><span class="sd">        skeleton: Skeleton object to encode.</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a><a href="#__codelineno-0-747"><span class="linenos" data-linenos="747 "></span></a>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a><a href="#__codelineno-0-748"><span class="linenos" data-linenos="748 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a><a href="#__codelineno-0-749"><span class="linenos" data-linenos="749 "></span></a><span class="sd">        Dictionary with nodes, edges, and symmetries.</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a><a href="#__codelineno-0-750"><span class="linenos" data-linenos="750 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a><a href="#__codelineno-0-751"><span class="linenos" data-linenos="751 "></span></a>    <span class="c1"># Encode nodes</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a><a href="#__codelineno-0-752"><span class="linenos" data-linenos="752 "></span></a>    <span class="n">nodes</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a><a href="#__codelineno-0-753"><span class="linenos" data-linenos="753 "></span></a>    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a><a href="#__codelineno-0-754"><span class="linenos" data-linenos="754 "></span></a>        <span class="n">nodes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">})</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a><a href="#__codelineno-0-755"><span class="linenos" data-linenos="755 "></span></a>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a><a href="#__codelineno-0-756"><span class="linenos" data-linenos="756 "></span></a>    <span class="c1"># Encode edges</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a><a href="#__codelineno-0-757"><span class="linenos" data-linenos="757 "></span></a>    <span class="n">edges</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a><a href="#__codelineno-0-758"><span class="linenos" data-linenos="758 "></span></a>    <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">edges</span><span class="p">:</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a><a href="#__codelineno-0-759"><span class="linenos" data-linenos="759 "></span></a>        <span class="n">edges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a><a href="#__codelineno-0-760"><span class="linenos" data-linenos="760 "></span></a>            <span class="p">{</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a><a href="#__codelineno-0-761"><span class="linenos" data-linenos="761 "></span></a>                <span class="s2">&quot;source&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">edge</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">name</span><span class="p">},</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a><a href="#__codelineno-0-762"><span class="linenos" data-linenos="762 "></span></a>                <span class="s2">&quot;destination&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">edge</span><span class="o">.</span><span class="n">destination</span><span class="o">.</span><span class="n">name</span><span class="p">},</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a><a href="#__codelineno-0-763"><span class="linenos" data-linenos="763 "></span></a>            <span class="p">}</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a><a href="#__codelineno-0-764"><span class="linenos" data-linenos="764 "></span></a>        <span class="p">)</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a><a href="#__codelineno-0-765"><span class="linenos" data-linenos="765 "></span></a>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a><a href="#__codelineno-0-766"><span class="linenos" data-linenos="766 "></span></a>    <span class="c1"># Encode symmetries</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a><a href="#__codelineno-0-767"><span class="linenos" data-linenos="767 "></span></a>    <span class="n">symmetries</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a><a href="#__codelineno-0-768"><span class="linenos" data-linenos="768 "></span></a>    <span class="k">for</span> <span class="n">symmetry</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">symmetries</span><span class="p">:</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a><a href="#__codelineno-0-769"><span class="linenos" data-linenos="769 "></span></a>        <span class="c1"># Convert set to list and encode as pairs</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a><a href="#__codelineno-0-770"><span class="linenos" data-linenos="770 "></span></a>        <span class="n">node_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">symmetry</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a><a href="#__codelineno-0-771"><span class="linenos" data-linenos="771 "></span></a>        <span class="n">symmetries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a><a href="#__codelineno-0-772"><span class="linenos" data-linenos="772 "></span></a>            <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">node_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">node_list</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">}]</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a><a href="#__codelineno-0-773"><span class="linenos" data-linenos="773 "></span></a>        <span class="p">)</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a><a href="#__codelineno-0-774"><span class="linenos" data-linenos="774 "></span></a>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a><a href="#__codelineno-0-775"><span class="linenos" data-linenos="775 "></span></a>    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;nodes&quot;</span><span class="p">:</span> <span class="n">nodes</span><span class="p">,</span> <span class="s2">&quot;edges&quot;</span><span class="p">:</span> <span class="n">edges</span><span class="p">,</span> <span class="s2">&quot;symmetries&quot;</span><span class="p">:</span> <span class="n">symmetries</span><span class="p">}</span>
 </code></pre></div>
             </details>
     </div>
