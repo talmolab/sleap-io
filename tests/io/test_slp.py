@@ -1436,6 +1436,44 @@ def test_save_file_verbose_propagation(tmp_path):
         assert mock_save_slp.call_args.kwargs["verbose"] is False
 
 
+def test_embed_false_behavior(tmp_path):
+    """Test that embed=False restores source videos or references embedded files."""
+    # Create test data
+    skeleton = Skeleton(["A", "B"])
+    video = Video.from_filename("tests/data/videos/centered_pair_low_quality.mp4")
+    
+    inst = Instance([[1, 2], [3, 4]], skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+    
+    # Create a .pkg.slp file with embedded frames
+    pkg_path = tmp_path / "test.pkg.slp"
+    write_labels(str(pkg_path), labels, embed="user")
+    
+    # Load embedded labels
+    embedded_labels = read_labels(str(pkg_path))
+    assert embedded_labels.video.backend.has_embedded_images
+    assert embedded_labels.video.source_video.filename == str(video.filename)
+    
+    # Test 1: Save with embed=False when source video is available
+    pkg_path2 = tmp_path / "test2.pkg.slp"
+    write_labels(str(pkg_path2), embedded_labels, embed=False)
+    
+    labels2 = read_labels(str(pkg_path2))
+    assert labels2.video.filename == str(video.filename)
+    assert type(labels2.video.backend).__name__ == "MediaVideo"
+    
+    # Test 2: Save with embed=False when no source video
+    embedded_labels.video.source_video = None
+    pkg_path3 = tmp_path / "test3.pkg.slp"
+    write_labels(str(pkg_path3), embedded_labels, embed=False)
+    
+    labels3 = read_labels(str(pkg_path3))
+    # Should reference the original embedded file
+    assert Path(labels3.video.filename).resolve() == pkg_path.resolve()
+    assert labels3.video.backend.has_embedded_images
+
+
 def test_self_referential_path_detection(tmp_path):
     """Test that self-referential paths are detected and raise an error."""
     # Create test data

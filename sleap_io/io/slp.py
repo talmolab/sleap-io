@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import h5py
 import simplejson as json
-from typing import Union
+from typing import Union, Optional
 from sleap_io import (
     Video,
     Skeleton,
@@ -173,11 +173,13 @@ def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
     return videos
 
 
-def video_to_dict(video: Video) -> dict:
+def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
     """Convert a `Video` object to a JSON-compatible dictionary.
 
     Args:
         video: A `Video` object to convert.
+        labels_path: Path to the labels file being written. Used to determine if the
+            video should use a self-reference (".") or external reference.
 
     Returns:
         A dictionary containing the video metadata.
@@ -201,13 +203,20 @@ def video_to_dict(video: Video) -> dict:
         }
 
     elif type(video.backend) == HDF5Video:
+        # Determine if we should use self-reference or external reference
+        use_self_reference = (
+            video.backend.has_embedded_images and 
+            labels_path is not None and 
+            Path(video.filename).resolve() == Path(labels_path).resolve()
+        )
+        
         return {
             "filename": video_filename,
             "backend": {
                 "type": "HDF5Video",
                 "shape": video.shape,
                 "filename": (
-                    "." if video.backend.has_embedded_images else video_filename
+                    "." if use_self_reference else video_filename
                 ),
                 "dataset": video.backend.dataset,
                 "input_format": video.backend.input_format,
@@ -353,7 +362,7 @@ def embed_video(
 
         grp = f.require_group(f"{group}/source_video")
         grp.attrs["json"] = json.dumps(
-            video_to_dict(source_video), separators=(",", ":")
+            video_to_dict(source_video, labels_path), separators=(",", ":")
         )
 
     return embedded_video
@@ -546,7 +555,7 @@ def process_and_embed_frames(
             # Store source video metadata
             grp = f.require_group(f"{group}/source_video")
             grp.attrs["json"] = json.dumps(
-                video_to_dict(source_video), separators=(",", ":")
+                video_to_dict(source_video, labels_path), separators=(",", ":")
             )
 
             # Store the embedded video for return
@@ -730,7 +739,7 @@ def write_videos(
     # Write video metadata
     video_jsons = []
     for video_ind, video in sorted(videos_to_write, key=lambda x: x[0]):
-        video_json = video_to_dict(video)
+        video_json = video_to_dict(video, labels_path)
         video_jsons.append(np.bytes_(json.dumps(video_json, separators=(",", ":"))))
 
     with h5py.File(labels_path, "a") as f:
