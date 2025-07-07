@@ -1292,11 +1292,11 @@ def test_format_id_1_3_tracking_score(tmp_path):
     loaded_inst2 = loaded_labels.labeled_frames[0].instances[1]
 
     assert isinstance(loaded_inst1, Instance)
-    assert loaded_inst1.tracking_score == 0.95
+    assert loaded_inst1.tracking_score == pytest.approx(0.95)
 
     assert isinstance(loaded_inst2, PredictedInstance)
-    assert loaded_inst2.tracking_score == 0.75
-    assert loaded_inst2.score == 0.8
+    assert loaded_inst2.tracking_score == pytest.approx(0.75)
+    assert loaded_inst2.score == pytest.approx(0.8)
 
 
 def test_format_id_backward_compatibility(tmp_path):
@@ -1370,10 +1370,10 @@ def test_format_id_backward_compatibility(tmp_path):
     loaded_pred_inst = loaded_labels.labeled_frames[0].instances[1]
 
     assert isinstance(loaded_inst, Instance)
-    assert loaded_inst.tracking_score == 0.0
+    assert loaded_inst.tracking_score == pytest.approx(0.0)
 
     assert isinstance(loaded_pred_inst, PredictedInstance)
-    assert loaded_pred_inst.tracking_score == 0.0
+    assert loaded_pred_inst.tracking_score == pytest.approx(0.0)
 
 
 def test_save_slp_verbose_propagation(tmp_path):
