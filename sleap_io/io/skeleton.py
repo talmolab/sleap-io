@@ -122,6 +122,7 @@ class SkeletonDecoder:
         # Now decode edges using the established mappings
         edges = []
         symmetries = []
+        seen_symmetries = set()  # Track symmetries to avoid duplicates
 
         for link in data.get("links", []):
             edge_type = self._get_edge_type(link.get("type", {}))
@@ -137,7 +138,11 @@ class SkeletonDecoder:
             if edge_type == 1 or edge_type == 3:  # Regular edge (1 or 3)
                 edges.append(Edge(source=source_node, destination=target_node))
             elif edge_type == 2 or edge_type == 15:  # Symmetry (2 or 15)
-                symmetries.append(Symmetry([source_node, target_node]))
+                # Create a unique key for this symmetry pair (order-independent)
+                sym_key = tuple(sorted([source_node.name, target_node.name]))
+                if sym_key not in seen_symmetries:
+                    symmetries.append(Symmetry([source_node, target_node]))
+                    seen_symmetries.add(sym_key)
 
         # Get skeleton name
         name = data.get("graph", {}).get("name", "Skeleton")
