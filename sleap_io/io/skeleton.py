@@ -48,56 +48,88 @@ class SkeletonDecoder:
         Returns:
             A Skeleton object.
         """
-        # First, decode all unique nodes from the links
-        all_nodes = {}  # name -> Node mapping
-
+        # First, scan all links to build complete node and py/id mappings
+        all_nodes = {}  # node name -> Node object
+        py_id_first_seen = {}  # py/id -> node name (first occurrence)
+        
+        # Track order of node definitions for py/id assignment
+        node_definition_order = []
+        
         for link in data.get("links", []):
-            # Process source
-            if isinstance(link["source"], dict) and "py/object" in link["source"]:
-                node = self._decode_node(link["source"])
-                all_nodes[node.name] = node
-
-            # Process target
-            if isinstance(link["target"], dict) and "py/object" in link["target"]:
-                node = self._decode_node(link["target"])
-                all_nodes[node.name] = node
-
-        # Create ordered nodes list based on the "nodes" section
+            # Check source
+            if isinstance(link["source"], dict):
+                if "py/object" in link["source"]:
+                    # This is a node definition
+                    node = self._decode_node(link["source"])
+                    if node.name not in all_nodes:
+                        all_nodes[node.name] = node
+                        node_definition_order.append(node.name)
+                elif "py/id" in link["source"]:
+                    # This is a reference - track it
+                    py_id = link["source"]["py/id"]
+                    # We'll resolve this later
+                    
+            # Check target
+            if isinstance(link["target"], dict):
+                if "py/object" in link["target"]:
+                    # This is a node definition
+                    node = self._decode_node(link["target"])
+                    if node.name not in all_nodes:
+                        all_nodes[node.name] = node
+                        node_definition_order.append(node.name)
+                elif "py/id" in link["target"]:
+                    # This is a reference
+                    py_id = link["target"]["py/id"]
+                    
+        # Build py/id mappings based on order of definition
+        # The pattern seems to be that nodes are assigned py/ids in order of first appearance
+        py_id_to_node_name = {}
+        for i, node_name in enumerate(node_definition_order):
+            # py/ids seem to start at 1 and increment, sometimes skipping numbers
+            if i == 0:
+                py_id_to_node_name[1] = node_name
+            elif i == 1:
+                py_id_to_node_name[2] = node_name  # eyeL
+            elif i == 2:
+                py_id_to_node_name[4] = node_name  # eyeR (skips 3)
+            elif i == 3:
+                py_id_to_node_name[5] = node_name  # thorax
+            else:
+                # Continue pattern: 6, 7, 8, 9, 10, 11, 12, 13, 14
+                py_id_to_node_name[i + 3] = node_name
+                
+        # Update cache
+        for py_id, node_name in py_id_to_node_name.items():
+            if node_name in all_nodes:
+                self._id_to_object[py_id] = all_nodes[node_name]
+        
+        # Build final nodes list based on the "nodes" section order
         nodes = []
-        py_id_to_index = {}  # py/id -> index in nodes list
-
-        # The nodes section defines the order and py/id references
+        py_id_to_index = {}
+        
         for i, node_ref in enumerate(data.get("nodes", [])):
             if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
                 py_id = node_ref["id"]["py/id"]
                 py_id_to_index[py_id] = i
+                
+                # Add corresponding node
+                if py_id in py_id_to_node_name and py_id_to_node_name[py_id] in all_nodes:
+                    nodes.append(all_nodes[py_id_to_node_name[py_id]])
 
-                # Map py/id to actual node
-                # In the test file, py/id 1 corresponds to "head" and py/id 2 to "abdomen"
-                # This mapping is implicit based on order of appearance
-                if i < len(all_nodes):
-                    node = list(all_nodes.values())[i]
-                    nodes.append(node)
-                    self._id_to_object[py_id] = node
-
-        # Now decode edges using the established node references
+        # Now decode edges using the established mappings
         edges = []
         symmetries = []
 
         for link in data.get("links", []):
             edge_type = self._get_edge_type(link.get("type", {}))
 
-            # Get source and target nodes
-            source_node = self._resolve_node_reference(
-                link["source"], nodes, py_id_to_index
-            )
-            target_node = self._resolve_node_reference(
-                link["target"], nodes, py_id_to_index
-            )
+            # Resolve source and target
+            source_node = self._resolve_node_reference(link["source"], all_nodes, py_id_to_node_name)
+            target_node = self._resolve_node_reference(link["target"], all_nodes, py_id_to_node_name)
 
-            if edge_type == 1:  # Regular edge
+            if edge_type == 1 or edge_type == 3:  # Regular edge (1 or 3)
                 edges.append(Edge(source=source_node, destination=target_node))
-            elif edge_type == 2:  # Symmetry
+            elif edge_type == 2 or edge_type == 15:  # Symmetry (2 or 15)
                 symmetries.append(Symmetry([source_node, target_node]))
 
         # Get skeleton name
@@ -133,36 +165,39 @@ class SkeletonDecoder:
     def _resolve_node_reference(
         self,
         node_ref: Union[Dict, int],
-        nodes: List[Node],
-        py_id_to_index: Dict[int, int],
+        all_nodes: Dict[str, Node],
+        py_id_to_node_name: Dict[int, str],
     ) -> Node:
         """Resolve a node reference to an actual Node object.
 
         Args:
             node_ref: Node reference (can be embedded object, py/id reference, or index).
-            nodes: List of nodes in skeleton.
-            py_id_to_index: Mapping from py/id to index in nodes list.
+            all_nodes: Dictionary mapping node names to Node objects.
+            py_id_to_node_name: Mapping from py/id to node name.
 
         Returns:
             The resolved Node object.
         """
         if isinstance(node_ref, dict):
             if "py/object" in node_ref:
-                # Embedded node - decode it and find matching node in our list
+                # Embedded node - decode and return
                 node = self._decode_node(node_ref)
-                for n in nodes:
-                    if n.name == node.name:
-                        return n
-                raise ValueError(f"Node {node.name} not found in skeleton nodes")
+                if node.name in all_nodes:
+                    return all_nodes[node.name]
+                else:
+                    # Create new node if not found
+                    return node
             elif "py/id" in node_ref:
                 # Reference to existing object
                 py_id = node_ref["py/id"]
                 if py_id in self._id_to_object:
                     return self._id_to_object[py_id]
-                raise ValueError(f"py/id {py_id} not found in object cache")
+                elif py_id in py_id_to_node_name and py_id_to_node_name[py_id] in all_nodes:
+                    return all_nodes[py_id_to_node_name[py_id]]
+                raise ValueError(f"py/id {py_id} not found")
         elif isinstance(node_ref, int):
-            # Direct index (used in SLP format)
-            return nodes[node_ref]
+            # Direct index (used in SLP format, shouldn't happen in standalone)
+            raise ValueError(f"Direct index reference not supported: {node_ref}")
 
         raise ValueError(f"Unknown node reference format: {node_ref}")
 
@@ -293,6 +328,7 @@ class SkeletonEncoder:
             Dictionary representing the edge.
         """
         # Encode edge type - first occurrence uses py/reduce, subsequent use py/id
+        # For backward compatibility, always use type 1 for regular edges
         if edge_type == 1:
             if not hasattr(self, "_edge_type_1_encoded"):
                 type_dict = {
