@@ -1022,7 +1022,7 @@ def write_metadata(labels_path: str, labels: Labels):
 
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
-        grp.attrs["format_id"] = 1.2
+        grp.attrs["format_id"] = 1.3
         grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
 
 
@@ -1092,7 +1092,7 @@ def read_instances(
                 point_id_start,
                 point_id_end,
             ) = instance_data
-            tracking_score = np.zeros_like(instance_score)
+            tracking_score = 0.0
         elif format_id >= 1.2:
             (
                 instance_id,
@@ -1169,7 +1169,7 @@ def write_lfs(labels_path: str, labels: Labels):
             ("score", "f4"),
             ("point_id_start", "u8"),
             ("point_id_end", "u8"),
-            ("tracking_score", "f4"),  # FORMAT_ID >= 1.2
+            ("tracking_score", "f4"),  # FORMAT_ID >= 1.2 (1.3 adds explicit handling)
         ]
     )
     frame_dtype = np.dtype(
