@@ -1546,22 +1546,22 @@ def test_save_overwrite_without_embedded(tmp_path, centered_pair_low_quality_vid
     # Create test data with external video
     skeleton = Skeleton(["A", "B"])
     video = centered_pair_low_quality_video
-    
+
     inst = Instance([[1, 2], [3, 4]], skeleton=skeleton)
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
-    
+
     # Save to a .slp file without embedding
     slp_path = tmp_path / "test.slp"
     labels.save(str(slp_path), embed=False)
-    
+
     # Load and verify it's not embedded
     loaded = read_labels(str(slp_path))
     assert type(loaded.video.backend).__name__ == "MediaVideo"
-    
+
     # Save over the same file with embed=False - should work fine
     loaded.save(str(slp_path), embed=False)
-    
+
     # Verify it still works
     loaded2 = read_labels(str(slp_path))
     assert type(loaded2.video.backend).__name__ == "MediaVideo"
@@ -1573,24 +1573,24 @@ def test_save_overwrite_embedded_with_source(tmp_path, centered_pair_low_quality
     # Create test data
     skeleton = Skeleton(["A", "B"])
     video = centered_pair_low_quality_video
-    
+
     inst = Instance([[1, 2], [3, 4]], skeleton=skeleton)
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
-    
+
     # Save with embedding
     pkg_path = tmp_path / "test.pkg.slp"
     labels.save(str(pkg_path), embed="user")
-    
+
     # Load and verify it's embedded with source video
     loaded = read_labels(str(pkg_path))
     assert loaded.video.backend.has_embedded_images
     assert loaded.video.source_video is not None
     assert loaded.video.source_video.filename == video.filename
-    
+
     # Save over the same file with embed=False - should restore source video
     loaded.save(str(pkg_path), embed=False)
-    
+
     # Verify source video was restored
     loaded2 = read_labels(str(pkg_path))
     assert type(loaded2.video.backend).__name__ == "MediaVideo"
