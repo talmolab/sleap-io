@@ -368,6 +368,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v040" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.4.0
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v030" class="md-nav__link">
     <span class="md-ellipsis">
       v0.3.0
@@ -1018,6 +1027,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/ultralytics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    ultralytics
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../reference/sleap_io/io/utils/" class="md-nav__link">
         
   
@@ -1369,6 +1401,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v040" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.4.0
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v030" class="md-nav__link">
     <span class="md-ellipsis">
       v0.3.0
@@ -1628,6 +1669,162 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v040"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.4.0">v0.4.0</a><a class="headerlink" href="#v040" title="Permanent link">&para;</a></h2>
+<h2>Summary</h2>
+<h3>Overview</h3>
+<p>The v0.4.0 release of sleap-io introduces significant improvements to skeleton file handling, enhances the package file (.pkg.slp) saving performance, and fixes several important bugs. This release focuses on making skeleton data more accessible and improving the user experience when working with large datasets.</p>
+<h3>🚀 New Features</h3>
+<h4><strong>Standalone Skeleton Serialization (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3210100368" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/178" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/178/hovercard" href="https://github.com/talmolab/sleap-io/pull/178">#178</a>)</strong></h4>
+<p>sleap-io now supports reading and writing skeleton files independently from label files. This feature enables:</p>
+<ul>
+<li>Loading skeleton definitions from <code>.json</code> files in SLEAP's jsonpickle format</li>
+<li>Saving skeletons for reuse across projects</li>
+<li>Working with multiple skeletons in a single file</li>
+</ul>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load a skeleton
+skeleton = sio.load_skeleton(&quot;skeleton.json&quot;)
+
+# Save a skeleton  
+sio.save_skeleton(skeleton, &quot;output.json&quot;)
+
+# Also works with lists of skeletons
+skeletons = sio.load_skeleton(&quot;multiple_skeletons.json&quot;)
+sio.save_skeleton(skeletons, &quot;output.json&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load a skeleton</span>
+<span class="pl-s1">skeleton</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_skeleton</span>(<span class="pl-s">"skeleton.json"</span>)
+
+<span class="pl-c"># Save a skeleton  </span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_skeleton</span>(<span class="pl-s1">skeleton</span>, <span class="pl-s">"output.json"</span>)
+
+<span class="pl-c"># Also works with lists of skeletons</span>
+<span class="pl-s1">skeletons</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_skeleton</span>(<span class="pl-s">"multiple_skeletons.json"</span>)
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_skeleton</span>(<span class="pl-s1">skeletons</span>, <span class="pl-s">"output.json"</span>)</pre></div>
+<h4><strong>YAML Skeleton Format Support (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3210331218" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/179" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/179/hovercard" href="https://github.com/talmolab/sleap-io/pull/179">#179</a>)</strong></h4>
+<p>Added support for human-readable YAML format for skeleton files, making it easier to:</p>
+<ul>
+<li>Manually create and edit skeleton definitions</li>
+<li>Version control skeleton configurations</li>
+<li>Share skeleton templates between projects</li>
+</ul>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load from YAML
+skeleton = sio.load_skeleton(&quot;skeleton.yaml&quot;)
+
+# Save to YAML  
+sio.save_skeleton(skeleton, &quot;output.yml&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load from YAML</span>
+<span class="pl-s1">skeleton</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_skeleton</span>(<span class="pl-s">"skeleton.yaml"</span>)
+
+<span class="pl-c"># Save to YAML  </span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_skeleton</span>(<span class="pl-s1">skeleton</span>, <span class="pl-s">"output.yml"</span>)</pre></div>
+<p><strong>Example YAML format:</strong></p>
+<div class="highlight highlight-source-yaml notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="Skeleton-0:
+  nodes:
+  - name: head
+  - name: thorax
+  - name: abdomen
+  edges:
+  - source:
+      name: head
+    destination:
+      name: thorax
+  symmetries:
+  - - name: eyeL
+    - name: eyeR"><pre><span class="pl-ent">Skeleton-0</span>:
+  <span class="pl-ent">nodes</span>:
+  - <span class="pl-ent">name</span>: <span class="pl-s">head</span>
+  - <span class="pl-ent">name</span>: <span class="pl-s">thorax</span>
+  - <span class="pl-ent">name</span>: <span class="pl-s">abdomen</span>
+  <span class="pl-ent">edges</span>:
+  - <span class="pl-ent">source</span>:
+      <span class="pl-ent">name</span>: <span class="pl-s">head</span>
+    <span class="pl-ent">destination</span>:
+      <span class="pl-ent">name</span>: <span class="pl-s">thorax</span>
+  <span class="pl-ent">symmetries</span>:
+  - <span class="pl-ent">- name</span>: <span class="pl-s">eyeL</span>
+    - <span class="pl-ent">name</span>: <span class="pl-s">eyeR</span></pre></div>
+<h4><strong>Frame Embedding Progress Bar (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3078861269" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/174" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/174/hovercard" href="https://github.com/talmolab/sleap-io/pull/174">#174</a>)</strong></h4>
+<p>Added a progress bar when embedding frames into <code>.pkg.slp</code> files, providing:</p>
+<ul>
+<li>Visual feedback during long embedding operations</li>
+<li>Better user experience when working with large datasets</li>
+<li>Estimate of remaining time for completion</li>
+</ul>
+<h3>🐛 Bug Fixes</h3>
+<h4><strong>Fixed Package File Saving with Embedded Videos (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3209895150" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/177" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/177/hovercard" href="https://github.com/talmolab/sleap-io/pull/177">#177</a>)</strong></h4>
+<ul>
+<li><strong>Changed default behavior</strong>: <code>embed=False</code> is now the default for fast-saving</li>
+<li><strong>Prevented data loss</strong>: Added detection for self-referential paths</li>
+<li><strong>Fixed video referencing</strong>: Correctly handles external video references</li>
+</ul>
+<p><strong>Impact:</strong> Users can now quickly save <code>.pkg.slp</code> files without re-embedding frames, significantly improving save performance for large projects.</p>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Fast save (default behavior)
+labels.save(&quot;file.slp&quot;)  # embed=False by default
+
+# Explicitly re-embed frames
+labels.save(&quot;file.slp&quot;, embed=True)"><pre><span class="pl-c"># Fast save (default behavior)</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">save</span>(<span class="pl-s">"file.slp"</span>)  <span class="pl-c"># embed=False by default</span>
+
+<span class="pl-c"># Explicitly re-embed frames</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">save</span>(<span class="pl-s">"file.slp"</span>, <span class="pl-s1">embed</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)</pre></div>
+<h4><strong>Fixed ImageVideo Backend Metadata Serialization (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3064860871" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/173" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/173/hovercard" href="https://github.com/talmolab/sleap-io/pull/173">#173</a>)</strong></h4>
+<ul>
+<li>Fixed compatibility issue with core SLEAP when using <code>ImageVideo</code> backend</li>
+<li>Resolved <code>cattrs</code> class inference errors</li>
+<li>Maintained backward compatibility with existing files</li>
+</ul>
+<p><strong>Impact:</strong> Users working with image sequences no longer encounter errors when loading files in core SLEAP.</p>
+<h3>🔧 Improvements</h3>
+<h4><strong>SLP Format v1.3 Support (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3209771870" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/176" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/176/hovercard" href="https://github.com/talmolab/sleap-io/pull/176">#176</a>)</strong></h4>
+<ul>
+<li>Added explicit support for SLEAP label format version 1.3</li>
+<li>Enhanced tracking score support on <code>Instance</code> objects</li>
+<li>Added comprehensive tests for format compatibility</li>
+</ul>
+<p><strong>Impact:</strong> Full compatibility with the latest SLEAP format features, including improved tracking metrics.</p>
+<h3>📦 Dependencies</h3>
+<ul>
+<li>Added <code>pyyaml</code> dependency for YAML skeleton format support</li>
+</ul>
+<h3>🔄 Migration Notes</h3>
+<h4>Default Embedding Behavior Change</h4>
+<p>The default behavior for saving <code>.pkg.slp</code> files has changed:</p>
+<ul>
+<li><strong>Before v0.4.0</strong>: <code>embed=True</code> (re-embeds all frames)</li>
+<li><strong>After v0.4.0</strong>: <code>embed=False</code> (references existing files)</li>
+</ul>
+<p>To maintain previous behavior, explicitly set <code>embed=True</code>:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="labels.save(&quot;output.pkg.slp&quot;, embed=True)"><pre><span class="pl-s1">labels</span>.<span class="pl-c1">save</span>(<span class="pl-s">"output.pkg.slp"</span>, <span class="pl-s1">embed</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)</pre></div>
+<h4>No Breaking API Changes</h4>
+<p>All existing APIs remain compatible. New features are additive and do not affect existing functionality.</p>
+<h3>🎯 Why These Changes Matter</h3>
+<ol>
+<li><strong>Skeleton Management</strong>: Standalone skeleton files enable better project organization and reusability</li>
+<li><strong>Performance</strong>: Fast-saving package files dramatically reduces save times for large datasets</li>
+<li><strong>User Experience</strong>: Progress bars and better error messages improve workflow transparency</li>
+<li><strong>Compatibility</strong>: Bug fixes ensure smooth interoperability with core SLEAP</li>
+<li><strong>Flexibility</strong>: YAML format provides a human-friendly alternative for skeleton configuration</li>
+</ol>
+<p>This release enhances sleap-io's capabilities as a standalone utility for pose tracking data management while maintaining full compatibility with the SLEAP ecosystem.</p>
+<h2>Changelog</h2>
+<ul>
+<li>Fix the backend metadata being serialized to SLP for ImageVideo backends by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3064860871" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/173" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/173/hovercard" href="https://github.com/talmolab/sleap-io/pull/173">#173</a></li>
+<li>Frame embedding progress bar by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3078861269" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/174" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/174/hovercard" href="https://github.com/talmolab/sleap-io/pull/174">#174</a></li>
+<li>Implement SLP format v1.3 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3209771870" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/176" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/176/hovercard" href="https://github.com/talmolab/sleap-io/pull/176">#176</a></li>
+<li>Fix saving package files with embedded videos by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3209895150" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/177" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/177/hovercard" href="https://github.com/talmolab/sleap-io/pull/177">#177</a></li>
+<li>Standalone Skeleton serialization/deserialization by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3210100368" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/178" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/178/hovercard" href="https://github.com/talmolab/sleap-io/pull/178">#178</a></li>
+<li>Add YAML support for skeleton serialization by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3210331218" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/179" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/179/hovercard" href="https://github.com/talmolab/sleap-io/pull/179">#179</a></li>
+<li>Bump to v0.4.0 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3210394633" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/180" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/180/hovercard" href="https://github.com/talmolab/sleap-io/pull/180">#180</a></li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.3.0...v0.4.0"><tt>v0.3.0...v0.4.0</tt></a></p>
 <h2 id="v030"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.3.0">v0.3.0</a><a class="headerlink" href="#v030" title="Permanent link">&para;</a></h2>
 <h2>What's Changed</h2>
 <ul>
