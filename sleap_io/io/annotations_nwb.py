@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import subprocess
 import os
+import json
 
 try:
     from numpy.typing import ArrayLike
@@ -52,9 +53,9 @@ def create_skeletons(labels):
         if video not in frame_indices:
             frame_indices[video] = []
         
+        frame_indices[video].append(labels[j].frame_idx)
+        
         for inst in l.instances:
-            
-            frame_indices[video].append(inst.frame_idx)
 
             skel = inst.skeleton
             skel_name = inst.skeleton.name # assumes unique skeletons in SLEAP are named uniquely 
@@ -117,7 +118,7 @@ def get_frames_from_slp(labels, mjpeg_frame_duration=30.0):
         if cache_key in written:        
             continue
 
-        frame = lf.video.get_frame(frame_idx) 
+        frame = lf.video.backend.get_frame(frame_idx) 
 
         out_path = out_dir / f"v{v_idx}_f{frame_idx}.png"
         filename = str(out_path)
@@ -236,13 +237,13 @@ def create_training_frames(labels, total_frames, unique_skeletons, annotations_m
                 iden_string = val.track.name
                 skel_name = skel_name + "_" + str(iden_string) # work around for identity tracking, append onto end of skeleetons instance name, need each skel_name to be unique for storage in SkeletonInstances
             
-            node_locations_sk1 = np.array([[pt.x, pt.y] for pt in val.points])
+            node_locations_sk1 = np.array([[pt[0][0], pt[0][1]] for pt in val.points]) 
             
             instance_sk1 = SkeletonInstance(
                 name=skel_name,
                 id=np.uint64(unique_ids),
                 node_locations=node_locations_sk1,
-                node_visibility=[pt.visible for pt in val.points],
+                node_visibility=[pt[1] for pt in val.points], # assumes visible is first index in points array?
                 skeleton=unique_skeletons[val.skeleton.name],
             )
             skeleton_instances_list.append(instance_sk1)
@@ -251,7 +252,7 @@ def create_training_frames(labels, total_frames, unique_skeletons, annotations_m
         # store the skeleton instances in a SkeletonInstances object
         skeleton_instances = SkeletonInstances(skeleton_instances=skeleton_instances_list)
 
-        mapped = frame_map.get(val.frame_idx)
+        mapped = frame_map.get(frame_idx)
 
         if isinstance(mapped[0], list): #loop through if mult videos same frame idx
             video_path = val.video.filename
