@@ -147,7 +147,7 @@ def load_ultralytics(
     dataset_path: str,
     split: str = "train",
     skeleton: Optional[Skeleton] = None,
-    **kwargs
+    **kwargs,
 ) -> Labels:
     """Load an Ultralytics YOLO pose dataset as a SLEAP `Labels` object.
 
@@ -159,14 +159,16 @@ def load_ultralytics(
     Returns:
         The dataset as a `Labels` object.
     """
-    return ultralytics.read_labels(dataset_path, split=split, skeleton=skeleton, **kwargs)
+    return ultralytics.read_labels(
+        dataset_path, split=split, skeleton=skeleton, **kwargs
+    )
 
 
 def save_ultralytics(
     labels: Labels,
     dataset_path: str,
     split_ratios: dict = {"train": 0.8, "val": 0.2},
-    **kwargs
+    **kwargs,
 ):
     """Save a SLEAP dataset to Ultralytics YOLO pose format.
 
@@ -267,7 +269,9 @@ def load_file(
             format = "json"
         elif filename.endswith(".h5"):
             format = "jabs"
-        elif filename.endswith("data.yaml") or (Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()):
+        elif filename.endswith("data.yaml") or (
+            Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
+        ):
             format = "ultralytics"
         else:
             for vid_ext in Video.EXTS:
