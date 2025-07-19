@@ -1,0 +1,28 @@
+# Ultralytics YOLO Pose Dataset Configuration
+
+# Dataset paths
+path: .  # dataset root dir
+train: train/images  # train images (relative to path)
+val: val/images  # val images (relative to path)
+
+# Classes
+names:
+  0: animal
+
+# Keypoints
+kpt_shape: [5, 3]  # 5 keypoints, 3 values (x, y, visibility) per keypoint
+flip_idx: [1, 0, 3, 2, 4]  # flip indices for horizontal flipping augmentation
+
+# Skeleton connections for visualization  
+skeleton:
+  - [0, 1]  # head to neck
+  - [1, 2]  # neck to center
+  - [2, 3]  # center to tail_base
+  - [2, 4]  # center to tail_tip
+
+# Node names (for reference)
+# 0: head
+# 1: neck  
+# 2: center
+# 3: tail_base
+# 4: tail_tip
