@@ -5,6 +5,7 @@ import pytest
 from pathlib import Path
 import tempfile
 import yaml
+import imageio.v3 as iio
 
 from sleap_io import Labels, Skeleton, Node, Edge, Instance, LabeledFrame, Track, Video
 from sleap_io.io.ultralytics import (
@@ -113,18 +114,24 @@ def test_read_labels_with_custom_skeleton(ultralytics_dataset):
     )
 
 
-def test_write_labels_single_split(tmp_path):
+def test_write_labels_single_split(tmp_path, centered_pair_low_quality_video):
     """Test writing labels to Ultralytics format with single split."""
-    # Create test labels
-    skeleton = Skeleton(
-        [Node("head"), Node("tail")], [Edge(Node("head"), Node("tail"))]
-    )
+    # Create test labels with actual video
+    head_node = Node("head")
+    tail_node = Node("tail")
+    skeleton = Skeleton([head_node, tail_node], [Edge(head_node, tail_node)])
     points_array = np.array([[10, 20, True], [30, 40, True]], dtype=np.float32)
     instance = Instance.from_numpy(points_data=points_array, skeleton=skeleton)
-    frame = LabeledFrame(
-        video=Video.from_filename("dummy.mp4"), frame_idx=0, instances=[instance]
-    )
-    labels = Labels([frame], [skeleton])
+
+    # Create frames from actual video
+    frames = []
+    for i in range(3):
+        frame = LabeledFrame(
+            video=centered_pair_low_quality_video, frame_idx=i, instances=[instance]
+        )
+        frames.append(frame)
+
+    labels = Labels(frames, [skeleton])
 
     # Write to Ultralytics format
     output_dir = tmp_path / "ultralytics_output"
@@ -140,6 +147,67 @@ def test_write_labels_single_split(tmp_path):
         config = yaml.safe_load(f)
     assert config["kpt_shape"] == [2, 3]
     assert "train" in config
+
+    # Check that real image files were created
+    image_files = list((output_dir / "train" / "images").glob("*.png"))
+    assert len(image_files) == 3  # Should have 3 images
+
+    # Check image naming pattern
+    expected_names = ["0000000.png", "0000001.png", "0000002.png"]
+    actual_names = sorted([f.name for f in image_files])
+    assert actual_names == expected_names
+
+    # Check that images are valid and have correct size
+    import imageio.v3 as iio
+
+    for img_file in image_files:
+        img = iio.imread(img_file)
+        assert img.shape == (384, 384)  # The video is 384x384 grayscale
+
+    # Check corresponding label files
+    label_files = list((output_dir / "train" / "labels").glob("*.txt"))
+    assert len(label_files) == 3
+
+    # Check label naming pattern matches images
+    expected_label_names = ["0000000.txt", "0000001.txt", "0000002.txt"]
+    actual_label_names = sorted([f.name for f in label_files])
+    assert actual_label_names == expected_label_names
+
+
+def test_write_labels_jpeg_format(tmp_path, centered_pair_low_quality_video):
+    """Test writing labels with JPEG image format and quality settings."""
+    # Create test labels
+    nose_node = Node("nose")
+    body_node = Node("body")
+    skeleton = Skeleton([nose_node, body_node])
+    points_array = np.array([[50, 60, True], [70, 80, True]], dtype=np.float32)
+    instance = Instance.from_numpy(points_data=points_array, skeleton=skeleton)
+
+    frame = LabeledFrame(
+        video=centered_pair_low_quality_video, frame_idx=10, instances=[instance]
+    )
+    labels = Labels([frame], [skeleton])
+
+    # Write with JPEG format and specific quality
+    output_dir = tmp_path / "ultralytics_jpeg"
+    write_labels(
+        labels,
+        str(output_dir),
+        split_ratios={"val": 1.0},
+        image_format="jpg",
+        image_quality=85,
+    )
+
+    # Check that JPEG files were created
+    image_files = list((output_dir / "val" / "images").glob("*.jpg"))
+    assert len(image_files) == 1
+    assert image_files[0].name == "0000000.jpg"
+
+    # Verify it's a valid JPEG
+    import imageio.v3 as iio
+
+    img = iio.imread(image_files[0])
+    assert img.shape == (384, 384)  # Should maintain original dimensions
 
 
 def test_write_labels_multiple_splits(tmp_path):

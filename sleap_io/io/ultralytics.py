@@ -20,6 +20,8 @@ from sleap_io.model.skeleton import Skeleton, Edge, Node
 from sleap_io.model.instance import Track, Instance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+import imageio.v3 as iio
+from tqdm import tqdm
 
 
 def read_labels(
@@ -102,6 +104,9 @@ def write_labels(
     dataset_path: str,
     split_ratios: Dict[str, float] = {"train": 0.8, "val": 0.2},
     class_id: int = 0,
+    image_format: str = "png",
+    image_quality: Optional[int] = None,
+    verbose: bool = True,
     **kwargs,
 ) -> None:
     """Write Labels to Ultralytics YOLO pose format.
@@ -111,6 +116,10 @@ def write_labels(
         dataset_path: Path to write the Ultralytics dataset.
         split_ratios: Dictionary mapping split names to ratios (must sum to 1.0).
         class_id: Class ID to use for all instances (default: 0).
+        image_format: Image format to use for saving frames. Either "png" (default, lossless) or "jpg".
+        image_quality: Image quality for JPEG format (1-100). For PNG, this is the compression level (0-9).
+            If None, uses default quality settings.
+        verbose: If True (default), show progress bars during export.
         **kwargs: Additional arguments (unused, for compatibility).
     """
     dataset_path = Path(dataset_path)
@@ -143,23 +152,61 @@ def write_labels(
         images_dir.mkdir(parents=True, exist_ok=True)
         labels_dir.mkdir(parents=True, exist_ok=True)
 
-        for frame in split_data.labeled_frames:
-            # Extract frame image and save
-            frame_img = frame.image
-            if frame_img is not None:
-                image_filename = f"frame_{frame.frame_idx:06d}.jpg"
+        # Create progress bar for frames if verbose
+        frame_iterator = (
+            tqdm(
+                split_data.labeled_frames,
+                desc=f"Writing {split_name} images",
+                disable=not verbose,
+            )
+            if verbose
+            else split_data.labeled_frames
+        )
+
+        for lf_idx, frame in enumerate(frame_iterator):
+            # Extract frame image
+            try:
+                frame_img = frame.image
+                if frame_img is None:
+                    warnings.warn(
+                        f"Could not load frame {frame.frame_idx} from video, skipping."
+                    )
+                    continue
+
+                # Use labeled frame index for filename
+                image_filename = f"{lf_idx:07d}.{image_format}"
                 image_path = images_dir / image_filename
 
-                # Save image (placeholder - real implementation would save actual image)
-                # For testing purposes, create a placeholder
-                with open(image_path, "w") as f:
-                    f.write(f"PLACEHOLDER_FRAME_{frame.frame_idx}")
+                # Handle grayscale conversion if needed
+                if frame_img.ndim == 3 and frame_img.shape[-1] == 1:
+                    # Squeeze single channel dimension for grayscale
+                    frame_img = np.squeeze(frame_img, axis=-1)
 
-                # Save annotations
-                label_path = labels_dir / f"frame_{frame.frame_idx:06d}.txt"
+                # Save image with appropriate quality settings
+                save_kwargs = {}
+                if image_format.lower() in ["jpg", "jpeg"]:
+                    if image_quality is not None:
+                        save_kwargs["quality"] = image_quality
+                elif image_format.lower() == "png":
+                    if image_quality is not None:
+                        # PNG uses compress_level (0-9)
+                        save_kwargs["compress_level"] = min(9, max(0, image_quality))
+
+                # Save the image
+                iio.imwrite(image_path, frame_img, **save_kwargs)
+
+                # Save annotations with same base filename
+                label_filename = f"{lf_idx:07d}.txt"
+                label_path = labels_dir / label_filename
                 write_label_file(
                     label_path, frame, skeleton, frame_img.shape[:2], class_id
                 )
+
+            except Exception as e:
+                warnings.warn(
+                    f"Error processing frame {frame.frame_idx}: {str(e)}, skipping."
+                )
+                continue
 
 
 def parse_data_yaml(yaml_path: Path) -> Dict:
