@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import yaml
 import imageio.v3 as iio
+import sleap_io
 
 from sleap_io import Labels, Skeleton, Node, Edge, Instance, LabeledFrame, Track, Video
 from sleap_io.io.ultralytics import (
@@ -432,3 +433,103 @@ def test_keypoint_count_mismatch_warning(tmp_path):
         instances = parse_label_file(label_file, skeleton, (100, 100))
 
     assert len(instances) == 0  # Instance rejected due to mismatch
+
+
+def test_realistic_labels_roundtrip(tmp_path, labels_predictions):
+    """Test roundtrip conversion with realistic labels containing multiple instances and tracks."""
+    # Take a subset of frames for testing
+    labels_subset = Labels(
+        labeled_frames=labels_predictions.labeled_frames[:10],
+        videos=labels_predictions.videos,
+        skeletons=labels_predictions.skeletons,
+        tracks=labels_predictions.tracks,
+    )
+
+    # Write to Ultralytics format
+    output_dir = tmp_path / "ultralytics_realistic"
+    write_labels(labels_subset, str(output_dir), split_ratios={"train": 1.0})
+
+    # Verify images were created
+    image_files = list((output_dir / "train" / "images").glob("*.png"))
+    assert len(image_files) == 10
+
+    # Read back and compare (note: tracks will be different as Ultralytics doesn't preserve them)
+    labels_read = read_labels(output_dir, split="train")
+    assert len(labels_read.labeled_frames) == 10
+    assert len(labels_read.skeletons) == 1
+
+    # Just verify we have the right number of instances per frame
+    # Don't check exact coordinates as frame ordering might differ
+    orig_instance_counts = [
+        len(frame.instances) for frame in labels_subset.labeled_frames
+    ]
+    read_instance_counts = [
+        len(frame.instances) for frame in labels_read.labeled_frames
+    ]
+    assert sum(orig_instance_counts) == sum(read_instance_counts)
+
+
+def test_mediavideo_backend_roundtrip(tmp_path, centered_pair_low_quality_video):
+    """Test roundtrip with MediaVideo backend."""
+    # Create simple labels
+    skeleton = Skeleton([Node("A"), Node("B")])
+    instances = [
+        Instance.from_numpy(
+            np.array([[100, 100, True], [200, 200, True]], dtype=np.float32), skeleton
+        )
+    ]
+    frame = LabeledFrame(
+        video=centered_pair_low_quality_video, frame_idx=0, instances=instances
+    )
+    labels = Labels([frame], videos=[centered_pair_low_quality_video])
+
+    # Write and read back
+    output_dir = tmp_path / "ultralytics_mediavideo"
+    write_labels(labels, str(output_dir))
+
+    labels_read = read_labels(output_dir)
+    assert len(labels_read.labeled_frames) == 1
+    assert len(labels_read.labeled_frames[0].instances) == 1
+
+
+def test_hdf5video_backend_roundtrip(tmp_path, slp_minimal_pkg):
+    """Test roundtrip with HDF5Video backend (embedded frames)."""
+    # Load labels with embedded video
+    labels = sleap_io.load_slp(slp_minimal_pkg)
+
+    # Take first frame
+    labels_subset = Labels(
+        labeled_frames=labels.labeled_frames[:1],
+        videos=labels.videos,
+        skeletons=labels.skeletons,
+    )
+
+    # Write and read back
+    output_dir = tmp_path / "ultralytics_hdf5"
+    write_labels(labels_subset, str(output_dir), split_ratios={"train": 1.0})
+
+    labels_read = read_labels(output_dir)
+    assert len(labels_read.labeled_frames) == 1
+
+
+def test_imagevideo_backend_roundtrip(tmp_path, centered_pair_frame_paths):
+    """Test roundtrip with ImageVideo backend."""
+    # Create ImageVideo from frame paths
+    video = sleap_io.Video.from_filename(centered_pair_frame_paths)
+
+    skeleton = Skeleton([Node("pt1"), Node("pt2")])
+    instances = [
+        Instance.from_numpy(
+            np.array([[50, 50, True], [150, 150, True]], dtype=np.float32), skeleton
+        )
+    ]
+    frame = LabeledFrame(video=video, frame_idx=0, instances=instances)
+    labels = Labels([frame], videos=[video])
+
+    # Write and read back
+    output_dir = tmp_path / "ultralytics_imagevideo"
+    write_labels(labels, str(output_dir), image_format="jpg")
+
+    labels_read = read_labels(output_dir)
+    assert len(labels_read.labeled_frames) == 1
+    assert len(labels_read.labeled_frames[0].instances) == 1
