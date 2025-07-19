@@ -86,7 +86,7 @@ def read_labels(
                     # Read first frame to get dimensions
                     img = video[0]
                     img_shape = img.shape[:2]
-                
+
                 instances = parse_label_file(label_file, skeleton, img_shape)
 
                 # Assign tracks to instances based on order
