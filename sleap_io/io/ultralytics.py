@@ -56,8 +56,9 @@ def read_labels(
         skeleton = create_skeleton_from_config(config)
 
     # Get paths for the specified split
-    images_dir = dataset_path / config.get(split, f"{split}/images")
-    labels_dir = dataset_path / str(images_dir).replace("/images", "/labels")
+    split_path = config.get(split, f"{split}/images")
+    images_dir = dataset_path / split_path
+    labels_dir = dataset_path / split_path.replace("/images", "/labels")
 
     if not images_dir.exists():
         raise FileNotFoundError(f"Images directory not found: {images_dir}")
@@ -78,7 +79,15 @@ def read_labels(
             # Parse label file if it exists
             instances = []
             if label_file.exists():
-                instances = parse_label_file(label_file, skeleton, video.shape[:2])
+                # Get image dimensions - try from video shape first, fallback to reading image
+                if video.shape is not None:
+                    img_shape = video.shape[:2]
+                else:
+                    # Read first frame to get dimensions
+                    img = video[0]
+                    img_shape = img.shape[:2]
+                
+                instances = parse_label_file(label_file, skeleton, img_shape)
 
                 # Assign tracks to instances based on order
                 for i, instance in enumerate(instances):
