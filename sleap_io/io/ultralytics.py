@@ -45,7 +45,13 @@ def read_labels(
     dataset_path = Path(dataset_path)
 
     # Parse data.yaml configuration
-    data_yaml_path = dataset_path / "data.yaml"
+    if dataset_path.name == "data.yaml":
+        # If path already points to data.yaml, use its parent as dataset path
+        data_yaml_path = dataset_path
+        dataset_path = dataset_path.parent
+    else:
+        data_yaml_path = dataset_path / "data.yaml"
+
     if not data_yaml_path.exists():
         raise FileNotFoundError(f"data.yaml not found at {data_yaml_path}")
 
