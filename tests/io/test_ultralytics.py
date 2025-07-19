@@ -533,3 +533,90 @@ def test_imagevideo_backend_roundtrip(tmp_path, centered_pair_frame_paths):
     labels_read = read_labels(output_dir)
     assert len(labels_read.labeled_frames) == 1
     assert len(labels_read.labeled_frames[0].instances) == 1
+
+
+def test_multiprocessing_write(tmp_path, centered_pair_low_quality_video):
+    """Test multiprocessing image saving."""
+    # Create labels with multiple frames
+    skeleton = Skeleton([Node("A"), Node("B")])
+    frames = []
+    for i in range(5):
+        instances = [
+            Instance.from_numpy(
+                np.array(
+                    [[10 + i, 20 + i, True], [30 + i, 40 + i, True]], dtype=np.float32
+                ),
+                skeleton,
+            )
+        ]
+        frame = LabeledFrame(
+            video=centered_pair_low_quality_video, frame_idx=i * 10, instances=instances
+        )
+        frames.append(frame)
+
+    labels = Labels(frames, videos=[centered_pair_low_quality_video])
+
+    # Write with multiprocessing
+    output_dir = tmp_path / "ultralytics_multiproc"
+    write_labels(
+        labels, str(output_dir), use_multiprocessing=True, n_workers=2, verbose=False
+    )
+
+    # Verify all images were created
+    image_files = list((output_dir / "train" / "images").glob("*.png"))
+    assert len(image_files) == 4  # 80% of 5 frames
+
+    # Verify annotations were created
+    label_files = list((output_dir / "train" / "labels").glob("*.txt"))
+    assert len(label_files) == 4
+
+
+def test_multiprocessing_with_progress(tmp_path, centered_pair_low_quality_video):
+    """Test multiprocessing with progress bar."""
+    # Create simple labels
+    skeleton = Skeleton([Node("nose"), Node("tail")])
+    instance = Instance.from_numpy(
+        np.array([[100, 100, True], [200, 200, True]], dtype=np.float32), skeleton
+    )
+    frame = LabeledFrame(
+        video=centered_pair_low_quality_video, frame_idx=0, instances=[instance]
+    )
+    labels = Labels([frame], videos=[centered_pair_low_quality_video])
+
+    # Write with multiprocessing and progress
+    output_dir = tmp_path / "ultralytics_mp_progress"
+    write_labels(
+        labels,
+        str(output_dir),
+        use_multiprocessing=True,
+        verbose=True,  # Enable progress bar
+    )
+
+    # Check output
+    assert (output_dir / "train" / "images" / "0000000.png").exists()
+    assert (output_dir / "train" / "labels" / "0000000.txt").exists()
+
+
+def test_multiprocessing_error_handling(tmp_path):
+    """Test multiprocessing handles errors gracefully."""
+    # Create labels with non-existent video
+    skeleton = Skeleton([Node("A"), Node("B")])
+    video = Video.from_filename("non_existent_video.mp4", open=False)
+    instance = Instance.from_numpy(
+        np.array([[10, 20, True], [30, 40, True]], dtype=np.float32), skeleton
+    )
+    frame = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([frame], videos=[video])
+
+    # Should not crash, just skip the frame
+    output_dir = tmp_path / "ultralytics_mp_error"
+    # Note: Warnings from subprocesses won't be captured by pytest
+    write_labels(labels, str(output_dir), use_multiprocessing=True, verbose=False)
+
+    # No images should be created since video doesn't exist
+    image_files = list((output_dir / "train" / "images").glob("*"))
+    assert len(image_files) == 0
+
+    # No annotations should be created either
+    label_files = list((output_dir / "train" / "labels").glob("*"))
+    assert len(label_files) == 0

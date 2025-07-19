@@ -22,6 +22,9 @@ from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 import imageio.v3 as iio
 from tqdm import tqdm
+import multiprocessing
+from multiprocessing import Pool
+from functools import partial
 
 
 def read_labels(
@@ -114,6 +117,53 @@ def read_labels(
     )
 
 
+def _save_frame_image(args: Tuple[dict, str, Optional[int]]) -> Optional[str]:
+    """Worker function to save a single frame image.
+
+    Args:
+        args: Tuple containing:
+            - frame_data: Dict with frame metadata (video_path, frame_idx, lf_idx)
+            - image_format: Image format to save
+            - image_quality: Optional image quality parameter
+
+    Returns:
+        Path to saved image file if successful, None if failed
+    """
+    frame_data, image_format, image_quality = args
+
+    try:
+        # Reopen video in worker process
+        video = Video.from_filename(frame_data["video_path"])
+
+        # Extract frame
+        frame_img = video[frame_data["frame_idx"]]
+        if frame_img is None:
+            return None
+
+        # Handle grayscale
+        if frame_img.ndim == 3 and frame_img.shape[-1] == 1:
+            frame_img = np.squeeze(frame_img, axis=-1)
+
+        # Save image
+        save_kwargs = {}
+        if image_format.lower() in ["jpg", "jpeg"]:
+            if image_quality is not None:
+                save_kwargs["quality"] = image_quality
+        elif image_format.lower() == "png":
+            if image_quality is not None:
+                save_kwargs["compress_level"] = min(9, max(0, image_quality))
+
+        iio.imwrite(frame_data["output_path"], frame_img, **save_kwargs)
+        return frame_data["output_path"]
+
+    except Exception as e:
+        warnings.warn(
+            f"Error processing frame {frame_data['frame_idx']} from "
+            f"{frame_data['video_path']}: {str(e)}"
+        )
+        return None
+
+
 def write_labels(
     labels: Labels,
     dataset_path: str,
@@ -122,6 +172,8 @@ def write_labels(
     image_format: str = "png",
     image_quality: Optional[int] = None,
     verbose: bool = True,
+    use_multiprocessing: bool = False,
+    n_workers: Optional[int] = None,
     **kwargs,
 ) -> None:
     """Write Labels to Ultralytics YOLO pose format.
@@ -135,6 +187,8 @@ def write_labels(
         image_quality: Image quality for JPEG format (1-100). For PNG, this is the compression level (0-9).
             If None, uses default quality settings.
         verbose: If True (default), show progress bars during export.
+        use_multiprocessing: If True, use multiprocessing for parallel image saving. Default is False.
+        n_workers: Number of worker processes. If None, uses CPU count - 1. Only used if use_multiprocessing=True.
         **kwargs: Additional arguments (unused, for compatibility).
     """
     dataset_path = Path(dataset_path)
@@ -167,61 +221,114 @@ def write_labels(
         images_dir.mkdir(parents=True, exist_ok=True)
         labels_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create progress bar for frames if verbose
-        frame_iterator = (
-            tqdm(
-                split_data.labeled_frames,
-                desc=f"Writing {split_name} images",
-                disable=not verbose,
-            )
-            if verbose
-            else split_data.labeled_frames
-        )
-
-        for lf_idx, frame in enumerate(frame_iterator):
-            # Extract frame image
-            try:
-                frame_img = frame.image
-                if frame_img is None:
-                    warnings.warn(
-                        f"Could not load frame {frame.frame_idx} from video, skipping."
-                    )
-                    continue
-
-                # Use labeled frame index for filename
+        if use_multiprocessing:
+            # Prepare frame data for multiprocessing
+            frame_data_list = []
+            for lf_idx, frame in enumerate(split_data.labeled_frames):
                 image_filename = f"{lf_idx:07d}.{image_format}"
                 image_path = images_dir / image_filename
 
-                # Handle grayscale conversion if needed
-                if frame_img.ndim == 3 and frame_img.shape[-1] == 1:
-                    # Squeeze single channel dimension for grayscale
-                    frame_img = np.squeeze(frame_img, axis=-1)
+                frame_data = {
+                    "video_path": str(frame.video.filename),
+                    "frame_idx": frame.frame_idx,
+                    "lf_idx": lf_idx,
+                    "output_path": str(image_path),
+                    "frame": frame,  # Keep reference for annotation writing
+                }
+                frame_data_list.append(frame_data)
 
-                # Save image with appropriate quality settings
-                save_kwargs = {}
-                if image_format.lower() in ["jpg", "jpeg"]:
-                    if image_quality is not None:
-                        save_kwargs["quality"] = image_quality
-                elif image_format.lower() == "png":
-                    if image_quality is not None:
-                        # PNG uses compress_level (0-9)
-                        save_kwargs["compress_level"] = min(9, max(0, image_quality))
+            # Set up worker pool
+            if n_workers is None:
+                n_workers = max(1, multiprocessing.cpu_count() - 1)
 
-                # Save the image
-                iio.imwrite(image_path, frame_img, **save_kwargs)
+            # Process frames in parallel
+            with Pool(processes=n_workers) as pool:
+                # Create args for each frame
+                args_list = [
+                    (fd, image_format, image_quality) for fd in frame_data_list
+                ]
 
-                # Save annotations with same base filename
-                label_filename = f"{lf_idx:07d}.txt"
-                label_path = labels_dir / label_filename
-                write_label_file(
-                    label_path, frame, skeleton, frame_img.shape[:2], class_id
+                # Use imap for progress tracking
+                if verbose:
+                    results = list(
+                        tqdm(
+                            pool.imap(_save_frame_image, args_list),
+                            total=len(args_list),
+                            desc=f"Writing {split_name} images (parallel)",
+                        )
+                    )
+                else:
+                    results = pool.map(_save_frame_image, args_list)
+
+            # Write annotations for successfully saved images
+            for frame_data, result in zip(frame_data_list, results):
+                if result is not None:
+                    frame = frame_data["frame"]
+                    # Get image shape from saved file
+                    img = iio.imread(result)
+                    label_filename = f"{frame_data['lf_idx']:07d}.txt"
+                    label_path = labels_dir / label_filename
+                    write_label_file(
+                        label_path, frame, skeleton, img.shape[:2], class_id
+                    )
+        else:
+            # Sequential processing (original implementation)
+            frame_iterator = (
+                tqdm(
+                    split_data.labeled_frames,
+                    desc=f"Writing {split_name} images",
+                    disable=not verbose,
                 )
+                if verbose
+                else split_data.labeled_frames
+            )
 
-            except Exception as e:
-                warnings.warn(
-                    f"Error processing frame {frame.frame_idx}: {str(e)}, skipping."
-                )
-                continue
+            for lf_idx, frame in enumerate(frame_iterator):
+                # Extract frame image
+                try:
+                    frame_img = frame.image
+                    if frame_img is None:
+                        warnings.warn(
+                            f"Could not load frame {frame.frame_idx} from video, skipping."
+                        )
+                        continue
+
+                    # Use labeled frame index for filename
+                    image_filename = f"{lf_idx:07d}.{image_format}"
+                    image_path = images_dir / image_filename
+
+                    # Handle grayscale conversion if needed
+                    if frame_img.ndim == 3 and frame_img.shape[-1] == 1:
+                        # Squeeze single channel dimension for grayscale
+                        frame_img = np.squeeze(frame_img, axis=-1)
+
+                    # Save image with appropriate quality settings
+                    save_kwargs = {}
+                    if image_format.lower() in ["jpg", "jpeg"]:
+                        if image_quality is not None:
+                            save_kwargs["quality"] = image_quality
+                    elif image_format.lower() == "png":
+                        if image_quality is not None:
+                            # PNG uses compress_level (0-9)
+                            save_kwargs["compress_level"] = min(
+                                9, max(0, image_quality)
+                            )
+
+                    # Save the image
+                    iio.imwrite(image_path, frame_img, **save_kwargs)
+
+                    # Save annotations with same base filename
+                    label_filename = f"{lf_idx:07d}.txt"
+                    label_path = labels_dir / label_filename
+                    write_label_file(
+                        label_path, frame, skeleton, frame_img.shape[:2], class_id
+                    )
+
+                except Exception as e:
+                    warnings.warn(
+                        f"Error processing frame {frame.frame_idx}: {str(e)}, skipping."
+                    )
+                    continue
 
 
 def parse_data_yaml(yaml_path: Path) -> Dict:
