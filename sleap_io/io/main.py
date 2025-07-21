@@ -345,33 +345,58 @@ def save_file(
 
 
 def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
-    """Load skeleton(s) from a JSON or YAML file.
+    """Load skeleton(s) from a JSON, YAML, or SLP file.
 
     Args:
-        filename: Path to a skeleton JSON or YAML file.
+        filename: Path to a skeleton file. Supported formats:
+            - JSON: Standalone skeleton or training config with embedded skeletons
+            - YAML: Simplified skeleton format
+            - SLP: SLEAP project file
 
     Returns:
         A single `Skeleton` or list of `Skeleton` objects.
 
     Notes:
-        This function loads skeletons from standalone files. JSON files use the
-        jsonpickle format, while YAML files use a simplified human-readable format.
-        The format is detected based on the file extension.
+        This function loads skeletons from various file types:
+        - JSON files: Can be standalone skeleton files (jsonpickle format) or training
+          config files with embedded skeletons
+        - YAML files: Use a simplified human-readable format
+        - SLP files: Extracts skeletons from SLEAP project files
+        The format is detected based on the file extension and content.
     """
     if isinstance(filename, Path):
         filename = str(filename)
 
     # Detect format based on extension
-    if filename.lower().endswith((".yaml", ".yml")):
+    if filename.lower().endswith(".slp"):
+        # SLP format - extract skeletons from SLEAP file
+        from sleap_io.io.slp import read_skeletons
+        return read_skeletons(filename)
+    elif filename.lower().endswith((".yaml", ".yml")):
         # YAML format
         with open(filename, "r") as f:
             yaml_data = f.read()
         decoder = SkeletonYAMLDecoder()
         return decoder.decode(yaml_data)
     else:
-        # JSON format (default)
+        # JSON format (default) - could be standalone or training config
+        import json
         with open(filename, "r") as f:
             json_data = f.read()
+        
+        # Try to detect if this is a training config file
+        try:
+            data = json.loads(json_data)
+            if isinstance(data, dict) and "data" in data:
+                if "labels" in data["data"] and "skeletons" in data["data"]["labels"]:
+                    # This is a training config file with embedded skeletons
+                    decoder = SkeletonDecoder()
+                    return decoder.decode(data["data"]["labels"]["skeletons"])
+        except (json.JSONDecodeError, KeyError, TypeError):
+            # Not a training config or invalid JSON structure
+            pass
+        
+        # Fall back to regular skeleton JSON decoding
         decoder = SkeletonDecoder()
         return decoder.decode(json_data)
 
