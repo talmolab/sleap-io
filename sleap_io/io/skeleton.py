@@ -456,7 +456,7 @@ class SkeletonSLPDecoder:
     integer indices for node references instead of embedded node objects.
     """
 
-    def decode_skeletons(self, metadata: dict, node_names: list[str]) -> list[Skeleton]:
+    def decode(self, metadata: dict, node_names: list[str]) -> list[Skeleton]:
         """Decode skeletons from SLP metadata format.
 
         Args:

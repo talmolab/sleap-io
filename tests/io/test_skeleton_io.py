@@ -568,7 +568,7 @@ def test_slp_encoder_decoder():
 
     # Decode back
     decoder = SkeletonSLPDecoder()
-    decoded_skeletons = decoder.decode_skeletons(metadata, node_names)
+    decoded_skeletons = decoder.decode(metadata, node_names)
 
     # Verify structure is preserved
     assert len(decoded_skeletons) == 2
