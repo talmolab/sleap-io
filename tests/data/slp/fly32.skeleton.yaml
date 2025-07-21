@@ -1,0 +1,136 @@
+M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat:
+  nodes:
+  - name: head
+  - name: eyeL
+  - name: eyeR
+  - name: neck
+  - name: thorax
+  - name: abdomen
+  - name: forelegR1
+  - name: forelegR2
+  - name: forelegR3
+  - name: forelegR4
+  - name: midlegR1
+  - name: midlegR2
+  - name: midlegR3
+  - name: midlegR4
+  - name: hindlegR1
+  - name: hindlegR2
+  - name: hindlegR3
+  - name: hindlegR4
+  - name: forelegL1
+  - name: forelegL2
+  - name: forelegL3
+  - name: forelegL4
+  - name: midlegL1
+  - name: midlegL2
+  - name: midlegL3
+  - name: midlegL4
+  - name: hindlegL1
+  - name: hindlegL2
+  - name: hindlegL3
+  - name: hindlegL4
+  - name: wingL
+  - name: wingR
+  edges:
+  - source:
+      name: head
+    destination:
+      name: eyeL
+  - source:
+      name: head
+    destination:
+      name: eyeR
+  - source:
+      name: head
+    destination:
+      name: neck
+  - source:
+      name: neck
+    destination:
+      name: thorax
+  - source:
+      name: neck
+    destination:
+      name: wingL
+  - source:
+      name: neck
+    destination:
+      name: wingR
+  - source:
+      name: thorax
+    destination:
+      name: abdomen
+  - source:
+      name: forelegR1
+    destination:
+      name: forelegR2
+  - source:
+      name: forelegR2
+    destination:
+      name: forelegR3
+  - source:
+      name: forelegR3
+    destination:
+      name: forelegR4
+  - source:
+      name: midlegR1
+    destination:
+      name: midlegR2
+  - source:
+      name: midlegR2
+    destination:
+      name: midlegR3
+  - source:
+      name: midlegR3
+    destination:
+      name: midlegR4
+  - source:
+      name: hindlegR1
+    destination:
+      name: hindlegR2
+  - source:
+      name: hindlegR2
+    destination:
+      name: hindlegR3
+  - source:
+      name: hindlegR3
+    destination:
+      name: hindlegR4
+  - source:
+      name: forelegL1
+    destination:
+      name: forelegL2
+  - source:
+      name: forelegL2
+    destination:
+      name: forelegL3
+  - source:
+      name: forelegL3
+    destination:
+      name: forelegL4
+  - source:
+      name: midlegL1
+    destination:
+      name: midlegL2
+  - source:
+      name: midlegL2
+    destination:
+      name: midlegL3
+  - source:
+      name: midlegL3
+    destination:
+      name: midlegL4
+  - source:
+      name: hindlegL1
+    destination:
+      name: hindlegL2
+  - source:
+      name: hindlegL2
+    destination:
+      name: hindlegL3
+  - source:
+      name: hindlegL3
+    destination:
+      name: hindlegL4
+  symmetries: []

@@ -925,16 +925,14 @@ def test_yaml_json_equivalence(skeleton_json_flies, skeleton_yaml_flies):
     # Compare structure
     assert json_skeleton.name == yaml_skeleton.name
 
-    # Note: The JSON file is missing hindlegR4, so it has 12 nodes vs YAML's 13
-    # This is OK - the files are test fixtures and don't need to be identical
-    assert len(json_skeleton.nodes) == 12
+    # Both files should have the same number of nodes
+    assert len(json_skeleton.nodes) == 13
     assert len(yaml_skeleton.nodes) == 13
 
-    # Check that the YAML file has the same nodes as JSON plus hindlegR4
+    # Check that both have the same node names
     json_node_names = {n.name for n in json_skeleton.nodes}
     yaml_node_names = {n.name for n in yaml_skeleton.nodes}
-    assert json_node_names.issubset(yaml_node_names)
-    assert "hindlegR4" in yaml_node_names
+    assert json_node_names == yaml_node_names
 
     # Both should have edges and symmetries
     assert len(json_skeleton.edges) > 0
@@ -967,6 +965,111 @@ def test_save_load_yaml_round_trip(tmp_path):
     # Check node order preserved
     for orig, loaded in zip(skeleton.nodes, loaded_skeleton.nodes):
         assert orig.name == loaded.name
+
+
+def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
+    """Test round-trip encoding/decoding of fly32 skeleton with non-sequential py/ids."""
+    # Load original
+    original = sio.load_skeleton(skeleton_json_fly32)
+    assert isinstance(original, list)
+    original = original[0]
+
+    # Save to new file
+    output_path = tmp_path / "fly32_round_trip.json"
+    sio.save_skeleton(original, output_path)
+
+    # Load again
+    reloaded = sio.load_skeleton(output_path)
+    # When saving a single skeleton, it's loaded back as a single skeleton, not a list
+    if isinstance(reloaded, list):
+        reloaded = reloaded[0]
+
+    # Verify everything matches
+    assert original.name == reloaded.name
+    assert len(original.nodes) == len(reloaded.nodes) == 32
+    assert len(original.edges) == len(reloaded.edges)
+
+    # Verify node names and order preserved
+    for i, (o_node, r_node) in enumerate(zip(original.nodes, reloaded.nodes)):
+        assert (
+            o_node.name == r_node.name
+        ), f"Node {i} mismatch: {o_node.name} != {r_node.name}"
+
+    # Verify edges preserved
+    for i, (o_edge, r_edge) in enumerate(zip(original.edges, reloaded.edges)):
+        assert o_edge.source.name == r_edge.source.name
+        assert o_edge.destination.name == r_edge.destination.name
+
+
+def test_training_config_decode(training_config_fly32, skeleton_json_fly32):
+    """Test decoding a training config with embedded skeleton data."""
+
+    # Test loading standalone skeleton file
+    with open(skeleton_json_fly32, "r") as f:
+        skeleton_data = json.load(f)
+    skeletons = SkeletonDecoder().decode(skeleton_data)
+    assert len(skeletons) == 1
+    skeleton = skeletons[0]
+    assert (
+        skeleton.name
+        == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    )
+    assert len(skeleton.nodes) == 32
+
+    # Test loading skeleton from training config
+    with open(training_config_fly32, "r") as f:
+        data = json.load(f)
+
+    skel_data = data["data"]["labels"]["skeletons"]
+    skels_cfg = SkeletonDecoder().decode(skel_data)
+    assert len(skels_cfg) == 1
+    skeleton_cfg = skels_cfg[0]
+
+    # Verify the skeletons match
+    assert skeleton.name == skeleton_cfg.name
+    assert len(skeleton.nodes) == len(skeleton_cfg.nodes)
+
+    # Verify node names and order match
+    for i, (n1, n2) in enumerate(zip(skeleton.nodes, skeleton_cfg.nodes)):
+        assert n1.name == n2.name, f"Node {i} mismatch: {n1.name} != {n2.name}"
+
+    # Verify we have the expected 32 nodes
+    expected_node_names = [
+        "head",
+        "eyeL",
+        "eyeR",
+        "neck",
+        "thorax",
+        "wingL",
+        "wingR",
+        "abdomen",
+        "forelegR1",
+        "forelegR2",
+        "forelegR3",
+        "forelegR4",
+        "midlegR1",
+        "midlegR2",
+        "midlegR3",
+        "midlegR4",
+        "hindlegR1",
+        "hindlegR2",
+        "hindlegR3",
+        "hindlegR4",
+        "forelegL1",
+        "forelegL2",
+        "forelegL3",
+        "forelegL4",
+        "midlegL1",
+        "midlegL2",
+        "midlegL3",
+        "midlegL4",
+        "hindlegL1",
+        "hindlegL2",
+        "hindlegL3",
+        "hindlegL4",
+    ]
+    actual_node_names = [n.name for n in skeleton.nodes]
+    assert actual_node_names == expected_node_names
 
 
 def test_yaml_decoder_invalid_format():
