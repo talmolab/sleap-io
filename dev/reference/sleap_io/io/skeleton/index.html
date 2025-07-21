@@ -2170,7 +2170,7 @@ integer indices for node references instead of embedded node objects.</p>
       </thead>
       <tbody>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;decode_skeletons&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;metadata&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;node_names&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonSLPDecoder.decode_skeletons&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonSLPDecoder.decode_skeletons">decode_skeletons</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;decode&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;metadata&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;node_names&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.skeleton.SkeletonSLPDecoder.decode&lt;/code&gt;)" href="#sleap_io.io.skeleton.SkeletonSLPDecoder.decode">decode</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Decode skeletons from SLP metadata format.</p>
@@ -2191,7 +2191,7 @@ integer indices for node references instead of embedded node objects.</p>
 <a id="__codelineno-0-456" name="__codelineno-0-456"></a><a href="#__codelineno-0-456"><span class="linenos" data-linenos="456 "></span></a><span class="sd">    integer indices for node references instead of embedded node objects.</span>
 <a id="__codelineno-0-457" name="__codelineno-0-457"></a><a href="#__codelineno-0-457"><span class="linenos" data-linenos="457 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-458" name="__codelineno-0-458"></a><a href="#__codelineno-0-458"><span class="linenos" data-linenos="458 "></span></a>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a><a href="#__codelineno-0-459"><span class="linenos" data-linenos="459 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">decode_skeletons</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">node_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]:</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a><a href="#__codelineno-0-459"><span class="linenos" data-linenos="459 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">node_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]:</span>
 <a id="__codelineno-0-460" name="__codelineno-0-460"></a><a href="#__codelineno-0-460"><span class="linenos" data-linenos="460 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Decode skeletons from SLP metadata format.</span>
 <a id="__codelineno-0-461" name="__codelineno-0-461"></a><a href="#__codelineno-0-461"><span class="linenos" data-linenos="461 "></span></a>
 <a id="__codelineno-0-462" name="__codelineno-0-462"></a><a href="#__codelineno-0-462"><span class="linenos" data-linenos="462 "></span></a><span class="sd">        Args:</span>
@@ -2272,10 +2272,10 @@ integer indices for node references instead of embedded node objects.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="sleap_io.io.skeleton.SkeletonSLPDecoder.decode_skeletons" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">decode_skeletons</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="n">node_names</span><span class="p">)</span></code>
+<h4 id="sleap_io.io.skeleton.SkeletonSLPDecoder.decode" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">decode</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="n">node_names</span><span class="p">)</span></code>
 
-<a href="#sleap_io.io.skeleton.SkeletonSLPDecoder.decode_skeletons" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#sleap_io.io.skeleton.SkeletonSLPDecoder.decode" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -2355,7 +2355,7 @@ integer indices for node references instead of embedded node objects.</p>
 
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/skeleton.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-459" name="__codelineno-0-459"></a><a href="#__codelineno-0-459"><span class="linenos" data-linenos="459 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">decode_skeletons</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">node_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]:</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-459" name="__codelineno-0-459"></a><a href="#__codelineno-0-459"><span class="linenos" data-linenos="459 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">node_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]:</span>
 <a id="__codelineno-0-460" name="__codelineno-0-460"></a><a href="#__codelineno-0-460"><span class="linenos" data-linenos="460 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode skeletons from SLP metadata format.</span>
 <a id="__codelineno-0-461" name="__codelineno-0-461"></a><a href="#__codelineno-0-461"><span class="linenos" data-linenos="461 "></span></a>
 <a id="__codelineno-0-462" name="__codelineno-0-462"></a><a href="#__codelineno-0-462"><span class="linenos" data-linenos="462 "></span></a><span class="sd">    Args:</span>
