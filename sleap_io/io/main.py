@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from sleap_io import Labels, Skeleton, Video
-from sleap_io.io import slp, nwb, labelstudio, jabs, video_writing
+from sleap_io.io import slp, nwb, labelstudio, jabs, video_writing, ultralytics
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
     SkeletonEncoder,
@@ -143,6 +143,44 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = No
     jabs.write_labels(labels, pose_version, root_folder)
 
 
+def load_ultralytics(
+    dataset_path: str,
+    split: str = "train",
+    skeleton: Optional[Skeleton] = None,
+    **kwargs,
+) -> Labels:
+    """Load an Ultralytics YOLO pose dataset as a SLEAP `Labels` object.
+
+    Args:
+        dataset_path: Path to the Ultralytics dataset root directory containing data.yaml.
+        split: Dataset split to read ('train', 'val', or 'test'). Defaults to 'train'.
+        skeleton: Optional skeleton to use. If not provided, will be inferred from data.yaml.
+
+    Returns:
+        The dataset as a `Labels` object.
+    """
+    return ultralytics.read_labels(
+        dataset_path, split=split, skeleton=skeleton, **kwargs
+    )
+
+
+def save_ultralytics(
+    labels: Labels,
+    dataset_path: str,
+    split_ratios: dict = {"train": 0.8, "val": 0.2},
+    **kwargs,
+):
+    """Save a SLEAP dataset to Ultralytics YOLO pose format.
+
+    Args:
+        labels: A SLEAP `Labels` object.
+        dataset_path: Path to save the Ultralytics dataset.
+        split_ratios: Dictionary mapping split names to ratios (must sum to 1.0).
+                     Defaults to {"train": 0.8, "val": 0.2}.
+    """
+    ultralytics.write_labels(labels, dataset_path, split_ratios=split_ratios, **kwargs)
+
+
 def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
 
@@ -213,8 +251,8 @@ def load_file(
     Args:
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
-            file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs"
-            and "video".
+            file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs",
+            "ultralytics", and "video".
 
     Returns:
         A `Labels` or `Video` object.
@@ -231,6 +269,10 @@ def load_file(
             format = "json"
         elif filename.endswith(".h5"):
             format = "jabs"
+        elif filename.endswith("data.yaml") or (
+            Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
+        ):
+            format = "ultralytics"
         else:
             for vid_ext in Video.EXTS:
                 if filename.endswith(vid_ext):
@@ -247,6 +289,8 @@ def load_file(
         return load_labelstudio(filename, **kwargs)
     elif filename.endswith(".h5"):
         return load_jabs(filename, **kwargs)
+    elif format == "ultralytics":
+        return load_ultralytics(filename, **kwargs)
     elif format == "video":
         return load_video(filename, **kwargs)
 
@@ -264,8 +308,8 @@ def save_file(
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to save labels to.
         format: Optional format to save as. If not provided, will be inferred from the
-            file extension. Available formats are: "slp", "nwb", "labelstudio" and
-            "jabs".
+            file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs",
+            and "ultralytics".
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
     """
@@ -281,6 +325,8 @@ def save_file(
             format = "labelstudio"
         elif "pose_version" in kwargs:
             format = "jabs"
+        elif "split_ratios" in kwargs or Path(filename).is_dir():
+            format = "ultralytics"
 
     if format == "slp":
         save_slp(labels, filename, verbose=verbose, **kwargs)
@@ -292,6 +338,8 @@ def save_file(
         pose_version = kwargs.pop("pose_version", 5)
         root_folder = kwargs.pop("root_folder", filename)
         save_jabs(labels, pose_version=pose_version, root_folder=root_folder)
+    elif format == "ultralytics":
+        save_ultralytics(labels, filename, **kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
 
