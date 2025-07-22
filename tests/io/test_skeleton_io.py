@@ -325,22 +325,50 @@ def test_load_flies_skeleton_fixture(skeleton_json_flies):
     skeleton = sio.load_skeleton(skeleton_json_flies)
 
     assert skeleton.name == "Skeleton-0"
-    assert len(skeleton.nodes) >= 10
+    assert len(skeleton.nodes) == 13
 
-    # Check that some expected fly nodes are present
-    node_names = {node.name for node in skeleton.nodes}
-    basic_nodes = {"head", "thorax"}
-    assert basic_nodes.intersection(
-        node_names
-    ), f"Expected basic nodes not found in {node_names}"
+    # Check exact node names
+    expected_nodes = [
+        "head",
+        "eyeL",
+        "eyeR",
+        "thorax",
+        "abdomen",
+        "wingL",
+        "wingR",
+        "forelegL4",
+        "forelegR4",
+        "midlegL4",
+        "midlegR4",
+        "hindlegL4",
+        "hindlegR4",
+    ]
+    node_names = [node.name for node in skeleton.nodes]
+    assert node_names == expected_nodes
 
-    # Verify we have edges and symmetries
-    assert len(skeleton.edges) > 0, "Should have some edges"
-    assert len(skeleton.symmetries) > 0, "Should have some symmetries"
+    # Check edges
+    assert len(skeleton.edges) == 12
+    # Check first few edges to verify structure
+    assert (
+        skeleton.edges[0].source.name == "head"
+        and skeleton.edges[0].destination.name == "eyeL"
+    )
+    assert (
+        skeleton.edges[1].source.name == "head"
+        and skeleton.edges[1].destination.name == "eyeR"
+    )
+    assert (
+        skeleton.edges[2].source.name == "thorax"
+        and skeleton.edges[2].destination.name == "head"
+    )
 
-    # Basic structural validation
-    assert skeleton is not None
-    assert isinstance(skeleton.name, str)
+    # Check symmetries
+    assert len(skeleton.symmetries) == 5
+    # Check specific symmetry pairs
+    sym_pairs = [sorted([n.name for n in s.nodes]) for s in skeleton.symmetries]
+    assert ["abdomen", "thorax"] in sym_pairs
+    assert ["wingL", "wingR"] in sym_pairs
+    assert ["forelegL4", "forelegR4"] in sym_pairs
 
 
 def test_round_trip_minimal_fixture(skeleton_json_minimal, tmp_path):
@@ -1086,13 +1114,24 @@ def test_load_skeleton_from_slp(slp_typical):
     skeletons = sio.load_skeleton(slp_typical)
 
     assert isinstance(skeletons, list)
-    assert len(skeletons) > 0
+    assert len(skeletons) == 1
 
-    # Check first skeleton
+    # Check the skeleton details
     skeleton = skeletons[0]
-    assert hasattr(skeleton, "name")
-    assert len(skeleton.nodes) > 0
-    assert all(hasattr(node, "name") for node in skeleton.nodes)
+    assert skeleton.name == "Skeleton-0"
+    assert len(skeleton.nodes) == 2
+
+    # Check node names
+    node_names = [node.name for node in skeleton.nodes]
+    assert node_names == ["A", "B"]
+
+    # Check edges
+    assert len(skeleton.edges) == 1
+    assert skeleton.edges[0].source.name == "A"
+    assert skeleton.edges[0].destination.name == "B"
+
+    # Check symmetries
+    assert len(skeleton.symmetries) == 0
 
 
 def test_load_skeleton_from_training_config(training_config_fly32):
@@ -1110,13 +1149,43 @@ def test_load_skeleton_from_training_config(training_config_fly32):
     assert len(skeleton.nodes) == 32
     assert len(skeleton.edges) == 25
 
-    # Check some specific nodes
+    # Check exact node names and order
+    expected_nodes = [
+        "head",
+        "eyeL",
+        "eyeR",
+        "neck",
+        "thorax",
+        "wingL",
+        "wingR",
+        "abdomen",
+        "forelegR1",
+        "forelegR2",
+        "forelegR3",
+        "forelegR4",
+        "midlegR1",
+        "midlegR2",
+        "midlegR3",
+        "midlegR4",
+        "hindlegR1",
+        "hindlegR2",
+        "hindlegR3",
+        "hindlegR4",
+        "forelegL1",
+        "forelegL2",
+        "forelegL3",
+        "forelegL4",
+        "midlegL1",
+        "midlegL2",
+        "midlegL3",
+        "midlegL4",
+        "hindlegL1",
+        "hindlegL2",
+        "hindlegL3",
+        "hindlegL4",
+    ]
     node_names = [n.name for n in skeleton.nodes]
-    assert "head" in node_names
-    assert "thorax" in node_names
-    assert "abdomen" in node_names
-    assert all(f"forelegR{i}" in node_names for i in range(1, 5))
-    assert all(f"forelegL{i}" in node_names for i in range(1, 5))
+    assert node_names == expected_nodes
 
 
 def test_load_skeleton_training_config_without_skeletons(tmp_path):
@@ -1160,18 +1229,31 @@ def test_load_skeleton_format_detection(
     skeleton_json_minimal, skeleton_yaml_flies, training_config_fly32
 ):
     """Test that load_skeleton correctly detects different file formats."""
-    # Test JSON skeleton file
+    # Test JSON skeleton file (minimal)
     json_skeleton = sio.load_skeleton(skeleton_json_minimal)
-    assert hasattr(json_skeleton, "name")
+    assert isinstance(json_skeleton, sio.Skeleton)
+    assert json_skeleton.name == "Skeleton-1"
+    assert len(json_skeleton.nodes) == 2
+    assert [n.name for n in json_skeleton.nodes] == ["head", "abdomen"]
+    assert len(json_skeleton.edges) == 1
+    assert json_skeleton.edges[0].source.name == "head"
+    assert json_skeleton.edges[0].destination.name == "abdomen"
 
-    # Test YAML skeleton file
+    # Test YAML skeleton file (flies13)
     yaml_skeletons = sio.load_skeleton(skeleton_yaml_flies)
     assert isinstance(yaml_skeletons, list)
+    assert len(yaml_skeletons) == 1
+    assert yaml_skeletons[0].name == "Skeleton-0"
+    assert len(yaml_skeletons[0].nodes) == 13
+    assert len(yaml_skeletons[0].edges) == 12
+    assert len(yaml_skeletons[0].symmetries) == 10  # YAML has all symmetry pairs
 
     # Test training config JSON
     config_skeletons = sio.load_skeleton(training_config_fly32)
     assert isinstance(config_skeletons, list)
     assert len(config_skeletons) == 1
+    assert len(config_skeletons[0].nodes) == 32
+    assert len(config_skeletons[0].edges) == 25
 
 
 def test_load_skeleton_malformed_json(tmp_path):
