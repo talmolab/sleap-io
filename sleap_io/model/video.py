@@ -55,6 +55,7 @@ class Video:
     backend: Optional[VideoBackend] = None
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
     source_video: Optional[Video] = None
+    original_video: Optional[Video] = None
     open_backend: bool = True
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS

@@ -33,6 +33,7 @@ def save_slp(
     labels: Labels,
     filename: str,
     embed: bool | str | list[tuple[Video, int]] | None = False,
+    restore_original_videos: bool = True,
     verbose: bool = True,
 ):
     """Save a SLEAP dataset to a `.slp` file.
@@ -54,9 +55,18 @@ def save_slp(
             will be restored if available.
 
             This argument is only valid for the SLP backend.
+        restore_original_videos: If `True` (default) and `embed=False`, use original
+            video files. If `False` and `embed=False`, keep references to source
+            `.pkg.slp` files. Only applies when `embed=False`.
         verbose: If `True` (the default), display a progress bar when embedding frames.
     """
-    return slp.write_labels(filename, labels, embed=embed, verbose=verbose)
+    return slp.write_labels(
+        filename,
+        labels,
+        embed=embed,
+        restore_original_videos=restore_original_videos,
+        verbose=verbose,
+    )
 
 
 def load_nwb(filename: str) -> Labels:

@@ -607,6 +607,7 @@ class Labels:
         filename: str,
         format: Optional[str] = None,
         embed: bool | str | list[tuple[Video, int]] | None = False,
+        restore_original_videos: bool = True,
         verbose: bool = True,
         **kwargs,
     ):
@@ -620,7 +621,6 @@ class Labels:
             embed: Frames to embed in the saved labels file. One of `None`, `True`,
                 `"all"`, `"user"`, `"suggestions"`, `"user+suggestions"`, `"source"` or
                 list of tuples of `(video, frame_idx)`.
-            verbose: If `True` (the default), display a progress bar when embedding frames.
 
                 If `False` is specified (the default), the source video will be
                 restored if available, otherwise the embedded frames will be re-saved.
@@ -632,6 +632,10 @@ class Labels:
                 video will be restored if available.
 
                 This argument is only valid for the SLP backend.
+            restore_original_videos: If `True` (default) and `embed=False`, use original
+                video files. If `False` and `embed=False`, keep references to source
+                `.pkg.slp` files. Only applies when `embed=False`.
+            verbose: If `True` (the default), display a progress bar when embedding frames.
         """
         from sleap_io import save_file
         from sleap_io.io.slp import sanitize_filename
@@ -657,7 +661,15 @@ class Labels:
                             f"to re-embed the frames, or save to a different filename."
                         )
 
-        save_file(self, filename, format=format, embed=embed, verbose=verbose, **kwargs)
+        save_file(
+            self,
+            filename,
+            format=format,
+            embed=embed,
+            restore_original_videos=restore_original_videos,
+            verbose=verbose,
+            **kwargs,
+        )
 
     def clean(
         self,
