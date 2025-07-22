@@ -1172,3 +1172,55 @@ def test_load_skeleton_format_detection(
     config_skeletons = sio.load_skeleton(training_config_fly32)
     assert isinstance(config_skeletons, list)
     assert len(config_skeletons) == 1
+
+
+def test_load_skeleton_malformed_json(tmp_path):
+    """Test handling of malformed JSON that triggers JSONDecodeError."""
+    # Create a file with invalid JSON syntax
+    malformed_path = tmp_path / "malformed.json"
+    with open(malformed_path, "w") as f:
+        f.write('{"data": {"labels": {"skeletons": [INVALID JSON HERE}')
+
+    # Should catch JSONDecodeError and fall back to regular skeleton decoding
+    # which will then raise its own error
+    with pytest.raises(json.JSONDecodeError):
+        sio.load_skeleton(malformed_path)
+
+
+def test_load_skeleton_training_config_type_error(tmp_path):
+    """Test handling of training config that causes TypeError."""
+    # Create a training config where skeletons is not the expected type
+    config_data = {
+        "data": {
+            "labels": {"skeletons": "not_a_list_or_dict"}  # String instead of list/dict
+        }
+    }
+
+    config_path = tmp_path / "bad_type_config.json"
+    with open(config_path, "w") as f:
+        json.dump(config_data, f)
+
+    # Should handle gracefully and return empty skeleton
+    skeleton = sio.load_skeleton(config_path)
+    assert isinstance(skeleton, sio.Skeleton)
+    assert len(skeleton.nodes) == 0
+
+
+def test_load_skeleton_training_config_parsing_error(tmp_path):
+    """Test exception handling when parsing training config structure."""
+    # Create a file that looks like a training config but has a non-dict skeleton entry
+    # This will cause the isinstance check to pass but the decoder to fail
+    config_data = {
+        "data": {
+            "labels": {"skeletons": [None]}  # This will cause issues in the decoder
+        }
+    }
+
+    config_path = tmp_path / "null_skeleton_config.json"
+    with open(config_path, "w") as f:
+        json.dump(config_data, f)
+
+    # The decoder will fail but it should be caught and fall back
+    # Since None is not a valid skeleton format, the fallback will also fail
+    with pytest.raises(AttributeError):  # None has no 'get' attribute
+        sio.load_skeleton(config_path)
