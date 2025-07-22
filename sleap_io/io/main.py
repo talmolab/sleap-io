@@ -371,6 +371,7 @@ def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
     if filename.lower().endswith(".slp"):
         # SLP format - extract skeletons from SLEAP file
         from sleap_io.io.slp import read_skeletons
+
         return read_skeletons(filename)
     elif filename.lower().endswith((".yaml", ".yml")):
         # YAML format
@@ -381,9 +382,10 @@ def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
     else:
         # JSON format (default) - could be standalone or training config
         import json
+
         with open(filename, "r") as f:
             json_data = f.read()
-        
+
         # Try to detect if this is a training config file
         try:
             data = json.loads(json_data)
@@ -395,7 +397,7 @@ def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
         except (json.JSONDecodeError, KeyError, TypeError):
             # Not a training config or invalid JSON structure
             pass
-        
+
         # Fall back to regular skeleton JSON decoding
         decoder = SkeletonDecoder()
         return decoder.decode(json_data)
