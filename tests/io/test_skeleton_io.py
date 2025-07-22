@@ -1079,3 +1079,94 @@ def test_yaml_decoder_invalid_format():
     # Test with list input (not supported)
     with pytest.raises(ValueError, match="Unexpected data format"):
         decoder.decode([{"nodes": []}])
+
+
+def test_load_skeleton_from_slp(slp_typical):
+    """Test loading skeletons from SLP file."""
+    skeletons = sio.load_skeleton(slp_typical)
+    
+    assert isinstance(skeletons, list)
+    assert len(skeletons) > 0
+    
+    # Check first skeleton
+    skeleton = skeletons[0]
+    assert hasattr(skeleton, 'name')
+    assert len(skeleton.nodes) > 0
+    assert all(hasattr(node, 'name') for node in skeleton.nodes)
+
+
+def test_load_skeleton_from_training_config(training_config_fly32):
+    """Test loading skeleton from training config JSON file."""
+    skeletons = sio.load_skeleton(training_config_fly32)
+    
+    assert isinstance(skeletons, list)
+    assert len(skeletons) == 1
+    
+    skeleton = skeletons[0]
+    assert skeleton.name == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    assert len(skeleton.nodes) == 32
+    assert len(skeleton.edges) == 25
+    
+    # Check some specific nodes
+    node_names = [n.name for n in skeleton.nodes]
+    assert "head" in node_names
+    assert "thorax" in node_names
+    assert "abdomen" in node_names
+    assert all(f"forelegR{i}" in node_names for i in range(1, 5))
+    assert all(f"forelegL{i}" in node_names for i in range(1, 5))
+
+
+def test_load_skeleton_training_config_without_skeletons(tmp_path):
+    """Test loading training config without skeleton data."""
+    # Create a training config without skeleton data
+    config_data = {
+        "data": {
+            "labels": {
+                "training_labels": "train.slp",
+                "validation_labels": "val.slp"
+            }
+        },
+        "model": {"backbone": {"unet": {}}}
+    }
+    
+    config_path = tmp_path / "config_no_skeleton.json"
+    with open(config_path, "w") as f:
+        json.dump(config_data, f)
+    
+    # Should fall back to regular skeleton decoding and return empty skeleton
+    skeleton = sio.load_skeleton(config_path)
+    assert isinstance(skeleton, sio.Skeleton)
+    assert len(skeleton.nodes) == 0  # Empty skeleton
+    assert len(skeleton.edges) == 0
+
+
+def test_load_skeleton_invalid_json(tmp_path):
+    """Test loading invalid JSON that's neither skeleton nor training config."""
+    # Create an invalid JSON file
+    invalid_data = {"foo": "bar", "baz": [1, 2, 3]}
+    
+    invalid_path = tmp_path / "invalid.json"
+    with open(invalid_path, "w") as f:
+        json.dump(invalid_data, f)
+    
+    # Should return an empty skeleton when JSON doesn't match expected format
+    skeleton = sio.load_skeleton(invalid_path)
+    assert isinstance(skeleton, sio.Skeleton)
+    assert len(skeleton.nodes) == 0
+    assert len(skeleton.edges) == 0
+
+
+def test_load_skeleton_format_detection(skeleton_json_minimal, skeleton_yaml_flies, training_config_fly32):
+    """Test that load_skeleton correctly detects different file formats."""
+    # Test JSON skeleton file
+    json_skeleton = sio.load_skeleton(skeleton_json_minimal)
+    assert hasattr(json_skeleton, 'name')
+    
+    # Test YAML skeleton file  
+    yaml_skeletons = sio.load_skeleton(skeleton_yaml_flies)
+    assert isinstance(yaml_skeletons, list)
+    
+    # Test training config JSON
+    config_skeletons = sio.load_skeleton(training_config_fly32)
+    assert isinstance(config_skeletons, list)
+    assert len(config_skeletons) == 1
