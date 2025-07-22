@@ -99,7 +99,7 @@ def make_video(
 
     original_video = None
     if is_embedded:
-        # Try to recover the source video and original video.
+        # Try to recover the source video and original video from HDF5 attrs.
         with h5py.File(labels_path, "r") as f:
             dataset = backend_metadata["dataset"]
             if dataset.endswith("/video"):
@@ -126,6 +126,21 @@ def make_video(
                     original_video_json,
                     open_backend=False,  # Original videos are often not available
                 )
+    else:
+        # For non-embedded videos, check if metadata is in videos_json
+        if "source_video" in video_json:
+            source_video = make_video(
+                labels_path,
+                video_json["source_video"],
+                open_backend=open_backend,
+            )
+
+        if "original_video" in video_json:
+            original_video = make_video(
+                labels_path,
+                video_json["original_video"],
+                open_backend=False,  # Original videos are often not available
+            )
 
     backend = None
     if open_backend:
@@ -209,23 +224,21 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
         A dictionary containing the video metadata.
     """
     video_filename = sanitize_filename(video.filename)
+    result = {"filename": video_filename}
+
+    # Add backend metadata
     if video.backend is None:
-        return {"filename": video_filename, "backend": video.backend_metadata}
-
-    if type(video.backend) == MediaVideo:
-        return {
+        result["backend"] = video.backend_metadata
+    elif type(video.backend) == MediaVideo:
+        result["backend"] = {
+            "type": "MediaVideo",
+            "shape": video.shape,
             "filename": video_filename,
-            "backend": {
-                "type": "MediaVideo",
-                "shape": video.shape,
-                "filename": video_filename,
-                "grayscale": video.grayscale,
-                "bgr": True,
-                "dataset": "",
-                "input_format": "",
-            },
+            "grayscale": video.grayscale,
+            "bgr": True,
+            "dataset": "",
+            "input_format": "",
         }
-
     elif type(video.backend) == HDF5Video:
         # Determine if we should use self-reference or external reference
         use_self_reference = (
@@ -235,38 +248,41 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             == Path(sanitize_filename(labels_path)).resolve()
         )
 
-        return {
-            "filename": video_filename,
-            "backend": {
-                "type": "HDF5Video",
-                "shape": video.shape,
-                "filename": ("." if use_self_reference else video_filename),
-                "dataset": video.backend.dataset,
-                "input_format": video.backend.input_format,
-                "convert_range": False,
-                "has_embedded_images": video.backend.has_embedded_images,
-                "grayscale": video.grayscale,
-            },
+        result["backend"] = {
+            "type": "HDF5Video",
+            "shape": video.shape,
+            "filename": ("." if use_self_reference else video_filename),
+            "dataset": video.backend.dataset,
+            "input_format": video.backend.input_format,
+            "convert_range": False,
+            "has_embedded_images": video.backend.has_embedded_images,
+            "grayscale": video.grayscale,
         }
-
     elif type(video.backend) == ImageVideo:
         if video.shape is not None:
             height, width, channels = video.shape[1:4]
         else:
             height, width, channels = None, None, 3
-        return {
-            "filename": video_filename,
-            "backend": {
-                "type": "ImageVideo",
-                "shape": video.shape,
-                "filename": sanitize_filename(video.backend.filename[0]),
-                "filenames": sanitize_filename(video.backend.filename),
-                "height_": height,
-                "width_": width,
-                "channels_": channels,
-                "grayscale": video.grayscale,
-            },
+        result["backend"] = {
+            "type": "ImageVideo",
+            "shape": video.shape,
+            "filename": sanitize_filename(video.backend.filename[0]),
+            "filenames": sanitize_filename(video.backend.filename),
+            "height_": height,
+            "width_": width,
+            "channels_": channels,
+            "grayscale": video.grayscale,
         }
+
+    # Add source_video metadata if present
+    if hasattr(video, "source_video") and video.source_video is not None:
+        result["source_video"] = video_to_dict(video.source_video, labels_path)
+
+    # Add original_video metadata if present
+    if hasattr(video, "original_video") and video.original_video is not None:
+        result["original_video"] = video_to_dict(video.original_video, labels_path)
+
+    return result
 
 
 def embed_video(

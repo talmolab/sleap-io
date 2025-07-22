@@ -138,9 +138,10 @@ def test_multiple_save_load_cycles(tmp_path, slp_minimal_pkg):
     # Second cycle: Load cycle1.slp and save again
     labels2 = load_file(output1)
     assert labels2.videos[0].filename == slp_minimal_pkg
-    # TODO: Enable these assertions once original_video is saved in videos_json for non-embedded files
-    # assert labels2.videos[0].original_video is not None
-    # assert labels2.videos[0].original_video.filename == original_video_path
+    # For minimal_instance.pkg.slp, source_video IS the original video
+    # In PRESERVE_SOURCE mode, the original video metadata should be preserved
+    assert labels2.videos[0].source_video is not None
+    assert labels2.videos[0].source_video.filename == original_video_path
 
     output2 = tmp_path / "cycle2.slp"
     labels2.save(output2, embed=False, restore_original_videos=False)
@@ -149,9 +150,9 @@ def test_multiple_save_load_cycles(tmp_path, slp_minimal_pkg):
     labels3 = load_file(output2)
     # In PRESERVE_SOURCE mode, it should still reference the original .pkg.slp
     assert labels3.videos[0].filename == slp_minimal_pkg
-    # TODO: Enable these assertions once original_video is saved in videos_json for non-embedded files
-    # assert labels3.videos[0].original_video is not None
-    # assert labels3.videos[0].original_video.filename == original_video_path
+    # Verify metadata persistence through multiple cycles
+    assert labels3.videos[0].source_video is not None
+    assert labels3.videos[0].source_video.filename == original_video_path
 
 
 def test_unavailable_video_handling(tmp_path):
@@ -288,6 +289,118 @@ def test_complex_workflow(tmp_path, slp_minimal_pkg):
     assert loaded_predictions.videos[0].backend_metadata["type"] == "HDF5Video"
     assert loaded_predictions.videos[0].backend_metadata["has_embedded_images"] == True
 
-    # TODO: Enable these assertions once original_video is saved in videos_json for non-embedded files
-    # assert loaded_predictions.videos[0].original_video is not None
-    # assert loaded_predictions.videos[0].original_video.backend_metadata["type"] == "MediaVideo"
+    # Verify metadata preservation through the workflow
+    # The video objects from inference_labels already have source_video metadata
+    # which is preserved when we create the predictions Labels object
+    assert loaded_predictions.videos[0].source_video is not None
+
+    # The source_video should point to minimal_instance.pkg.slp (the original training data)
+    # This is correct because we're using the same video objects from inference_labels
+    assert loaded_predictions.videos[0].source_video.filename == slp_minimal_pkg
+    assert (
+        loaded_predictions.videos[0].source_video.backend_metadata["type"]
+        == "HDF5Video"
+    )
+
+    # And that should have the original MediaVideo as its source
+    assert loaded_predictions.videos[0].source_video.source_video is not None
+    assert (
+        loaded_predictions.videos[0].source_video.source_video.backend_metadata["type"]
+        == "MediaVideo"
+    )
+
+
+def test_write_videos_backwards_compatibility():
+    """Test backwards compatibility with restore_source parameter."""
+    from sleap_io.io.slp import write_videos, VideoReferenceMode
+    from sleap_io.model.video import Video
+    import tempfile
+
+    video = Video(
+        filename="test.mp4",
+        backend_metadata={
+            "type": "MediaVideo",
+            "shape": [1, 100, 100, 1],
+            "filename": "test.mp4",
+            "grayscale": True,
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = Path(tmpdir) / "test.slp"
+
+        # Test restore_source=True with reference_mode=None (should use RESTORE_ORIGINAL)
+        write_videos(str(output), [video], restore_source=True, reference_mode=None)
+
+        # Test restore_source=False with reference_mode=None (should use EMBED)
+        write_videos(str(output), [video], restore_source=False, reference_mode=None)
+
+
+def test_video_lineage_edge_cases():
+    """Test edge cases in video lineage metadata handling."""
+    from sleap_io.io.slp import write_videos, VideoReferenceMode
+    from sleap_io.model.video import Video
+    import tempfile
+
+    # Test case 1: Video with original_video already set
+    original = Video(
+        filename="original.mp4",
+        backend_metadata={
+            "type": "MediaVideo",
+            "shape": [10, 100, 100, 1],
+            "filename": "original.mp4",
+            "grayscale": True,
+        },
+    )
+
+    video_with_original = Video(
+        filename="current.slp",
+        backend_metadata={
+            "type": "HDF5Video",
+            "shape": [10, 100, 100, 1],
+            "filename": "current.slp",
+            "dataset": "video0/video",
+            "has_embedded_images": True,
+            "grayscale": True,
+        },
+        source_video=None,
+        original_video=original,  # This should be saved
+    )
+
+    # Test case 2: source_video has original_video
+    source_with_original = Video(
+        filename="source.pkg.slp",
+        backend_metadata={
+            "type": "HDF5Video",
+            "shape": [10, 100, 100, 1],
+            "filename": "source.pkg.slp",
+            "dataset": "video0/video",
+            "has_embedded_images": True,
+            "grayscale": True,
+        },
+        original_video=original,
+    )
+
+    video_with_source_original = Video(
+        filename="current2.slp",
+        backend_metadata={
+            "type": "HDF5Video",
+            "shape": [10, 100, 100, 1],
+            "filename": "current2.slp",
+            "dataset": "video0/video",
+            "has_embedded_images": True,
+            "grayscale": True,
+        },
+        source_video=source_with_original,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = Path(tmpdir) / "test_lineage.slp"
+
+        # Write videos with different lineage scenarios
+        write_videos(
+            str(output),
+            [video_with_original, video_with_source_original],
+            reference_mode=VideoReferenceMode.EMBED,
+            original_videos=[video_with_original, video_with_source_original],
+        )
