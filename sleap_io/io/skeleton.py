@@ -81,36 +81,31 @@ class SkeletonDecoder:
                     # This is a reference
                     py_id = link["target"]["py/id"]
 
-        # Build py/id mappings based on order of definition
-        # The pattern seems to be that nodes are assigned py/ids in order of first appearance
+        # Build py/id mappings from the nodes section
+        # The nodes section defines the py/id assignments
         py_id_to_node_name = {}
-        for i, node_name in enumerate(node_definition_order):
-            # py/ids seem to start at 1 and increment, sometimes skipping numbers
-            if i == 0:
-                py_id_to_node_name[1] = node_name
-            elif i == 1:
-                py_id_to_node_name[2] = node_name  # eyeL
-            elif i == 2:
-                py_id_to_node_name[4] = node_name  # eyeR (skips 3)
-            elif i == 3:
-                py_id_to_node_name[5] = node_name  # thorax
-            else:
-                # Continue pattern: 6, 7, 8, 9, 10, 11, 12, 13, 14
-                py_id_to_node_name[i + 3] = node_name
+        nodes = []
 
-        # Update cache
-        for py_id, node_name in py_id_to_node_name.items():
-            if node_name in all_nodes:
-                self._id_to_object[py_id] = all_nodes[node_name]
+        # First pass: extract py/ids from nodes section
+        node_py_ids = []
+        for node_ref in data.get("nodes", []):
+            if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
+                node_py_ids.append(node_ref["id"]["py/id"])
+
+        # Map py/ids to node names based on order of appearance
+        # The py/ids in the nodes array correspond to nodes in order of first appearance
+        for i, py_id in enumerate(node_py_ids):
+            if i < len(node_definition_order):
+                node_name = node_definition_order[i]
+                py_id_to_node_name[py_id] = node_name
+                # Update cache
+                if node_name in all_nodes:
+                    self._id_to_object[py_id] = all_nodes[node_name]
 
         # Build final nodes list based on the "nodes" section order
-        nodes = []
-        py_id_to_index = {}
-
-        for i, node_ref in enumerate(data.get("nodes", [])):
+        for node_ref in data.get("nodes", []):
             if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
                 py_id = node_ref["id"]["py/id"]
-                py_id_to_index[py_id] = i
 
                 # Add corresponding node
                 if (
@@ -461,7 +456,7 @@ class SkeletonSLPDecoder:
     integer indices for node references instead of embedded node objects.
     """
 
-    def decode_skeletons(self, metadata: dict, node_names: list[str]) -> list[Skeleton]:
+    def decode(self, metadata: dict, node_names: list[str]) -> list[Skeleton]:
         """Decode skeletons from SLP metadata format.
 
         Args:

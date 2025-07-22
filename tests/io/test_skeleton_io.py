@@ -325,22 +325,50 @@ def test_load_flies_skeleton_fixture(skeleton_json_flies):
     skeleton = sio.load_skeleton(skeleton_json_flies)
 
     assert skeleton.name == "Skeleton-0"
-    assert len(skeleton.nodes) >= 10
+    assert len(skeleton.nodes) == 13
 
-    # Check that some expected fly nodes are present
-    node_names = {node.name for node in skeleton.nodes}
-    basic_nodes = {"head", "thorax"}
-    assert basic_nodes.intersection(
-        node_names
-    ), f"Expected basic nodes not found in {node_names}"
+    # Check exact node names
+    expected_nodes = [
+        "head",
+        "eyeL",
+        "eyeR",
+        "thorax",
+        "abdomen",
+        "wingL",
+        "wingR",
+        "forelegL4",
+        "forelegR4",
+        "midlegL4",
+        "midlegR4",
+        "hindlegL4",
+        "hindlegR4",
+    ]
+    node_names = [node.name for node in skeleton.nodes]
+    assert node_names == expected_nodes
 
-    # Verify we have edges and symmetries
-    assert len(skeleton.edges) > 0, "Should have some edges"
-    assert len(skeleton.symmetries) > 0, "Should have some symmetries"
+    # Check edges
+    assert len(skeleton.edges) == 12
+    # Check first few edges to verify structure
+    assert (
+        skeleton.edges[0].source.name == "head"
+        and skeleton.edges[0].destination.name == "eyeL"
+    )
+    assert (
+        skeleton.edges[1].source.name == "head"
+        and skeleton.edges[1].destination.name == "eyeR"
+    )
+    assert (
+        skeleton.edges[2].source.name == "thorax"
+        and skeleton.edges[2].destination.name == "head"
+    )
 
-    # Basic structural validation
-    assert skeleton is not None
-    assert isinstance(skeleton.name, str)
+    # Check symmetries
+    assert len(skeleton.symmetries) == 5
+    # Check specific symmetry pairs
+    sym_pairs = [sorted([n.name for n in s.nodes]) for s in skeleton.symmetries]
+    assert ["abdomen", "thorax"] in sym_pairs
+    assert ["wingL", "wingR"] in sym_pairs
+    assert ["forelegL4", "forelegR4"] in sym_pairs
 
 
 def test_round_trip_minimal_fixture(skeleton_json_minimal, tmp_path):
@@ -568,7 +596,7 @@ def test_slp_encoder_decoder():
 
     # Decode back
     decoder = SkeletonSLPDecoder()
-    decoded_skeletons = decoder.decode_skeletons(metadata, node_names)
+    decoded_skeletons = decoder.decode(metadata, node_names)
 
     # Verify structure is preserved
     assert len(decoded_skeletons) == 2
@@ -925,16 +953,14 @@ def test_yaml_json_equivalence(skeleton_json_flies, skeleton_yaml_flies):
     # Compare structure
     assert json_skeleton.name == yaml_skeleton.name
 
-    # Note: The JSON file is missing hindlegR4, so it has 12 nodes vs YAML's 13
-    # This is OK - the files are test fixtures and don't need to be identical
-    assert len(json_skeleton.nodes) == 12
+    # Both files should have the same number of nodes
+    assert len(json_skeleton.nodes) == 13
     assert len(yaml_skeleton.nodes) == 13
 
-    # Check that the YAML file has the same nodes as JSON plus hindlegR4
+    # Check that both have the same node names
     json_node_names = {n.name for n in json_skeleton.nodes}
     yaml_node_names = {n.name for n in yaml_skeleton.nodes}
-    assert json_node_names.issubset(yaml_node_names)
-    assert "hindlegR4" in yaml_node_names
+    assert json_node_names == yaml_node_names
 
     # Both should have edges and symmetries
     assert len(json_skeleton.edges) > 0
@@ -969,6 +995,111 @@ def test_save_load_yaml_round_trip(tmp_path):
         assert orig.name == loaded.name
 
 
+def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
+    """Test round-trip encoding/decoding of fly32 skeleton with non-sequential py/ids."""
+    # Load original
+    original = sio.load_skeleton(skeleton_json_fly32)
+    assert isinstance(original, list)
+    original = original[0]
+
+    # Save to new file
+    output_path = tmp_path / "fly32_round_trip.json"
+    sio.save_skeleton(original, output_path)
+
+    # Load again
+    reloaded = sio.load_skeleton(output_path)
+    # When saving a single skeleton, it's loaded back as a single skeleton, not a list
+    if isinstance(reloaded, list):
+        reloaded = reloaded[0]
+
+    # Verify everything matches
+    assert original.name == reloaded.name
+    assert len(original.nodes) == len(reloaded.nodes) == 32
+    assert len(original.edges) == len(reloaded.edges)
+
+    # Verify node names and order preserved
+    for i, (o_node, r_node) in enumerate(zip(original.nodes, reloaded.nodes)):
+        assert (
+            o_node.name == r_node.name
+        ), f"Node {i} mismatch: {o_node.name} != {r_node.name}"
+
+    # Verify edges preserved
+    for i, (o_edge, r_edge) in enumerate(zip(original.edges, reloaded.edges)):
+        assert o_edge.source.name == r_edge.source.name
+        assert o_edge.destination.name == r_edge.destination.name
+
+
+def test_training_config_decode(training_config_fly32, skeleton_json_fly32):
+    """Test decoding a training config with embedded skeleton data."""
+
+    # Test loading standalone skeleton file
+    with open(skeleton_json_fly32, "r") as f:
+        skeleton_data = json.load(f)
+    skeletons = SkeletonDecoder().decode(skeleton_data)
+    assert len(skeletons) == 1
+    skeleton = skeletons[0]
+    assert (
+        skeleton.name
+        == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    )
+    assert len(skeleton.nodes) == 32
+
+    # Test loading skeleton from training config
+    with open(training_config_fly32, "r") as f:
+        data = json.load(f)
+
+    skel_data = data["data"]["labels"]["skeletons"]
+    skels_cfg = SkeletonDecoder().decode(skel_data)
+    assert len(skels_cfg) == 1
+    skeleton_cfg = skels_cfg[0]
+
+    # Verify the skeletons match
+    assert skeleton.name == skeleton_cfg.name
+    assert len(skeleton.nodes) == len(skeleton_cfg.nodes)
+
+    # Verify node names and order match
+    for i, (n1, n2) in enumerate(zip(skeleton.nodes, skeleton_cfg.nodes)):
+        assert n1.name == n2.name, f"Node {i} mismatch: {n1.name} != {n2.name}"
+
+    # Verify we have the expected 32 nodes
+    expected_node_names = [
+        "head",
+        "eyeL",
+        "eyeR",
+        "neck",
+        "thorax",
+        "wingL",
+        "wingR",
+        "abdomen",
+        "forelegR1",
+        "forelegR2",
+        "forelegR3",
+        "forelegR4",
+        "midlegR1",
+        "midlegR2",
+        "midlegR3",
+        "midlegR4",
+        "hindlegR1",
+        "hindlegR2",
+        "hindlegR3",
+        "hindlegR4",
+        "forelegL1",
+        "forelegL2",
+        "forelegL3",
+        "forelegL4",
+        "midlegL1",
+        "midlegL2",
+        "midlegL3",
+        "midlegL4",
+        "hindlegL1",
+        "hindlegL2",
+        "hindlegL3",
+        "hindlegL4",
+    ]
+    actual_node_names = [n.name for n in skeleton.nodes]
+    assert actual_node_names == expected_node_names
+
+
 def test_yaml_decoder_invalid_format():
     """Test YAML decoder with invalid data format."""
     decoder = SkeletonYAMLDecoder()
@@ -976,3 +1107,202 @@ def test_yaml_decoder_invalid_format():
     # Test with list input (not supported)
     with pytest.raises(ValueError, match="Unexpected data format"):
         decoder.decode([{"nodes": []}])
+
+
+def test_load_skeleton_from_slp(slp_typical):
+    """Test loading skeletons from SLP file."""
+    skeletons = sio.load_skeleton(slp_typical)
+
+    assert isinstance(skeletons, list)
+    assert len(skeletons) == 1
+
+    # Check the skeleton details
+    skeleton = skeletons[0]
+    assert skeleton.name == "Skeleton-0"
+    assert len(skeleton.nodes) == 2
+
+    # Check node names
+    node_names = [node.name for node in skeleton.nodes]
+    assert node_names == ["A", "B"]
+
+    # Check edges
+    assert len(skeleton.edges) == 1
+    assert skeleton.edges[0].source.name == "A"
+    assert skeleton.edges[0].destination.name == "B"
+
+    # Check symmetries
+    assert len(skeleton.symmetries) == 0
+
+
+def test_load_skeleton_from_training_config(training_config_fly32):
+    """Test loading skeleton from training config JSON file."""
+    skeletons = sio.load_skeleton(training_config_fly32)
+
+    assert isinstance(skeletons, list)
+    assert len(skeletons) == 1
+
+    skeleton = skeletons[0]
+    assert (
+        skeleton.name
+        == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    )
+    assert len(skeleton.nodes) == 32
+    assert len(skeleton.edges) == 25
+
+    # Check exact node names and order
+    expected_nodes = [
+        "head",
+        "eyeL",
+        "eyeR",
+        "neck",
+        "thorax",
+        "wingL",
+        "wingR",
+        "abdomen",
+        "forelegR1",
+        "forelegR2",
+        "forelegR3",
+        "forelegR4",
+        "midlegR1",
+        "midlegR2",
+        "midlegR3",
+        "midlegR4",
+        "hindlegR1",
+        "hindlegR2",
+        "hindlegR3",
+        "hindlegR4",
+        "forelegL1",
+        "forelegL2",
+        "forelegL3",
+        "forelegL4",
+        "midlegL1",
+        "midlegL2",
+        "midlegL3",
+        "midlegL4",
+        "hindlegL1",
+        "hindlegL2",
+        "hindlegL3",
+        "hindlegL4",
+    ]
+    node_names = [n.name for n in skeleton.nodes]
+    assert node_names == expected_nodes
+
+
+def test_load_skeleton_training_config_without_skeletons(tmp_path):
+    """Test loading training config without skeleton data."""
+    # Create a training config without skeleton data
+    config_data = {
+        "data": {
+            "labels": {"training_labels": "train.slp", "validation_labels": "val.slp"}
+        },
+        "model": {"backbone": {"unet": {}}},
+    }
+
+    config_path = tmp_path / "config_no_skeleton.json"
+    with open(config_path, "w") as f:
+        json.dump(config_data, f)
+
+    # Should fall back to regular skeleton decoding and return empty skeleton
+    skeleton = sio.load_skeleton(config_path)
+    assert isinstance(skeleton, sio.Skeleton)
+    assert len(skeleton.nodes) == 0  # Empty skeleton
+    assert len(skeleton.edges) == 0
+
+
+def test_load_skeleton_invalid_json(tmp_path):
+    """Test loading invalid JSON that's neither skeleton nor training config."""
+    # Create an invalid JSON file
+    invalid_data = {"foo": "bar", "baz": [1, 2, 3]}
+
+    invalid_path = tmp_path / "invalid.json"
+    with open(invalid_path, "w") as f:
+        json.dump(invalid_data, f)
+
+    # Should return an empty skeleton when JSON doesn't match expected format
+    skeleton = sio.load_skeleton(invalid_path)
+    assert isinstance(skeleton, sio.Skeleton)
+    assert len(skeleton.nodes) == 0
+    assert len(skeleton.edges) == 0
+
+
+def test_load_skeleton_format_detection(
+    skeleton_json_minimal, skeleton_yaml_flies, training_config_fly32
+):
+    """Test that load_skeleton correctly detects different file formats."""
+    # Test JSON skeleton file (minimal)
+    json_skeleton = sio.load_skeleton(skeleton_json_minimal)
+    assert isinstance(json_skeleton, sio.Skeleton)
+    assert json_skeleton.name == "Skeleton-1"
+    assert len(json_skeleton.nodes) == 2
+    assert [n.name for n in json_skeleton.nodes] == ["head", "abdomen"]
+    assert len(json_skeleton.edges) == 1
+    assert json_skeleton.edges[0].source.name == "head"
+    assert json_skeleton.edges[0].destination.name == "abdomen"
+
+    # Test YAML skeleton file (flies13)
+    yaml_skeletons = sio.load_skeleton(skeleton_yaml_flies)
+    assert isinstance(yaml_skeletons, list)
+    assert len(yaml_skeletons) == 1
+    assert yaml_skeletons[0].name == "Skeleton-0"
+    assert len(yaml_skeletons[0].nodes) == 13
+    assert len(yaml_skeletons[0].edges) == 12
+    assert len(yaml_skeletons[0].symmetries) == 10  # YAML has all symmetry pairs
+
+    # Test training config JSON
+    config_skeletons = sio.load_skeleton(training_config_fly32)
+    assert isinstance(config_skeletons, list)
+    assert len(config_skeletons) == 1
+    assert len(config_skeletons[0].nodes) == 32
+    assert len(config_skeletons[0].edges) == 25
+
+
+def test_load_skeleton_malformed_json(tmp_path):
+    """Test handling of malformed JSON that triggers JSONDecodeError."""
+    # Create a file with invalid JSON syntax
+    malformed_path = tmp_path / "malformed.json"
+    with open(malformed_path, "w") as f:
+        f.write('{"data": {"labels": {"skeletons": [INVALID JSON HERE}')
+
+    # Should catch JSONDecodeError and fall back to regular skeleton decoding
+    # which will then raise its own error
+    with pytest.raises(json.JSONDecodeError):
+        sio.load_skeleton(malformed_path)
+
+
+def test_load_skeleton_training_config_type_error(tmp_path):
+    """Test handling of training config that causes TypeError."""
+    # Create a training config where skeletons is not the expected type
+    config_data = {
+        "data": {
+            "labels": {"skeletons": "not_a_list_or_dict"}  # String instead of list/dict
+        }
+    }
+
+    config_path = tmp_path / "bad_type_config.json"
+    with open(config_path, "w") as f:
+        json.dump(config_data, f)
+
+    # Should handle gracefully and return empty skeleton
+    skeleton = sio.load_skeleton(config_path)
+    assert isinstance(skeleton, sio.Skeleton)
+    assert len(skeleton.nodes) == 0
+
+
+def test_load_skeleton_training_config_parsing_error(tmp_path):
+    """Test exception handling when parsing training config structure."""
+    # Create a file that looks like a training config but has a non-dict skeleton entry
+    # This will cause the isinstance check to pass but the decoder to fail
+    config_data = {
+        "data": {
+            "labels": {"skeletons": [None]}  # This will cause issues in the decoder
+        }
+    }
+
+    config_path = tmp_path / "null_skeleton_config.json"
+    with open(config_path, "w") as f:
+        json.dump(config_data, f)
+
+    # The decoder will fail but it should be caught and fall back
+    # Since None is not a valid skeleton format, the fallback will also fail
+    with pytest.raises(AttributeError):  # None has no 'get' attribute
+        sio.load_skeleton(config_path)

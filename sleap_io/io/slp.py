@@ -975,7 +975,7 @@ def read_skeletons(labels_path: str) -> list[Skeleton]:
 
     # Use the SLP skeleton decoder
     decoder = SkeletonSLPDecoder()
-    return decoder.decode_skeletons(metadata, node_names)
+    return decoder.decode(metadata, node_names)
 
 
 def serialize_skeletons(skeletons: list[Skeleton]) -> tuple[list[dict], list[dict]]:

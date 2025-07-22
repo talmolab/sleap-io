@@ -137,3 +137,43 @@ def slp_multiview():
     )
     """
     return "tests/data/slp/multiview.slp"
+
+
+@pytest.fixture
+def skeleton_json_fly32():
+    """Fly skeleton JSON file with 32 nodes and 25 edges.
+
+    This skeleton:
+    - Has 32 nodes representing detailed fly body parts
+    - Has 25 edges connecting body parts
+    - Uses jsonpickle format with py/id references
+    - Nodes are ordered differently in the nodes array than their py/id assignments
+    """
+    return "tests/data/slp/fly32.skeleton.json"
+
+
+@pytest.fixture
+def skeleton_yaml_fly32():
+    """Fly skeleton YAML file with 32 nodes and 25 edges.
+
+    This skeleton:
+    - Same skeleton as skeleton_json_fly32 but in YAML format
+    - Uses simplified human-readable YAML format
+    - Has skeleton name as top-level key
+    - Nodes are simple name lists
+    - Edges use node names for references
+    """
+    return "tests/data/slp/fly32.skeleton.yaml"
+
+
+@pytest.fixture
+def training_config_fly32():
+    """Training configuration JSON file with embedded skeleton.
+
+    This file:
+    - Contains training configuration for SLEAP
+    - Has an embedded skeleton in the 'skeletons' field
+    - The skeleton uses jsonpickle format with py/id references
+    - Demonstrates how skeletons are embedded in training configs
+    """
+    return "tests/data/slp/fly32.training_config.json"
