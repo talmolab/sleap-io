@@ -565,12 +565,15 @@ def test_split(slp_real_data, tmp_path):
         Path(split2_.video.filename).as_posix()
         == (tmp_path / "split2.pkg.slp").as_posix()
     )
+    # Check original_video field for the ultimate source
+    assert hasattr(split1_.video, "original_video")
     assert (
-        split1_.video.source_video.filename
+        Path(split1_.video.original_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
+    assert hasattr(split2_.video, "original_video")
     assert (
-        split2_.video.source_video.filename
+        Path(split2_.video.original_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
 
