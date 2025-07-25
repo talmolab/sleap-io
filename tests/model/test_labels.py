@@ -1335,7 +1335,7 @@ def test_update_from_numpy_special_case():
 
 def test_update_from_numpy_confidence_scores():
     """Test updating confidence scores in existing predicted instances.
-    
+
     Uses update_from_numpy to update scores.
     """
     # Create a basic labels object
@@ -1575,7 +1575,7 @@ def test_update_from_numpy_nan_handling():
 
 def test_update_from_numpy_more_tracks_than_provided():
     """Test update_from_numpy special case with more tracks in array.
-    
+
     Tests when array has more tracks than the provided track list.
     """
     # Create a basic labels object
@@ -1663,7 +1663,7 @@ def test_update_from_numpy_more_tracks_than_provided():
 
 def test_update_from_numpy_special_case_without_confidence():
     """Test update_from_numpy special case with more tracks in array.
-    
+
     Tests case without confidence scores.
     """
     # Create a basic labels object
@@ -1864,7 +1864,7 @@ def test_update_from_numpy_nan_handling_v2():
 
 def test_update_from_numpy_more_tracks_than_provided_v2():
     """Test update_from_numpy special case with more tracks in array.
-    
+
     Tests when array has more tracks than the provided track list.
     """
     # Create a basic labels object
@@ -1952,7 +1952,7 @@ def test_update_from_numpy_more_tracks_than_provided_v2():
 
 def test_update_from_numpy_special_case_without_confidence_v2():
     """Test update_from_numpy special case with more tracks in array.
-    
+
     Tests case without confidence scores.
     """
     # Create a basic labels object

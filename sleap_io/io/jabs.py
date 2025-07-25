@@ -10,17 +10,11 @@ from typing import List, Optional, Union
 import h5py
 import numpy as np
 
-from sleap_io import (
-    Edge,
-    Instance,
-    LabeledFrame,
-    Labels,
-    Node,
-    Skeleton,
-    Symmetry,
-    Track,
-    Video,
-)
+from sleap_io.model.instance import Instance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
+from sleap_io.model.video import Video
 
 JABS_DEFAULT_KEYPOINTS = [
     Node("NOSE"),

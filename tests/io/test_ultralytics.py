@@ -296,11 +296,11 @@ def test_denormalize_coordinates():
 
     assert points_array[0, 0] == 100.0  # 0.125 * 800
     assert points_array[0, 1] == 200.0  # 0.5 * 400
-    assert points_array[0, 2] is True
+    assert points_array[0, 2] == 1.0  # True converted to float
 
     assert np.isnan(points_array[1, 0])
     assert np.isnan(points_array[1, 1])
-    assert points_array[1, 2] is False
+    assert points_array[1, 2] == 0.0  # False converted to float
 
 
 def test_load_file_integration(ultralytics_dataset):

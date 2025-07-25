@@ -588,7 +588,8 @@ def test_slp_encoder_decoder():
     assert isinstance(skeletons_dicts[1]["links"][0]["source"], int)
     assert isinstance(skeletons_dicts[1]["links"][0]["target"], int)
 
-    # The exact indices depend on the global node ordering, so we just verify they're valid
+    # The exact indices depend on the global node ordering, so we just verify
+    # they're valid
 
     # Create fake metadata for decoder
     metadata = {"skeletons": skeletons_dicts}

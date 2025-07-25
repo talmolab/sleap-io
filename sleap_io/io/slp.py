@@ -13,24 +13,22 @@ import numpy as np
 import simplejson as json
 from tqdm import tqdm
 
-from sleap_io import (
-    Camera,
-    CameraGroup,
-    FrameGroup,
-    Instance,
-    InstanceGroup,
-    LabeledFrame,
-    Labels,
-    PredictedInstance,
-    RecordingSession,
-    Skeleton,
-    SuggestionFrame,
-    Track,
-    Video,
-)
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
 from sleap_io.io.utils import is_file_accessible, read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
+from sleap_io.model.camera import (
+    Camera,
+    CameraGroup,
+    FrameGroup,
+    InstanceGroup,
+    RecordingSession,
+)
+from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton
+from sleap_io.model.suggestions import SuggestionFrame
+from sleap_io.model.video import Video
 
 try:
     import cv2

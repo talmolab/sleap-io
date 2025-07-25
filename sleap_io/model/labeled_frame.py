@@ -11,7 +11,8 @@ from typing import Union
 import numpy as np
 from attrs import define, field
 
-from sleap_io import Instance, PredictedInstance, Video
+from sleap_io.model.instance import Instance, PredictedInstance
+from sleap_io.model.video import Video
 
 
 @define(eq=False)

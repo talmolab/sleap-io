@@ -14,7 +14,7 @@ from typing import Optional, Union
 import attrs
 import numpy as np
 
-from sleap_io import Node, Skeleton
+from sleap_io.model.skeleton import Node, Skeleton
 
 
 class PointsArray(np.ndarray):

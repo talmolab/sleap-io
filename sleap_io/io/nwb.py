@@ -22,17 +22,11 @@ from ndx_pose import (  # type: ignore[import]
 )
 from pynwb import NWBHDF5IO, NWBFile, ProcessingModule  # type: ignore[import]
 
-from sleap_io import (
-    Instance,
-    LabeledFrame,
-    Labels,
-    PredictedInstance,
-    Track,
-    Video,
-)
-from sleap_io import (
-    Skeleton as SleapSkeleton,
-)
+from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+from sleap_io.model.video import Video
 
 
 def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
@@ -556,8 +550,7 @@ def build_pose_estimation_container_for_track(
     pose_estimation_container_kwargs = dict(
         name=f"track={track_name}",
         description=(
-            f"Estimated positions of {sleap_skeleton.name} in video "
-            f"{video_path.name}"
+            f"Estimated positions of {sleap_skeleton.name} in video {video_path.name}"
         ),
         pose_estimation_series=pose_estimation_series_list,
         skeleton=nwb_skeleton,

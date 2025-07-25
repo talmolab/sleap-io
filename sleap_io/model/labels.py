@@ -20,17 +20,12 @@ from typing import Any, Iterator, Optional, Union
 import numpy as np
 from attrs import define, field
 
-from sleap_io import (
-    Instance,
-    LabeledFrame,
-    PredictedInstance,
-    RecordingSession,
-    Skeleton,
-    SuggestionFrame,
-    Track,
-    Video,
-)
-from sleap_io.model.skeleton import NodeOrIndex
+from sleap_io.model.camera import RecordingSession
+from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.skeleton import NodeOrIndex, Skeleton
+from sleap_io.model.suggestions import SuggestionFrame
+from sleap_io.model.video import Video
 
 
 @define

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional, Union
 
-from sleap_io import Edge, Node, Skeleton, Symmetry
+from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 
 
 class SkeletonDecoder:

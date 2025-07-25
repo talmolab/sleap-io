@@ -7,7 +7,6 @@ from typing import List, Optional, Union
 
 import numpy as np
 
-from sleap_io import Labels, Skeleton, Video
 from sleap_io.io import jabs, labelstudio, nwb, slp, ultralytics, video_writing
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
@@ -15,6 +14,9 @@ from sleap_io.io.skeleton import (
     SkeletonYAMLDecoder,
     SkeletonYAMLEncoder,
 )
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton
+from sleap_io.model.video import Video
 
 
 def load_slp(filename: str, open_videos: bool = True) -> Labels:

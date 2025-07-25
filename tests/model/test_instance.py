@@ -271,18 +271,18 @@ def test_instance_setitem():
     # Set point by index
     inst[0] = [1, 2]
     assert_equal(inst[0]["xy"], [1, 2])
-    assert inst[0]["visible"] is True
+    assert inst[0]["visible"]
 
     # Set point by node name
     inst["B"] = [3, 4]
     assert_equal(inst["B"]["xy"], [3, 4])
-    assert inst["B"]["visible"] is True
+    assert inst["B"]["visible"]
 
     # Set point by Node object
     node = inst.skeleton.nodes[2]
     inst[node] = [5, 6]
     assert_equal(inst[node]["xy"], [5, 6])
-    assert inst[node]["visible"] is True
+    assert inst[node]["visible"]
 
     # Check all points were set correctly
     assert_equal(inst.numpy(), [[1, 2], [3, 4], [5, 6]])
@@ -304,21 +304,21 @@ def test_predicted_instance_setitem():
     # Set point by index without score (should default to 1.0)
     inst[0] = [1, 2]
     assert_equal(inst[0]["xy"], [1, 2])
-    assert inst[0]["visible"] is True
+    assert inst[0]["visible"]
     assert inst[0]["score"] == 1.0
 
     # Set point by node name with score
     inst["B"] = [3, 4, 0.75]
     assert_equal(inst["B"]["xy"], [3, 4])
     assert inst["B"]["score"] == 0.75
-    assert inst["B"]["visible"] is True
+    assert inst["B"]["visible"]
 
     # Set point by Node object with score
     node = inst.skeleton.nodes[2]
     inst[node] = [5, 6, 0.9]
     assert_equal(inst[node]["xy"], [5, 6])
     assert inst[node]["score"] == 0.9
-    assert inst[node]["visible"] is True
+    assert inst[node]["visible"]
 
     # Check numpy output with scores
     expected = np.array([[1, 2, 1.0], [3, 4, 0.75], [5, 6, 0.9]])

@@ -16,7 +16,11 @@ from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import simplejson as json
 
-from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
+from sleap_io.model.instance import Instance
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton
+from sleap_io.model.video import Video
 
 
 def read_labels(

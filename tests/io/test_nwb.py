@@ -236,7 +236,8 @@ def test_complex_case_append_with_timestamps_metadata(nwbfile, centered_pair):
             extracted_starting_time = pose_estimation_series.starting_time
             assert extracted_starting_time == 0
 
-        # Other store timestamps and the timestamps should be a subset of the videotimestamps
+        # Other store timestamps and the timestamps should be a subset of the
+        # videotimestamps
         else:
             extracted_timestamps = pose_estimation_series.timestamps
             assert np.isin(
