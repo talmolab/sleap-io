@@ -643,7 +643,8 @@ def test_make_session_and_session_to_dict(
     """Test recording session (de)serialization functions.
 
     Args:
-        recording_session_345: A RecordingSession object with 3 cameras, 4 videos, and 5 frame groups.
+        recording_session_345: A RecordingSession object with 3 cameras, 4 videos,
+            and 5 frame groups.
     """
 
     def assert_cameras_equal(camera: Camera, camera_0: Camera):
@@ -1164,7 +1165,7 @@ def conditional_import(verbose):
 
 
 def test_embed_frames_verbose_propagation(slp_minimal, tmp_path):
-    """Test that embed_frames propagates the verbose parameter to process_and_embed_frames."""
+    """Test that embed_frames propagates verbose to process_and_embed_frames."""
     labels = load_slp(slp_minimal)
     frames_to_embed = [(labels.videos[0], 0)]
 
@@ -1205,25 +1206,29 @@ def test_embed_videos_verbose_propagation(slp_minimal, tmp_path):
 
 
 def test_write_videos_verbose_propagation(slp_minimal, tmp_path):
-    """Test that write_videos propagates the verbose parameter to process_and_embed_frames."""
+    """Test that write_videos propagates verbose to process_and_embed_frames."""
     labels = load_slp(slp_minimal)
 
     # Create temp file for embedding
     temp_slp = tmp_path / "test_write_videos_prop.slp"
 
-    # Mock process_and_embed_frames to verify verbose is correctly passed when embedding is needed
+    # Mock process_and_embed_frames to verify verbose is correctly passed when
+    # embedding is needed
     with mock.patch("sleap_io.io.slp.process_and_embed_frames"):
-        # This is a simplified test as we can't easily trigger the condition where write_videos
+        # This is a simplified test as we can't easily trigger the condition where
+        # write_videos
         # calls process_and_embed_frames directly
         write_videos(temp_slp, labels.videos, verbose=True)
-        # In a real case with embedded videos, this would verify that verbose is passed correctly
+        # In a real case with embedded videos, this would verify that verbose is
+        # passed correctly
         # Since we're not actually embedding in this test, the mock may not be called
 
-    # The actual test here is that the function accepts the verbose parameter without errors
+    # The actual test here is that the function accepts the verbose parameter
+    # without errors
 
 
 def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
-    """Test that write_labels propagates the verbose parameter to embed_videos and write_videos."""
+    """Test that write_labels propagates verbose to embed_videos and write_videos."""
     labels = load_slp(slp_minimal)
 
     # Create temp file
@@ -1543,7 +1548,10 @@ def test_mixed_video_scenarios(tmp_path, centered_pair_low_quality_video):
 
 
 def test_save_overwrite_without_embedded(tmp_path, centered_pair_low_quality_video):
-    """Test that saving with embed=False over the same file works when no embedded data."""
+    """Test saving with embed=False over the same file.
+
+    Tests when no embedded data exists.
+    """
     # Create test data with external video
     skeleton = Skeleton(["A", "B"])
     video = centered_pair_low_quality_video
@@ -1570,7 +1578,7 @@ def test_save_overwrite_without_embedded(tmp_path, centered_pair_low_quality_vid
 
 
 def test_save_overwrite_embedded_with_source(tmp_path, centered_pair_low_quality_video):
-    """Test that saving with embed=False over the same file works when embedded data has source."""
+    """Test saving with embed=False over same file when embedded data has source."""
     # Create test data
     skeleton = Skeleton(["A", "B"])
     video = centered_pair_low_quality_video
@@ -1902,7 +1910,8 @@ def test_video_original_video_field(slp_minimal_pkg):
     assert hasattr(video, "original_video")
     assert video.original_video is None  # Not set for current files
 
-    # TODO: The source_video should become original_video when the field rename is complete
+    # TODO: The source_video should become original_video when the field rename
+    # is complete
     assert video.source_video is not None  # This is current behavior
 
 
@@ -1940,7 +1949,8 @@ def test_complex_workflow(tmp_path, slp_minimal_pkg):
     # which is preserved when we create the predictions Labels object
     assert loaded_predictions.videos[0].source_video is not None
 
-    # The source_video should point to minimal_instance.pkg.slp (the original training data)
+    # The source_video should point to minimal_instance.pkg.slp
+    # (the original training data)
     # This is correct because we're using the same video objects from inference_labels
     assert loaded_predictions.videos[0].source_video.filename == slp_minimal_pkg
     assert (
@@ -1976,7 +1986,8 @@ def test_write_videos_backwards_compatibility():
     with tempfile.TemporaryDirectory() as tmpdir:
         output = Path(tmpdir) / "test.slp"
 
-        # Test restore_source=True with reference_mode=None (should use RESTORE_ORIGINAL)
+        # Test restore_source=True with reference_mode=None
+        # (should use RESTORE_ORIGINAL)
         write_videos(str(output), [video], restore_source=True, reference_mode=None)
 
         # Test restore_source=False with reference_mode=None (should use EMBED)

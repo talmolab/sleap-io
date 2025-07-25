@@ -436,7 +436,10 @@ def test_keypoint_count_mismatch_warning(tmp_path):
 
 
 def test_realistic_labels_roundtrip(tmp_path, labels_predictions):
-    """Test roundtrip conversion with realistic labels containing multiple instances and tracks."""
+    """Test roundtrip conversion with realistic labels.
+
+    Tests labels containing multiple instances and tracks.
+    """
     # Take a subset of frames for testing
     labels_subset = Labels(
         labeled_frames=labels_predictions.labeled_frames[:10],
@@ -453,7 +456,8 @@ def test_realistic_labels_roundtrip(tmp_path, labels_predictions):
     image_files = list((output_dir / "train" / "images").glob("*.png"))
     assert len(image_files) == 10
 
-    # Read back and compare (note: tracks will be different as Ultralytics doesn't preserve them)
+    # Read back and compare
+    # Note: tracks will be different as Ultralytics doesn't preserve them
     labels_read = read_labels(output_dir, split="train")
     assert len(labels_read.labeled_frames) == 10
     assert len(labels_read.skeletons) == 1
@@ -881,7 +885,10 @@ def test_parse_label_file_with_invalid_keypoint_count(tmp_path):
 
 
 def test_read_labels_fallback_to_read_first_frame(tmp_path):
-    """Test read_labels when video.shape is None and falls back to reading first frame."""
+    """Test read_labels when video.shape is None.
+
+    Tests fallback to reading first frame.
+    """
     from unittest.mock import Mock, patch
 
     # Create test data structure
@@ -933,7 +940,8 @@ def test_read_labels_fallback_to_read_first_frame(tmp_path):
 def test_write_labels_frame_extraction_error_continue(tmp_path):
     """Test write_labels warning for frame.image returning None - code coverage only."""
     # This test just ensures the warning code path is covered
-    # The actual behavior is tricky to test due to how enumerate works with skipped frames
+    # The actual behavior is tricky to test due to how enumerate works with
+    # skipped frames
 
     # We've already tested this code path indirectly in other tests
     # This specific line (291-294) gets executed when frame.image returns None

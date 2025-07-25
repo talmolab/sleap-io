@@ -997,7 +997,10 @@ def test_save_load_yaml_round_trip(tmp_path):
 
 
 def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
-    """Test round-trip encoding/decoding of fly32 skeleton with non-sequential py/ids."""
+    """Test round-trip encoding/decoding of fly32 skeleton.
+
+    Tests skeletons with non-sequential py/ids.
+    """
     # Load original
     original = sio.load_skeleton(skeleton_json_fly32)
     assert isinstance(original, list)
@@ -1038,10 +1041,11 @@ def test_training_config_decode(training_config_fly32, skeleton_json_fly32):
     skeletons = SkeletonDecoder().decode(skeleton_data)
     assert len(skeletons) == 1
     skeleton = skeletons[0]
-    assert (
-        skeleton.name
-        == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    expected_name = (
+        "M:/talmo/data/leap_datasets/BermanFlies/"
+        "2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
     )
+    assert skeleton.name == expected_name
     assert len(skeleton.nodes) == 32
 
     # Test loading skeleton from training config
@@ -1142,10 +1146,11 @@ def test_load_skeleton_from_training_config(training_config_fly32):
     assert len(skeletons) == 1
 
     skeleton = skeletons[0]
-    assert (
-        skeleton.name
-        == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    expected_name = (
+        "M:/talmo/data/leap_datasets/BermanFlies/"
+        "2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
     )
+    assert skeleton.name == expected_name
     assert len(skeleton.nodes) == 32
     assert len(skeleton.edges) == 25
 

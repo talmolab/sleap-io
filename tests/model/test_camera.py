@@ -611,7 +611,8 @@ def test_rodrigues_transformation():
         if np.allclose(rvec, 0):
             np.testing.assert_allclose(recovered_rvec, np.zeros(3), atol=1e-6)
         else:
-            # For non-zero rotations, the vectors may differ in magnitude but should represent
+            # For non-zero rotations, the vectors may differ in magnitude but
+            # should represent
             # the same rotation when converted back to matrices
             recovered_matrix, _ = rodrigues_transformation(recovered_rvec)
             np.testing.assert_allclose(recovered_matrix, rotation_matrix, atol=1e-6)

@@ -124,7 +124,8 @@ def test_instance_comparison():
     inst2 = Instance({"A": [0, 1], "C": [2, 3]}, skeleton=Skeleton(["A", "C"]))
     assert not inst1 == inst2
 
-    # test that instances with the same skeleton but different point coordinates are not considered equal
+    # test that instances with the same skeleton but different point coordinates
+    # are not considered equal
     inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     inst2 = Instance({"A": [2, 3], "B": [0, 1]}, skeleton=Skeleton(["A", "B"]))
     assert not inst1 == inst2
