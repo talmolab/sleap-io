@@ -102,7 +102,8 @@ def rodrigues_transformation(input_matrix: np.ndarray) -> tuple[np.ndarray, np.n
 
     else:
         raise ValueError(
-            f"Input must be a 3x3 matrix or a 3-element vector, got shape {input_matrix.shape}"
+            f"Input must be a 3x3 matrix or a 3-element vector, got shape "
+            f"{input_matrix.shape}"
         )
 
 

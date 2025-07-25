@@ -203,8 +203,9 @@ class Labels:
                 arbitrary order.
             return_confidence: If `False` (the default), only return points of nodes. If
                 `True`, return the points and scores of nodes.
-            user_instances: If `True` (the default), include user instances when available,
-                preferring them over predicted instances with the same track. If `False`,
+            user_instances: If `True` (the default), include user instances when
+                available, preferring them over predicted instances with the same track.
+                If `False`,
                 only include predicted instances.
 
         Returns:
@@ -242,7 +243,7 @@ class Labels:
         n_instances = 0
         for lf in lfs:
             if user_instances:
-                # Count max of either user or predicted instances per frame (not their sum)
+                # Count max of either user or predicted instances per frame (not sum)
                 n_frame_instances = max(
                     len(lf.user_instances), len(lf.predicted_instances)
                 )
@@ -283,23 +284,25 @@ class Labels:
                     for inst in lf.user_instances:
                         instances_to_include.append(inst)
 
-                    # For the trivial case (single instance per frame), if we found user instances,
-                    # we shouldn't include any predicted instances
+                    # For the trivial case (single instance per frame), if we found
+                    # user instances, we shouldn't include any predicted instances
                     if is_single_instance and len(instances_to_include) > 0:
                         pass  # Skip adding predicted instances
                     else:
-                        # Add predicted instances that don't have a corresponding user instance
+                        # Add predicted instances that don't have a corresponding
+                        # user instance
                         for inst in lf.predicted_instances:
                             skip = False
                             for user_inst in lf.user_instances:
-                                # Skip if this predicted instance is linked to a user instance via from_predicted
+                                # Skip if this predicted instance is linked to a user
+                                # instance via from_predicted
                                 if (
                                     hasattr(user_inst, "from_predicted")
                                     and user_inst.from_predicted == inst
                                 ):
                                     skip = True
                                     break
-                                # Skip if user and predicted instances share the same track
+                                # Skip if user and predicted instances share same track
                                 if (
                                     user_inst.track is not None
                                     and inst.track is not None
@@ -379,10 +382,12 @@ class Labels:
 
         Args:
             tracks_arr: A numpy array of tracks, with shape
-                `(n_frames, n_tracks, n_nodes, 2)` or `(n_frames, n_tracks, n_nodes, 3)`,
+                `(n_frames, n_tracks, n_nodes, 2)` or
+                `(n_frames, n_tracks, n_nodes, 3)`,
                 where the last dimension contains the x,y coordinates (and optionally
                 confidence scores).
-            videos: List of Video objects to associate with the labels. At least one video
+            videos: List of Video objects to associate with the labels. At least one
+                video
                 is required.
             skeletons: Skeleton or list of Skeleton objects to use for the instances.
                 At least one skeleton is required.
@@ -396,8 +401,8 @@ class Labels:
             A new Labels object with instances constructed from the numpy array.
 
         Raises:
-            ValueError: If the array dimensions are invalid, or if no videos or skeletons
-                are provided.
+            ValueError: If the array dimensions are invalid, or if no videos or
+                skeletons are provided.
 
         Examples:
             >>> import numpy as np
@@ -638,7 +643,10 @@ class Labels:
             restore_original_videos: If `True` (default) and `embed=False`, use original
                 video files. If `False` and `embed=False`, keep references to source
                 `.pkg.slp` files. Only applies when `embed=False`.
-            verbose: If `True` (the default), display a progress bar when embedding frames.
+            verbose: If `True` (the default), display a progress bar when embedding
+                frames.
+            **kwargs: Additional format-specific arguments passed to the save function.
+                See `save_file` for format-specific options.
         """
         from pathlib import Path
 
@@ -660,9 +668,10 @@ class Labels:
                     ).resolve()
                     if sanitized_video_path == sanitized_save_path:
                         raise ValueError(
-                            f"Cannot save with embed=False when overwriting a file that "
-                            f"contains embedded videos. Use labels.save('{filename}', embed=True) "
-                            f"to re-embed the frames, or save to a different filename."
+                            f"Cannot save with embed=False when overwriting a file "
+                            f"that contains embedded videos. Use "
+                            f"labels.save('{filename}', embed=True) to re-embed the "
+                            f"frames, or save to a different filename."
                         )
 
         save_file(
@@ -805,8 +814,8 @@ class Labels:
         if skeleton is None:
             if len(self.skeletons) != 1:
                 raise ValueError(
-                    "Skeleton must be specified when there is more than one skeleton in "
-                    "the labels."
+                    "Skeleton must be specified when there is more than one skeleton "
+                    "in the labels."
                 )
             skeleton = self.skeleton
 
@@ -1333,7 +1342,8 @@ class Labels:
 
         Args:
             tracks_arr: A numpy array of tracks, with shape
-                `(n_frames, n_tracks, n_nodes, 2)` or `(n_frames, n_tracks, n_nodes, 3)`,
+                `(n_frames, n_tracks, n_nodes, 2)` or
+                `(n_frames, n_tracks, n_nodes, 3)`,
                 where the last dimension contains the x,y coordinates (and optionally
                 confidence scores).
             video: The video to update instances for. If not specified, the first video
@@ -1346,9 +1356,9 @@ class Labels:
                 `False`, only updates existing instances.
 
         Raises:
-            ValueError: If the video cannot be determined, or if tracks are not specified
-                and the number of tracks in the array doesn't match the number of tracks
-                in the labels.
+            ValueError: If the video cannot be determined, or if tracks are not
+                specified and the number of tracks in the array doesn't match the number
+                of tracks in the labels.
 
         Notes:
             This method is the inverse of `Labels.numpy()`, and can be used to update
@@ -1386,9 +1396,9 @@ class Labels:
         if tracks is None:
             if len(self.tracks) != n_tracks_arr:
                 raise ValueError(
-                    f"Number of tracks in array ({n_tracks_arr}) doesn't match number of "
-                    f"tracks in labels ({len(self.tracks)}). Please specify the tracks "
-                    f"corresponding to the second dimension of the array."
+                    f"Number of tracks in array ({n_tracks_arr}) doesn't match "
+                    f"number of tracks in labels ({len(self.tracks)}). Please specify "
+                    f"the tracks corresponding to the second dimension of the array."
                 )
             tracks = self.tracks
 

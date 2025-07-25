@@ -77,6 +77,16 @@ class VideoBackend:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            **kwargs: Additional backend-specific arguments. These are filtered to only
+                include parameters that are valid for the specific backend being
+                created:
+                - For ImageVideo: No additional arguments.
+                - For MediaVideo: plugin (str): Video plugin to use. One of "opencv",
+                  "FFMPEG", or "pyav". If None, will use the first available plugin.
+                - For HDF5Video: input_format (str), frame_map (dict),
+                  source_filename (str),
+                  source_inds (np.ndarray), image_format (str). See HDF5Video for
+                  details.
 
         Returns:
             VideoBackend subclass instance.

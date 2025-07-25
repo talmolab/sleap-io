@@ -179,7 +179,8 @@ class SkeletonDecoder:
         """Resolve a node reference to an actual Node object.
 
         Args:
-            node_ref: Node reference (can be embedded object, py/id reference, or index).
+            node_ref: Node reference (can be embedded object, py/id reference, or
+                index).
             all_nodes: Dictionary mapping node names to Node objects.
             py_id_to_node_name: Mapping from py/id to node name.
 
@@ -629,7 +630,8 @@ class SkeletonYAMLDecoder:
         Args:
             data: YAML string or pre-parsed dictionary containing skeleton data.
                   If a dict is provided with skeleton names as keys, returns list.
-                  If a dict is provided with nodes/edges/symmetries, returns single skeleton.
+                  If a dict is provided with nodes/edges/symmetries, returns single
+                  skeleton.
 
         Returns:
             A single Skeleton or list of Skeletons depending on input format.

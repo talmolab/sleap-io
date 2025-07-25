@@ -165,9 +165,16 @@ def load_ultralytics(
     """Load an Ultralytics YOLO pose dataset as a SLEAP `Labels` object.
 
     Args:
-        dataset_path: Path to the Ultralytics dataset root directory containing data.yaml.
+        dataset_path: Path to the Ultralytics dataset root directory containing
+            data.yaml.
         split: Dataset split to read ('train', 'val', or 'test'). Defaults to 'train'.
-        skeleton: Optional skeleton to use. If not provided, will be inferred from data.yaml.
+        skeleton: Optional skeleton to use. If not provided, will be inferred from
+            data.yaml.
+        **kwargs: Additional arguments passed to `ultralytics.read_labels`.
+            Currently supports:
+            - image_size: Tuple of (height, width) for coordinate denormalization.
+              Defaults to
+              (480, 640). Will attempt to infer from actual images if available.
 
     Returns:
         The dataset as a `Labels` object.
@@ -190,6 +197,20 @@ def save_ultralytics(
         dataset_path: Path to save the Ultralytics dataset.
         split_ratios: Dictionary mapping split names to ratios (must sum to 1.0).
                      Defaults to {"train": 0.8, "val": 0.2}.
+        **kwargs: Additional arguments passed to `ultralytics.write_labels`.
+            Currently supports:
+            - class_id: Class ID to use for all instances (default: 0).
+            - image_format: Image format to use for saving frames. Either "png"
+              (default, lossless) or "jpg".
+            - image_quality: Image quality for JPEG format (1-100). For PNG, this is
+              the compression
+              level (0-9). If None, uses default quality settings.
+            - verbose: If True (default), show progress bars during export.
+            - use_multiprocessing: If True, use multiprocessing for parallel image
+              saving. Default is False.
+            - n_workers: Number of worker processes. If None, uses CPU count - 1.
+              Only used if
+              use_multiprocessing=True.
     """
     ultralytics.write_labels(labels, dataset_path, split_ratios=split_ratios, **kwargs)
 
@@ -202,6 +223,42 @@ def load_video(filename: str, **kwargs) -> Video:
             "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
             "tiff", "bmp". If the filename is a list, a list of image filenames are
             expected. If filename is a folder, it will be searched for images.
+        **kwargs: Additional arguments passed to `Video.from_filename`.
+            Currently supports:
+            - dataset: Name of dataset in HDF5 file.
+            - grayscale: Whether to force grayscale. If None, autodetect on first
+              frame load.
+            - keep_open: Whether to keep the video reader open between calls to read
+              frames.
+              If False, will close the reader after each call. If True (the
+              default), it will
+              keep the reader open and cache it for subsequent calls which may
+              enhance the
+              performance of reading multiple frames.
+            - source_video: Source video object if this is a proxy video. This is
+              metadata
+              and does not affect reading.
+            - backend_metadata: Metadata to store on the video backend. This is
+              useful for
+              storing metadata that requires an open backend (e.g., shape
+              information) without
+              having to open the backend.
+            - plugin: Video plugin to use for MediaVideo backend. One of "opencv",
+              "FFMPEG",
+              or "pyav". If None, will use the first available plugin.
+            - input_format: Format of the data in HDF5 datasets. One of
+              "channels_last" (the
+              default) in (frames, height, width, channels) order or "channels_first" in
+              (frames, channels, width, height) order.
+            - frame_map: Mapping from frame indices to indices in the HDF5 dataset.
+              This is
+              used to translate between frame indices of images within their source
+              video
+              and indices of images in the dataset.
+            - source_filename: Path to the source video file for HDF5 embedded videos.
+            - source_inds: Indices of frames in the source video file for HDF5
+              embedded videos.
+            - image_format: Format of images in HDF5 embedded dataset.
 
     Returns:
         A `Video` object.
@@ -266,6 +323,16 @@ def load_file(
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs",
             "ultralytics", and "video".
+        **kwargs: Additional arguments passed to the format-specific loading function:
+            - For "slp" format: No additional arguments.
+            - For "nwb" format: No additional arguments.
+            - For "labelstudio" format: skeleton (Optional[Skeleton]): Skeleton to
+              use for
+              the labels.
+            - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
+              the labels.
+            - For "ultralytics" format: See `load_ultralytics` for supported arguments.
+            - For "video" format: See `load_video` for supported arguments.
 
     Returns:
         A `Labels` or `Video` object.
@@ -325,6 +392,19 @@ def save_file(
             and "ultralytics".
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
+        **kwargs: Additional arguments passed to the format-specific saving function:
+            - For "slp" format: embed (bool | str | list[tuple[Video, int]] |
+              None): Frames
+              to embed in the saved labels file. One of None, True, "all", "user",
+              "suggestions", "user+suggestions", "source" or list of tuples of
+              (video, frame_idx). If False (the default), no frames are embedded.
+            - For "nwb" format: pose_estimation_metadata (dict): Metadata to store
+              in the
+              NWB file. append (bool): If True, append to existing NWB file.
+            - For "labelstudio" format: No additional arguments.
+            - For "jabs" format: pose_version (int): JABS pose format version (1-6).
+              root_folder (Optional[str]): Root folder for JABS project structure.
+            - For "ultralytics" format: See `save_ultralytics` for supported arguments.
     """
     if isinstance(filename, Path):
         filename = str(filename)

@@ -643,7 +643,7 @@ def test_make_session_and_session_to_dict(
     """Test recording session (de)serialization functions.
 
     Args:
-        frame_group_345: Frame group with an `InstanceGroup` at each camera view.
+        recording_session_345: A RecordingSession object with 3 cameras, 4 videos, and 5 frame groups.
     """
 
     def assert_cameras_equal(camera: Camera, camera_0: Camera):

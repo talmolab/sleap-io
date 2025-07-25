@@ -201,7 +201,7 @@ class PredictedPointsArray(PointsArray):
 
     @classmethod
     def from_array(cls, array: np.ndarray) -> "PredictedPointsArray":
-        """Convert an existing array to a PredictedPointsArray with the appropriate dtype.
+        """Convert an existing array to a PredictedPointsArray with appropriate dtype.
 
         Args:
             array: A numpy array to convert. Can be a structured array or a regular
@@ -221,7 +221,8 @@ class PredictedPointsArray(PointsArray):
             - Fourth column (if present) is interpreted as visible flag
             - Fifth column (if present) is interpreted as complete flag
 
-            If visibility is not provided, it is inferred from NaN values in the x coordinate.
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
         """
         dtype = cls._get_dtype()
 
@@ -827,7 +828,8 @@ class PredictedInstance(Instance):
             node: The node to set the point for. Can be an integer index, string name,
                 or Node object.
             value: A tuple or array-like of length 2 or 3 containing (x, y) coordinates
-                and optionally a confidence score. If the score is not provided, it defaults to 1.0.
+                and optionally a confidence score. If the score is not provided, it
+                defaults to 1.0.
 
         Notes:
             This sets the point coordinates, score, and marks the point as visible.

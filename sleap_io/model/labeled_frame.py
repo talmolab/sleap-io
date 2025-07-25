@@ -60,7 +60,7 @@ class LabeledFrame:
 
     @property
     def predicted_instances(self) -> list[Instance]:
-        """Frame instances that are predicted by a model (`PredictedInstance` objects)."""
+        """Frame instances that are predicted by a model (`PredictedInstance`)."""
         return [inst for inst in self.instances if type(inst) is PredictedInstance]
 
     @property

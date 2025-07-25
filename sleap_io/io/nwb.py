@@ -505,7 +505,8 @@ def build_pose_estimation_container_for_track(
         labels (Labels): A general labels object
         track_name (str): The name of the track in labels.tracks
         video (Video): The video to which data belongs to
-        pose_estimation_metadata: (dict) Metadata for pose estimation. See `append_nwb_data`
+        pose_estimation_metadata: (dict) Metadata for pose estimation.
+            See `append_nwb_data`
         skeleton_map: Mapping of skeleton names to NWB Skeleton objects
         skeleton_map: Mapping of skeleton names to NWB Skeleton objects
         devices: Optional list of recording devices
@@ -554,7 +555,10 @@ def build_pose_estimation_container_for_track(
     # Arrange and mix metadata
     pose_estimation_container_kwargs = dict(
         name=f"track={track_name}",
-        description=f"Estimated positions of {sleap_skeleton.name} in video {video_path.name}",
+        description=(
+            f"Estimated positions of {sleap_skeleton.name} in video "
+            f"{video_path.name}"
+        ),
         pose_estimation_series=pose_estimation_series_list,
         skeleton=nwb_skeleton,
         source_software="SLEAP",

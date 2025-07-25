@@ -125,6 +125,9 @@ class Video:
             source_video: The source video object if this is a proxy video. This is
                 present when the video contains an embedded subset of frames from
                 another video.
+            **kwargs: Additional backend-specific arguments passed to
+                VideoBackend.from_filename. See VideoBackend.from_filename for supported
+                arguments.
 
         Returns:
             Video instance with the appropriate backend instantiated.

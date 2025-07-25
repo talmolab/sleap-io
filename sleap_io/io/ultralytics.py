@@ -1,4 +1,5 @@
-"""This module handles direct I/O operations for working with Ultralytics YOLO pose format.
+"""This module handles direct I/O operations for working with Ultralytics YOLO pose
+format.
 
 Ultralytics YOLO pose format specification:
 - Directory structure: dataset_root/split/images/ and dataset_root/split/labels/
@@ -38,11 +39,14 @@ def read_labels(
     """Read Ultralytics YOLO pose dataset and return a `Labels` object.
 
     Args:
-        dataset_path: Path to the Ultralytics dataset root directory containing data.yaml.
+        dataset_path: Path to the Ultralytics dataset root directory containing
+            data.yaml.
         split: Dataset split to read ('train', 'val', or 'test'). Defaults to 'train'.
-        skeleton: Optional skeleton to use. If not provided, will be inferred from data.yaml.
+        skeleton: Optional skeleton to use. If not provided, will be inferred from
+            data.yaml.
         image_size: Image dimensions (height, width) for coordinate denormalization.
-                   Defaults to (480, 640). Will attempt to infer from actual images if available.
+                   Defaults to (480, 640). Will attempt to infer from actual images if
+                   available.
 
     Returns:
         Parsed labels as a `Labels` instance.
@@ -90,7 +94,8 @@ def read_labels(
             # Parse label file if it exists
             instances = []
             if label_file.exists():
-                # Get image dimensions - try from video shape first, fallback to reading image
+                # Get image dimensions - try from video shape first, fallback to reading
+                # image
                 if video.shape is not None:
                     img_shape = video.shape[:2]
                 else:
@@ -185,12 +190,16 @@ def write_labels(
         dataset_path: Path to write the Ultralytics dataset.
         split_ratios: Dictionary mapping split names to ratios (must sum to 1.0).
         class_id: Class ID to use for all instances (default: 0).
-        image_format: Image format to use for saving frames. Either "png" (default, lossless) or "jpg".
-        image_quality: Image quality for JPEG format (1-100). For PNG, this is the compression level (0-9).
+        image_format: Image format to use for saving frames. Either "png" (default,
+            lossless) or "jpg".
+        image_quality: Image quality for JPEG format (1-100). For PNG, this is the
+            compression level (0-9).
             If None, uses default quality settings.
         verbose: If True (default), show progress bars during export.
-        use_multiprocessing: If True, use multiprocessing for parallel image saving. Default is False.
-        n_workers: Number of worker processes. If None, uses CPU count - 1. Only used if use_multiprocessing=True.
+        use_multiprocessing: If True, use multiprocessing for parallel image saving.
+            Default is False.
+        n_workers: Number of worker processes. If None, uses CPU count - 1. Only used
+            if use_multiprocessing=True.
         **kwargs: Additional arguments (unused, for compatibility).
     """
     dataset_path = Path(dataset_path)
@@ -291,7 +300,8 @@ def write_labels(
                     frame_img = frame.image
                     if frame_img is None:
                         warnings.warn(
-                            f"Could not load frame {frame.frame_idx} from video, skipping."
+                            f"Could not load frame {frame.frame_idx} from video, "
+                            f"skipping."
                         )
                         continue
 
