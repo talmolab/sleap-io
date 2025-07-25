@@ -1,17 +1,20 @@
 """This module contains high-level wrappers for utilizing different I/O backends."""
 
 from __future__ import annotations
+
+from pathlib import Path
+from typing import List, Optional, Union
+
+import numpy as np
+
 from sleap_io import Labels, Skeleton, Video
-from sleap_io.io import slp, nwb, labelstudio, jabs, video_writing, ultralytics
+from sleap_io.io import jabs, labelstudio, nwb, slp, ultralytics, video_writing
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
     SkeletonEncoder,
     SkeletonYAMLDecoder,
     SkeletonYAMLEncoder,
 )
-from typing import Optional, Union, List
-from pathlib import Path
-import numpy as np
 
 
 def load_slp(filename: str, open_videos: bool = True) -> Labels:

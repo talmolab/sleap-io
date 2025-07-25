@@ -1,13 +1,15 @@
 """Utilities for writing videos."""
 
 from __future__ import annotations
-from typing import Type, Optional
+
+from pathlib import Path
 from types import TracebackType
-import numpy as np
+from typing import Optional, Type
+
+import attrs
 import imageio
 import imageio.v2 as iio_v2
-import attrs
-from pathlib import Path
+import numpy as np
 
 
 @attrs.define

@@ -39,11 +39,9 @@ pip install -e .[dev]
 
 ### Linting
 ```bash
-# Format check (MUST pass before committing)
-black --check sleap_io tests
-
-# Docstring style check
-pydocstyle --convention=google sleap_io/
+# Linting and format check (MUST pass before committing)
+ruff check sleap_io tests
+ruff format --check sleap_io tests
 ```
 
 ### Testing
@@ -72,10 +70,10 @@ mike serve
 
 ## Code Style Requirements
 
-1. **Formatting**: Use `black` with max line length of 88
+1. **Formatting**: Use `ruff format` with max line length of 88
 2. **Docstrings**: Google style, document "Attributes" section in class-level docstring
 3. **Type hints**: Always include for function arguments and return types
-4. **Import order**: Standard library, third-party, local (enforced by black)
+4. **Import order**: Standard library, third-party, local (enforced by ruff)
 
 ## Testing Guidelines
 

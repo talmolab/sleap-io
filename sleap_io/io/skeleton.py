@@ -1,9 +1,11 @@
 """This module handles I/O operations for standalone skeleton JSON files."""
 
 from __future__ import annotations
+
 import json
-from typing import Any, Dict, List, Union, Tuple, Optional
-from sleap_io import Skeleton, Node, Edge, Symmetry
+from typing import Any, Dict, List, Optional, Union
+
+from sleap_io import Edge, Node, Skeleton, Symmetry
 
 
 class SkeletonDecoder:
@@ -50,7 +52,6 @@ class SkeletonDecoder:
         """
         # First, scan all links to build complete node and py/id mappings
         all_nodes = {}  # node name -> Node object
-        py_id_first_seen = {}  # py/id -> node name (first occurrence)
 
         # Track order of node definitions for py/id assignment
         node_definition_order = []

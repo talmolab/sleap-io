@@ -1,13 +1,14 @@
-import pytest
-from pathlib import Path
+"""Tests for NWB I/O functionality."""
+
 import datetime
+from pathlib import Path
 
 import numpy as np
-from pynwb import NWBFile, NWBHDF5IO
-from pynwb.file import Subject
+import pytest
+from pynwb import NWBHDF5IO, NWBFile
 
 from sleap_io import load_slp
-from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps
+from sleap_io.io.nwb import append_nwb_data, get_timestamps, write_nwb
 
 
 @pytest.fixture

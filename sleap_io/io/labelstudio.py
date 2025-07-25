@@ -16,7 +16,7 @@ from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import simplejson as json
 
-from sleap_io import Instance, LabeledFrame, Labels, Node, Skeleton, Video
+from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
 
 
 def read_labels(
@@ -37,7 +37,7 @@ def read_labels(
     with open(labels_path, "r") as task_file:
         tasks = json.load(task_file)
 
-    if type(skeleton) == list:
+    if type(skeleton) is list:
         skeleton = Skeleton(nodes=skeleton)  # type: ignore[arg-type]
     elif skeleton is None:
         skeleton = infer_nodes(tasks)

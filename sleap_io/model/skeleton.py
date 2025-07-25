@@ -6,10 +6,12 @@ differently depending on the underlying pose model.
 """
 
 from __future__ import annotations
-from attrs import define, field
+
 import typing
-import numpy as np
 from functools import lru_cache
+
+import numpy as np
+from attrs import define, field
 
 
 @define(eq=False)
@@ -138,7 +140,7 @@ class Skeleton:
         if isinstance(self.nodes, np.ndarray):
             object.__setattr__(self, "nodes", self.nodes.tolist())
         for i, node in enumerate(self.nodes):
-            if type(node) == str:
+            if type(node) is str:
                 self.nodes[i] = Node(node)
 
     def _convert_edges(self):
@@ -147,29 +149,29 @@ class Skeleton:
             self.edges = self.edges.tolist()
         node_names = self.node_names
         for i, edge in enumerate(self.edges):
-            if type(edge) == Edge:
+            if type(edge) is Edge:
                 continue
             src, dst = edge
-            if type(src) == str:
+            if type(src) is str:
                 try:
                     src = node_names.index(src)
                 except ValueError:
                     raise ValueError(
                         f"Node '{src}' specified in the edge list is not in the nodes."
                     )
-            if type(src) == int or (
+            if type(src) is int or (
                 np.isscalar(src) and np.issubdtype(src.dtype, np.integer)
             ):
                 src = self.nodes[src]
 
-            if type(dst) == str:
+            if type(dst) is str:
                 try:
                     dst = node_names.index(dst)
                 except ValueError:
                     raise ValueError(
                         f"Node '{dst}' specified in the edge list is not in the nodes."
                     )
-            if type(dst) == int or (
+            if type(dst) is int or (
                 np.isscalar(dst) and np.issubdtype(dst.dtype, np.integer)
             ):
                 dst = self.nodes[dst]
@@ -183,10 +185,10 @@ class Skeleton:
 
         node_names = self.node_names
         for i, symmetry in enumerate(self.symmetries):
-            if type(symmetry) == Symmetry:
+            if type(symmetry) is Symmetry:
                 continue
             node1, node2 = symmetry
-            if type(node1) == str:
+            if type(node1) is str:
                 try:
                     node1 = node_names.index(node1)
                 except ValueError:
@@ -194,12 +196,12 @@ class Skeleton:
                         f"Node '{node1}' specified in the symmetry list is not in the "
                         "nodes."
                     )
-            if type(node1) == int or (
+            if type(node1) is int or (
                 np.isscalar(node1) and np.issubdtype(node1.dtype, np.integer)
             ):
                 node1 = self.nodes[node1]
 
-            if type(node2) == str:
+            if type(node2) is str:
                 try:
                     node2 = node_names.index(node2)
                 except ValueError:
@@ -207,7 +209,7 @@ class Skeleton:
                         f"Node '{node2}' specified in the symmetry list is not in the "
                         "nodes."
                     )
-            if type(node2) == int or (
+            if type(node2) is int or (
                 np.isscalar(node2) and np.issubdtype(node2.dtype, np.integer)
             ):
                 node2 = self.nodes[node2]
@@ -311,33 +313,33 @@ class Skeleton:
     def __repr__(self) -> str:
         """Return a readable representation of the skeleton."""
         nodes = ", ".join([f'"{node}"' for node in self.node_names])
-        return "Skeleton(" f"nodes=[{nodes}], " f"edges={self.edge_inds}" ")"
+        return f"Skeleton(nodes=[{nodes}], edges={self.edge_inds})"
 
     def index(self, node: Node | str) -> int:
         """Return the index of a node specified as a `Node` or string name."""
-        if type(node) == str:
+        if type(node) is str:
             return self.index(self._name_to_node_cache[node])
-        elif type(node) == Node:
+        elif type(node) is Node:
             return self._node_to_ind_cache[node]
         else:
             raise IndexError(f"Invalid indexing argument for skeleton: {node}")
 
     def __getitem__(self, idx: NodeOrIndex) -> Node:
         """Return a `Node` when indexing by name or integer."""
-        if type(idx) == int:
+        if type(idx) is int:
             return self.nodes[idx]
-        elif type(idx) == str:
+        elif type(idx) is str:
             return self._name_to_node_cache[idx]
         else:
             raise IndexError(f"Invalid indexing argument for skeleton: {idx}")
 
     def __contains__(self, node: NodeOrIndex) -> bool:
         """Check if a node is in the skeleton."""
-        if type(node) == str:
+        if type(node) is str:
             return node in self._name_to_node_cache
-        elif type(node) == Node:
+        elif type(node) is Node:
             return node in self.nodes
-        elif type(node) == int:
+        elif type(node) is int:
             return 0 <= node < len(self.nodes)
         else:
             raise ValueError(f"Invalid node type for skeleton: {node}")
@@ -355,10 +357,10 @@ class Skeleton:
         if node in self:
             raise ValueError(f"Node '{node}' already exists in the skeleton.")
 
-        if type(node) == str:
+        if type(node) is str:
             node = Node(node)
 
-        if type(node) != Node:
+        if type(node) is not Node:
             raise ValueError(f"Invalid node type: {node} ({type(node)})")
 
         self.nodes.append(node)
@@ -398,7 +400,7 @@ class Skeleton:
             else:
                 raise IndexError(f"Node '{node}' not found in the skeleton.")
 
-        if type(node) == Node:
+        if type(node) is Node:
             return node
 
         return self[node]
@@ -415,7 +417,7 @@ class Skeleton:
             dst: The destination node specified as a `Node`, name or index.
         """
         edge = None
-        if type(src) == tuple:
+        if type(src) is tuple:
             src, dst = src
 
         if is_node_or_index(src):
@@ -426,7 +428,7 @@ class Skeleton:
             dst = self.require_node(dst)
             edge = Edge(src, dst)
 
-        if type(src) == Edge:
+        if type(src) is Edge:
             edge = src
 
         if edge not in self.edges:
@@ -452,7 +454,7 @@ class Skeleton:
             node2: The second node specified as a `Node`, name or index.
         """
         symmetry = None
-        if type(node1) == Symmetry:
+        if type(node1) is Symmetry:
             symmetry = node1
             node1, node2 = symmetry
 
@@ -508,7 +510,7 @@ class Skeleton:
             >>> skel.node_names
             ["a", "b", "c"]
         """
-        if type(name_map) == list:
+        if type(name_map) is list:
             if len(name_map) != len(self.nodes):
                 raise ValueError(
                     "List of new node names must be the same length as the current "
@@ -517,9 +519,9 @@ class Skeleton:
             name_map = {node: name for node, name in zip(self.nodes, name_map)}
 
         for old_name, new_name in name_map.items():
-            if type(old_name) == Node:
+            if type(old_name) is Node:
                 old_name = old_name.name
-            if type(old_name) == int:
+            if type(old_name) is int:
                 old_name = self.nodes[old_name].name
 
             if old_name not in self._name_to_node_cache:
@@ -677,8 +679,8 @@ class Skeleton:
         """
         if isinstance(other_nodes, np.ndarray):
             other_nodes = other_nodes.tolist()
-        if type(other_nodes) != tuple:
-            other_nodes = [x.name if type(x) == Node else x for x in other_nodes]
+        if type(other_nodes) is not tuple:
+            other_nodes = [x.name if type(x) is Node else x for x in other_nodes]
 
         skeleton_inds, other_inds = match_nodes_cached(
             tuple(self.node_names), tuple(other_nodes)

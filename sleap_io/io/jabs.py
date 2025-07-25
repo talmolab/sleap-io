@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
-import h5py
-import re
 import os
-import numpy as np
-from typing import List, Optional, Union
+import re
 import warnings
+from typing import List, Optional, Union
+
+import h5py
+import numpy as np
 
 from sleap_io import (
+    Edge,
     Instance,
     LabeledFrame,
     Labels,
     Node,
-    Edge,
-    Symmetry,
-    Video,
     Skeleton,
+    Symmetry,
     Track,
+    Video,
 )
 
 JABS_DEFAULT_KEYPOINTS = [
@@ -102,9 +103,9 @@ def read_labels(
         except (KeyError, IndexError):
             pose_version = 2
             data_shape = pose_file["poseest/points"].shape
-            assert (
-                len(data_shape) == 3
-            ), f"Pose version not present and shape does not match single mouse: shape of {data_shape} for {labels_path}"
+            assert len(data_shape) == 3, (
+                f"Pose version not present and shape does not match single mouse: shape of {data_shape} for {labels_path}"
+            )
         if pose_version == 2:
             tracks[1] = Track("1")
         # Change field name for newer pose formats
@@ -205,9 +206,9 @@ def prediction_to_instance(
     Returns:
         Parsed `Instance`.
     """
-    assert (
-        len(skeleton.nodes) == data.shape[0]
-    ), f"Skeleton ({len(skeleton.nodes)}) does not match number of keypoints ({data.shape[0]})"
+    assert len(skeleton.nodes) == data.shape[0], (
+        f"Skeleton ({len(skeleton.nodes)}) does not match number of keypoints ({data.shape[0]})"
+    )
 
     points = {}
     for i, cur_node in enumerate(skeleton.nodes):

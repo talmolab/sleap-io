@@ -1,30 +1,37 @@
 """Functions to write and read from the neurodata without borders (NWB) format."""
 
-from copy import deepcopy
-from typing import List, Optional, Union, Dict
-from pathlib import Path
 import datetime
-import uuid
 import re
+import uuid
+from copy import deepcopy
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
-import pandas as pd  # type: ignore[import]
 import numpy as np
+import pandas as pd  # type: ignore[import]
 
 try:
     from numpy.typing import ArrayLike
 except ImportError:
     ArrayLike = np.ndarray
-from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
-from ndx_pose import PoseEstimationSeries, PoseEstimation, Skeleton, Skeletons  # type: ignore[import]
+from ndx_pose import (  # type: ignore[import]
+    PoseEstimation,
+    PoseEstimationSeries,
+    Skeleton,
+    Skeletons,
+)
+from pynwb import NWBHDF5IO, NWBFile, ProcessingModule  # type: ignore[import]
 
 from sleap_io import (
-    Labels,
-    Video,
-    LabeledFrame,
-    Track,
-    Skeleton as SleapSkeleton,
     Instance,
+    LabeledFrame,
+    Labels,
     PredictedInstance,
+    Track,
+    Video,
+)
+from sleap_io import (
+    Skeleton as SleapSkeleton,
 )
 
 

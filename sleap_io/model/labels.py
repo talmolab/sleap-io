@@ -12,22 +12,25 @@ training models) and predictions (inference results).
 """
 
 from __future__ import annotations
+
+from copy import deepcopy
+from pathlib import Path
+from typing import Any, Iterator, Optional, Union
+
+import numpy as np
+from attrs import define, field
+
 from sleap_io import (
-    Skeleton,
-    LabeledFrame,
     Instance,
+    LabeledFrame,
     PredictedInstance,
-    Video,
-    Track,
-    SuggestionFrame,
     RecordingSession,
+    Skeleton,
+    SuggestionFrame,
+    Track,
+    Video,
 )
 from sleap_io.model.skeleton import NodeOrIndex
-from attrs import define, field
-from typing import Iterator, Union, Optional, Any
-import numpy as np
-from pathlib import Path
-from copy import deepcopy
 
 
 @define
@@ -89,15 +92,15 @@ class Labels:
         self, key: int | slice | list[int] | np.ndarray | tuple[Video, int]
     ) -> list[LabeledFrame] | LabeledFrame:
         """Return one or more labeled frames based on indexing criteria."""
-        if type(key) == int:
+        if type(key) is int:
             return self.labeled_frames[key]
-        elif type(key) == slice:
+        elif type(key) is slice:
             return [self.labeled_frames[i] for i in range(*key.indices(len(self)))]
-        elif type(key) == list:
+        elif type(key) is list:
             return [self.labeled_frames[i] for i in key]
         elif isinstance(key, np.ndarray):
             return [self.labeled_frames[i] for i in key.tolist()]
-        elif type(key) == tuple and len(key) == 2:
+        elif type(key) is tuple and len(key) == 2:
             video, frame_idx = key
             res = self.find(video, frame_idx)
             if len(res) == 1:
@@ -107,7 +110,7 @@ class Labels:
                     f"No labeled frames found for video {video} and "
                     f"frame index {frame_idx}."
                 )
-        elif type(key) == Video:
+        elif type(key) is Video:
             res = self.find(key)
             if len(res) == 0:
                 raise IndexError(f"No labeled frames found for video {key}.")
@@ -224,7 +227,7 @@ class Labels:
         # Get labeled frames for specified video.
         if video is None:
             video = 0
-        if type(video) == int:
+        if type(video) is int:
             video = self.videos[video]
         lfs = [lf for lf in self.labeled_frames if lf.video == video]
 
@@ -348,9 +351,9 @@ class Labels:
                     inst = track_to_instance[track]
                     j = self.tracks.index(track)
 
-                    if type(inst) == PredictedInstance:
+                    if type(inst) is PredictedInstance:
                         tracks[i, j] = inst.numpy(scores=return_confidence)
-                    elif type(inst) == Instance:
+                    elif type(inst) is Instance:
                         tracks[i, j, :, :2] = inst.numpy()
 
                         # If return_confidence is True, add dummy confidence scores
@@ -637,9 +640,10 @@ class Labels:
                 `.pkg.slp` files. Only applies when `embed=False`.
             verbose: If `True` (the default), display a progress bar when embedding frames.
         """
+        from pathlib import Path
+
         from sleap_io import save_file
         from sleap_io.io.slp import sanitize_filename
-        from pathlib import Path
 
         # Check for self-referential save when embed=False
         if embed is False and (format == "slp" or str(filename).endswith(".slp")):
@@ -694,7 +698,6 @@ class Labels:
         used_videos = []
         kept_frames = []
         for lf in self.labeled_frames:
-
             if empty_instances:
                 lf.remove_empty_instances()
 
@@ -1027,7 +1030,7 @@ class Labels:
         elif filename_map is not None:
             for video in self.videos:
                 for old_fn, new_fn in filename_map.items():
-                    if type(video.filename) == list:
+                    if type(video.filename) is list:
                         new_fns = []
                         for fn in video.filename:
                             if Path(fn) == Path(old_fn):
@@ -1044,7 +1047,7 @@ class Labels:
                 for old_prefix, new_prefix in prefix_map.items():
                     old_prefix, new_prefix = Path(old_prefix), Path(new_prefix)
 
-                    if type(video.filename) == list:
+                    if type(video.filename) is list:
                         new_fns = []
                         for fn in video.filename:
                             fn = Path(fn)
@@ -1284,7 +1287,7 @@ class Labels:
                 raise ValueError(
                     "Video needs to be specified when trimming multi-video projects."
                 )
-        if type(video) == int:
+        if type(video) is int:
             video = self.videos[video]
 
         # Write trimmed clip.

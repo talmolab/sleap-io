@@ -1,15 +1,15 @@
 """Tests for methods in the sleap_io.model.instance file."""
 
-from pickletools import pyset
 import numpy as np
-from numpy.testing import assert_equal
 import pytest
+from numpy.testing import assert_equal
+
+from sleap_io import Skeleton
 from sleap_io.model.instance import (
-    Track,
     Instance,
     PredictedInstance,
+    Track,
 )
-from sleap_io import Skeleton
 
 
 def test_track():
@@ -118,7 +118,7 @@ def test_instance_convert_points():
 
 
 def test_instance_comparison():
-    """Test some properties of `Instance` equality semantics"""
+    """Test some properties of `Instance` equality semantics."""
     # test that instances with different skeletons are not considered equal
     inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=Skeleton(["A", "B"]))
     inst2 = Instance({"A": [0, 1], "C": [2, 3]}, skeleton=Skeleton(["A", "C"]))
@@ -271,18 +271,18 @@ def test_instance_setitem():
     # Set point by index
     inst[0] = [1, 2]
     assert_equal(inst[0]["xy"], [1, 2])
-    assert inst[0]["visible"] == True
+    assert inst[0]["visible"] is True
 
     # Set point by node name
     inst["B"] = [3, 4]
     assert_equal(inst["B"]["xy"], [3, 4])
-    assert inst["B"]["visible"] == True
+    assert inst["B"]["visible"] is True
 
     # Set point by Node object
     node = inst.skeleton.nodes[2]
     inst[node] = [5, 6]
     assert_equal(inst[node]["xy"], [5, 6])
-    assert inst[node]["visible"] == True
+    assert inst[node]["visible"] is True
 
     # Check all points were set correctly
     assert_equal(inst.numpy(), [[1, 2], [3, 4], [5, 6]])
@@ -304,21 +304,21 @@ def test_predicted_instance_setitem():
     # Set point by index without score (should default to 1.0)
     inst[0] = [1, 2]
     assert_equal(inst[0]["xy"], [1, 2])
-    assert inst[0]["visible"] == True
+    assert inst[0]["visible"] is True
     assert inst[0]["score"] == 1.0
 
     # Set point by node name with score
     inst["B"] = [3, 4, 0.75]
     assert_equal(inst["B"]["xy"], [3, 4])
     assert inst["B"]["score"] == 0.75
-    assert inst["B"]["visible"] == True
+    assert inst["B"]["visible"] is True
 
     # Set point by Node object with score
     node = inst.skeleton.nodes[2]
     inst[node] = [5, 6, 0.9]
     assert_equal(inst[node]["xy"], [5, 6])
     assert inst[node]["score"] == 0.9
-    assert inst[node]["visible"] == True
+    assert inst[node]["visible"] is True
 
     # Check numpy output with scores
     expected = np.array([[1, 2, 1.0], [3, 4, 0.75], [5, 6, 0.9]])

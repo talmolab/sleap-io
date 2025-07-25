@@ -1,36 +1,36 @@
 """This module handles direct I/O operations for working with .slp files."""
 
 from __future__ import annotations
-import numpy as np
+
+import sys
+from enum import Enum, IntEnum
+from pathlib import Path
+from typing import Optional, Union
+
 import h5py
+import imageio.v3 as iio
+import numpy as np
 import simplejson as json
-from typing import Union, Optional
+from tqdm import tqdm
+
 from sleap_io import (
-    Video,
-    Skeleton,
-    Edge,
-    Symmetry,
-    Node,
-    Track,
-    SuggestionFrame,
-    Instance,
-    PredictedInstance,
-    LabeledFrame,
-    Labels,
     Camera,
     CameraGroup,
-    InstanceGroup,
     FrameGroup,
+    Instance,
+    InstanceGroup,
+    LabeledFrame,
+    Labels,
+    PredictedInstance,
     RecordingSession,
+    Skeleton,
+    SuggestionFrame,
+    Track,
+    Video,
 )
-from sleap_io.io.video_reading import VideoBackend, ImageVideo, MediaVideo, HDF5Video
-from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset, is_file_accessible
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
-from enum import IntEnum, Enum
-from pathlib import Path
-import imageio.v3 as iio
-import sys
-from tqdm import tqdm
+from sleap_io.io.utils import is_file_accessible, read_hdf5_attrs, read_hdf5_dataset
+from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
 
 try:
     import cv2
@@ -229,7 +229,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
     # Add backend metadata
     if video.backend is None:
         result["backend"] = video.backend_metadata
-    elif type(video.backend) == MediaVideo:
+    elif type(video.backend) is MediaVideo:
         result["backend"] = {
             "type": "MediaVideo",
             "shape": video.shape,
@@ -239,7 +239,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "dataset": "",
             "input_format": "",
         }
-    elif type(video.backend) == HDF5Video:
+    elif type(video.backend) is HDF5Video:
         # Determine if we should use self-reference or external reference
         use_self_reference = (
             video.backend.has_embedded_images
@@ -258,7 +258,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "has_embedded_images": video.backend.has_embedded_images,
             "grayscale": video.grayscale,
         }
-    elif type(video.backend) == ImageVideo:
+    elif type(video.backend) is ImageVideo:
         if video.shape is not None:
             height, width, channels = video.shape[1:4]
         else:
@@ -718,7 +718,7 @@ def write_videos(
 
     # First determine which videos need embedding
     for video_ind, video in enumerate(videos):
-        if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
+        if type(video.backend) is HDF5Video and video.backend.has_embedded_images:
             if reference_mode == VideoReferenceMode.RESTORE_ORIGINAL:
                 if video.source_video is None:
                     # No source video available, reference the current embedded video file
@@ -770,9 +770,7 @@ def write_videos(
             image_format=[
                 v.backend.image_format if hasattr(v.backend, "image_format") else "png"
                 for _, v, _ in videos_to_embed
-            ][
-                0
-            ],  # Use the first video's format
+            ][0],  # Use the first video's format
             verbose=verbose,
         )
 
@@ -1220,7 +1218,7 @@ def write_lfs(labels_path: str, labels: Labels):
                 to_link.append((instance_id, inst.from_predicted))
             score = 0.0
 
-            if type(inst) == Instance:
+            if type(inst) is Instance:
                 instance_type = InstanceType.USER
                 tracking_score = inst.tracking_score
                 point_id_start = len(points)
@@ -1232,7 +1230,7 @@ def write_lfs(labels_path: str, labels: Labels):
 
                 point_id_end = len(points)
 
-            elif type(inst) == PredictedInstance:
+            elif type(inst) is PredictedInstance:
                 instance_type = InstanceType.PREDICTED
                 score = inst.score
                 tracking_score = inst.tracking_score
@@ -1569,8 +1567,7 @@ def make_session(
             frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
         except ValueError as e:
             print(
-                f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping..."
-                f"\n{e}"
+                f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping...\n{e}"
             )
 
     session = RecordingSession(
@@ -1961,9 +1958,9 @@ def write_labels(
 
     # Store original videos before embedding modifies them
     # We need to make a copy of the actual video objects, not just the list
-    original_videos = [v for v in labels.videos] if embed and embed != False else None
+    original_videos = [v for v in labels.videos] if embed else None
 
-    if embed and embed != False:
+    if embed:
         embed_videos(labels_path, labels, embed, verbose=verbose)
 
     # Determine reference mode based on parameters

@@ -5,10 +5,13 @@ The `LabeledFrame` class is a data structure that contains `Instance`s and
 """
 
 from __future__ import annotations
-from sleap_io import Instance, PredictedInstance, Video
-from attrs import define, field
+
 from typing import Union
+
 import numpy as np
+from attrs import define, field
+
+from sleap_io import Instance, PredictedInstance, Video
 
 
 @define(eq=False)
@@ -45,26 +48,26 @@ class LabeledFrame:
     @property
     def user_instances(self) -> list[Instance]:
         """Frame instances that are user-labeled (`Instance` objects)."""
-        return [inst for inst in self.instances if type(inst) == Instance]
+        return [inst for inst in self.instances if type(inst) is Instance]
 
     @property
     def has_user_instances(self) -> bool:
         """Return True if the frame has any user-labeled instances."""
         for inst in self.instances:
-            if type(inst) == Instance:
+            if type(inst) is Instance:
                 return True
         return False
 
     @property
     def predicted_instances(self) -> list[Instance]:
         """Frame instances that are predicted by a model (`PredictedInstance` objects)."""
-        return [inst for inst in self.instances if type(inst) == PredictedInstance]
+        return [inst for inst in self.instances if type(inst) is PredictedInstance]
 
     @property
     def has_predicted_instances(self) -> bool:
         """Return True if the frame has any predicted instances."""
         for inst in self.instances:
-            if type(inst) == PredictedInstance:
+            if type(inst) is PredictedInstance:
                 return True
         return False
 
@@ -102,12 +105,12 @@ class LabeledFrame:
             used_tracks = [
                 inst.track
                 for inst in self.instances
-                if type(inst) == Instance and inst.track is not None
+                if type(inst) is Instance and inst.track is not None
             ]
             unused_predictions = [
                 inst
                 for inst in self.instances
-                if inst.track not in used_tracks and type(inst) == PredictedInstance
+                if inst.track not in used_tracks and type(inst) is PredictedInstance
             ]
 
         else:
@@ -121,14 +124,14 @@ class LabeledFrame:
             unused_predictions = [
                 inst
                 for inst in self.instances
-                if type(inst) == PredictedInstance and inst not in used_instances
+                if type(inst) is PredictedInstance and inst not in used_instances
             ]
 
         return unused_predictions
 
     def remove_predictions(self):
         """Remove all `PredictedInstance` objects from the frame."""
-        self.instances = [inst for inst in self.instances if type(inst) == Instance]
+        self.instances = [inst for inst in self.instances if type(inst) is Instance]
 
     def remove_empty_instances(self):
         """Remove all instances with no visible points."""

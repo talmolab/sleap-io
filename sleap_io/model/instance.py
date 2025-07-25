@@ -8,11 +8,13 @@ estimated, such as confidence scores.
 """
 
 from __future__ import annotations
+
+from typing import Optional, Union
+
 import attrs
-from typing import ClassVar, Optional, Union
-from sleap_io import Skeleton, Node
-from sleap_io.model.skeleton import NodeOrIndex
 import numpy as np
+
+from sleap_io import Node, Skeleton
 
 
 class PointsArray(np.ndarray):
@@ -499,7 +501,7 @@ class Instance:
 
     def __getitem__(self, node: Union[int, str, Node]) -> np.ndarray:
         """Return the point associated with a node."""
-        if type(node) != int:
+        if type(node) is not int:
             node = self.skeleton.index(node)
 
         return self.points[node]
@@ -515,7 +517,7 @@ class Instance:
         Notes:
             This sets the point coordinates and marks the point as visible.
         """
-        if type(node) != int:
+        if type(node) is not int:
             node = self.skeleton.index(node)
 
         if len(value) < 2:
@@ -830,7 +832,7 @@ class PredictedInstance(Instance):
         Notes:
             This sets the point coordinates, score, and marks the point as visible.
         """
-        if type(node) != int:
+        if type(node) is not int:
             node = self.skeleton.index(node)
 
         if len(value) < 2:

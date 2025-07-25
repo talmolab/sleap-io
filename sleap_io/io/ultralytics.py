@@ -10,21 +10,23 @@ Ultralytics YOLO pose format specification:
 """
 
 from __future__ import annotations
+
+import multiprocessing
+import warnings
+from multiprocessing import Pool
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import imageio.v3 as iio
 import numpy as np
 import yaml
-from typing import Dict, List, Optional, Union, Tuple
-from pathlib import Path
-import warnings
-from sleap_io.model.video import Video
-from sleap_io.model.skeleton import Skeleton, Edge, Node
-from sleap_io.model.instance import Track, Instance
+from tqdm import tqdm
+
+from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-import imageio.v3 as iio
-from tqdm import tqdm
-import multiprocessing
-from multiprocessing import Pool
-from functools import partial
+from sleap_io.model.skeleton import Edge, Node, Skeleton
+from sleap_io.model.video import Video
 
 
 def read_labels(
@@ -379,7 +381,7 @@ def parse_label_file(
                     )
                     continue
 
-                class_id = int(parts[0])
+                _ = int(parts[0])  # class_id - not used but part of YOLO format
                 x_center, y_center, width, height = map(float, parts[1:5])
 
                 # Parse keypoints
@@ -560,7 +562,7 @@ def create_splits_from_labels(
                 n_train=train_ratio, n_val=val_ratio, n_test=test_ratio
             )
             return {"train": train_split, "val": val_split, "test": test_split}
-        except:
+        except Exception:
             # Fallback to manual splitting
             first_split = train_ratio + val_ratio
             temp_split, test_split = labels.split(first_split)

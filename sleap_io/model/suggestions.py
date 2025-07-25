@@ -1,8 +1,10 @@
 """Data module for suggestions."""
 
 from __future__ import annotations
-from sleap_io.model.video import Video
+
 import attrs
+
+from sleap_io.model.video import Video
 
 
 @attrs.define(auto_attribs=True)

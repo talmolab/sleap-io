@@ -1,9 +1,9 @@
 """Tests for standalone skeleton JSON I/O."""
 
-import pytest
 import json
-import tempfile
-from pathlib import Path
+
+import pytest
+
 import sleap_io as sio
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
@@ -173,8 +173,8 @@ def test_encode_simple_skeleton():
     data = json.loads(json_str)
 
     assert data["graph"]["name"] == "test"
-    assert data["directed"] == True
-    assert data["multigraph"] == True
+    assert data["directed"] is True
+    assert data["multigraph"] is True
     assert len(data["links"]) == 1
     assert data["links"][0]["source"]["py/object"] == "sleap.skeleton.Node"
     assert data["links"][0]["source"]["py/state"]["py/tuple"][0] == "A"
@@ -1019,9 +1019,9 @@ def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
 
     # Verify node names and order preserved
     for i, (o_node, r_node) in enumerate(zip(original.nodes, reloaded.nodes)):
-        assert (
-            o_node.name == r_node.name
-        ), f"Node {i} mismatch: {o_node.name} != {r_node.name}"
+        assert o_node.name == r_node.name, (
+            f"Node {i} mismatch: {o_node.name} != {r_node.name}"
+        )
 
     # Verify edges preserved
     for i, (o_edge, r_edge) in enumerate(zip(original.edges, reloaded.edges)):
@@ -1031,7 +1031,6 @@ def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
 
 def test_training_config_decode(training_config_fly32, skeleton_json_fly32):
     """Test decoding a training config with embedded skeleton data."""
-
     # Test loading standalone skeleton file
     with open(skeleton_json_fly32, "r") as f:
         skeleton_data = json.load(f)

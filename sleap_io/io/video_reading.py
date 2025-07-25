@@ -1,17 +1,17 @@
 """Backends for reading videos."""
 
 from __future__ import annotations
-from pathlib import Path
 
-import simplejson as json
 import sys
 from io import BytesIO
+from pathlib import Path
 from typing import Optional, Tuple
 
 import attrs
 import h5py
 import imageio.v3 as iio
 import numpy as np
+import simplejson as json
 
 try:
     import cv2
@@ -19,12 +19,12 @@ except ImportError:
     pass
 
 try:
-    import imageio_ffmpeg
+    import imageio_ffmpeg  # noqa: F401
 except ImportError:
     pass
 
 try:
-    import av
+    import av  # noqa: F401
 except ImportError:
     pass
 
@@ -84,10 +84,10 @@ class VideoBackend:
         if isinstance(filename, Path):
             filename = filename.as_posix()
 
-        if type(filename) == str and Path(filename).is_dir():
+        if type(filename) is str and Path(filename).is_dir():
             filename = ImageVideo.find_images(filename)
 
-        if type(filename) == list:
+        if type(filename) is list:
             filename = [Path(f).as_posix() for f in filename]
             return ImageVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)

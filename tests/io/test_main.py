@@ -1,41 +1,42 @@
 """Tests for functions in the sleap_io.io.main file."""
 
 import pytest
+
 from sleap_io import Labels
 from sleap_io.io.main import (
-    load_slp,
-    load_nwb,
-    save_nwb,
-    load_labelstudio,
-    save_labelstudio,
-    load_jabs,
-    save_jabs,
-    load_video,
-    save_video,
     load_file,
+    load_jabs,
+    load_labelstudio,
+    load_nwb,
+    load_slp,
+    load_video,
     save_file,
+    save_jabs,
+    save_labelstudio,
+    save_nwb,
+    save_video,
 )
 
 
 def test_load_slp(slp_typical):
     """Test `load_slp` loads a .slp to a `Labels` object."""
-    assert type(load_slp(slp_typical)) == Labels
-    assert type(load_file(slp_typical)) == Labels
+    assert type(load_slp(slp_typical)) is Labels
+    assert type(load_file(slp_typical)) is Labels
 
 
 def test_nwb(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     save_nwb(labels, tmp_path / "test_nwb.nwb")
     loaded_labels = load_nwb(tmp_path / "test_nwb.nwb")
-    assert type(loaded_labels) == Labels
-    assert type(load_file(tmp_path / "test_nwb.nwb")) == Labels
+    assert type(loaded_labels) is Labels
+    assert type(load_file(tmp_path / "test_nwb.nwb")) is Labels
     assert len(loaded_labels) == len(labels)
 
     labels2 = load_slp(slp_typical)
     labels2.videos[0].filename = "test"
     save_nwb(labels2, tmp_path / "test_nwb.nwb", append=True)
     loaded_labels = load_nwb(tmp_path / "test_nwb.nwb")
-    assert type(loaded_labels) == Labels
+    assert type(loaded_labels) is Labels
     assert len(loaded_labels) == (len(labels) + len(labels2))
     assert len(loaded_labels.videos) == 2
 
@@ -44,8 +45,8 @@ def test_labelstudio(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     save_labelstudio(labels, tmp_path / "test_labelstudio.json")
     loaded_labels = load_labelstudio(tmp_path / "test_labelstudio.json")
-    assert type(loaded_labels) == Labels
-    assert type(load_file(tmp_path / "test_labelstudio.json")) == Labels
+    assert type(loaded_labels) is Labels
+    assert type(load_file(tmp_path / "test_labelstudio.json")) is Labels
     assert len(loaded_labels) == len(labels)
 
 
@@ -57,7 +58,7 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
     # Confidence field is not preserved, so just check number of labels
     assert len(labels_single) == len(labels_single_written)
     assert len(labels_single.videos) == len(labels_single_written.videos)
-    assert type(load_file(jabs_real_data_v2)) == Labels
+    assert type(load_file(jabs_real_data_v2)) is Labels
 
     labels_multi = load_jabs(jabs_real_data_v5)
     assert isinstance(labels_multi, Labels)
@@ -81,22 +82,22 @@ def test_load_save_file(format, tmp_path, slp_typical, jabs_real_data_v5):
     if format == "slp":
         labels = load_slp(slp_typical)
         save_file(labels, tmp_path / "test.slp")
-        assert type(load_file(tmp_path / "test.slp")) == Labels
+        assert type(load_file(tmp_path / "test.slp")) is Labels
     elif format == "nwb":
         labels = load_slp(slp_typical)
         save_file(labels, tmp_path / "test.nwb")
-        assert type(load_file(tmp_path / "test.nwb")) == Labels
+        assert type(load_file(tmp_path / "test.nwb")) is Labels
     elif format == "labelstudio":
         labels = load_slp(slp_typical)
         save_file(labels, tmp_path / "test.json")
-        assert type(load_file(tmp_path / "test.json")) == Labels
+        assert type(load_file(tmp_path / "test.json")) is Labels
     elif format == "jabs":
         labels = load_jabs(jabs_real_data_v5)
         save_file(labels, tmp_path, pose_version=5)
-        assert type(load_file(tmp_path / jabs_real_data_v5)) == Labels
+        assert type(load_file(tmp_path / jabs_real_data_v5)) is Labels
 
         save_file(labels, tmp_path, format="jabs")
-        assert type(load_file(tmp_path / jabs_real_data_v5)) == Labels
+        assert type(load_file(tmp_path / jabs_real_data_v5)) is Labels
 
 
 def test_load_save_file_invalid():
