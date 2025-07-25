@@ -12,22 +12,20 @@ training models) and predictions (inference results).
 """
 
 from __future__ import annotations
-from sleap_io import (
-    Skeleton,
-    LabeledFrame,
-    Instance,
-    PredictedInstance,
-    Video,
-    Track,
-    SuggestionFrame,
-    RecordingSession,
-)
-from sleap_io.model.skeleton import NodeOrIndex
-from attrs import define, field
-from typing import Iterator, Union, Optional, Any
-import numpy as np
-from pathlib import Path
+
 from copy import deepcopy
+from pathlib import Path
+from typing import Any, Iterator, Optional, Union
+
+import numpy as np
+from attrs import define, field
+
+from sleap_io.model.camera import RecordingSession
+from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.skeleton import NodeOrIndex, Skeleton
+from sleap_io.model.suggestions import SuggestionFrame
+from sleap_io.model.video import Video
 
 
 @define
@@ -89,15 +87,15 @@ class Labels:
         self, key: int | slice | list[int] | np.ndarray | tuple[Video, int]
     ) -> list[LabeledFrame] | LabeledFrame:
         """Return one or more labeled frames based on indexing criteria."""
-        if type(key) == int:
+        if type(key) is int:
             return self.labeled_frames[key]
-        elif type(key) == slice:
+        elif type(key) is slice:
             return [self.labeled_frames[i] for i in range(*key.indices(len(self)))]
-        elif type(key) == list:
+        elif type(key) is list:
             return [self.labeled_frames[i] for i in key]
         elif isinstance(key, np.ndarray):
             return [self.labeled_frames[i] for i in key.tolist()]
-        elif type(key) == tuple and len(key) == 2:
+        elif type(key) is tuple and len(key) == 2:
             video, frame_idx = key
             res = self.find(video, frame_idx)
             if len(res) == 1:
@@ -107,7 +105,7 @@ class Labels:
                     f"No labeled frames found for video {video} and "
                     f"frame index {frame_idx}."
                 )
-        elif type(key) == Video:
+        elif type(key) is Video:
             res = self.find(key)
             if len(res) == 0:
                 raise IndexError(f"No labeled frames found for video {key}.")
@@ -200,8 +198,9 @@ class Labels:
                 arbitrary order.
             return_confidence: If `False` (the default), only return points of nodes. If
                 `True`, return the points and scores of nodes.
-            user_instances: If `True` (the default), include user instances when available,
-                preferring them over predicted instances with the same track. If `False`,
+            user_instances: If `True` (the default), include user instances when
+                available, preferring them over predicted instances with the same track.
+                If `False`,
                 only include predicted instances.
 
         Returns:
@@ -224,7 +223,7 @@ class Labels:
         # Get labeled frames for specified video.
         if video is None:
             video = 0
-        if type(video) == int:
+        if type(video) is int:
             video = self.videos[video]
         lfs = [lf for lf in self.labeled_frames if lf.video == video]
 
@@ -239,7 +238,7 @@ class Labels:
         n_instances = 0
         for lf in lfs:
             if user_instances:
-                # Count max of either user or predicted instances per frame (not their sum)
+                # Count max of either user or predicted instances per frame (not sum)
                 n_frame_instances = max(
                     len(lf.user_instances), len(lf.predicted_instances)
                 )
@@ -280,23 +279,25 @@ class Labels:
                     for inst in lf.user_instances:
                         instances_to_include.append(inst)
 
-                    # For the trivial case (single instance per frame), if we found user instances,
-                    # we shouldn't include any predicted instances
+                    # For the trivial case (single instance per frame), if we found
+                    # user instances, we shouldn't include any predicted instances
                     if is_single_instance and len(instances_to_include) > 0:
                         pass  # Skip adding predicted instances
                     else:
-                        # Add predicted instances that don't have a corresponding user instance
+                        # Add predicted instances that don't have a corresponding
+                        # user instance
                         for inst in lf.predicted_instances:
                             skip = False
                             for user_inst in lf.user_instances:
-                                # Skip if this predicted instance is linked to a user instance via from_predicted
+                                # Skip if this predicted instance is linked to a user
+                                # instance via from_predicted
                                 if (
                                     hasattr(user_inst, "from_predicted")
                                     and user_inst.from_predicted == inst
                                 ):
                                     skip = True
                                     break
-                                # Skip if user and predicted instances share the same track
+                                # Skip if user and predicted instances share same track
                                 if (
                                     user_inst.track is not None
                                     and inst.track is not None
@@ -348,9 +349,9 @@ class Labels:
                     inst = track_to_instance[track]
                     j = self.tracks.index(track)
 
-                    if type(inst) == PredictedInstance:
+                    if type(inst) is PredictedInstance:
                         tracks[i, j] = inst.numpy(scores=return_confidence)
-                    elif type(inst) == Instance:
+                    elif type(inst) is Instance:
                         tracks[i, j, :, :2] = inst.numpy()
 
                         # If return_confidence is True, add dummy confidence scores
@@ -376,10 +377,12 @@ class Labels:
 
         Args:
             tracks_arr: A numpy array of tracks, with shape
-                `(n_frames, n_tracks, n_nodes, 2)` or `(n_frames, n_tracks, n_nodes, 3)`,
+                `(n_frames, n_tracks, n_nodes, 2)` or
+                `(n_frames, n_tracks, n_nodes, 3)`,
                 where the last dimension contains the x,y coordinates (and optionally
                 confidence scores).
-            videos: List of Video objects to associate with the labels. At least one video
+            videos: List of Video objects to associate with the labels. At least one
+                video
                 is required.
             skeletons: Skeleton or list of Skeleton objects to use for the instances.
                 At least one skeleton is required.
@@ -393,8 +396,8 @@ class Labels:
             A new Labels object with instances constructed from the numpy array.
 
         Raises:
-            ValueError: If the array dimensions are invalid, or if no videos or skeletons
-                are provided.
+            ValueError: If the array dimensions are invalid, or if no videos or
+                skeletons are provided.
 
         Examples:
             >>> import numpy as np
@@ -635,11 +638,15 @@ class Labels:
             restore_original_videos: If `True` (default) and `embed=False`, use original
                 video files. If `False` and `embed=False`, keep references to source
                 `.pkg.slp` files. Only applies when `embed=False`.
-            verbose: If `True` (the default), display a progress bar when embedding frames.
+            verbose: If `True` (the default), display a progress bar when embedding
+                frames.
+            **kwargs: Additional format-specific arguments passed to the save function.
+                See `save_file` for format-specific options.
         """
+        from pathlib import Path
+
         from sleap_io import save_file
         from sleap_io.io.slp import sanitize_filename
-        from pathlib import Path
 
         # Check for self-referential save when embed=False
         if embed is False and (format == "slp" or str(filename).endswith(".slp")):
@@ -656,9 +663,10 @@ class Labels:
                     ).resolve()
                     if sanitized_video_path == sanitized_save_path:
                         raise ValueError(
-                            f"Cannot save with embed=False when overwriting a file that "
-                            f"contains embedded videos. Use labels.save('{filename}', embed=True) "
-                            f"to re-embed the frames, or save to a different filename."
+                            f"Cannot save with embed=False when overwriting a file "
+                            f"that contains embedded videos. Use "
+                            f"labels.save('{filename}', embed=True) to re-embed the "
+                            f"frames, or save to a different filename."
                         )
 
         save_file(
@@ -694,7 +702,6 @@ class Labels:
         used_videos = []
         kept_frames = []
         for lf in self.labeled_frames:
-
             if empty_instances:
                 lf.remove_empty_instances()
 
@@ -802,8 +809,8 @@ class Labels:
         if skeleton is None:
             if len(self.skeletons) != 1:
                 raise ValueError(
-                    "Skeleton must be specified when there is more than one skeleton in "
-                    "the labels."
+                    "Skeleton must be specified when there is more than one skeleton "
+                    "in the labels."
                 )
             skeleton = self.skeleton
 
@@ -1027,7 +1034,7 @@ class Labels:
         elif filename_map is not None:
             for video in self.videos:
                 for old_fn, new_fn in filename_map.items():
-                    if type(video.filename) == list:
+                    if type(video.filename) is list:
                         new_fns = []
                         for fn in video.filename:
                             if Path(fn) == Path(old_fn):
@@ -1044,7 +1051,7 @@ class Labels:
                 for old_prefix, new_prefix in prefix_map.items():
                     old_prefix, new_prefix = Path(old_prefix), Path(new_prefix)
 
-                    if type(video.filename) == list:
+                    if type(video.filename) is list:
                         new_fns = []
                         for fn in video.filename:
                             fn = Path(fn)
@@ -1284,7 +1291,7 @@ class Labels:
                 raise ValueError(
                     "Video needs to be specified when trimming multi-video projects."
                 )
-        if type(video) == int:
+        if type(video) is int:
             video = self.videos[video]
 
         # Write trimmed clip.
@@ -1330,7 +1337,8 @@ class Labels:
 
         Args:
             tracks_arr: A numpy array of tracks, with shape
-                `(n_frames, n_tracks, n_nodes, 2)` or `(n_frames, n_tracks, n_nodes, 3)`,
+                `(n_frames, n_tracks, n_nodes, 2)` or
+                `(n_frames, n_tracks, n_nodes, 3)`,
                 where the last dimension contains the x,y coordinates (and optionally
                 confidence scores).
             video: The video to update instances for. If not specified, the first video
@@ -1343,9 +1351,9 @@ class Labels:
                 `False`, only updates existing instances.
 
         Raises:
-            ValueError: If the video cannot be determined, or if tracks are not specified
-                and the number of tracks in the array doesn't match the number of tracks
-                in the labels.
+            ValueError: If the video cannot be determined, or if tracks are not
+                specified and the number of tracks in the array doesn't match the number
+                of tracks in the labels.
 
         Notes:
             This method is the inverse of `Labels.numpy()`, and can be used to update
@@ -1383,9 +1391,9 @@ class Labels:
         if tracks is None:
             if len(self.tracks) != n_tracks_arr:
                 raise ValueError(
-                    f"Number of tracks in array ({n_tracks_arr}) doesn't match number of "
-                    f"tracks in labels ({len(self.tracks)}). Please specify the tracks "
-                    f"corresponding to the second dimension of the array."
+                    f"Number of tracks in array ({n_tracks_arr}) doesn't match "
+                    f"number of tracks in labels ({len(self.tracks)}). Please specify "
+                    f"the tracks corresponding to the second dimension of the array."
                 )
             tracks = self.tracks
 

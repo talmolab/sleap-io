@@ -1,8 +1,8 @@
 """Fixtures that return paths to Ultralytics YOLO pose dataset."""
 
 import pytest
-from pathlib import Path
-from sleap_io import Skeleton, Node, Edge
+
+from sleap_io import Edge, Node, Skeleton
 
 
 @pytest.fixture

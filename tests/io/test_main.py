@@ -1,41 +1,42 @@
 """Tests for functions in the sleap_io.io.main file."""
 
 import pytest
+
 from sleap_io import Labels
 from sleap_io.io.main import (
-    load_slp,
-    load_nwb,
-    save_nwb,
-    load_labelstudio,
-    save_labelstudio,
-    load_jabs,
-    save_jabs,
-    load_video,
-    save_video,
     load_file,
+    load_jabs,
+    load_labelstudio,
+    load_nwb,
+    load_slp,
+    load_video,
     save_file,
+    save_jabs,
+    save_labelstudio,
+    save_nwb,
+    save_video,
 )
 
 
 def test_load_slp(slp_typical):
     """Test `load_slp` loads a .slp to a `Labels` object."""
-    assert type(load_slp(slp_typical)) == Labels
-    assert type(load_file(slp_typical)) == Labels
+    assert type(load_slp(slp_typical)) is Labels
+    assert type(load_file(slp_typical)) is Labels
 
 
 def test_nwb(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     save_nwb(labels, tmp_path / "test_nwb.nwb")
     loaded_labels = load_nwb(tmp_path / "test_nwb.nwb")
-    assert type(loaded_labels) == Labels
-    assert type(load_file(tmp_path / "test_nwb.nwb")) == Labels
+    assert type(loaded_labels) is Labels
+    assert type(load_file(tmp_path / "test_nwb.nwb")) is Labels
     assert len(loaded_labels) == len(labels)
 
     labels2 = load_slp(slp_typical)
     labels2.videos[0].filename = "test"
     save_nwb(labels2, tmp_path / "test_nwb.nwb", append=True)
     loaded_labels = load_nwb(tmp_path / "test_nwb.nwb")
-    assert type(loaded_labels) == Labels
+    assert type(loaded_labels) is Labels
     assert len(loaded_labels) == (len(labels) + len(labels2))
     assert len(loaded_labels.videos) == 2
 
@@ -44,8 +45,8 @@ def test_labelstudio(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     save_labelstudio(labels, tmp_path / "test_labelstudio.json")
     loaded_labels = load_labelstudio(tmp_path / "test_labelstudio.json")
-    assert type(loaded_labels) == Labels
-    assert type(load_file(tmp_path / "test_labelstudio.json")) == Labels
+    assert type(loaded_labels) is Labels
+    assert type(load_file(tmp_path / "test_labelstudio.json")) is Labels
     assert len(loaded_labels) == len(labels)
 
 
@@ -57,7 +58,7 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
     # Confidence field is not preserved, so just check number of labels
     assert len(labels_single) == len(labels_single_written)
     assert len(labels_single.videos) == len(labels_single_written.videos)
-    assert type(load_file(jabs_real_data_v2)) == Labels
+    assert type(load_file(jabs_real_data_v2)) is Labels
 
     labels_multi = load_jabs(jabs_real_data_v5)
     assert isinstance(labels_multi, Labels)
@@ -66,7 +67,8 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
     save_jabs(labels_multi, 5, tmp_path)
     labels_v5_written = load_jabs(str(tmp_path / jabs_real_data_v5))
     # v5 contains all v4 and v3 data, so only need to check v5
-    # Confidence field and ordering of identities is not preserved, so just check number of labels
+    # Confidence field and ordering of identities is not preserved, so just check
+    # number of labels
     assert len(labels_v5_written) == len(labels_multi)
     assert len(labels_v5_written.videos) == len(labels_multi.videos)
 
@@ -81,22 +83,22 @@ def test_load_save_file(format, tmp_path, slp_typical, jabs_real_data_v5):
     if format == "slp":
         labels = load_slp(slp_typical)
         save_file(labels, tmp_path / "test.slp")
-        assert type(load_file(tmp_path / "test.slp")) == Labels
+        assert type(load_file(tmp_path / "test.slp")) is Labels
     elif format == "nwb":
         labels = load_slp(slp_typical)
         save_file(labels, tmp_path / "test.nwb")
-        assert type(load_file(tmp_path / "test.nwb")) == Labels
+        assert type(load_file(tmp_path / "test.nwb")) is Labels
     elif format == "labelstudio":
         labels = load_slp(slp_typical)
         save_file(labels, tmp_path / "test.json")
-        assert type(load_file(tmp_path / "test.json")) == Labels
+        assert type(load_file(tmp_path / "test.json")) is Labels
     elif format == "jabs":
         labels = load_jabs(jabs_real_data_v5)
         save_file(labels, tmp_path, pose_version=5)
-        assert type(load_file(tmp_path / jabs_real_data_v5)) == Labels
+        assert type(load_file(tmp_path / jabs_real_data_v5)) is Labels
 
         save_file(labels, tmp_path, format="jabs")
-        assert type(load_file(tmp_path / jabs_real_data_v5)) == Labels
+        assert type(load_file(tmp_path / jabs_real_data_v5)) is Labels
 
 
 def test_load_save_file_invalid():
@@ -115,3 +117,30 @@ def test_save_video(centered_pair_low_quality_video, tmp_path):
     save_video(vid, tmp_path / "output2.mp4")
     vid2 = load_video(tmp_path / "output2.mp4")
     assert vid2.shape == (4, 384, 384, 1)
+
+
+def test_save_file_ultralytics_autodetect(tmp_path, slp_typical):
+    """Test ultralytics format auto-detection in save_file."""
+    labels = load_slp(slp_typical)
+
+    # Test with directory path (should auto-detect ultralytics)
+    output_dir = tmp_path / "ultralytics_output"
+    output_dir.mkdir()
+    save_file(labels, str(output_dir))  # No format specified
+
+    # Check that files were created in ultralytics format
+    assert (output_dir / "data.yaml").exists()
+    # Default split creates train/val directories
+    assert (output_dir / "train").exists()
+    assert (output_dir / "val").exists()
+
+    # Test with split_ratios kwarg (should auto-detect ultralytics)
+    output_dir2 = tmp_path / "ultralytics_output2"
+    splits = {"train": 0.8, "val": 0.1, "test": 0.1}
+    save_file(labels, str(output_dir2), split_ratios=splits)
+
+    assert (output_dir2 / "data.yaml").exists()
+    # With 3-way split, creates train/val/test
+    assert (output_dir2 / "train").exists()
+    assert (output_dir2 / "val").exists()
+    assert (output_dir2 / "test").exists()

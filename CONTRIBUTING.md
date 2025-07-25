@@ -28,14 +28,14 @@ To reinstall the environment from scratch using `conda`:
 conda env remove -n sleap-io && conda env create -f environment.yml
 ```
 
-We also recommend setting up `black` to run automatically in your IDE.
+We also recommend setting up `ruff` to run automatically in your IDE.
 A good way to do this without messing up your global environment is to use a tool like [`pipx`](https://pypa.github.io/pipx/):
 ```
 pip install pipx
 pipx ensurepath
-pipx install black
+pipx install ruff
 ```
-This will make `black` available everywhere (such as VSCode), but will not be dependent on your conda `base` environment.
+This will make `ruff` available everywhere (such as VSCode), but will not be dependent on your conda `base` environment.
 
 
 ### Contributing a change
@@ -104,15 +104,15 @@ All changes should aim to increase or maintain test coverage.
 
 
 ### Code style
-To standardize formatting conventions, we use [`black`](https://black.readthedocs.io/en/stable/).
+To standardize formatting conventions and linting, we use [`ruff`](https://docs.astral.sh/ruff/).
 
-It's highly recommended to set this up in your local environment so your code is auto-formatted before pushing commits.
+It's highly recommended to set this up in your local environment so your code is auto-formatted and linted before pushing commits.
 
-Adherence to the `black` code style is automatically checked on push (see [`.github/workflows/lint.yml`](.github/workflows/lint.yml)).
+Adherence to the `ruff` code style and linting rules is automatically checked on push (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 
 ### Documentation conventions
-We require that all non-test code follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) conventions. This is checked via [`pydocstyle`](http://www.pydocstyle.org/).
+We require that all non-test code follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) conventions. This is checked via `ruff`.
 
 For example, a method might be documented as:
 

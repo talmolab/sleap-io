@@ -1,36 +1,34 @@
 """This module handles direct I/O operations for working with .slp files."""
 
 from __future__ import annotations
-import numpy as np
+
+import sys
+from enum import Enum, IntEnum
+from pathlib import Path
+from typing import Optional, Union
+
 import h5py
+import imageio.v3 as iio
+import numpy as np
 import simplejson as json
-from typing import Union, Optional
-from sleap_io import (
-    Video,
-    Skeleton,
-    Edge,
-    Symmetry,
-    Node,
-    Track,
-    SuggestionFrame,
-    Instance,
-    PredictedInstance,
-    LabeledFrame,
-    Labels,
+from tqdm import tqdm
+
+from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
+from sleap_io.io.utils import is_file_accessible, read_hdf5_attrs, read_hdf5_dataset
+from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
+from sleap_io.model.camera import (
     Camera,
     CameraGroup,
-    InstanceGroup,
     FrameGroup,
+    InstanceGroup,
     RecordingSession,
 )
-from sleap_io.io.video_reading import VideoBackend, ImageVideo, MediaVideo, HDF5Video
-from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset, is_file_accessible
-from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
-from enum import IntEnum, Enum
-from pathlib import Path
-import imageio.v3 as iio
-import sys
-from tqdm import tqdm
+from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton
+from sleap_io.model.suggestions import SuggestionFrame
+from sleap_io.model.video import Video
 
 try:
     import cv2
@@ -229,7 +227,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
     # Add backend metadata
     if video.backend is None:
         result["backend"] = video.backend_metadata
-    elif type(video.backend) == MediaVideo:
+    elif type(video.backend) is MediaVideo:
         result["backend"] = {
             "type": "MediaVideo",
             "shape": video.shape,
@@ -239,7 +237,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "dataset": "",
             "input_format": "",
         }
-    elif type(video.backend) == HDF5Video:
+    elif type(video.backend) is HDF5Video:
         # Determine if we should use self-reference or external reference
         use_self_reference = (
             video.backend.has_embedded_images
@@ -258,7 +256,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "has_embedded_images": video.backend.has_embedded_images,
             "grayscale": video.grayscale,
         }
-    elif type(video.backend) == ImageVideo:
+    elif type(video.backend) is ImageVideo:
         if video.shape is not None:
             height, width, channels = video.shape[1:4]
         else:
@@ -417,7 +415,8 @@ def prepare_frames_to_embed(
     Args:
         labels_path: A string path to the SLEAP labels file.
         labels: A `Labels` object containing the videos.
-        frames_to_embed: A list of tuples of `(video, frame_idx)` specifying the frames to embed.
+        frames_to_embed: A list of tuples of `(video, frame_idx)` specifying the
+            frames to embed.
 
     Returns:
         A list of dictionaries, each containing metadata for a frame to embed:
@@ -469,13 +468,15 @@ def process_and_embed_frames(
 
     Args:
         labels_path: A string path to the SLEAP labels file.
-        frames_metadata: A list of dictionaries with frame metadata from prepare_frames_to_embed.
+        frames_metadata: A list of dictionaries with frame metadata from
+            prepare_frames_to_embed.
         image_format: The image format to use for embedding. Valid formats are "png"
             (the default), "jpg" or "hdf5".
         fixed_length: If `True` (the default), the embedded images will be padded to the
             length of the largest image. If `False`, the images will be stored as
             variable length, which is smaller but may not be supported by all readers.
-        verbose: If `True` (the default), display a progress bar for the embedding process.
+        verbose: If `True` (the default), display a progress bar for the embedding
+            process.
 
     Returns:
         A dictionary mapping original Video objects to their embedded versions.
@@ -618,7 +619,8 @@ def embed_frames(
         embed: A list of tuples of `(video, frame_idx)` specifying the frames to embed.
         image_format: The image format to use for embedding. Valid formats are "png"
             (the default), "jpg" or "hdf5".
-        verbose: If `True` (the default), display a progress bar for the embedding process.
+        verbose: If `True` (the default), display a progress bar for the embedding
+            process.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -653,7 +655,8 @@ def embed_videos(
 
             If `True` or `"all"`, all labeled frames and suggested frames will be
             embedded.
-        verbose: If `True` (the default), display a progress bar for the embedding process.
+        verbose: If `True` (the default), display a progress bar for the embedding
+            process.
 
             If `"source"` is specified, no images will be embedded and the source video
             will be restored if available.
@@ -697,7 +700,8 @@ def write_videos(
         videos: A list of `Video` objects to store the metadata for.
         restore_source: Deprecated. Use reference_mode instead. If `True`, restore
             source videos if available and will not re-embed the embedded images.
-            If `False` (the default), will re-embed images that were previously embedded.
+            If `False` (the default), will re-embed images that were previously
+            embedded.
         reference_mode: How to handle video references:
             - EMBED: Re-embed frames that were previously embedded
             - RESTORE_ORIGINAL: Use original video if available
@@ -718,10 +722,11 @@ def write_videos(
 
     # First determine which videos need embedding
     for video_ind, video in enumerate(videos):
-        if type(video.backend) == HDF5Video and video.backend.has_embedded_images:
+        if type(video.backend) is HDF5Video and video.backend.has_embedded_images:
             if reference_mode == VideoReferenceMode.RESTORE_ORIGINAL:
                 if video.source_video is None:
-                    # No source video available, reference the current embedded video file
+                    # No source video available, reference the current embedded video
+                    # file
                     videos_to_write.append((video_ind, video))
                 else:
                     # Use the source video
@@ -770,9 +775,7 @@ def write_videos(
             image_format=[
                 v.backend.image_format if hasattr(v.backend, "image_format") else "png"
                 for _, v, _ in videos_to_embed
-            ][
-                0
-            ],  # Use the first video's format
+            ][0],  # Use the first video's format
             verbose=verbose,
         )
 
@@ -799,7 +802,8 @@ def write_videos(
             # If original_videos is provided (e.g., during embedding), use those
             original_video = original_videos[video_ind] if original_videos else video
 
-            # Determine what metadata to save based on reference mode and video structure
+            # Determine what metadata to save based on reference mode and video
+            # structure
             original_to_save = None
             source_to_save = None
 
@@ -812,19 +816,22 @@ def write_videos(
                     and hasattr(original_video.source_video, "original_video")
                     and original_video.source_video.original_video is not None
                 ):
-                    # If source_video has original_video, use that (it's the true original)
+                    # If source_video has original_video, use that (it's the true
+                    # original)
                     original_to_save = original_video.source_video.original_video
                 elif (
                     original_video.source_video is not None
                     and reference_mode == VideoReferenceMode.EMBED
                 ):
-                    # For embed mode, if we only have source_video, that becomes the original
+                    # For embed mode, if we only have source_video, that becomes the
+                    # original
                     original_to_save = original_video.source_video
 
             # Handle source_video metadata
             if reference_mode != VideoReferenceMode.PRESERVE_SOURCE:
                 if reference_mode == VideoReferenceMode.EMBED and original_videos:
-                    # For embed mode, save the original video as source (it's the .pkg.slp)
+                    # For embed mode, save the original video as source (it's the
+                    # .pkg.slp)
                     source_to_save = original_video
                 elif original_video.source_video is not None:
                     source_to_save = original_video.source_video
@@ -834,7 +841,8 @@ def write_videos(
                 video_group = f[dataset]
 
                 if original_to_save is not None:
-                    # Store original_video metadata as a group (consistent with source_video)
+                    # Store original_video metadata as a group (consistent with
+                    # source_video)
                     original_grp = video_group.require_group("original_video")
                     original_json = video_to_dict(original_to_save, labels_path)
                     original_grp.attrs["json"] = json.dumps(
@@ -842,7 +850,8 @@ def write_videos(
                     )
 
                 if source_to_save is not None:
-                    # For EMBED mode with original_videos, we need to overwrite source_video
+                    # For EMBED mode with original_videos, we need to overwrite
+                    # source_video
                     # because embed_videos saves the wrong metadata
                     if (
                         reference_mode == VideoReferenceMode.EMBED
@@ -1220,7 +1229,7 @@ def write_lfs(labels_path: str, labels: Labels):
                 to_link.append((instance_id, inst.from_predicted))
             score = 0.0
 
-            if type(inst) == Instance:
+            if type(inst) is Instance:
                 instance_type = InstanceType.USER
                 tracking_score = inst.tracking_score
                 point_id_start = len(points)
@@ -1232,7 +1241,7 @@ def write_lfs(labels_path: str, labels: Labels):
 
                 point_id_end = len(points)
 
-            elif type(inst) == PredictedInstance:
+            elif type(inst) is PredictedInstance:
                 instance_type = InstanceType.PREDICTED
                 score = inst.score
                 tracking_score = inst.tracking_score
@@ -1394,7 +1403,7 @@ def make_frame_group(
             and optional keys:
             - "frame_idx": Frame index.
             - Any keys containing metadata.
-        labeled_frames_list: List of `LabeledFrame` objects (expecting
+        labeled_frames: List of `LabeledFrame` objects (expecting
             `Labels.labeled_frames`).
         camera_group: `CameraGroup` object used to retrieve `Camera` objects.
 
@@ -1529,8 +1538,8 @@ def make_session(
             - "frame_group_dicts": List of dictionaries containing `FrameGroup`
                 information. See `make_frame_group` for what each dictionary contains.
             - Any optional keys containing metadata.
-        videos_list: List containing `Video` objects (expected `Labels.videos`).
-        labeled_frames_list: List containing `LabeledFrame` objects (expected
+        videos: List containing `Video` objects (expected `Labels.videos`).
+        labeled_frames: List containing `LabeledFrame` objects (expected
             `Labels.labeled_frames`).
 
     Returns:
@@ -1569,8 +1578,7 @@ def make_session(
             frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
         except ValueError as e:
             print(
-                f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping..."
-                f"\n{e}"
+                f"Error reconstructing FrameGroup: {frame_group_dict}. Skipping...\n{e}"
             )
 
     session = RecordingSession(
@@ -1708,7 +1716,8 @@ def camera_to_dict(camera: Camera) -> dict:
     Returns:
         Dictionary containing camera information with the following keys:
             - "name": Camera name.
-            - "size": Image size (width, height) of camera in pixels of size (2,) and type
+            - "size": Image size (width, height) of camera in pixels of size (2,) and
+              type
                 int.
             - "matrix": Intrinsic camera matrix of size (3, 3) and type float64.
             - "distortions": Radial-tangential distortion coefficients
@@ -1961,9 +1970,9 @@ def write_labels(
 
     # Store original videos before embedding modifies them
     # We need to make a copy of the actual video objects, not just the list
-    original_videos = [v for v in labels.videos] if embed and embed != False else None
+    original_videos = [v for v in labels.videos] if embed else None
 
-    if embed and embed != False:
+    if embed:
         embed_videos(labels_path, labels, embed, verbose=verbose)
 
     # Determine reference mode based on parameters

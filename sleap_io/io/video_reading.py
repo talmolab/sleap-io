@@ -1,17 +1,17 @@
 """Backends for reading videos."""
 
 from __future__ import annotations
-from pathlib import Path
 
-import simplejson as json
 import sys
 from io import BytesIO
+from pathlib import Path
 from typing import Optional, Tuple
 
 import attrs
 import h5py
 import imageio.v3 as iio
 import numpy as np
+import simplejson as json
 
 try:
     import cv2
@@ -19,12 +19,12 @@ except ImportError:
     pass
 
 try:
-    import imageio_ffmpeg
+    import imageio_ffmpeg  # noqa: F401
 except ImportError:
     pass
 
 try:
-    import av
+    import av  # noqa: F401
 except ImportError:
     pass
 
@@ -77,6 +77,16 @@ class VideoBackend:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            **kwargs: Additional backend-specific arguments. These are filtered to only
+                include parameters that are valid for the specific backend being
+                created:
+                - For ImageVideo: No additional arguments.
+                - For MediaVideo: plugin (str): Video plugin to use. One of "opencv",
+                  "FFMPEG", or "pyav". If None, will use the first available plugin.
+                - For HDF5Video: input_format (str), frame_map (dict),
+                  source_filename (str),
+                  source_inds (np.ndarray), image_format (str). See HDF5Video for
+                  details.
 
         Returns:
             VideoBackend subclass instance.
@@ -84,10 +94,10 @@ class VideoBackend:
         if isinstance(filename, Path):
             filename = filename.as_posix()
 
-        if type(filename) == str and Path(filename).is_dir():
+        if type(filename) is str and Path(filename).is_dir():
             filename = ImageVideo.find_images(filename)
 
-        if type(filename) == list:
+        if type(filename) is list:
             filename = [Path(f).as_posix() for f in filename]
             return ImageVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)

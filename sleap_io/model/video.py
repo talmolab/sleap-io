@@ -5,14 +5,17 @@ a video and its components used in SLEAP.
 """
 
 from __future__ import annotations
-import attrs
-from typing import Tuple, Optional, Optional, Any
-import numpy as np
-from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
-from sleap_io.io.video_writing import VideoWriter
-from sleap_io.io.utils import is_file_accessible
+
 from pathlib import Path
+from typing import Any, Optional, Tuple
+
+import attrs
 import h5py
+import numpy as np
+
+from sleap_io.io.utils import is_file_accessible
+from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
+from sleap_io.io.video_writing import VideoWriter
 
 
 @attrs.define(eq=False)
@@ -65,7 +68,7 @@ class Video:
         if self.open_backend and self.backend is None and self.exists():
             try:
                 self.open()
-            except Exception as e:
+            except Exception:
                 # If we can't open the backend, just ignore it for now so we don't
                 # prevent the user from building the Video object entirely.
                 pass
@@ -122,6 +125,9 @@ class Video:
             source_video: The source video object if this is a proxy video. This is
                 present when the video contains an embedded subset of frames from
                 another video.
+            **kwargs: Additional backend-specific arguments passed to
+                VideoBackend.from_filename. See VideoBackend.from_filename for supported
+                arguments.
 
         Returns:
             Video instance with the appropriate backend instantiated.
@@ -155,7 +161,7 @@ class Video:
         """
         try:
             return self.backend.shape
-        except:
+        except Exception:
             if "shape" in self.backend_metadata:
                 return self.backend_metadata["shape"]
             return None
@@ -265,7 +271,7 @@ class Video:
             has_dataset = False
             if (
                 self.backend is not None
-                and type(self.backend) == HDF5Video
+                and type(self.backend) is HDF5Video
                 and self.backend._open_reader is not None
             ):
                 has_dataset = dataset in self.backend._open_reader
@@ -330,8 +336,7 @@ class Video:
 
         if not self.exists(dataset=dataset):
             msg = (
-                f"Video does not exist or cannot be opened for reading: "
-                f"{self.filename}"
+                f"Video does not exist or cannot be opened for reading: {self.filename}"
             )
             if dataset is not None:
                 msg += f" (dataset: {dataset})"
@@ -361,7 +366,7 @@ class Video:
                     self.backend, "grayscale", None
                 )
                 self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
-            except:
+            except Exception:
                 pass
 
             del self.backend

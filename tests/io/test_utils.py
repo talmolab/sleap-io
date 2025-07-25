@@ -1,15 +1,16 @@
 """Tests for the sleap_io.io.test_utils file."""
 
-import pytest
 import h5py
 import numpy as np
+import pytest
+
 from sleap_io.io.utils import (
     read_hdf5_attrs,
     read_hdf5_dataset,
     read_hdf5_group,
+    write_hdf5_attrs,
     write_hdf5_dataset,
     write_hdf5_group,
-    write_hdf5_attrs,
 )
 
 

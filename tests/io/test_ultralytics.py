@@ -1,26 +1,26 @@
 """Tests for sleap_io.io.ultralytics module."""
 
+import tempfile
+from pathlib import Path
+
+import imageio.v3 as iio
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
 import yaml
-import imageio.v3 as iio
-import sleap_io
 
-from sleap_io import Labels, Skeleton, Node, Edge, Instance, LabeledFrame, Track, Video
+import sleap_io
+from sleap_io import Edge, Instance, LabeledFrame, Labels, Node, Skeleton, Video
+from sleap_io.io.main import load_file, load_ultralytics, save_file, save_ultralytics
 from sleap_io.io.ultralytics import (
-    read_labels,
-    write_labels,
-    parse_data_yaml,
     create_skeleton_from_config,
-    parse_label_file,
-    write_label_file,
-    create_data_yaml,
-    normalize_coordinates,
     denormalize_coordinates,
+    normalize_coordinates,
+    parse_data_yaml,
+    parse_label_file,
+    read_labels,
+    write_label_file,
+    write_labels,
 )
-from sleap_io.io.main import load_file, save_file, load_ultralytics, save_ultralytics
 
 
 def test_parse_data_yaml(ultralytics_data_yaml):
@@ -296,11 +296,11 @@ def test_denormalize_coordinates():
 
     assert points_array[0, 0] == 100.0  # 0.125 * 800
     assert points_array[0, 1] == 200.0  # 0.5 * 400
-    assert points_array[0, 2] == True
+    assert points_array[0, 2] == 1.0  # True converted to float
 
     assert np.isnan(points_array[1, 0])
     assert np.isnan(points_array[1, 1])
-    assert points_array[1, 2] == False
+    assert points_array[1, 2] == 0.0  # False converted to float
 
 
 def test_load_file_integration(ultralytics_dataset):
@@ -436,7 +436,10 @@ def test_keypoint_count_mismatch_warning(tmp_path):
 
 
 def test_realistic_labels_roundtrip(tmp_path, labels_predictions):
-    """Test roundtrip conversion with realistic labels containing multiple instances and tracks."""
+    """Test roundtrip conversion with realistic labels.
+
+    Tests labels containing multiple instances and tracks.
+    """
     # Take a subset of frames for testing
     labels_subset = Labels(
         labeled_frames=labels_predictions.labeled_frames[:10],
@@ -453,7 +456,8 @@ def test_realistic_labels_roundtrip(tmp_path, labels_predictions):
     image_files = list((output_dir / "train" / "images").glob("*.png"))
     assert len(image_files) == 10
 
-    # Read back and compare (note: tracks will be different as Ultralytics doesn't preserve them)
+    # Read back and compare
+    # Note: tracks will be different as Ultralytics doesn't preserve them
     labels_read = read_labels(output_dir, split="train")
     assert len(labels_read.labeled_frames) == 10
     assert len(labels_read.skeletons) == 1
@@ -694,7 +698,7 @@ def test_missing_labels_directory(tmp_path):
 def test_video_shape_none_fallback(tmp_path, centered_pair_low_quality_video):
     """Test fallback to reading frame when video.shape is None."""
     # Create a mock video with None shape
-    from unittest.mock import Mock, patch
+    from unittest.mock import Mock
 
     # Create test setup
     skeleton = Skeleton([Node("a"), Node("b")])
@@ -730,7 +734,7 @@ def test_empty_skeletons_error(tmp_path):
 
 def test_frame_image_none_warning(tmp_path, centered_pair_low_quality_video):
     """Test warning when frame.image returns None."""
-    from unittest.mock import Mock, PropertyMock, patch
+    from unittest.mock import PropertyMock, patch
 
     skeleton = Skeleton([Node("a"), Node("b")])
     instance = Instance.from_numpy(
@@ -845,6 +849,7 @@ def test_parse_label_file_edge_cases(tmp_path, ultralytics_skeleton):
 def test_frame_none_return_from_video(tmp_path):
     """Test handling when video returns None for a frame."""
     from unittest.mock import Mock, patch
+
     from sleap_io.io.ultralytics import _save_frame_image
 
     # Create a mock video that returns None for frame
@@ -880,7 +885,10 @@ def test_parse_label_file_with_invalid_keypoint_count(tmp_path):
 
 
 def test_read_labels_fallback_to_read_first_frame(tmp_path):
-    """Test read_labels when video.shape is None and falls back to reading first frame."""
+    """Test read_labels when video.shape is None.
+
+    Tests fallback to reading first frame.
+    """
     from unittest.mock import Mock, patch
 
     # Create test data structure
@@ -932,7 +940,8 @@ def test_read_labels_fallback_to_read_first_frame(tmp_path):
 def test_write_labels_frame_extraction_error_continue(tmp_path):
     """Test write_labels warning for frame.image returning None - code coverage only."""
     # This test just ensures the warning code path is covered
-    # The actual behavior is tricky to test due to how enumerate works with skipped frames
+    # The actual behavior is tricky to test due to how enumerate works with
+    # skipped frames
 
     # We've already tested this code path indirectly in other tests
     # This specific line (291-294) gets executed when frame.image returns None

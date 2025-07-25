@@ -1,6 +1,7 @@
 """Fixtures for video and media files."""
 
 import pytest
+
 import sleap_io
 
 

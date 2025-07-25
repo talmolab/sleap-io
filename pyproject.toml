@@ -42,8 +42,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-watch",
-    "black",
-    "pydocstyle",
+    "ruff",
     "toml",
     "twine",
     "build",
@@ -62,12 +61,24 @@ Repository = "https://github.com/talmolab/sleap-io"
 [tool.setuptools.packages.find]
 exclude = ["site"]
 
-[tool.black]
+[tool.ruff]
 line-length = 88
+target-version = "py38"
 
-[pydocstyle]
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "D",    # pydocstyle
+    "I",    # isort
+]
+
+[tool.ruff.lint.pydocstyle]
 convention = "google"
-match-dir = "sleap_io"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D103"]
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file

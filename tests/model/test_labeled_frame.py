@@ -1,9 +1,10 @@
 """Tests for methods in sleap_io.model.labeled_frame file."""
 
-from numpy.testing import assert_equal
-from sleap_io import Video, Skeleton, Instance, PredictedInstance, Track
-from sleap_io.model.labeled_frame import LabeledFrame
 import numpy as np
+from numpy.testing import assert_equal
+
+from sleap_io import Instance, PredictedInstance, Skeleton, Track, Video
+from sleap_io.model.labeled_frame import LabeledFrame
 
 
 def test_labeled_frame():
@@ -21,9 +22,9 @@ def test_labeled_frame():
 
     assert len(lf) == 2
     assert len(lf.user_instances) == 1
-    assert type(lf.user_instances[0]) == Instance
+    assert type(lf.user_instances[0]) is Instance
     assert len(lf.predicted_instances) == 1
-    assert type(lf.predicted_instances[0]) == PredictedInstance
+    assert type(lf.predicted_instances[0]) is PredictedInstance
 
     # Test LabeledFrame.__getitem__ method
     assert lf[0] == inst
@@ -54,7 +55,7 @@ def test_remove_predictions():
 
     assert len(lf) == 1
     assert len(lf.predicted_instances) == 0
-    assert type(lf[0]) == Instance
+    assert type(lf[0]) is Instance
     assert_equal(lf.numpy(), [[[0, 1], [2, 3]]])
     assert not lf.has_predicted_instances
     assert lf.has_user_instances
@@ -80,7 +81,7 @@ def test_remove_empty_instances():
     lf.remove_empty_instances()
 
     assert len(lf) == 1
-    assert type(lf[0]) == Instance
+    assert type(lf[0]) is Instance
     assert_equal(lf.numpy(), [[[0, 1], [2, 3]]])
 
 

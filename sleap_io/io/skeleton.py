@@ -1,9 +1,11 @@
 """This module handles I/O operations for standalone skeleton JSON files."""
 
 from __future__ import annotations
+
 import json
-from typing import Any, Dict, List, Union, Tuple, Optional
-from sleap_io import Skeleton, Node, Edge, Symmetry
+from typing import Any, Dict, List, Optional, Union
+
+from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 
 
 class SkeletonDecoder:
@@ -50,7 +52,6 @@ class SkeletonDecoder:
         """
         # First, scan all links to build complete node and py/id mappings
         all_nodes = {}  # node name -> Node object
-        py_id_first_seen = {}  # py/id -> node name (first occurrence)
 
         # Track order of node definitions for py/id assignment
         node_definition_order = []
@@ -178,7 +179,8 @@ class SkeletonDecoder:
         """Resolve a node reference to an actual Node object.
 
         Args:
-            node_ref: Node reference (can be embedded object, py/id reference, or index).
+            node_ref: Node reference (can be embedded object, py/id reference, or
+                index).
             all_nodes: Dictionary mapping node names to Node objects.
             py_id_to_node_name: Mapping from py/id to node name.
 
@@ -628,7 +630,8 @@ class SkeletonYAMLDecoder:
         Args:
             data: YAML string or pre-parsed dictionary containing skeleton data.
                   If a dict is provided with skeleton names as keys, returns list.
-                  If a dict is provided with nodes/edges/symmetries, returns single skeleton.
+                  If a dict is provided with nodes/edges/symmetries, returns single
+                  skeleton.
 
         Returns:
             A single Skeleton or list of Skeletons depending on input format.

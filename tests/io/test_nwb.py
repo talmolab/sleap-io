@@ -1,13 +1,14 @@
-import pytest
-from pathlib import Path
+"""Tests for NWB I/O functionality."""
+
 import datetime
+from pathlib import Path
 
 import numpy as np
-from pynwb import NWBFile, NWBHDF5IO
-from pynwb.file import Subject
+import pytest
+from pynwb import NWBHDF5IO, NWBFile
 
 from sleap_io import load_slp
-from sleap_io.io.nwb import write_nwb, append_nwb_data, get_timestamps
+from sleap_io.io.nwb import append_nwb_data, get_timestamps, write_nwb
 
 
 @pytest.fixture
@@ -235,7 +236,8 @@ def test_complex_case_append_with_timestamps_metadata(nwbfile, centered_pair):
             extracted_starting_time = pose_estimation_series.starting_time
             assert extracted_starting_time == 0
 
-        # Other store timestamps and the timestamps should be a subset of the videotimestamps
+        # Other store timestamps and the timestamps should be a subset of the
+        # videotimestamps
         else:
             extracted_timestamps = pose_estimation_series.timestamps
             assert np.isin(

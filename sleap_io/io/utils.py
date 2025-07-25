@@ -1,10 +1,12 @@
 """Miscellaneous utilities for working with different I/O formats."""
 
 from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Optional, Union
+
 import h5py  # type: ignore[import]
 import numpy as np
-from typing import Any, Union, Optional
-from pathlib import Path
 
 
 def read_hdf5_dataset(filename: str, dataset: str) -> np.ndarray:
@@ -66,7 +68,7 @@ def read_hdf5_group(filename: str, group: str = "/") -> dict[str, np.ndarray]:
     data = {}
 
     def read_datasets(k, v):
-        if type(v) == h5py.Dataset:
+        if type(v) is h5py.Dataset:
             data[v.name] = v[()]
 
     with h5py.File(filename, "r") as f:

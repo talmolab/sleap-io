@@ -1,9 +1,9 @@
 """Tests for standalone skeleton JSON I/O."""
 
-import pytest
 import json
-import tempfile
-from pathlib import Path
+
+import pytest
+
 import sleap_io as sio
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
@@ -173,8 +173,8 @@ def test_encode_simple_skeleton():
     data = json.loads(json_str)
 
     assert data["graph"]["name"] == "test"
-    assert data["directed"] == True
-    assert data["multigraph"] == True
+    assert data["directed"] is True
+    assert data["multigraph"] is True
     assert len(data["links"]) == 1
     assert data["links"][0]["source"]["py/object"] == "sleap.skeleton.Node"
     assert data["links"][0]["source"]["py/state"]["py/tuple"][0] == "A"
@@ -588,7 +588,8 @@ def test_slp_encoder_decoder():
     assert isinstance(skeletons_dicts[1]["links"][0]["source"], int)
     assert isinstance(skeletons_dicts[1]["links"][0]["target"], int)
 
-    # The exact indices depend on the global node ordering, so we just verify they're valid
+    # The exact indices depend on the global node ordering, so we just verify
+    # they're valid
 
     # Create fake metadata for decoder
     metadata = {"skeletons": skeletons_dicts}
@@ -996,7 +997,10 @@ def test_save_load_yaml_round_trip(tmp_path):
 
 
 def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
-    """Test round-trip encoding/decoding of fly32 skeleton with non-sequential py/ids."""
+    """Test round-trip encoding/decoding of fly32 skeleton.
+
+    Tests skeletons with non-sequential py/ids.
+    """
     # Load original
     original = sio.load_skeleton(skeleton_json_fly32)
     assert isinstance(original, list)
@@ -1019,9 +1023,9 @@ def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
 
     # Verify node names and order preserved
     for i, (o_node, r_node) in enumerate(zip(original.nodes, reloaded.nodes)):
-        assert (
-            o_node.name == r_node.name
-        ), f"Node {i} mismatch: {o_node.name} != {r_node.name}"
+        assert o_node.name == r_node.name, (
+            f"Node {i} mismatch: {o_node.name} != {r_node.name}"
+        )
 
     # Verify edges preserved
     for i, (o_edge, r_edge) in enumerate(zip(original.edges, reloaded.edges)):
@@ -1031,17 +1035,17 @@ def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
 
 def test_training_config_decode(training_config_fly32, skeleton_json_fly32):
     """Test decoding a training config with embedded skeleton data."""
-
     # Test loading standalone skeleton file
     with open(skeleton_json_fly32, "r") as f:
         skeleton_data = json.load(f)
     skeletons = SkeletonDecoder().decode(skeleton_data)
     assert len(skeletons) == 1
     skeleton = skeletons[0]
-    assert (
-        skeleton.name
-        == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    expected_name = (
+        "M:/talmo/data/leap_datasets/BermanFlies/"
+        "2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
     )
+    assert skeleton.name == expected_name
     assert len(skeleton.nodes) == 32
 
     # Test loading skeleton from training config
@@ -1142,10 +1146,11 @@ def test_load_skeleton_from_training_config(training_config_fly32):
     assert len(skeletons) == 1
 
     skeleton = skeletons[0]
-    assert (
-        skeleton.name
-        == "M:/talmo/data/leap_datasets/BermanFlies/2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    expected_name = (
+        "M:/talmo/data/leap_datasets/BermanFlies/"
+        "2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
     )
+    assert skeleton.name == expected_name
     assert len(skeleton.nodes) == 32
     assert len(skeleton.edges) == 25
 
