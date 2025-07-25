@@ -122,22 +122,23 @@ def test_save_video(centered_pair_low_quality_video, tmp_path):
 def test_save_file_ultralytics_autodetect(tmp_path, slp_typical):
     """Test ultralytics format auto-detection in save_file."""
     labels = load_slp(slp_typical)
-    
+
     # Test with directory path (should auto-detect ultralytics)
     output_dir = tmp_path / "ultralytics_output"
     output_dir.mkdir()
     save_file(labels, str(output_dir))  # No format specified
-    
+
     # Check that files were created in ultralytics format
     assert (output_dir / "data.yaml").exists()
     # Default split creates train/val directories
     assert (output_dir / "train").exists()
     assert (output_dir / "val").exists()
-    
+
     # Test with split_ratios kwarg (should auto-detect ultralytics)
     output_dir2 = tmp_path / "ultralytics_output2"
-    save_file(labels, str(output_dir2), split_ratios={"train": 0.8, "val": 0.1, "test": 0.1})
-    
+    splits = {"train": 0.8, "val": 0.1, "test": 0.1}
+    save_file(labels, str(output_dir2), split_ratios=splits)
+
     assert (output_dir2 / "data.yaml").exists()
     # With 3-way split, creates train/val/test
     assert (output_dir2 / "train").exists()
