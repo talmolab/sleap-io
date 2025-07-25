@@ -1434,7 +1434,7 @@ equal in a set or dict.</p>
 <a id="__codelineno-0-60" name="__codelineno-0-60"></a><a href="#__codelineno-0-60"><span class="linenos" data-linenos=" 60 "></span></a>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a><a href="#__codelineno-0-61"><span class="linenos" data-linenos=" 61 "></span></a>    <span class="nd">@property</span>
 <a id="__codelineno-0-62" name="__codelineno-0-62"></a><a href="#__codelineno-0-62"><span class="linenos" data-linenos=" 62 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">predicted_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Instance</span><span class="p">]:</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a><a href="#__codelineno-0-63"><span class="linenos" data-linenos=" 63 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Frame instances that are predicted by a model (`PredictedInstance` objects).&quot;&quot;&quot;</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><a href="#__codelineno-0-63"><span class="linenos" data-linenos=" 63 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Frame instances that are predicted by a model (`PredictedInstance`).&quot;&quot;&quot;</span>
 <a id="__codelineno-0-64" name="__codelineno-0-64"></a><a href="#__codelineno-0-64"><span class="linenos" data-linenos=" 64 "></span></a>        <span class="k">return</span> <span class="p">[</span><span class="n">inst</span> <span class="k">for</span> <span class="n">inst</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">instances</span> <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">inst</span><span class="p">)</span> <span class="ow">is</span> <span class="n">PredictedInstance</span><span class="p">]</span>
 <a id="__codelineno-0-65" name="__codelineno-0-65"></a><a href="#__codelineno-0-65"><span class="linenos" data-linenos=" 65 "></span></a>
 <a id="__codelineno-0-66" name="__codelineno-0-66"></a><a href="#__codelineno-0-66"><span class="linenos" data-linenos=" 66 "></span></a>    <span class="nd">@property</span>
@@ -1605,7 +1605,7 @@ equal in a set or dict.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Frame instances that are predicted by a model (<code>PredictedInstance</code> objects).</p>
+        <p>Frame instances that are predicted by a model (<code>PredictedInstance</code>).</p>
 
     </div>
 
