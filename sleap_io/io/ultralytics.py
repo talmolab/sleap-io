@@ -1,5 +1,4 @@
-"""This module handles direct I/O operations for working with Ultralytics YOLO pose
-format.
+"""Handles direct I/O operations for working with Ultralytics YOLO pose format.
 
 Ultralytics YOLO pose format specification:
 - Directory structure: dataset_root/split/images/ and dataset_root/split/labels/

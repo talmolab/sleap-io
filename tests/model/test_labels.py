@@ -916,7 +916,8 @@ def test_labels_numpy_user_instances():
 
     # Test 2: For untracked instances
     untracked = labels.numpy(untracked=True)
-    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted], 2 nodes, 2 coordinates)
+    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted],
+    # 2 nodes, 2 coordinates)
     assert untracked.shape == (3, 2, 2, 2)
     # Frame0 should have user instance first, then predicted instance track2
     assert_equal(untracked[0, 0], [[10, 10], [20, 20]])
@@ -930,7 +931,8 @@ def test_labels_numpy_user_instances():
 
     # Test 3: with return_confidence=True
     untracked_conf = labels.numpy(untracked=True, return_confidence=True)
-    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted], 2 nodes, 3 values)
+    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted],
+    # 2 nodes, 3 values)
     assert untracked_conf.shape == (3, 2, 2, 3)
     # Frame0 should have user instance first, then predicted instance track2
     assert_equal(untracked_conf[0, 0, 0, 2], 1.0)
@@ -957,7 +959,8 @@ def test_labels_numpy_user_instances():
 
     # Test 5: For untracked instances with user_instances=False
     pred_only_untracked = labels.numpy(untracked=True, user_instances=False)
-    # Shape should be (3 frames, max_predicted_instances_per_frame=2, 2 nodes, 2 coordinates)
+    # Shape should be (3 frames, max_predicted_instances_per_frame=2, 2 nodes,
+    # 2 coordinates)
     assert pred_only_untracked.shape == (3, 2, 2, 2)
     # Frame0 should have both predicted instances
     assert_equal(pred_only_untracked[0, 0], [[11, 11], [21, 21]])
@@ -1052,7 +1055,8 @@ def test_update_from_numpy(labels_predictions):
     # Verify the new instance was created
     first_frame = labels_copy.labeled_frames[0]
 
-    # Check if a track with the name "new_track" exists in any of the first frame's instances
+    # Check if a track with the name "new_track" exists in any of the first
+    # frame's instances
     has_new_track = any(
         inst.track and inst.track.name == "new_track" for inst in first_frame.instances
     )
@@ -1330,7 +1334,10 @@ def test_update_from_numpy_special_case():
 
 
 def test_update_from_numpy_confidence_scores():
-    """Test updating confidence scores in existing predicted instances with update_from_numpy."""
+    """Test updating confidence scores in existing predicted instances.
+    
+    Uses update_from_numpy to update scores.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1567,7 +1574,10 @@ def test_update_from_numpy_nan_handling():
 
 
 def test_update_from_numpy_more_tracks_than_provided():
-    """Test the special case in update_from_numpy where array has more tracks than provided track list."""
+    """Test update_from_numpy special case with more tracks in array.
+    
+    Tests when array has more tracks than the provided track list.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1606,7 +1616,8 @@ def test_update_from_numpy_more_tracks_than_provided():
     arr[0, 2, 0, 1] = 60.0  # y for first node
     arr[0, 2, 0, 2] = 1.0  # confidence
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 
     # Update with our array - this will trigger the special case
@@ -1651,7 +1662,10 @@ def test_update_from_numpy_more_tracks_than_provided():
 
 
 def test_update_from_numpy_special_case_without_confidence():
-    """Test the special case in update_from_numpy where array has more tracks than provided tracks list, without confidence scores."""
+    """Test update_from_numpy special case with more tracks in array.
+    
+    Tests case without confidence scores.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1687,7 +1701,8 @@ def test_update_from_numpy_special_case_without_confidence():
     arr[0, 2, 0, 0] = 50.0  # x for first node
     arr[0, 2, 0, 1] = 60.0  # y for first node
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     # and ensure we're testing the "else:" branch (no confidence scores)
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 
@@ -1848,7 +1863,10 @@ def test_update_from_numpy_nan_handling_v2():
 
 
 def test_update_from_numpy_more_tracks_than_provided_v2():
-    """Test the special case in update_from_numpy where array has more tracks than provided track list."""
+    """Test update_from_numpy special case with more tracks in array.
+    
+    Tests when array has more tracks than the provided track list.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1887,7 +1905,8 @@ def test_update_from_numpy_more_tracks_than_provided_v2():
     arr[0, 2, 0, 1] = 60.0  # y for first node
     arr[0, 2, 0, 2] = 1.0  # confidence
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 
     # Update with our array - this will trigger the special case
@@ -1932,7 +1951,10 @@ def test_update_from_numpy_more_tracks_than_provided_v2():
 
 
 def test_update_from_numpy_special_case_without_confidence_v2():
-    """Test the special case in update_from_numpy where array has more tracks than provided tracks list, without confidence scores."""
+    """Test update_from_numpy special case with more tracks in array.
+    
+    Tests case without confidence scores.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1968,7 +1990,8 @@ def test_update_from_numpy_special_case_without_confidence_v2():
     arr[0, 2, 0, 0] = 50.0  # x for first node
     arr[0, 2, 0, 1] = 60.0  # y for first node
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     # and ensure we're testing the "else:" branch (no confidence scores)
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 

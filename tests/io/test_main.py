@@ -67,7 +67,8 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
     save_jabs(labels_multi, 5, tmp_path)
     labels_v5_written = load_jabs(str(tmp_path / jabs_real_data_v5))
     # v5 contains all v4 and v3 data, so only need to check v5
-    # Confidence field and ordering of identities is not preserved, so just check number of labels
+    # Confidence field and ordering of identities is not preserved, so just check
+    # number of labels
     assert len(labels_v5_written) == len(labels_multi)
     assert len(labels_v5_written.videos) == len(labels_multi.videos)
 
