@@ -281,40 +281,38 @@ def test_labels_set_with_different_labels():
 def test_labels_set_save_ultralytics(tmp_path):
     """Test saving LabelsSet in ultralytics format."""
     # Create simple labels without video dependencies
-    from sleap_io import Labels, LabeledFrame, Video, Instance, Skeleton, Node
-    
+    from sleap_io import Instance, LabeledFrame, Labels, Node, Skeleton, Video
+
     # Create a simple skeleton
     skeleton = Skeleton([Node("node1"), Node("node2")])
-    
+
     # Create labels with a fake video
     labels = Labels(skeletons=[skeleton])
     video = Video.from_filename("fake_video.mp4")
-    
+
     # Add a labeled frame
     lf = LabeledFrame(video=video, frame_idx=0)
     instance = Instance.from_numpy([[10, 20], [30, 40]], skeleton=skeleton)
     lf.instances.append(instance)
     labels.append(lf)
-    
+
     labels_set = LabelsSet({"train": labels, "val": labels, "test": labels})
-    
+
     # Save as ultralytics format
     save_dir = tmp_path / "yolo_dataset"
     labels_set.save(save_dir, format="ultralytics", verbose=False)
-    
+
     # Check that the directory structure was created
     assert save_dir.exists()
     assert (save_dir / "data.yaml").exists()
-    
+
     # Test split name mapping
-    labels_set_mapped = LabelsSet({
-        "training": labels,
-        "validation": labels,
-        "testing": labels
-    })
+    labels_set_mapped = LabelsSet(
+        {"training": labels, "validation": labels, "testing": labels}
+    )
     save_dir_mapped = tmp_path / "yolo_dataset_mapped"
     labels_set_mapped.save(save_dir_mapped, format="ultralytics", verbose=False)
-    
+
     # Check data.yaml was created
     assert (save_dir_mapped / "data.yaml").exists()
 
@@ -323,7 +321,7 @@ def test_labels_set_save_invalid_format(tmp_path, slp_minimal):
     """Test error handling for invalid save format."""
     labels = load_slp(slp_minimal)
     labels_set = LabelsSet({"train": labels})
-    
+
     # Test invalid format
     with pytest.raises(ValueError, match="Unknown format: invalid_format"):
         labels_set.save(tmp_path, format="invalid_format")
