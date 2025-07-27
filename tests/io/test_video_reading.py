@@ -439,3 +439,141 @@ def test_tiff_rank4_format_reading(tmp_path):
         video_bad._read_frame(0)
     with pytest.raises(ValueError, match="Unknown format"):
         video_bad._read_frames([0, 1])
+
+
+def test_tiff_chwt_format_with_mocking(tmp_path, monkeypatch):
+    """Test CHWT format reading using mocking since imageio doesn't preserve 4D."""
+    import numpy as np
+
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Create mock CHWT data (3 channels, 64 height, 64 width, 5 time points)
+    chwt_data = np.random.randint(0, 255, (3, 64, 64, 5), dtype=np.uint8)
+    chwt_path = tmp_path / "chwt.tif"
+
+    # Mock iio.imread to return our CHWT data
+    def mock_imread(filename, index=None):
+        if index is not None:
+            # For multi-page check, only return data for index 0
+            if index > 0:
+                raise IndexError("index out of range")
+            # Return the full 4D array even with index (simulating single-page TIFF)
+            return chwt_data
+        # Return full 4D array
+        return chwt_data
+
+    monkeypatch.setattr("imageio.v3.imread", mock_imread)
+
+    # Test CHWT format detection
+    format_type, metadata = TiffVideo.detect_format(str(chwt_path))
+    assert format_type == "rank4_video"
+    assert metadata["format"] == "CHWT"
+    assert metadata["channels"] == 3
+    assert metadata["height"] == 64
+    assert metadata["width"] == 64
+    assert metadata["n_frames"] == 5
+
+    # Test CHWT format reading
+    video = TiffVideo(str(chwt_path), format="CHWT")
+
+    # Test single frame reading
+    frame = video._read_frame(2)
+    assert frame.shape == (64, 64, 3)
+    expected_frame = np.moveaxis(chwt_data[:, :, :, 2], 0, -1)  # CHW -> HWC
+    np.testing.assert_array_equal(frame, expected_frame)
+
+    # Test multiple frame reading
+    frames = video._read_frames([0, 2, 4])
+    assert frames.shape == (3, 64, 64, 3)
+    expected_frames = np.moveaxis(chwt_data[:, :, :, [0, 2, 4]], -1, 0)  # CHWT -> TCHW
+    expected_frames = np.moveaxis(expected_frames, 1, -1)  # TCHW -> THWC
+    np.testing.assert_array_equal(frames, expected_frames)
+
+
+def test_tiff_attrs_post_init(tmp_path, monkeypatch):
+    """Test TiffVideo.__attrs_post_init__ auto-detection."""
+    import numpy as np
+
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Create a rank-3 HWT format file
+    hwt_path = tmp_path / "hwt_auto.tif"
+    hwt_data = np.random.randint(0, 255, (128, 128, 8), dtype=np.uint8)
+    iio.imwrite(hwt_path, hwt_data)
+
+    # Create TiffVideo without specifying format (triggers __attrs_post_init__)
+    video = TiffVideo(str(hwt_path))
+    assert video.format == "HWT"  # Should auto-detect HWT format
+
+    # Test with a rank-4 file
+    thwc_path = tmp_path / "thwc_auto.tif"
+    thwc_data = np.random.randint(0, 255, (5, 64, 64, 3), dtype=np.uint8)
+    iio.imwrite(thwc_path, thwc_data)
+
+    video2 = TiffVideo(str(thwc_path))
+    assert video2.format == "THWC"  # Should auto-detect THWC format
+
+    # Test with multi-page detection
+    def mock_imread_multipage(filename, index=None):
+        if index == 1:
+            return np.zeros((64, 64), dtype=np.uint8)
+        elif index == 0:
+            return np.zeros((64, 64), dtype=np.uint8)
+        else:
+            raise IndexError("index out of range")
+
+    monkeypatch.setattr("imageio.v3.imread", mock_imread_multipage)
+
+    video3 = TiffVideo(str(tmp_path / "multipage.tif"))
+    assert video3.format == "multi_page"
+
+    # Test with single_frame detection (falls back to multi_page)
+    def mock_imread_single(filename, index=None):
+        if index is not None:
+            if index == 0:
+                return np.zeros((64, 64, 3), dtype=np.uint8)  # HWC single frame
+            else:
+                raise IndexError("single page")
+        return np.zeros((64, 64, 3), dtype=np.uint8)
+
+    monkeypatch.setattr("imageio.v3.imread", mock_imread_single)
+
+    video4 = TiffVideo(str(tmp_path / "single.tif"))
+    assert video4.format == "multi_page"  # Falls back to multi_page for single_frame
+
+
+def test_tiff_detect_format_edge_cases_extended(tmp_path, monkeypatch):
+    """Test TiffVideo.detect_format with unusual ndim values."""
+    import numpy as np
+
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Test with 5D array (unusual ndim)
+    def mock_imread_5d(filename, index=None):
+        if index is not None:
+            if index == 0:
+                return np.zeros((2, 3, 64, 64, 10), dtype=np.uint8)
+            else:
+                raise IndexError("single page")
+        return np.zeros((2, 3, 64, 64, 10), dtype=np.uint8)  # 5D array
+
+    monkeypatch.setattr("imageio.v3.imread", mock_imread_5d)
+
+    format_type, metadata = TiffVideo.detect_format(str(tmp_path / "5d.tif"))
+    assert format_type == "single_frame"  # Falls back to single_frame for unusual ndim
+    assert metadata["shape"] == (2, 3, 64, 64, 10)
+
+    # Test with 1D array
+    def mock_imread_1d(filename, index=None):
+        if index is not None:
+            if index == 0:
+                return np.zeros(100, dtype=np.uint8)
+            else:
+                raise IndexError("single page")
+        return np.zeros(100, dtype=np.uint8)  # 1D array
+
+    monkeypatch.setattr("imageio.v3.imread", mock_imread_1d)
+
+    format_type, metadata = TiffVideo.detect_format(str(tmp_path / "1d.tif"))
+    assert format_type == "single_frame"
+    assert metadata["shape"] == (100,)
