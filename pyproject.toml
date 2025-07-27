@@ -85,4 +85,4 @@ convention = "google"
 skip = '.git*,*.css'
 check-hidden = true
 # ignore-regex = ''
-# ignore-words-list = ''
+ignore-words-list = 'THW,HWT,THWC,CHWT'
