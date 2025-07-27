@@ -15,7 +15,7 @@ import multiprocessing
 import warnings
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import imageio.v3 as iio
 import numpy as np
@@ -27,6 +27,9 @@ from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
+
+if TYPE_CHECKING:
+    from sleap_io.model.labels_set import LabelsSet
 
 
 def read_labels(
@@ -121,6 +124,88 @@ def read_labels(
         tracks=list(tracks.values()),
         provenance={"source": str(dataset_path), "split": split},
     )
+
+
+def read_labels_set(
+    dataset_path: str,
+    splits: Optional[List[str]] = None,
+    skeleton: Optional[Skeleton] = None,
+    image_size: Tuple[int, int] = (480, 640),
+    verbose: bool = True,
+) -> LabelsSet:
+    """Read multiple splits from an Ultralytics dataset as a LabelsSet.
+
+    Args:
+        dataset_path: Path to the root directory of the Ultralytics dataset.
+        splits: List of split names to load (e.g., ["train", "val", "test"]).
+            If None, will attempt to load all available splits.
+        skeleton: Skeleton to use for the dataset. If None, will attempt to
+            load from data.yaml file in the dataset root.
+        image_size: Default image size (height, width) to use if unable to
+            determine from the actual images. Default: (480, 640).
+        verbose: If True, show progress bars during loading.
+
+    Returns:
+        A LabelsSet containing Labels objects for each split.
+
+    Example:
+        >>> labels_set = read_labels_set("path/to/yolo_dataset/")
+        >>> train_labels = labels_set["train"]
+        >>> val_labels = labels_set["val"]
+    """
+    from sleap_io.model.labels_set import LabelsSet
+
+    dataset_path = Path(dataset_path)
+
+    # If no splits specified, try to detect available splits
+    if splits is None:
+        splits = []
+        for split_name in ["train", "val", "test", "valid"]:
+            if (dataset_path / split_name).exists():
+                splits.append(split_name)
+
+        if not splits:
+            raise ValueError(f"No splits found in dataset path: {dataset_path}")
+
+    # Try to load skeleton from data.yaml if not provided
+    if skeleton is None:
+        data_yaml_path = dataset_path / "data.yaml"
+        if data_yaml_path.exists():
+            with open(data_yaml_path, "r") as f:
+                data_config = yaml.safe_load(f)
+
+            # Extract skeleton from data.yaml if available
+            if "kpt_shape" in data_config:
+                kpt_shape = data_config["kpt_shape"]
+                if isinstance(kpt_shape, list) and len(kpt_shape) >= 2:
+                    n_keypoints = kpt_shape[0]
+                    # Create a basic skeleton with numbered nodes
+                    nodes = [Node(name=str(i)) for i in range(n_keypoints)]
+                    skeleton = Skeleton(nodes=nodes)
+
+    labels_dict = {}
+
+    for split in splits:
+        if verbose:
+            print(f"Loading split: {split}")
+
+        try:
+            labels = read_labels(
+                dataset_path=str(dataset_path),
+                split=split,
+                skeleton=skeleton,
+                image_size=image_size,
+            )
+            labels_dict[split] = labels
+        except Exception as e:
+            if verbose:
+                print(f"Warning: Could not load split '{split}': {e}")
+            continue
+
+    if not labels_dict:
+        raise ValueError(f"Could not load any splits from dataset: {dataset_path}")
+
+    return LabelsSet(labels=labels_dict)
 
 
 def _save_frame_image(args: Tuple[dict, str, Optional[int]]) -> Optional[str]:

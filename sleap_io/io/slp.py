@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from enum import Enum, IntEnum
 from pathlib import Path
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import h5py
 import imageio.v3 as iio
@@ -35,6 +35,9 @@ from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
+
+if TYPE_CHECKING:
+    from sleap_io.model.labels_set import LabelsSet
 
 try:
     import cv2
@@ -1948,6 +1951,68 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     labels.provenance["filename"] = labels_path
 
     return labels
+
+
+def read_labels_set(
+    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
+    open_videos: bool = True,
+) -> LabelsSet:
+    """Load a LabelsSet from multiple SLP files.
+
+    Args:
+        path: Can be one of:
+            - A directory path containing .slp files
+            - A list of .slp file paths
+            - A dictionary mapping names to .slp file paths
+        open_videos: If `True` (the default), attempt to open the video backend for
+            I/O. If `False`, the backend will not be opened.
+
+    Returns:
+        A LabelsSet containing the loaded Labels objects.
+
+    Examples:
+        Load from directory:
+        >>> labels_set = read_labels_set("path/to/splits/")
+
+        Load from list:
+        >>> labels_set = read_labels_set(["train.slp", "val.slp", "test.slp"])
+
+        Load from dictionary:
+        >>> labels_set = read_labels_set({"train": "train.slp", "val": "val.slp"})
+    """
+    from sleap_io.model.labels_set import LabelsSet
+
+    labels_dict = {}
+
+    if isinstance(path, dict):
+        # Dictionary of name -> path mappings
+        for name, file_path in path.items():
+            labels_dict[name] = read_labels(str(file_path), open_videos=open_videos)
+
+    elif isinstance(path, list):
+        # List of paths - auto-generate names
+        for i, file_path in enumerate(path):
+            file_path = Path(file_path)
+            # Use filename without extension as key, or fall back to generic name
+            name = file_path.stem if file_path.stem else f"labels_{i}"
+            labels_dict[name] = read_labels(str(file_path), open_videos=open_videos)
+
+    else:
+        # Directory path - find all .slp files
+        path = Path(path)
+        if not path.is_dir():
+            raise ValueError(f"Path must be a directory, list, or dict. Got: {path}")
+
+        slp_files = sorted(path.glob("*.slp"))
+        if not slp_files:
+            raise ValueError(f"No .slp files found in directory: {path}")
+
+        for slp_file in slp_files:
+            # Use filename without extension as key
+            name = slp_file.stem
+            labels_dict[name] = read_labels(str(slp_file), open_videos=open_videos)
+
+    return LabelsSet(labels=labels_dict)
 
 
 def write_labels(
