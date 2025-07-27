@@ -131,7 +131,6 @@ def read_labels_set(
     splits: Optional[List[str]] = None,
     skeleton: Optional[Skeleton] = None,
     image_size: Tuple[int, int] = (480, 640),
-    verbose: bool = True,
 ) -> LabelsSet:
     """Read multiple splits from an Ultralytics dataset as a LabelsSet.
 
@@ -143,7 +142,6 @@ def read_labels_set(
             load from data.yaml file in the dataset root.
         image_size: Default image size (height, width) to use if unable to
             determine from the actual images. Default: (480, 640).
-        verbose: If True, show progress bars during loading.
 
     Returns:
         A LabelsSet containing Labels objects for each split.
@@ -174,8 +172,30 @@ def read_labels_set(
             with open(data_yaml_path, "r") as f:
                 data_config = yaml.safe_load(f)
 
-            # Extract skeleton from data.yaml if available
-            if "kpt_shape" in data_config:
+            # Try to create skeleton from our custom metadata first
+            if "node_names" in data_config and "skeleton" in data_config:
+                try:
+                    node_names = data_config["node_names"]
+                    skeleton_connections = data_config["skeleton"]
+
+                    # Create nodes from names
+                    nodes = [Node(name) for name in node_names]
+
+                    # Create edges from skeleton connections
+                    edges = []
+                    for connection in skeleton_connections:
+                        if len(connection) == 2:
+                            src_idx, dst_idx = connection
+                            if 0 <= src_idx < len(nodes) and 0 <= dst_idx < len(nodes):
+                                edges.append(Edge(nodes[src_idx], nodes[dst_idx]))
+
+                    skeleton = Skeleton(nodes=nodes, edges=edges)
+                except (KeyError, IndexError, TypeError):
+                    # Fall back to basic skeleton creation
+                    pass
+
+            # Fall back to basic skeleton creation if metadata approach failed
+            if skeleton is None and "kpt_shape" in data_config:
                 kpt_shape = data_config["kpt_shape"]
                 if isinstance(kpt_shape, list) and len(kpt_shape) >= 2:
                     n_keypoints = kpt_shape[0]
@@ -186,9 +206,6 @@ def read_labels_set(
     labels_dict = {}
 
     for split in splits:
-        if verbose:
-            print(f"Loading split: {split}")
-
         try:
             labels = read_labels(
                 dataset_path=str(dataset_path),
@@ -197,9 +214,7 @@ def read_labels_set(
                 image_size=image_size,
             )
             labels_dict[split] = labels
-        except Exception as e:
-            if verbose:
-                print(f"Warning: Could not load split '{split}': {e}")
+        except Exception:
             continue
 
     if not labels_dict:

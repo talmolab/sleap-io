@@ -573,8 +573,7 @@ def test_multiprocessing_write(tmp_path, centered_pair_low_quality_video):
     # Write with multiprocessing
     output_dir = tmp_path / "ultralytics_multiproc"
     write_labels(
-        labels, str(output_dir), use_multiprocessing=True, n_workers=2, verbose=False
-    )
+        labels, str(output_dir), use_multiprocessing=True, n_workers=2,     )
 
     # Verify all images were created
     image_files = list((output_dir / "train" / "images").glob("*.png"))
@@ -1074,7 +1073,7 @@ def test_read_labels_set_basic(tmp_path):
     create_test_ultralytics_dataset(dataset_path, ["train", "val"])
 
     # Load LabelsSet
-    labels_set = read_labels_set(str(dataset_path), verbose=False)
+    labels_set = read_labels_set(str(dataset_path))
 
     assert isinstance(labels_set, LabelsSet)
     assert len(labels_set) == 2
@@ -1099,8 +1098,7 @@ def test_read_labels_set_specific_splits(tmp_path):
 
     # Load only train and test
     labels_set = read_labels_set(
-        str(dataset_path), splits=["train", "test"], verbose=False
-    )
+        str(dataset_path), splits=["train", "test"],     )
 
     assert len(labels_set) == 2
     assert "train" in labels_set
@@ -1119,7 +1117,7 @@ def test_read_labels_set_custom_skeleton(tmp_path):
     skeleton = Skeleton([Node(name="head"), Node(name="body"), Node(name="tail")])
 
     # Load with custom skeleton
-    labels_set = read_labels_set(str(dataset_path), skeleton=skeleton, verbose=False)
+    labels_set = read_labels_set(str(dataset_path), skeleton=skeleton)
 
     assert len(labels_set["train"].skeletons[0].nodes) == 3
     assert labels_set["train"].skeletons[0].nodes[0].name == "head"
@@ -1138,7 +1136,6 @@ def test_read_labels_set_missing_splits(tmp_path):
     labels_set = read_labels_set(
         str(dataset_path),
         splits=["train", "val", "test"],  # val and test don't exist
-        verbose=False,
     )
 
     # Should only load train
@@ -1154,7 +1151,7 @@ def test_read_labels_set_no_splits(tmp_path):
     dataset_path.mkdir()
 
     with pytest.raises(ValueError, match="No splits found"):
-        read_labels_set(str(dataset_path), verbose=False)
+        read_labels_set(str(dataset_path))
 
 
 def test_read_labels_set_auto_detect_splits(tmp_path):
@@ -1166,7 +1163,7 @@ def test_read_labels_set_auto_detect_splits(tmp_path):
     create_test_ultralytics_dataset(dataset_path, ["train", "valid"])
 
     # Don't specify splits - should auto-detect
-    labels_set = read_labels_set(str(dataset_path), verbose=False)
+    labels_set = read_labels_set(str(dataset_path))
 
     assert len(labels_set) == 2
     assert "train" in labels_set
@@ -1206,7 +1203,7 @@ def test_read_labels_set_no_data_yaml(tmp_path):
 
     # Should work with provided skeleton
     skeleton = Skeleton([Node(name="point")])
-    labels_set = read_labels_set(str(dataset_path), skeleton=skeleton, verbose=False)
+    labels_set = read_labels_set(str(dataset_path), skeleton=skeleton)
 
     assert len(labels_set) == 1
     assert "train" in labels_set
@@ -1232,7 +1229,7 @@ def test_read_labels_set_roundtrip(tmp_path, slp_minimal):
     )
 
     # Read back as LabelsSet
-    labels_set = read_labels_set(str(dataset_path), verbose=False)
+    labels_set = read_labels_set(str(dataset_path))
 
     assert isinstance(labels_set, LabelsSet)
     assert len(labels_set) == 3
