@@ -3,10 +3,12 @@
 from sleap_io.io.main import (
     load_file,
     load_jabs,
+    load_labels_set,
     load_labelstudio,
     load_nwb,
     load_skeleton,
     load_slp,
+    load_ultralytics,
     load_video,
     save_file,
     save_jabs,
@@ -14,6 +16,7 @@ from sleap_io.io.main import (
     save_nwb,
     save_skeleton,
     save_slp,
+    save_ultralytics,
     save_video,
 )
 from sleap_io.io.video_reading import VideoBackend
@@ -32,6 +35,7 @@ from sleap_io.model.instance import (
 )
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+from sleap_io.model.labels_set import LabelsSet
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
@@ -41,10 +45,12 @@ __all__ = [
     "__version__",
     "load_file",
     "load_jabs",
+    "load_labels_set",
     "load_labelstudio",
     "load_nwb",
     "load_skeleton",
     "load_slp",
+    "load_ultralytics",
     "load_video",
     "save_file",
     "save_jabs",
@@ -52,6 +58,7 @@ __all__ = [
     "save_nwb",
     "save_skeleton",
     "save_slp",
+    "save_ultralytics",
     "save_video",
     "VideoBackend",
     "VideoWriter",
@@ -65,6 +72,7 @@ __all__ = [
     "Track",
     "LabeledFrame",
     "Labels",
+    "LabelsSet",
     "Edge",
     "Node",
     "Skeleton",

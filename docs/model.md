@@ -6,6 +6,8 @@
 
 ::: sleap_io.Labels
 
+::: sleap_io.LabelsSet
+
 ::: sleap_io.LabeledFrame
 
 ::: sleap_io.Instance

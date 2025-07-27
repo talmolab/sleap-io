@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, Iterator, Optional, Union
 
 import numpy as np
 from attrs import define, field
@@ -26,6 +26,9 @@ from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.skeleton import NodeOrIndex, Skeleton
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
+
+if TYPE_CHECKING:
+    from sleap_io.model.labels_set import LabelsSet
 
 
 @define
@@ -1108,7 +1111,7 @@ class Labels:
 
         return labels
 
-    def split(self, n: int | float, seed: int | None = None) -> tuple[Labels, Labels]:
+    def split(self, n: int | float, seed: int | None = None):
         """Separate the labels into random splits.
 
         Args:
@@ -1118,7 +1121,7 @@ class Labels:
             seed: Optional integer seed to use for reproducibility.
 
         Returns:
-            A tuple of `split1, split2`.
+            A LabelsSet with keys "split1" and "split2".
 
             If an integer was specified, `len(split1) == n`.
 
@@ -1132,10 +1135,19 @@ class Labels:
 
             If there is exactly 1 labeled frame in the labels, the same frame will be
             assigned to both splits.
+
+        Notes:
+            This method now returns a LabelsSet for easier management of splits.
+            For backward compatibility, the returned LabelsSet can be unpacked like
+            a tuple:
+            `split1, split2 = labels.split(0.8)`
         """
+        # Import here to avoid circular imports
+        from sleap_io.model.labels_set import LabelsSet
+
         n0 = len(self)
         if n0 == 0:
-            return self, self
+            return LabelsSet({"split1": self, "split2": self})
         n1 = n
         if n < 1.0:
             n1 = max(int(n0 * float(n)), 1)
@@ -1153,7 +1165,7 @@ class Labels:
         split1 = self.extract(inds1, copy=True)
         split2 = self.extract(inds2, copy=True)
 
-        return split1, split2
+        return LabelsSet({"split1": split1, "split2": split2})
 
     def make_training_splits(
         self,
@@ -1163,7 +1175,7 @@ class Labels:
         save_dir: str | Path | None = None,
         seed: int | None = None,
         embed: bool = True,
-    ) -> tuple[Labels, Labels] | tuple[Labels, Labels, Labels]:
+    ) -> LabelsSet:
         """Make splits for training with embedded images.
 
         Args:
@@ -1182,8 +1194,10 @@ class Labels:
                 videos files.
 
         Returns:
-            A tuple of `labels_train, labels_val` or
-            `labels_train, labels_val, labels_test` if `n_test` was specified.
+            A `LabelsSet` containing "train", "val", and optionally "test" keys.
+            The `LabelsSet` can be unpacked for backward compatibility:
+            `train, val = labels.make_training_splits(0.8)`
+            `train, val, test = labels.make_training_splits(0.8, n_test=0.1)`
 
         Notes:
             Predictions and suggestions will be removed before saving, leaving only
@@ -1205,6 +1219,9 @@ class Labels:
 
         See also: `Labels.split`
         """
+        # Import here to avoid circular imports
+        from sleap_io.model.labels_set import LabelsSet
+
         # Clean up labels.
         labels = deepcopy(self)
         labels.remove_predictions()
@@ -1239,24 +1256,19 @@ class Labels:
         if n_test is not None:
             labels_test.provenance["source_labels"] = source_labels
 
+        # Create LabelsSet
+        if n_test is None:
+            labels_set = LabelsSet({"train": labels_train, "val": labels_val})
+        else:
+            labels_set = LabelsSet(
+                {"train": labels_train, "val": labels_val, "test": labels_test}
+            )
+
         # Save.
         if save_dir is not None:
-            save_dir = Path(save_dir)
-            save_dir.mkdir(exist_ok=True, parents=True)
+            labels_set.save(save_dir, embed=embed)
 
-            if embed:
-                labels_train.save(save_dir / "train.pkg.slp", embed="user")
-                labels_val.save(save_dir / "val.pkg.slp", embed="user")
-                labels_test.save(save_dir / "test.pkg.slp", embed="user")
-            else:
-                labels_train.save(save_dir / "train.slp", embed=False)
-                labels_val.save(save_dir / "val.slp", embed=False)
-                labels_test.save(save_dir / "test.slp", embed=False)
-
-        if n_test is None:
-            return labels_train, labels_val
-        else:
-            return labels_train, labels_val, labels_test
+        return labels_set
 
     def trim(
         self,
