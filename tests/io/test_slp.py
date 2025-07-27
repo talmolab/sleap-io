@@ -1919,6 +1919,7 @@ def test_video_to_dict_tiffvideo(tmp_path, multipage_tiff_path):
     assert video_dict["backend"]["grayscale"] is True
     assert video_dict["backend"]["keep_open"] is False
     assert video_dict["backend"]["filename"] == multipage_tiff_path
+    assert video_dict["backend"]["format"] == "multi_page"
 
 
 def test_tiffvideo_roundtrip(tmp_path, multipage_tiff_path):

@@ -181,6 +181,7 @@ def make_video(
                 dataset=backend_metadata.get("dataset", None),
                 grayscale=grayscale,
                 input_format=backend_metadata.get("input_format", None),
+                format=backend_metadata.get("format", None),
             )
         except Exception:
             backend = None
@@ -284,6 +285,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "filename": video_filename,
             "grayscale": video.grayscale,
             "keep_open": video.backend.keep_open,
+            "format": video.backend.format,
         }
 
     # Add source_video metadata if present

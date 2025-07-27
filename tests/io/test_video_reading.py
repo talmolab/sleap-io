@@ -226,14 +226,19 @@ def test_tiff_multipage(multipage_tiff_path):
 
 
 def test_tiff_stacked_channels(stacked_tiff_path):
-    """Test that stacked TIFF (H,W,C) is handled by ImageVideo backend."""
+    """Test that stacked TIFF (H,W,T) is handled by TiffVideo backend."""
     backend = VideoBackend.from_filename(stacked_tiff_path)
-    assert type(backend) is ImageVideo
-    assert backend.num_frames == 1
+    assert type(backend) is TiffVideo
+    assert backend.format == "HWT"
+    assert backend.num_frames == 8
 
-    # This should read as a single multi-channel image
+    # This should read frames from the HWT format
     frame = backend.get_frame(0)
-    assert frame.shape == (128, 128, 8)  # 8 channels
+    assert frame.shape == (128, 128, 1)  # Single channel per frame
+
+    # Test multiple frames
+    frames = backend.get_frames([0, 3, 7])
+    assert frames.shape == (3, 128, 128, 1)
 
 
 def test_tiff_image_sequence(tiff_image_sequence_path):
@@ -253,12 +258,98 @@ def test_tiff_image_sequence(tiff_image_sequence_path):
 def test_is_multipage_tiff(
     single_page_tiff_path, multipage_tiff_path, stacked_tiff_path
 ):
-    """Test the is_multipage_tiff utility function."""
-    from sleap_io.io.video_reading import is_multipage_tiff
+    """Test the TiffVideo.is_multipage static method."""
+    from sleap_io.io.video_reading import TiffVideo
 
-    assert is_multipage_tiff(single_page_tiff_path) is False
-    assert is_multipage_tiff(multipage_tiff_path) is True
-    assert is_multipage_tiff(stacked_tiff_path) is False
+    assert TiffVideo.is_multipage(single_page_tiff_path) is False
+    assert TiffVideo.is_multipage(multipage_tiff_path) is True
+    assert TiffVideo.is_multipage(stacked_tiff_path) is False
 
     # Test with non-existent file
-    assert is_multipage_tiff("non_existent.tif") is False
+    assert TiffVideo.is_multipage("non_existent.tif") is False
+
+
+def test_tiff_format_detection(
+    single_page_tiff_path, multipage_tiff_path, stacked_tiff_path
+):
+    """Test the TiffVideo.detect_format static method."""
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Test single page detection
+    format_type, metadata = TiffVideo.detect_format(single_page_tiff_path)
+    assert format_type == "single_frame"
+    assert metadata["shape"] == (128, 128)  # Grayscale
+
+    # Test multi-page detection
+    format_type, metadata = TiffVideo.detect_format(multipage_tiff_path)
+    assert format_type == "multi_page"
+    assert len(metadata["shape"]) in (2, 3)  # Could be (H, W) or (H, W, C)
+
+    # Test stacked/multi-channel detection
+    format_type, metadata = TiffVideo.detect_format(stacked_tiff_path)
+    assert format_type == "rank3_video"  # Detected as HWT (square frames)
+    assert metadata["shape"] == (128, 128, 8)
+    assert metadata.get("format") == "HWT"
+    assert metadata["n_frames"] == 8  # T dimension
+
+
+def test_tiff_rank3_format_detection():
+    """Test TiffVideo._detect_rank3_format static method."""
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Test HWC format (single frame with channels)
+    format_type, metadata = TiffVideo._detect_rank3_format((480, 640, 3))
+    assert format_type == "single_frame"
+    assert metadata["format"] == "HWC"
+
+    # Test THW format (when last two dims are equal)
+    format_type, metadata = TiffVideo._detect_rank3_format((10, 128, 128))
+    assert format_type == "rank3_video"
+    assert metadata["format"] == "THW"
+    assert metadata["n_frames"] == 10
+    assert metadata["height"] == 128
+    assert metadata["width"] == 128
+
+    # Test HWT format (square frames)
+    format_type, metadata = TiffVideo._detect_rank3_format((128, 128, 10))
+    assert format_type == "rank3_video"
+    assert metadata["format"] == "HWT"
+    assert metadata["height"] == 128
+    assert metadata["width"] == 128
+    assert metadata["n_frames"] == 10
+
+    # Test HWT format (non-square)
+    format_type, metadata = TiffVideo._detect_rank3_format((480, 640, 10))
+    assert format_type == "rank3_video"
+    assert metadata["format"] == "HWT"
+    assert metadata["height"] == 480
+    assert metadata["width"] == 640
+    assert metadata["n_frames"] == 10
+
+
+def test_tiff_rank4_format_detection():
+    """Test TiffVideo._detect_rank4_format static method."""
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Test CHWT format
+    format_type, metadata = TiffVideo._detect_rank4_format((3, 480, 640, 10))
+    assert format_type == "rank4_video"
+    assert metadata["format"] == "CHWT"
+    assert metadata["channels"] == 3
+    assert metadata["height"] == 480
+    assert metadata["width"] == 640
+    assert metadata["n_frames"] == 10
+
+    # Test THWC format
+    format_type, metadata = TiffVideo._detect_rank4_format((10, 480, 640, 3))
+    assert format_type == "rank4_video"
+    assert metadata["format"] == "THWC"
+    assert metadata["n_frames"] == 10
+    assert metadata["height"] == 480
+    assert metadata["width"] == 640
+    assert metadata["channels"] == 3
+
+    # Test ambiguous case (defaults to THWC)
+    format_type, metadata = TiffVideo._detect_rank4_format((10, 480, 640, 10))
+    assert format_type == "rank4_video"
+    assert metadata["format"] == "THWC"
