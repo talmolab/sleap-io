@@ -10,7 +10,7 @@ import pytest
 @pytest.fixture
 def coco_flat_images():
     """Basic COCO dataset with flat image directory structure.
-    
+
     This dataset:
     - Has images in a simple 'images/' folder
     - Contains 3 images with mouse pose annotations
@@ -24,7 +24,7 @@ def coco_flat_images():
 @pytest.fixture
 def coco_category_folders():
     """COCO dataset with images organized by category subfolders.
-    
+
     This dataset:
     - Has images organized in category subdirectories (mouse/, fly/)
     - Contains multiple animal categories with different skeletons
@@ -38,7 +38,7 @@ def coco_category_folders():
 @pytest.fixture
 def coco_multi_source():
     """COCO dataset with images from multiple source directories.
-    
+
     This dataset:
     - Has images organized by source (source1/, source2/)
     - Simulates data collected from different sessions/setups
@@ -52,7 +52,7 @@ def coco_multi_source():
 @pytest.fixture
 def coco_nested_paths():
     """COCO dataset with deeply nested image directory structure.
-    
+
     This dataset:
     - Has images in deeply nested paths (data/experiment_1/session_a/images/)
     - Simulates hierarchical experimental organization
@@ -66,7 +66,7 @@ def coco_nested_paths():
 @pytest.fixture
 def coco_visibility_binary():
     """COCO dataset using binary visibility encoding (0/1).
-    
+
     This dataset:
     - Uses binary visibility: 0=not visible, 1=visible
     - Contains 3 images with mouse pose annotations
@@ -80,9 +80,10 @@ def coco_visibility_binary():
 @pytest.fixture
 def coco_visibility_ternary():
     """COCO dataset using ternary visibility encoding (0/1/2).
-    
+
     This dataset:
-    - Uses ternary visibility: 0=not labeled, 1=labeled but not visible, 2=labeled and visible
+    - Uses ternary visibility: 0=not labeled, 1=labeled but not visible,
+      2=labeled and visible
     - Contains 3 images with mouse pose annotations
     - Mix of all three visibility states to test comprehensive visibility handling
     - Uses 17-keypoint mouse skeleton
@@ -94,7 +95,7 @@ def coco_visibility_ternary():
 @pytest.fixture
 def coco_mixed_animals():
     """COCO dataset with multiple animal categories in the same images.
-    
+
     This dataset:
     - Contains both mouse and fly annotations in each image
     - Mouse: 17 keypoints with standard mammalian skeleton
