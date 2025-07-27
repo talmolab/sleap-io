@@ -326,3 +326,25 @@ def test_load_labels_set_kwargs_passing(tmp_path):
     assert len(labels_set) == 1
     assert "val" in labels_set
     assert labels_set["val"].skeletons[0].nodes[0].name == "custom_node"
+
+
+def test_load_labels_set_format_detection_edge_cases(tmp_path, slp_minimal):
+    """Test edge cases in format detection for load_labels_set."""
+    labels = load_slp(slp_minimal)
+    
+    # Test single SLP file wrapped in a list
+    single_file = tmp_path / "single.slp"
+    labels.save(single_file, embed=False)
+    
+    # Should auto-detect SLP format from file extension when in list
+    labels_set = load_labels_set([str(single_file)])
+    assert len(labels_set) == 1
+    assert "single" in labels_set
+    
+    # Test non-directory path with explicit format
+    # This tests the edge case where a single file path is provided but format is explicit
+    try:
+        # This should fail because SLP format expects directory/list/dict
+        load_labels_set(str(single_file), format="slp")
+    except ValueError as e:
+        assert "Path must be a directory" in str(e)
