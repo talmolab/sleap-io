@@ -925,7 +925,7 @@ class TiffVideo(VideoBackend):
                 "format": "HWT",
                 "height": dim1,
                 "width": dim2,
-                "n_frames": dim3
+                "n_frames": dim3,
             }
         else:
             # For non-square frames, check if it could be THW
@@ -937,7 +937,7 @@ class TiffVideo(VideoBackend):
                     "format": "THW",
                     "n_frames": dim1,
                     "height": dim2,
-                    "width": dim3
+                    "width": dim3,
                 }
             else:
                 # Default to HWT format
@@ -946,7 +946,7 @@ class TiffVideo(VideoBackend):
                     "format": "HWT",
                     "height": dim1,
                     "width": dim2,
-                    "n_frames": dim3
+                    "n_frames": dim3,
                 }
 
     @staticmethod
@@ -970,7 +970,7 @@ class TiffVideo(VideoBackend):
                 "channels": dim1,
                 "height": dim2,
                 "width": dim3,
-                "n_frames": dim4
+                "n_frames": dim4,
             }
         elif dim4 in (1, 3):
             # THWC format
@@ -980,7 +980,7 @@ class TiffVideo(VideoBackend):
                 "n_frames": dim1,
                 "height": dim2,
                 "width": dim3,
-                "channels": dim4
+                "channels": dim4,
             }
         else:
             # Default to THWC
@@ -990,7 +990,7 @@ class TiffVideo(VideoBackend):
                 "n_frames": dim1,
                 "height": dim2,
                 "width": dim3,
-                "channels": dim4
+                "channels": dim4,
             }
 
     def __attrs_post_init__(self):
