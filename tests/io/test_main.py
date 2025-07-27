@@ -242,7 +242,7 @@ def test_load_labels_set_ultralytics(tmp_path):
     label_file.write_text("0 0.5 0.5 0.4 0.4 0.4 0.4 2 0.6 0.6 2\n")
 
     # Load with auto-detection (should detect ultralytics)
-    labels_set = load_labels_set(dataset_path, verbose=False)
+    labels_set = load_labels_set(dataset_path)
 
     assert isinstance(labels_set, LabelsSet)
     assert "train" in labels_set
@@ -320,7 +320,6 @@ def test_load_labels_set_kwargs_passing(tmp_path):
         format="ultralytics",
         splits=["val"],
         skeleton=skeleton,
-        verbose=False,
     )
 
     assert len(labels_set) == 1

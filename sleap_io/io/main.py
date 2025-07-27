@@ -565,7 +565,8 @@ def load_labels_set(
         splits = kwargs.pop("splits", None)
         skeleton = kwargs.pop("skeleton", None)
         image_size = kwargs.pop("image_size", (480, 640))
-        verbose = kwargs.pop("verbose", True)
+        # Remove verbose from kwargs if present (for backward compatibility)
+        kwargs.pop("verbose", None)
 
         if not isinstance(path, (str, Path)):
             raise ValueError(
@@ -578,7 +579,6 @@ def load_labels_set(
             splits=splits,
             skeleton=skeleton,
             image_size=image_size,
-            verbose=verbose,
         )
     else:
         raise ValueError(
