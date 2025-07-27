@@ -17,6 +17,7 @@ def centered_pair_low_quality_video(centered_pair_low_quality_path):
     return sleap_io.Video.from_filename(centered_pair_low_quality_path)
 
 
+@pytest.fixture
 def centered_pair_frame_paths():
     """Paths to three frames of a video with two flies in the center."""
     return [
