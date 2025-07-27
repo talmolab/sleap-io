@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import h5py
+import imageio.v3 as iio
 import numpy as np
 import pytest
 from numpy.testing import assert_equal
@@ -353,3 +354,84 @@ def test_tiff_rank4_format_detection():
     format_type, metadata = TiffVideo._detect_rank4_format((10, 480, 640, 10))
     assert format_type == "rank4_video"
     assert metadata["format"] == "THWC"
+
+
+def test_tiff_format_detection_edge_cases(tmp_path):
+    """Test TiffVideo.detect_format edge cases."""
+    from sleap_io.io.video_reading import TiffVideo
+    import numpy as np
+    
+    # Test exception handling
+    format_type, metadata = TiffVideo.detect_format("non_existent_file.tif")
+    assert format_type == "single_frame"
+    assert metadata["shape"] is None
+    
+    # Create a rank-4 test file
+    rank4_path = tmp_path / "rank4.tif"
+    rank4_data = np.zeros((10, 128, 128, 3), dtype=np.uint8)
+    iio.imwrite(rank4_path, rank4_data)
+    
+    format_type, metadata = TiffVideo.detect_format(str(rank4_path))
+    assert format_type == "rank4_video"
+    assert metadata["format"] == "THWC"
+    
+    # imageio might save 5D as multi-page, so let's just check the other edge case is covered
+
+
+def test_tiff_thw_format_reading(tmp_path):
+    """Test reading THW format TIFF files."""
+    from sleap_io.io.video_reading import TiffVideo
+    import numpy as np
+    
+    # Create a THW format TIFF (10 frames of 50x50)
+    thw_path = tmp_path / "thw.tif"
+    thw_data = np.random.randint(0, 255, (10, 50, 50), dtype=np.uint8)
+    iio.imwrite(thw_path, thw_data)
+    
+    # Create TiffVideo with explicit THW format
+    video = TiffVideo(str(thw_path), format="THW")
+    assert video.num_frames == 10
+    
+    # Test single frame reading
+    frame = video._read_frame(0)
+    assert frame.shape == (50, 50, 1)
+    np.testing.assert_array_equal(frame[:, :, 0], thw_data[0])
+    
+    # Test multiple frame reading
+    frames = video._read_frames([0, 5, 9])
+    assert frames.shape == (3, 50, 50, 1)
+    np.testing.assert_array_equal(frames[0, :, :, 0], thw_data[0])
+    np.testing.assert_array_equal(frames[1, :, :, 0], thw_data[5])
+    np.testing.assert_array_equal(frames[2, :, :, 0], thw_data[9])
+
+
+def test_tiff_rank4_format_reading(tmp_path):
+    """Test reading rank-4 format TIFF files."""
+    from sleap_io.io.video_reading import TiffVideo
+    import numpy as np
+    
+    # Test THWC format
+    thwc_path = tmp_path / "thwc.tif"
+    thwc_data = np.random.randint(0, 255, (5, 64, 64, 3), dtype=np.uint8)
+    iio.imwrite(thwc_path, thwc_data)
+    
+    video = TiffVideo(str(thwc_path), format="THWC")
+    assert video.num_frames == 5
+    
+    frame = video._read_frame(2)
+    assert frame.shape == (64, 64, 3)
+    np.testing.assert_array_equal(frame, thwc_data[2])
+    
+    frames = video._read_frames([0, 2, 4])
+    assert frames.shape == (3, 64, 64, 3)
+    np.testing.assert_array_equal(frames, thwc_data[[0, 2, 4]])
+    
+    # Note: imageio may not preserve 4D arrays as expected, so we'll skip CHWT test
+    # and just test the format error handling
+    
+    # Test unknown format error
+    video_bad = TiffVideo(str(thwc_path), format="UNKNOWN")
+    with pytest.raises(ValueError, match="Unknown format"):
+        video_bad._read_frame(0)
+    with pytest.raises(ValueError, match="Unknown format"):
+        video_bad._read_frames([0, 1])
