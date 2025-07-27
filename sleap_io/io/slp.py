@@ -15,7 +15,13 @@ from tqdm import tqdm
 
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
 from sleap_io.io.utils import is_file_accessible, read_hdf5_attrs, read_hdf5_dataset
-from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
+from sleap_io.io.video_reading import (
+    HDF5Video,
+    ImageVideo,
+    MediaVideo,
+    TiffVideo,
+    VideoBackend,
+)
 from sleap_io.model.camera import (
     Camera,
     CameraGroup,
@@ -270,6 +276,14 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "width_": width,
             "channels_": channels,
             "grayscale": video.grayscale,
+        }
+    elif type(video.backend) is TiffVideo:
+        result["backend"] = {
+            "type": "TiffVideo",
+            "shape": video.shape,
+            "filename": video_filename,
+            "grayscale": video.grayscale,
+            "keep_open": video.backend.keep_open,
         }
 
     # Add source_video metadata if present

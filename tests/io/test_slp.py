@@ -1900,6 +1900,72 @@ def test_video_to_dict_with_none_backend(tmp_path):
     assert video_dict["backend"] == video.backend_metadata
 
 
+def test_video_to_dict_tiffvideo(tmp_path, multipage_tiff_path):
+    """Test that video_to_dict handles TiffVideo backend correctly."""
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Create a TiffVideo backend
+    backend = TiffVideo(filename=multipage_tiff_path, grayscale=True, keep_open=False)
+    video = Video(
+        filename=multipage_tiff_path,
+        backend=backend,
+    )
+
+    video_dict = video_to_dict(video, labels_path=tmp_path / "test.slp")
+
+    assert video_dict["filename"] == multipage_tiff_path
+    assert video_dict["backend"]["type"] == "TiffVideo"
+    assert video_dict["backend"]["shape"] == video.shape
+    assert video_dict["backend"]["grayscale"] is True
+    assert video_dict["backend"]["keep_open"] is False
+    assert video_dict["backend"]["filename"] == multipage_tiff_path
+
+
+def test_tiffvideo_roundtrip(tmp_path, multipage_tiff_path):
+    """Test saving and loading Labels with TiffVideo backend."""
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Create labels with a TiffVideo
+    video = Video.from_filename(multipage_tiff_path)
+    assert isinstance(video.backend, TiffVideo)
+
+    skeleton = Skeleton(nodes=["A", "B"])
+    labeled_frame = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[
+            Instance.from_numpy(
+                points_data=np.array([[10, 20], [30, 40]]),
+                skeleton=skeleton,
+            )
+        ],
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[labeled_frame],
+    )
+
+    # Save to SLP
+    output_path = tmp_path / "test_tiff.slp"
+    labels.save(output_path)
+
+    # Load and verify
+    loaded_labels = load_file(output_path)
+    loaded_video = loaded_labels.videos[0]
+
+    # Check that the video was loaded correctly
+    assert loaded_video.filename == multipage_tiff_path
+    assert isinstance(loaded_video.backend, TiffVideo)
+    assert loaded_video.backend.num_frames == 8
+    assert loaded_video.shape == video.shape
+
+    # Verify we can read frames
+    frame = loaded_video.backend.get_frame(0)
+    assert frame.shape == (128, 128, 1)
+
+
 def test_video_original_video_field(slp_minimal_pkg):
     """Test that Video objects have the new original_video field."""
     labels = load_file(slp_minimal_pkg)
