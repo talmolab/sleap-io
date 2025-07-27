@@ -35,6 +35,26 @@ def _get_valid_kwargs(cls, kwargs: dict) -> dict:
     return {k: v for k, v in kwargs.items() if k in valid_fields}
 
 
+def is_multipage_tiff(filename: str) -> bool:
+    """Check if a TIFF file contains multiple pages.
+
+    Args:
+        filename: Path to the TIFF file.
+
+    Returns:
+        True if the TIFF contains multiple pages, False otherwise.
+    """
+    try:
+        # Try to read the second frame
+        iio.imread(filename, index=1)
+        return True
+    except (IndexError, ValueError):
+        return False
+    except Exception:
+        # For any other error, assume it's not multi-page
+        return False
+
+
 @attrs.define
 class VideoBackend:
     """Base class for video backends.
@@ -102,6 +122,22 @@ class VideoBackend:
             return ImageVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
+        elif filename.endswith(("tif", "tiff")):
+            # Check if it's a multi-page TIFF
+            if is_multipage_tiff(filename):
+                return TiffVideo(
+                    filename,
+                    grayscale=grayscale,
+                    keep_open=keep_open,
+                    **_get_valid_kwargs(TiffVideo, kwargs),
+                )
+            else:
+                # Single-page TIFF, treat as regular image
+                return ImageVideo(
+                    [filename],
+                    grayscale=grayscale,
+                    **_get_valid_kwargs(ImageVideo, kwargs),
+                )
         elif filename.endswith(ImageVideo.EXTS):
             return ImageVideo(
                 [filename], grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
@@ -799,3 +835,72 @@ class ImageVideo(VideoBackend):
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
         return img
+
+
+@attrs.define
+class TiffVideo(VideoBackend):
+    """Video backend for reading multi-page TIFF stacks.
+
+    This backend supports reading multi-page TIFF files as video sequences.
+    Each page in the TIFF is treated as a frame.
+
+    Attributes:
+        filename: Path to the multi-page TIFF file.
+        grayscale: Whether to force grayscale. If None, autodetect on first frame load.
+        keep_open: Whether to keep the reader open between calls to read frames.
+    """
+
+    EXTS = ("tif", "tiff")
+
+    @property
+    def num_frames(self) -> int:
+        """Number of frames in the TIFF stack."""
+        # Count frames by trying to read each one until we get an error
+        frame_count = 0
+        while True:
+            try:
+                iio.imread(self.filename, index=frame_count)
+                frame_count += 1
+            except (IndexError, ValueError):
+                break
+        return frame_count
+
+    def _read_frame(self, frame_idx: int) -> np.ndarray:
+        """Read a single frame from the TIFF stack.
+
+        Args:
+            frame_idx: Index of frame to read.
+
+        Returns:
+            The frame as a numpy array of shape `(height, width, channels)`.
+
+        Notes:
+            This does not apply grayscale conversion. It is recommended to use the
+            `get_frame` method of the `VideoBackend` class instead.
+        """
+        try:
+            img = iio.imread(self.filename, index=frame_idx)
+        except ValueError as e:
+            if "imagecodecs" in str(e):
+                # Try PIL backend if imagecodecs is not installed
+                img = iio.imread(self.filename, index=frame_idx, plugin="TIFF-PIL")
+            else:
+                raise
+
+        if img.ndim == 2:
+            img = np.expand_dims(img, axis=-1)
+        return img
+
+    def _read_frames(self, frame_inds: list) -> np.ndarray:
+        """Read multiple frames from the TIFF stack.
+
+        Args:
+            frame_inds: List of frame indices to read.
+
+        Returns:
+            Frames as a numpy array of shape `(frames, height, width, channels)`.
+        """
+        imgs = []
+        for idx in frame_inds:
+            imgs.append(self._read_frame(idx))
+        return np.stack(imgs, axis=0)
