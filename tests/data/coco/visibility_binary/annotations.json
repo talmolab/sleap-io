@@ -1,0 +1,337 @@
+{
+  "info": {
+    "description": "Test COCO dataset for sleap-io",
+    "version": "1.0",
+    "year": 2024,
+    "contributor": "sleap-io test suite",
+    "date_created": "2024-01-01T00:00:00+00:00"
+  },
+  "licenses": [
+    {
+      "id": 1,
+      "name": "Attribution-NonCommercial",
+      "url": "http://creativecommons.org/licenses/by-nc/2.0/"
+    }
+  ],
+  "images": [
+    {
+      "id": 1,
+      "width": 384,
+      "height": 384,
+      "file_name": "image_001.jpg",
+      "license": 1,
+      "date_captured": "2024-01-01T00:00:00+00:00"
+    },
+    {
+      "id": 2,
+      "width": 384,
+      "height": 384,
+      "file_name": "image_002.jpg",
+      "license": 1,
+      "date_captured": "2024-01-01T00:00:00+00:00"
+    },
+    {
+      "id": 3,
+      "width": 384,
+      "height": 384,
+      "file_name": "image_003.jpg",
+      "license": 1,
+      "date_captured": "2024-01-01T00:00:00+00:00"
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "area": 4200,
+      "bbox": [
+        70,
+        70,
+        190,
+        140
+      ],
+      "iscrowd": 0,
+      "keypoints": [
+        90,
+        115,
+        0,
+        101,
+        115,
+        1,
+        112,
+        115,
+        1,
+        123,
+        115,
+        0,
+        134,
+        115,
+        1,
+        145,
+        115,
+        1,
+        156,
+        115,
+        0,
+        167,
+        115,
+        1,
+        178,
+        115,
+        1,
+        189,
+        115,
+        0,
+        200,
+        115,
+        1,
+        211,
+        115,
+        1,
+        222,
+        115,
+        0,
+        233,
+        115,
+        1,
+        244,
+        115,
+        1,
+        255,
+        115,
+        0,
+        266,
+        115,
+        1
+      ],
+      "num_keypoints": 11
+    },
+    {
+      "id": 2,
+      "image_id": 2,
+      "category_id": 1,
+      "area": 4200,
+      "bbox": [
+        70,
+        70,
+        190,
+        140
+      ],
+      "iscrowd": 0,
+      "keypoints": [
+        90,
+        140,
+        0,
+        101,
+        140,
+        1,
+        112,
+        140,
+        1,
+        123,
+        140,
+        0,
+        134,
+        140,
+        1,
+        145,
+        140,
+        1,
+        156,
+        140,
+        0,
+        167,
+        140,
+        1,
+        178,
+        140,
+        1,
+        189,
+        140,
+        0,
+        200,
+        140,
+        1,
+        211,
+        140,
+        1,
+        222,
+        140,
+        0,
+        233,
+        140,
+        1,
+        244,
+        140,
+        1,
+        255,
+        140,
+        0,
+        266,
+        140,
+        1
+      ],
+      "num_keypoints": 11
+    },
+    {
+      "id": 3,
+      "image_id": 3,
+      "category_id": 1,
+      "area": 4200,
+      "bbox": [
+        70,
+        70,
+        190,
+        140
+      ],
+      "iscrowd": 0,
+      "keypoints": [
+        90,
+        165,
+        0,
+        101,
+        165,
+        1,
+        112,
+        165,
+        1,
+        123,
+        165,
+        0,
+        134,
+        165,
+        1,
+        145,
+        165,
+        1,
+        156,
+        165,
+        0,
+        167,
+        165,
+        1,
+        178,
+        165,
+        1,
+        189,
+        165,
+        0,
+        200,
+        165,
+        1,
+        211,
+        165,
+        1,
+        222,
+        165,
+        0,
+        233,
+        165,
+        1,
+        244,
+        165,
+        1,
+        255,
+        165,
+        0,
+        266,
+        165,
+        1
+      ],
+      "num_keypoints": 11
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "mouse",
+      "supercategory": "animal",
+      "keypoints": [
+        "nose",
+        "left_ear",
+        "right_ear",
+        "neck",
+        "left_shoulder",
+        "right_shoulder",
+        "left_front_paw",
+        "right_front_paw",
+        "spine1",
+        "spine2",
+        "spine3",
+        "left_hip",
+        "right_hip",
+        "left_rear_paw",
+        "right_rear_paw",
+        "tail_base",
+        "tail_tip"
+      ],
+      "skeleton": [
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          5,
+          7
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          4,
+          9
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          11,
+          13
+        ],
+        [
+          12,
+          14
+        ],
+        [
+          13,
+          15
+        ],
+        [
+          11,
+          16
+        ],
+        [
+          16,
+          17
+        ]
+      ]
+    }
+  ]
+}
