@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
 import numpy as np
 
@@ -17,6 +17,9 @@ from sleap_io.io.skeleton import (
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
+
+if TYPE_CHECKING:
+    from sleap_io.model.labels_set import LabelsSet
 
 
 def load_slp(filename: str, open_videos: bool = True) -> Labels:
@@ -496,6 +499,151 @@ def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
         # Fall back to regular skeleton JSON decoding
         decoder = SkeletonDecoder()
         return decoder.decode(json_data)
+
+
+def load_labels_set(
+    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
+    format: Optional[str] = None,
+    open_videos: bool = True,
+    **kwargs,
+) -> LabelsSet:
+    """Load a LabelsSet from multiple files.
+
+    Args:
+        path: Can be one of:
+            - A directory path containing label files
+            - A list of file paths
+            - A dictionary mapping names to file paths
+        format: Optional format specification. If None, will try to infer from path.
+            Supported formats: "slp", "ultralytics"
+        open_videos: If `True` (the default), attempt to open video backends.
+        **kwargs: Additional format-specific arguments.
+
+    Returns:
+        A LabelsSet containing the loaded Labels objects.
+
+    Examples:
+        Load from SLP directory:
+        >>> labels_set = load_labels_set("path/to/splits/")
+
+        Load from list of SLP files:
+        >>> labels_set = load_labels_set(["train.slp", "val.slp"])
+
+        Load from Ultralytics dataset:
+        >>> labels_set = load_labels_set("path/to/yolo_dataset/", format="ultralytics")
+    """
+    # Try to infer format if not specified
+    if format is None:
+        if isinstance(path, (str, Path)):
+            path_obj = Path(path)
+            if path_obj.is_dir():
+                # Check for ultralytics structure
+                if (path_obj / "data.yaml").exists() or any(
+                    (path_obj / split).exists() for split in ["train", "val", "test"]
+                ):
+                    format = "ultralytics"
+                else:
+                    # Default to SLP for directories
+                    format = "slp"
+            else:
+                # Single file path - check extension
+                if path_obj.suffix == ".slp":
+                    format = "slp"
+        elif isinstance(path, list) and len(path) > 0:
+            # Check first file in list
+            first_path = Path(path[0])
+            if first_path.suffix == ".slp":
+                format = "slp"
+        elif isinstance(path, dict):
+            # Dictionary input defaults to SLP
+            format = "slp"
+
+    if format == "slp":
+        return slp.read_labels_set(path, open_videos=open_videos)
+    elif format == "ultralytics":
+        # Extract ultralytics-specific kwargs
+        splits = kwargs.pop("splits", None)
+        skeleton = kwargs.pop("skeleton", None)
+        image_size = kwargs.pop("image_size", (480, 640))
+        verbose = kwargs.pop("verbose", True)
+
+        if not isinstance(path, (str, Path)):
+            raise ValueError(
+                "Ultralytics format requires a directory path, "
+                f"got {type(path).__name__}"
+            )
+
+        return ultralytics.read_labels_set(
+            str(path),
+            splits=splits,
+            skeleton=skeleton,
+            image_size=image_size,
+            verbose=verbose,
+        )
+    else:
+        raise ValueError(
+            f"Unknown format: {format}. Supported formats: 'slp', 'ultralytics'"
+        )
+
+
+def load_slp_labels_set(
+    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
+    open_videos: bool = True,
+) -> LabelsSet:
+    """Load a LabelsSet from SLP files.
+
+    Args:
+        path: Can be one of:
+            - A directory path containing .slp files
+            - A list of .slp file paths
+            - A dictionary mapping names to .slp file paths
+        open_videos: If `True` (the default), attempt to open video backends.
+
+    Returns:
+        A LabelsSet containing the loaded Labels objects.
+
+    Examples:
+        >>> labels_set = load_slp_labels_set("path/to/splits/")
+        >>> labels_set = load_slp_labels_set(["train.slp", "val.slp"])
+        >>> labels_set = load_slp_labels_set({"train": "train.slp", "val": "val.slp"})
+    """
+    return slp.read_labels_set(path, open_videos=open_videos)
+
+
+def load_ultralytics_labels_set(
+    dataset_path: str,
+    splits: Optional[List[str]] = None,
+    skeleton: Optional[Skeleton] = None,
+    image_size: tuple[int, int] = (480, 640),
+    verbose: bool = True,
+) -> LabelsSet:
+    """Load a LabelsSet from an Ultralytics dataset.
+
+    Args:
+        dataset_path: Path to the root directory of the Ultralytics dataset.
+        splits: List of split names to load (e.g., ["train", "val", "test"]).
+            If None, will attempt to load all available splits.
+        skeleton: Skeleton to use for the dataset. If None, will attempt to
+            load from data.yaml file in the dataset root.
+        image_size: Default image size (height, width) to use if unable to
+            determine from the actual images. Default: (480, 640).
+        verbose: If True, show progress bars during loading.
+
+    Returns:
+        A LabelsSet containing Labels objects for each split.
+
+    Examples:
+        >>> labels_set = load_ultralytics_labels_set("path/to/yolo_dataset/")
+        >>> train_labels = labels_set["train"]
+        >>> val_labels = labels_set["val"]
+    """
+    return ultralytics.read_labels_set(
+        dataset_path,
+        splits=splits,
+        skeleton=skeleton,
+        image_size=image_size,
+        verbose=verbose,
+    )
 
 
 def save_skeleton(skeleton: Union[Skeleton, List[Skeleton]], filename: str | Path):
