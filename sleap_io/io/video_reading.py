@@ -878,15 +878,7 @@ class TiffVideo(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
-        try:
-            img = iio.imread(self.filename, index=frame_idx)
-        except ValueError as e:
-            if "imagecodecs" in str(e):
-                # Try PIL backend if imagecodecs is not installed
-                img = iio.imread(self.filename, index=frame_idx, plugin="TIFF-PIL")
-            else:
-                raise
-
+        img = iio.imread(self.filename, index=frame_idx)
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
         return img
