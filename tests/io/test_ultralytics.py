@@ -573,7 +573,11 @@ def test_multiprocessing_write(tmp_path, centered_pair_low_quality_video):
     # Write with multiprocessing
     output_dir = tmp_path / "ultralytics_multiproc"
     write_labels(
-        labels, str(output_dir), use_multiprocessing=True, n_workers=2,     )
+        labels,
+        str(output_dir),
+        use_multiprocessing=True,
+        n_workers=2,
+    )
 
     # Verify all images were created
     image_files = list((output_dir / "train" / "images").glob("*.png"))
@@ -1098,7 +1102,9 @@ def test_read_labels_set_specific_splits(tmp_path):
 
     # Load only train and test
     labels_set = read_labels_set(
-        str(dataset_path), splits=["train", "test"],     )
+        str(dataset_path),
+        splits=["train", "test"],
+    )
 
     assert len(labels_set) == 2
     assert "train" in labels_set
