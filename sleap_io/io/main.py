@@ -586,66 +586,6 @@ def load_labels_set(
         )
 
 
-def load_slp_labels_set(
-    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
-    open_videos: bool = True,
-) -> LabelsSet:
-    """Load a LabelsSet from SLP files.
-
-    Args:
-        path: Can be one of:
-            - A directory path containing .slp files
-            - A list of .slp file paths
-            - A dictionary mapping names to .slp file paths
-        open_videos: If `True` (the default), attempt to open video backends.
-
-    Returns:
-        A LabelsSet containing the loaded Labels objects.
-
-    Examples:
-        >>> labels_set = load_slp_labels_set("path/to/splits/")
-        >>> labels_set = load_slp_labels_set(["train.slp", "val.slp"])
-        >>> labels_set = load_slp_labels_set({"train": "train.slp", "val": "val.slp"})
-    """
-    return slp.read_labels_set(path, open_videos=open_videos)
-
-
-def load_ultralytics_labels_set(
-    dataset_path: str,
-    splits: Optional[List[str]] = None,
-    skeleton: Optional[Skeleton] = None,
-    image_size: tuple[int, int] = (480, 640),
-    verbose: bool = True,
-) -> LabelsSet:
-    """Load a LabelsSet from an Ultralytics dataset.
-
-    Args:
-        dataset_path: Path to the root directory of the Ultralytics dataset.
-        splits: List of split names to load (e.g., ["train", "val", "test"]).
-            If None, will attempt to load all available splits.
-        skeleton: Skeleton to use for the dataset. If None, will attempt to
-            load from data.yaml file in the dataset root.
-        image_size: Default image size (height, width) to use if unable to
-            determine from the actual images. Default: (480, 640).
-        verbose: If True, show progress bars during loading.
-
-    Returns:
-        A LabelsSet containing Labels objects for each split.
-
-    Examples:
-        >>> labels_set = load_ultralytics_labels_set("path/to/yolo_dataset/")
-        >>> train_labels = labels_set["train"]
-        >>> val_labels = labels_set["val"]
-    """
-    return ultralytics.read_labels_set(
-        dataset_path,
-        splits=splits,
-        skeleton=skeleton,
-        image_size=image_size,
-        verbose=verbose,
-    )
-
-
 def save_skeleton(skeleton: Union[Skeleton, List[Skeleton]], filename: str | Path):
     """Save skeleton(s) to a JSON or YAML file.
 

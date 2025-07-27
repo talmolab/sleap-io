@@ -152,30 +152,66 @@ class LabelsSet:
         self,
         save_dir: Union[str, Path],
         embed: Union[bool, str] = True,
-        use_pkg_format: bool = True,
+        format: str = "slp",
+        **kwargs,
     ) -> None:
         """Save all Labels objects to a directory.
-
-        Each Labels object will be saved as a separate file named after its key
-        in the LabelsSet.
 
         Args:
             save_dir: Directory to save the files to. Will be created if it
                 doesn't exist.
-            embed: Whether to embed images in the saved files. Can be True, False,
-                "user", "predictions", or "all". See Labels.save() for details.
-            use_pkg_format: If True and embed is True, save as .pkg.slp files.
-                If False or embed is False, save as .slp files.
+            embed: For SLP format: Whether to embed images in the saved files.
+                Can be True, False, "user", "predictions", or "all".
+                See Labels.save() for details.
+            format: Output format. Currently supports "slp" (default) and "ultralytics".
+            **kwargs: Additional format-specific arguments. For ultralytics format,
+                these might include skeleton, image_size, etc.
+
+        Examples:
+            Save as SLP files with embedded images:
+            >>> labels_set.save("path/to/splits/", embed=True)
+
+            Save as SLP files without embedding:
+            >>> labels_set.save("path/to/splits/", embed=False)
+
+            Save as Ultralytics dataset:
+            >>> labels_set.save("path/to/dataset/", format="ultralytics")
         """
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        for name, labels in self.items():
-            if embed and use_pkg_format:
-                filename = f"{name}.pkg.slp"
-            else:
-                filename = f"{name}.slp"
-            labels.save(save_dir / filename, embed=embed)
+        if format == "slp":
+            for name, labels in self.items():
+                if embed:
+                    filename = f"{name}.pkg.slp"
+                else:
+                    filename = f"{name}.slp"
+                labels.save(save_dir / filename, embed=embed)
+
+        elif format == "ultralytics":
+            # Import here to avoid circular imports
+            from sleap_io.io import ultralytics
+
+            # For ultralytics, we need to save each split in the proper structure
+            for name, labels in self.items():
+                # Map common split names
+                split_name = name
+                if name in ["training", "train"]:
+                    split_name = "train"
+                elif name in ["validation", "val", "valid"]:
+                    split_name = "val"
+                elif name in ["testing", "test"]:
+                    split_name = "test"
+
+                # Write this split
+                ultralytics.write_labels(
+                    labels, str(save_dir), split=split_name, **kwargs
+                )
+
+        else:
+            raise ValueError(
+                f"Unknown format: {format}. Supported formats: 'slp', 'ultralytics'"
+            )
 
     @classmethod
     def from_labels_lists(
