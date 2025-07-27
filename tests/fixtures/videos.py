@@ -29,8 +29,8 @@ def centered_pair_frame_paths():
 @pytest.fixture
 def single_page_tiff_path():
     """Path to a single-page TIFF file.
-    
-    Returns path to a 128x128 grayscale TIFF containing a single frame 
+
+    Returns path to a 128x128 grayscale TIFF containing a single frame
     with a white square on black background.
     """
     return "tests/fixtures/tiff/single_page.tif"
@@ -39,7 +39,7 @@ def single_page_tiff_path():
 @pytest.fixture
 def multipage_tiff_path():
     """Path to a multi-page TIFF file.
-    
+
     Returns path to an 8-page TIFF where each page is 128x128 grayscale.
     Each frame contains a white square that moves diagonally across frames,
     and a frame indicator in the top-left corner.
@@ -50,7 +50,7 @@ def multipage_tiff_path():
 @pytest.fixture
 def stacked_tiff_path():
     """Path to a stacked TIFF file with frames as channels.
-    
+
     Returns path to a TIFF with shape (128, 128, 8) where the 8 frames
     are stored as channels in a single image. Each channel contains the
     same moving square pattern as the multi-page variant.
@@ -61,7 +61,7 @@ def stacked_tiff_path():
 @pytest.fixture
 def tiff_image_sequence_path():
     """Path to a directory containing a sequence of TIFF files.
-    
+
     Returns path to a directory with 8 individual TIFF files named
     frame_000.tif through frame_007.tif. Each file is 128x128 grayscale
     with the same moving square pattern as other TIFF fixtures.
