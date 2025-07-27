@@ -30,8 +30,6 @@
 
 ::: sleap_io.load_labels_set
 
-::: sleap_io.save_labels_set
-
 ::: sleap_io.load_skeleton
 
 ::: sleap_io.save_skeleton
