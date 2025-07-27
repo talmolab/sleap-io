@@ -32,6 +32,7 @@ from sleap_io.model.instance import (
 )
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+from sleap_io.model.labels_set import LabelsSet
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
@@ -65,6 +66,7 @@ __all__ = [
     "Track",
     "LabeledFrame",
     "Labels",
+    "LabelsSet",
     "Edge",
     "Node",
     "Skeleton",
