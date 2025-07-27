@@ -1299,26 +1299,10 @@
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_slp_labels_set&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;open_videos&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.main.load_slp_labels_set&lt;/code&gt;)" href="#sleap_io.io.main.load_slp_labels_set">load_slp_labels_set</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Load a LabelsSet from SLP files.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_ultralytics&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dataset_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;split&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;train&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;skeleton&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kwargs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.main.load_ultralytics&lt;/code&gt;)" href="#sleap_io.io.main.load_ultralytics">load_ultralytics</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Load an Ultralytics YOLO pose dataset as a SLEAP <code>Labels</code> object.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;load_ultralytics_labels_set&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dataset_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;splits&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;skeleton&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;image_size&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;480&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;640&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;verbose&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.main.load_ultralytics_labels_set&lt;/code&gt;)" href="#sleap_io.io.main.load_ultralytics_labels_set">load_ultralytics_labels_set</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Load a LabelsSet from an Ultralytics dataset.</p>
                 </div>
               </td>
             </tr>
@@ -2367,130 +2351,6 @@ when the video files are not available).</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="sleap_io.io.main.load_slp_labels_set" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">load_slp_labels_set</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">open_videos</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
-
-<a href="#sleap_io.io.main.load_slp_labels_set" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Load a LabelsSet from SLP files.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>path</code>
-            </td>
-            <td>
-                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib.Path">Path</span>, <span title="list">list</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib.Path">Path</span>]], <span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib.Path">Path</span>]]]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Can be one of:
-- A directory path containing .slp files
-- A list of .slp file paths
-- A dictionary mapping names to .slp file paths</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>open_videos</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If <code>True</code> (the default), attempt to open video backends.</p>
-              </div>
-            </td>
-            <td>
-                  <code>True</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;LabelsSet&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels_set.LabelsSet&lt;/code&gt;)" href="../../model/labels_set/#sleap_io.model.labels_set.LabelsSet">LabelsSet</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>A LabelsSet containing the loaded Labels objects.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Examples:</span></p>
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">labels_set</span> <span class="o">=</span> <span class="n">load_slp_labels_set</span><span class="p">(</span><span class="s2">&quot;path/to/splits/&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">labels_set</span> <span class="o">=</span> <span class="n">load_slp_labels_set</span><span class="p">([</span><span class="s2">&quot;train.slp&quot;</span><span class="p">,</span> <span class="s2">&quot;val.slp&quot;</span><span class="p">])</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">labels_set</span> <span class="o">=</span> <span class="n">load_slp_labels_set</span><span class="p">({</span><span class="s2">&quot;train&quot;</span><span class="p">:</span> <span class="s2">&quot;train.slp&quot;</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="s2">&quot;val.slp&quot;</span><span class="p">})</span>
-</code></pre></div>
-
-
-            <details class="quote">
-              <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-589" name="__codelineno-0-589"></a><a href="#__codelineno-0-589"><span class="linenos" data-linenos="589 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_slp_labels_set</span><span class="p">(</span>
-<a id="__codelineno-0-590" name="__codelineno-0-590"></a><a href="#__codelineno-0-590"><span class="linenos" data-linenos="590 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]]],</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a><a href="#__codelineno-0-591"><span class="linenos" data-linenos="591 "></span></a>    <span class="n">open_videos</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592"></a><a href="#__codelineno-0-592"><span class="linenos" data-linenos="592 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelsSet</span><span class="p">:</span>
-<a id="__codelineno-0-593" name="__codelineno-0-593"></a><a href="#__codelineno-0-593"><span class="linenos" data-linenos="593 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a LabelsSet from SLP files.</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594"></a><a href="#__codelineno-0-594"><span class="linenos" data-linenos="594 "></span></a>
-<a id="__codelineno-0-595" name="__codelineno-0-595"></a><a href="#__codelineno-0-595"><span class="linenos" data-linenos="595 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-596" name="__codelineno-0-596"></a><a href="#__codelineno-0-596"><span class="linenos" data-linenos="596 "></span></a><span class="sd">        path: Can be one of:</span>
-<a id="__codelineno-0-597" name="__codelineno-0-597"></a><a href="#__codelineno-0-597"><span class="linenos" data-linenos="597 "></span></a><span class="sd">            - A directory path containing .slp files</span>
-<a id="__codelineno-0-598" name="__codelineno-0-598"></a><a href="#__codelineno-0-598"><span class="linenos" data-linenos="598 "></span></a><span class="sd">            - A list of .slp file paths</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">            - A dictionary mapping names to .slp file paths</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">        open_videos: If `True` (the default), attempt to open video backends.</span>
-<a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a><span class="sd">        A LabelsSet containing the loaded Labels objects.</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a><span class="sd">        &gt;&gt;&gt; labels_set = load_slp_labels_set(&quot;path/to/splits/&quot;)</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a><span class="sd">        &gt;&gt;&gt; labels_set = load_slp_labels_set([&quot;train.slp&quot;, &quot;val.slp&quot;])</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608"></a><a href="#__codelineno-0-608"><span class="linenos" data-linenos="608 "></span></a><span class="sd">        &gt;&gt;&gt; labels_set = load_slp_labels_set({&quot;train&quot;: &quot;train.slp&quot;, &quot;val&quot;: &quot;val.slp&quot;})</span>
-<a id="__codelineno-0-609" name="__codelineno-0-609"></a><a href="#__codelineno-0-609"><span class="linenos" data-linenos="609 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a><a href="#__codelineno-0-610"><span class="linenos" data-linenos="610 "></span></a>    <span class="k">return</span> <span class="n">slp</span><span class="o">.</span><span class="n">read_labels_set</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">open_videos</span><span class="o">=</span><span class="n">open_videos</span><span class="p">)</span>
-</code></pre></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
 <h3 id="sleap_io.io.main.load_ultralytics" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">load_ultralytics</span><span class="p">(</span><span class="n">dataset_path</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="s1">&#39;train&#39;</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
@@ -2637,190 +2497,6 @@ Currently supports:
 <a id="__codelineno-0-187" name="__codelineno-0-187"></a><a href="#__codelineno-0-187"><span class="linenos" data-linenos="187 "></span></a>    <span class="k">return</span> <span class="n">ultralytics</span><span class="o">.</span><span class="n">read_labels</span><span class="p">(</span>
 <a id="__codelineno-0-188" name="__codelineno-0-188"></a><a href="#__codelineno-0-188"><span class="linenos" data-linenos="188 "></span></a>        <span class="n">dataset_path</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="n">split</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="n">skeleton</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
 <a id="__codelineno-0-189" name="__codelineno-0-189"></a><a href="#__codelineno-0-189"><span class="linenos" data-linenos="189 "></span></a>    <span class="p">)</span>
-</code></pre></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="sleap_io.io.main.load_ultralytics_labels_set" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">load_ultralytics_labels_set</span><span class="p">(</span><span class="n">dataset_path</span><span class="p">,</span> <span class="n">splits</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">image_size</span><span class="o">=</span><span class="p">(</span><span class="mi">480</span><span class="p">,</span> <span class="mi">640</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
-
-<a href="#sleap_io.io.main.load_ultralytics_labels_set" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Load a LabelsSet from an Ultralytics dataset.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>dataset_path</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Path to the root directory of the Ultralytics dataset.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>splits</code>
-            </td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.List">List</span>[<span title="str">str</span>]]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of split names to load (e.g., ["train", "val", "test"]).
-If None, will attempt to load all available splits.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>skeleton</code>
-            </td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../../model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Skeleton to use for the dataset. If None, will attempt to
-load from data.yaml file in the dataset root.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>image_size</code>
-            </td>
-            <td>
-                  <code><span title="tuple">tuple</span>[<span title="int">int</span>, <span title="int">int</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Default image size (height, width) to use if unable to
-determine from the actual images. Default: (480, 640).</p>
-              </div>
-            </td>
-            <td>
-                  <code>(480, 640)</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>verbose</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If True, show progress bars during loading.</p>
-              </div>
-            </td>
-            <td>
-                  <code>True</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;LabelsSet&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels_set.LabelsSet&lt;/code&gt;)" href="../../model/labels_set/#sleap_io.model.labels_set.LabelsSet">LabelsSet</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>A LabelsSet containing Labels objects for each split.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Examples:</span></p>
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">labels_set</span> <span class="o">=</span> <span class="n">load_ultralytics_labels_set</span><span class="p">(</span><span class="s2">&quot;path/to/yolo_dataset/&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">train_labels</span> <span class="o">=</span> <span class="n">labels_set</span><span class="p">[</span><span class="s2">&quot;train&quot;</span><span class="p">]</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">val_labels</span> <span class="o">=</span> <span class="n">labels_set</span><span class="p">[</span><span class="s2">&quot;val&quot;</span><span class="p">]</span>
-</code></pre></div>
-
-
-            <details class="quote">
-              <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-613" name="__codelineno-0-613"></a><a href="#__codelineno-0-613"><span class="linenos" data-linenos="613 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_ultralytics_labels_set</span><span class="p">(</span>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a><a href="#__codelineno-0-614"><span class="linenos" data-linenos="614 "></span></a>    <span class="n">dataset_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>    <span class="n">splits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a><a href="#__codelineno-0-616"><span class="linenos" data-linenos="616 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a><a href="#__codelineno-0-617"><span class="linenos" data-linenos="617 "></span></a>    <span class="n">image_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">480</span><span class="p">,</span> <span class="mi">640</span><span class="p">),</span>
-<a id="__codelineno-0-618" name="__codelineno-0-618"></a><a href="#__codelineno-0-618"><span class="linenos" data-linenos="618 "></span></a>    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-619" name="__codelineno-0-619"></a><a href="#__codelineno-0-619"><span class="linenos" data-linenos="619 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelsSet</span><span class="p">:</span>
-<a id="__codelineno-0-620" name="__codelineno-0-620"></a><a href="#__codelineno-0-620"><span class="linenos" data-linenos="620 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a LabelsSet from an Ultralytics dataset.</span>
-<a id="__codelineno-0-621" name="__codelineno-0-621"></a><a href="#__codelineno-0-621"><span class="linenos" data-linenos="621 "></span></a>
-<a id="__codelineno-0-622" name="__codelineno-0-622"></a><a href="#__codelineno-0-622"><span class="linenos" data-linenos="622 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-623" name="__codelineno-0-623"></a><a href="#__codelineno-0-623"><span class="linenos" data-linenos="623 "></span></a><span class="sd">        dataset_path: Path to the root directory of the Ultralytics dataset.</span>
-<a id="__codelineno-0-624" name="__codelineno-0-624"></a><a href="#__codelineno-0-624"><span class="linenos" data-linenos="624 "></span></a><span class="sd">        splits: List of split names to load (e.g., [&quot;train&quot;, &quot;val&quot;, &quot;test&quot;]).</span>
-<a id="__codelineno-0-625" name="__codelineno-0-625"></a><a href="#__codelineno-0-625"><span class="linenos" data-linenos="625 "></span></a><span class="sd">            If None, will attempt to load all available splits.</span>
-<a id="__codelineno-0-626" name="__codelineno-0-626"></a><a href="#__codelineno-0-626"><span class="linenos" data-linenos="626 "></span></a><span class="sd">        skeleton: Skeleton to use for the dataset. If None, will attempt to</span>
-<a id="__codelineno-0-627" name="__codelineno-0-627"></a><a href="#__codelineno-0-627"><span class="linenos" data-linenos="627 "></span></a><span class="sd">            load from data.yaml file in the dataset root.</span>
-<a id="__codelineno-0-628" name="__codelineno-0-628"></a><a href="#__codelineno-0-628"><span class="linenos" data-linenos="628 "></span></a><span class="sd">        image_size: Default image size (height, width) to use if unable to</span>
-<a id="__codelineno-0-629" name="__codelineno-0-629"></a><a href="#__codelineno-0-629"><span class="linenos" data-linenos="629 "></span></a><span class="sd">            determine from the actual images. Default: (480, 640).</span>
-<a id="__codelineno-0-630" name="__codelineno-0-630"></a><a href="#__codelineno-0-630"><span class="linenos" data-linenos="630 "></span></a><span class="sd">        verbose: If True, show progress bars during loading.</span>
-<a id="__codelineno-0-631" name="__codelineno-0-631"></a><a href="#__codelineno-0-631"><span class="linenos" data-linenos="631 "></span></a>
-<a id="__codelineno-0-632" name="__codelineno-0-632"></a><a href="#__codelineno-0-632"><span class="linenos" data-linenos="632 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-633" name="__codelineno-0-633"></a><a href="#__codelineno-0-633"><span class="linenos" data-linenos="633 "></span></a><span class="sd">        A LabelsSet containing Labels objects for each split.</span>
-<a id="__codelineno-0-634" name="__codelineno-0-634"></a><a href="#__codelineno-0-634"><span class="linenos" data-linenos="634 "></span></a>
-<a id="__codelineno-0-635" name="__codelineno-0-635"></a><a href="#__codelineno-0-635"><span class="linenos" data-linenos="635 "></span></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-636" name="__codelineno-0-636"></a><a href="#__codelineno-0-636"><span class="linenos" data-linenos="636 "></span></a><span class="sd">        &gt;&gt;&gt; labels_set = load_ultralytics_labels_set(&quot;path/to/yolo_dataset/&quot;)</span>
-<a id="__codelineno-0-637" name="__codelineno-0-637"></a><a href="#__codelineno-0-637"><span class="linenos" data-linenos="637 "></span></a><span class="sd">        &gt;&gt;&gt; train_labels = labels_set[&quot;train&quot;]</span>
-<a id="__codelineno-0-638" name="__codelineno-0-638"></a><a href="#__codelineno-0-638"><span class="linenos" data-linenos="638 "></span></a><span class="sd">        &gt;&gt;&gt; val_labels = labels_set[&quot;val&quot;]</span>
-<a id="__codelineno-0-639" name="__codelineno-0-639"></a><a href="#__codelineno-0-639"><span class="linenos" data-linenos="639 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-640" name="__codelineno-0-640"></a><a href="#__codelineno-0-640"><span class="linenos" data-linenos="640 "></span></a>    <span class="k">return</span> <span class="n">ultralytics</span><span class="o">.</span><span class="n">read_labels_set</span><span class="p">(</span>
-<a id="__codelineno-0-641" name="__codelineno-0-641"></a><a href="#__codelineno-0-641"><span class="linenos" data-linenos="641 "></span></a>        <span class="n">dataset_path</span><span class="p">,</span>
-<a id="__codelineno-0-642" name="__codelineno-0-642"></a><a href="#__codelineno-0-642"><span class="linenos" data-linenos="642 "></span></a>        <span class="n">splits</span><span class="o">=</span><span class="n">splits</span><span class="p">,</span>
-<a id="__codelineno-0-643" name="__codelineno-0-643"></a><a href="#__codelineno-0-643"><span class="linenos" data-linenos="643 "></span></a>        <span class="n">skeleton</span><span class="o">=</span><span class="n">skeleton</span><span class="p">,</span>
-<a id="__codelineno-0-644" name="__codelineno-0-644"></a><a href="#__codelineno-0-644"><span class="linenos" data-linenos="644 "></span></a>        <span class="n">image_size</span><span class="o">=</span><span class="n">image_size</span><span class="p">,</span>
-<a id="__codelineno-0-645" name="__codelineno-0-645"></a><a href="#__codelineno-0-645"><span class="linenos" data-linenos="645 "></span></a>        <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
-<a id="__codelineno-0-646" name="__codelineno-0-646"></a><a href="#__codelineno-0-646"><span class="linenos" data-linenos="646 "></span></a>    <span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
@@ -3547,34 +3223,34 @@ while YAML files use a simplified human-readable format.</p>
 
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-649" name="__codelineno-0-649"></a><a href="#__codelineno-0-649"><span class="linenos" data-linenos="649 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_skeleton</span><span class="p">(</span><span class="n">skeleton</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]],</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">):</span>
-<a id="__codelineno-0-650" name="__codelineno-0-650"></a><a href="#__codelineno-0-650"><span class="linenos" data-linenos="650 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save skeleton(s) to a JSON or YAML file.</span>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a><a href="#__codelineno-0-651"><span class="linenos" data-linenos="651 "></span></a>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a><a href="#__codelineno-0-652"><span class="linenos" data-linenos="652 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a><a href="#__codelineno-0-653"><span class="linenos" data-linenos="653 "></span></a><span class="sd">        skeleton: A single `Skeleton` or list of `Skeleton` objects to save.</span>
-<a id="__codelineno-0-654" name="__codelineno-0-654"></a><a href="#__codelineno-0-654"><span class="linenos" data-linenos="654 "></span></a><span class="sd">        filename: Path to save the skeleton file.</span>
-<a id="__codelineno-0-655" name="__codelineno-0-655"></a><a href="#__codelineno-0-655"><span class="linenos" data-linenos="655 "></span></a>
-<a id="__codelineno-0-656" name="__codelineno-0-656"></a><a href="#__codelineno-0-656"><span class="linenos" data-linenos="656 "></span></a><span class="sd">    Notes:</span>
-<a id="__codelineno-0-657" name="__codelineno-0-657"></a><a href="#__codelineno-0-657"><span class="linenos" data-linenos="657 "></span></a><span class="sd">        This function saves skeletons in either JSON or YAML format based on the</span>
-<a id="__codelineno-0-658" name="__codelineno-0-658"></a><a href="#__codelineno-0-658"><span class="linenos" data-linenos="658 "></span></a><span class="sd">        file extension. JSON files use the jsonpickle format compatible with SLEAP,</span>
-<a id="__codelineno-0-659" name="__codelineno-0-659"></a><a href="#__codelineno-0-659"><span class="linenos" data-linenos="659 "></span></a><span class="sd">        while YAML files use a simplified human-readable format.</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a><a href="#__codelineno-0-660"><span class="linenos" data-linenos="660 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a><a href="#__codelineno-0-661"><span class="linenos" data-linenos="661 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">Path</span><span class="p">):</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a><a href="#__codelineno-0-662"><span class="linenos" data-linenos="662 "></span></a>        <span class="n">filename</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a><a href="#__codelineno-0-663"><span class="linenos" data-linenos="663 "></span></a>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a><a href="#__codelineno-0-664"><span class="linenos" data-linenos="664 "></span></a>    <span class="c1"># Detect format based on extension</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a><a href="#__codelineno-0-665"><span class="linenos" data-linenos="665 "></span></a>    <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.yaml&quot;</span><span class="p">,</span> <span class="s2">&quot;.yml&quot;</span><span class="p">)):</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><a href="#__codelineno-0-666"><span class="linenos" data-linenos="666 "></span></a>        <span class="c1"># YAML format</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a><a href="#__codelineno-0-667"><span class="linenos" data-linenos="667 "></span></a>        <span class="n">encoder</span> <span class="o">=</span> <span class="n">SkeletonYAMLEncoder</span><span class="p">()</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a><a href="#__codelineno-0-668"><span class="linenos" data-linenos="668 "></span></a>        <span class="n">yaml_data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><a href="#__codelineno-0-669"><span class="linenos" data-linenos="669 "></span></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a><a href="#__codelineno-0-670"><span class="linenos" data-linenos="670 "></span></a>            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">yaml_data</span><span class="p">)</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a><a href="#__codelineno-0-671"><span class="linenos" data-linenos="671 "></span></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a><a href="#__codelineno-0-672"><span class="linenos" data-linenos="672 "></span></a>        <span class="c1"># JSON format (default)</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a><a href="#__codelineno-0-673"><span class="linenos" data-linenos="673 "></span></a>        <span class="n">encoder</span> <span class="o">=</span> <span class="n">SkeletonEncoder</span><span class="p">()</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><a href="#__codelineno-0-674"><span class="linenos" data-linenos="674 "></span></a>        <span class="n">json_data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><a href="#__codelineno-0-675"><span class="linenos" data-linenos="675 "></span></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><a href="#__codelineno-0-676"><span class="linenos" data-linenos="676 "></span></a>            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">json_data</span><span class="p">)</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-589" name="__codelineno-0-589"></a><a href="#__codelineno-0-589"><span class="linenos" data-linenos="589 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_skeleton</span><span class="p">(</span><span class="n">skeleton</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]],</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">):</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a><a href="#__codelineno-0-590"><span class="linenos" data-linenos="590 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save skeleton(s) to a JSON or YAML file.</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591"></a><a href="#__codelineno-0-591"><span class="linenos" data-linenos="591 "></span></a>
+<a id="__codelineno-0-592" name="__codelineno-0-592"></a><a href="#__codelineno-0-592"><span class="linenos" data-linenos="592 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a><a href="#__codelineno-0-593"><span class="linenos" data-linenos="593 "></span></a><span class="sd">        skeleton: A single `Skeleton` or list of `Skeleton` objects to save.</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a><a href="#__codelineno-0-594"><span class="linenos" data-linenos="594 "></span></a><span class="sd">        filename: Path to save the skeleton file.</span>
+<a id="__codelineno-0-595" name="__codelineno-0-595"></a><a href="#__codelineno-0-595"><span class="linenos" data-linenos="595 "></span></a>
+<a id="__codelineno-0-596" name="__codelineno-0-596"></a><a href="#__codelineno-0-596"><span class="linenos" data-linenos="596 "></span></a><span class="sd">    Notes:</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597"></a><a href="#__codelineno-0-597"><span class="linenos" data-linenos="597 "></span></a><span class="sd">        This function saves skeletons in either JSON or YAML format based on the</span>
+<a id="__codelineno-0-598" name="__codelineno-0-598"></a><a href="#__codelineno-0-598"><span class="linenos" data-linenos="598 "></span></a><span class="sd">        file extension. JSON files use the jsonpickle format compatible with SLEAP,</span>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a><span class="sd">        while YAML files use a simplified human-readable format.</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">Path</span><span class="p">):</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a>        <span class="n">filename</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a>
+<a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a>    <span class="c1"># Detect format based on extension</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a>    <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.yaml&quot;</span><span class="p">,</span> <span class="s2">&quot;.yml&quot;</span><span class="p">)):</span>
+<a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a>        <span class="c1"># YAML format</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a>        <span class="n">encoder</span> <span class="o">=</span> <span class="n">SkeletonYAMLEncoder</span><span class="p">()</span>
+<a id="__codelineno-0-608" name="__codelineno-0-608"></a><a href="#__codelineno-0-608"><span class="linenos" data-linenos="608 "></span></a>        <span class="n">yaml_data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
+<a id="__codelineno-0-609" name="__codelineno-0-609"></a><a href="#__codelineno-0-609"><span class="linenos" data-linenos="609 "></span></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610"></a><a href="#__codelineno-0-610"><span class="linenos" data-linenos="610 "></span></a>            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">yaml_data</span><span class="p">)</span>
+<a id="__codelineno-0-611" name="__codelineno-0-611"></a><a href="#__codelineno-0-611"><span class="linenos" data-linenos="611 "></span></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a><a href="#__codelineno-0-612"><span class="linenos" data-linenos="612 "></span></a>        <span class="c1"># JSON format (default)</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a><a href="#__codelineno-0-613"><span class="linenos" data-linenos="613 "></span></a>        <span class="n">encoder</span> <span class="o">=</span> <span class="n">SkeletonEncoder</span><span class="p">()</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a><a href="#__codelineno-0-614"><span class="linenos" data-linenos="614 "></span></a>        <span class="n">json_data</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">skeleton</span><span class="p">)</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a><a href="#__codelineno-0-616"><span class="linenos" data-linenos="616 "></span></a>            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">json_data</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
