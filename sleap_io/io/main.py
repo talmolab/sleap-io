@@ -326,7 +326,19 @@ def load_video(filename: str, **kwargs) -> Video:
               having to open the backend.
             - plugin: Video plugin to use for MediaVideo backend. One of "opencv",
               "FFMPEG",
-              or "pyav". If None, will use the first available plugin.
+              or "pyav". Also accepts aliases (case-insensitive):
+              * opencv: "opencv", "cv", "cv2", "ocv"
+              * FFMPEG: "FFMPEG", "ffmpeg", "imageio-ffmpeg", "imageio_ffmpeg"
+              * pyav: "pyav", "av"
+
+              If not specified, uses the following priority:
+              1. Global default set via `sio.set_default_video_plugin()`
+              2. Auto-detection based on available packages
+
+              To set a global default:
+              >>> import sleap_io as sio
+              >>> sio.set_default_video_plugin("opencv")
+              >>> video = sio.load_video("video.mp4")  # Uses opencv
             - input_format: Format of the data in HDF5 datasets. One of
               "channels_last" (the
               default) in (frames, height, width, channels) order or "channels_first" in
@@ -343,6 +355,10 @@ def load_video(filename: str, **kwargs) -> Video:
 
     Returns:
         A `Video` object.
+
+    See Also:
+        set_default_video_plugin: Set the default video plugin globally.
+        get_default_video_plugin: Get the current default video plugin.
     """
     return Video.from_filename(filename, **kwargs)
 

@@ -159,7 +159,8 @@ class VideoBackend:
                 created:
                 - For ImageVideo: No additional arguments.
                 - For MediaVideo: plugin (str): Video plugin to use. One of "opencv",
-                  "FFMPEG", or "pyav". If None, will use the first available plugin.
+                  "FFMPEG", or "pyav". Also accepts aliases (case-insensitive).
+                  If None, uses global default if set, otherwise auto-detects.
                 - For HDF5Video: input_format (str), frame_map (dict),
                   source_filename (str),
                   source_inds (np.ndarray), image_format (str). See HDF5Video for
@@ -442,14 +443,24 @@ class MediaVideo(VideoBackend):
             will use the first available plugin in the order listed above.
     """
 
-    plugin: str = attrs.field(
-        validator=attrs.validators.in_(["opencv", "FFMPEG", "pyav"])
-    )
+    plugin: str = attrs.field()
+
+    @plugin.validator
+    def _validate_plugin(self, attribute, value):
+        # Normalize the plugin name
+        normalized = normalize_plugin_name(value)
+        # Update the actual value to the normalized version
+        object.__setattr__(self, attribute.name, normalized)
 
     EXTS = ("mp4", "avi", "mov", "mj2", "mkv")
 
     @plugin.default
     def _default_plugin(self) -> str:
+        # Check global default first
+        if _default_video_plugin is not None:
+            return _default_video_plugin
+
+        # Otherwise auto-detect
         if "cv2" in sys.modules:
             return "opencv"
         elif "imageio_ffmpeg" in sys.modules:

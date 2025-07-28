@@ -577,3 +577,97 @@ def test_tiff_detect_format_edge_cases_extended(tmp_path, monkeypatch):
     format_type, metadata = TiffVideo.detect_format(str(tmp_path / "1d.tif"))
     assert format_type == "single_frame"
     assert metadata["shape"] == (100,)
+
+
+def test_plugin_name_normalization():
+    """Test plugin name normalization with various aliases."""
+    from sleap_io.io.video_reading import normalize_plugin_name
+
+    # Test opencv aliases
+    assert normalize_plugin_name("opencv") == "opencv"
+    assert normalize_plugin_name("OpenCV") == "opencv"
+    assert normalize_plugin_name("cv") == "opencv"
+    assert normalize_plugin_name("cv2") == "opencv"
+    assert normalize_plugin_name("CV2") == "opencv"
+    assert normalize_plugin_name("ocv") == "opencv"
+
+    # Test FFMPEG aliases
+    assert normalize_plugin_name("FFMPEG") == "FFMPEG"
+    assert normalize_plugin_name("ffmpeg") == "FFMPEG"
+    assert normalize_plugin_name("imageio-ffmpeg") == "FFMPEG"
+    assert normalize_plugin_name("imageio_ffmpeg") == "FFMPEG"
+
+    # Test pyav aliases
+    assert normalize_plugin_name("pyav") == "pyav"
+    assert normalize_plugin_name("PyAV") == "pyav"
+    assert normalize_plugin_name("av") == "pyav"
+    assert normalize_plugin_name("AV") == "pyav"
+
+    # Test invalid plugin
+    with pytest.raises(ValueError, match="Unknown plugin"):
+        normalize_plugin_name("invalid_plugin")
+
+
+def test_global_default_plugin():
+    """Test global default plugin functionality."""
+    import sleap_io as sio
+
+    # Test initial state
+    assert sio.get_default_video_plugin() is None
+
+    # Test setting default
+    sio.set_default_video_plugin("opencv")
+    assert sio.get_default_video_plugin() == "opencv"
+
+    # Test setting with alias
+    sio.set_default_video_plugin("cv2")
+    assert sio.get_default_video_plugin() == "opencv"
+
+    # Test clearing default
+    sio.set_default_video_plugin(None)
+    assert sio.get_default_video_plugin() is None
+
+    # Test invalid plugin
+    with pytest.raises(ValueError):
+        sio.set_default_video_plugin("invalid")
+
+
+def test_media_video_with_plugin(centered_pair_low_quality_path):
+    """Test MediaVideo creation with explicit plugin."""
+    import sleap_io as sio
+
+    # Clear any global default
+    sio.set_default_video_plugin(None)
+
+    # Test with explicit plugin
+    backend = VideoBackend.from_filename(
+        centered_pair_low_quality_path, plugin="opencv"
+    )
+    assert isinstance(backend, MediaVideo)
+    assert backend.plugin == "opencv"
+
+    # Test with plugin alias
+    backend = VideoBackend.from_filename(centered_pair_low_quality_path, plugin="cv2")
+    assert backend.plugin == "opencv"
+
+    # Test with different plugin
+    backend = VideoBackend.from_filename(
+        centered_pair_low_quality_path, plugin="FFMPEG"
+    )
+    assert backend.plugin == "FFMPEG"
+
+
+def test_media_video_uses_global_default(centered_pair_low_quality_path):
+    """Test MediaVideo uses global default when no plugin specified."""
+    import sleap_io as sio
+
+    # Set global default
+    sio.set_default_video_plugin("FFMPEG")
+
+    # Create without explicit plugin
+    backend = VideoBackend.from_filename(centered_pair_low_quality_path)
+    assert isinstance(backend, MediaVideo)
+    assert backend.plugin == "FFMPEG"
+
+    # Reset to avoid affecting other tests
+    sio.set_default_video_plugin(None)

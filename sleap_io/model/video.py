@@ -51,7 +51,27 @@ class Video:
         two `Video` instances with the same attributes will NOT be considered equal in a
         set or dict.
 
-    See also: VideoBackend
+    Media Video Plugin Support:
+        For media files (mp4, avi, etc.), the following plugins are supported:
+        - "opencv": Uses OpenCV (cv2) for video reading
+        - "FFMPEG": Uses imageio-ffmpeg for video reading
+        - "pyav": Uses PyAV for video reading
+
+        Plugin aliases (case-insensitive):
+        - opencv: "opencv", "cv", "cv2", "ocv"
+        - FFMPEG: "FFMPEG", "ffmpeg", "imageio-ffmpeg", "imageio_ffmpeg"
+        - pyav: "pyav", "av"
+
+        Plugin selection priority:
+        1. Explicitly specified plugin parameter
+        2. Backend metadata plugin value
+        3. Global default (set via sio.set_default_video_plugin)
+        4. Auto-detection based on available packages
+
+    See Also:
+        VideoBackend: The backend interface for reading video data.
+        sleap_io.set_default_video_plugin: Set global default plugin.
+        sleap_io.get_default_video_plugin: Get current default plugin.
     """
 
     filename: str | list[str]
@@ -293,6 +313,7 @@ class Video:
         dataset: Optional[str] = None,
         grayscale: Optional[str] = None,
         keep_open: bool = True,
+        plugin: Optional[str] = None,
     ):
         """Open the video backend for reading.
 
@@ -306,6 +327,10 @@ class Video:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            plugin: Video plugin to use for MediaVideo files. One of "opencv",
+                "FFMPEG", or "pyav". Also accepts aliases (case-insensitive).
+                If not specified, uses the backend metadata, global default,
+                or auto-detection in that order.
 
         Notes:
             This is useful for opening the video backend to read frames and then closing
@@ -345,12 +370,24 @@ class Video:
         # Close previous backend if open.
         self.close()
 
+        # Handle plugin parameter
+        backend_kwargs = {}
+        if plugin is not None:
+            from sleap_io.io.video_reading import normalize_plugin_name
+
+            plugin = normalize_plugin_name(plugin)
+            self.backend_metadata["plugin"] = plugin
+
+        if "plugin" in self.backend_metadata:
+            backend_kwargs["plugin"] = self.backend_metadata["plugin"]
+
         # Create new backend.
         self.backend = VideoBackend.from_filename(
             self.filename,
             dataset=dataset,
             grayscale=grayscale,
             keep_open=keep_open,
+            **backend_kwargs,
         )
 
     def close(self):
@@ -426,3 +463,36 @@ class Video:
 
         new_video = Video.from_filename(save_path, grayscale=self.grayscale)
         return new_video
+
+    def set_video_plugin(self, plugin: str) -> None:
+        """Set the video plugin and reopen the video.
+
+        Args:
+            plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav".
+                Also accepts aliases (case-insensitive).
+
+        Raises:
+            ValueError: If the video is not a MediaVideo type.
+
+        Examples:
+            >>> video.set_video_plugin("opencv")
+            >>> video.set_video_plugin("CV2")  # Same as "opencv"
+        """
+        from sleap_io.io.video_reading import MediaVideo, normalize_plugin_name
+
+        if not self.filename.endswith(MediaVideo.EXTS):
+            raise ValueError(f"Cannot set plugin for non-media video: {self.filename}")
+
+        plugin = normalize_plugin_name(plugin)
+
+        # Close current backend if open
+        was_open = self.is_open
+        if was_open:
+            self.close()
+
+        # Update backend metadata
+        self.backend_metadata["plugin"] = plugin
+
+        # Reopen with new plugin if it was open
+        if was_open:
+            self.open()
