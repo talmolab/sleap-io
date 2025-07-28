@@ -13,6 +13,10 @@ package that aims to provide functionality for interacting with pose tracking-re
 data structures and file formats with minimal dependencies. This package *does not*
 have any functionality related to labeling, training, or inference.
 
+## Documentation
+
+**📚 [Documentation](https://io.sleap.ai)** - Comprehensive guides and API reference
+
 ## Installation
 ```
 pip install sleap-io

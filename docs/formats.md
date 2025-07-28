@@ -8,6 +8,8 @@
 
 ::: sleap_io.save_video
 
+::: sleap_io.load_labels_set
+
 ::: sleap_io.load_slp
 
 ::: sleap_io.save_slp
@@ -29,8 +31,6 @@
 ::: sleap_io.load_ultralytics
 
 ::: sleap_io.save_ultralytics
-
-::: sleap_io.load_labels_set
 
 ::: sleap_io.load_skeleton
 
