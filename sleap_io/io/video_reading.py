@@ -29,6 +29,83 @@ except ImportError:
     pass
 
 
+# Global default video plugin
+_default_video_plugin: Optional[str] = None
+
+
+def normalize_plugin_name(plugin: str) -> str:
+    """Normalize plugin names to standard format.
+
+    Args:
+        plugin: Plugin name or alias (case-insensitive).
+
+    Returns:
+        Normalized plugin name ("opencv", "FFMPEG", or "pyav").
+
+    Raises:
+        ValueError: If plugin name is not recognized.
+    """
+    plugin_lower = plugin.lower()
+
+    # Map aliases to standard names
+    aliases = {
+        "cv": "opencv",
+        "cv2": "opencv",
+        "opencv": "opencv",
+        "ocv": "opencv",
+        "ffmpeg": "FFMPEG",
+        "imageio-ffmpeg": "FFMPEG",
+        "imageio_ffmpeg": "FFMPEG",
+        "pyav": "pyav",
+        "av": "pyav",
+    }
+
+    if plugin_lower not in aliases:
+        raise ValueError(
+            f"Unknown plugin: {plugin}. Valid options: opencv, FFMPEG, pyav"
+        )
+
+    return aliases[plugin_lower]
+
+
+def set_default_video_plugin(plugin: Optional[str]) -> None:
+    """Set the default video plugin for all subsequently loaded videos.
+
+    Args:
+        plugin: Video plugin name. One of "opencv", "FFMPEG", or "pyav".
+            Also accepts aliases: "cv", "cv2", "ocv" for opencv;
+            "imageio-ffmpeg", "imageio_ffmpeg" for FFMPEG; "av" for pyav.
+            Case-insensitive. If None, clears the default preference.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.set_default_video_plugin("opencv")
+        >>> sio.set_default_video_plugin("cv2")  # Same as "opencv"
+        >>> sio.set_default_video_plugin(None)  # Clear preference
+    """
+    global _default_video_plugin
+    if plugin is not None:
+        plugin = normalize_plugin_name(plugin)
+    _default_video_plugin = plugin
+
+
+def get_default_video_plugin() -> Optional[str]:
+    """Get the current default video plugin.
+
+    Returns:
+        The current default video plugin name, or None if not set.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.get_default_video_plugin()
+        None
+        >>> sio.set_default_video_plugin("opencv")
+        >>> sio.get_default_video_plugin()
+        'opencv'
+    """
+    return _default_video_plugin
+
+
 def _get_valid_kwargs(cls, kwargs: dict) -> dict:
     """Filter a list of kwargs to the ones that are valid for a class."""
     valid_fields = [a.name for a in attrs.fields(cls)]
