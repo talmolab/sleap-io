@@ -222,43 +222,42 @@ def save_ultralytics(
 
 def _detect_coco_format(json_path: str) -> bool:
     """Detect if a JSON file is in COCO format vs Label Studio format.
-    
+
     Args:
         json_path: Path to JSON file to check.
-        
+
     Returns:
         True if the file appears to be COCO format, False otherwise.
     """
     try:
         import json
-        with open(json_path, 'r') as f:
+
+        with open(json_path, "r") as f:
             data = json.load(f)
-        
+
         # COCO format has specific top-level fields
-        coco_fields = {'images', 'annotations', 'categories'}
+        coco_fields = {"images", "annotations", "categories"}
         has_coco_fields = all(field in data for field in coco_fields)
-        
+
         # Check if categories have keypoints (pose data)
         has_keypoints = False
-        if 'categories' in data:
-            has_keypoints = any('keypoints' in cat for cat in data['categories'])
-        
+        if "categories" in data:
+            has_keypoints = any("keypoints" in cat for cat in data["categories"])
+
         return has_coco_fields and has_keypoints
     except:
         return False
 
 
-def load_coco(
-    json_path: str, dataset_root: Optional[str] = None, **kwargs
-) -> Labels:
+def load_coco(json_path: str, dataset_root: Optional[str] = None, **kwargs) -> Labels:
     """Load a COCO-style pose dataset and return a Labels object.
-    
+
     Args:
         json_path: Path to the COCO annotation JSON file.
         dataset_root: Root directory of the dataset. If None, uses parent directory
                      of json_path.
         **kwargs: Additional arguments (currently unused).
-        
+
     Returns:
         The dataset as a `Labels` object.
     """
@@ -371,7 +370,7 @@ def load_file(
     Args:
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
-            file extension. Available formats are: "slp", "nwb", "labelstudio", "coco", 
+            file extension. Available formats are: "slp", "nwb", "labelstudio", "coco",
             "jabs", "ultralytics", and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
@@ -379,7 +378,7 @@ def load_file(
             - For "labelstudio" format: skeleton (Optional[Skeleton]): Skeleton to
               use for
               the labels.
-            - For "coco" format: dataset_root (Optional[str]): Root directory of the 
+            - For "coco" format: dataset_root (Optional[str]): Root directory of the
               dataset.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.

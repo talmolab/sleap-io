@@ -794,7 +794,9 @@ def write_videos(
             image_format=[
                 v.backend.image_format if hasattr(v.backend, "image_format") else "png"
                 for _, v, _ in videos_to_embed
-            ][0],  # Use the first video's format
+            ][
+                0
+            ],  # Use the first video's format
             verbose=verbose,
         )
 

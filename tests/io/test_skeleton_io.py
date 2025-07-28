@@ -1023,9 +1023,9 @@ def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
 
     # Verify node names and order preserved
     for i, (o_node, r_node) in enumerate(zip(original.nodes, reloaded.nodes)):
-        assert o_node.name == r_node.name, (
-            f"Node {i} mismatch: {o_node.name} != {r_node.name}"
-        )
+        assert (
+            o_node.name == r_node.name
+        ), f"Node {i} mismatch: {o_node.name} != {r_node.name}"
 
     # Verify edges preserved
     for i, (o_edge, r_edge) in enumerate(zip(original.edges, reloaded.edges)):

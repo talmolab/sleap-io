@@ -112,3 +112,7 @@ pytest tests/path/to/test_module.py::TestClass::test_method -v
 ## Testing Best Practices
 
 - When adding tests, use global imports at the module-level rather than importing locally within a test function unless strictly needed (e.g., for import checking). Analyze current imports to find the best place to add the import statement and do not duplicate existing imports.
+
+## Known Issues and Workarounds
+
+- If you get an opencv/cv2 issue when running tests, try running the entire module, or entire test suite instead (this is an opencv issue with importing submodules of the tests).
