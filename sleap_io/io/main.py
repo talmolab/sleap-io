@@ -7,7 +7,16 @@ from typing import TYPE_CHECKING, List, Optional, Union
 
 import numpy as np
 
-from sleap_io.io import coco, dlc, jabs, labelstudio, nwb, slp, ultralytics, video_writing
+from sleap_io.io import (
+    coco,
+    dlc,
+    jabs,
+    labelstudio,
+    nwb,
+    slp,
+    ultralytics,
+    video_writing,
+)
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
     SkeletonEncoder,
