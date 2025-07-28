@@ -367,13 +367,14 @@ def test_category_without_keypoints(tmp_path):
                 "id": 1,
                 "name": "person",
                 # Missing 'keypoints' field
-                "skeleton": [[0, 1]]
+                "skeleton": [[0, 1]],
             }
-        ]
+        ],
     }
 
     json_path = tmp_path / "bad_category.json"
     import json
+
     with open(json_path, "w") as f:
         json.dump(coco_data, f)
 
@@ -404,13 +405,8 @@ def test_missing_num_keypoints_field(tmp_path):
             }
         ],
         "categories": [
-            {
-                "id": 1,
-                "name": "person",
-                "keypoints": ["head", "tail"],
-                "skeleton": []
-            }
-        ]
+            {"id": 1, "name": "person", "keypoints": ["head", "tail"], "skeleton": []}
+        ],
     }
 
     # Save annotation file
@@ -490,28 +486,23 @@ def test_mixed_annotations_skip_non_pose(tmp_path):
                 "image_id": 1,
                 "category_id": 1,  # Pose category
                 "keypoints": [50, 50, 2, 60, 60, 2],
-                "num_keypoints": 2
+                "num_keypoints": 2,
             },
             {
                 "id": 2,
                 "image_id": 1,
                 "category_id": 2,  # Non-pose category (no keypoints)
-                "bbox": [10, 10, 20, 20]
-            }
+                "bbox": [10, 10, 20, 20],
+            },
         ],
         "categories": [
-            {
-                "id": 1,
-                "name": "person",
-                "keypoints": ["head", "tail"],
-                "skeleton": []
-            },
+            {"id": 1, "name": "person", "keypoints": ["head", "tail"], "skeleton": []},
             {
                 "id": 2,
                 "name": "car",
                 # No keypoints - this is a detection category
-            }
-        ]
+            },
+        ],
     }
 
     json_path = tmp_path / "mixed.json"
