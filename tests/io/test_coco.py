@@ -354,3 +354,178 @@ class TestCOCODataStructures:
         assert len(visible_points) > 0
         assert len(invisible_points) > 0
         assert len(visible_points) + len(invisible_points) == len(instance.points)
+
+
+def test_category_without_keypoints(tmp_path):
+    """Test handling of category without keypoints field."""
+    # Create a COCO file with a category missing keypoints
+    coco_data = {
+        "images": [{"id": 1, "file_name": "test.jpg", "width": 100, "height": 100}],
+        "annotations": [],
+        "categories": [
+            {
+                "id": 1,
+                "name": "person",
+                # Missing 'keypoints' field
+                "skeleton": [[0, 1]]
+            }
+        ]
+    }
+    
+    json_path = tmp_path / "bad_category.json"
+    import json
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f)
+    
+    # Should raise ValueError
+    with pytest.raises(ValueError, match="Category 'person' has no keypoint definitions"):
+        coco.create_skeleton_from_category(coco_data["categories"][0])
+
+
+def test_missing_num_keypoints_field(tmp_path):
+    """Test handling when num_keypoints field is missing."""
+    import json
+    import numpy as np
+    import imageio.v3 as iio
+    
+    # Create test data with missing num_keypoints
+    coco_data = {
+        "images": [{"id": 1, "file_name": "test.jpg", "width": 100, "height": 100}],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "keypoints": [50, 50, 2, 60, 60, 2],
+                # num_keypoints field is missing
+            }
+        ],
+        "categories": [
+            {
+                "id": 1,
+                "name": "person",
+                "keypoints": ["head", "tail"],
+                "skeleton": []
+            }
+        ]
+    }
+    
+    # Save annotation file
+    json_path = tmp_path / "no_num_keypoints.json"
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f)
+    
+    # Create dummy image
+    img_path = tmp_path / "test.jpg"
+    iio.imwrite(img_path, np.zeros((100, 100, 3), dtype=np.uint8))
+    
+    # Should still load successfully (uses skeleton node count as fallback)
+    labels = coco.read_labels(json_path, tmp_path)
+    assert len(labels) == 1
+    assert len(labels[0].instances) == 1
+    assert len(labels[0].instances[0].points) == 2  # Based on skeleton, not num_keypoints
+
+
+def test_keypoint_length_mismatch(tmp_path):
+    """Test error handling for mismatched keypoint array length."""
+    from sleap_io import Skeleton, Node
+    
+    # Create test data with wrong keypoint length
+    keypoints = [100.0, 50.0, 2]  # Only 3 values instead of 6 (2 points * 3)
+    skeleton = Skeleton([Node("head"), Node("tail")])
+    
+    with pytest.raises(ValueError, match="Keypoints length 3 doesn't match expected 6"):
+        coco.decode_keypoints(keypoints, num_keypoints=2, skeleton=skeleton)
+
+
+def test_skeleton_annotation_mismatch(tmp_path):
+    """Test error handling when skeleton nodes don't match annotation keypoints."""
+    from sleap_io import Skeleton, Node
+    
+    # Create skeleton with 3 nodes
+    skeleton = Skeleton([Node("head"), Node("body"), Node("tail")])
+    
+    # But provide keypoints for only 2 points
+    keypoints = [100.0, 50.0, 2, 150.0, 60.0, 2]  # 2 points * 3 values
+    
+    with pytest.raises(ValueError, match="Skeleton has 3 nodes but annotation has 2 keypoints"):
+        coco.decode_keypoints(keypoints, num_keypoints=2, skeleton=skeleton)
+
+
+def test_unknown_visibility_value(tmp_path):
+    """Test handling of unknown visibility values."""
+    from sleap_io import Skeleton, Node
+    
+    # Create test data with unusual visibility value
+    keypoints = [100.0, 50.0, 99]  # Visibility value 99 (not 0, 1, or 2)
+    skeleton = Skeleton([Node("head")])
+    
+    # Should treat unknown visibility as visible
+    points = coco.decode_keypoints(keypoints, num_keypoints=1, skeleton=skeleton)
+    assert points.shape == (1, 3)
+    assert points[0, 0] == 100.0
+    assert points[0, 1] == 50.0
+    assert points[0, 2] == True  # Treated as visible
+
+
+def test_mixed_annotations_skip_non_pose(tmp_path):
+    """Test that non-pose annotations are properly skipped."""
+    import json
+    import numpy as np
+    import imageio.v3 as iio
+    
+    # Create COCO data with both pose and non-pose categories
+    coco_data = {
+        "images": [{"id": 1, "file_name": "test.jpg", "width": 100, "height": 100}],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,  # Pose category
+                "keypoints": [50, 50, 2, 60, 60, 2],
+                "num_keypoints": 2
+            },
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 2,  # Non-pose category (no keypoints)
+                "bbox": [10, 10, 20, 20]
+            }
+        ],
+        "categories": [
+            {
+                "id": 1,
+                "name": "person",
+                "keypoints": ["head", "tail"],
+                "skeleton": []
+            },
+            {
+                "id": 2,
+                "name": "car",
+                # No keypoints - this is a detection category
+            }
+        ]
+    }
+    
+    json_path = tmp_path / "mixed.json"
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f)
+    
+    # Create dummy image
+    img_path = tmp_path / "test.jpg"
+    iio.imwrite(img_path, np.zeros((100, 100, 3), dtype=np.uint8))
+    
+    # Should load only pose annotations
+    labels = coco.read_labels(json_path, tmp_path)
+    assert len(labels) == 1
+    assert len(labels[0].instances) == 1  # Only the pose annotation
+
+
+def test_auto_discover_no_json_files(tmp_path):
+    """Test error when no JSON files found in auto-discovery mode."""
+    # Create empty directory
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    
+    with pytest.raises(FileNotFoundError, match="No JSON annotation files found"):
+        coco.read_labels_set(str(empty_dir))

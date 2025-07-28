@@ -213,9 +213,6 @@ def read_labels(
             skeleton = create_skeleton_from_category(category)
             skeletons[category["id"]] = skeleton
 
-    if not skeletons:
-        raise ValueError("No pose categories found in COCO annotation file")
-
     # Create image id to annotation mapping
     image_annotations = {}
     for annotation in coco_data["annotations"]:
@@ -310,9 +307,6 @@ def read_labels_set(
 
     for json_file in json_files:
         json_path = dataset_path / json_file
-
-        if not json_path.exists():
-            raise FileNotFoundError(f"Annotation file not found: {json_path}")
 
         # Use filename (without extension) as split name
         split_name = json_path.stem
