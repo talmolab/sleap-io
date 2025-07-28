@@ -34,7 +34,7 @@ def single_page_tiff_path():
     Returns path to a 128x128 grayscale TIFF containing a single frame
     with a white square on black background.
     """
-    return "tests/fixtures/tiff/single_page.tif"
+    return "tests/data/tiff/single_page.tif"
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def multipage_tiff_path():
     Each frame contains a white square that moves diagonally across frames,
     and a frame indicator in the top-left corner.
     """
-    return "tests/fixtures/tiff/multipage.tif"
+    return "tests/data/tiff/multipage.tif"
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ def stacked_tiff_path():
     are stored as channels in a single image. Each channel contains the
     same moving square pattern as the multi-page variant.
     """
-    return "tests/fixtures/tiff/stacked_as_channels.tif"
+    return "tests/data/tiff/stacked_as_channels.tif"
 
 
 @pytest.fixture
@@ -67,4 +67,4 @@ def tiff_image_sequence_path():
     frame_000.tif through frame_007.tif. Each file is 128x128 grayscale
     with the same moving square pattern as other TIFF fixtures.
     """
-    return "tests/fixtures/tiff/image_sequence"
+    return "tests/data/tiff/image_sequence"

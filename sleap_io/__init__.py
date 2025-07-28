@@ -2,6 +2,7 @@
 
 from sleap_io.io.main import (
     load_coco,
+    load_dlc,
     load_file,
     load_jabs,
     load_labels_set,
@@ -45,6 +46,7 @@ from sleap_io.version import __version__
 __all__ = [
     "__version__",
     "load_coco",
+    "load_dlc",
     "load_file",
     "load_jabs",
     "load_labels_set",
