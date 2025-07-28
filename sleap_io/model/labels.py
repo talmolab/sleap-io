@@ -1566,3 +1566,20 @@ class Labels:
 
         # Make sure everything is properly linked
         self.update()
+
+    def set_video_plugin(self, plugin: str) -> None:
+        """Reopen all media videos with the specified plugin.
+
+        Args:
+            plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav".
+                Also accepts aliases (case-insensitive).
+
+        Examples:
+            >>> labels.set_video_plugin("opencv")
+            >>> labels.set_video_plugin("FFMPEG")
+        """
+        from sleap_io.io.video_reading import MediaVideo
+
+        for video in self.videos:
+            if video.filename.endswith(MediaVideo.EXTS):
+                video.set_video_plugin(plugin)

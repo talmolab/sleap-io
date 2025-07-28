@@ -184,3 +184,98 @@ def test_safe_video_open(slp_minimal_pkg):
 
     video = Video(slp_minimal_pkg, backend_metadata={"dataset": "video999/video"})
     assert not video.is_open
+
+
+def test_video_set_plugin(centered_pair_low_quality_path):
+    """Test Video.set_video_plugin() method."""
+    import sleap_io as sio
+
+    # Clear any global default
+    sio.set_default_video_plugin(None)
+
+    # Create video
+    video = Video.from_filename(centered_pair_low_quality_path)
+    video.open()
+    assert video.is_open
+
+    # Get initial plugin (auto-detected)
+    initial_plugin = video.backend.plugin
+    assert initial_plugin in ["opencv", "FFMPEG", "pyav"]
+
+    # Change plugin
+    video.set_video_plugin("FFMPEG")
+    assert video.backend.plugin == "FFMPEG"
+    assert video.backend_metadata["plugin"] == "FFMPEG"
+
+    # Test with alias
+    video.set_video_plugin("cv2")
+    assert video.backend.plugin == "opencv"
+
+    # Test error for non-media video
+    hdf5_video = Video.from_filename("test.h5")
+    with pytest.raises(ValueError, match="Cannot set plugin for non-media video"):
+        hdf5_video.set_video_plugin("opencv")
+
+
+def test_video_open_with_plugin(centered_pair_low_quality_path):
+    """Test Video.open() with plugin parameter."""
+    import sleap_io as sio
+
+    # Clear any global default
+    sio.set_default_video_plugin(None)
+
+    # Create video without opening
+    video = Video(centered_pair_low_quality_path, open_backend=False)
+    assert not video.is_open
+
+    # Open with specific plugin
+    video.open(plugin="FFMPEG")
+    assert video.is_open
+    assert video.backend.plugin == "FFMPEG"
+    assert video.backend_metadata["plugin"] == "FFMPEG"
+
+    # Close and reopen with different plugin
+    video.close()
+    video.open(plugin="opencv")
+    assert video.backend.plugin == "opencv"
+
+    # Test plugin alias
+    video.close()
+    video.open(plugin="cv2")
+    assert video.backend.plugin == "opencv"
+
+
+def test_labels_set_video_plugin(centered_pair_low_quality_path):
+    """Test Labels.set_video_plugin() method."""
+    import sleap_io as sio
+    from sleap_io import LabeledFrame, Labels
+
+    # Clear any global default
+    sio.set_default_video_plugin(None)
+
+    # Create labels with multiple videos
+    video1 = Video.from_filename(centered_pair_low_quality_path)
+    video2 = Video.from_filename(
+        centered_pair_low_quality_path
+    )  # Same file, different instance
+
+    labels = Labels()
+    labels.videos.extend([video1, video2])
+    labels.labeled_frames.append(LabeledFrame(video=video1, frame_idx=0))
+    labels.labeled_frames.append(LabeledFrame(video=video2, frame_idx=1))
+
+    # Open videos
+    video1.open()
+    video2.open()
+
+    # Change plugin for all videos
+    labels.set_video_plugin("FFMPEG")
+
+    # Check both videos were updated
+    assert video1.backend.plugin == "FFMPEG"
+    assert video2.backend.plugin == "FFMPEG"
+
+    # Test with alias
+    labels.set_video_plugin("cv2")
+    assert video1.backend.plugin == "opencv"
+    assert video2.backend.plugin == "opencv"
