@@ -81,14 +81,11 @@ def load_dlc(
         # Single-animal format: use scorer/bodyparts/coords
         df = pd.read_csv(filename, header=[0, 1, 2], index_col=0)
 
-    # No need to skip columns since we already handled the scorer row
-    start_col = 0
-
     # Parse structure based on format
     if is_multianimal:
-        skeleton, tracks = _parse_multi_animal_structure(df, start_col)
+        skeleton, tracks = _parse_multi_animal_structure(df)
     else:
-        skeleton = _parse_single_animal_structure(df, start_col)
+        skeleton = _parse_single_animal_structure(df)
         tracks = []
 
     # First, group all image paths by their video directory
@@ -162,9 +159,9 @@ def load_dlc(
 
         # Parse instances for this frame
         if is_multianimal:
-            instances = _parse_multi_animal_row(row, skeleton, tracks, start_col)
+            instances = _parse_multi_animal_row(row, skeleton, tracks)
         else:
-            instances = _parse_single_animal_row(row, skeleton, start_col)
+            instances = _parse_single_animal_row(row, skeleton)
 
         if instances:
             # Get the index of this image within its video
@@ -190,16 +187,14 @@ def load_dlc(
     )
 
 
-def _parse_multi_animal_structure(
-    df: pd.DataFrame, start_col: int
-) -> tuple[Skeleton, list[Track]]:
+def _parse_multi_animal_structure(df: pd.DataFrame) -> tuple[Skeleton, list[Track]]:
     """Parse multi-animal DLC structure to extract skeleton and tracks."""
     # Extract unique node names and track names from columns
     tracks_dict = {}
     node_names = []
 
     # Iterate through columns (skip coords columns)
-    for col in df.columns[start_col:]:
+    for col in df.columns:
         if len(col) >= 3:  # Multi-level column (individuals, bodyparts, coords)
             individual = col[0]
             bodypart = col[1]
@@ -232,12 +227,12 @@ def _parse_multi_animal_structure(
     return skeleton, tracks
 
 
-def _parse_single_animal_structure(df: pd.DataFrame, start_col: int) -> Skeleton:
+def _parse_single_animal_structure(df: pd.DataFrame) -> Skeleton:
     """Parse single-animal DLC structure to extract skeleton."""
     # Extract node names from bodyparts level
     node_names = []
 
-    for col in df.columns[start_col:]:
+    for col in df.columns:
         if len(col) >= 3:  # Multi-level column
             bodypart = col[1]
             coord = col[2]
@@ -257,16 +252,13 @@ def _parse_single_animal_structure(df: pd.DataFrame, start_col: int) -> Skeleton
 
 
 def _parse_multi_animal_row(
-    row: pd.Series, skeleton: Skeleton, tracks: list[Track], start_col: int
+    row: pd.Series, skeleton: Skeleton, tracks: list[Track]
 ) -> list[Instance]:
     """Parse a row of multi-animal DLC data."""
     instances_dict = {}
 
     # Group data by individual
-    for col_idx, (col_tuple, value) in enumerate(row.items()):
-        if col_idx < start_col:
-            continue
-
+    for col_tuple, value in row.items():
         if len(col_tuple) >= 3:
             individual = col_tuple[0]
             bodypart = col_tuple[1]
@@ -316,9 +308,7 @@ def _parse_multi_animal_row(
     return instances
 
 
-def _parse_single_animal_row(
-    row: pd.Series, skeleton: Skeleton, start_col: int
-) -> list[Instance]:
+def _parse_single_animal_row(row: pd.Series, skeleton: Skeleton) -> list[Instance]:
     """Parse a row of single-animal DLC data."""
     # Create instance
     points = np.full((len(skeleton.nodes), 2), np.nan)
@@ -326,10 +316,7 @@ def _parse_single_animal_row(
 
     # Collect coordinates for each bodypart
     bodyparts_data = {}
-    for col_idx, (col_tuple, value) in enumerate(row.items()):
-        if col_idx < start_col:
-            continue
-
+    for col_tuple, value in row.items():
         if len(col_tuple) >= 3:
             bodypart = col_tuple[1]
             coord = col_tuple[2]
@@ -365,5 +352,3 @@ def _extract_frame_index(img_path: str) -> int:
     if matches:
         return int(matches[-1])  # Use last number found
     return 0
-
-
