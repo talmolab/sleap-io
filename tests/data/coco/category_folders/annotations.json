@@ -1,0 +1,395 @@
+{
+  "info": {
+    "description": "Test COCO dataset for sleap-io",
+    "version": "1.0",
+    "year": 2024,
+    "contributor": "sleap-io test suite",
+    "date_created": "2024-01-01T00:00:00+00:00"
+  },
+  "licenses": [
+    {
+      "id": 1,
+      "name": "Attribution-NonCommercial",
+      "url": "http://creativecommons.org/licenses/by-nc/2.0/"
+    }
+  ],
+  "images": [
+    {
+      "id": 1,
+      "width": 384,
+      "height": 384,
+      "file_name": "mouse/mouse_001.jpg",
+      "license": 1,
+      "date_captured": "2024-01-01T00:00:00+00:00"
+    },
+    {
+      "id": 2,
+      "width": 384,
+      "height": 384,
+      "file_name": "mouse/mouse_002.jpg",
+      "license": 1,
+      "date_captured": "2024-01-01T00:00:00+00:00"
+    },
+    {
+      "id": 3,
+      "width": 384,
+      "height": 384,
+      "file_name": "fly/fly_001.jpg",
+      "license": 1,
+      "date_captured": "2024-01-01T00:00:00+00:00"
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "area": 4000,
+      "bbox": [
+        60,
+        60,
+        180,
+        120
+      ],
+      "iscrowd": 0,
+      "keypoints": [
+        100,
+        100,
+        2,
+        108,
+        100,
+        2,
+        116,
+        100,
+        2,
+        124,
+        100,
+        2,
+        132,
+        100,
+        2,
+        140,
+        100,
+        2,
+        148,
+        100,
+        2,
+        156,
+        100,
+        2,
+        164,
+        100,
+        2,
+        172,
+        100,
+        2,
+        180,
+        100,
+        2,
+        188,
+        100,
+        2,
+        196,
+        100,
+        2,
+        204,
+        100,
+        2,
+        212,
+        100,
+        2,
+        220,
+        100,
+        2,
+        228,
+        100,
+        2
+      ],
+      "num_keypoints": 17
+    },
+    {
+      "id": 2,
+      "image_id": 2,
+      "category_id": 1,
+      "area": 4000,
+      "bbox": [
+        60,
+        60,
+        180,
+        120
+      ],
+      "iscrowd": 0,
+      "keypoints": [
+        100,
+        130,
+        2,
+        108,
+        130,
+        2,
+        116,
+        130,
+        2,
+        124,
+        130,
+        2,
+        132,
+        130,
+        2,
+        140,
+        130,
+        2,
+        148,
+        130,
+        2,
+        156,
+        130,
+        2,
+        164,
+        130,
+        2,
+        172,
+        130,
+        2,
+        180,
+        130,
+        2,
+        188,
+        130,
+        2,
+        196,
+        130,
+        2,
+        204,
+        130,
+        2,
+        212,
+        130,
+        2,
+        220,
+        130,
+        2,
+        228,
+        130,
+        2
+      ],
+      "num_keypoints": 17
+    },
+    {
+      "id": 3,
+      "image_id": 3,
+      "category_id": 2,
+      "area": 1000,
+      "bbox": [
+        140,
+        140,
+        60,
+        40
+      ],
+      "iscrowd": 0,
+      "keypoints": [
+        150,
+        150,
+        2,
+        155,
+        153,
+        2,
+        160,
+        156,
+        2,
+        165,
+        159,
+        2,
+        170,
+        162,
+        2,
+        175,
+        165,
+        2,
+        180,
+        168,
+        2,
+        185,
+        171,
+        2,
+        190,
+        174,
+        2,
+        195,
+        177,
+        2,
+        200,
+        180,
+        2,
+        205,
+        183,
+        2,
+        210,
+        186,
+        2
+      ],
+      "num_keypoints": 13
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "mouse",
+      "supercategory": "animal",
+      "keypoints": [
+        "nose",
+        "left_ear",
+        "right_ear",
+        "neck",
+        "left_shoulder",
+        "right_shoulder",
+        "left_front_paw",
+        "right_front_paw",
+        "spine1",
+        "spine2",
+        "spine3",
+        "left_hip",
+        "right_hip",
+        "left_rear_paw",
+        "right_rear_paw",
+        "tail_base",
+        "tail_tip"
+      ],
+      "skeleton": [
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          5,
+          7
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          4,
+          9
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          11,
+          13
+        ],
+        [
+          12,
+          14
+        ],
+        [
+          13,
+          15
+        ],
+        [
+          11,
+          16
+        ],
+        [
+          16,
+          17
+        ]
+      ]
+    },
+    {
+      "id": 2,
+      "name": "fly",
+      "supercategory": "animal",
+      "keypoints": [
+        "head",
+        "thorax",
+        "abdomen",
+        "left_wing",
+        "right_wing",
+        "left_antenna",
+        "right_antenna",
+        "left_front_leg",
+        "right_front_leg",
+        "left_mid_leg",
+        "right_mid_leg",
+        "left_rear_leg",
+        "right_rear_leg"
+      ],
+      "skeleton": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          2,
+          9
+        ],
+        [
+          2,
+          10
+        ],
+        [
+          2,
+          11
+        ],
+        [
+          2,
+          12
+        ],
+        [
+          2,
+          13
+        ]
+      ]
+    }
+  ]
+}

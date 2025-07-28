@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 
 import numpy as np
 
-from sleap_io.io import dlc, jabs, labelstudio, nwb, slp, ultralytics, video_writing
+from sleap_io.io import coco, dlc, jabs, labelstudio, nwb, slp, ultralytics, video_writing
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
     SkeletonEncoder,
@@ -236,6 +236,57 @@ def save_ultralytics(
     ultralytics.write_labels(labels, dataset_path, split_ratios=split_ratios, **kwargs)
 
 
+def _detect_coco_format(json_path: str) -> bool:
+    """Detect if a JSON file is in COCO format vs Label Studio format.
+
+    Args:
+        json_path: Path to JSON file to check.
+
+    Returns:
+        True if the file appears to be COCO format, False otherwise.
+    """
+    try:
+        import json
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        # COCO format has specific top-level fields
+        coco_fields = {"images", "annotations", "categories"}
+        has_coco_fields = all(field in data for field in coco_fields)
+
+        # Check if categories have keypoints (pose data)
+        has_keypoints = False
+        if "categories" in data:
+            has_keypoints = any("keypoints" in cat for cat in data["categories"])
+
+        return has_coco_fields and has_keypoints
+    except Exception:
+        return False
+
+
+def load_coco(
+    json_path: str,
+    dataset_root: Optional[str] = None,
+    grayscale: bool = False,
+    **kwargs,
+) -> Labels:
+    """Load a COCO-style pose dataset and return a Labels object.
+
+    Args:
+        json_path: Path to the COCO annotation JSON file.
+        dataset_root: Root directory of the dataset. If None, uses parent directory
+                     of json_path.
+        grayscale: If True, load images as grayscale (1 channel). If False, load as
+                   RGB (3 channels). Default is False.
+        **kwargs: Additional arguments (currently unused).
+
+    Returns:
+        The dataset as a `Labels` object.
+    """
+    return coco.read_labels(json_path, dataset_root=dataset_root, grayscale=grayscale)
+
+
 def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
 
@@ -342,14 +393,17 @@ def load_file(
     Args:
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
-            file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs",
-            "dlc", "ultralytics", and "video".
+            file extension. Available formats are: "slp", "nwb", "labelstudio", "coco",
+            "jabs", "dlc", "ultralytics", and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
             - For "labelstudio" format: skeleton (Optional[Skeleton]): Skeleton to
               use for
               the labels.
+            - For "coco" format: dataset_root (Optional[str]): Root directory of the
+              dataset. grayscale (bool): If True, load images as grayscale (1 channel).
+              If False, load as RGB (3 channels). Default is False.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
             - For "dlc" format: video_search_paths (Optional[List[str]]): Paths to
@@ -369,7 +423,11 @@ def load_file(
         elif filename.endswith(".nwb"):
             format = "nwb"
         elif filename.endswith(".json"):
-            format = "json"
+            # Detect if this is COCO format or Label Studio format
+            if _detect_coco_format(filename):
+                format = "coco"
+            else:
+                format = "json"
         elif filename.endswith(".h5"):
             format = "jabs"
         elif filename.endswith("data.yaml") or (
@@ -391,7 +449,10 @@ def load_file(
     elif filename.endswith(".nwb"):
         return load_nwb(filename, **kwargs)
     elif filename.endswith(".json"):
-        return load_labelstudio(filename, **kwargs)
+        if format == "coco":
+            return load_coco(filename, **kwargs)
+        else:
+            return load_labelstudio(filename, **kwargs)
     elif filename.endswith(".h5"):
         return load_jabs(filename, **kwargs)
     elif format == "dlc":
