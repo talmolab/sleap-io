@@ -26,6 +26,8 @@
 
 ::: sleap_io.save_labelstudio
 
+::: sleap_io.load_coco
+
 ::: sleap_io.load_dlc
 
 ::: sleap_io.load_ultralytics
