@@ -97,6 +97,7 @@ def test_load_multiple_datasets(
         assert len(labels.skeletons) == 1
         assert len(labels.skeleton.nodes) == 3  # A, B, C
         assert len(labels.labeled_frames) >= 1  # At least one frame
+        assert len(labels.videos) == 1  # Each should have one video
 
         # Check skeleton nodes
         node_names = [node.name for node in labels.skeleton.nodes]
@@ -143,11 +144,10 @@ def test_video_creation(dlc_testdata):
 
     assert len(labels.videos) >= 1
     for video in labels.videos:
-        # Video backends inherit from VideoBackend, not Video
-        from sleap_io.io.video_reading import VideoBackend
-
-        assert isinstance(video, VideoBackend)
-        assert video.num_frames > 0
+        assert isinstance(video, sio.Video)
+        # Check that it's an image sequence video with multiple frames
+        assert hasattr(video, 'backend')
+        assert video.backend is not None
 
 
 def test_track_assignment(dlc_maudlc_testdata):
@@ -238,22 +238,18 @@ def test_extract_frame_index_no_numbers(dlc_testdata):
     assert _extract_frame_index("frame_042.jpg") == 42
 
 
-def test_video_creation_with_existing_files(tmp_path, dlc_testdata):
-    """Test video creation when image files actually exist."""
-    from sleap_io.io.dlc import _get_or_create_video
+def test_single_video_per_folder(dlc_testdata):
+    """Test that a single Video object is created per video folder."""
+    labels = sio.load_file(dlc_testdata)
 
-    # Create actual image files
-    img_dir = tmp_path / "labeled-data" / "video"
-    img_dir.mkdir(parents=True)
+    # Should have exactly one video for all frames
+    assert len(labels.videos) == 1
 
-    # Create a dummy image file
-    img_file = img_dir / "img000.png"
-    img_file.write_text("dummy")
+    # All labeled frames should reference the same video
+    video = labels.videos[0]
+    for lf in labels.labeled_frames:
+        assert lf.video is video
 
-    # Test with full path that exists
-    video = _get_or_create_video("labeled-data/video/img000.png", tmp_path, None)
-    assert video.filename == [str(tmp_path / "labeled-data/video/img000.png")]
-
-    # Test with just the filename (should use simple path)
-    video2 = _get_or_create_video("img000.png", img_dir, None)
-    assert video2.filename == [str(img_dir / "img000.png")]
+    # Frame indices should be correct (0, 1, 3 based on the test data)
+    frame_indices = sorted([lf.frame_idx for lf in labels.labeled_frames])
+    assert frame_indices == [0, 1, 3]

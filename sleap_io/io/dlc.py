@@ -9,7 +9,6 @@ from typing import Optional, Union
 import numpy as np
 import pandas as pd
 
-from sleap_io.io.video_reading import ImageVideo
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -77,10 +76,10 @@ def load_dlc(
     # Read full file with appropriate header levels
     if is_multianimal:
         # Multi-animal format: skip scorer row, use individuals/bodyparts/coords
-        df = pd.read_csv(filename, header=[1, 2, 3])
+        df = pd.read_csv(filename, header=[1, 2, 3], index_col=0)
     else:
         # Single-animal format: use scorer/bodyparts/coords
-        df = pd.read_csv(filename, header=[0, 1, 2])
+        df = pd.read_csv(filename, header=[0, 1, 2], index_col=0)
 
     # No need to skip columns since we already handled the scorer row
     start_col = 0
@@ -92,12 +91,74 @@ def load_dlc(
         skeleton = _parse_single_animal_structure(df, start_col)
         tracks = []
 
-    # Parse the actual data rows
+    # First, group all image paths by their video directory
+    video_image_paths = {}
+    frame_map = {}  # Maps image path to frame index
+
+    for idx in df.index:
+        img_path = str(idx)
+        frame_idx = _extract_frame_index(img_path)
+        frame_map[img_path] = frame_idx
+
+        # Extract video name from path
+        # e.g., "labeled-data/video/img000.png" -> "video"
+        path_parts = Path(img_path).parts
+        if len(path_parts) >= 2 and path_parts[0] == "labeled-data":
+            video_name = path_parts[1]
+        else:
+            video_name = Path(img_path).parent.name or "default"
+
+        if video_name not in video_image_paths:
+            video_image_paths[video_name] = []
+        video_image_paths[video_name].append(img_path)
+
+    # Create one Video object per video directory
+    videos = {}
+    for video_name, image_paths in video_image_paths.items():
+        # Sort image paths to ensure consistent ordering
+        sorted_paths = sorted(image_paths, key=lambda p: frame_map[p])
+
+        # Find the actual image files
+        actual_image_files = []
+        for img_path in sorted_paths:
+            # First try the full path from CSV
+            full_path = filename.parent / img_path
+            if full_path.exists():
+                actual_image_files.append(str(full_path))
+            else:
+                # Try just the filename in the same directory as the CSV
+                img_name = Path(img_path).name
+                simple_path = filename.parent / img_name
+                if simple_path.exists():
+                    actual_image_files.append(str(simple_path))
+                else:
+                    # Try going up one directory from CSV location
+                    # (CSV in subdir references parent/subdir/img.png)
+                    parent_path = filename.parent.parent / img_path
+                    if parent_path.exists():
+                        actual_image_files.append(str(parent_path))
+
+        # Only create video if we found actual images
+        if actual_image_files:
+            videos[video_name] = Video.from_filename(actual_image_files)
+
+    # Parse the actual data rows and create labeled frames
     labeled_frames = []
     for idx, row in df.iterrows():
         # Get image path from index
         img_path = str(idx)
         frame_idx = _extract_frame_index(img_path)
+
+        # Determine which video this frame belongs to
+        path_parts = Path(img_path).parts
+        if len(path_parts) >= 2 and path_parts[0] == "labeled-data":
+            video_name = path_parts[1]
+        else:
+            video_name = Path(img_path).parent.name or "default"
+
+        # Skip if we don't have a video for this frame
+        if video_name not in videos:
+            continue
 
         # Parse instances for this frame
         if is_multianimal:
@@ -106,20 +167,20 @@ def load_dlc(
             instances = _parse_single_animal_row(row, skeleton, start_col)
 
         if instances:
-            # Create a simple video for now
-            video = _get_or_create_video(img_path, filename.parent, video_search_paths)
+            # Get the index of this image within its video
+            sorted_video_paths = sorted(
+                video_image_paths[video_name], key=lambda p: frame_map[p]
+            )
+            video_frame_idx = sorted_video_paths.index(img_path)
             labeled_frames.append(
-                LabeledFrame(video=video, frame_idx=frame_idx, instances=instances)
+                LabeledFrame(
+                    video=videos[video_name],
+                    frame_idx=video_frame_idx,
+                    instances=instances,
+                )
             )
 
-    # Consolidate videos - use dict to ensure uniqueness
-    video_dict = {}
-    for lf in labeled_frames:
-        video_key = (
-            str(lf.video.filename) if hasattr(lf.video, "filename") else id(lf.video)
-        )
-        video_dict[video_key] = lf.video
-    unique_videos = list(video_dict.values())
+    unique_videos = list(videos.values())
 
     return Labels(
         labeled_frames=labeled_frames,
@@ -306,25 +367,3 @@ def _extract_frame_index(img_path: str) -> int:
     return 0
 
 
-def _get_or_create_video(
-    img_path: str,
-    base_dir: Path,
-    video_search_paths: Optional[list[Union[str, Path]]] = None,
-) -> Video:
-    """Get or create a video object for the given image path."""
-    # For now, create a simple ImageVideo
-    # In a full implementation, this would search for actual video files
-    # or group images into proper video sequences
-
-    img_full_path = base_dir / img_path
-    if img_full_path.exists():
-        return ImageVideo.from_filename([str(img_full_path)])
-    else:
-        # Try without the full path structure
-        img_name = Path(img_path).name
-        img_simple_path = base_dir / img_name
-        if img_simple_path.exists():
-            return ImageVideo.from_filename([str(img_simple_path)])
-
-    # Fallback: create a placeholder
-    return ImageVideo.from_filename([str(base_dir / "placeholder.png")])
