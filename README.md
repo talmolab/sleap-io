@@ -18,8 +18,15 @@ have any functionality related to labeling, training, or inference.
 **📚 [Documentation](https://io.sleap.ai)** - Comprehensive guides and API reference
 
 ## Installation
+
+### From PyPI
 ```
 pip install sleap-io
+```
+
+### From source (latest version)
+```
+pip install git+https://github.com/talmolab/sleap-io.git@main
 ```
 
 For development, use one of the following syntaxes:
