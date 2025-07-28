@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 
 import numpy as np
 
-from sleap_io.io import jabs, labelstudio, nwb, slp, ultralytics, video_writing
+from sleap_io.io import dlc, jabs, labelstudio, nwb, slp, ultralytics, video_writing
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
     SkeletonEncoder,
@@ -159,6 +159,22 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = No
         Filenames for JABS poses are based on video filenames.
     """
     jabs.write_labels(labels, pose_version, root_folder)
+
+
+def load_dlc(
+    filename: str, video_search_paths: Optional[List[Union[str, Path]]] = None, **kwargs
+) -> Labels:
+    """Read DeepLabCut annotations from a CSV file and return a `Labels` object.
+
+    Args:
+        filename: Path to DLC CSV file with annotations.
+        video_search_paths: Optional list of paths to search for video files.
+        **kwargs: Additional arguments passed to DLC loader.
+
+    Returns:
+        Parsed labels as a `Labels` instance.
+    """
+    return dlc.load_dlc(filename, video_search_paths=video_search_paths, **kwargs)
 
 
 def load_ultralytics(
@@ -327,7 +343,7 @@ def load_file(
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs",
-            "ultralytics", and "video".
+            "dlc", "ultralytics", and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
@@ -336,6 +352,8 @@ def load_file(
               the labels.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
+            - For "dlc" format: video_search_paths (Optional[List[str]]): Paths to
+              search for video files.
             - For "ultralytics" format: See `load_ultralytics` for supported arguments.
             - For "video" format: See `load_video` for supported arguments.
 
@@ -358,6 +376,8 @@ def load_file(
             Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
         ):
             format = "ultralytics"
+        elif filename.endswith(".csv") and dlc.is_dlc_file(filename):
+            format = "dlc"
         else:
             for vid_ext in Video.EXTS:
                 if filename.endswith(vid_ext):
@@ -374,6 +394,8 @@ def load_file(
         return load_labelstudio(filename, **kwargs)
     elif filename.endswith(".h5"):
         return load_jabs(filename, **kwargs)
+    elif format == "dlc":
+        return load_dlc(filename, **kwargs)
     elif format == "ultralytics":
         return load_ultralytics(filename, **kwargs)
     elif format == "video":
