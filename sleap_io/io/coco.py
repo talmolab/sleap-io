@@ -184,7 +184,9 @@ def decode_keypoints(
 
 
 def read_labels(
-    json_path: Union[str, Path], dataset_root: Optional[Union[str, Path]] = None
+    json_path: Union[str, Path],
+    dataset_root: Optional[Union[str, Path]] = None,
+    grayscale: bool = False,
 ) -> Labels:
     """Read COCO-style pose dataset and return a Labels object.
 
@@ -192,6 +194,8 @@ def read_labels(
         json_path: Path to the COCO annotation JSON file.
         dataset_root: Root directory of the dataset. If None, uses parent directory
                      of json_path.
+        grayscale: If True, load images as grayscale (1 channel). If False, load as
+                   RGB (3 channels). Default is False.
 
     Returns:
         Parsed labels as a Labels instance.
@@ -221,26 +225,67 @@ def read_labels(
             image_annotations[image_id] = []
         image_annotations[image_id].append(annotation)
 
-    # Process images and annotations
-    labeled_frames = []
-    videos = {}
+    # Group images by shape (height, width) for shared Video objects
+    shape_to_images = {}
+    image_id_to_path = {}
+    image_id_to_shape = {}
 
     for image_info in coco_data["images"]:
         image_id = image_info["id"]
         image_filename = image_info["file_name"]
+        height = image_info.get("height", 0)
+        width = image_info.get("width", 0)
 
         # Resolve image path
         try:
             image_path = resolve_image_path(image_filename, dataset_root)
+            image_id_to_path[image_id] = image_path
+
+            # Group by shape
+            shape_key = (height, width)
+            image_id_to_shape[image_id] = shape_key
+            if shape_key not in shape_to_images:
+                shape_to_images[shape_key] = []
+            shape_to_images[shape_key].append(str(image_path))
         except FileNotFoundError:
-            # Skip missing images with warning
+            # Skip missing images
             continue
 
-        # Create or get video object
-        video_key = str(image_path)
-        if video_key not in videos:
-            videos[video_key] = Video.from_filename(str(image_path))
-        video = videos[video_key]
+    # Create Video objects for each unique shape
+    shape_to_video = {}
+    for shape_key, image_paths in shape_to_images.items():
+        height, width = shape_key
+        # Create Video from the list of images with this shape
+        video = Video.from_filename(
+            image_paths,
+            grayscale=grayscale,
+        )
+        shape_to_video[shape_key] = video
+
+    # Process images and annotations
+    labeled_frames = []
+    image_id_to_frame_idx = {}
+
+    # Build frame index mapping for each image
+    for shape_key, image_paths in shape_to_images.items():
+        for frame_idx, image_path in enumerate(image_paths):
+            # Find the image_id for this path
+            for img_id, path in image_id_to_path.items():
+                if str(path) == image_path:
+                    image_id_to_frame_idx[img_id] = frame_idx
+                    break
+
+    for image_info in coco_data["images"]:
+        image_id = image_info["id"]
+
+        # Skip if image was not found
+        if image_id not in image_id_to_path:
+            continue
+
+        # Get the video and frame index for this image
+        shape_key = image_id_to_shape[image_id]
+        video = shape_to_video[shape_key]
+        frame_idx = image_id_to_frame_idx[image_id]
 
         # Create instances from annotations
         instances = []
@@ -272,7 +317,9 @@ def read_labels(
         if (
             instances or image_id in image_annotations
         ):  # Include frames even without instances
-            labeled_frame = LabeledFrame(video=video, frame_idx=0, instances=instances)
+            labeled_frame = LabeledFrame(
+                video=video, frame_idx=frame_idx, instances=instances
+            )
             labeled_frames.append(labeled_frame)
 
     # Create Labels object (skeletons will be auto-added from instances)
@@ -280,7 +327,9 @@ def read_labels(
 
 
 def read_labels_set(
-    dataset_path: Union[str, Path], json_files: Optional[List[str]] = None
+    dataset_path: Union[str, Path],
+    json_files: Optional[List[str]] = None,
+    grayscale: bool = False,
 ) -> Dict[str, Labels]:
     """Read multiple COCO annotation files and return a dictionary of Labels.
 
@@ -291,6 +340,8 @@ def read_labels_set(
         dataset_path: Root directory containing COCO annotation files.
         json_files: List of specific JSON filenames to load. If None, automatically
                    discovers all .json files in the dataset directory.
+        grayscale: If True, load images as grayscale (1 channel). If False, load as
+                   RGB (3 channels). Default is False.
 
     Returns:
         Dictionary mapping split names to Labels objects.
@@ -312,7 +363,7 @@ def read_labels_set(
         split_name = json_path.stem
 
         # Load labels for this split
-        labels = read_labels(json_path, dataset_root=dataset_path)
+        labels = read_labels(json_path, dataset_root=dataset_path, grayscale=grayscale)
         labels_dict[split_name] = labels
 
     return labels_dict

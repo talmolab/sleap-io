@@ -527,3 +527,156 @@ def test_auto_discover_no_json_files(tmp_path):
 
     with pytest.raises(FileNotFoundError, match="No JSON annotation files found"):
         coco.read_labels_set(str(empty_dir))
+
+
+def test_shared_video_objects_for_same_shape(tmp_path):
+    """Test that images with the same shape share Video objects."""
+    import json
+
+    import imageio.v3 as iio
+    import numpy as np
+
+    # Create COCO data with multiple images of the same shape
+    coco_data = {
+        "images": [
+            {"id": 1, "file_name": "img1.jpg", "width": 100, "height": 100},
+            {"id": 2, "file_name": "img2.jpg", "width": 100, "height": 100},
+            {"id": 3, "file_name": "img3.jpg", "width": 200, "height": 150},
+            {"id": 4, "file_name": "img4.jpg", "width": 100, "height": 100},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "keypoints": [50, 50, 2, 60, 60, 2],
+                "num_keypoints": 2,
+            },
+            {
+                "id": 2,
+                "image_id": 2,
+                "category_id": 1,
+                "keypoints": [40, 40, 2, 70, 70, 2],
+                "num_keypoints": 2,
+            },
+            {
+                "id": 3,
+                "image_id": 3,
+                "category_id": 1,
+                "keypoints": [100, 100, 2, 120, 120, 2],
+                "num_keypoints": 2,
+            },
+            {
+                "id": 4,
+                "image_id": 4,
+                "category_id": 1,
+                "keypoints": [30, 30, 2, 80, 80, 2],
+                "num_keypoints": 2,
+            },
+        ],
+        "categories": [
+            {"id": 1, "name": "person", "keypoints": ["head", "tail"], "skeleton": []}
+        ],
+    }
+
+    # Save annotation file
+    json_path = tmp_path / "annotations.json"
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f)
+
+    # Create dummy images
+    iio.imwrite(tmp_path / "img1.jpg", np.zeros((100, 100, 3), dtype=np.uint8))
+    iio.imwrite(tmp_path / "img2.jpg", np.zeros((100, 100, 3), dtype=np.uint8))
+    iio.imwrite(tmp_path / "img3.jpg", np.zeros((150, 200, 3), dtype=np.uint8))
+    iio.imwrite(tmp_path / "img4.jpg", np.zeros((100, 100, 3), dtype=np.uint8))
+
+    # Load labels
+    labels = coco.read_labels(json_path, tmp_path)
+
+    # Check that we have 4 frames
+    assert len(labels) == 4
+
+    # Get video objects from frames
+    videos = [frame.video for frame in labels]
+    unique_videos = []
+    for video in videos:
+        if video not in unique_videos:
+            unique_videos.append(video)
+
+    # Should have 2 unique video objects (one for 100x100, one for 200x150)
+    assert len(unique_videos) == 2
+
+    # Check that frames with same shape share the same video object
+    video_100x100 = None
+    video_200x150 = None
+
+    for frame in labels:
+        if frame.video.shape == (3, 100, 100, 3):  # 3 frames of 100x100
+            if video_100x100 is None:
+                video_100x100 = frame.video
+            else:
+                # Same shape should use same video object
+                assert frame.video is video_100x100
+        elif frame.video.shape == (1, 150, 200, 3):  # 1 frame of 150x200
+            if video_200x150 is None:
+                video_200x150 = frame.video
+            else:
+                assert frame.video is video_200x150
+
+    # Verify frame indices are correct
+    frame_indices_100x100 = []
+    frame_indices_200x150 = []
+
+    for frame in labels:
+        if frame.video is video_100x100:
+            frame_indices_100x100.append(frame.frame_idx)
+        else:
+            frame_indices_200x150.append(frame.frame_idx)
+
+    # 100x100 video should have frames at indices 0, 1, 2 (3 images)
+    assert sorted(frame_indices_100x100) == [0, 1, 2]
+    # 200x150 video should have frame at index 0 (1 image)
+    assert frame_indices_200x150 == [0]
+
+
+def test_grayscale_loading(tmp_path):
+    """Test loading images as grayscale."""
+    import json
+
+    import imageio.v3 as iio
+    import numpy as np
+
+    # Create simple COCO data
+    coco_data = {
+        "images": [
+            {"id": 1, "file_name": "test.jpg", "width": 100, "height": 100},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "keypoints": [50, 50, 2],
+                "num_keypoints": 1,
+            },
+        ],
+        "categories": [
+            {"id": 1, "name": "person", "keypoints": ["head"], "skeleton": []}
+        ],
+    }
+
+    # Save annotation file
+    json_path = tmp_path / "annotations.json"
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f)
+
+    # Create dummy image
+    iio.imwrite(tmp_path / "test.jpg", np.zeros((100, 100, 3), dtype=np.uint8))
+
+    # Load as RGB (default)
+    labels_rgb = coco.read_labels(json_path, tmp_path, grayscale=False)
+    assert labels_rgb[0].video.shape == (1, 100, 100, 3)
+
+    # Load as grayscale
+    labels_gray = coco.read_labels(json_path, tmp_path, grayscale=True)
+    assert labels_gray[0].video.shape == (1, 100, 100, 1)

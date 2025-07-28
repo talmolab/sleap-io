@@ -249,19 +249,26 @@ def _detect_coco_format(json_path: str) -> bool:
         return False
 
 
-def load_coco(json_path: str, dataset_root: Optional[str] = None, **kwargs) -> Labels:
+def load_coco(
+    json_path: str,
+    dataset_root: Optional[str] = None,
+    grayscale: bool = False,
+    **kwargs,
+) -> Labels:
     """Load a COCO-style pose dataset and return a Labels object.
 
     Args:
         json_path: Path to the COCO annotation JSON file.
         dataset_root: Root directory of the dataset. If None, uses parent directory
                      of json_path.
+        grayscale: If True, load images as grayscale (1 channel). If False, load as
+                   RGB (3 channels). Default is False.
         **kwargs: Additional arguments (currently unused).
 
     Returns:
         The dataset as a `Labels` object.
     """
-    return coco.read_labels(json_path, dataset_root=dataset_root)
+    return coco.read_labels(json_path, dataset_root=dataset_root, grayscale=grayscale)
 
 
 def load_video(filename: str, **kwargs) -> Video:
@@ -379,7 +386,8 @@ def load_file(
               use for
               the labels.
             - For "coco" format: dataset_root (Optional[str]): Root directory of the
-              dataset.
+              dataset. grayscale (bool): If True, load images as grayscale (1 channel).
+              If False, load as RGB (3 channels). Default is False.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
             - For "ultralytics" format: See `load_ultralytics` for supported arguments.
