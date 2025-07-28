@@ -245,7 +245,7 @@ def _detect_coco_format(json_path: str) -> bool:
             has_keypoints = any("keypoints" in cat for cat in data["categories"])
 
         return has_coco_fields and has_keypoints
-    except:
+    except Exception:
         return False
 
 
