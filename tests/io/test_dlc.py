@@ -231,12 +231,10 @@ def test_csv_parse_exception_handling(tmp_path):
     # during the multi-animal header check
     bad_csv = tmp_path / "bad_structure.csv"
     bad_csv.write_text(
-        "scorer,Scorer\n"
-        "bodyparts,A\n"
-        "coords,x\n"
+        "scorer,Scorer\nbodyparts,A\ncoords,x\n"
         # Only one header row when we try to read with header=[1,2,3]
     )
-    
+
     # This should trigger the exception handler and fall back to single-animal format
     labels = sio.load_file(bad_csv)
     assert isinstance(labels, sio.Labels)
@@ -279,12 +277,12 @@ def test_dlc_with_nested_path_structure(tmp_path):
     data_dir = tmp_path / "project"
     labeled_dir = data_dir / "labeled-data" / "session1"
     labeled_dir.mkdir(parents=True)
-    
+
     # Create images in the expected location
     for i in range(3):
         img_path = labeled_dir / f"img{i:03d}.png"
         img_path.write_text("dummy image")
-    
+
     # Create CSV that references images with full path
     csv_path = labeled_dir / "test_data.csv"
     csv_content = (
@@ -296,16 +294,16 @@ def test_dlc_with_nested_path_structure(tmp_path):
         "labeled-data/session1/img002.png,20,21,22,23,24,25\n"
     )
     csv_path.write_text(csv_content)
-    
+
     # Load from CSV - this tests the full path resolution (line 127)
     labels = sio.load_file(csv_path)
     assert len(labels.labeled_frames) == 3
     assert len(labels.videos) == 1
-    
+
     # Now test from parent directory - this tests the parent path resolution (line 139)
     csv_parent_path = data_dir / "test_data.csv"
     csv_parent_path.write_text(csv_content)
-    
+
     labels2 = sio.load_file(csv_parent_path)
     assert len(labels2.labeled_frames) == 3
     assert len(labels2.videos) == 1
