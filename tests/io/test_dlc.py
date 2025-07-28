@@ -214,11 +214,11 @@ def test_malformed_csv_format_detection(tmp_path):
     malformed_csv.write_text(
         "scorer,Scorer,Scorer,Scorer,Scorer,Scorer,Scorer\n"
         "not_individuals,Animal1,Animal1,Animal2,Animal2,single,single\n"
-        "bodyparts,A,A,A,A,D,D\n"  
+        "bodyparts,A,A,A,A,D,D\n"
         "coords,x,y,x,y,x,y\n"
         "frame1,1,2,3,4,5,6\n"
     )
-    
+
     # This should fall back to single-animal format since "individuals" check fails
     labels = sio.load_file(malformed_csv)
     assert isinstance(labels, sio.Labels)
@@ -228,11 +228,11 @@ def test_malformed_csv_format_detection(tmp_path):
 def test_extract_frame_index_no_numbers(dlc_testdata):
     """Test frame index extraction when filename has no numbers."""
     from sleap_io.io.dlc import _extract_frame_index
-    
+
     # Test with filename without numbers
     assert _extract_frame_index("no_numbers.png") == 0
     assert _extract_frame_index("also-no-nums.jpg") == 0
-    
+
     # Test normal case for comparison
     assert _extract_frame_index("img001.png") == 1
     assert _extract_frame_index("frame_042.jpg") == 42
@@ -241,21 +241,19 @@ def test_extract_frame_index_no_numbers(dlc_testdata):
 def test_video_creation_with_existing_files(tmp_path, dlc_testdata):
     """Test video creation when image files actually exist."""
     from sleap_io.io.dlc import _get_or_create_video
-    
+
     # Create actual image files
     img_dir = tmp_path / "labeled-data" / "video"
     img_dir.mkdir(parents=True)
-    
+
     # Create a dummy image file
     img_file = img_dir / "img000.png"
     img_file.write_text("dummy")
-    
+
     # Test with full path that exists
     video = _get_or_create_video("labeled-data/video/img000.png", tmp_path, None)
     assert video.filename == [str(tmp_path / "labeled-data/video/img000.png")]
-    
+
     # Test with just the filename (should use simple path)
     video2 = _get_or_create_video("img000.png", img_dir, None)
     assert video2.filename == [str(img_dir / "img000.png")]
-
-
