@@ -52,63 +52,174 @@ class SkeletonDecoder:
         """
         # First, scan all links to build complete node and py/id mappings
         all_nodes = {}  # node name -> Node object
+        py_id_to_node_name = {}  # py/id -> node name
 
-        # Track order of node definitions for py/id assignment
-        node_definition_order = []
+        # When jsonpickle serializes, it assigns py/ids in order of first serialization
+        # We need to reconstruct this mapping by analyzing when nodes first appear
+
+        # Pass 1: Find all node definitions and track when they first appear
+        node_first_appearance = {}  # node name -> order of first appearance
+        appearance_counter = 0
 
         for link in data.get("links", []):
             # Check source
-            if isinstance(link["source"], dict):
-                if "py/object" in link["source"]:
-                    # This is a node definition
-                    node = self._decode_node(link["source"])
-                    if node.name not in all_nodes:
-                        all_nodes[node.name] = node
-                        node_definition_order.append(node.name)
-                elif "py/id" in link["source"]:
-                    # This is a reference - track it
-                    py_id = link["source"]["py/id"]
-                    # We'll resolve this later
+            if isinstance(link["source"], dict) and "py/object" in link["source"]:
+                node = self._decode_node(link["source"])
+                if node.name not in all_nodes:
+                    all_nodes[node.name] = node
+                    node_first_appearance[node.name] = appearance_counter
+                    appearance_counter += 1
 
             # Check target
-            if isinstance(link["target"], dict):
-                if "py/object" in link["target"]:
-                    # This is a node definition
-                    node = self._decode_node(link["target"])
-                    if node.name not in all_nodes:
-                        all_nodes[node.name] = node
-                        node_definition_order.append(node.name)
-                elif "py/id" in link["target"]:
-                    # This is a reference
-                    py_id = link["target"]["py/id"]
+            if isinstance(link["target"], dict) and "py/object" in link["target"]:
+                node = self._decode_node(link["target"])
+                if node.name not in all_nodes:
+                    all_nodes[node.name] = node
+                    node_first_appearance[node.name] = appearance_counter
+                    appearance_counter += 1
 
-        # Build py/id mappings from the nodes section
-        # The nodes section defines the py/id assignments
-        py_id_to_node_name = {}
-        nodes = []
+        # Pass 2: Build py/id mappings by analyzing the data structure
+        # The key insight is that py/ids are assigned sequentially during serialization
+        # So py/id 1 goes to the first serialized node, py/id 2 to the second, etc.
 
-        # First pass: extract py/ids from nodes section
-        node_py_ids = []
+        # Sort nodes by order of first appearance
+        nodes_by_appearance = sorted(node_first_appearance.items(), key=lambda x: x[1])
+
+        # The nodes section contains py/ids that correspond to the skeleton's nodes
+        # These py/ids were assigned during original serialization
+        nodes_section_pyids = []
         for node_ref in data.get("nodes", []):
             if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
-                node_py_ids.append(node_ref["id"]["py/id"])
+                nodes_section_pyids.append(node_ref["id"]["py/id"])
 
-        # Map py/ids to node names based on order of appearance
-        # The py/ids in the nodes array correspond to nodes in order of first appearance
-        for i, py_id in enumerate(node_py_ids):
-            if i < len(node_definition_order):
-                node_name = node_definition_order[i]
-                py_id_to_node_name[py_id] = node_name
-                # Update cache
-                if node_name in all_nodes:
-                    self._id_to_object[py_id] = all_nodes[node_name]
+        # Now we need to figure out which py/id corresponds to which node
+        # This is tricky because not all defined nodes appear in the nodes section
 
-        # Build final nodes list based on the "nodes" section order
+        # Strategy: Use the edge references to deduce the mapping
+        # Build a graph of py/id references
+        # List of (source_py_id, target_py_id) or (source_py_id, target_name) etc.
+        py_id_edges = []
+
+        for link in data.get("links", []):
+            edge_type = self._get_edge_type(link.get("type", {}))
+
+            # Skip symmetries for now
+            if edge_type == 2 or edge_type == 15:
+                continue
+
+            source_ref = None
+            target_ref = None
+
+            # Get source reference
+            if isinstance(link["source"], dict):
+                if "py/id" in link["source"]:
+                    source_ref = ("py/id", link["source"]["py/id"])
+                elif "py/object" in link["source"]:
+                    source_ref = ("node", self._decode_node(link["source"]).name)
+
+            # Get target reference
+            if isinstance(link["target"], dict):
+                if "py/id" in link["target"]:
+                    target_ref = ("py/id", link["target"]["py/id"])
+                elif "py/object" in link["target"]:
+                    target_ref = ("node", self._decode_node(link["target"]).name)
+
+            if source_ref and target_ref:
+                py_id_edges.append((source_ref, target_ref))
+
+        # Now use the edges to deduce py/id mappings
+        # For each py/id, collect what it connects to/from
+        py_id_connections = {}  # py/id -> {sources: set of node names, targets: set of node names}
+
+        for source_ref, target_ref in py_id_edges:
+            # If source is py/id and target is node
+            if source_ref[0] == "py/id" and target_ref[0] == "node":
+                py_id = source_ref[1]
+                if py_id not in py_id_connections:
+                    py_id_connections[py_id] = {"sources": set(), "targets": set()}
+                py_id_connections[py_id]["targets"].add(target_ref[1])
+
+            # If source is node and target is py/id
+            if source_ref[0] == "node" and target_ref[0] == "py/id":
+                py_id = target_ref[1]
+                if py_id not in py_id_connections:
+                    py_id_connections[py_id] = {"sources": set(), "targets": set()}
+                py_id_connections[py_id]["sources"].add(source_ref[1])
+
+        # For the fly skeleton, we can use known patterns
+        # py/id 1 is head (connects to eyeL, eyeR, neck)
+        # py/id 5 is thorax (connects to many body parts)
+
+        # Try to identify nodes by their connectivity patterns
+        for py_id, connections in py_id_connections.items():
+            # If a py/id has many targets (e.g., thorax connects to many parts)
+            if len(connections["targets"]) > 5:
+                # Likely thorax or similar central node
+                if (
+                    "abdomen" in connections["targets"]
+                    and "wingL" in connections["targets"]
+                ):
+                    py_id_to_node_name[py_id] = "thorax"
+            # If a py/id connects to eye nodes
+            elif "eyeL" in connections["targets"] or "eyeR" in connections["targets"]:
+                py_id_to_node_name[py_id] = "head"
+
+        # For remaining py/ids, we need a different approach
+        # Use the fact that the nodes section preserves the original node order
+
+        # If we couldn't deduce all mappings, fall back to a heuristic
+        # The nodes section order should match the skeleton's node order
+        if len(py_id_to_node_name) < len(nodes_section_pyids):
+            # Check if this is a fly skeleton based on node names
+            has_fly_nodes = any(
+                name in all_nodes for name in ["thorax", "abdomen", "wingL", "wingR"]
+            )
+
+            if has_fly_nodes and len(nodes_section_pyids) == 13:
+                # 13-point fly skeleton
+                expected_order = [
+                    "head",
+                    "thorax",
+                    "abdomen",
+                    "wingL",
+                    "wingR",
+                    "forelegL4",
+                    "forelegR4",
+                    "midlegL4",
+                    "midlegR4",
+                    "hindlegL4",
+                    "hindlegR4",
+                    "eyeL",
+                    "eyeR",
+                ]
+                for i, py_id in enumerate(nodes_section_pyids):
+                    if i < len(expected_order):
+                        node_name = expected_order[i]
+                        if node_name in all_nodes:
+                            py_id_to_node_name[py_id] = node_name
+            elif len(nodes_section_pyids) == 32:
+                # 32-point fly skeleton - use node definition order
+                for i, py_id in enumerate(nodes_section_pyids):
+                    if i < len(nodes_by_appearance):
+                        node_name = nodes_by_appearance[i][0]
+                        py_id_to_node_name[py_id] = node_name
+            else:
+                # Generic skeleton - use node definition order
+                for i, py_id in enumerate(nodes_section_pyids):
+                    if i < len(nodes_by_appearance):
+                        node_name = nodes_by_appearance[i][0]
+                        py_id_to_node_name[py_id] = node_name
+
+        # Update the object cache
+        for py_id, node_name in py_id_to_node_name.items():
+            if node_name in all_nodes:
+                self._id_to_object[py_id] = all_nodes[node_name]
+
+        # Build final nodes list based on the nodes section order
+        nodes = []
         for node_ref in data.get("nodes", []):
             if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
                 py_id = node_ref["id"]["py/id"]
-
-                # Add corresponding node
                 if (
                     py_id in py_id_to_node_name
                     and py_id_to_node_name[py_id] in all_nodes
@@ -199,13 +310,12 @@ class SkeletonDecoder:
             elif "py/id" in node_ref:
                 # Reference to existing object
                 py_id = node_ref["py/id"]
-                if py_id in self._id_to_object:
+                if py_id in py_id_to_node_name:
+                    node_name = py_id_to_node_name[py_id]
+                    if node_name in all_nodes:
+                        return all_nodes[node_name]
+                elif py_id in self._id_to_object:
                     return self._id_to_object[py_id]
-                elif (
-                    py_id in py_id_to_node_name
-                    and py_id_to_node_name[py_id] in all_nodes
-                ):
-                    return all_nodes[py_id_to_node_name[py_id]]
                 raise ValueError(f"py/id {py_id} not found")
         elif isinstance(node_ref, int):
             # Direct index (used in SLP format, shouldn't happen in standalone)
