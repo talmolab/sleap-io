@@ -10,10 +10,10 @@ from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 
 def decode_skeleton(data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
     """Decode skeleton(s) from JSON data using the default decoder.
-    
+
     Args:
         data: JSON string or pre-parsed dictionary containing skeleton data.
-        
+
     Returns:
         A single Skeleton or list of Skeletons depending on input format.
     """
@@ -23,10 +23,10 @@ def decode_skeleton(data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
 
 def encode_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
     """Encode skeleton(s) to JSON string using the default encoder.
-    
+
     Args:
         skeletons: A single Skeleton or list of Skeletons to encode.
-        
+
     Returns:
         JSON string in jsonpickle format.
     """
@@ -44,7 +44,9 @@ class SkeletonDecoder:
 
     def __init__(self):
         """Initialize the decoder."""
-        self.decoded_objects: List[Any] = []  # List of decoded objects indexed by py/id - 1
+        self.decoded_objects: List[
+            Any
+        ] = []  # List of decoded objects indexed by py/id - 1
 
     def decode(self, data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
         """Decode skeleton(s) from JSON data.
@@ -78,14 +80,14 @@ class SkeletonDecoder:
         """
         # Reset decoded objects list for this skeleton
         self.decoded_objects = []
-        
+
         # Track edge types separately for formats that use separate py/id spaces
         edge_type_ids = {}  # edge_type_value -> py/id
         next_edge_type_id = 1
-        
+
         # First pass: decode all objects in order of appearance
         seen_nodes = set()  # Track node names we've already seen
-        
+
         for link in data.get("links", []):
             # Check each component of the link for new objects
             for key in ["source", "target", "type"]:
@@ -106,22 +108,21 @@ class SkeletonDecoder:
                             edge_type_ids[edge_type_val] = next_edge_type_id
                             next_edge_type_id += 1
                     # py/id references are handled in second pass
-        
+
         # Store edge type mappings for second pass
         self._edge_type_ids = edge_type_ids
-        
-        
+
         # Second pass: build edges using the decoded objects
         edges = []
         symmetries = []
         seen_symmetries = set()
-        
+
         for link in data.get("links", []):
             # Resolve references to build the edge
             source_node = self._resolve_link_ref(link["source"])
             target_node = self._resolve_link_ref(link["target"])
             edge_type_val = self._resolve_edge_type_ref(link.get("type", {}))
-            
+
             if edge_type_val == 1:  # Regular edge
                 edges.append(Edge(source=source_node, destination=target_node))
             elif edge_type_val == 2:  # Symmetry edge
@@ -130,11 +131,11 @@ class SkeletonDecoder:
                 if sym_key not in seen_symmetries:
                     symmetries.append(Symmetry([source_node, target_node]))
                     seen_symmetries.add(sym_key)
-        
+
         # Build nodes list from the nodes section
         nodes = []
         nodes_from_refs = []
-        
+
         # First collect nodes based on the nodes array
         for node_ref in data.get("nodes", []):
             if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
@@ -144,10 +145,10 @@ class SkeletonDecoder:
                     obj = self.decoded_objects[py_id - 1]
                     if isinstance(obj, Node):
                         nodes_from_refs.append(obj)
-        
+
         # If we're missing nodes (due to malformed JSON), collect all Node objects
         all_nodes = [obj for obj in self.decoded_objects if isinstance(obj, Node)]
-        
+
         if len(nodes_from_refs) < len(all_nodes):
             # The nodes array is incomplete or includes non-nodes
             # Use all nodes in their natural order
@@ -155,18 +156,18 @@ class SkeletonDecoder:
         else:
             # Use the order from the nodes array
             nodes = nodes_from_refs
-        
+
         # Get skeleton name
         name = data.get("graph", {}).get("name", "Skeleton")
-        
+
         return Skeleton(nodes=nodes, edges=edges, symmetries=symmetries, name=name)
 
     def _resolve_link_ref(self, node_ref: Union[Dict, int]) -> Node:
         """Resolve a node reference.
-        
+
         Args:
             node_ref: Node reference (can be embedded object or py/id reference).
-            
+
         Returns:
             The resolved Node object.
         """
@@ -190,15 +191,15 @@ class SkeletonDecoder:
         elif isinstance(node_ref, int):
             # Direct index (used in SLP format, shouldn't happen in standalone)
             raise ValueError(f"Direct index reference not supported: {node_ref}")
-            
+
         raise ValueError(f"Unknown node reference format: {node_ref}")
-    
+
     def _resolve_edge_type_ref(self, type_data: Dict) -> int:
         """Resolve edge type reference.
-        
+
         Args:
             type_data: Dictionary containing edge type data.
-            
+
         Returns:
             Integer edge type (1 for regular edge, 2 for symmetry).
         """
@@ -208,25 +209,24 @@ class SkeletonDecoder:
         elif "py/id" in type_data:
             # Reference to existing edge type
             py_id = type_data["py/id"]
-            
+
             # First try to find in decoded objects (training config format)
             if py_id <= len(self.decoded_objects):
                 obj = self.decoded_objects[py_id - 1]
                 if isinstance(obj, int):
                     return obj
-            
+
             # If not found, check if this is a separate edge type ID space
             # (standalone skeleton format)
             for edge_val, edge_id in self._edge_type_ids.items():
                 if edge_id == py_id:
                     return edge_val
-            
+
             raise ValueError(f"py/id {py_id} not found as edge type")
         else:
             # Default to regular edge
             return 1
-    
-    
+
     def _decode_node(self, data: Dict) -> Node:
         """Decode a node from jsonpickle format.
 
@@ -251,8 +251,6 @@ class SkeletonDecoder:
             name = data.get("name", "")
 
         return Node(name=name)
-
-
 
 
 class SkeletonEncoder:

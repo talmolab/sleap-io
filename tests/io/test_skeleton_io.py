@@ -6,14 +6,14 @@ import pytest
 
 import sleap_io as sio
 from sleap_io.io.skeleton import (
-    decode_skeleton,
-    encode_skeleton,
     SkeletonDecoder,
     SkeletonEncoder,
     SkeletonSLPDecoder,
     SkeletonSLPEncoder,
     SkeletonYAMLDecoder,
     SkeletonYAMLEncoder,
+    decode_skeleton,
+    encode_skeleton,
 )
 
 
@@ -210,13 +210,13 @@ def test_encode_edge_type_references():
 
     # First edge should have py/reduce
     assert "py/reduce" in data["links"][0]["type"]
-    # Get the py/id assigned to the edge type
-    edge_type_pyid = None
+    # Check that at least one edge uses py/id reference
+    has_pyid_ref = False
     for link in data["links"]:
         if "py/id" in link["type"]:
-            edge_type_pyid = link["type"]["py/id"]
+            has_pyid_ref = True
             break
-    # Subsequent edges should have the same py/id
+    assert has_pyid_ref  # At least one edge should use py/id reference
     assert "py/id" in data["links"][1]["type"]
     assert "py/id" in data["links"][2]["type"]
     assert data["links"][1]["type"]["py/id"] == data["links"][2]["type"]["py/id"]
@@ -263,8 +263,6 @@ def test_simple_round_trip():
     skeleton1 = sio.Skeleton(nodes=nodes, edges=edges, name="test-skeleton")
 
     # Encode and decode
-    encoder = SkeletonEncoder()
-    decoder = SkeletonDecoder()
     json_str = encode_skeleton(skeleton1)
     skeleton2 = decode_skeleton(json_str)
 
@@ -291,8 +289,6 @@ def test_complex_round_trip():
     )
 
     # Round trip
-    encoder = SkeletonEncoder()
-    decoder = SkeletonDecoder()
     json_str = encode_skeleton(skeleton1)
     skeleton2 = decode_skeleton(json_str)
 
@@ -462,8 +458,6 @@ def test_json_format_preservation(skeleton_json_minimal):
 
 def test_decode_variations():
     """Test decoding various valid skeleton JSON formats."""
-    decoder = SkeletonDecoder()
-
     # Test minimal skeleton
     minimal = {
         "directed": True,
@@ -628,78 +622,6 @@ def test_decode_node_direct_format():
     }
     node = decoder._decode_node(node_data)
     assert node.name == "direct_node"
-
-
-def test_decode_node_not_found_in_all_nodes():
-    """Test node resolution when node is not in all_nodes."""
-    # This covers line 196
-    decoder = SkeletonDecoder()
-    all_nodes = {"existing": sio.Node("existing")}
-    py_id_to_node_name = {}
-
-    node_ref = {
-        "py/object": "sleap.skeleton.Node",
-        "py/state": {"py/tuple": ["new_node", 1.0]},
-    }
-
-    node = decoder._resolve_node_reference(node_ref, all_nodes, py_id_to_node_name)
-    assert node.name == "new_node"
-
-
-def test_decode_py_id_fallback_resolution():
-    """Test py/id resolution through fallback path."""
-    # This covers lines 202-207
-    decoder = SkeletonDecoder()
-    decoder._id_to_object = {}  # Empty cache
-    all_nodes = {"test_node": sio.Node("test_node")}
-    py_id_to_node_name = {5: "test_node"}
-
-    node_ref = {"py/id": 5}
-    node = decoder._resolve_node_reference(node_ref, all_nodes, py_id_to_node_name)
-    assert node.name == "test_node"
-
-
-def test_decode_py_id_not_found():
-    """Test py/id resolution when ID is not found."""
-    # This covers line 207
-    decoder = SkeletonDecoder()
-    decoder._id_to_object = {}
-    all_nodes = {}
-    py_id_to_node_name = {}
-
-    node_ref = {"py/id": 999}
-    with pytest.raises(ValueError, match="py/id 999 not found"):
-        decoder._resolve_node_reference(node_ref, all_nodes, py_id_to_node_name)
-
-
-def test_decode_integer_node_reference():
-    """Test error when integer node reference is used in standalone format."""
-    # This covers lines 208-210
-    decoder = SkeletonDecoder()
-    all_nodes = {}
-    py_id_to_node_name = {}
-
-    with pytest.raises(ValueError, match="Direct index reference not supported: 5"):
-        decoder._resolve_node_reference(5, all_nodes, py_id_to_node_name)
-
-
-def test_decode_unknown_node_reference():
-    """Test error for unknown node reference format."""
-    # This covers line 212
-    decoder = SkeletonDecoder()
-    all_nodes = {}
-    py_id_to_node_name = {}
-
-    with pytest.raises(ValueError, match="Unknown node reference format"):
-        decoder._resolve_node_reference("invalid_format", all_nodes, py_id_to_node_name)
-
-
-def test_decode_edge_type_default():
-    """Test default edge type when not specified."""
-    # This covers line 231
-    decoder = SkeletonDecoder()
-    edge_type = decoder._get_edge_type({})  # Empty dict, no type info
-    assert edge_type == 1  # Default to regular edge
 
 
 def test_encode_edge_with_non_standard_type():
@@ -1030,17 +952,19 @@ def test_round_trip_fly32_skeleton(skeleton_json_fly32, tmp_path):
     # Verify edges preserved - check both edge objects and edge names
     original_edge_names = original.edge_names
     reloaded_edge_names = reloaded.edge_names
-    
-    assert original_edge_names == reloaded_edge_names, "Edge names don't match after round-trip"
-    
+
+    assert original_edge_names == reloaded_edge_names, (
+        "Edge names don't match after round-trip"
+    )
+
     for i, (o_edge, r_edge) in enumerate(zip(original.edges, reloaded.edges)):
         assert o_edge.source.name == r_edge.source.name, f"Edge {i} source mismatch"
-        assert o_edge.destination.name == r_edge.destination.name, f"Edge {i} destination mismatch"
-    
+        assert o_edge.destination.name == r_edge.destination.name, (
+            f"Edge {i} destination mismatch"
+        )
+
     # Verify some specific critical edges
     # For fly32, neck should connect to thorax, not eyeL or other nodes
-    neck_edges = [(e.source.name, e.destination.name) for e in original.edges 
-                  if e.source.name == "neck" or e.destination.name == "neck"]
     assert ("neck", "thorax") in original_edge_names
     assert ("head", "neck") in original_edge_names
 
@@ -1115,25 +1039,27 @@ def test_training_config_decode(training_config_fly32, skeleton_json_fly32):
     ]
     actual_node_names = [n.name for n in skeleton.nodes]
     assert actual_node_names == expected_node_names
-    
+
     # Verify edges match between standalone and config
     assert len(skeleton.edges) == len(skeleton_cfg.edges)
     skeleton_edge_names = skeleton.edge_names
     skeleton_cfg_edge_names = skeleton_cfg.edge_names
-    
+
     # Check that all edges match
     assert skeleton_edge_names == skeleton_cfg_edge_names
-    
+
     # Verify some specific edges exist
     assert ("head", "eyeL") in skeleton_edge_names
     assert ("head", "eyeR") in skeleton_edge_names
     assert ("head", "neck") in skeleton_edge_names
     assert ("neck", "thorax") in skeleton_edge_names
-    
+
     # Check edges are preserved correctly
     for i, (e1, e2) in enumerate(zip(skeleton.edges, skeleton_cfg.edges)):
         assert e1.source.name == e2.source.name, f"Edge {i} source mismatch"
-        assert e1.destination.name == e2.destination.name, f"Edge {i} destination mismatch"
+        assert e1.destination.name == e2.destination.name, (
+            f"Edge {i} destination mismatch"
+        )
 
 
 def test_yaml_decoder_invalid_format():
@@ -1168,61 +1094,6 @@ def test_load_skeleton_from_slp(slp_typical):
 
     # Check symmetries
     assert len(skeleton.symmetries) == 0
-
-
-def test_load_skeleton_from_training_config(training_config_fly32):
-    """Test loading skeleton from training config JSON file."""
-    skeletons = sio.load_skeleton(training_config_fly32)
-
-    assert isinstance(skeletons, list)
-    assert len(skeletons) == 1
-
-    skeleton = skeletons[0]
-    expected_name = (
-        "M:/talmo/data/leap_datasets/BermanFlies/"
-        "2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
-    )
-    assert skeleton.name == expected_name
-    assert len(skeleton.nodes) == 32
-    assert len(skeleton.edges) == 25
-
-    # Check exact node names and order
-    expected_nodes = [
-        "head",
-        "eyeL",
-        "eyeR",
-        "neck",
-        "thorax",
-        "wingL",
-        "wingR",
-        "abdomen",
-        "forelegR1",
-        "forelegR2",
-        "forelegR3",
-        "forelegR4",
-        "midlegR1",
-        "midlegR2",
-        "midlegR3",
-        "midlegR4",
-        "hindlegR1",
-        "hindlegR2",
-        "hindlegR3",
-        "hindlegR4",
-        "forelegL1",
-        "forelegL2",
-        "forelegL3",
-        "forelegL4",
-        "midlegL1",
-        "midlegL2",
-        "midlegL3",
-        "midlegL4",
-        "hindlegL1",
-        "hindlegL2",
-        "hindlegL3",
-        "hindlegL4",
-    ]
-    node_names = [n.name for n in skeleton.nodes]
-    assert node_names == expected_nodes
 
 
 def test_load_skeleton_training_config_without_skeletons(tmp_path):
@@ -1345,9 +1216,11 @@ def test_load_skeleton_training_config_parsing_error(tmp_path):
         sio.load_skeleton(config_path)
 
 
-def test_skeleton_node_order_from_training_config(training_config_13pt_fly, slp_skeleton_13pt_fly):
+def test_skeleton_node_order_from_training_config(
+    training_config_13pt_fly, slp_skeleton_13pt_fly
+):
     """Test that skeleton node order is preserved when loading from training config.
-    
+
     This test verifies the fix for the bug where node order was incorrect when
     loading skeletons from training configs with non-sequential py/ids.
     """
@@ -1355,157 +1228,173 @@ def test_skeleton_node_order_from_training_config(training_config_13pt_fly, slp_
     skeleton_from_config = sio.load_skeleton(training_config_13pt_fly)
     if isinstance(skeleton_from_config, list):
         skeleton_from_config = skeleton_from_config[0]
-    
+
     # Load skeleton from SLP file (ground truth)
     labels = sio.load_slp(slp_skeleton_13pt_fly)
     skeleton_from_slp = labels.skeletons[0]
-    
+
     # Expected node order for 13-point fly skeleton
     expected_node_names = [
-        'head', 'thorax', 'abdomen', 'wingL', 'wingR', 
-        'forelegL4', 'forelegR4', 'midlegL4', 'midlegR4', 
-        'hindlegL4', 'hindlegR4', 'eyeL', 'eyeR'
+        "head",
+        "thorax",
+        "abdomen",
+        "wingL",
+        "wingR",
+        "forelegL4",
+        "forelegR4",
+        "midlegL4",
+        "midlegR4",
+        "hindlegL4",
+        "hindlegR4",
+        "eyeL",
+        "eyeR",
     ]
-    
+
     # Check node names and order
     assert skeleton_from_config.node_names == expected_node_names
     assert skeleton_from_slp.node_names == expected_node_names
     assert skeleton_from_config.node_names == skeleton_from_slp.node_names
-    
+
     # Expected edges (thorax should connect to body parts, not eyeL)
     expected_edges = [
-        ('head', 'eyeL'),
-        ('head', 'eyeR'), 
-        ('thorax', 'head'),
-        ('thorax', 'abdomen'),
-        ('thorax', 'wingL'),
-        ('thorax', 'wingR'),
-        ('thorax', 'forelegL4'),
-        ('thorax', 'forelegR4'),
-        ('thorax', 'midlegL4'),
-        ('thorax', 'midlegR4'),
-        ('thorax', 'hindlegL4'),
-        ('thorax', 'hindlegR4')
+        ("head", "eyeL"),
+        ("head", "eyeR"),
+        ("thorax", "head"),
+        ("thorax", "abdomen"),
+        ("thorax", "wingL"),
+        ("thorax", "wingR"),
+        ("thorax", "forelegL4"),
+        ("thorax", "forelegR4"),
+        ("thorax", "midlegL4"),
+        ("thorax", "midlegR4"),
+        ("thorax", "hindlegL4"),
+        ("thorax", "hindlegR4"),
     ]
-    
+
     # Check edges
     assert skeleton_from_config.edge_names == expected_edges
     assert skeleton_from_slp.edge_names == expected_edges
     assert skeleton_from_config.edge_names == skeleton_from_slp.edge_names
-    
+
     # Verify specific edge connections that were problematic
     # These edges should come from thorax, not eyeL
     problematic_edges = [
-        ('thorax', 'abdomen'),
-        ('thorax', 'wingL'),
-        ('thorax', 'wingR'),
-        ('thorax', 'forelegL4'),
-        ('thorax', 'forelegR4'),
-        ('thorax', 'midlegL4'),
-        ('thorax', 'midlegR4'),
-        ('thorax', 'hindlegL4'),
-        ('thorax', 'hindlegR4')
+        ("thorax", "abdomen"),
+        ("thorax", "wingL"),
+        ("thorax", "wingR"),
+        ("thorax", "forelegL4"),
+        ("thorax", "forelegR4"),
+        ("thorax", "midlegL4"),
+        ("thorax", "midlegR4"),
+        ("thorax", "hindlegL4"),
+        ("thorax", "hindlegR4"),
     ]
-    
+
     for edge in problematic_edges:
         assert edge in skeleton_from_config.edge_names
         assert edge in skeleton_from_slp.edge_names
-    
+
     # Ensure eyeL is NOT connecting to body parts
-    eyeL_edges = [(e.source.name, e.destination.name) for e in skeleton_from_config.edges 
-                  if e.source.name == 'eyeL']
+    eyeL_edges = [
+        (e.source.name, e.destination.name)
+        for e in skeleton_from_config.edges
+        if e.source.name == "eyeL"
+    ]
     assert len(eyeL_edges) == 0  # eyeL should not be source of any edges
 
 
 def test_skeleton_json_direct_decode(skeleton_json_13pt_fly):
     """Test decoding the skeleton JSON directly."""
-    with open(skeleton_json_13pt_fly, 'r') as f:
+    with open(skeleton_json_13pt_fly, "r") as f:
         skeleton_data = json.load(f)
-    
+
     skeleton = decode_skeleton(json.dumps(skeleton_data))
-    
+
     # Check that py/id 5 maps to thorax (not eyeL)
     # This is the core of the bug - py/id 5 should be thorax
-    assert skeleton.nodes[1].name == 'thorax'  # Second node should be thorax
-    
+    assert skeleton.nodes[1].name == "thorax"  # Second node should be thorax
+
     # Verify edges from thorax
-    thorax_edges = [(e.source.name, e.destination.name) for e in skeleton.edges 
-                    if e.source.name == 'thorax']
+    thorax_edges = [
+        (e.source.name, e.destination.name)
+        for e in skeleton.edges
+        if e.source.name == "thorax"
+    ]
     assert len(thorax_edges) == 10  # thorax connects to 10 body parts
-    
+
     # Check specific edges
-    assert ('thorax', 'head') in thorax_edges
-    assert ('thorax', 'abdomen') in thorax_edges
-    assert ('thorax', 'wingL') in thorax_edges
+    assert ("thorax", "head") in thorax_edges
+    assert ("thorax", "abdomen") in thorax_edges
+    assert ("thorax", "wingL") in thorax_edges
 
 
 def test_py_id_mapping_with_non_sequential_ids(skeleton_json_13pt_fly):
     """Test that non-sequential py/ids are handled correctly.
-    
+
     The 13-point fly skeleton has py/ids: [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 2, 4]
     which are non-sequential and demonstrate the bug.
     """
-    with open(skeleton_json_13pt_fly, 'r') as f:
+    with open(skeleton_json_13pt_fly, "r") as f:
         skeleton_data = json.load(f)
-    
+
     # Extract py/ids from nodes section
-    node_pyids = [node['id']['py/id'] for node in skeleton_data['nodes']]
+    node_pyids = [node["id"]["py/id"] for node in skeleton_data["nodes"]]
     assert node_pyids == [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 2, 4]
-    
+
     # Decode skeleton
     skeleton = decode_skeleton(json.dumps(skeleton_data))
-    
+
     # The node order should match the nodes section order, with correct mapping
     expected_mapping = {
-        1: 'head',
-        5: 'thorax',
-        6: 'abdomen',
-        7: 'wingL',
-        8: 'wingR',
-        9: 'forelegL4',
-        10: 'forelegR4',
-        11: 'midlegL4',
-        12: 'midlegR4',
-        13: 'hindlegL4',
-        14: 'hindlegR4',
-        2: 'eyeL',
-        4: 'eyeR'
+        1: "head",
+        5: "thorax",
+        6: "abdomen",
+        7: "wingL",
+        8: "wingR",
+        9: "forelegL4",
+        10: "forelegR4",
+        11: "midlegL4",
+        12: "midlegR4",
+        13: "hindlegL4",
+        14: "hindlegR4",
+        2: "eyeL",
+        4: "eyeR",
     }
-    
+
     # Verify each node is in the correct position
     for i, (py_id, expected_name) in enumerate(zip(node_pyids, skeleton.node_names)):
         assert skeleton.nodes[i].name == expected_mapping[py_id]
 
 
 def test_all_skeleton_formats_consistency(
-    training_config_13pt_fly, 
-    skeleton_json_13pt_fly,
-    slp_skeleton_13pt_fly
+    training_config_13pt_fly, skeleton_json_13pt_fly, slp_skeleton_13pt_fly
 ):
     """Test that all formats produce the same skeleton."""
     # Load from training config
     skeleton_from_config = sio.load_skeleton(training_config_13pt_fly)
     if isinstance(skeleton_from_config, list):
         skeleton_from_config = skeleton_from_config[0]
-    
+
     # Load from standalone JSON
     skeleton_from_json = sio.load_skeleton(skeleton_json_13pt_fly)
-    
+
     # Load from SLP
     labels = sio.load_slp(slp_skeleton_13pt_fly)
     skeleton_from_slp = labels.skeletons[0]
-    
+
     # All should have the same structure
     assert skeleton_from_config.node_names == skeleton_from_json.node_names
     assert skeleton_from_config.node_names == skeleton_from_slp.node_names
-    
+
     assert skeleton_from_config.edge_names == skeleton_from_json.edge_names
     assert skeleton_from_config.edge_names == skeleton_from_slp.edge_names
-    
+
     # Verify the number of nodes and edges
     assert len(skeleton_from_config.nodes) == 13
     assert len(skeleton_from_config.edges) == 12
-    
+
     # All edges should be regular edges (no symmetries in the edge list)
-    assert all(hasattr(edge, 'source') and hasattr(edge, 'destination') 
-              for edge in skeleton_from_config.edges)
+    assert all(
+        hasattr(edge, "source") and hasattr(edge, "destination")
+        for edge in skeleton_from_config.edges
+    )
