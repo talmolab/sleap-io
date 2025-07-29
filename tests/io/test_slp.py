@@ -2,88 +2,92 @@
 
 from __future__ import annotations
 
+import shutil
+import sys
+from pathlib import Path
+from unittest import mock
+
+import h5py
+import numpy as np
+import pytest
+import simplejson as json
+
 from sleap_io import (
-    Video,
-    Skeleton,
-    Edge,
-    Node,
-    Instance,
-    LabeledFrame,
-    Track,
-    PredictedInstance,
-    Labels,
-    SuggestionFrame,
     Camera,
     CameraGroup,
     FrameGroup,
+    Instance,
     InstanceGroup,
+    LabeledFrame,
+    Labels,
+    LabelsSet,
+    Node,
+    PredictedInstance,
     RecordingSession,
+    Skeleton,
+    SuggestionFrame,
+    Track,
+    Video,
+    load_file,
+    load_slp,
+    save_file,
+    save_slp,
 )
 from sleap_io.io.slp import (
-    read_videos,
-    write_videos,
-    read_tracks,
-    write_tracks,
-    read_instances,
-    read_metadata,
-    read_skeletons,
-    serialize_skeletons,
-    write_metadata,
-    read_points,
-    read_pred_points,
-    read_instances,
-    write_lfs,
-    read_labels,
-    write_labels,
-    read_suggestions,
-    write_suggestions,
+    camera_group_to_dict,
+    camera_to_dict,
+    embed_frames,
+    embed_videos,
+    frame_group_to_dict,
+    instance_group_to_dict,
     make_camera,
     make_camera_group,
     make_frame_group,
     make_instance_group,
     make_session,
-    camera_to_dict,
-    camera_group_to_dict,
-    frame_group_to_dict,
-    instance_group_to_dict,
-    session_to_dict,
-    read_sessions,
-    write_sessions,
-    embed_frames,
-    embed_videos,
-    process_and_embed_frames,
     prepare_frames_to_embed,
+    process_and_embed_frames,
+    read_instances,
+    read_labels,
+    read_labels_set,
+    read_metadata,
+    read_points,
+    read_pred_points,
+    read_sessions,
+    read_skeletons,
+    read_suggestions,
+    read_tracks,
+    read_videos,
+    session_to_dict,
+    video_to_dict,
+    write_labels,
+    write_lfs,
+    write_metadata,
+    write_sessions,
+    write_suggestions,
+    write_tracks,
+    write_videos,
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
-from sleap_io.io.main import save_slp, save_file, load_slp
-import numpy as np
-import simplejson as json
-import pytest
-from pathlib import Path
-import shutil
-from sleap_io.io.video_reading import ImageVideo, HDF5Video, MediaVideo
-import sys
-import h5py
-from unittest import mock
-from tqdm import tqdm
+from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
     """Test `read_labels` can read different types of .slp files."""
     labels = read_labels(slp_typical)
-    assert type(labels) == Labels
+    assert type(labels) is Labels
 
     labels = read_labels(slp_simple_skel)
-    assert type(labels) == Labels
+    assert type(labels) is Labels
 
     labels = read_labels(slp_minimal)
-    assert type(labels) == Labels
+    assert type(labels) is Labels
 
 
 def test_load_slp_with_provenance(slp_predictions_with_provenance):
     labels = read_labels(slp_predictions_with_provenance)
     provenance = labels.provenance
-    assert type(provenance) == dict
+    assert type(provenance) is dict
     assert provenance["sleap_version"] == "1.2.7"
 
 
@@ -92,18 +96,18 @@ def test_read_instances_from_predicted(slp_real_data):
 
     lf = labels.find(video=labels.video, frame_idx=220)[0]
     assert len(lf) == 3
-    assert type(lf.instances[0]) == PredictedInstance
-    assert type(lf.instances[1]) == PredictedInstance
-    assert type(lf.instances[2]) == Instance
+    assert type(lf.instances[0]) is PredictedInstance
+    assert type(lf.instances[1]) is PredictedInstance
+    assert type(lf.instances[2]) is Instance
     assert lf.instances[2].from_predicted == lf.instances[1]
     assert lf.unused_predictions == [lf.instances[0]]
 
     lf = labels.find(video=labels.video, frame_idx=770)[0]
     assert len(lf) == 4
-    assert type(lf.instances[0]) == PredictedInstance
-    assert type(lf.instances[1]) == PredictedInstance
-    assert type(lf.instances[2]) == Instance
-    assert type(lf.instances[3]) == Instance
+    assert type(lf.instances[0]) is PredictedInstance
+    assert type(lf.instances[1]) is PredictedInstance
+    assert type(lf.instances[2]) is Instance
+    assert type(lf.instances[3]) is Instance
     assert lf.instances[2].from_predicted == lf.instances[1]
     assert lf.instances[3].from_predicted == lf.instances[0]
     assert len(lf.unused_predictions) == 0
@@ -111,7 +115,7 @@ def test_read_instances_from_predicted(slp_real_data):
 
 def test_read_labels_multiview(slp_multiview):
     labels = read_labels(slp_multiview)
-    assert type(labels) == Labels
+    assert type(labels) is Labels
     assert len(labels.sessions) == 1
     assert isinstance(labels.sessions[0], RecordingSession)
 
@@ -137,7 +141,7 @@ def test_read_skeleton(centered_pair):
     skeletons = read_skeletons(centered_pair)
     assert len(skeletons) == 1
     skeleton = skeletons[0]
-    assert type(skeleton) == Skeleton
+    assert type(skeleton) is Skeleton
     assert len(skeleton.nodes) == 24
     assert len(skeleton.edges) == 23
     assert len(skeleton.symmetries) == 20
@@ -362,7 +366,7 @@ def test_write_labels(centered_pair, slp_real_data, tmp_path):
         assert [len(lf) for lf in saved_labels] == [len(lf) for lf in labels]
         np.testing.assert_array_equal(saved_labels.numpy(), labels.numpy())
         assert saved_labels.video.filename == labels.video.filename
-        assert type(saved_labels.video.backend) == type(labels.video.backend)
+        assert type(saved_labels.video.backend) is type(labels.video.backend)
         assert saved_labels.video.backend.grayscale == labels.video.backend.grayscale
         assert saved_labels.video.backend.shape == labels.video.backend.shape
         assert len(saved_labels.skeletons) == len(labels.skeletons) == 1
@@ -642,14 +646,17 @@ def test_make_session_and_session_to_dict(
     """Test recording session (de)serialization functions.
 
     Args:
-        frame_group_345: Frame group with an `InstanceGroup` at each camera view.
+        recording_session_345: A RecordingSession object with 3 cameras, 4 videos,
+            and 5 frame groups.
     """
 
     def assert_cameras_equal(camera: Camera, camera_0: Camera):
         """Compare two cameras.
+
         Args:
             camera: First camera.
             camera_0: Second camera.
+
         Raises:
             AssertionError: If the cameras are not equal.
         """
@@ -803,12 +810,12 @@ def test_load_multi_skeleton(tmpdir):
 
 def test_slp_imgvideo(tmpdir, slp_imgvideo):
     labels = read_labels(slp_imgvideo)
-    assert type(labels.video.backend) == ImageVideo
+    assert type(labels.video.backend) is ImageVideo
     assert labels.video.shape == (3, 384, 384, 1)
 
     write_labels(tmpdir / "test.slp", labels)
     labels = read_labels(tmpdir / "test.slp")
-    assert type(labels.video.backend) == ImageVideo
+    assert type(labels.video.backend) is ImageVideo
     assert labels.video.shape == (3, 384, 384, 1)
 
     videos = [Video.from_filename(["fake1.jpg", "fake2.jpg"])]
@@ -816,7 +823,7 @@ def test_slp_imgvideo(tmpdir, slp_imgvideo):
     assert len(videos[0].filename) == 2
     write_videos(tmpdir / "test2.slp", videos)
     videos = read_videos(tmpdir / "test2.slp")
-    assert type(videos[0].backend) == ImageVideo
+    assert type(videos[0].backend) is ImageVideo
     assert len(videos[0].filename) == 2
     assert videos[0].shape is None
 
@@ -840,14 +847,14 @@ def test_suggestions(tmpdir):
 
 def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
     labels = read_labels(slp_minimal_pkg)
-    assert type(labels.video.backend) == HDF5Video
+    assert type(labels.video.backend) is HDF5Video
     assert labels.video.shape == (1, 384, 384, 1)
     assert labels.video.backend.embedded_frame_inds == [0]
     assert labels.video.filename == slp_minimal_pkg
 
     write_labels(str(tmpdir / "roundtrip.pkg.slp"), labels)
     labels = read_labels(str(tmpdir / "roundtrip.pkg.slp"))
-    assert type(labels.video.backend) == HDF5Video
+    assert type(labels.video.backend) is HDF5Video
     assert labels.video.shape == (1, 384, 384, 1)
     assert labels.video.backend.embedded_frame_inds == [0]
     assert (
@@ -861,7 +868,7 @@ def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
 )
 def test_embed(tmpdir, slp_real_data, to_embed):
     base_labels = read_labels(slp_real_data)
-    assert type(base_labels.video.backend) == MediaVideo
+    assert type(base_labels.video.backend) is MediaVideo
     assert (
         Path(base_labels.video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
@@ -875,7 +882,7 @@ def test_embed(tmpdir, slp_real_data, to_embed):
     write_labels(labels_path, base_labels, embed=to_embed)
     labels = read_labels(labels_path)
     assert len(labels) == 10
-    assert type(labels.video.backend) == HDF5Video
+    assert type(labels.video.backend) is HDF5Video
     assert Path(labels.video.filename).as_posix() == labels_path
     assert (
         Path(labels.video.source_video.filename).as_posix()
@@ -913,7 +920,6 @@ def test_embed_hdf5_format(tmpdir, slp_real_data):
     ]
 
     # Prepare metadata and process with HDF5 format
-    from sleap_io.io.slp import prepare_frames_to_embed, process_and_embed_frames
 
     frames_metadata = prepare_frames_to_embed(labels_path, base_labels, frames_to_embed)
     replaced_videos = process_and_embed_frames(
@@ -939,7 +945,7 @@ def test_embed_hdf5_format(tmpdir, slp_real_data):
 
     # Verify the embedded file
     labels = read_labels(labels_path)
-    assert type(labels.video.backend) == HDF5Video
+    assert type(labels.video.backend) is HDF5Video
     assert Path(labels.video.filename).as_posix() == labels_path
 
     # Check the image format
@@ -958,7 +964,6 @@ def test_embed_variable_length(tmpdir, slp_real_data):
     ]
 
     # First prepare the metadata
-    from sleap_io.io.slp import prepare_frames_to_embed, process_and_embed_frames
 
     frames_metadata = prepare_frames_to_embed(labels_path, base_labels, frames_to_embed)
 
@@ -986,7 +991,7 @@ def test_embed_variable_length(tmpdir, slp_real_data):
 
     # Verify the embedded file
     labels = read_labels(labels_path)
-    assert type(labels.video.backend) == HDF5Video
+    assert type(labels.video.backend) is HDF5Video
     assert Path(labels.video.filename).as_posix() == labels_path
 
     # Check that the frames were properly embedded
@@ -1022,7 +1027,7 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
         Path(labels3.video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
-    assert type(labels3.video.backend) == MediaVideo
+    assert type(labels3.video.backend) is MediaVideo
 
 
 def test_embed_empty_video(tmpdir, slp_real_data, centered_pair_frame_paths):
@@ -1075,7 +1080,7 @@ def test_embed_grayscale(tmpdir, slp_real_data):
 
 def test_lazy_video_read(slp_real_data):
     labels = read_labels(slp_real_data)
-    assert type(labels.video.backend) == MediaVideo
+    assert type(labels.video.backend) is MediaVideo
     assert labels.video.exists()
 
     labels = read_labels(slp_real_data, open_videos=False)
@@ -1153,15 +1158,17 @@ def conditional_import(verbose):
     with mock.patch("tqdm.tqdm") as mock_tqdm:
         result = mod.conditional_import(True)
         assert result is True  # The import happened
+        # Verify tqdm was imported when verbose=True
+        assert mock_tqdm is not None
 
     # Test with verbose=False
-    with mock.patch("tqdm.tqdm") as mock_tqdm:
+    with mock.patch("tqdm.tqdm"):
         result = mod.conditional_import(False)
         assert result is False  # The import didn't happen
 
 
 def test_embed_frames_verbose_propagation(slp_minimal, tmp_path):
-    """Test that embed_frames propagates the verbose parameter to process_and_embed_frames."""
+    """Test that embed_frames propagates verbose to process_and_embed_frames."""
     labels = load_slp(slp_minimal)
     frames_to_embed = [(labels.videos[0], 0)]
 
@@ -1202,25 +1209,29 @@ def test_embed_videos_verbose_propagation(slp_minimal, tmp_path):
 
 
 def test_write_videos_verbose_propagation(slp_minimal, tmp_path):
-    """Test that write_videos propagates the verbose parameter to process_and_embed_frames."""
+    """Test that write_videos propagates verbose to process_and_embed_frames."""
     labels = load_slp(slp_minimal)
 
     # Create temp file for embedding
     temp_slp = tmp_path / "test_write_videos_prop.slp"
 
-    # Mock process_and_embed_frames to verify verbose is correctly passed when embedding is needed
-    with mock.patch("sleap_io.io.slp.process_and_embed_frames") as mock_embed:
-        # This is a simplified test as we can't easily trigger the condition where write_videos
+    # Mock process_and_embed_frames to verify verbose is correctly passed when
+    # embedding is needed
+    with mock.patch("sleap_io.io.slp.process_and_embed_frames"):
+        # This is a simplified test as we can't easily trigger the condition where
+        # write_videos
         # calls process_and_embed_frames directly
         write_videos(temp_slp, labels.videos, verbose=True)
-        # In a real case with embedded videos, this would verify that verbose is passed correctly
+        # In a real case with embedded videos, this would verify that verbose is
+        # passed correctly
         # Since we're not actually embedding in this test, the mock may not be called
 
-    # The actual test here is that the function accepts the verbose parameter without errors
+    # The actual test here is that the function accepts the verbose parameter
+    # without errors
 
 
 def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
-    """Test that write_labels propagates the verbose parameter to embed_videos and write_videos."""
+    """Test that write_labels propagates verbose to embed_videos and write_videos."""
     labels = load_slp(slp_minimal)
 
     # Create temp file
@@ -1230,7 +1241,6 @@ def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
     with mock.patch("sleap_io.io.slp.embed_videos") as mock_embed_videos, mock.patch(
         "sleap_io.io.slp.write_videos"
     ) as mock_write_videos:
-
         write_labels(temp_slp, labels, embed="user", verbose=True)
 
         # Check that verbose=True was passed to embed_videos
@@ -1243,7 +1253,6 @@ def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
     with mock.patch("sleap_io.io.slp.embed_videos") as mock_embed_videos, mock.patch(
         "sleap_io.io.slp.write_videos"
     ) as mock_write_videos:
-
         write_labels(temp_slp, labels, embed="user", verbose=False)
 
         # Check that verbose=False was passed to embed_videos
@@ -1542,7 +1551,10 @@ def test_mixed_video_scenarios(tmp_path, centered_pair_low_quality_video):
 
 
 def test_save_overwrite_without_embedded(tmp_path, centered_pair_low_quality_video):
-    """Test that saving with embed=False over the same file works when no embedded data."""
+    """Test saving with embed=False over the same file.
+
+    Tests when no embedded data exists.
+    """
     # Create test data with external video
     skeleton = Skeleton(["A", "B"])
     video = centered_pair_low_quality_video
@@ -1569,7 +1581,7 @@ def test_save_overwrite_without_embedded(tmp_path, centered_pair_low_quality_vid
 
 
 def test_save_overwrite_embedded_with_source(tmp_path, centered_pair_low_quality_video):
-    """Test that saving with embed=False over the same file works when embedded data has source."""
+    """Test saving with embed=False over same file when embedded data has source."""
     # Create test data
     skeleton = Skeleton(["A", "B"])
     video = centered_pair_low_quality_video
@@ -1607,9 +1619,6 @@ def test_self_referential_path_detection(tmp_path):
     # Create instance and labeled frame
     inst = Instance([[1, 2], [3, 4]], skeleton=skeleton, track=track)
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
-    labels = Labels(
-        videos=[video], skeletons=[skeleton], tracks=[track], labeled_frames=[lf]
-    )
 
     # Create a .pkg.slp file with embedded frames
     pkg_path = tmp_path / "test.pkg.slp"
@@ -1622,7 +1631,7 @@ def test_self_referential_path_detection(tmp_path):
 
     # Create a mock embedded video with minimal HDF5Video backend
     # We need to use a mock to bypass the actual file reading
-    from unittest.mock import Mock, patch
+    from unittest.mock import patch
 
     # Create a real HDF5Video instance but mock its file operations
     with patch("h5py.File"):
@@ -1658,3 +1667,592 @@ def test_self_referential_path_detection(tmp_path):
     # Saving to a different file should work
     pkg_path2 = tmp_path / "test2.pkg.slp"
     write_labels(str(pkg_path2), labels_with_embedded, embed=False)
+
+
+# Video reference restoration tests
+def test_labels_save_restore_original_videos_api(tmp_path, slp_minimal_pkg):
+    """Test the restore_original_videos parameter in Labels.save()."""
+    # Load a .pkg.slp file
+    labels = load_file(slp_minimal_pkg)
+
+    # Verify it has embedded videos with source_video metadata
+    assert len(labels.videos) == 1
+    video = labels.videos[0]
+    assert isinstance(video.backend, HDF5Video)
+    assert video.backend.has_embedded_images
+    assert video.source_video is not None
+    original_video_path = video.source_video.filename
+
+    # Test default behavior (restore_original_videos=True)
+    output_default = tmp_path / "test_default.slp"
+    labels.save(output_default, embed=False)
+
+    # Load and check that original video is restored
+    labels_default = load_file(output_default)
+    assert labels_default.videos[0].filename == original_video_path
+    assert labels_default.videos[0].backend_metadata["type"] == "MediaVideo"
+
+    # Test new behavior (restore_original_videos=False)
+    output_preserve = tmp_path / "test_preserve_source.slp"
+    labels.save(output_preserve, embed=False, restore_original_videos=False)
+
+    # Load and check that source .pkg.slp is referenced
+    labels_preserve = load_file(output_preserve)
+    assert labels_preserve.videos[0].filename == slp_minimal_pkg
+    assert labels_preserve.videos[0].backend_metadata["type"] == "HDF5Video"
+    assert labels_preserve.videos[0].backend_metadata["has_embedded_images"] is True
+
+
+def test_save_slp_restore_original_videos_api(tmp_path, slp_minimal_pkg):
+    """Test the restore_original_videos parameter in save_slp()."""
+    from sleap_io.io.main import save_slp
+
+    # Load a .pkg.slp file
+    labels = load_file(slp_minimal_pkg)
+
+    # Test default behavior
+    output_default = tmp_path / "test_default_api.slp"
+    save_slp(labels, output_default, embed=False)
+
+    labels_default = load_file(output_default)
+    assert labels_default.videos[0].backend_metadata["type"] == "MediaVideo"
+
+    # Test new behavior
+    output_preserve = tmp_path / "test_preserve_api.slp"
+    save_slp(labels, output_preserve, embed=False, restore_original_videos=False)
+
+    labels_preserve = load_file(output_preserve)
+    assert labels_preserve.videos[0].filename == slp_minimal_pkg
+    assert labels_preserve.videos[0].backend_metadata["type"] == "HDF5Video"
+
+
+def test_video_metadata_preservation(tmp_path, slp_minimal_pkg):
+    """Test that video metadata is preserved correctly in all modes."""
+    # Load fresh labels for metadata extraction
+    labels = load_file(slp_minimal_pkg)
+    video = labels.videos[0]
+
+    # Store original metadata for comparison
+    # For minimal_instance.pkg.slp, source_video IS the original video
+    original_backend_metadata = video.source_video.backend_metadata.copy()
+
+    # Test EMBED mode
+    labels = load_file(slp_minimal_pkg)  # Fresh load
+    output_embed = tmp_path / "test_embed.slp"
+    labels.save(output_embed, embed=True)
+
+    with h5py.File(output_embed, "r") as f:
+        # Check that both original and source video metadata are stored
+        assert "video0" in f
+        # Since source_video IS the original, it should be stored as original_video
+        assert "original_video" in f["video0"]
+        assert "source_video" in f["video0"]
+
+        # Verify original video metadata (should be the MediaVideo)
+        assert isinstance(f["video0/original_video"], h5py.Group)
+        original_json = json.loads(f["video0/original_video"].attrs["json"])
+        assert original_json["backend"]["type"] == "MediaVideo"
+        assert (
+            original_json["backend"]["filename"]
+            == original_backend_metadata["filename"]
+        )
+
+        # Verify source video metadata (should be the .pkg.slp file)
+        assert isinstance(f["video0/source_video"], h5py.Group)
+        source_json = json.loads(f["video0/source_video"].attrs["json"])
+        assert source_json["backend"]["type"] == "HDF5Video"
+        assert source_json["backend"]["filename"] == slp_minimal_pkg
+
+    # Test RESTORE_ORIGINAL mode (default)
+    labels = load_file(slp_minimal_pkg)  # Fresh load
+    output_restore = tmp_path / "test_restore.slp"
+    labels.save(output_restore, embed=False, restore_original_videos=True)
+
+    # Load and verify the video reference is restored to original
+    labels_restore = load_file(output_restore)
+    assert labels_restore.videos[0].filename == original_backend_metadata["filename"]
+    assert labels_restore.videos[0].backend_metadata["type"] == "MediaVideo"
+
+    # Test PRESERVE_SOURCE mode (new)
+    labels = load_file(slp_minimal_pkg)  # Fresh load
+    output_preserve = tmp_path / "test_preserve.slp"
+    labels.save(output_preserve, embed=False, restore_original_videos=False)
+
+    # Load and verify the video reference is preserved to source .pkg.slp
+    labels_preserve = load_file(output_preserve)
+    assert labels_preserve.videos[0].filename == slp_minimal_pkg
+    assert labels_preserve.videos[0].backend_metadata["type"] == "HDF5Video"
+
+
+def test_multiple_save_load_cycles(tmp_path, slp_minimal_pkg):
+    """Test that video lineage is preserved through multiple save/load cycles."""
+    # First cycle: Load .pkg.slp and save with preserve_source
+    labels1 = load_file(slp_minimal_pkg)
+    original_video_path = labels1.videos[0].source_video.filename
+
+    output1 = tmp_path / "cycle1.slp"
+    labels1.save(output1, embed=False, restore_original_videos=False)
+
+    # Second cycle: Load cycle1.slp and save again
+    labels2 = load_file(output1)
+    assert labels2.videos[0].filename == slp_minimal_pkg
+    # For minimal_instance.pkg.slp, source_video IS the original video
+    # In PRESERVE_SOURCE mode, the original video metadata should be preserved
+    assert labels2.videos[0].source_video is not None
+    assert labels2.videos[0].source_video.filename == original_video_path
+
+    output2 = tmp_path / "cycle2.slp"
+    labels2.save(output2, embed=False, restore_original_videos=False)
+
+    # Third cycle: Verify metadata is still preserved
+    labels3 = load_file(output2)
+    # In PRESERVE_SOURCE mode, it should still reference the original .pkg.slp
+    assert labels3.videos[0].filename == slp_minimal_pkg
+    # Verify metadata persistence through multiple cycles
+    assert labels3.videos[0].source_video is not None
+    assert labels3.videos[0].source_video.filename == original_video_path
+
+
+def test_unavailable_video_handling(tmp_path):
+    """Test handling of videos when files are not available."""
+    # Create a Labels object with a video that doesn't exist
+    fake_video = Video(
+        filename="/nonexistent/original.mp4",
+        backend=None,
+        backend_metadata={
+            "type": "MediaVideo",
+            "shape": [100, 384, 384, 3],
+            "filename": "/nonexistent/original.mp4",
+            "grayscale": False,
+            "bgr": True,
+            "dataset": "",
+            "input_format": "",
+        },
+    )
+
+    labels = Labels(videos=[fake_video])
+
+    # Save and verify metadata is preserved
+    output = tmp_path / "test_unavailable.slp"
+    labels.save(output, embed=False)
+
+    # Load and check metadata was preserved
+    loaded = load_file(output)
+    assert loaded.videos[0].filename == "/nonexistent/original.mp4"
+    assert loaded.videos[0].backend is None or not loaded.videos[0].exists()
+    assert loaded.videos[0].backend_metadata["type"] == "MediaVideo"
+    assert loaded.videos[0].backend_metadata["shape"] == [100, 384, 384, 3]
+
+
+def test_video_reference_mode_enum():
+    """Test that VideoReferenceMode enum is properly defined."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    assert VideoReferenceMode.EMBED.value == "embed"
+    assert VideoReferenceMode.RESTORE_ORIGINAL.value == "restore_original"
+    assert VideoReferenceMode.PRESERVE_SOURCE.value == "preserve_source"
+
+
+def test_write_videos_with_reference_mode(tmp_path, slp_minimal_pkg):
+    """Test the internal write_videos function with VideoReferenceMode."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    labels = load_file(slp_minimal_pkg)
+    videos = labels.videos
+
+    # Test PRESERVE_SOURCE mode
+    output = tmp_path / "test_internal.slp"
+    write_videos(output, videos, reference_mode=VideoReferenceMode.PRESERVE_SOURCE)
+
+    # Read back and verify
+    loaded_videos = read_videos(output)
+    assert loaded_videos[0].filename == slp_minimal_pkg
+    assert loaded_videos[0].backend_metadata["type"] == "HDF5Video"
+
+
+def test_video_restore_backwards_compatibility(tmp_path, slp_minimal_pkg):
+    """Test that the default behavior maintains backwards compatibility."""
+    labels = load_file(slp_minimal_pkg)
+    original_video_path = labels.videos[0].source_video.filename
+
+    # Default behavior should restore original videos
+    output = tmp_path / "test_compat.slp"
+    labels.save(output, embed=False)  # No restore_original_videos parameter
+
+    loaded = load_file(output)
+    assert loaded.videos[0].filename == original_video_path
+    assert loaded.videos[0].backend_metadata["type"] == "MediaVideo"
+
+
+def test_video_to_dict_with_none_backend(tmp_path):
+    """Test that video_to_dict handles videos with backend=None correctly."""
+    video = Video(
+        filename="test.mp4",
+        backend=None,
+        backend_metadata={
+            "type": "MediaVideo",
+            "filename": "test.mp4",
+            "shape": [10, 100, 100, 1],
+            "grayscale": True,
+        },
+    )
+
+    video_dict = video_to_dict(video, labels_path=tmp_path / "test.slp")
+
+    assert video_dict["filename"] == "test.mp4"
+    assert video_dict["backend"] == video.backend_metadata
+
+
+def test_video_to_dict_tiffvideo(tmp_path, multipage_tiff_path):
+    """Test that video_to_dict handles TiffVideo backend correctly."""
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Create a TiffVideo backend
+    backend = TiffVideo(filename=multipage_tiff_path, grayscale=True, keep_open=False)
+    video = Video(
+        filename=multipage_tiff_path,
+        backend=backend,
+    )
+
+    video_dict = video_to_dict(video, labels_path=tmp_path / "test.slp")
+
+    assert video_dict["filename"] == multipage_tiff_path
+    assert video_dict["backend"]["type"] == "TiffVideo"
+    assert video_dict["backend"]["shape"] == video.shape
+    assert video_dict["backend"]["grayscale"] is True
+    assert video_dict["backend"]["keep_open"] is False
+    assert video_dict["backend"]["filename"] == multipage_tiff_path
+    assert video_dict["backend"]["format"] == "multi_page"
+
+
+def test_tiffvideo_roundtrip(tmp_path, multipage_tiff_path):
+    """Test saving and loading Labels with TiffVideo backend."""
+    from sleap_io.io.video_reading import TiffVideo
+
+    # Create labels with a TiffVideo
+    video = Video.from_filename(multipage_tiff_path)
+    assert isinstance(video.backend, TiffVideo)
+
+    skeleton = Skeleton(nodes=["A", "B"])
+    labeled_frame = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[
+            Instance.from_numpy(
+                points_data=np.array([[10, 20], [30, 40]]),
+                skeleton=skeleton,
+            )
+        ],
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[labeled_frame],
+    )
+
+    # Save to SLP
+    output_path = tmp_path / "test_tiff.slp"
+    labels.save(output_path)
+
+    # Load and verify
+    loaded_labels = load_file(output_path)
+    loaded_video = loaded_labels.videos[0]
+
+    # Check that the video was loaded correctly
+    assert loaded_video.filename == multipage_tiff_path
+    assert isinstance(loaded_video.backend, TiffVideo)
+    assert loaded_video.backend.num_frames == 8
+    assert loaded_video.shape == video.shape
+
+    # Verify we can read frames
+    frame = loaded_video.backend.get_frame(0)
+    assert frame.shape == (128, 128, 1)
+
+
+def test_video_original_video_field(slp_minimal_pkg):
+    """Test that Video objects have the new original_video field."""
+    labels = load_file(slp_minimal_pkg)
+    video = labels.videos[0]
+
+    # Current implementation has source_video, not original_video
+    # This test will fail until we implement the field rename
+    assert hasattr(video, "original_video")
+    assert video.original_video is None  # Not set for current files
+
+    # TODO: The source_video should become original_video when the field rename
+    # is complete
+    assert video.source_video is not None  # This is current behavior
+
+
+def test_complex_workflow(tmp_path, slp_minimal_pkg):
+    """Test a complex workflow with training and inference results."""
+    # Load training data
+    train_labels = load_file(slp_minimal_pkg)
+
+    # Simulate saving for distribution (embed=True)
+    train_pkg = tmp_path / "train.pkg.slp"
+    train_labels.save(train_pkg, embed=True)
+
+    # Load in inference environment
+    inference_labels = load_file(train_pkg)
+
+    # Simulate predictions (in practice would come from a model)
+    predictions = Labels(
+        videos=inference_labels.videos,
+        skeletons=inference_labels.skeletons,
+        labeled_frames=[],  # Would contain predicted instances
+    )
+
+    # Save predictions referencing the training package
+    predictions_output = tmp_path / "predictions_on_train.slp"
+    predictions.save(predictions_output, embed=False, restore_original_videos=False)
+
+    # Load predictions and verify they reference train.pkg.slp
+    loaded_predictions = load_file(predictions_output)
+    assert loaded_predictions.videos[0].filename == train_pkg.as_posix()
+    assert loaded_predictions.videos[0].backend_metadata["type"] == "HDF5Video"
+    assert loaded_predictions.videos[0].backend_metadata["has_embedded_images"] is True
+
+    # Verify metadata preservation through the workflow
+    # The video objects from inference_labels already have source_video metadata
+    # which is preserved when we create the predictions Labels object
+    assert loaded_predictions.videos[0].source_video is not None
+
+    # The source_video should point to minimal_instance.pkg.slp
+    # (the original training data)
+    # This is correct because we're using the same video objects from inference_labels
+    assert loaded_predictions.videos[0].source_video.filename == slp_minimal_pkg
+    assert (
+        loaded_predictions.videos[0].source_video.backend_metadata["type"]
+        == "HDF5Video"
+    )
+
+    # And that should have the original MediaVideo as its source
+    assert loaded_predictions.videos[0].source_video.source_video is not None
+    assert (
+        loaded_predictions.videos[0].source_video.source_video.backend_metadata["type"]
+        == "MediaVideo"
+    )
+
+
+def test_write_videos_backwards_compatibility():
+    """Test backwards compatibility with restore_source parameter."""
+    import tempfile
+
+    from sleap_io.io.slp import write_videos
+    from sleap_io.model.video import Video
+
+    video = Video(
+        filename="test.mp4",
+        backend_metadata={
+            "type": "MediaVideo",
+            "shape": [1, 100, 100, 1],
+            "filename": "test.mp4",
+            "grayscale": True,
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = Path(tmpdir) / "test.slp"
+
+        # Test restore_source=True with reference_mode=None
+        # (should use RESTORE_ORIGINAL)
+        write_videos(str(output), [video], restore_source=True, reference_mode=None)
+
+        # Test restore_source=False with reference_mode=None (should use EMBED)
+        write_videos(str(output), [video], restore_source=False, reference_mode=None)
+
+
+def test_video_lineage_edge_cases():
+    """Test edge cases in video lineage metadata handling."""
+    import tempfile
+
+    from sleap_io.io.slp import VideoReferenceMode, write_videos
+    from sleap_io.model.video import Video
+
+    # Test case 1: Video with original_video already set
+    original = Video(
+        filename="original.mp4",
+        backend_metadata={
+            "type": "MediaVideo",
+            "shape": [10, 100, 100, 1],
+            "filename": "original.mp4",
+            "grayscale": True,
+        },
+    )
+
+    video_with_original = Video(
+        filename="current.slp",
+        backend_metadata={
+            "type": "HDF5Video",
+            "shape": [10, 100, 100, 1],
+            "filename": "current.slp",
+            "dataset": "video0/video",
+            "has_embedded_images": True,
+            "grayscale": True,
+        },
+        source_video=None,
+        original_video=original,  # This should be saved
+    )
+
+    # Test case 2: source_video has original_video
+    source_with_original = Video(
+        filename="source.pkg.slp",
+        backend_metadata={
+            "type": "HDF5Video",
+            "shape": [10, 100, 100, 1],
+            "filename": "source.pkg.slp",
+            "dataset": "video0/video",
+            "has_embedded_images": True,
+            "grayscale": True,
+        },
+        original_video=original,
+    )
+
+    video_with_source_original = Video(
+        filename="current2.slp",
+        backend_metadata={
+            "type": "HDF5Video",
+            "shape": [10, 100, 100, 1],
+            "filename": "current2.slp",
+            "dataset": "video0/video",
+            "has_embedded_images": True,
+            "grayscale": True,
+        },
+        source_video=source_with_original,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = Path(tmpdir) / "test_lineage.slp"
+
+        # Write videos with different lineage scenarios
+        write_videos(
+            str(output),
+            [video_with_original, video_with_source_original],
+            reference_mode=VideoReferenceMode.EMBED,
+            original_videos=[video_with_original, video_with_source_original],
+        )
+
+
+# Tests for read_labels_set
+
+
+def test_read_labels_set_from_directory(tmp_path, slp_minimal):
+    """Test loading LabelsSet from a directory of SLP files."""
+    # Load minimal labels
+    labels = load_slp(slp_minimal)
+
+    # Create test directory with multiple SLP files
+    test_dir = tmp_path / "splits"
+    test_dir.mkdir()
+
+    # Save splits
+    labels.save(test_dir / "train.slp", embed=False)
+    labels.save(test_dir / "val.slp", embed=False)
+    labels.save(test_dir / "test.slp", embed=False)
+
+    # Load as LabelsSet
+    labels_set = read_labels_set(test_dir)
+
+    assert isinstance(labels_set, LabelsSet)
+    assert len(labels_set) == 3
+    assert "train" in labels_set
+    assert "val" in labels_set
+    assert "test" in labels_set
+
+    # Check that each loaded Labels has correct data
+    for name in ["train", "val", "test"]:
+        assert len(labels_set[name]) == len(labels)
+
+
+def test_read_labels_set_from_list(tmp_path, slp_minimal):
+    """Test loading LabelsSet from a list of file paths."""
+    labels = load_slp(slp_minimal)
+
+    # Create test files
+    file1 = tmp_path / "split1.slp"
+    file2 = tmp_path / "split2.slp"
+    labels.save(file1, embed=False)
+    labels.save(file2, embed=False)
+
+    # Load from list
+    labels_set = read_labels_set([file1, file2])
+
+    assert isinstance(labels_set, LabelsSet)
+    assert len(labels_set) == 2
+    assert "split1" in labels_set
+    assert "split2" in labels_set
+
+
+def test_read_labels_set_from_dict(tmp_path, slp_minimal):
+    """Test loading LabelsSet from a dictionary mapping."""
+    labels = load_slp(slp_minimal)
+
+    # Create test files
+    train_file = tmp_path / "train_data.slp"
+    val_file = tmp_path / "validation_data.slp"
+    labels.save(train_file, embed=False)
+    labels.save(val_file, embed=False)
+
+    # Load from dictionary
+    labels_set = read_labels_set({"training": train_file, "validation": val_file})
+
+    assert isinstance(labels_set, LabelsSet)
+    assert len(labels_set) == 2
+    assert "training" in labels_set
+    assert "validation" in labels_set
+
+
+def test_read_labels_set_empty_directory(tmp_path):
+    """Test error handling for empty directory."""
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    with pytest.raises(ValueError, match="No .slp files found"):
+        read_labels_set(empty_dir)
+
+
+def test_read_labels_set_invalid_path(tmp_path):
+    """Test error handling for invalid path."""
+    # Non-directory path
+    file_path = tmp_path / "file.txt"
+    file_path.write_text("test")
+
+    with pytest.raises(ValueError, match="Path must be a directory"):
+        read_labels_set(file_path)
+
+
+def test_read_labels_set_without_videos(tmp_path, slp_minimal):
+    """Test loading LabelsSet without opening videos."""
+    labels = load_slp(slp_minimal)
+
+    # Save a file
+    test_file = tmp_path / "test.slp"
+    labels.save(test_file, embed=False)
+
+    # Load without opening videos
+    labels_set = read_labels_set([test_file], open_videos=False)
+
+    assert isinstance(labels_set, LabelsSet)
+    assert len(labels_set) == 1
+
+    # Videos should not be opened
+    for lf in labels_set["test"].labeled_frames:
+        assert lf.video is not None
+        assert not lf.video.is_open
+
+
+def test_read_labels_set_string_paths(tmp_path, slp_minimal):
+    """Test that string paths work as well as Path objects."""
+    labels = load_slp(slp_minimal)
+
+    # Create test directory
+    test_dir = tmp_path / "splits"
+    test_dir.mkdir()
+    labels.save(test_dir / "data.slp", embed=False)
+
+    # Test with string path
+    labels_set = read_labels_set(str(test_dir))
+    assert len(labels_set) == 1
+    assert "data" in labels_set

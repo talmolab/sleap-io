@@ -1,23 +1,24 @@
 """Test methods and functions in the sleap_io.model.labels file."""
 
-from numpy.testing import assert_equal, assert_allclose
+import copy
+from pathlib import Path
+
+import numpy as np
 import pytest
+from numpy.testing import assert_allclose, assert_equal
+
 from sleap_io import (
-    Video,
-    Skeleton,
     Instance,
-    PredictedInstance,
     LabeledFrame,
-    Track,
-    SuggestionFrame,
+    PredictedInstance,
     RecordingSession,
+    Skeleton,
+    SuggestionFrame,
+    Track,
+    Video,
     load_slp,
-    load_video,
 )
 from sleap_io.model.labels import Labels
-import numpy as np
-from pathlib import Path
-import copy
 
 
 def test_labels():
@@ -37,7 +38,7 @@ def test_labels():
     )
 
     assert len(labels) == 1
-    assert type(labels[0]) == LabeledFrame
+    assert type(labels[0]) is LabeledFrame
     assert labels[0].frame_idx == 0
 
     with pytest.raises(IndexError):
@@ -565,12 +566,15 @@ def test_split(slp_real_data, tmp_path):
         Path(split2_.video.filename).as_posix()
         == (tmp_path / "split2.pkg.slp").as_posix()
     )
+    # Check original_video field for the ultimate source
+    assert hasattr(split1_.video, "original_video")
     assert (
-        split1_.video.source_video.filename
+        Path(split1_.video.original_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
+    assert hasattr(split2_.video, "original_video")
     assert (
-        split2_.video.source_video.filename
+        Path(split2_.video.original_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
 
@@ -633,7 +637,7 @@ def test_make_training_splits_save(slp_real_data, tmp_path):
 
 
 @pytest.mark.parametrize("embed", [True, False])
-def test_make_training_splits_save(slp_real_data, tmp_path, embed):
+def test_make_training_splits_save_with_embed(slp_real_data, tmp_path, embed):
     labels = load_slp(slp_real_data)
 
     train, val, test = labels.make_training_splits(
@@ -912,7 +916,8 @@ def test_labels_numpy_user_instances():
 
     # Test 2: For untracked instances
     untracked = labels.numpy(untracked=True)
-    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted], 2 nodes, 2 coordinates)
+    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted],
+    # 2 nodes, 2 coordinates)
     assert untracked.shape == (3, 2, 2, 2)
     # Frame0 should have user instance first, then predicted instance track2
     assert_equal(untracked[0, 0], [[10, 10], [20, 20]])
@@ -926,7 +931,8 @@ def test_labels_numpy_user_instances():
 
     # Test 3: with return_confidence=True
     untracked_conf = labels.numpy(untracked=True, return_confidence=True)
-    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted], 2 nodes, 3 values)
+    # Shape should be (3 frames, max_instances_per_frame=2 [user and predicted],
+    # 2 nodes, 3 values)
     assert untracked_conf.shape == (3, 2, 2, 3)
     # Frame0 should have user instance first, then predicted instance track2
     assert_equal(untracked_conf[0, 0, 0, 2], 1.0)
@@ -953,7 +959,8 @@ def test_labels_numpy_user_instances():
 
     # Test 5: For untracked instances with user_instances=False
     pred_only_untracked = labels.numpy(untracked=True, user_instances=False)
-    # Shape should be (3 frames, max_predicted_instances_per_frame=2, 2 nodes, 2 coordinates)
+    # Shape should be (3 frames, max_predicted_instances_per_frame=2, 2 nodes,
+    # 2 coordinates)
     assert pred_only_untracked.shape == (3, 2, 2, 2)
     # Frame0 should have both predicted instances
     assert_equal(pred_only_untracked[0, 0], [[11, 11], [21, 21]])
@@ -997,7 +1004,8 @@ def test_labels_numpy_user_instances():
 def test_update_from_numpy(labels_predictions):
     """Test updating instances from numpy arrays."""
     import numpy as np
-    from sleap_io import Track, PredictedInstance
+
+    from sleap_io import Track
 
     # Get original numpy representation
     original_arr = labels_predictions.numpy(return_confidence=True)
@@ -1047,7 +1055,8 @@ def test_update_from_numpy(labels_predictions):
     # Verify the new instance was created
     first_frame = labels_copy.labeled_frames[0]
 
-    # Check if a track with the name "new_track" exists in any of the first frame's instances
+    # Check if a track with the name "new_track" exists in any of the first
+    # frame's instances
     has_new_track = any(
         inst.track and inst.track.name == "new_track" for inst in first_frame.instances
     )
@@ -1069,7 +1078,8 @@ def test_update_from_numpy_errors():
     """Test error handling in update_from_numpy."""
     import numpy as np
     import pytest
-    from sleap_io import Labels, Video, Skeleton, Track
+
+    from sleap_io import Labels, Skeleton, Track, Video
 
     # Create a basic labels object
     labels = Labels()
@@ -1108,7 +1118,6 @@ def test_update_from_numpy_errors():
 
 def test_update_from_numpy_no_create_missing(labels_predictions):
     """Test update_from_numpy with create_missing=False."""
-
     # Get original numpy representation and copy labels
     original_arr = labels_predictions.numpy(return_confidence=True)
     labels_copy = copy.deepcopy(labels_predictions)
@@ -1133,14 +1142,13 @@ def test_update_from_numpy_no_create_missing(labels_predictions):
     labels_copy.update_from_numpy(extended_arr, create_missing=False)
 
     # The frame count should not have changed
-    assert (
-        len(labels_copy.labeled_frames) == initial_frame_count
-    ), "New frames should not be created with create_missing=False"
+    assert len(labels_copy.labeled_frames) == initial_frame_count, (
+        "New frames should not be created with create_missing=False"
+    )
 
 
 def test_update_from_numpy_update_user_instances(labels_predictions):
     """Test updating user instances with update_from_numpy."""
-
     # Get original data
     labels_copy = copy.deepcopy(labels_predictions)
     video = labels_copy.videos[0]
@@ -1149,7 +1157,6 @@ def test_update_from_numpy_update_user_instances(labels_predictions):
 
     # Find an existing frame to modify
     existing_frame = labels_copy.labeled_frames[0]
-    frame_idx = existing_frame.frame_idx
 
     # Clear and add our test instance
     existing_frame.instances = []
@@ -1191,17 +1198,16 @@ def test_update_from_numpy_update_user_instances(labels_predictions):
 
     # Verify the user instance was updated
     points = updated_instance.numpy()
-    assert np.allclose(
-        points[0], [150.0, 160.0]
-    ), "User instance first point should be updated"
-    assert np.allclose(
-        points[1], [170.0, 180.0]
-    ), "User instance second point should be updated"
+    assert np.allclose(points[0], [150.0, 160.0]), (
+        "User instance first point should be updated"
+    )
+    assert np.allclose(points[1], [170.0, 180.0]), (
+        "User instance second point should be updated"
+    )
 
 
 def test_update_from_numpy_without_confidence():
     """Test update_from_numpy with array without confidence scores."""
-
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1236,7 +1242,8 @@ def test_update_from_numpy_without_confidence():
 def test_update_from_numpy_int_video_index():
     """Test update_from_numpy with integer video index."""
     import numpy as np
-    from sleap_io import Labels, Video, Skeleton, Track
+
+    from sleap_io import Labels, Skeleton, Track, Video
 
     # Create a labels object with multiple videos
     labels = Labels()
@@ -1261,14 +1268,13 @@ def test_update_from_numpy_int_video_index():
 
     # Verify a new frame was created for the second video
     assert len(labels.labeled_frames) == 1, "Should create one frame"
-    assert (
-        labels.labeled_frames[0].video == video2
-    ), "Should create frame for second video"
+    assert labels.labeled_frames[0].video == video2, (
+        "Should create frame for second video"
+    )
 
 
 def test_update_from_numpy_special_case():
     """Test the special case handling in update_from_numpy."""
-
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1313,23 +1319,25 @@ def test_update_from_numpy_special_case():
         (inst for inst in labels[0].instances if inst.track == track1), None
     )
     assert track1_instance is not None, "No instance found for track1"
-    assert np.allclose(
-        track1_instance.numpy()[0], [10.0, 20.0]
-    ), "First track instance not updated correctly"
+    assert np.allclose(track1_instance.numpy()[0], [10.0, 20.0]), (
+        "First track instance not updated correctly"
+    )
 
     # Find instance with track2
     track2_instance = next(
         (inst for inst in labels[0].instances if inst.track == track2), None
     )
     assert track2_instance is not None, "No instance created for track2"
-    assert np.allclose(
-        track2_instance.numpy()[0], [30.0, 40.0]
-    ), "Second track instance not created correctly"
+    assert np.allclose(track2_instance.numpy()[0], [30.0, 40.0]), (
+        "Second track instance not created correctly"
+    )
 
 
 def test_update_from_numpy_confidence_scores():
-    """Test updating confidence scores in existing predicted instances with update_from_numpy."""
+    """Test updating confidence scores in existing predicted instances.
 
+    Uses update_from_numpy to update scores.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1366,29 +1374,28 @@ def test_update_from_numpy_confidence_scores():
 
     # Verify the instance's confidence scores were updated
     updated_inst = labels[0].instances[0]
-    assert isinstance(
-        updated_inst, PredictedInstance
-    ), "Instance should remain a PredictedInstance"
-    assert np.isclose(
-        updated_inst["A"]["score"], 0.95
-    ), "First node confidence score should be updated"
-    assert np.isclose(
-        updated_inst["B"]["score"], 0.98
-    ), "Second node confidence score should be updated"
+    assert isinstance(updated_inst, PredictedInstance), (
+        "Instance should remain a PredictedInstance"
+    )
+    assert np.isclose(updated_inst["A"]["score"], 0.95), (
+        "First node confidence score should be updated"
+    )
+    assert np.isclose(updated_inst["B"]["score"], 0.98), (
+        "Second node confidence score should be updated"
+    )
 
     # Check with numpy method that includes scores
     points_with_scores = updated_inst.numpy(scores=True)
-    assert np.isclose(
-        points_with_scores[0, 2], 0.95
-    ), "First node confidence should be updated in numpy output"
-    assert np.isclose(
-        points_with_scores[1, 2], 0.98
-    ), "Second node confidence should be updated in numpy output"
+    assert np.isclose(points_with_scores[0, 2], 0.95), (
+        "First node confidence should be updated in numpy output"
+    )
+    assert np.isclose(points_with_scores[1, 2], 0.98), (
+        "Second node confidence should be updated in numpy output"
+    )
 
 
 def test_update_from_numpy_inferred_tracks():
     """Test update_from_numpy using tracks inferred from labels."""
-
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1435,21 +1442,20 @@ def test_update_from_numpy_inferred_tracks():
     # Find instance with track1
     track1_instance = next((inst for inst in instances if inst.track == track1), None)
     assert track1_instance is not None, "No instance found for track1"
-    assert np.allclose(
-        track1_instance.numpy()[0], [15.0, 25.0]
-    ), "First track instance not updated correctly"
+    assert np.allclose(track1_instance.numpy()[0], [15.0, 25.0]), (
+        "First track instance not updated correctly"
+    )
 
     # Find instance with track2
     track2_instance = next((inst for inst in instances if inst.track == track2), None)
     assert track2_instance is not None, "No instance created for track2"
-    assert np.allclose(
-        track2_instance.numpy()[0], [50.0, 60.0]
-    ), "Second track instance not created correctly"
+    assert np.allclose(track2_instance.numpy()[0], [50.0, 60.0]), (
+        "Second track instance not created correctly"
+    )
 
 
 def test_update_from_numpy_special_case_new_track():
     """Test the special case for adding a new track in update_from_numpy."""
-
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1492,17 +1498,16 @@ def test_update_from_numpy_special_case_new_track():
 
     # Verify it was created and has the right data
     assert new_track_instance is not None, "New track instance should be created"
-    assert np.allclose(
-        new_track_instance.numpy()[0], [30.0, 40.0]
-    ), "New track data should be set correctly"
-    assert np.isclose(
-        new_track_instance.numpy(scores=True)[0, 2], 0.8
-    ), "New track confidence should be set"
+    assert np.allclose(new_track_instance.numpy()[0], [30.0, 40.0]), (
+        "New track data should be set correctly"
+    )
+    assert np.isclose(new_track_instance.numpy(scores=True)[0, 2], 0.8), (
+        "New track confidence should be set"
+    )
 
 
 def test_update_from_numpy_nan_handling():
     """Test handling of NaN values in update_from_numpy."""
-
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1562,15 +1567,17 @@ def test_update_from_numpy_nan_handling():
     if isinstance(updated_inst, PredictedInstance):
         scores = updated_inst.numpy(scores=True)[:, 2]
         assert np.isclose(scores[0], 0.95), "First point confidence should be updated"
-        assert np.isclose(
-            scores[1], 0.8
-        ), "Second point confidence should remain unchanged"
+        assert np.isclose(scores[1], 0.8), (
+            "Second point confidence should remain unchanged"
+        )
         assert np.isclose(scores[2], 0.98), "Third point confidence should be updated"
 
 
 def test_update_from_numpy_more_tracks_than_provided():
-    """Test the special case in update_from_numpy where array has more tracks than provided track list."""
+    """Test update_from_numpy special case with more tracks in array.
 
+    Tests when array has more tracks than the provided track list.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1609,7 +1616,8 @@ def test_update_from_numpy_more_tracks_than_provided():
     arr[0, 2, 0, 1] = 60.0  # y for first node
     arr[0, 2, 0, 2] = 1.0  # confidence
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 
     # Update with our array - this will trigger the special case
@@ -1624,9 +1632,9 @@ def test_update_from_numpy_more_tracks_than_provided():
             break
 
     assert track1_instance is not None, "track1 instance should be created"
-    assert np.allclose(
-        track1_instance.numpy()[0], [10.0, 20.0]
-    ), "Track1 coordinates should match"
+    assert np.allclose(track1_instance.numpy()[0], [10.0, 20.0]), (
+        "Track1 coordinates should match"
+    )
 
     # Verify track3's instance was created correctly
     track3_instance = None
@@ -1639,9 +1647,9 @@ def test_update_from_numpy_more_tracks_than_provided():
     # track3 (last in provided_tracks) should be assigned the data from arr[0, 1]
     # (i.e., the second column in the array)
     assert track3_instance is not None, "track3 instance should be created"
-    assert np.allclose(
-        track3_instance.numpy()[0], [30.0, 40.0]
-    ), "Track3 coordinates should match"
+    assert np.allclose(track3_instance.numpy()[0], [30.0, 40.0]), (
+        "Track3 coordinates should match"
+    )
 
     # Verify there's no extra instance with track2
     track2_instance = None
@@ -1654,8 +1662,10 @@ def test_update_from_numpy_more_tracks_than_provided():
 
 
 def test_update_from_numpy_special_case_without_confidence():
-    """Test the special case in update_from_numpy where array has more tracks than provided tracks list, without confidence scores."""
+    """Test update_from_numpy special case with more tracks in array.
 
+    Tests case without confidence scores.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1691,7 +1701,8 @@ def test_update_from_numpy_special_case_without_confidence():
     arr[0, 2, 0, 0] = 50.0  # x for first node
     arr[0, 2, 0, 1] = 60.0  # y for first node
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     # and ensure we're testing the "else:" branch (no confidence scores)
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 
@@ -1706,9 +1717,9 @@ def test_update_from_numpy_special_case_without_confidence():
             break
 
     assert track1_instance is not None, "track1 instance should be created"
-    assert np.allclose(
-        track1_instance.numpy()[0], [10.0, 20.0]
-    ), "Track1 coordinates should match"
+    assert np.allclose(track1_instance.numpy()[0], [10.0, 20.0]), (
+        "Track1 coordinates should match"
+    )
 
     # Verify track3's instance was created correctly using data from the last column
     track3_instance = None
@@ -1718,23 +1729,22 @@ def test_update_from_numpy_special_case_without_confidence():
             break
 
     assert track3_instance is not None, "track3 instance should be created"
-    assert np.allclose(
-        track3_instance.numpy()[0], [30.0, 40.0]
-    ), "Track3 coordinates should match"
+    assert np.allclose(track3_instance.numpy()[0], [30.0, 40.0]), (
+        "Track3 coordinates should match"
+    )
 
     # Verify that confidence scores were set to 1.0 by default
     if isinstance(track3_instance, PredictedInstance):
         # Convert the points to a numpy array with scores
         points_with_scores = track3_instance.numpy(scores=True)
         # Check if any scores are close to 1.0 (default value)
-        assert np.isclose(
-            points_with_scores[0, 2], 1.0
-        ), "Default confidence score should be 1.0"
+        assert np.isclose(points_with_scores[0, 2], 1.0), (
+            "Default confidence score should be 1.0"
+        )
 
 
-def test_update_from_numpy_special_case_new_track():
+def test_update_from_numpy_special_case_new_track_v2():
     """Test the special case for adding a new track in update_from_numpy."""
-
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1777,17 +1787,16 @@ def test_update_from_numpy_special_case_new_track():
 
     # Verify it was created and has the right data
     assert new_track_instance is not None, "New track instance should be created"
-    assert np.allclose(
-        new_track_instance.numpy()[0], [30.0, 40.0]
-    ), "New track data should be set correctly"
-    assert np.isclose(
-        new_track_instance.numpy(scores=True)[0, 2], 0.8
-    ), "New track confidence should be set"
+    assert np.allclose(new_track_instance.numpy()[0], [30.0, 40.0]), (
+        "New track data should be set correctly"
+    )
+    assert np.isclose(new_track_instance.numpy(scores=True)[0, 2], 0.8), (
+        "New track confidence should be set"
+    )
 
 
-def test_update_from_numpy_nan_handling():
+def test_update_from_numpy_nan_handling_v2():
     """Test handling of NaN values in update_from_numpy."""
-
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1847,15 +1856,17 @@ def test_update_from_numpy_nan_handling():
     if isinstance(updated_inst, PredictedInstance):
         scores = updated_inst.numpy(scores=True)[:, 2]
         assert np.isclose(scores[0], 0.95), "First point confidence should be updated"
-        assert np.isclose(
-            scores[1], 0.8
-        ), "Second point confidence should remain unchanged"
+        assert np.isclose(scores[1], 0.8), (
+            "Second point confidence should remain unchanged"
+        )
         assert np.isclose(scores[2], 0.98), "Third point confidence should be updated"
 
 
-def test_update_from_numpy_more_tracks_than_provided():
-    """Test the special case in update_from_numpy where array has more tracks than provided track list."""
+def test_update_from_numpy_more_tracks_than_provided_v2():
+    """Test update_from_numpy special case with more tracks in array.
 
+    Tests when array has more tracks than the provided track list.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1894,7 +1905,8 @@ def test_update_from_numpy_more_tracks_than_provided():
     arr[0, 2, 0, 1] = 60.0  # y for first node
     arr[0, 2, 0, 2] = 1.0  # confidence
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 
     # Update with our array - this will trigger the special case
@@ -1909,9 +1921,9 @@ def test_update_from_numpy_more_tracks_than_provided():
             break
 
     assert track1_instance is not None, "track1 instance should be created"
-    assert np.allclose(
-        track1_instance.numpy()[0], [10.0, 20.0]
-    ), "Track1 coordinates should match"
+    assert np.allclose(track1_instance.numpy()[0], [10.0, 20.0]), (
+        "Track1 coordinates should match"
+    )
 
     # Verify track3's instance was created correctly
     track3_instance = None
@@ -1924,9 +1936,9 @@ def test_update_from_numpy_more_tracks_than_provided():
     # track3 (last in provided_tracks) should be assigned the data from arr[0, 1]
     # (i.e., the second column in the array)
     assert track3_instance is not None, "track3 instance should be created"
-    assert np.allclose(
-        track3_instance.numpy()[0], [30.0, 40.0]
-    ), "Track3 coordinates should match"
+    assert np.allclose(track3_instance.numpy()[0], [30.0, 40.0]), (
+        "Track3 coordinates should match"
+    )
 
     # Verify there's no extra instance with track2
     track2_instance = None
@@ -1938,9 +1950,11 @@ def test_update_from_numpy_more_tracks_than_provided():
     assert track2_instance is None, "Should not create an instance for track2"
 
 
-def test_update_from_numpy_special_case_without_confidence():
-    """Test the special case in update_from_numpy where array has more tracks than provided tracks list, without confidence scores."""
+def test_update_from_numpy_special_case_without_confidence_v2():
+    """Test update_from_numpy special case with more tracks in array.
 
+    Tests case without confidence scores.
+    """
     # Create a basic labels object
     labels = Labels()
     video = Video("test.mp4")
@@ -1976,7 +1990,8 @@ def test_update_from_numpy_special_case_without_confidence():
     arr[0, 2, 0, 0] = 50.0  # x for first node
     arr[0, 2, 0, 1] = 60.0  # y for first node
 
-    # The key to hit the special case: provide a tracks list SHORTER than array tracks dimension
+    # The key to hit the special case: provide a tracks list SHORTER than array
+    # tracks dimension
     # and ensure we're testing the "else:" branch (no confidence scores)
     provided_tracks = [track1, track3]  # Only providing track1 and track3
 
@@ -1991,9 +2006,9 @@ def test_update_from_numpy_special_case_without_confidence():
             break
 
     assert track1_instance is not None, "track1 instance should be created"
-    assert np.allclose(
-        track1_instance.numpy()[0], [10.0, 20.0]
-    ), "Track1 coordinates should match"
+    assert np.allclose(track1_instance.numpy()[0], [10.0, 20.0]), (
+        "Track1 coordinates should match"
+    )
 
     # Verify track3's instance was created correctly using data from the last column
     track3_instance = None
@@ -2003,23 +2018,22 @@ def test_update_from_numpy_special_case_without_confidence():
             break
 
     assert track3_instance is not None, "track3 instance should be created"
-    assert np.allclose(
-        track3_instance.numpy()[0], [30.0, 40.0]
-    ), "Track3 coordinates should match"
+    assert np.allclose(track3_instance.numpy()[0], [30.0, 40.0]), (
+        "Track3 coordinates should match"
+    )
 
     # Verify that confidence scores were set to 1.0 by default
     if isinstance(track3_instance, PredictedInstance):
         # Convert the points to a numpy array with scores
         points_with_scores = track3_instance.numpy(scores=True)
         # Check if any scores are close to 1.0 (default value)
-        assert np.isclose(
-            points_with_scores[0, 2], 1.0
-        ), "Default confidence score should be 1.0"
+        assert np.isclose(points_with_scores[0, 2], 1.0), (
+            "Default confidence score should be 1.0"
+        )
 
 
 def test_labels_numpy_with_confidence(labels_predictions: Labels):
     """Test the numpy method with confidence scores enabled."""
-
     # Test getting numpy array with confidence scores
     tracks_arr_with_conf = labels_predictions.numpy(return_confidence=True)
     assert tracks_arr_with_conf.shape[3] == 3  # x, y, confidence

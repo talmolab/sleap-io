@@ -24,6 +24,14 @@
 
 ::: sleap_io.save_labelstudio
 
+::: sleap_io.load_dlc
+
+::: sleap_io.load_ultralytics
+
+::: sleap_io.save_ultralytics
+
+::: sleap_io.load_labels_set
+
 ::: sleap_io.load_skeleton
 
 ::: sleap_io.save_skeleton

@@ -1,7 +1,8 @@
 """Tests for methods in the sleap_io.model.skeleton file."""
 
 import pytest
-from sleap_io.model.skeleton import Node, Edge, Symmetry, Skeleton
+
+from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 
 
 def test_edge():
@@ -32,7 +33,7 @@ def test_skeleton():
     skel = Skeleton(["A", "B"])
     assert skel.node_names == ["A", "B"]
     for node in skel.nodes:
-        assert type(node) == Node
+        assert type(node) is Node
 
     skel = Skeleton(["A", "B"], edges=[("A", "B")])
     assert skel.edges[0].source == skel.nodes[0]

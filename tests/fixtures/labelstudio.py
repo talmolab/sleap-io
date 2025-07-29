@@ -1,13 +1,16 @@
 """Fixtures that return paths to label-studio .json files."""
 
 import pytest
-from sleap_io import Skeleton, Node, Edge
+
+from sleap_io import Edge, Node, Skeleton
 
 
 @pytest.fixture
 def ls_multianimal():
-    """Typical label studio file from a multi-animal DLC project (mixes multi-animal
-    bodyparts and unique bodyparts."""
+    """Typical label studio file from a multi-animal DLC project.
+
+    This mixes multi-animal bodyparts and unique bodyparts.
+    """
     nodes = [
         Node("pup_snout"),
         Node("pup_neck"),

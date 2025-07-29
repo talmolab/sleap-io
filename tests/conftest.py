@@ -1,8 +1,10 @@
 """Provide fixtures for the entire parent directory."""
 
-from tests.fixtures.slp import *
-from tests.fixtures.labels import *
-from tests.fixtures.labelstudio import *
-from tests.fixtures.videos import *
-from tests.fixtures.jabs import *
-from tests.fixtures.camera import *
+from tests.fixtures.camera import *  # noqa: F403
+from tests.fixtures.dlc import *  # noqa: F403
+from tests.fixtures.jabs import *  # noqa: F403
+from tests.fixtures.labels import *  # noqa: F403
+from tests.fixtures.labelstudio import *  # noqa: F403
+from tests.fixtures.slp import *  # noqa: F403
+from tests.fixtures.ultralytics import *  # noqa: F403
+from tests.fixtures.videos import *  # noqa: F403

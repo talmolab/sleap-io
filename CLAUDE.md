@@ -39,11 +39,9 @@ pip install -e .[dev]
 
 ### Linting
 ```bash
-# Format check (MUST pass before committing)
-black --check sleap_io tests
-
-# Docstring style check
-pydocstyle --convention=google sleap_io/
+# Linting and format check (MUST pass before committing)
+ruff check sleap_io tests
+ruff format --check sleap_io tests
 ```
 
 ### Testing
@@ -72,10 +70,10 @@ mike serve
 
 ## Code Style Requirements
 
-1. **Formatting**: Use `black` with max line length of 88
+1. **Formatting**: Use `ruff format` with max line length of 88
 2. **Docstrings**: Google style, document "Attributes" section in class-level docstring
 3. **Type hints**: Always include for function arguments and return types
-4. **Import order**: Standard library, third-party, local (enforced by black)
+4. **Import order**: Standard library, third-party, local (enforced by ruff)
 
 ## Testing Guidelines
 
@@ -114,3 +112,7 @@ pytest tests/path/to/test_module.py::TestClass::test_method -v
 ## Testing Best Practices
 
 - When adding tests, use global imports at the module-level rather than importing locally within a test function unless strictly needed (e.g., for import checking). Analyze current imports to find the best place to add the import statement and do not duplicate existing imports.
+
+## Known Issues and Workarounds
+
+- If you get an opencv/cv2 issue when running tests, try running the entire module, or entire test suite instead (this is an opencv issue with importing submodules of the tests).

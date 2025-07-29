@@ -1,31 +1,32 @@
 """Functions to write and read from the neurodata without borders (NWB) format."""
 
-from copy import deepcopy
-from typing import List, Optional, Union, Dict
-from pathlib import Path
 import datetime
-import uuid
 import re
+import uuid
+from copy import deepcopy
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
-import pandas as pd  # type: ignore[import]
 import numpy as np
+import pandas as pd  # type: ignore[import]
 
 try:
     from numpy.typing import ArrayLike
 except ImportError:
     ArrayLike = np.ndarray
-from pynwb import NWBFile, NWBHDF5IO, ProcessingModule  # type: ignore[import]
-from ndx_pose import PoseEstimationSeries, PoseEstimation, Skeleton, Skeletons  # type: ignore[import]
-
-from sleap_io import (
-    Labels,
-    Video,
-    LabeledFrame,
-    Track,
-    Skeleton as SleapSkeleton,
-    Instance,
-    PredictedInstance,
+from ndx_pose import (  # type: ignore[import]
+    PoseEstimation,
+    PoseEstimationSeries,
+    Skeleton,
+    Skeletons,
 )
+from pynwb import NWBHDF5IO, NWBFile, ProcessingModule  # type: ignore[import]
+
+from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+from sleap_io.model.video import Video
 
 
 def convert_predictions_to_dataframe(labels: Labels) -> pd.DataFrame:
@@ -498,7 +499,8 @@ def build_pose_estimation_container_for_track(
         labels (Labels): A general labels object
         track_name (str): The name of the track in labels.tracks
         video (Video): The video to which data belongs to
-        pose_estimation_metadata: (dict) Metadata for pose estimation. See `append_nwb_data`
+        pose_estimation_metadata: (dict) Metadata for pose estimation.
+            See `append_nwb_data`
         skeleton_map: Mapping of skeleton names to NWB Skeleton objects
         skeleton_map: Mapping of skeleton names to NWB Skeleton objects
         devices: Optional list of recording devices
@@ -547,7 +549,9 @@ def build_pose_estimation_container_for_track(
     # Arrange and mix metadata
     pose_estimation_container_kwargs = dict(
         name=f"track={track_name}",
-        description=f"Estimated positions of {sleap_skeleton.name} in video {video_path.name}",
+        description=(
+            f"Estimated positions of {sleap_skeleton.name} in video {video_path.name}"
+        ),
         pose_estimation_series=pose_estimation_series_list,
         skeleton=nwb_skeleton,
         source_software="SLEAP",

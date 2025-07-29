@@ -25,7 +25,8 @@ def jabs_real_data_v5():
     - Contains 250 frames worth of predictions from a video (not included)
     - Provides pose data, keypoint confidences, assigned identities, and static objects
     - Included static objects are arena corners
-    - Tracklet from frame 228 -> 232 do not get assigned a longterm ID, but still contain pose data
+    - Tracklet from frame 228 -> 232 do not get assigned a longterm ID, but still
+      contain pose data
 
     """
     return "tests/data/jabs/example_pose_est_v5.h5"

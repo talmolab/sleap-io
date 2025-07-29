@@ -252,6 +252,7 @@ def test_camera_repr(camera_group_345: CameraGroup):
     camera_group = camera_group_345
     camera = camera_group.cameras[0]
     repr_str = str(camera)
+    assert repr_str is not None  # Just verify __repr__ doesn't crash
 
 
 def test_recording_session_videos():
@@ -364,10 +365,12 @@ def test_camera_group_cameras():
 def test_camera_group_repr(camera_group_345: CameraGroup):
     camera_group = camera_group_345
     repr_str = str(camera_group)
+    assert repr_str is not None  # Just verify __repr__ doesn't crash
 
     for cam_idx, camera in enumerate(camera_group.cameras):
         camera.name = f"camera_{cam_idx}"
     repr_str = str(camera_group)
+    assert repr_str is not None  # Just verify __repr__ doesn't crash
 
 
 def test_instance_group_init(
@@ -451,6 +454,7 @@ def test_instance_group_properties():
 def test_instance_group_repr(instance_group_345: InstanceGroup):
     instance_group = instance_group_345
     repr_str = str(instance_group)
+    assert repr_str is not None  # Just verify __repr__ doesn't crash
 
 
 def test_frame_group_init(camera_group_345: CameraGroup):
@@ -501,6 +505,7 @@ def test_frame_group_init(camera_group_345: CameraGroup):
 def test_frame_group_repr(frame_group_345: FrameGroup):
     frame_group = frame_group_345
     repr_str = str(frame_group)
+    assert repr_str is not None  # Just verify __repr__ doesn't crash
 
 
 def test_recording_session_init(camera_group_345: CameraGroup):
@@ -542,6 +547,7 @@ def test_recording_session_repr(recording_session_345: RecordingSession):
     """Test recording session repr method."""
     session = recording_session_345
     repr_str = str(session)
+    assert repr_str is not None  # Just verify __repr__ doesn't crash
 
 
 def test_rodrigues_transformation():
@@ -605,7 +611,8 @@ def test_rodrigues_transformation():
         if np.allclose(rvec, 0):
             np.testing.assert_allclose(recovered_rvec, np.zeros(3), atol=1e-6)
         else:
-            # For non-zero rotations, the vectors may differ in magnitude but should represent
+            # For non-zero rotations, the vectors may differ in magnitude but
+            # should represent
             # the same rotation when converted back to matrices
             recovered_matrix, _ = rodrigues_transformation(recovered_rvec)
             np.testing.assert_allclose(recovered_matrix, rotation_matrix, atol=1e-6)

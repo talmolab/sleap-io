@@ -8,11 +8,13 @@ estimated, such as confidence scores.
 """
 
 from __future__ import annotations
+
+from typing import Optional, Union
+
 import attrs
-from typing import ClassVar, Optional, Union
-from sleap_io import Skeleton, Node
-from sleap_io.model.skeleton import NodeOrIndex
 import numpy as np
+
+from sleap_io.model.skeleton import Node, Skeleton
 
 
 class PointsArray(np.ndarray):
@@ -199,7 +201,7 @@ class PredictedPointsArray(PointsArray):
 
     @classmethod
     def from_array(cls, array: np.ndarray) -> "PredictedPointsArray":
-        """Convert an existing array to a PredictedPointsArray with the appropriate dtype.
+        """Convert an existing array to a PredictedPointsArray with appropriate dtype.
 
         Args:
             array: A numpy array to convert. Can be a structured array or a regular
@@ -219,7 +221,8 @@ class PredictedPointsArray(PointsArray):
             - Fourth column (if present) is interpreted as visible flag
             - Fifth column (if present) is interpreted as complete flag
 
-            If visibility is not provided, it is inferred from NaN values in the x coordinate.
+            If visibility is not provided, it is inferred from NaN values in the x
+            coordinate.
         """
         dtype = cls._get_dtype()
 
@@ -499,7 +502,7 @@ class Instance:
 
     def __getitem__(self, node: Union[int, str, Node]) -> np.ndarray:
         """Return the point associated with a node."""
-        if type(node) != int:
+        if type(node) is not int:
             node = self.skeleton.index(node)
 
         return self.points[node]
@@ -515,7 +518,7 @@ class Instance:
         Notes:
             This sets the point coordinates and marks the point as visible.
         """
-        if type(node) != int:
+        if type(node) is not int:
             node = self.skeleton.index(node)
 
         if len(value) < 2:
@@ -825,12 +828,13 @@ class PredictedInstance(Instance):
             node: The node to set the point for. Can be an integer index, string name,
                 or Node object.
             value: A tuple or array-like of length 2 or 3 containing (x, y) coordinates
-                and optionally a confidence score. If the score is not provided, it defaults to 1.0.
+                and optionally a confidence score. If the score is not provided, it
+                defaults to 1.0.
 
         Notes:
             This sets the point coordinates, score, and marks the point as visible.
         """
-        if type(node) != int:
+        if type(node) is not int:
             node = self.skeleton.index(node)
 
         if len(value) < 2:

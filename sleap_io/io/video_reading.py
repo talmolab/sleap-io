@@ -1,17 +1,17 @@
 """Backends for reading videos."""
 
 from __future__ import annotations
-from pathlib import Path
 
-import simplejson as json
 import sys
 from io import BytesIO
+from pathlib import Path
 from typing import Optional, Tuple
 
 import attrs
 import h5py
 import imageio.v3 as iio
 import numpy as np
+import simplejson as json
 
 try:
     import cv2
@@ -19,14 +19,91 @@ except ImportError:
     pass
 
 try:
-    import imageio_ffmpeg
+    import imageio_ffmpeg  # noqa: F401
 except ImportError:
     pass
 
 try:
-    import av
+    import av  # noqa: F401
 except ImportError:
     pass
+
+
+# Global default video plugin
+_default_video_plugin: Optional[str] = None
+
+
+def normalize_plugin_name(plugin: str) -> str:
+    """Normalize plugin names to standard format.
+
+    Args:
+        plugin: Plugin name or alias (case-insensitive).
+
+    Returns:
+        Normalized plugin name ("opencv", "FFMPEG", or "pyav").
+
+    Raises:
+        ValueError: If plugin name is not recognized.
+    """
+    plugin_lower = plugin.lower()
+
+    # Map aliases to standard names
+    aliases = {
+        "cv": "opencv",
+        "cv2": "opencv",
+        "opencv": "opencv",
+        "ocv": "opencv",
+        "ffmpeg": "FFMPEG",
+        "imageio-ffmpeg": "FFMPEG",
+        "imageio_ffmpeg": "FFMPEG",
+        "pyav": "pyav",
+        "av": "pyav",
+    }
+
+    if plugin_lower not in aliases:
+        raise ValueError(
+            f"Unknown plugin: {plugin}. Valid options: opencv, FFMPEG, pyav"
+        )
+
+    return aliases[plugin_lower]
+
+
+def set_default_video_plugin(plugin: Optional[str]) -> None:
+    """Set the default video plugin for all subsequently loaded videos.
+
+    Args:
+        plugin: Video plugin name. One of "opencv", "FFMPEG", or "pyav".
+            Also accepts aliases: "cv", "cv2", "ocv" for opencv;
+            "imageio-ffmpeg", "imageio_ffmpeg" for FFMPEG; "av" for pyav.
+            Case-insensitive. If None, clears the default preference.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.set_default_video_plugin("opencv")
+        >>> sio.set_default_video_plugin("cv2")  # Same as "opencv"
+        >>> sio.set_default_video_plugin(None)  # Clear preference
+    """
+    global _default_video_plugin
+    if plugin is not None:
+        plugin = normalize_plugin_name(plugin)
+    _default_video_plugin = plugin
+
+
+def get_default_video_plugin() -> Optional[str]:
+    """Get the current default video plugin.
+
+    Returns:
+        The current default video plugin name, or None if not set.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.get_default_video_plugin()
+        None
+        >>> sio.set_default_video_plugin("opencv")
+        >>> sio.get_default_video_plugin()
+        'opencv'
+    """
+    return _default_video_plugin
 
 
 def _get_valid_kwargs(cls, kwargs: dict) -> dict:
@@ -77,6 +154,17 @@ class VideoBackend:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            **kwargs: Additional backend-specific arguments. These are filtered to only
+                include parameters that are valid for the specific backend being
+                created:
+                - For ImageVideo: No additional arguments.
+                - For MediaVideo: plugin (str): Video plugin to use. One of "opencv",
+                  "FFMPEG", or "pyav". Also accepts aliases (case-insensitive).
+                  If None, uses global default if set, otherwise auto-detects.
+                - For HDF5Video: input_format (str), frame_map (dict),
+                  source_filename (str),
+                  source_inds (np.ndarray), image_format (str). See HDF5Video for
+                  details.
 
         Returns:
             VideoBackend subclass instance.
@@ -84,14 +172,37 @@ class VideoBackend:
         if isinstance(filename, Path):
             filename = filename.as_posix()
 
-        if type(filename) == str and Path(filename).is_dir():
+        if type(filename) is str and Path(filename).is_dir():
             filename = ImageVideo.find_images(filename)
 
-        if type(filename) == list:
+        if type(filename) is list:
             filename = [Path(f).as_posix() for f in filename]
             return ImageVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
+        elif filename.endswith(("tif", "tiff")):
+            # Detect TIFF format
+            format_type, metadata = TiffVideo.detect_format(filename)
+
+            if format_type in ("multi_page", "rank3_video", "rank4_video"):
+                # Use TiffVideo for multi-page or multi-dimensional TIFFs
+                tiff_kwargs = _get_valid_kwargs(TiffVideo, kwargs)
+                # Add format if detected
+                if format_type in ("rank3_video", "rank4_video"):
+                    tiff_kwargs["format"] = metadata.get("format")
+                return TiffVideo(
+                    filename,
+                    grayscale=grayscale,
+                    keep_open=keep_open,
+                    **tiff_kwargs,
+                )
+            else:
+                # Single-page TIFF, treat as regular image
+                return ImageVideo(
+                    [filename],
+                    grayscale=grayscale,
+                    **_get_valid_kwargs(ImageVideo, kwargs),
+                )
         elif filename.endswith(ImageVideo.EXTS):
             return ImageVideo(
                 [filename], grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
@@ -332,14 +443,24 @@ class MediaVideo(VideoBackend):
             will use the first available plugin in the order listed above.
     """
 
-    plugin: str = attrs.field(
-        validator=attrs.validators.in_(["opencv", "FFMPEG", "pyav"])
-    )
+    plugin: str = attrs.field()
+
+    @plugin.validator
+    def _validate_plugin(self, attribute, value):
+        # Normalize the plugin name
+        normalized = normalize_plugin_name(value)
+        # Update the actual value to the normalized version
+        object.__setattr__(self, attribute.name, normalized)
 
     EXTS = ("mp4", "avi", "mov", "mj2", "mkv")
 
     @plugin.default
     def _default_plugin(self) -> str:
+        # Check global default first
+        if _default_video_plugin is not None:
+            return _default_video_plugin
+
+        # Otherwise auto-detect
         if "cv2" in sys.modules:
             return "opencv"
         elif "imageio_ffmpeg" in sys.modules:
@@ -789,3 +910,278 @@ class ImageVideo(VideoBackend):
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
         return img
+
+
+@attrs.define
+class TiffVideo(VideoBackend):
+    """Video backend for reading multi-page TIFF stacks.
+
+    This backend supports reading multi-page TIFF files as video sequences.
+    Each page in the TIFF is treated as a frame.
+
+    Attributes:
+        filename: Path to the multi-page TIFF file.
+        grayscale: Whether to force grayscale. If None, autodetect on first frame load.
+        keep_open: Whether to keep the reader open between calls to read frames.
+        format: Format of the TIFF file ("multi_page", "THW", "HWT", "THWC", "CHWT").
+    """
+
+    EXTS = ("tif", "tiff")
+    format: Optional[str] = None
+
+    @staticmethod
+    def is_multipage(filename: str) -> bool:
+        """Check if a TIFF file contains multiple pages.
+
+        Args:
+            filename: Path to the TIFF file.
+
+        Returns:
+            True if the TIFF contains multiple pages, False otherwise.
+        """
+        try:
+            # Try to read the second frame
+            iio.imread(filename, index=1)
+            return True
+        except (IndexError, ValueError):
+            return False
+        except Exception:
+            # For any other error, assume it's not multi-page
+            return False
+
+    @staticmethod
+    def detect_format(filename: str) -> tuple[str, dict]:
+        """Detect TIFF format and shape for single files.
+
+        Args:
+            filename: Path to the TIFF file.
+
+        Returns:
+            Tuple of (format_type, metadata) where:
+            - format_type: "single_frame", "multi_page", "rank3_video", or "rank4_video"
+            - metadata: dict with shape info and inferred format
+        """
+        try:
+            # Read first frame to check shape
+            img = iio.imread(filename, index=0)
+            shape = img.shape
+
+            # Check if multi-page first
+            is_multi = TiffVideo.is_multipage(filename)
+
+            if is_multi:
+                return "multi_page", {"shape": shape}
+
+            # Single page cases
+            if img.ndim == 2:
+                # Rank-2: single channel image
+                return "single_frame", {"shape": shape}
+            elif img.ndim == 3:
+                # Rank-3: could be HWC (single frame) or THW/HWT (video)
+                return TiffVideo._detect_rank3_format(shape)
+            elif img.ndim == 4:
+                # Rank-4: video with channels
+                return TiffVideo._detect_rank4_format(shape)
+            else:
+                return "single_frame", {"shape": shape}
+
+        except Exception:
+            return "single_frame", {"shape": None}
+
+    @staticmethod
+    def _detect_rank3_format(shape: tuple) -> tuple[str, dict]:
+        """Detect format for rank-3 TIFF files.
+
+        Args:
+            shape: Shape tuple (dim1, dim2, dim3)
+
+        Returns:
+            Tuple of (format_type, metadata)
+        """
+        dim1, dim2, dim3 = shape
+
+        # If last dimension is 1 or 3, likely HWC (single frame)
+        if dim3 in (1, 3):
+            return "single_frame", {"shape": shape, "format": "HWC"}
+
+        # If first two dims are equal, it's likely HWT format
+        # (most common case for square frames stored as H x W x T)
+        if dim1 == dim2:
+            # Default to HWT format for square frames
+            return "rank3_video", {
+                "shape": shape,
+                "format": "HWT",
+                "height": dim1,
+                "width": dim2,
+                "n_frames": dim3,
+            }
+        else:
+            # For non-square frames, check if it could be THW
+            # This is less common but possible
+            if dim2 == dim3:
+                # Could be THW format
+                return "rank3_video", {
+                    "shape": shape,
+                    "format": "THW",
+                    "n_frames": dim1,
+                    "height": dim2,
+                    "width": dim3,
+                }
+            else:
+                # Default to HWT format
+                return "rank3_video", {
+                    "shape": shape,
+                    "format": "HWT",
+                    "height": dim1,
+                    "width": dim2,
+                    "n_frames": dim3,
+                }
+
+    @staticmethod
+    def _detect_rank4_format(shape: tuple) -> tuple[str, dict]:
+        """Detect format for rank-4 TIFF files.
+
+        Args:
+            shape: Shape tuple (dim1, dim2, dim3, dim4)
+
+        Returns:
+            Tuple of (format_type, metadata)
+        """
+        dim1, dim2, dim3, dim4 = shape
+
+        # Check if first or last dimension is 1 or 3 (channels)
+        if dim1 in (1, 3):
+            # CHWT format
+            return "rank4_video", {
+                "shape": shape,
+                "format": "CHWT",
+                "channels": dim1,
+                "height": dim2,
+                "width": dim3,
+                "n_frames": dim4,
+            }
+        elif dim4 in (1, 3):
+            # THWC format
+            return "rank4_video", {
+                "shape": shape,
+                "format": "THWC",
+                "n_frames": dim1,
+                "height": dim2,
+                "width": dim3,
+                "channels": dim4,
+            }
+        else:
+            # Default to THWC
+            return "rank4_video", {
+                "shape": shape,
+                "format": "THWC",
+                "n_frames": dim1,
+                "height": dim2,
+                "width": dim3,
+                "channels": dim4,
+            }
+
+    def __attrs_post_init__(self):
+        """Initialize format if not provided."""
+        if self.format is None:
+            # Auto-detect format
+            format_type, metadata = TiffVideo.detect_format(self.filename)
+            if format_type == "multi_page":
+                self.format = "multi_page"
+            elif format_type in ("rank3_video", "rank4_video"):
+                self.format = metadata.get("format", "multi_page")
+            else:
+                self.format = "multi_page"
+
+    @property
+    def num_frames(self) -> int:
+        """Number of frames in the TIFF stack."""
+        if self.format == "multi_page":
+            # Count frames by trying to read each one until we get an error
+            frame_count = 0
+            while True:
+                try:
+                    iio.imread(self.filename, index=frame_count)
+                    frame_count += 1
+                except (IndexError, ValueError):
+                    break
+            return frame_count
+        else:
+            # For rank3/rank4 formats, detect from shape
+            format_type, metadata = TiffVideo.detect_format(self.filename)
+            return metadata.get("n_frames", 1)
+
+    def _read_frame(self, frame_idx: int) -> np.ndarray:
+        """Read a single frame from the TIFF stack.
+
+        Args:
+            frame_idx: Index of frame to read.
+
+        Returns:
+            The frame as a numpy array of shape `(height, width, channels)`.
+
+        Notes:
+            This does not apply grayscale conversion. It is recommended to use the
+            `get_frame` method of the `VideoBackend` class instead.
+        """
+        if self.format == "multi_page":
+            img = iio.imread(self.filename, index=frame_idx)
+            if img.ndim == 2:
+                img = np.expand_dims(img, axis=-1)
+            return img
+        else:
+            # Read entire array for rank3/rank4 formats
+            img = iio.imread(self.filename)
+
+            if self.format == "THW":
+                # Extract frame from THW format
+                frame = img[frame_idx, :, :]
+                return np.expand_dims(frame, axis=-1)
+            elif self.format == "HWT":
+                # Extract frame from HWT format
+                frame = img[:, :, frame_idx]
+                return np.expand_dims(frame, axis=-1)
+            elif self.format == "THWC":
+                # Extract frame from THWC format
+                return img[frame_idx, :, :, :]
+            elif self.format == "CHWT":
+                # Extract frame from CHWT format
+                frame = img[:, :, :, frame_idx]
+                return np.moveaxis(frame, 0, -1)  # CHW -> HWC
+            else:
+                raise ValueError(f"Unknown format: {self.format}")
+
+    def _read_frames(self, frame_inds: list) -> np.ndarray:
+        """Read multiple frames from the TIFF stack.
+
+        Args:
+            frame_inds: List of frame indices to read.
+
+        Returns:
+            Frames as a numpy array of shape `(frames, height, width, channels)`.
+        """
+        if self.format == "multi_page":
+            imgs = []
+            for idx in frame_inds:
+                imgs.append(self._read_frame(idx))
+            return np.stack(imgs, axis=0)
+        else:
+            # For rank3/rank4, read all at once and extract
+            img = iio.imread(self.filename)
+
+            if self.format == "THW":
+                frames = img[frame_inds, :, :]
+                return np.expand_dims(frames, axis=-1)
+            elif self.format == "HWT":
+                frames = img[:, :, frame_inds]
+                frames = np.moveaxis(frames, -1, 0)  # HWT -> THW
+                return np.expand_dims(frames, axis=-1)
+            elif self.format == "THWC":
+                return img[frame_inds, :, :, :]
+            elif self.format == "CHWT":
+                frames = img[:, :, :, frame_inds]
+                frames = np.moveaxis(frames, -1, 0)  # CHWT -> TCHW
+                frames = np.moveaxis(frames, 1, -1)  # TCHW -> THWC
+                return frames
+            else:
+                raise ValueError(f"Unknown format: {self.format}")

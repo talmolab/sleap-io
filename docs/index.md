@@ -19,7 +19,8 @@ have any functionality related to labeling, training, or inference.
 The main purpose of this library is to provide utilities to load/save from different
 [formats](formats.md) for pose data and standardize them into our common [Data Model](model.md).
 
-- Read/write labels in [SLP](formats.md#sleap_io.load_slp), [NWB](formats.md#sleap_io.load_nwb), [JABS](formats.md#sleap_io.load_jabs) and [LabelStudio](formats.md#sleap_io.load_labelstudio).
+- Read/write labels in [SLP](formats.md#sleap_io.load_slp), [NWB](formats.md#sleap_io.load_nwb), [DeepLabCut](formats.md#sleap_io.load_dlc), [JABS](formats.md#sleap_io.load_jabs), [LabelStudio](formats.md#sleap_io.load_labelstudio) and [Ultralytics YOLO](formats.md#sleap_io.load_ultralytics) formats.
+- Support for [LabelsSet](model.md#sleap_io.LabelsSet) to manage multiple dataset splits (train/val/test) and export to different formats.
 - [Read videos in any format](formats.md#sleap_io.load_video), work them in a [numpy-like interface](model.md#sleap_io.Video) whether the video files are accessible or not, and [easily save them out](formats.md#sleap_io.save_video).
 
 This enables ease-of-use through format-agnostic operations that make it easy to work
@@ -29,6 +30,7 @@ with pose data, including utilities for common tasks. Some of these include:
 - [Convert labels to numpy arrays for analysis](examples.md#convert-labels-to-raw-arrays)
 - [Fix video paths in the labels](examples.md#fix-video-paths)
 - [Make training/validation/test splits](examples.md#make-trainingvalidationtest-splits)
+- [Work with dataset splits using LabelsSet](examples.md#working-with-dataset-splits-labelsset)
 - [Replace a skeleton](examples.md#replace-skeleton)
 
 See [Examples](examples.md) for more usage examples and recipes.

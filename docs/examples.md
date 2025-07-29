@@ -150,6 +150,43 @@ labels_test = sio.load_file("split1/test.pkg.slp")
 **See also:** [`Labels.make_training_splits`](model.md#sleap_io.Labels.make_training_splits)
 
 
+## Working with dataset splits (LabelsSet)
+
+```py
+import sleap_io as sio
+
+# Load source labels.
+labels = sio.load_file("labels.v001.slp")
+
+# Create splits and get them as a LabelsSet
+labels_set = labels.make_training_splits(n_train=0.8, n_val=0.1, n_test=0.1)
+
+# Access individual splits
+train_labels = labels_set["train"]
+val_labels = labels_set["val"] 
+test_labels = labels_set["test"]
+
+# Save the entire LabelsSet
+labels_set.save("splits/")  # Saves as SLP files by default
+
+# Save as Ultralytics YOLO format
+labels_set.save("yolo_dataset/", format="ultralytics")
+
+# Load a LabelsSet from a directory
+loaded_set = sio.load_labels_set("splits/")
+
+# Load from specific files
+file_dict = {
+    "train": "path/to/train.slp",
+    "val": "path/to/val.slp",
+    "test": "path/to/test.slp"
+}
+loaded_set = sio.load_labels_set(file_dict)
+```
+
+**See also:** [`LabelsSet`](model.md#sleap_io.LabelsSet), [`load_labels_set`](formats.md#sleap_io.load_labels_set), [`save_labels_set`](formats.md#sleap_io.save_labels_set)
+
+
 ## Re-encode video
 
 Some video formats are not readily seekable at frame-level accuracy. By reencoding them

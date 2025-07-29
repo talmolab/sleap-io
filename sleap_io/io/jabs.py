@@ -2,24 +2,19 @@
 
 from __future__ import annotations
 
-import h5py
-import re
 import os
-import numpy as np
-from typing import List, Optional, Union
+import re
 import warnings
+from typing import List, Optional, Union
 
-from sleap_io import (
-    Instance,
-    LabeledFrame,
-    Labels,
-    Node,
-    Edge,
-    Symmetry,
-    Video,
-    Skeleton,
-    Track,
-)
+import h5py
+import numpy as np
+
+from sleap_io.model.instance import Instance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
+from sleap_io.model.video import Video
 
 JABS_DEFAULT_KEYPOINTS = [
     Node("NOSE"),
@@ -73,7 +68,8 @@ def read_labels(
 
     TODO: Attributes are ignored, including px_to_cm field.
     TODO: Segmentation data ignored in v6, but will read in pose.
-    TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object). Should be converted to multiple objects
+    TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object).
+          Should be converted to multiple objects
 
     Args:
         labels_path: Path to the JABS pose file.
@@ -102,9 +98,10 @@ def read_labels(
         except (KeyError, IndexError):
             pose_version = 2
             data_shape = pose_file["poseest/points"].shape
-            assert (
-                len(data_shape) == 3
-            ), f"Pose version not present and shape does not match single mouse: shape of {data_shape} for {labels_path}"
+            assert len(data_shape) == 3, (
+                f"Pose version not present and shape does not match single mouse: "
+                f"shape of {data_shape} for {labels_path}"
+            )
         if pose_version == 2:
             tracks[1] = Track("1")
         # Change field name for newer pose formats
@@ -134,7 +131,8 @@ def read_labels(
                     max_ids = pose_file["poseest/instance_count"][frame_idx]
                 for cur_id in range(max_ids):
                     # v4+ uses reserved values for invalid/unused poses
-                    # Note: ignores 'poseest/id_mask' to keep predictions that were not assigned an id
+                    # Note: ignores 'poseest/id_mask' to keep predictions that
+                    # were not assigned an id
                     if pose_version > 3 and pose_ids[cur_id] <= 0:
                         continue
                     if pose_ids[cur_id] not in tracks.keys():
@@ -205,9 +203,10 @@ def prediction_to_instance(
     Returns:
         Parsed `Instance`.
     """
-    assert (
-        len(skeleton.nodes) == data.shape[0]
-    ), f"Skeleton ({len(skeleton.nodes)}) does not match number of keypoints ({data.shape[0]})"
+    assert len(skeleton.nodes) == data.shape[0], (
+        f"Skeleton ({len(skeleton.nodes)}) does not match "
+        f"number of keypoints ({data.shape[0]})"
+    )
 
     points = {}
     for i, cur_node in enumerate(skeleton.nodes):
@@ -295,7 +294,9 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
             pose = instance.numpy()
             if pose.shape[0] != len(JABS_DEFAULT_KEYPOINTS):
                 warnings.warn(
-                    f"JABS format only supports 12 keypoints for mice. Skipping storage of instance on frame {label.frame_idx} with {len(instance.points)} keypoints."
+                    f"JABS format only supports 12 keypoints for mice. "
+                    f"Skipping storage of instance on frame {label.frame_idx} "
+                    f"with {len(instance.points)} keypoints."
                 )
                 continue
             missing_points = np.isnan(pose[:, 0])
@@ -310,7 +311,9 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
                 ]
             else:
                 warnings.warn(
-                    f"Pose with unassigned track found on {label.video.filename} frame {label.frame_idx} instance {instance_idx}. Assigning ID {last_unassigned_id}."
+                    f"Pose with unassigned track found on {label.video.filename} "
+                    f"frame {label.frame_idx} instance {instance_idx}. "
+                    f"Assigning ID {last_unassigned_id}."
                 )
                 identity_mat[label.frame_idx, instance_idx] = last_unassigned_id
                 last_unassigned_id += 1
@@ -369,7 +372,8 @@ def tracklets_to_v3(tracklet_matrix: np.ndarray) -> np.ndarray:
         (c) tracklets exist for continuous blocks of time
 
     Args:
-        tracklet_matrix: Numpy array of shape (frame, n_animals) that contains identity values. Identities are assumed to be 1-indexed.
+        tracklet_matrix: Numpy array of shape (frame, n_animals) that contains
+            identity values. Identities are assumed to be 1-indexed.
 
     Returns:
         A corrected numpy array of the same shape as input
@@ -386,7 +390,8 @@ def tracklets_to_v3(tracklet_matrix: np.ndarray) -> np.ndarray:
         for sliced_frame, sliced_column in zip(
             np.split(frame_idx, gaps + 1), np.split(column_idx, gaps + 1)
         ):
-            # The keys used here are (first frame, first column) such that sorting can be used for ascending order
+            # The keys used here are (first frame, first column) such that
+            # sorting can be used for ascending order
             track_fragments[sliced_frame[0], sliced_column[0]] = sliced_column
 
     return_mat = np.zeros_like(tracklet_matrix)
@@ -500,7 +505,8 @@ def write_jabs_v4(data: dict, filename: str):
             data=identity_mask_mat,
         )
         # No identity embedding data
-        # Note that since the identity information doesn't exist, this will break any functionality that relies on it
+        # Note that since the identity information doesn't exist, this will break
+        # any functionality that relies on it
         default_id_embeds = np.zeros(
             list(identity_mask_mat.shape) + [0], dtype=np.float32
         )

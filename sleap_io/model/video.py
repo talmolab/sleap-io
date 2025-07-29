@@ -5,14 +5,17 @@ a video and its components used in SLEAP.
 """
 
 from __future__ import annotations
-import attrs
-from typing import Tuple, Optional, Optional, Any
-import numpy as np
-from sleap_io.io.video_reading import VideoBackend, MediaVideo, HDF5Video, ImageVideo
-from sleap_io.io.video_writing import VideoWriter
-from sleap_io.io.utils import is_file_accessible
+
 from pathlib import Path
+from typing import Any, Optional, Tuple
+
+import attrs
 import h5py
+import numpy as np
+
+from sleap_io.io.utils import is_file_accessible
+from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, VideoBackend
+from sleap_io.io.video_writing import VideoWriter
 
 
 @attrs.define(eq=False)
@@ -48,13 +51,34 @@ class Video:
         two `Video` instances with the same attributes will NOT be considered equal in a
         set or dict.
 
-    See also: VideoBackend
+    Media Video Plugin Support:
+        For media files (mp4, avi, etc.), the following plugins are supported:
+        - "opencv": Uses OpenCV (cv2) for video reading
+        - "FFMPEG": Uses imageio-ffmpeg for video reading
+        - "pyav": Uses PyAV for video reading
+
+        Plugin aliases (case-insensitive):
+        - opencv: "opencv", "cv", "cv2", "ocv"
+        - FFMPEG: "FFMPEG", "ffmpeg", "imageio-ffmpeg", "imageio_ffmpeg"
+        - pyav: "pyav", "av"
+
+        Plugin selection priority:
+        1. Explicitly specified plugin parameter
+        2. Backend metadata plugin value
+        3. Global default (set via sio.set_default_video_plugin)
+        4. Auto-detection based on available packages
+
+    See Also:
+        VideoBackend: The backend interface for reading video data.
+        sleap_io.set_default_video_plugin: Set global default plugin.
+        sleap_io.get_default_video_plugin: Get current default plugin.
     """
 
     filename: str | list[str]
     backend: Optional[VideoBackend] = None
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
     source_video: Optional[Video] = None
+    original_video: Optional[Video] = None
     open_backend: bool = True
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
@@ -64,7 +88,7 @@ class Video:
         if self.open_backend and self.backend is None and self.exists():
             try:
                 self.open()
-            except Exception as e:
+            except Exception:
                 # If we can't open the backend, just ignore it for now so we don't
                 # prevent the user from building the Video object entirely.
                 pass
@@ -121,6 +145,9 @@ class Video:
             source_video: The source video object if this is a proxy video. This is
                 present when the video contains an embedded subset of frames from
                 another video.
+            **kwargs: Additional backend-specific arguments passed to
+                VideoBackend.from_filename. See VideoBackend.from_filename for supported
+                arguments.
 
         Returns:
             Video instance with the appropriate backend instantiated.
@@ -154,7 +181,7 @@ class Video:
         """
         try:
             return self.backend.shape
-        except:
+        except Exception:
             if "shape" in self.backend_metadata:
                 return self.backend_metadata["shape"]
             return None
@@ -264,7 +291,7 @@ class Video:
             has_dataset = False
             if (
                 self.backend is not None
-                and type(self.backend) == HDF5Video
+                and type(self.backend) is HDF5Video
                 and self.backend._open_reader is not None
             ):
                 has_dataset = dataset in self.backend._open_reader
@@ -286,6 +313,7 @@ class Video:
         dataset: Optional[str] = None,
         grayscale: Optional[str] = None,
         keep_open: bool = True,
+        plugin: Optional[str] = None,
     ):
         """Open the video backend for reading.
 
@@ -299,6 +327,10 @@ class Video:
                 frames. If False, will close the reader after each call. If True (the
                 default), it will keep the reader open and cache it for subsequent calls
                 which may enhance the performance of reading multiple frames.
+            plugin: Video plugin to use for MediaVideo files. One of "opencv",
+                "FFMPEG", or "pyav". Also accepts aliases (case-insensitive).
+                If not specified, uses the backend metadata, global default,
+                or auto-detection in that order.
 
         Notes:
             This is useful for opening the video backend to read frames and then closing
@@ -329,8 +361,7 @@ class Video:
 
         if not self.exists(dataset=dataset):
             msg = (
-                f"Video does not exist or cannot be opened for reading: "
-                f"{self.filename}"
+                f"Video does not exist or cannot be opened for reading: {self.filename}"
             )
             if dataset is not None:
                 msg += f" (dataset: {dataset})"
@@ -339,12 +370,24 @@ class Video:
         # Close previous backend if open.
         self.close()
 
+        # Handle plugin parameter
+        backend_kwargs = {}
+        if plugin is not None:
+            from sleap_io.io.video_reading import normalize_plugin_name
+
+            plugin = normalize_plugin_name(plugin)
+            self.backend_metadata["plugin"] = plugin
+
+        if "plugin" in self.backend_metadata:
+            backend_kwargs["plugin"] = self.backend_metadata["plugin"]
+
         # Create new backend.
         self.backend = VideoBackend.from_filename(
             self.filename,
             dataset=dataset,
             grayscale=grayscale,
             keep_open=keep_open,
+            **backend_kwargs,
         )
 
     def close(self):
@@ -360,7 +403,7 @@ class Video:
                     self.backend, "grayscale", None
                 )
                 self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
-            except:
+            except Exception:
                 pass
 
             del self.backend
@@ -420,3 +463,36 @@ class Video:
 
         new_video = Video.from_filename(save_path, grayscale=self.grayscale)
         return new_video
+
+    def set_video_plugin(self, plugin: str) -> None:
+        """Set the video plugin and reopen the video.
+
+        Args:
+            plugin: Video plugin to use. One of "opencv", "FFMPEG", or "pyav".
+                Also accepts aliases (case-insensitive).
+
+        Raises:
+            ValueError: If the video is not a MediaVideo type.
+
+        Examples:
+            >>> video.set_video_plugin("opencv")
+            >>> video.set_video_plugin("CV2")  # Same as "opencv"
+        """
+        from sleap_io.io.video_reading import MediaVideo, normalize_plugin_name
+
+        if not self.filename.endswith(MediaVideo.EXTS):
+            raise ValueError(f"Cannot set plugin for non-media video: {self.filename}")
+
+        plugin = normalize_plugin_name(plugin)
+
+        # Close current backend if open
+        was_open = self.is_open
+        if was_open:
+            self.close()
+
+        # Update backend metadata
+        self.backend_metadata["plugin"] = plugin
+
+        # Reopen with new plugin if it was open
+        if was_open:
+            self.open()
