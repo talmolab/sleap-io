@@ -8,6 +8,32 @@ from typing import Any, Dict, List, Optional, Union
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 
 
+def decode_skeleton(data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
+    """Decode skeleton(s) from JSON data using the default decoder.
+
+    Args:
+        data: JSON string or pre-parsed dictionary containing skeleton data.
+
+    Returns:
+        A single Skeleton or list of Skeletons depending on input format.
+    """
+    decoder = SkeletonDecoder()
+    return decoder.decode(data)
+
+
+def encode_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+    """Encode skeleton(s) to JSON string using the default encoder.
+
+    Args:
+        skeletons: A single Skeleton or list of Skeletons to encode.
+
+    Returns:
+        JSON string in jsonpickle format.
+    """
+    encoder = SkeletonEncoder()
+    return encoder.encode(skeletons)
+
+
 class SkeletonDecoder:
     """Decode skeleton data from jsonpickle-encoded format.
 
@@ -18,7 +44,9 @@ class SkeletonDecoder:
 
     def __init__(self):
         """Initialize the decoder."""
-        self._id_to_object: Dict[int, Any] = {}
+        self.decoded_objects: List[
+            Any
+        ] = []  # List of decoded objects indexed by py/id - 1
 
     def decode(self, data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
         """Decode skeleton(s) from JSON data.
@@ -32,8 +60,8 @@ class SkeletonDecoder:
         if isinstance(data, str):
             data = json.loads(data)
 
-        # Reset object cache for each decode operation
-        self._id_to_object = {}
+        # Reset decoded objects list for each decode operation
+        self.decoded_objects = []
 
         # Check if this is a list of skeletons or a single skeleton
         if isinstance(data, list):
@@ -50,100 +78,154 @@ class SkeletonDecoder:
         Returns:
             A Skeleton object.
         """
-        # First, scan all links to build complete node and py/id mappings
-        all_nodes = {}  # node name -> Node object
+        # Reset decoded objects list for this skeleton
+        self.decoded_objects = []
 
-        # Track order of node definitions for py/id assignment
-        node_definition_order = []
+        # Track edge types separately for formats that use separate py/id spaces
+        edge_type_ids = {}  # edge_type_value -> py/id
+        next_edge_type_id = 1
+
+        # First pass: decode all objects in order of appearance
+        seen_nodes = set()  # Track node names we've already seen
 
         for link in data.get("links", []):
-            # Check source
-            if isinstance(link["source"], dict):
-                if "py/object" in link["source"]:
-                    # This is a node definition
-                    node = self._decode_node(link["source"])
-                    if node.name not in all_nodes:
-                        all_nodes[node.name] = node
-                        node_definition_order.append(node.name)
-                elif "py/id" in link["source"]:
-                    # This is a reference - track it
-                    py_id = link["source"]["py/id"]
-                    # We'll resolve this later
+            # Check each component of the link for new objects
+            for key in ["source", "target", "type"]:
+                value = link.get(key, {})
+                if isinstance(value, dict):
+                    if "py/object" in value:
+                        # New node object
+                        node = self._decode_node(value)
+                        if node.name not in seen_nodes:
+                            self.decoded_objects.append(node)
+                            seen_nodes.add(node.name)
+                    elif "py/reduce" in value:
+                        # New edge type
+                        edge_type_val = value["py/reduce"][1]["py/tuple"][0]
+                        self.decoded_objects.append(edge_type_val)
+                        # Also track edge type IDs separately
+                        if edge_type_val not in edge_type_ids:
+                            edge_type_ids[edge_type_val] = next_edge_type_id
+                            next_edge_type_id += 1
+                    # py/id references are handled in second pass
 
-            # Check target
-            if isinstance(link["target"], dict):
-                if "py/object" in link["target"]:
-                    # This is a node definition
-                    node = self._decode_node(link["target"])
-                    if node.name not in all_nodes:
-                        all_nodes[node.name] = node
-                        node_definition_order.append(node.name)
-                elif "py/id" in link["target"]:
-                    # This is a reference
-                    py_id = link["target"]["py/id"]
+        # Store edge type mappings for second pass
+        self._edge_type_ids = edge_type_ids
 
-        # Build py/id mappings from the nodes section
-        # The nodes section defines the py/id assignments
-        py_id_to_node_name = {}
-        nodes = []
-
-        # First pass: extract py/ids from nodes section
-        node_py_ids = []
-        for node_ref in data.get("nodes", []):
-            if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
-                node_py_ids.append(node_ref["id"]["py/id"])
-
-        # Map py/ids to node names based on order of appearance
-        # The py/ids in the nodes array correspond to nodes in order of first appearance
-        for i, py_id in enumerate(node_py_ids):
-            if i < len(node_definition_order):
-                node_name = node_definition_order[i]
-                py_id_to_node_name[py_id] = node_name
-                # Update cache
-                if node_name in all_nodes:
-                    self._id_to_object[py_id] = all_nodes[node_name]
-
-        # Build final nodes list based on the "nodes" section order
-        for node_ref in data.get("nodes", []):
-            if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
-                py_id = node_ref["id"]["py/id"]
-
-                # Add corresponding node
-                if (
-                    py_id in py_id_to_node_name
-                    and py_id_to_node_name[py_id] in all_nodes
-                ):
-                    nodes.append(all_nodes[py_id_to_node_name[py_id]])
-
-        # Now decode edges using the established mappings
+        # Second pass: build edges using the decoded objects
         edges = []
         symmetries = []
-        seen_symmetries = set()  # Track symmetries to avoid duplicates
+        seen_symmetries = set()
 
         for link in data.get("links", []):
-            edge_type = self._get_edge_type(link.get("type", {}))
+            # Resolve references to build the edge
+            source_node = self._resolve_link_ref(link["source"])
+            target_node = self._resolve_link_ref(link["target"])
+            edge_type_val = self._resolve_edge_type_ref(link.get("type", {}))
 
-            # Resolve source and target
-            source_node = self._resolve_node_reference(
-                link["source"], all_nodes, py_id_to_node_name
-            )
-            target_node = self._resolve_node_reference(
-                link["target"], all_nodes, py_id_to_node_name
-            )
-
-            if edge_type == 1 or edge_type == 3:  # Regular edge (1 or 3)
+            if edge_type_val == 1:  # Regular edge
                 edges.append(Edge(source=source_node, destination=target_node))
-            elif edge_type == 2 or edge_type == 15:  # Symmetry (2 or 15)
+            elif edge_type_val == 2:  # Symmetry edge
                 # Create a unique key for this symmetry pair (order-independent)
                 sym_key = tuple(sorted([source_node.name, target_node.name]))
                 if sym_key not in seen_symmetries:
                     symmetries.append(Symmetry([source_node, target_node]))
                     seen_symmetries.add(sym_key)
 
+        # Build nodes list from the nodes section
+        nodes = []
+        nodes_from_refs = []
+
+        # First collect nodes based on the nodes array
+        for node_ref in data.get("nodes", []):
+            if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
+                py_id = node_ref["id"]["py/id"]
+                # Get node from decoded objects (py/id is 1-indexed)
+                if py_id <= len(self.decoded_objects):
+                    obj = self.decoded_objects[py_id - 1]
+                    if isinstance(obj, Node):
+                        nodes_from_refs.append(obj)
+
+        # If we're missing nodes (due to malformed JSON), collect all Node objects
+        all_nodes = [obj for obj in self.decoded_objects if isinstance(obj, Node)]
+
+        if len(nodes_from_refs) < len(all_nodes):
+            # The nodes array is incomplete or includes non-nodes
+            # Use all nodes in their natural order
+            nodes = all_nodes
+        else:
+            # Use the order from the nodes array
+            nodes = nodes_from_refs
+
         # Get skeleton name
         name = data.get("graph", {}).get("name", "Skeleton")
 
         return Skeleton(nodes=nodes, edges=edges, symmetries=symmetries, name=name)
+
+    def _resolve_link_ref(self, node_ref: Union[Dict, int]) -> Node:
+        """Resolve a node reference.
+
+        Args:
+            node_ref: Node reference (can be embedded object or py/id reference).
+
+        Returns:
+            The resolved Node object.
+        """
+        if isinstance(node_ref, dict):
+            if "py/object" in node_ref:
+                # Find the node in decoded objects by name
+                node = self._decode_node(node_ref)
+                for obj in self.decoded_objects:
+                    if isinstance(obj, Node) and obj.name == node.name:
+                        return obj
+                raise ValueError(f"Node {node.name} not found in decoded objects")
+            elif "py/id" in node_ref:
+                # Reference to existing object
+                py_id = node_ref["py/id"]
+                if py_id <= len(self.decoded_objects):
+                    obj = self.decoded_objects[py_id - 1]
+                    if isinstance(obj, Node):
+                        return obj
+                    raise ValueError(f"py/id {py_id} is not a Node")
+                raise ValueError(f"py/id {py_id} not found")
+        elif isinstance(node_ref, int):
+            # Direct index (used in SLP format, shouldn't happen in standalone)
+            raise ValueError(f"Direct index reference not supported: {node_ref}")
+
+        raise ValueError(f"Unknown node reference format: {node_ref}")
+
+    def _resolve_edge_type_ref(self, type_data: Dict) -> int:
+        """Resolve edge type reference.
+
+        Args:
+            type_data: Dictionary containing edge type data.
+
+        Returns:
+            Integer edge type (1 for regular edge, 2 for symmetry).
+        """
+        if "py/reduce" in type_data:
+            # Return the value directly (already decoded in first pass)
+            return type_data["py/reduce"][1]["py/tuple"][0]
+        elif "py/id" in type_data:
+            # Reference to existing edge type
+            py_id = type_data["py/id"]
+
+            # First try to find in decoded objects (training config format)
+            if py_id <= len(self.decoded_objects):
+                obj = self.decoded_objects[py_id - 1]
+                if isinstance(obj, int):
+                    return obj
+
+            # If not found, check if this is a separate edge type ID space
+            # (standalone skeleton format)
+            for edge_val, edge_id in self._edge_type_ids.items():
+                if edge_id == py_id:
+                    return edge_val
+
+            raise ValueError(f"py/id {py_id} not found as edge type")
+        else:
+            # Default to regular edge
+            return 1
 
     def _decode_node(self, data: Dict) -> Node:
         """Decode a node from jsonpickle format.
@@ -169,68 +251,6 @@ class SkeletonDecoder:
             name = data.get("name", "")
 
         return Node(name=name)
-
-    def _resolve_node_reference(
-        self,
-        node_ref: Union[Dict, int],
-        all_nodes: Dict[str, Node],
-        py_id_to_node_name: Dict[int, str],
-    ) -> Node:
-        """Resolve a node reference to an actual Node object.
-
-        Args:
-            node_ref: Node reference (can be embedded object, py/id reference, or
-                index).
-            all_nodes: Dictionary mapping node names to Node objects.
-            py_id_to_node_name: Mapping from py/id to node name.
-
-        Returns:
-            The resolved Node object.
-        """
-        if isinstance(node_ref, dict):
-            if "py/object" in node_ref:
-                # Embedded node - decode and return
-                node = self._decode_node(node_ref)
-                if node.name in all_nodes:
-                    return all_nodes[node.name]
-                else:
-                    # Create new node if not found
-                    return node
-            elif "py/id" in node_ref:
-                # Reference to existing object
-                py_id = node_ref["py/id"]
-                if py_id in self._id_to_object:
-                    return self._id_to_object[py_id]
-                elif (
-                    py_id in py_id_to_node_name
-                    and py_id_to_node_name[py_id] in all_nodes
-                ):
-                    return all_nodes[py_id_to_node_name[py_id]]
-                raise ValueError(f"py/id {py_id} not found")
-        elif isinstance(node_ref, int):
-            # Direct index (used in SLP format, shouldn't happen in standalone)
-            raise ValueError(f"Direct index reference not supported: {node_ref}")
-
-        raise ValueError(f"Unknown node reference format: {node_ref}")
-
-    def _get_edge_type(self, type_data: Dict) -> int:
-        """Extract edge type from jsonpickle format.
-
-        Args:
-            type_data: Dictionary containing edge type data.
-
-        Returns:
-            Integer edge type (1 for regular edge, 2 for symmetry).
-        """
-        if "py/reduce" in type_data:
-            # Extract from py/reduce format
-            return type_data["py/reduce"][1]["py/tuple"][0]
-        elif "py/id" in type_data:
-            # Direct reference
-            return type_data["py/id"]
-        else:
-            # Default to regular edge
-            return 1
 
 
 class SkeletonEncoder:

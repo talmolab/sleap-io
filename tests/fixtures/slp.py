@@ -177,3 +177,39 @@ def training_config_fly32():
     - Demonstrates how skeletons are embedded in training configs
     """
     return "tests/data/slp/fly32.training_config.json"
+
+
+@pytest.fixture
+def slp_skeleton_13pt_fly():
+    """SLP file with 13-point fly skeleton only (no labels).
+
+    This file:
+    - Contains only skeleton definition, no labeled frames
+    - Has 13 nodes in standard fly configuration
+    - Used for testing skeleton node order preservation
+    """
+    return "tests/data/slp/skeleton-order-bug/skeleton_only_13pt_fly.slp"
+
+
+@pytest.fixture
+def training_config_13pt_fly():
+    """Training config with 13-point fly skeleton demonstrating node order bug.
+
+    This file:
+    - Contains training configuration with embedded skeleton
+    - Has 13-point fly skeleton with non-sequential py/ids
+    - Demonstrates the node order preservation issue in PR #185
+    """
+    return "tests/data/slp/skeleton-order-bug/training_config_13pt_fly.json"
+
+
+@pytest.fixture
+def skeleton_json_13pt_fly():
+    """Standalone skeleton JSON for 13-point fly.
+
+    This file:
+    - Contains just the skeleton data extracted from training config
+    - Has 13 nodes with fly-specific node names
+    - Useful for isolated skeleton decoding tests
+    """
+    return "tests/data/slp/skeleton-order-bug/skeleton_13pt_fly.json"
