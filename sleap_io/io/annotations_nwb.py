@@ -1,3 +1,5 @@
+"""Functions to write user annotated frames to NWB format."""
+
 import datetime
 import json
 import os
