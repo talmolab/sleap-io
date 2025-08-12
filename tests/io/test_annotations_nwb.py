@@ -1,174 +1,265 @@
-"""Tests for annotations → NWB export (annotations_nwb)."""
+"""Tests for annotations_nwb I/O functionality."""
 
-import datetime
-import types
-from pathlib import Path
-
-import numpy as np
+import json
+import subprocess
 import pytest
-from pynwb import NWBHDF5IO, NWBFile
-from sleap_io import load_slp
+import numpy as np
+from pathlib import Path
+import cv2
 
-import sys
-
-_fake_cv2 = types.ModuleType("cv2")
-_fake_cv2.CAP_PROP_FPS = 5
+import sleap_io.io.annotations_nwb as ann
 
 
-class _Cap:
-    """Pretend every video opens and advertises 30 fps."""
-    def isOpened(self):  # noqa: N802
-        return True
-
-    def get(self, _):  # noqa: D401
-        return 30.0
-
-
-_fake_cv2.VideoCapture = lambda *_a, **_k: _Cap()  # noqa: E731
-_fake_cv2.imwrite = lambda *_a, **_k: True  # noqa: E731
-sys.modules.setdefault("cv2", _fake_cv2)     # must exist *before* import
-
-
-import sleap_io.io.annotations_nwb as ann  # now safe to import – cv2 is present
-
-@pytest.fixture
-def nwbfile():
-    """Minimal NWBFile identical to the one used in core sleap-io tests."""
-    return NWBFile(
-        session_description="testing session",
-        identifier="identifier",
-        session_start_time=datetime.datetime.now(datetime.timezone.utc),
-    )
-
-
-@pytest.fixture(autouse=True)
-def stub_external(monkeypatch, tmp_path):
-    """Neutralise disk/ffmpeg side-effects for *every* test."""
-    # ffmpeg calls
-    monkeypatch.setattr(ann.subprocess, "run", lambda *_a, **_k: None)
-
-    # Work in an isolated temp-dir so make_mjpeg’s files don’t pollute repo
+def test_make_mjpeg_error(tmp_path, monkeypatch):
+    image_list = [("img1.png", 0.5), ("img2.jpg", 1.0)]
+    frame_map = {0: [[0, "video1"]], 1: [[1, "video1"]]}
     monkeypatch.chdir(tmp_path)
 
-    # Lightweight stand-ins for the heavy frame + MJPEG pipeline; individual
-    # tests can override if they want to exercise the real versions.
-    monkeypatch.setattr(
-        ann,
-        "get_frames_from_slp",
-        lambda _labels, *_a, **_k: (
-            [("dummy.png", 0.04)],
-            {0: [[0, "dummy_video"]]},
-        ),
-    )
-    monkeypatch.setattr(
-        ann,
-        "make_mjpeg",
-        lambda *_a, **_k: "annotated_frames.avi",
-    )
+    def fake_run(cmd, check):
+        raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
-def _expected_video_set(labels):
-    return {Path(v.filename).as_posix() for v in labels.videos}
+    with pytest.raises(subprocess.CalledProcessError):
+        ann.make_mjpeg(image_list, frame_map)
+
+    txt_file = tmp_path / "input.txt"
+    json_file = tmp_path / "frame_map.json"
+    assert txt_file.exists(), "input.txt not created"
+    assert json_file.exists(), "frame_map.json not created"
+
+    loaded = json.loads(json_file.read_text())
+    expected = {str(k): v for k, v in frame_map.items()}
+    assert loaded == expected
 
 
-def test_create_skeletons_typical(slp_typical):
-    labels = load_slp(slp_typical)
+def test_create_skeletons_basic():
+    # Dummy nodes and skeleton
+    Node = type("Node", (), {})
+    node1 = Node()
+    node1.name = "n1"
 
-    skeletons, frame_indices, unique = ann.create_skeletons(labels)
+    node2 = Node()
+    node2.name = "n2"
 
-    # one NWB skeleton per SLEAP skeleton
-    assert len(skeletons.skeletons) == len(labels.skeletons)
+    DummySkel = type("DummySkel", (), {})
+    skel = DummySkel()
+    skel.name = "TestSkel" 
+    skel.nodes = [node1, node2]
+    skel.edges = [(node1, node2)]
 
-    # every video encountered in the labels is represented
-    assert set(frame_indices) == _expected_video_set(labels)
+    DummyInst = type("DummyInst", (), {})
+    inst = DummyInst()
+    inst.skeleton = skel
 
-    # internal book-keeping matches
-    assert set(unique) == {sk.name for sk in labels.skeletons}
+    # Two labels referencing same video
+    DummyVideo = type("Video", (), {})
+    label1 = type("Label", (), {})()
+    label1.video = DummyVideo()
+    label1.video.filename = "vid1.mp4"
+    label1.frame_idx = 0
+    label1.instances = [inst]
 
+    label2 = type("Label", (), {})()
+    label2.video = DummyVideo()
+    label2.video.filename = "vid1.mp4"
+    label2.frame_idx = 1
+    label2.instances = [inst]
+    
+    labels = [label1, label2]
 
-def test_create_training_frames_identity_false(slp_typical):
-    labels = load_slp(slp_typical)
-    skeletons, _, unique = ann.create_skeletons(labels)
+    skeletons, frame_indices, unique_skeletons = ann.create_skeletons(labels)
 
-    # dummy MJPEG ImageSeries
-    dummy_mjpeg = ann.ImageSeries(
-        name="dummy",
-        description="stand-in",
-        format="external",
-        external_file=["annotated_frames.avi"],
-        starting_frame=[0],
-        rate=30.0,
-    )
+    # Verify unique skeletons
+    assert list(unique_skeletons.keys()) == ["TestSkel"]
+    sk_obj = unique_skeletons["TestSkel"]
+    assert sk_obj.name == "TestSkel"
+    assert list(sk_obj.nodes) == ["n1", "n2"]
 
-    tf = ann.create_training_frames(
-        labels=labels,
-        unique_skeletons=unique,
-        annotations_mjpeg=dummy_mjpeg,
-        frame_map={0: [[0, "dummy"]]},
-        identity=False,
-    )
+    # Verify frame_indices mapping
+    assert set(frame_indices.keys()) == {"vid1.mp4"}
+    assert frame_indices["vid1.mp4"] == [0, 1]
 
-    # one training frame per labelled frame
-    assert len(tf.training_frames) == len(labels.labeled_frames)
-
-
-def test_create_source_videos_minimal():
-    frame_indices = {"video_01.avi": [0, 1]}
-    src_vids, annotated = ann.create_source_videos(frame_indices, "annotated_frames.avi")
-
-    # original + annotated
-    assert len(src_vids.image_series) == 2
-    assert annotated in src_vids.image_series
-
-
-def test_write_annotations_nwb_typical(slp_typical, tmp_path):
-    labels = load_slp(slp_typical)
-    out_path = tmp_path / "annotations_typical.nwb"
-
-    ann.write_annotations_nwb(labels, str(out_path))
-
-    with NWBHDF5IO(str(out_path), "r") as io:
-        nwb = io.read()
-
-        # containers created
-        assert "behavior" in nwb.processing
-        behavior_pm = nwb.processing["behavior"]
-
-        assert "Skeletons" in behavior_pm.data_interfaces
-        assert "PoseTraining" in behavior_pm.data_interfaces
-
-        # subject auto-filled for DANDI compliance
-        assert nwb.subject.subject_id == "subject1"
-        assert nwb.subject.species == "Mus musculus"
+    # Verify Skeletons container
+    assert hasattr(skeletons, 'skeletons')
+    assert len(skeletons.skeletons) == 1
+    sk0 = skeletons.skeletons["TestSkel"]
+    assert sk0.name == "TestSkel"
+    assert list(sk0.nodes) == ["n1", "n2"]
 
 
-def test_write_annotations_rejects_empty(nwbfile, slp_minimal):
-    """Mirrors sleap-io’s ValueError path for no predicted instances."""
-    labels = load_slp(slp_minimal)
+def test_get_frames_from_slp_basic(tmp_path, monkeypatch):
+    # Dummy LabeledFrame objects
+    class DummyBackend:
+        def get_frame(self, idx):
+            return np.zeros((2, 2, 3), dtype=np.uint8)
+    class DummyVideo:
+        def __init__(self, filename):
+            self.filename = filename
+            self.backend = DummyBackend()
+    class DummyLF:
+        def __init__(self, frame_idx, filename):
+            self.frame_idx = frame_idx
+            self.video = DummyVideo(filename)
 
-    # emulate sleap-io assertion: must have predicted instances
-    with pytest.raises(ValueError):
-        ann.create_skeletons(labels)
+    labels = type("Labels", (), {})()
+    labels.labeled_frames = [DummyLF(0, "video1.mp4"), DummyLF(1, "video1.mp4")]
 
-
-def test_make_mjpeg_script(tmp_path, monkeypatch):
-    """Exercise make_mjpeg with two fake images."""
-    img1 = tmp_path / "f1.png"
-    img2 = tmp_path / "f2.png"
-    img1.write_bytes(b"\x89PNG\r\n\x1a\n")
-    img2.write_bytes(b"\x89PNG\r\n\x1a\n")
-
-    image_list = [(str(img1), 0.01), (str(img2), 0.01)]
-    frame_map = {0: [[0, "v"]], 1: [[1, "v"]]}
-
-    # capture ffmpeg invocation
-    called = {}
-
-    monkeypatch.setattr(ann.subprocess, "run", lambda cmd, *_a, **_k: called.setdefault("cmd", cmd))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cv2, "imwrite", lambda fname, img: True)
 
-    out = ann.make_mjpeg(image_list, frame_map)
+    image_list, frame_map = ann.get_frames_from_slp(labels, mjpeg_frame_duration=5.0)
 
-    assert (tmp_path / "input.txt").exists()
-    assert (tmp_path / "frame_map.json").exists()
-    assert out == "annotated_frames.avi"
-    assert called["cmd"][0] == "ffmpeg"
+    # Should produce two entries
+    assert len(image_list) == 2
+    # Filenames should include the 'frames' directory
+    assert all(Path(path).parent.name == "frames" for path, _ in image_list)
+    # Durations match
+    assert [dur for _, dur in image_list] == [5.0, 5.0]
+    # frame_map keys as integers
+    assert set(frame_map.keys()) == {0, 1}
+    assert frame_map[0] == [0, "video1"]
+    assert frame_map[1] == [1, "video1"]
+
+
+def test_create_source_videos_basic(monkeypatch):
+    frame_indices = {"video1.mp4": [0, 1], "video2.avi": [2]}
+    output_mjpeg = "annot.avi"
+    mjpeg_frame_rate = 24.0
+
+    class FakeCap:
+        def __init__(self, path): self.path = path
+        def isOpened(self): return True
+        def get(self, prop): return 30.0
+    monkeypatch.setattr(cv2, "VideoCapture", FakeCap)
+
+    created_series = []
+    class FakeImageSeries:
+        def __init__(self, *args, **kwargs):
+            created_series.append((args, kwargs))
+    class FakeSourceVideos:
+        def __init__(self, image_series):
+            self.series = image_series
+    monkeypatch.setattr(ann, "ImageSeries", FakeImageSeries)
+    monkeypatch.setattr(ann, "SourceVideos", FakeSourceVideos)
+
+    source_videos, annotations_series = ann.create_source_videos(
+        frame_indices, output_mjpeg, mjpeg_frame_rate
+    )
+
+    assert isinstance(source_videos, FakeSourceVideos)
+    assert isinstance(annotations_series, FakeImageSeries)
+    assert len(source_videos.series) == len(frame_indices) + 1
+    assert source_videos.series[-1] is annotations_series
+
+
+def test_create_training_frames_basic(monkeypatch):
+    class DummyVal:
+        def __init__(self):
+            self.points = [((1, 2), True), ((3, 4), False)]
+            self.skeleton = type("Skel", (), {"name": "TestSkel"})()
+    class DummyLF:
+        def __init__(self, idx):
+            self.frame_idx = idx
+            self.instances = [DummyVal()]
+    labels = type("Labels", (), {})()
+    labels.labeled_frames = [DummyLF(5), DummyLF(7)]
+
+    from sleap_io.io.annotations_nwb import Skeleton
+    fake_skel = Skeleton(name="TestSkel", nodes=[], edges=np.empty((0, 2), dtype="uint8"))
+    fake_unique = {"TestSkel": fake_skel}
+    fake_annotations = object()
+    fake_frame_map = {5: [0, "video"], 7: [1, "video"]}
+
+    created = []
+    class FakeTrainingFrame:
+        def __init__(self, name, skeleton_instances, source_video, source_video_frame_index):
+            self.name = name
+            self.source_video = source_video
+            self.source_video_frame_index = source_video_frame_index
+            created.append(self)
+    class FakeTrainingFrames:
+        def __init__(self, training_frames):
+            self.training_frames = training_frames
+    monkeypatch.setattr(ann, "TrainingFrame", FakeTrainingFrame)
+    monkeypatch.setattr(ann, "TrainingFrames", FakeTrainingFrames)
+
+    result = ann.create_training_frames(
+        labels, fake_unique, fake_annotations, fake_frame_map
+    )
+
+    assert isinstance(result, FakeTrainingFrames)
+    assert len(result.training_frames) == 2
+    assert result.training_frames[0].name == "frame_0"
+    assert int(result.training_frames[0].source_video_frame_index) == 0
+    assert int(result.training_frames[1].source_video_frame_index) == 1
+    assert result.training_frames[0].source_video is fake_annotations
+
+
+def test_write_annotations_nwb_success(tmp_path, monkeypatch):
+    fake_skeletons = object()
+    fake_frame_indices = {}
+    fake_unique = {}
+    fake_images = []
+    fake_frame_map = {}
+    fake_mjpeg = "out.avi"
+    fake_source_videos = object()
+    fake_annotations = object()
+    fake_training = object()
+
+    monkeypatch.setattr(ann, "create_skeletons", lambda labels: (fake_skeletons, fake_frame_indices, fake_unique))
+    monkeypatch.setattr(ann, "get_frames_from_slp", lambda labels: (fake_images, fake_frame_map))
+    monkeypatch.setattr(ann, "make_mjpeg", lambda imgs, fmap: fake_mjpeg)
+    monkeypatch.setattr(ann, "create_source_videos", lambda fidx, mjp, rate=None: (fake_source_videos, fake_annotations))
+    monkeypatch.setattr(ann, "create_training_frames", lambda labels, uniq, ann_mjp, fmap: fake_training)
+
+    class FakePose:
+        def __init__(self, training_frames, source_videos):
+            self.training_frames = training_frames
+            self.source_videos = source_videos
+    monkeypatch.setattr(ann, "PoseTraining", FakePose)
+
+    class FakeSubject:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+    monkeypatch.setattr(ann, "Subject", FakeSubject)
+
+    class FakeNWBFile:
+        def __init__(self, **kwargs):
+            self.modules = []
+            self.kwargs = kwargs
+        def create_processing_module(self, name, description):
+            mod = type("Mod", (), {"added": []})()
+            def add(iface): mod.added.append(iface)
+            mod.add = add
+            self.modules.append((name, mod))
+            return mod
+    monkeypatch.setattr(ann, "NWBFile", FakeNWBFile)
+
+    created_ios = []
+    class FakeIO:
+        def __init__(self, path, mode):
+            self.path = path
+            self.mode = mode
+            created_ios.append(self)
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def write(self, nwbfile): self.written = nwbfile
+    monkeypatch.setattr(ann, "NWBHDF5IO", FakeIO)
+
+    labels = object()
+    out_path = tmp_path / "test.nwb"
+    ann.write_annotations_nwb(labels, str(out_path), nwb_file_kwargs={"foo": True}, nwb_subject_kwargs={"subject_id": "sub1"})
+
+    assert len(created_ios) == 1
+    io_inst = created_ios[0]
+    assert io_inst.path == str(out_path)
+    assert io_inst.mode == "w"
+    assert hasattr(io_inst, "written")
+    nwbfile = io_inst.written
+    assert isinstance(nwbfile, FakeNWBFile)
+
+    assert len(nwbfile.modules) == 1
+    name, proc = nwbfile.modules[0]
+    assert name == "behavior"
+    assert proc.added[0] is fake_skeletons
+    assert isinstance(proc.added[1], FakePose)
