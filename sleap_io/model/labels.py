@@ -999,6 +999,7 @@ class Labels:
         new_filenames: list[str | Path] | None = None,
         filename_map: dict[str | Path, str | Path] | None = None,
         prefix_map: dict[str | Path, str | Path] | None = None,
+        open_videos: bool = True,
     ):
         """Replace video filenames.
 
@@ -1008,6 +1009,9 @@ class Labels:
             filename_map: Dictionary mapping old filenames (keys) to new filenames
                 (values).
             prefix_map: Dictionary mapping old prefixes (keys) to new prefixes (values).
+            open_videos: If `True` (the default), attempt to open the video backend for
+                I/O after replacing the filename. If `False`, the backend will not be
+                opened (useful for operations with costly file existence checks).
 
         Notes:
             Only one of the argument types can be provided.
@@ -1032,7 +1036,7 @@ class Labels:
                 )
 
             for video, new_filename in zip(self.videos, new_filenames):
-                video.replace_filename(new_filename)
+                video.replace_filename(new_filename, open=open_videos)
 
         elif filename_map is not None:
             for video in self.videos:
@@ -1044,10 +1048,10 @@ class Labels:
                                 new_fns.append(new_fn)
                             else:
                                 new_fns.append(fn)
-                        video.replace_filename(new_fns)
+                        video.replace_filename(new_fns, open=open_videos)
                     else:
                         if Path(video.filename) == Path(old_fn):
-                            video.replace_filename(new_fn)
+                            video.replace_filename(new_fn, open=open_videos)
 
         elif prefix_map is not None:
             for video in self.videos:
@@ -1062,12 +1066,12 @@ class Labels:
                                 new_fns.append(new_prefix / fn.relative_to(old_prefix))
                             else:
                                 new_fns.append(fn)
-                        video.replace_filename(new_fns)
+                        video.replace_filename(new_fns, open=open_videos)
                     else:
                         fn = Path(video.filename)
                         if fn.as_posix().startswith(old_prefix.as_posix()):
                             video.replace_filename(
-                                new_prefix / fn.relative_to(old_prefix)
+                                new_prefix / fn.relative_to(old_prefix), open=open_videos
                             )
 
     def extract(

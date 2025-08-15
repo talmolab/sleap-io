@@ -457,6 +457,50 @@ def test_replace_filenames():
     assert labels.video.filename == ["test/imgs/img0.png", "test/imgs/img1.png"]
 
 
+def test_replace_filenames_open_videos():
+    """Test that open_videos=False prevents video backend from opening."""
+    # Create videos that won't exist on disk
+    labels = Labels(
+        videos=[
+            Video.from_filename("nonexistent_a.mp4"),
+            Video.from_filename("nonexistent_b.mp4"),
+        ]
+    )
+
+    # Test with open_videos=True (default) - should attempt to open backend
+    labels.replace_filenames(
+        new_filenames=["new_nonexistent_a.mp4", "new_nonexistent_b.mp4"]
+    )
+    # Backend should be None since files don't exist
+    assert labels.videos[0].backend is None
+    assert labels.videos[1].backend is None
+    assert labels.videos[0].filename == "new_nonexistent_a.mp4"
+    assert labels.videos[1].filename == "new_nonexistent_b.mp4"
+
+    # Test with open_videos=False - should not attempt to open backend
+    labels.replace_filenames(
+        new_filenames=["final_a.mp4", "final_b.mp4"], open_videos=False
+    )
+    # Backend should still be None, but filenames should be updated
+    assert labels.videos[0].backend is None
+    assert labels.videos[1].backend is None
+    assert labels.videos[0].filename == "final_a.mp4"
+    assert labels.videos[1].filename == "final_b.mp4"
+
+    # Test with filename_map and open_videos=False
+    labels.replace_filenames(
+        filename_map={"final_a.mp4": "mapped_a.mp4", "final_b.mp4": "mapped_b.mp4"},
+        open_videos=False,
+    )
+    assert labels.videos[0].filename == "mapped_a.mp4"
+    assert labels.videos[1].filename == "mapped_b.mp4"
+
+    # Test with prefix_map and open_videos=False
+    labels.replace_filenames(prefix_map={"mapped_": "prefixed_"}, open_videos=False)
+    assert labels.videos[0].filename == "prefixed_a.mp4"
+    assert labels.videos[1].filename == "prefixed_b.mp4"
+
+
 def test_split(slp_real_data, tmp_path):
     # n = 0
     labels = Labels()
