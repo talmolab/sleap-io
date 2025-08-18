@@ -1056,23 +1056,29 @@ class Labels:
         elif prefix_map is not None:
             for video in self.videos:
                 for old_prefix, new_prefix in prefix_map.items():
-                    old_prefix, new_prefix = Path(old_prefix), Path(new_prefix)
-
+                    # Work with strings for prefix replacement
+                    # If old_prefix ends with a separator and new_prefix doesn't, add it
+                    if old_prefix.endswith(("/", "\\")) and not new_prefix.endswith(
+                        ("/", "\\")
+                    ):
+                        new_prefix = new_prefix + old_prefix[-1]
                     if type(video.filename) is list:
                         new_fns = []
                         for fn in video.filename:
-                            fn = Path(fn)
-                            if fn.as_posix().startswith(old_prefix.as_posix()):
-                                new_fns.append(new_prefix / fn.relative_to(old_prefix))
+                            fn_str = str(fn)
+                            if fn_str.startswith(old_prefix):
+                                # Replace the prefix string
+                                new_fn = new_prefix + fn_str[len(old_prefix) :]
+                                new_fns.append(new_fn)
                             else:
                                 new_fns.append(fn)
                         video.replace_filename(new_fns, open=open_videos)
                     else:
-                        fn = Path(video.filename)
-                        if fn.as_posix().startswith(old_prefix.as_posix()):
-                            video.replace_filename(
-                                new_prefix / fn.relative_to(old_prefix), open=open_videos
-                            )
+                        fn_str = str(video.filename)
+                        if fn_str.startswith(old_prefix):
+                            # Replace the prefix string
+                            new_fn = new_prefix + fn_str[len(old_prefix) :]
+                            video.replace_filename(new_fn, open=open_videos)
 
     def extract(
         self, inds: list[int] | list[tuple[Video, int]] | np.ndarray, copy: bool = True
