@@ -1238,10 +1238,8 @@ def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
     temp_slp = tmp_path / "test_write_labels_prop.slp"
 
     # Mock embed_videos to verify verbose is correctly passed
-    with (
-        mock.patch("sleap_io.io.slp.embed_videos") as mock_embed_videos,
-        mock.patch("sleap_io.io.slp.write_videos") as mock_write_videos,
-    ):
+    with mock.patch("sleap_io.io.slp.embed_videos") as mock_embed_videos, \
+         mock.patch("sleap_io.io.slp.write_videos") as mock_write_videos:
         write_labels(temp_slp, labels, embed="user", verbose=True)
 
         # Check that verbose=True was passed to embed_videos
@@ -1251,10 +1249,8 @@ def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
         assert mock_write_videos.call_args.kwargs["verbose"] is True
 
     # Check with verbose=False
-    with (
-        mock.patch("sleap_io.io.slp.embed_videos") as mock_embed_videos,
-        mock.patch("sleap_io.io.slp.write_videos") as mock_write_videos,
-    ):
+    with mock.patch("sleap_io.io.slp.embed_videos") as mock_embed_videos, \
+         mock.patch("sleap_io.io.slp.write_videos") as mock_write_videos:
         write_labels(temp_slp, labels, embed="user", verbose=False)
 
         # Check that verbose=False was passed to embed_videos
