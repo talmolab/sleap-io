@@ -13,9 +13,20 @@ package that aims to provide functionality for interacting with pose tracking-re
 data structures and file formats with minimal dependencies. This package *does not*
 have any functionality related to labeling, training, or inference.
 
+## Documentation
+
+**📚 [Documentation](https://io.sleap.ai)** - Comprehensive guides and API reference
+
 ## Installation
+
+### From PyPI
 ```
 pip install sleap-io
+```
+
+### From source (latest version)
+```
+pip install git+https://github.com/talmolab/sleap-io.git@main
 ```
 
 For video backend support, install with extras:

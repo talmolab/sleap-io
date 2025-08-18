@@ -37,6 +37,8 @@ See [Examples](examples.md) for more usage examples and recipes.
 
 
 ## Installation
+
+### From PyPI
 ```
 pip install sleap-io
 ```
@@ -45,6 +47,11 @@ or
 
 ```
 conda install -c conda-forge sleap-io
+```
+
+### From source (latest version)
+```
+pip install git+https://github.com/talmolab/sleap-io.git@main
 ```
 
 ### Optional Dependencies
