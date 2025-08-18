@@ -8,7 +8,7 @@ on:
       - "sleap_io/**"
       - "tests/**"
       - ".github/workflows/ci.yml"
-      - "environment.yml"
+      - "pyproject.toml"
   push:
     branches:
       - main
@@ -16,7 +16,7 @@ on:
       - "sleap_io/**"
       - "tests/**"
       - ".github/workflows/ci.yml"
-      - "environment.yml"
+      - "pyproject.toml"
 
 jobs:
   # Lint with ruff
@@ -34,22 +34,24 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Setup UV
+      uses: astral-sh/setup-uv@v6
       with:
         python-version: "3.12"
 
     - name: Install dependencies
       run: |
-        pip install --editable .[dev]
+        uv sync --frozen --all-extras
 
-    - name: Run ruff check
-      run: |
-        ruff check sleap_io tests
+    - name: Run ruff checks
+      uses: astral-sh/ruff-action@v1
+      with:
+        args: "check sleap_io tests"
     
     - name: Run ruff format check
-      run: |
-        ruff format --check sleap_io tests
+      uses: astral-sh/ruff-action@v1
+      with:
+        args: "format --check sleap_io tests"
 
   # Tests with pytest
   tests:
@@ -69,36 +71,31 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Conda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v6
         with:
-          miniforge-version: latest
-          conda-solver: "libmamba"
-          environment-file: environment.yml
-          activate-environment: sleap-io
           python-version: ${{ matrix.python }}
 
-      - name: Print environment info
-        shell: bash -l {0}
+      - name: Install dependencies
         run: |
-          which python
-          conda info
-          conda list
-          pip freeze
+          uv sync --frozen --all-extras
+
+      - name: Print environment info
+        run: |
+          uv run python --version
+          uv run pip freeze
 
       - name: Install graphics dependencies on Ubuntu
         # https://github.com/conda-forge/opencv-feedstock/issues/401
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        shell: bash -l {0}
         run: |
           sudo apt-get update && sudo apt-get install libglapi-mesa libegl-mesa0 libegl1 libopengl0 libgl1 libglx-mesa0
 
       - name: Test with pytest (with coverage)
-        shell: bash -l {0}
         run: |
-          pytest --cov=sleap_io --cov-report=xml --durations=-1 tests/
+          uv run pytest --cov=sleap_io --cov-report=xml --durations=-1 tests/
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
