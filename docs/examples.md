@@ -184,7 +184,7 @@ file_dict = {
 loaded_set = sio.load_labels_set(file_dict)
 ```
 
-**See also:** [`LabelsSet`](model.md#sleap_io.LabelsSet), [`load_labels_set`](formats.md#sleap_io.load_labels_set), [`save_labels_set`](formats.md#sleap_io.save_labels_set)
+**See also:** [`LabelsSet`](model.md#sleap_io.LabelsSet), [`load_labels_set`](formats.md#sleap_io.load_labels_set)
 
 
 ## Re-encode video

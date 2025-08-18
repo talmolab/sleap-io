@@ -37,6 +37,8 @@ See [Examples](examples.md) for more usage examples and recipes.
 
 
 ## Installation
+
+### From PyPI
 ```
 pip install sleap-io
 ```
@@ -47,12 +49,31 @@ or
 conda install -c conda-forge sleap-io
 ```
 
-For development, use one of the following syntaxes:
+### From source (latest version)
+```
+pip install git+https://github.com/talmolab/sleap-io.git@main
+```
+
+### Optional Dependencies
+
+For video backend support, install with extras:
+```
+pip install sleap-io[opencv]  # For OpenCV backend
+pip install sleap-io[av]       # For PyAV backend  
+pip install sleap-io[all]      # For all video backends
+```
+
+### Development Installation
+
+For development, use one of the following:
+```
+uv sync --all-extras           # Recommended: install with uv
+```
 ```
 conda env create -f environment.yml
 ```
 ```
-pip install -e .[dev]
+pip install -e .[dev,all]      # Install with all extras for development
 ```
 
 
