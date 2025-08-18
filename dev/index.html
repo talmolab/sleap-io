@@ -1338,19 +1338,24 @@ with pose data, including utilities for common tasks. Some of these include:</p>
 </ul>
 <p>See <a href="examples/">Examples</a> for more usage examples and recipes.</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
-<h3 id="from-pypi">From PyPI<a class="headerlink" href="#from-pypi" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip install sleap-io
 </code></pre></div>
 <p>or</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>conda install -c conda-forge sleap-io
 </code></pre></div>
-<h3 id="from-source-latest-version">From source (latest version)<a class="headerlink" href="#from-source-latest-version" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip install git+https://github.com/talmolab/sleap-io.git@main
+<h3 id="optional-dependencies">Optional Dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">&para;</a></h3>
+<p>For video backend support, install with extras:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip install sleap-io[opencv]  # For OpenCV backend
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pip install sleap-io[av]       # For PyAV backend  
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pip install sleap-io[all]      # For all video backends
+</code></pre></div></p>
+<h3 id="development-installation">Development Installation<a class="headerlink" href="#development-installation" title="Permanent link">&para;</a></h3>
+<p>For development, use one of the following:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv sync --all-extras           # Recommended: install with uv
 </code></pre></div>
-<p>For development, use one of the following syntaxes:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>conda env create -f environment.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>conda env create -f environment.yml
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pip install -e .[dev]
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pip install -e .[dev,all]      # Install with all extras for development
 </code></pre></div></p>
 <h2 id="support">Support<a class="headerlink" href="#support" title="Permanent link">&para;</a></h2>
 <p>For technical inquiries specific to this package, please <a href="https://github.com/talmolab/sleap-io/issues">open an Issue</a>
