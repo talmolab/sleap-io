@@ -10,26 +10,48 @@ This repository follows a set of standard development practices for modern Pytho
     git clone https://github.com/talmolab/sleap-io && cd sleap-io
     ```
 2. Install the package in development mode:
-   With [`conda`](https://docs.conda.io/en/latest/miniconda.html) (*recommended*):
+   With [`uv`](https://docs.astral.sh/uv/) (*recommended*):
+   ```
+   uv sync --all-extras
+   ```
+   Or with [`conda`](https://docs.conda.io/en/latest/miniconda.html):
    ```
    conda env create -f environment.yml && conda activate sleap-io
    ```
-   Or without conda:
+   Or with pip:
    ```
-   pip install -e .[dev]
+   pip install -e .[dev,opencv]
    ```
 3. Test that things are working:
+   ```
+   uv run pytest tests
+   ```
+   Or if using conda/pip:
    ```
    pytest tests
    ```
 
-To reinstall the environment from scratch using `conda`:
+To reinstall the environment from scratch:
+
+With `uv`:
+```
+uv sync --all-extras --refresh
+```
+
+Or with `conda`:
 ```
 conda env remove -n sleap-io && conda env create -f environment.yml
 ```
 
 We also recommend setting up `ruff` to run automatically in your IDE.
-A good way to do this without messing up your global environment is to use a tool like [`pipx`](https://pypa.github.io/pipx/):
+
+If using `uv`, ruff is already included in the dev dependencies and can be run with:
+```
+uv run ruff check
+uv run ruff format
+```
+
+Alternatively, you can install it globally with [`pipx`](https://pypa.github.io/pipx/):
 ```
 pip install pipx
 pipx ensurepath
@@ -58,11 +80,14 @@ See the [`.github/workflows`](.github/workflows) folder for how our checks are i
 ### Packaging and dependency management
 This package uses [`setuptools`](https://setuptools.pypa.io/en/latest/) as a [packaging and distribution system](https://packaging.python.org/en/latest/guides/distributing-packages-using-setuptools/).
 
-Our [build system](https://setuptools.pypa.io/en/latest/build_meta.html) is configured in two places:
-- [`pyproject.toml`](pyproject.toml) which defines the basic build system configuration. This probably won't need to be changed.
-- [`setup.cfg`](setup.cfg) which contains the [declarative configuration](https://setuptools.pypa.io/en/latest/userguide/declarative_config.html#declarative-config) of the package and its dependencies.
+Our package configuration is defined in [`pyproject.toml`](pyproject.toml) which contains:
+- Build system configuration
+- Package metadata and dependencies
+- Optional dependencies (extras)
 
-If new dependencies need to be introduced (or if versions need to be fenced), specify these in [`setup.cfg`](setup.cfg) in the `install_requires` section. For development-only dependencies (i.e., packages that are not needed for distribution), add them to the `[options.extras_require]` → `dev` section. These dependencies will only be installed when specifying the `dev` extras like: `pip install -e .[dev]` or `pip install sleap-io[dev]`.
+If new dependencies need to be introduced (or if versions need to be fenced), specify these in [`pyproject.toml`](pyproject.toml) in the `dependencies` section. For development-only dependencies (i.e., packages that are not needed for distribution), add them to the `[project.optional-dependencies]` → `dev` section. For optional features like OpenCV support, add them to a dedicated extras group (e.g., `opencv`).
+
+These dependencies will only be installed when specifying the extras like: `pip install -e .[dev,opencv]` or `pip install sleap-io[dev,opencv]`. With `uv`, use `uv sync --all-extras` to install all optional dependencies.
 
 Best practices for adding dependencies include:
 - Use permissive [version ranges](https://peps.python.org/pep-0440/#version-specifiers) so that the package remains future- and backward-compatible without requiring new releases.
@@ -73,7 +98,7 @@ For more reference see:
 - [Setuptools Keywords](https://setuptools.pypa.io/en/latest/references/keywords.html)
 - [PEP 508 - Dependency specification for Python Software Packages](https://peps.python.org/pep-0508/)
 
-**Note:** We use [`conda`](https://docs.conda.io/en/latest/miniconda.html) as a preferred method for defining and managing environments, but this is not required. A recommended development environment is defined in [`environment.yml`](environment.yml).
+**Note:** We recommend using [`uv`](https://docs.astral.sh/uv/) for fast, reliable Python environment management. For backwards compatibility, a minimal conda environment is defined in [`environment.yml`](environment.yml) that simply installs the package via pip.
 
 
 ### Testing
@@ -97,9 +122,14 @@ All changes should aim to increase or maintain test coverage.
 
 *The following steps are based on [this guide](https://jasonstitt.com/perfect-python-live-test-coverage).*
 
-1. If you already have an environment installed, `pip install -e ."[dev]"` to make sure you have the latest dev tools (namely `pytest-watch`).
+1. If you already have an environment installed, ensure you have the latest dev tools (namely `pytest-watch`):
+   - With `uv`: `uv sync --all-extras`
+   - With pip: `pip install -e ."[dev]"`
 2. Install the [Coverage Gutters extension](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters) in VS Code.
-3. Open a terminal, `conda activate sleap-io` and then run `ptw` to automatically run tests. This will generate a new `lcov.info` file when it's done.
+3. Open a terminal and run the test watcher:
+   - With `uv`: `uv run ptw`
+   - With conda: `conda activate sleap-io && ptw`
+   This will generate a new `lcov.info` file when it's done.
 4. Enable the coverage gutters by using **Ctrl/Cmd**+**Shift**+**P**, then **Coverage Gutters: Display Coverage**.
 
 
@@ -172,6 +202,10 @@ The version number is set in [`sleap_io/version.py`](sleap_io/version.py) in the
 
 To manually build (e.g., locally):
 ```
+uv build
+```
+Or with Python's build module:
+```
 python -m build --wheel
 ```
 
@@ -180,7 +214,10 @@ To trigger an automated build (via the [`.github/workflows/build.yml`](.github/w
 
 ## Documentation website
 
-1. Install `sleap-io` with the `dev` dependencies (e.g., `pip install -e ".[dev]"`). This is the default when installing from source via conda (`conda env create -f environment.yml`).
-2. Build and tag a new version of the docs: `mike deploy --update-aliases 0.1.4 latest`
-3. Preview live changes locally with: `mike serve`
-4. Manually push a specific version with: `mike deploy --push --update-aliases --allow-empty 0.1.4 latest`
+1. Install `sleap-io` with the `dev` dependencies:
+   - With `uv`: `uv sync --all-extras`
+   - With pip: `pip install -e ".[dev]"`
+   - With conda: `conda env create -f environment.yml`
+2. Build and tag a new version of the docs: `uv run mike deploy --update-aliases 0.1.4 latest`
+3. Preview live changes locally with: `uv run mike serve`
+4. Manually push a specific version with: `uv run mike deploy --push --update-aliases --allow-empty 0.1.4 latest`
