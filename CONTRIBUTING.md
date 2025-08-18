@@ -20,7 +20,7 @@ This repository follows a set of standard development practices for modern Pytho
    ```
    Or with pip:
    ```
-   pip install -e .[dev,opencv]
+   pip install -e .[dev,all]
    ```
 3. Test that things are working:
    ```
@@ -87,7 +87,13 @@ Our package configuration is defined in [`pyproject.toml`](pyproject.toml) which
 
 If new dependencies need to be introduced (or if versions need to be fenced), specify these in [`pyproject.toml`](pyproject.toml) in the `dependencies` section. For development-only dependencies (i.e., packages that are not needed for distribution), add them to the `[project.optional-dependencies]` → `dev` section. For optional features like OpenCV support, add them to a dedicated extras group (e.g., `opencv`).
 
-These dependencies will only be installed when specifying the extras like: `pip install -e .[dev,opencv]` or `pip install sleap-io[dev,opencv]`. With `uv`, use `uv sync --all-extras` to install all optional dependencies.
+These dependencies will only be installed when specifying the extras like: `pip install -e .[dev,all]` or `pip install sleap-io[dev,all]`. With `uv`, use `uv sync --all-extras` to install all optional dependencies.
+
+Available extras:
+- `dev`: Development tools (pytest, ruff, etc.)
+- `opencv`: OpenCV support for video processing
+- `av`: PyAV support for video processing
+- `all`: All optional dependencies (opencv + av)
 
 Best practices for adding dependencies include:
 - Use permissive [version ranges](https://peps.python.org/pep-0440/#version-specifiers) so that the package remains future- and backward-compatible without requiring new releases.

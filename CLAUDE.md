@@ -37,7 +37,7 @@ conda env create -f environment.yml
 conda activate sleap-io
 
 # Pip development install
-pip install -e .[dev,opencv]
+pip install -e .[dev,all]
 ```
 
 ### Linting
@@ -150,5 +150,8 @@ uv run pytest tests/path/to/test_module.py::TestClass::test_method -v
 
 ## Known Issues and Workarounds
 
-- OpenCV is now an optional dependency. Install with `uv sync --all-extras` or `pip install -e .[opencv]` if you need OpenCV support for video backends.
+- OpenCV and PyAV are now optional dependencies for video backends:
+  - Install all: `uv sync --all-extras` or `pip install -e .[all]`
+  - Install OpenCV only: `pip install -e .[opencv]`
+  - Install PyAV only: `pip install -e .[av]`
 - If you get an opencv/cv2 issue when running tests, try running the entire module, or entire test suite instead (this is an opencv issue with importing submodules of the tests).

@@ -53,6 +53,8 @@ dev = [
     "mkdocs-section-index",
     "mike"]
 opencv = ["opencv-python"]
+av = ["av"]
+all = ["opencv-python", "av"]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"

@@ -7,4 +7,4 @@ dependencies:
   - python
   - pip
   - pip:
-    - "--editable=.[dev,opencv]"
+    - "--editable=.[dev,all]"
