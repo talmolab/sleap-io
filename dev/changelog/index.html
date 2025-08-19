@@ -368,6 +368,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v050" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.0
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v041" class="md-nav__link">
     <span class="md-ellipsis">
       v0.4.1
@@ -1479,6 +1488,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v050" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.0
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v041" class="md-nav__link">
     <span class="md-ellipsis">
       v0.4.1
@@ -1756,6 +1774,311 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v050"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.0">v0.5.0</a><a class="headerlink" href="#v050" title="Permanent link">&para;</a></h2>
+<h2>Summary</h2>
+<h3>Overview</h3>
+<p>The v0.5.0 release of sleap-io represents a major leap forward in format compatibility, development tooling, and data management capabilities. This release introduces support for five new pose tracking formats (COCO, DeepLabCut, TIFF stacks, and enhanced Ultralytics), adds powerful multi-dataset management with <code>LabelsSet</code>, and modernizes the development workflow with UV package manager. The release also includes critical bug fixes, performance improvements, and comprehensive documentation updates.</p>
+<h3>🚀 New Features</h3>
+<h4><strong>Multi-Dataset Management with LabelsSet (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267444361" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/197" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/197/hovercard" href="https://github.com/talmolab/sleap-io/pull/197">#197</a>)</strong></h4>
+<p>sleap-io now provides a powerful <code>LabelsSet</code> container for managing multiple <code>Labels</code> objects, enabling seamless handling of train/val/test splits and dataset collections.</p>
+<p>This feature includes:</p>
+<ul>
+<li>Hybrid dictionary/tuple interface for flexible access patterns</li>
+<li>Automatic split creation from existing datasets</li>
+<li>Batch I/O operations for entire dataset collections</li>
+<li>Backward-compatible API that doesn't break existing code</li>
+</ul>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Create train/val/test splits
+splits = labels.make_training_splits(n_train=0.8, n_test=0.1)
+
+# Access as dictionary
+train = splits[&quot;train&quot;]
+val = splits[&quot;val&quot;]
+test = splits[&quot;test&quot;]
+
+# Or unpack as tuple (backward compatible)
+train, val, test = splits
+
+# Save all splits at once
+splits.save(&quot;splits/&quot;, embed=True)  # Creates train.pkg.slp, val.pkg.slp, test.pkg.slp
+
+# Load multi-split datasets
+labels_set = sio.load_labels_set(&quot;path/to/splits/&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Create train/val/test splits</span>
+<span class="pl-s1">splits</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">make_training_splits</span>(<span class="pl-s1">n_train</span><span class="pl-c1">=</span><span class="pl-c1">0.8</span>, <span class="pl-s1">n_test</span><span class="pl-c1">=</span><span class="pl-c1">0.1</span>)
+
+<span class="pl-c"># Access as dictionary</span>
+<span class="pl-s1">train</span> <span class="pl-c1">=</span> <span class="pl-s1">splits</span>[<span class="pl-s">"train"</span>]
+<span class="pl-s1">val</span> <span class="pl-c1">=</span> <span class="pl-s1">splits</span>[<span class="pl-s">"val"</span>]
+<span class="pl-s1">test</span> <span class="pl-c1">=</span> <span class="pl-s1">splits</span>[<span class="pl-s">"test"</span>]
+
+<span class="pl-c"># Or unpack as tuple (backward compatible)</span>
+<span class="pl-s1">train</span>, <span class="pl-s1">val</span>, <span class="pl-s1">test</span> <span class="pl-c1">=</span> <span class="pl-s1">splits</span>
+
+<span class="pl-c"># Save all splits at once</span>
+<span class="pl-s1">splits</span>.<span class="pl-c1">save</span>(<span class="pl-s">"splits/"</span>, <span class="pl-s1">embed</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)  <span class="pl-c"># Creates train.pkg.slp, val.pkg.slp, test.pkg.slp</span>
+
+<span class="pl-c"># Load multi-split datasets</span>
+<span class="pl-s1">labels_set</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_labels_set</span>(<span class="pl-s">"path/to/splits/"</span>)</pre></div>
+<h4><strong>COCO-Style Dataset Support (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267516841" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/199" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/199/hovercard" href="https://github.com/talmolab/sleap-io/pull/199">#199</a>)</strong></h4>
+<p>Added comprehensive support for reading COCO pose format, enabling integration with the broader computer vision ecosystem.</p>
+<p>Features:</p>
+<ul>
+<li>Automatic skeleton creation from COCO categories</li>
+<li>Multi-species support with different skeletons per category</li>
+<li>Flexible directory structure handling (flat, nested, categorized)</li>
+<li>Binary and ternary visibility encodings</li>
+<li>Memory-efficient shared video objects for images</li>
+</ul>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load COCO annotations
+labels = sio.load_file(&quot;annotations.json&quot;, format=&quot;coco&quot;)
+
+# Load with custom image root
+labels = sio.load_file(&quot;coco_data.json&quot;, dataset_root=&quot;/path/to/images&quot;)
+
+# Load multi-split COCO dataset
+labels_set = sio.load_labels_set(&quot;dataset/&quot;, format=&quot;coco&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load COCO annotations</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"annotations.json"</span>, <span class="pl-s1">format</span><span class="pl-c1">=</span><span class="pl-s">"coco"</span>)
+
+<span class="pl-c"># Load with custom image root</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"coco_data.json"</span>, <span class="pl-s1">dataset_root</span><span class="pl-c1">=</span><span class="pl-s">"/path/to/images"</span>)
+
+<span class="pl-c"># Load multi-split COCO dataset</span>
+<span class="pl-s1">labels_set</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_labels_set</span>(<span class="pl-s">"dataset/"</span>, <span class="pl-s1">format</span><span class="pl-c1">=</span><span class="pl-s">"coco"</span>)</pre></div>
+<h4><strong>DeepLabCut Training Data Support (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267535177" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/201" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/201/hovercard" href="https://github.com/talmolab/sleap-io/pull/201">#201</a>)</strong></h4>
+<p>Implemented complete support for reading DeepLabCut CSV files, supporting all DLC format variations.</p>
+<p>Capabilities:</p>
+<ul>
+<li>Single-animal tracking (SADLC)</li>
+<li>Multi-animal tracking (MADLC)</li>
+<li>Multi-animal with identity tracking (MAUDLC)</li>
+<li>Automatic format detection from CSV headers</li>
+<li>Proper video grouping from image directories</li>
+</ul>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load DLC annotations
+labels = sio.load_file(&quot;CollectedData_scorer.csv&quot;)
+
+# Access the data
+print(f&quot;Found {len(labels.labeled_frames)} labeled frames&quot;)
+for lf in labels.labeled_frames:
+    for instance in lf.instances:
+        if instance.track:
+            print(f&quot;Individual '{instance.track.name}': {instance.numpy()}&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load DLC annotations</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"CollectedData_scorer.csv"</span>)
+
+<span class="pl-c"># Access the data</span>
+<span class="pl-en">print</span>(<span class="pl-s">f"Found <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-en">len</span>(<span class="pl-s1">labels</span>.<span class="pl-c1">labeled_frames</span>)<span class="pl-kos">}</span></span> labeled frames"</span>)
+<span class="pl-k">for</span> <span class="pl-s1">lf</span> <span class="pl-c1">in</span> <span class="pl-s1">labels</span>.<span class="pl-c1">labeled_frames</span>:
+    <span class="pl-k">for</span> <span class="pl-s1">instance</span> <span class="pl-c1">in</span> <span class="pl-s1">lf</span>.<span class="pl-c1">instances</span>:
+        <span class="pl-k">if</span> <span class="pl-s1">instance</span>.<span class="pl-c1">track</span>:
+            <span class="pl-en">print</span>(<span class="pl-s">f"Individual '<span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">instance</span>.<span class="pl-c1">track</span>.<span class="pl-c1">name</span><span class="pl-kos">}</span></span>': <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">instance</span>.<span class="pl-c1">numpy</span>()<span class="pl-kos">}</span></span>"</span>)</pre></div>
+<h4><strong>TIFF Stack Support (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3266722329" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/195" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/195/hovercard" href="https://github.com/talmolab/sleap-io/pull/195">#195</a>)</strong></h4>
+<p>Added native support for multi-page TIFF files through a new <code>TiffVideo</code> backend.</p>
+<p>Features:</p>
+<ul>
+<li>Automatic detection of single vs multi-page TIFFs</li>
+<li>Frame-by-frame access for TIFF stacks</li>
+<li>Full SLP serialization support</li>
+<li>Backward compatibility with older SLEAP versions</li>
+</ul>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load multi-page TIFF
+video = sio.Video.from_filename(&quot;multipage_stack.tif&quot;)
+print(f&quot;Stack has {video.shape[0]} frames&quot;)
+
+# Use in labels
+labels = sio.Labels()
+labels.videos.append(video)
+labels.save(&quot;project.slp&quot;)  # TiffVideo metadata preserved"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load multi-page TIFF</span>
+<span class="pl-s1">video</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Video</span>.<span class="pl-c1">from_filename</span>(<span class="pl-s">"multipage_stack.tif"</span>)
+<span class="pl-en">print</span>(<span class="pl-s">f"Stack has <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">video</span>.<span class="pl-c1">shape</span>[<span class="pl-c1">0</span>]<span class="pl-kos">}</span></span> frames"</span>)
+
+<span class="pl-c"># Use in labels</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">Labels</span>()
+<span class="pl-s1">labels</span>.<span class="pl-c1">videos</span>.<span class="pl-c1">append</span>(<span class="pl-s1">video</span>)
+<span class="pl-s1">labels</span>.<span class="pl-c1">save</span>(<span class="pl-s">"project.slp"</span>)  <span class="pl-c"># TiffVideo metadata preserved</span></pre></div>
+<h4><strong>Video Plugin Management (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267646437" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/202" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/202/hovercard" href="https://github.com/talmolab/sleap-io/pull/202">#202</a>)</strong></h4>
+<p>Introduced comprehensive control over video backend selection to handle platform-specific codec issues.</p>
+<p>New capabilities:</p>
+<ul>
+<li>Global default plugin setting</li>
+<li>Flexible plugin name aliases (case-insensitive)</li>
+<li>Runtime plugin switching on existing videos</li>
+<li>Batch plugin changes for entire projects</li>
+</ul>
+<p><strong>Usage:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Set global default
+sio.set_default_video_plugin(&quot;opencv&quot;)  # or &quot;cv2&quot;, &quot;cv&quot;, &quot;ocv&quot;
+
+# Load with specific plugin
+video = sio.load_video(&quot;video.mp4&quot;, plugin=&quot;FFMPEG&quot;)
+
+# Switch plugin on existing video
+video.set_video_plugin(&quot;pyav&quot;)  # or &quot;av&quot;, &quot;PyAV&quot;
+
+# Batch change for all videos in project
+labels = sio.load_slp(&quot;project.slp&quot;)
+labels.set_video_plugin(&quot;opencv&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Set global default</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">set_default_video_plugin</span>(<span class="pl-s">"opencv"</span>)  <span class="pl-c"># or "cv2", "cv", "ocv"</span>
+
+<span class="pl-c"># Load with specific plugin</span>
+<span class="pl-s1">video</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_video</span>(<span class="pl-s">"video.mp4"</span>, <span class="pl-s1">plugin</span><span class="pl-c1">=</span><span class="pl-s">"FFMPEG"</span>)
+
+<span class="pl-c"># Switch plugin on existing video</span>
+<span class="pl-s1">video</span>.<span class="pl-c1">set_video_plugin</span>(<span class="pl-s">"pyav"</span>)  <span class="pl-c"># or "av", "PyAV"</span>
+
+<span class="pl-c"># Batch change for all videos in project</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"project.slp"</span>)
+<span class="pl-s1">labels</span>.<span class="pl-c1">set_video_plugin</span>(<span class="pl-s">"opencv"</span>)</pre></div>
+<h3>🐛 Bug Fixes</h3>
+<h4><strong>Fixed Skeleton Node Order Decoding (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3271704232" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/208" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/208/hovercard" href="https://github.com/talmolab/sleap-io/pull/208">#208</a>)</strong></h4>
+<ul>
+<li>Fixed incorrect node ordering when loading skeletons from training configs with non-sequential py/ids</li>
+<li>Resolved edge connection errors that occurred with complex skeletons</li>
+<li>Added comprehensive tests for node and edge order preservation</li>
+</ul>
+<p><strong>Impact:</strong> Skeletons loaded from training configs now correctly preserve their structure and edge connections.</p>
+<h3>🔧 Improvements</h3>
+<h4><strong>Performance: Labels.replace_filenames Control (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3325508444" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/213" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/213/hovercard" href="https://github.com/talmolab/sleap-io/pull/213">#213</a>)</strong></h4>
+<p>Added <code>open_videos</code> parameter to <code>Labels.replace_filenames()</code> for better performance when working with network storage:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Replace paths without opening videos (faster on network storage)
+labels.replace_filenames(
+    prefix_map={&quot;/old/network/path&quot;: &quot;/new/network/path&quot;},
+    open_videos=False  # Avoid costly file checks
+)"><pre><span class="pl-c"># Replace paths without opening videos (faster on network storage)</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">replace_filenames</span>(
+    <span class="pl-s1">prefix_map</span><span class="pl-c1">=</span>{<span class="pl-s">"/old/network/path"</span>: <span class="pl-s">"/new/network/path"</span>},
+    <span class="pl-s1">open_videos</span><span class="pl-c1">=</span><span class="pl-c1">False</span>  <span class="pl-c"># Avoid costly file checks</span>
+)</pre></div>
+<p><strong>Impact:</strong> Significantly faster filename replacement operations when dealing with many files on network storage.</p>
+<h4><strong>Development Workflow: UV Migration (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3332125566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/214" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/214/hovercard" href="https://github.com/talmolab/sleap-io/pull/214">#214</a>)</strong></h4>
+<p>Migrated CI/CD and development tooling from conda to UV for dramatic performance improvements:</p>
+<ul>
+<li><strong>10-100x faster</strong> dependency resolution and installation</li>
+<li><strong>CI runtime reduced</strong> from ~12 minutes to ~2 minutes</li>
+<li><strong>Single tool</strong> for all Python/package management tasks</li>
+<li><strong>PyPI trusted publisher</strong> for improved security</li>
+</ul>
+<p><strong>Developer experience:</strong></p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-line setup
+uv sync --all-extras
+
+# All commands now use uv run prefix
+uv run pytest tests/
+uv run ruff check sleap_io tests
+uv build"><pre><span class="pl-c"><span class="pl-c">#</span> One-line setup</span>
+uv sync --all-extras
+
+<span class="pl-c"><span class="pl-c">#</span> All commands now use uv run prefix</span>
+uv run pytest tests/
+uv run ruff check sleap_io tests
+uv build</pre></div>
+<h4><strong>Tooling: Unified Linting with Ruff (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3262159854" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/194" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/194/hovercard" href="https://github.com/talmolab/sleap-io/pull/194">#194</a>)</strong></h4>
+<p>Replaced black and pydocstyle with ruff for unified, faster code quality checks:</p>
+<ul>
+<li>Single tool for both formatting and linting</li>
+<li>Significantly faster CI runs</li>
+<li>Fixed 50+ code quality issues during migration</li>
+<li>Consistent configuration and error reporting</li>
+</ul>
+<h4><strong>Documentation Enhancements (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267754223" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/203" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/203/hovercard" href="https://github.com/talmolab/sleap-io/pull/203">#203</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3335914574" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/215" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/215/hovercard" href="https://github.com/talmolab/sleap-io/pull/215">#215</a>)</strong></h4>
+<p>Comprehensive documentation improvements for both AI assistants and human contributors:</p>
+<ul>
+<li>Added Claude Code integration with <code>.claude/commands</code> directory</li>
+<li>Visual data model diagram with relationships</li>
+<li>Modernized CONTRIBUTING.md with Quick Start section</li>
+<li>Updated all examples to use UV commands</li>
+<li>Streamlined testing and coverage workflows</li>
+</ul>
+<h3>📦 Dependencies</h3>
+<ul>
+<li>Added <code>pyyaml</code> for YAML skeleton support (from v0.4.0)</li>
+<li>Made OpenCV and PyAV optional dependencies with modular installation</li>
+<li>Removed hard conda dependencies in favor of pip/UV</li>
+</ul>
+<h3>🔄 Migration Notes</h3>
+<h4>Optional Video Backend Dependencies</h4>
+<p>Video backends are now optional to reduce installation size:</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Basic installation (no video backends)
+pip install sleap-io
+
+# With specific backends
+pip install sleap-io[opencv]  # OpenCV only
+pip install sleap-io[av]      # PyAV only
+pip install sleap-io[all]     # All backends"><pre><span class="pl-c"><span class="pl-c">#</span> Basic installation (no video backends)</span>
+pip install sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> With specific backends</span>
+pip install sleap-io[opencv]  <span class="pl-c"><span class="pl-c">#</span> OpenCV only</span>
+pip install sleap-io[av]      <span class="pl-c"><span class="pl-c">#</span> PyAV only</span>
+pip install sleap-io[all]     <span class="pl-c"><span class="pl-c">#</span> All backends</span></pre></div>
+<h4>Development Setup</h4>
+<p>For developers, UV is now the recommended tool:</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Install UV
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Setup development environment
+uv sync --all-extras
+
+# Run commands with uv run prefix
+uv run pytest tests/"><pre><span class="pl-c"><span class="pl-c">#</span> Install UV</span>
+curl -LsSf https://astral.sh/uv/install.sh <span class="pl-k">|</span> sh
+
+<span class="pl-c"><span class="pl-c">#</span> Setup development environment</span>
+uv sync --all-extras
+
+<span class="pl-c"><span class="pl-c">#</span> Run commands with uv run prefix</span>
+uv run pytest tests/</pre></div>
+<p>Conda environments still work but use pip under the hood for simplicity.</p>
+<h4>No Breaking API Changes</h4>
+<p>All existing APIs remain compatible. New features are additive and do not affect existing functionality.</p>
+<h3>🎯 Why These Changes Matter</h3>
+<ol>
+<li><strong>Format Ecosystem</strong>: Support for COCO and DeepLabCut enables integration with the broader pose tracking community</li>
+<li><strong>Dataset Management</strong>: <code>LabelsSet</code> provides professional-grade tools for managing train/val/test splits</li>
+<li><strong>Performance</strong>: UV migration and video control features dramatically improve development and runtime speed</li>
+<li><strong>Media Flexibility</strong>: TIFF support and plugin management handle diverse video formats and platform requirements</li>
+<li><strong>Developer Experience</strong>: Modern tooling and documentation reduce friction for contributors</li>
+<li><strong>Code Quality</strong>: Ruff migration ensures consistent, high-quality code across the project</li>
+</ol>
+<p>This release significantly expands sleap-io's capabilities as a universal pose tracking data utility, improving compatibility with external tools, performance for large-scale operations, and the overall development experience.</p>
+<h2>Changelog</h2>
+<ul>
+<li>Replace black/pydocstyle with ruff in CI by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3262159854" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/194" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/194/hovercard" href="https://github.com/talmolab/sleap-io/pull/194">#194</a></li>
+<li>Add TIFF support for multi-page stacks by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3266722329" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/195" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/195/hovercard" href="https://github.com/talmolab/sleap-io/pull/195">#195</a></li>
+<li>Add LabelsSet for multi-label and split handling by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267444361" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/197" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/197/hovercard" href="https://github.com/talmolab/sleap-io/pull/197">#197</a></li>
+<li>Add COCO-style dataset support by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267516841" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/199" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/199/hovercard" href="https://github.com/talmolab/sleap-io/pull/199">#199</a></li>
+<li>Add DLC training data support by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267535177" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/201" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/201/hovercard" href="https://github.com/talmolab/sleap-io/pull/201">#201</a></li>
+<li>Video plugin conveniences by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267646437" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/202" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/202/hovercard" href="https://github.com/talmolab/sleap-io/pull/202">#202</a></li>
+<li>Fix skeleton node order decoding by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3271704232" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/208" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/208/hovercard" href="https://github.com/talmolab/sleap-io/pull/208">#208</a></li>
+<li>Migrate CI from conda to UV by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3332125566" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/214" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/214/hovercard" href="https://github.com/talmolab/sleap-io/pull/214">#214</a></li>
+<li>Update to 0.5.0 and refresh docs by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3267754223" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/203" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/203/hovercard" href="https://github.com/talmolab/sleap-io/pull/203">#203</a></li>
+<li>Add <code>open_videos</code> parameter to <code>Labels.replace_filenames</code> method by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3325508444" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/213" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/213/hovercard" href="https://github.com/talmolab/sleap-io/pull/213">#213</a></li>
+<li>Documentation improvements for Claude Code and contributors by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3335914574" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/215" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/215/hovercard" href="https://github.com/talmolab/sleap-io/pull/215">#215</a></li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.4.1...v0.5.0"><tt>v0.4.1...v0.5.0</tt></a></p>
 <h2 id="v041"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.4.1">v0.4.1</a><a class="headerlink" href="#v041" title="Permanent link">&para;</a></h2>
 <h2>Summary</h2>
 <h3>Overview</h3>
