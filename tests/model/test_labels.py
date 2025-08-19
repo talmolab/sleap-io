@@ -624,6 +624,58 @@ def test_replace_filenames_cross_platform():
     assert labels.videos[0].filename == ["/new/imgs/file.png"]
 
 
+def test_replace_filenames_edge_cases():
+    """Test edge cases in replace_filenames to improve coverage."""
+    # Test case where old prefix ends with separator but remainder doesn't start with one
+    # This covers lines 1088-1099 and 1125-1128
+    labels = Labels(
+        videos=[
+            Video.from_filename("/data/videos/subfolder/test.mp4"),
+        ]
+    )
+    
+    # Old prefix with trailing slash, remainder doesn't start with slash
+    labels.replace_filenames(
+        prefix_map={"/data/videos/": "/new/location"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/new/location/subfolder/test.mp4"
+    
+    # Test with list of filenames - old prefix with separator, new without
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/subfolder/img0.png", "/data/imgs/subfolder/img1.png"]),
+        ]
+    )
+    
+    labels.replace_filenames(
+        prefix_map={"/data/imgs/": "/new/imgs"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/subfolder/img0.png", "/new/imgs/subfolder/img1.png"]
+    
+    # Test case where old prefix ends with separator and new prefix also ends with separator
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/file.png"]),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"/data/imgs/": "/new/imgs/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/file.png"]
+    
+    # Test case for non-list filename with old prefix ending in separator
+    labels = Labels(
+        videos=[
+            Video.from_filename("/data/videos/subfolder/test.mp4"),
+        ]
+    )
+    
+    labels.replace_filenames(
+        prefix_map={"/data/videos/": "/new/location/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/new/location/subfolder/test.mp4"
+
+
 def test_split(slp_real_data, tmp_path):
     # n = 0
     labels = Labels()
