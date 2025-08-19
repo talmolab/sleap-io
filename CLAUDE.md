@@ -42,13 +42,12 @@ pip install -e .[dev,all]
 
 ### Linting
 ```bash
-# Linting and format check (MUST pass before committing)
-uv run ruff check sleap_io tests
-uv run ruff format --check sleap_io tests
+# Auto-format and fix linting issues (from .claude/commands/lint.md)
+uv run ruff format sleap_io tests && uv run ruff check --fix sleap_io tests
 
-# Auto-fix linting issues
-uv run ruff check --fix sleap_io tests
-uv run ruff format sleap_io tests
+# Check formatting without making changes
+uv run ruff format --check sleap_io tests
+uv run ruff check sleap_io tests
 ```
 
 ### Testing
@@ -59,8 +58,11 @@ uv run pytest --cov=sleap_io --cov-report=xml tests/
 # Run specific test module
 uv run pytest tests/io/test_slp.py -v
 
-# Check line-by-line coverage for a module
-uv run pytest tests/model/test_labels.py -v --cov=sleap_io --cov-report=json && uv run coverage annotate --include="*/sleap_io/model/labels.py"
+# Quick coverage check with line-by-line annotations (from .claude/commands/coverage.md)
+uv run pytest -q --maxfail=1 --cov --cov-branch && rm .coverage.* && uv run coverage annotate
+
+# Check which files changed in PR for targeted coverage review
+git diff --name-only $(git merge-base origin/main HEAD) | jq -R . | jq -s .
 
 # Watch mode for development
 uv run ptw
@@ -118,6 +120,21 @@ uv add --dev <package>
 # Update dependencies
 uv sync --upgrade
 ```
+
+## Claude Commands
+
+The `.claude/commands` directory contains useful command shortcuts for Claude Code:
+
+- **lint.md**: Auto-format and fix linting issues with ruff
+- **coverage.md**: Run tests with coverage and generate line-by-line annotations  
+- **pr-description.md**: Generate comprehensive PR descriptions using gh CLI
+
+### PR Descriptions
+
+When updating PR descriptions (from .claude/commands/pr-description.md):
+1. Fetch current PR metadata and linked issues using `gh` CLI
+2. Include: Summary, Key Changes, Example Usage, API Changes, Testing, and Design Decisions
+3. Document reasoning behind implementation choices for future reference
 
 ## Common Development Tasks
 
