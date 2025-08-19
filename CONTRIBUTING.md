@@ -2,6 +2,28 @@
 
 This repository follows a set of standard development practices for modern Python packages.
 
+## Quick Start
+
+For developers who want to get started quickly with [`uv`](https://docs.astral.sh/uv/):
+
+```bash
+# Clone and setup
+git clone https://github.com/talmolab/sleap-io && cd sleap-io
+uv sync --all-extras
+
+# Make changes on a new branch
+git checkout -b yourname/feature-name
+
+# Before committing - format and lint
+uv run ruff format sleap_io tests && uv run ruff check --fix sleap_io tests
+
+# Run tests
+uv run pytest tests/
+
+# Check coverage
+uv run pytest -q --maxfail=1 --cov --cov-branch && rm .coverage.* && uv run coverage annotate
+```
+
 ## Development workflow
 
 ### Setting up
@@ -47,8 +69,12 @@ We also recommend setting up `ruff` to run automatically in your IDE.
 
 If using `uv`, ruff is already included in the dev dependencies and can be run with:
 ```
-uv run ruff check
-uv run ruff format
+# Auto-format and fix linting issues
+uv run ruff format sleap_io tests && uv run ruff check --fix sleap_io tests
+
+# Check without making changes
+uv run ruff format --check sleap_io tests
+uv run ruff check sleap_io tests
 ```
 
 Alternatively, you can install it globally with [`pipx`](https://pypa.github.io/pipx/):
@@ -66,10 +92,27 @@ Once you're set up, follow these steps to make a change:
 1. If you don't have push access to the repository, start by [making a fork](https://github.com/talmolab/sleap-io/fork) of the repository.
 2. Switch to the [`main`](https://github.com/talmolab/sleap-io/tree/main) branch and `git pull` to fetch the latest changes.
 3. Create a new branch named `<username>/<feature_name>` with a descriptive title for the change. For example: `talmo/nwb_support` or `talmo/update_dependencies`.
-4. Push as many commits as you want. Descriptive commit messages and titles are optional but recommended.
-5. Open a [Pull Request](https://github.com/talmolab/sleap-io/compare) of your new branch against `main` with a description of your changes. Feel free to create a "Draft" pull request to work on it incrementally.
-6. Once the [tests](#tests-and-standards) pass, request a review from a core developer and make any changes requested.
-7. Once approved, perform a [squash merge](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/about-pull-request-merges#squash-and-merge-your-pull-request-commits) against `main` to incorporate your changes.
+4. Make your changes and ensure code quality:
+   ```bash
+   # Format and lint your code before committing
+   uv run ruff format sleap_io tests && uv run ruff check --fix sleap_io tests
+   
+   # Run tests to ensure nothing broke
+   uv run pytest tests/
+   
+   # Check test coverage for modified files
+   uv run pytest --cov=sleap_io --cov-report=term
+   ```
+5. Push as many commits as you want. Descriptive commit messages and titles are optional but recommended.
+6. Open a [Pull Request](https://github.com/talmolab/sleap-io/compare) of your new branch against `main` with a description of your changes. Feel free to create a "Draft" pull request to work on it incrementally.
+7. Write a comprehensive PR description including:
+   - Summary of changes
+   - Example usage (for new features)
+   - API changes (if any)
+   - Testing approach
+   - Design decisions and rationale
+8. Once the [tests](#tests-and-standards) pass, request a review from a core developer and make any changes requested.
+9. Once approved, perform a [squash merge](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/about-pull-request-merges#squash-and-merge-your-pull-request-commits) against `main` to incorporate your changes.
 
 
 ## Tests and standards
@@ -117,6 +160,29 @@ It is highly recommended checking out other existing tests for reference on how 
 All tests must pass before a PR can be merged.
 
 Tests will be run on every commit across multiple operating systems and Python versions (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+#### Running tests locally
+
+```bash
+# Run full test suite
+uv run pytest tests/
+
+# Run a specific test module
+uv run pytest tests/io/test_slp.py -v
+
+# Run a specific test function
+uv run pytest tests/io/test_slp.py::test_load_slp -v
+
+# Run with coverage report
+uv run pytest --cov=sleap_io --cov-report=term tests/
+
+# Quick coverage check with line-by-line annotations
+uv run pytest -q --maxfail=1 --cov --cov-branch && rm .coverage.* && uv run coverage annotate
+# This creates .py,cover files next to each module showing line-by-line coverage
+
+# Check which files changed in your PR (useful for targeted testing)
+git diff --name-only $(git merge-base origin/main HEAD)
+```
 
 
 ### Coverage
@@ -227,3 +293,30 @@ To trigger an automated build (via the [`.github/workflows/build.yml`](.github/w
 2. Build and tag a new version of the docs: `uv run mike deploy --update-aliases 0.1.4 latest`
 3. Preview live changes locally with: `uv run mike serve`
 4. Manually push a specific version with: `uv run mike deploy --push --update-aliases --allow-empty 0.1.4 latest`
+
+## Troubleshooting
+
+### Common Issues
+
+#### OpenCV import errors during testing
+If you encounter cv2/OpenCV import errors when running individual tests:
+- Try running the entire test module instead: `uv run pytest tests/io/test_video.py`
+- Or run the full test suite: `uv run pytest tests/`
+- This is a known OpenCV issue with importing submodules
+
+#### Video backend dependencies
+sleap-io has optional video backend dependencies:
+- Install all backends: `uv sync --all-extras` or `pip install -e .[all]`
+- Install OpenCV only: `pip install -e .[opencv]`
+- Install PyAV only: `pip install -e .[av]`
+
+#### Environment issues
+If you're having environment problems:
+- With `uv`: `uv sync --all-extras --refresh`
+- With conda: `conda env remove -n sleap-io && conda env create -f environment.yml`
+
+#### Finding what changed in your PR
+To see which files you've modified (useful for targeted testing):
+```bash
+git diff --name-only $(git merge-base origin/main HEAD)
+```
