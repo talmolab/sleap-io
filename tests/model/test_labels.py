@@ -574,6 +574,63 @@ def test_replace_filenames_cross_platform():
     )
     assert labels.videos[0].filename == "/new/location/test.mp4"
 
+    # Test with list of filenames (ImageVideo case)
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png", "/data/imgs/img1.png"]),
+        ]
+    )
+
+    # Replace prefix in list of filenames
+    labels.replace_filenames(
+        prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/img0.png", "/new/imgs/img1.png"]
+
+    # Test list with some non-matching files
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png", "/other/path/img1.png"]),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/img0.png", "/other/path/img1.png"]
+
+    # Test list with trailing separator and new prefix ending with separator
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png", "/data/imgs/img1.png"]),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"/data/imgs/": "/new/imgs/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/img0.png", "/new/imgs/img1.png"]
+
+    # Test with new_prefix ending with slash but remainder starting with slash
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png"]),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"/data/imgs": "/new/imgs/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/img0.png"]
+
+    # Test case where old_prefix has sep and new doesn't, with list
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/file.png"]),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"/data/imgs/": "/new/imgs"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/file.png"]
+
 
 def test_split(slp_real_data, tmp_path):
     # n = 0
