@@ -124,7 +124,7 @@ See the [`.github/workflows`](.github/workflows) folder for how our checks are i
 This package uses [`setuptools`](https://setuptools.pypa.io/en/latest/) as a [packaging and distribution system](https://packaging.python.org/en/latest/guides/distributing-packages-using-setuptools/).
 
 Our package configuration is defined in [`pyproject.toml`](pyproject.toml) which contains:
-- Build system configuration
+- Build system configuration (using setuptools)
 - Package metadata and dependencies
 - Optional dependencies (extras)
 
@@ -143,8 +143,8 @@ Best practices for adding dependencies include:
 - Don't pin to a single specific versions of dependencies unless absolutely necessary, and consider using [platform-specific specifiers](https://setuptools.pypa.io/en/latest/userguide/dependency_management.html#platform-specific-dependencies).
 
 For more reference see:
-- [Configuring setuptools using `setup.cfg` files](https://setuptools.pypa.io/en/latest/userguide/declarative_config.html)
-- [Setuptools Keywords](https://setuptools.pypa.io/en/latest/references/keywords.html)
+- [PEP 517 - pyproject.toml-based builds](https://peps.python.org/pep-0517/)
+- [PEP 518 - Specifying build dependencies](https://peps.python.org/pep-0518/)
 - [PEP 508 - Dependency specification for Python Software Packages](https://peps.python.org/pep-0508/)
 
 **Note:** We recommend using [`uv`](https://docs.astral.sh/uv/) for fast, reliable Python environment management. For backwards compatibility, a minimal conda environment is defined in [`environment.yml`](environment.yml) that simply installs the package via pip.
@@ -189,20 +189,6 @@ git diff --name-only $(git merge-base origin/main HEAD)
 We check for coverage by parsing the outputs from `pytest` and uploading to [Codecov](https://app.codecov.io/gh/talmolab/sleap-io).
 
 All changes should aim to increase or maintain test coverage.
-
-### Live coverage
-
-*The following steps are based on [this guide](https://jasonstitt.com/perfect-python-live-test-coverage).*
-
-1. If you already have an environment installed, ensure you have the latest dev tools (namely `pytest-watch`):
-   - With `uv`: `uv sync --all-extras`
-   - With pip: `pip install -e ."[dev]"`
-2. Install the [Coverage Gutters extension](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters) in VS Code.
-3. Open a terminal and run the test watcher:
-   - With `uv`: `uv run ptw`
-   - With conda: `conda activate sleap-io && ptw`
-   This will generate a new `lcov.info` file when it's done.
-4. Enable the coverage gutters by using **Ctrl/Cmd**+**Shift**+**P**, then **Coverage Gutters: Display Coverage**.
 
 
 ### Code style
@@ -267,21 +253,47 @@ Valid examples:
 0.1.10a2
 ```
 
-### Build
+### Build and Publishing
 The PyPI-compatible package settings are in [`pyproject.toml`](pyproject.toml).
 
 The version number is set in [`sleap_io/version.py`](sleap_io/version.py) in the `__version__` variable. This is read automatically by setuptools during installation and build.
 
-To manually build (e.g., locally):
-```
+#### Building with uv
+
+To build the package locally:
+```bash
+# Build source distribution and wheel
 uv build
-```
-Or with Python's build module:
-```
-python -m build --wheel
+
+# Build artifacts will be placed in dist/
+ls dist/
 ```
 
-To trigger an automated build (via the [`.github/workflows/build.yml`](.github/workflows/build.yml) action), [publish a Release](https://github.com/talmolab/sleap-io/releases/new).
+For more details, see the [uv guide on building packages](https://docs.astral.sh/uv/guides/package/).
+
+#### Publishing to PyPI
+
+With `uv`, you can publish directly to PyPI:
+```bash
+# Set your PyPI token (get from https://pypi.org/manage/account/token/)
+export UV_PUBLISH_TOKEN="pypi-..."
+
+# Build and publish
+uv build
+uv publish
+```
+
+For test releases:
+```bash
+# Publish to TestPyPI first
+uv publish --index testpypi
+```
+
+See the [uv publishing documentation](https://docs.astral.sh/uv/guides/package/#publishing-packages) for authentication options and advanced usage.
+
+#### Automated releases
+
+To trigger an automated build and release (via the [`.github/workflows/build.yml`](.github/workflows/build.yml) action), [publish a Release](https://github.com/talmolab/sleap-io/releases/new).
 
 
 ## Documentation website
