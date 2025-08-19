@@ -14,7 +14,12 @@ import simplejson as json
 from tqdm import tqdm
 
 from sleap_io.io.skeleton import SkeletonSLPDecoder, SkeletonSLPEncoder
-from sleap_io.io.utils import is_file_accessible, read_hdf5_attrs, read_hdf5_dataset
+from sleap_io.io.utils import (
+    is_file_accessible,
+    read_hdf5_attrs,
+    read_hdf5_dataset,
+    sanitize_filename,
+)
 from sleap_io.io.video_reading import (
     HDF5Video,
     ImageVideo,
@@ -58,23 +63,6 @@ class InstanceType(IntEnum):
 
     USER = 0
     PREDICTED = 1
-
-
-def sanitize_filename(
-    filename: str | Path | list[str] | list[Path],
-) -> str | list[str]:
-    """Sanitize a filename to a canonical posix-compatible format.
-
-    Args:
-        filename: A string or `Path` object or list of either to sanitize.
-
-    Returns:
-        A sanitized filename as a string (or list of strings if a list was provided)
-        with forward slashes and posix-formatted.
-    """
-    if isinstance(filename, list):
-        return [sanitize_filename(f) for f in filename]
-    return Path(filename).as_posix().replace("\\", "/")
 
 
 def make_video(

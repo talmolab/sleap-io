@@ -457,6 +457,244 @@ def test_replace_filenames():
     assert labels.video.filename == ["test/imgs/img0.png", "test/imgs/img1.png"]
 
 
+def test_replace_filenames_open_videos():
+    """Test that open_videos=False prevents video backend from opening."""
+    # Create videos that won't exist on disk
+    labels = Labels(
+        videos=[
+            Video.from_filename("nonexistent_a.mp4"),
+            Video.from_filename("nonexistent_b.mp4"),
+        ]
+    )
+
+    # Test with open_videos=True (default) - should attempt to open backend
+    labels.replace_filenames(
+        new_filenames=["new_nonexistent_a.mp4", "new_nonexistent_b.mp4"]
+    )
+    # Backend should be None since files don't exist
+    assert labels.videos[0].backend is None
+    assert labels.videos[1].backend is None
+    assert labels.videos[0].filename == "new_nonexistent_a.mp4"
+    assert labels.videos[1].filename == "new_nonexistent_b.mp4"
+
+    # Test with open_videos=False - should not attempt to open backend
+    labels.replace_filenames(
+        new_filenames=["final_a.mp4", "final_b.mp4"], open_videos=False
+    )
+    # Backend should still be None, but filenames should be updated
+    assert labels.videos[0].backend is None
+    assert labels.videos[1].backend is None
+    assert labels.videos[0].filename == "final_a.mp4"
+    assert labels.videos[1].filename == "final_b.mp4"
+
+    # Test with filename_map and open_videos=False
+    labels.replace_filenames(
+        filename_map={"final_a.mp4": "mapped_a.mp4", "final_b.mp4": "mapped_b.mp4"},
+        open_videos=False,
+    )
+    assert labels.videos[0].filename == "mapped_a.mp4"
+    assert labels.videos[1].filename == "mapped_b.mp4"
+
+    # Test with prefix_map and open_videos=False
+    labels.replace_filenames(prefix_map={"mapped_": "prefixed_"}, open_videos=False)
+    assert labels.videos[0].filename == "prefixed_a.mp4"
+    assert labels.videos[1].filename == "prefixed_b.mp4"
+
+
+def test_replace_filenames_cross_platform():
+    """Test that prefix_map handles Windows and Linux paths correctly."""
+    # Test Windows paths being replaced with Linux paths
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:\data\videos\test1.mp4"),
+            Video.from_filename(r"C:\data\videos\test2.mp4"),
+        ]
+    )
+
+    # Replace Windows prefix with Linux prefix - should match despite backslashes
+    labels.replace_filenames(
+        prefix_map={r"C:\data\videos": "/mnt/storage/videos"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/mnt/storage/videos/test1.mp4"
+    assert labels.videos[1].filename == "/mnt/storage/videos/test2.mp4"
+
+    # Test Linux paths being replaced with Windows paths
+    labels = Labels(
+        videos=[
+            Video.from_filename("/home/user/data/vid1.mp4"),
+            Video.from_filename("/home/user/data/vid2.mp4"),
+        ]
+    )
+
+    # Replace Linux prefix with Windows prefix
+    labels.replace_filenames(
+        prefix_map={"/home/user/data": r"D:\mydata"}, open_videos=False
+    )
+    assert labels.videos[0].filename == r"D:\mydata/vid1.mp4"
+    assert labels.videos[1].filename == r"D:\mydata/vid2.mp4"
+
+    # Test mixed separators in the source paths
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:/mixed\path/file1.mp4"),
+            Video.from_filename("C:/mixed/path/file2.mp4"),
+        ]
+    )
+
+    # Should match both despite different separators
+    labels.replace_filenames(
+        prefix_map={"C:/mixed/path": "/unified/path"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/unified/path/file1.mp4"
+    assert labels.videos[1].filename == "/unified/path/file2.mp4"
+
+    # Test with trailing separators
+    labels = Labels(
+        videos=[
+            Video.from_filename("/data/videos/test.mp4"),
+        ]
+    )
+
+    # Old prefix with trailing slash, new without
+    labels.replace_filenames(
+        prefix_map={"/data/videos/": "/new/location"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/new/location/test.mp4"
+
+    # Reset for next test
+    labels = Labels(
+        videos=[
+            Video.from_filename("/data/videos/test.mp4"),
+        ]
+    )
+
+    # Old prefix without trailing slash, new with
+    labels.replace_filenames(
+        prefix_map={"/data/videos": "/new/location/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/new/location/test.mp4"
+
+    # Test with list of filenames (ImageVideo case)
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png", "/data/imgs/img1.png"]),
+        ]
+    )
+
+    # Replace prefix in list of filenames
+    labels.replace_filenames(prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False)
+    assert labels.videos[0].filename == ["/new/imgs/img0.png", "/new/imgs/img1.png"]
+
+    # Test list with some non-matching files
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png", "/other/path/img1.png"]),
+        ]
+    )
+    labels.replace_filenames(prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False)
+    assert labels.videos[0].filename == ["/new/imgs/img0.png", "/other/path/img1.png"]
+
+    # Test list with trailing separator and new prefix ending with separator
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png", "/data/imgs/img1.png"]),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"/data/imgs/": "/new/imgs/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/new/imgs/img0.png", "/new/imgs/img1.png"]
+
+    # Test with new_prefix ending with slash but remainder starting with slash
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/img0.png"]),
+        ]
+    )
+    labels.replace_filenames(prefix_map={"/data/imgs": "/new/imgs/"}, open_videos=False)
+    assert labels.videos[0].filename == ["/new/imgs/img0.png"]
+
+    # Test case where old_prefix has sep and new doesn't, with list
+    labels = Labels(
+        videos=[
+            Video.from_filename(["/data/imgs/file.png"]),
+        ]
+    )
+    labels.replace_filenames(prefix_map={"/data/imgs/": "/new/imgs"}, open_videos=False)
+    assert labels.videos[0].filename == ["/new/imgs/file.png"]
+
+
+def test_replace_filenames_edge_cases_windows_paths():
+    """Test edge cases in replace_filenames to improve coverage."""
+    # Test lines 1088-1095: list case where old_ends_with_sep=True after sanitization
+    # This requires Windows-style paths with trailing backslash
+    # Case 1: new_prefix doesn't end with separator (lines 1091-1093)
+    labels = Labels(
+        videos=[
+            Video.from_filename([r"C:\prefix\file1.mp4", r"C:\prefix\file2.mp4"]),
+        ]
+    )
+    # Windows path with single backslash at end -
+    # preserves trailing / after sanitization
+    labels.replace_filenames(
+        prefix_map={"C:\\prefix\\": "/newprefix"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/newprefix/file1.mp4", "/newprefix/file2.mp4"]
+
+    # Case 2: new_prefix ends with separator (line 1095)
+    labels = Labels(
+        videos=[
+            Video.from_filename([r"C:\prefix\file1.mp4", r"C:\prefix\file2.mp4"]),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"C:\\prefix\\": "/newprefix/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == ["/newprefix/file1.mp4", "/newprefix/file2.mp4"]
+
+    # Case 3: empty new_prefix (line 1095)
+    labels = Labels(
+        videos=[
+            Video.from_filename([r"C:\prefix\file1.mp4", r"C:\prefix\file2.mp4"]),
+        ]
+    )
+    labels.replace_filenames(prefix_map={"C:\\prefix\\": ""}, open_videos=False)
+    assert labels.videos[0].filename == ["file1.mp4", "file2.mp4"]
+
+    # Test lines 1125-1128: non-list case where
+    # old_ends_with_sep=True after sanitization
+    # Case 1: new_prefix doesn't end with separator
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:\prefix\file.mp4"),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"C:\\prefix\\": "/newprefix"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/newprefix/file.mp4"
+
+    # Case 2: new_prefix ends with separator
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:\prefix\file.mp4"),
+        ]
+    )
+    labels.replace_filenames(
+        prefix_map={"C:\\prefix\\": "/newprefix/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/newprefix/file.mp4"
+
+    # Case 3: empty new_prefix
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:\prefix\file.mp4"),
+        ]
+    )
+    labels.replace_filenames(prefix_map={"C:\\prefix\\": ""}, open_videos=False)
+    assert labels.videos[0].filename == "file.mp4"
+
+
 def test_split(slp_real_data, tmp_path):
     # n = 0
     labels = Labels()
@@ -788,6 +1026,14 @@ def test_labels_replace_skeleton(slp_real_data):
     inst = labels[0][0]
     assert inst.skeleton == new_skel
     assert_allclose(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan]])
+
+    # Test line 927: ValueError when multiple skeletons and no old_skeleton specified
+    labels.skeletons.append(Skeleton(["node1", "node2"]))
+    assert len(labels.skeletons) == 2
+
+    new_skel = Skeleton(["A", "B"])
+    with pytest.raises(ValueError, match="Old skeleton must be specified"):
+        labels.replace_skeleton(new_skel)
 
 
 def test_labels_trim(centered_pair, tmpdir):
