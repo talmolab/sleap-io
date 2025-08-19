@@ -582,9 +582,7 @@ def test_replace_filenames_cross_platform():
     )
 
     # Replace prefix in list of filenames
-    labels.replace_filenames(
-        prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False
-    )
+    labels.replace_filenames(prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False)
     assert labels.videos[0].filename == ["/new/imgs/img0.png", "/new/imgs/img1.png"]
 
     # Test list with some non-matching files
@@ -593,9 +591,7 @@ def test_replace_filenames_cross_platform():
             Video.from_filename(["/data/imgs/img0.png", "/other/path/img1.png"]),
         ]
     )
-    labels.replace_filenames(
-        prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False
-    )
+    labels.replace_filenames(prefix_map={"/data/imgs": "/new/imgs"}, open_videos=False)
     assert labels.videos[0].filename == ["/new/imgs/img0.png", "/other/path/img1.png"]
 
     # Test list with trailing separator and new prefix ending with separator
@@ -615,9 +611,7 @@ def test_replace_filenames_cross_platform():
             Video.from_filename(["/data/imgs/img0.png"]),
         ]
     )
-    labels.replace_filenames(
-        prefix_map={"/data/imgs": "/new/imgs/"}, open_videos=False
-    )
+    labels.replace_filenames(prefix_map={"/data/imgs": "/new/imgs/"}, open_videos=False)
     assert labels.videos[0].filename == ["/new/imgs/img0.png"]
 
     # Test case where old_prefix has sep and new doesn't, with list
@@ -626,9 +620,7 @@ def test_replace_filenames_cross_platform():
             Video.from_filename(["/data/imgs/file.png"]),
         ]
     )
-    labels.replace_filenames(
-        prefix_map={"/data/imgs/": "/new/imgs"}, open_videos=False
-    )
+    labels.replace_filenames(prefix_map={"/data/imgs/": "/new/imgs"}, open_videos=False)
     assert labels.videos[0].filename == ["/new/imgs/file.png"]
 
 

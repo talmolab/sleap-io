@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from sleap_io.model.camera import rodrigues_transformation
 import numpy as np
 import pytest
 
 import sleap_io
+from sleap_io.model.camera import rodrigues_transformation
 
 
 @pytest.fixture
