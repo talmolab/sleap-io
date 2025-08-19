@@ -273,27 +273,20 @@ For more details, see the [uv guide on building packages](https://docs.astral.sh
 
 #### Publishing to PyPI
 
-With `uv`, you can publish directly to PyPI:
-```bash
-# Set your PyPI token (get from https://pypi.org/manage/account/token/)
-export UV_PUBLISH_TOKEN="pypi-..."
+Publishing to PyPI is handled automatically via GitHub Actions using [Trusted Publisher](https://docs.pypi.org/trusted-publishers/). This means no tokens or passwords are needed for releases from GitHub.
 
+For manual/local publishing with `uv` (rarely needed):
+```bash
 # Build and publish
 uv build
 uv publish
 ```
 
-For test releases:
-```bash
-# Publish to TestPyPI first
-uv publish --index testpypi
-```
-
-See the [uv publishing documentation](https://docs.astral.sh/uv/guides/package/#publishing-packages) for authentication options and advanced usage.
+See the [uv publishing documentation](https://docs.astral.sh/uv/guides/package/#publishing-packages) for more details.
 
 #### Automated releases
 
-To trigger an automated build and release (via the [`.github/workflows/build.yml`](.github/workflows/build.yml) action), [publish a Release](https://github.com/talmolab/sleap-io/releases/new).
+To trigger an automated build and release (via the [`.github/workflows/build.yml`](.github/workflows/build.yml) action), [publish a Release](https://github.com/talmolab/sleap-io/releases/new). The GitHub Action will automatically authenticate with PyPI using Trusted Publisher and upload the built packages.
 
 
 ## Documentation website
