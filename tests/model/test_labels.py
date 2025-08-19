@@ -501,6 +501,80 @@ def test_replace_filenames_open_videos():
     assert labels.videos[1].filename == "prefixed_b.mp4"
 
 
+def test_replace_filenames_cross_platform():
+    """Test that prefix_map handles Windows and Linux paths correctly."""
+    # Test Windows paths being replaced with Linux paths
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:\data\videos\test1.mp4"),
+            Video.from_filename(r"C:\data\videos\test2.mp4"),
+        ]
+    )
+
+    # Replace Windows prefix with Linux prefix - should match despite backslashes
+    labels.replace_filenames(
+        prefix_map={r"C:\data\videos": "/mnt/storage/videos"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/mnt/storage/videos/test1.mp4"
+    assert labels.videos[1].filename == "/mnt/storage/videos/test2.mp4"
+
+    # Test Linux paths being replaced with Windows paths
+    labels = Labels(
+        videos=[
+            Video.from_filename("/home/user/data/vid1.mp4"),
+            Video.from_filename("/home/user/data/vid2.mp4"),
+        ]
+    )
+
+    # Replace Linux prefix with Windows prefix
+    labels.replace_filenames(
+        prefix_map={"/home/user/data": r"D:\mydata"}, open_videos=False
+    )
+    assert labels.videos[0].filename == r"D:\mydata/vid1.mp4"
+    assert labels.videos[1].filename == r"D:\mydata/vid2.mp4"
+
+    # Test mixed separators in the source paths
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:/mixed\path/file1.mp4"),
+            Video.from_filename("C:/mixed/path/file2.mp4"),
+        ]
+    )
+
+    # Should match both despite different separators
+    labels.replace_filenames(
+        prefix_map={"C:/mixed/path": "/unified/path"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/unified/path/file1.mp4"
+    assert labels.videos[1].filename == "/unified/path/file2.mp4"
+
+    # Test with trailing separators
+    labels = Labels(
+        videos=[
+            Video.from_filename("/data/videos/test.mp4"),
+        ]
+    )
+
+    # Old prefix with trailing slash, new without
+    labels.replace_filenames(
+        prefix_map={"/data/videos/": "/new/location"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/new/location/test.mp4"
+
+    # Reset for next test
+    labels = Labels(
+        videos=[
+            Video.from_filename("/data/videos/test.mp4"),
+        ]
+    )
+
+    # Old prefix without trailing slash, new with
+    labels.replace_filenames(
+        prefix_map={"/data/videos": "/new/location/"}, open_videos=False
+    )
+    assert labels.videos[0].filename == "/new/location/test.mp4"
+
+
 def test_split(slp_real_data, tmp_path):
     # n = 0
     labels = Labels()

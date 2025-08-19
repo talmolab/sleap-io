@@ -196,3 +196,20 @@ def is_file_accessible(filename: str | Path) -> bool:
         return True
     except (FileNotFoundError, PermissionError, OSError, ValueError):
         return False
+
+
+def sanitize_filename(
+    filename: str | Path | list[str] | list[Path],
+) -> str | list[str]:
+    """Sanitize a filename to a canonical posix-compatible format.
+
+    Args:
+        filename: A string or `Path` object or list of either to sanitize.
+
+    Returns:
+        A sanitized filename as a string (or list of strings if a list was provided)
+        with forward slashes and posix-formatted.
+    """
+    if isinstance(filename, list):
+        return [sanitize_filename(f) for f in filename]
+    return Path(filename).as_posix().replace("\\", "/")

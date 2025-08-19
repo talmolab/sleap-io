@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional, Union
 import numpy as np
 from attrs import define, field
 
+from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.camera import RecordingSession
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -1056,28 +1057,79 @@ class Labels:
         elif prefix_map is not None:
             for video in self.videos:
                 for old_prefix, new_prefix in prefix_map.items():
-                    # Work with strings for prefix replacement
-                    # If old_prefix ends with a separator and new_prefix doesn't, add it
-                    if old_prefix.endswith(("/", "\\")) and not new_prefix.endswith(
-                        ("/", "\\")
-                    ):
-                        new_prefix = new_prefix + old_prefix[-1]
+                    # Sanitize old_prefix for cross-platform matching
+                    old_prefix_sanitized = sanitize_filename(old_prefix)
+
+                    # Check if old prefix ends with a separator
+                    old_ends_with_sep = old_prefix_sanitized.endswith("/")
+
                     if type(video.filename) is list:
                         new_fns = []
                         for fn in video.filename:
-                            fn_str = str(fn)
-                            if fn_str.startswith(old_prefix):
-                                # Replace the prefix string
-                                new_fn = new_prefix + fn_str[len(old_prefix) :]
+                            # Sanitize filename for matching
+                            fn_sanitized = sanitize_filename(fn)
+
+                            if fn_sanitized.startswith(old_prefix_sanitized):
+                                # Calculate the remainder after removing the prefix
+                                remainder = fn_sanitized[len(old_prefix_sanitized) :]
+
+                                # Build the new filename
+                                if remainder.startswith("/"):
+                                    # Remainder has separator, remove it to avoid double
+                                    # slash
+                                    remainder = remainder[1:]
+                                    # Always add separator between prefix and remainder
+                                    if new_prefix and not new_prefix.endswith(
+                                        ("/", "\\")
+                                    ):
+                                        new_fn = new_prefix + "/" + remainder
+                                    else:
+                                        new_fn = new_prefix + remainder
+                                elif old_ends_with_sep:
+                                    # Old prefix had separator, preserve it in the new
+                                    # one
+                                    if new_prefix and not new_prefix.endswith(
+                                        ("/", "\\")
+                                    ):
+                                        new_fn = new_prefix + "/" + remainder
+                                    else:
+                                        new_fn = new_prefix + remainder
+                                else:
+                                    # No separator in old prefix, don't add one
+                                    new_fn = new_prefix + remainder
+
                                 new_fns.append(new_fn)
                             else:
                                 new_fns.append(fn)
                         video.replace_filename(new_fns, open=open_videos)
                     else:
-                        fn_str = str(video.filename)
-                        if fn_str.startswith(old_prefix):
-                            # Replace the prefix string
-                            new_fn = new_prefix + fn_str[len(old_prefix) :]
+                        # Sanitize filename for matching
+                        fn_sanitized = sanitize_filename(video.filename)
+
+                        if fn_sanitized.startswith(old_prefix_sanitized):
+                            # Calculate the remainder after removing the prefix
+                            remainder = fn_sanitized[len(old_prefix_sanitized) :]
+
+                            # Build the new filename
+                            if remainder.startswith("/"):
+                                # Remainder has separator, remove it to avoid double
+                                # slash
+                                remainder = remainder[1:]
+                                # Always add separator between prefix and remainder
+                                if new_prefix and not new_prefix.endswith(("/", "\\")):
+                                    new_fn = new_prefix + "/" + remainder
+                                else:
+                                    new_fn = new_prefix + remainder
+                            elif old_ends_with_sep:
+                                # Old prefix had separator, preserve it in the new one
+                                if new_prefix and not new_prefix.endswith(("/", "\\")):
+                                    new_fn = new_prefix + "/" + remainder
+                                else:
+                                    new_fn = new_prefix + remainder
+                            else:
+                                # No separator in old prefix, don't add one
+                                new_fn = new_prefix + remainder
+
                             video.replace_filename(new_fn, open=open_videos)
 
     def extract(
