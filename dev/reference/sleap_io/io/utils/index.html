@@ -1321,6 +1321,14 @@
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sanitize_filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.utils.sanitize_filename&lt;/code&gt;)" href="#sleap_io.io.utils.sanitize_filename">sanitize_filename</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Sanitize a filename to a canonical posix-compatible format.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;write_hdf5_attrs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dataset&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;attributes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.utils.write_hdf5_attrs&lt;/code&gt;)" href="#sleap_io.io.utils.write_hdf5_attrs">write_hdf5_attrs</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -1810,6 +1818,98 @@ corresponding to the datasets as arrays.</p>
 <a id="__codelineno-0-75" name="__codelineno-0-75"></a><a href="#__codelineno-0-75"><span class="linenos" data-linenos="75 "></span></a>        <span class="n">f</span><span class="p">[</span><span class="n">group</span><span class="p">]</span><span class="o">.</span><span class="n">visititems</span><span class="p">(</span><span class="n">read_datasets</span><span class="p">)</span>
 <a id="__codelineno-0-76" name="__codelineno-0-76"></a><a href="#__codelineno-0-76"><span class="linenos" data-linenos="76 "></span></a>
 <a id="__codelineno-0-77" name="__codelineno-0-77"></a><a href="#__codelineno-0-77"><span class="linenos" data-linenos="77 "></span></a>    <span class="k">return</span> <span class="n">data</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="sleap_io.io.utils.sanitize_filename" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sanitize_filename</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.utils.sanitize_filename" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Sanitize a filename to a canonical posix-compatible format.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>filename</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | <span title="list">list</span>[<span title="str">str</span>] | <span title="list">list</span>[<span title="pathlib.Path">Path</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A string or <code>Path</code> object or list of either to sanitize.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="str">str</span> | <span title="list">list</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A sanitized filename as a string (or list of strings if a list was provided)
+with forward slashes and posix-formatted.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/utils.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-201" name="__codelineno-0-201"></a><a href="#__codelineno-0-201"><span class="linenos" data-linenos="201 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sanitize_filename</span><span class="p">(</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a><a href="#__codelineno-0-202"><span class="linenos" data-linenos="202 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">Path</span><span class="p">],</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><a href="#__codelineno-0-203"><span class="linenos" data-linenos="203 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><a href="#__codelineno-0-204"><span class="linenos" data-linenos="204 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sanitize a filename to a canonical posix-compatible format.</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><a href="#__codelineno-0-205"><span class="linenos" data-linenos="205 "></span></a>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><a href="#__codelineno-0-206"><span class="linenos" data-linenos="206 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><a href="#__codelineno-0-207"><span class="linenos" data-linenos="207 "></span></a><span class="sd">        filename: A string or `Path` object or list of either to sanitize.</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><a href="#__codelineno-0-208"><span class="linenos" data-linenos="208 "></span></a>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a><a href="#__codelineno-0-209"><span class="linenos" data-linenos="209 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a><a href="#__codelineno-0-210"><span class="linenos" data-linenos="210 "></span></a><span class="sd">        A sanitized filename as a string (or list of strings if a list was provided)</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><a href="#__codelineno-0-211"><span class="linenos" data-linenos="211 "></span></a><span class="sd">        with forward slashes and posix-formatted.</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a><a href="#__codelineno-0-212"><span class="linenos" data-linenos="212 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a><a href="#__codelineno-0-213"><span class="linenos" data-linenos="213 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a><a href="#__codelineno-0-214"><span class="linenos" data-linenos="214 "></span></a>        <span class="k">return</span> <span class="p">[</span><span class="n">sanitize_filename</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">filename</span><span class="p">]</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><a href="#__codelineno-0-215"><span class="linenos" data-linenos="215 "></span></a>    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">as_posix</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;/&quot;</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
