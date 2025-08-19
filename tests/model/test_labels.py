@@ -1007,6 +1007,14 @@ def test_labels_replace_skeleton(slp_real_data):
     inst = labels[0][0]
     assert inst.skeleton == new_skel
     assert_allclose(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan]])
+    
+    # Test line 927: ValueError when multiple skeletons and no old_skeleton specified
+    labels.skeletons.append(Skeleton(["node1", "node2"]))
+    assert len(labels.skeletons) == 2
+    
+    new_skel = Skeleton(["A", "B"])
+    with pytest.raises(ValueError, match="Old skeleton must be specified"):
+        labels.replace_skeleton(new_skel)
 
 
 def test_labels_trim(centered_pair, tmpdir):
