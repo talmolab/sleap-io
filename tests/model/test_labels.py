@@ -634,12 +634,13 @@ def test_replace_filenames_edge_cases_windows_paths():
             Video.from_filename([r"C:\prefix\file1.mp4", r"C:\prefix\file2.mp4"]),
         ]
     )
-    # Use Windows path with single backslash at end - this preserves trailing / after sanitization
+    # Windows path with single backslash at end -
+    # preserves trailing / after sanitization
     labels.replace_filenames(
         prefix_map={"C:\\prefix\\": "/newprefix"}, open_videos=False
     )
     assert labels.videos[0].filename == ["/newprefix/file1.mp4", "/newprefix/file2.mp4"]
-    
+
     # Case 2: new_prefix ends with separator (line 1095)
     labels = Labels(
         videos=[
@@ -650,19 +651,18 @@ def test_replace_filenames_edge_cases_windows_paths():
         prefix_map={"C:\\prefix\\": "/newprefix/"}, open_videos=False
     )
     assert labels.videos[0].filename == ["/newprefix/file1.mp4", "/newprefix/file2.mp4"]
-    
+
     # Case 3: empty new_prefix (line 1095)
     labels = Labels(
         videos=[
             Video.from_filename([r"C:\prefix\file1.mp4", r"C:\prefix\file2.mp4"]),
         ]
     )
-    labels.replace_filenames(
-        prefix_map={"C:\\prefix\\": ""}, open_videos=False
-    )
+    labels.replace_filenames(prefix_map={"C:\\prefix\\": ""}, open_videos=False)
     assert labels.videos[0].filename == ["file1.mp4", "file2.mp4"]
-    
-    # Test lines 1125-1128: non-list case where old_ends_with_sep=True after sanitization
+
+    # Test lines 1125-1128: non-list case where
+    # old_ends_with_sep=True after sanitization
     # Case 1: new_prefix doesn't end with separator
     labels = Labels(
         videos=[
@@ -673,7 +673,7 @@ def test_replace_filenames_edge_cases_windows_paths():
         prefix_map={"C:\\prefix\\": "/newprefix"}, open_videos=False
     )
     assert labels.videos[0].filename == "/newprefix/file.mp4"
-    
+
     # Case 2: new_prefix ends with separator
     labels = Labels(
         videos=[
@@ -684,16 +684,14 @@ def test_replace_filenames_edge_cases_windows_paths():
         prefix_map={"C:\\prefix\\": "/newprefix/"}, open_videos=False
     )
     assert labels.videos[0].filename == "/newprefix/file.mp4"
-    
+
     # Case 3: empty new_prefix
     labels = Labels(
         videos=[
             Video.from_filename(r"C:\prefix\file.mp4"),
         ]
     )
-    labels.replace_filenames(
-        prefix_map={"C:\\prefix\\": ""}, open_videos=False
-    )
+    labels.replace_filenames(prefix_map={"C:\\prefix\\": ""}, open_videos=False)
     assert labels.videos[0].filename == "file.mp4"
 
 
@@ -1028,11 +1026,11 @@ def test_labels_replace_skeleton(slp_real_data):
     inst = labels[0][0]
     assert inst.skeleton == new_skel
     assert_allclose(inst.numpy(), [[np.nan, np.nan], [np.nan, np.nan]])
-    
+
     # Test line 927: ValueError when multiple skeletons and no old_skeleton specified
     labels.skeletons.append(Skeleton(["node1", "node2"]))
     assert len(labels.skeletons) == 2
-    
+
     new_skel = Skeleton(["A", "B"])
     with pytest.raises(ValueError, match="Old skeleton must be specified"):
         labels.replace_skeleton(new_skel)
