@@ -88,3 +88,29 @@ skip = '.git*,*.css'
 check-hidden = true
 # ignore-regex = ''
 ignore-words-list = 'THW,HWT,THWC,CHWT'
+
+[tool.coverage.run]
+branch = true
+parallel = true
+concurrency = ["multiprocessing", "thread"]
+source = ["sleap_io"]
+omit = [
+  "*/tests/*",
+  "*/.venv/*",
+  "*/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "if TYPE_CHECKING:",
+  "pragma: no cover",
+  "if __name__ == \"__main__\":",
+]
+precision = 1
+skip_covered = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.coverage.html]
+directory = "htmlcov"
