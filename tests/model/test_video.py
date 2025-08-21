@@ -279,3 +279,59 @@ def test_labels_set_video_plugin(centered_pair_low_quality_path):
     labels.set_video_plugin("cv2")
     assert video1.backend.plugin == "opencv"
     assert video2.backend.plugin == "opencv"
+
+
+def test_video_matches_path():
+    """Test Video.matches_path() method."""
+    # Create test videos with different paths
+    video1 = Video(filename="/path/to/video.mp4", open_backend=False)
+    video2 = Video(filename="/path/to/video.mp4", open_backend=False)
+    video3 = Video(filename="/different/path/video.mp4", open_backend=False)
+    video4 = Video(filename="/path/to/other.mp4", open_backend=False)
+
+    # Test strict path matching
+    assert video1.matches_path(video2, strict=True)
+    assert not video1.matches_path(video3, strict=True)
+    assert not video1.matches_path(video4, strict=True)
+
+    # Test basename matching
+    assert video1.matches_path(video2, strict=False)
+    assert video1.matches_path(video3, strict=False)  # Same basename
+    assert not video1.matches_path(video4, strict=False)  # Different basename
+
+    # Test with image sequences
+    video_seq1 = Video(filename=["img1.png", "img2.png"], open_backend=False)
+    video_seq2 = Video(filename=["img1.png", "img2.png"], open_backend=False)
+    video_seq3 = Video(filename=["img3.png", "img4.png"], open_backend=False)
+
+    assert video_seq1.matches_path(video_seq2, strict=True)
+    assert not video_seq1.matches_path(video_seq3, strict=True)
+
+    # Test mixed types
+    assert not video1.matches_path(video_seq1, strict=False)
+
+
+def test_video_matches_content():
+    """Test Video.matches_content() method."""
+    # Create videos with mock shapes
+    video1 = Video(filename="test1.mp4", open_backend=False)
+    video1.backend_metadata["shape"] = (100, 480, 640, 3)
+
+    video2 = Video(filename="test2.mp4", open_backend=False)
+    video2.backend_metadata["shape"] = (100, 480, 640, 3)
+
+    video3 = Video(filename="test3.mp4", open_backend=False)
+    video3.backend_metadata["shape"] = (50, 480, 640, 3)  # Different frames
+
+    video4 = Video(filename="test4.mp4", open_backend=False)
+    video4.backend_metadata["shape"] = (100, 240, 320, 3)  # Different resolution
+
+    # Test matching content
+    assert video1.matches_content(video2)  # Same shape
+    assert not video1.matches_content(video3)  # Different frame count
+    assert not video1.matches_content(video4)  # Different resolution
+
+    # Test with no shape metadata
+    video5 = Video(filename="test5.mp4", open_backend=False)
+    video6 = Video(filename="test6.mp4", open_backend=False)
+    assert video5.matches_content(video6)  # Both have no shape

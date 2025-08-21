@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from numpy.testing import assert_equal
+from numpy.testing import assert_array_equal, assert_equal
 
 from sleap_io import Skeleton
 from sleap_io.model.instance import (
@@ -333,3 +333,217 @@ def test_predicted_instance_setitem():
     # Test with too few elements
     with pytest.raises(ValueError):
         inst["A"] = [1]
+
+
+def test_instance_same_pose_as():
+    """Test Instance.same_pose_as() method."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Create instances with similar poses
+    inst1 = Instance.from_numpy(
+        np.array([[10.0, 10.0], [20.0, 20.0]]), skeleton=skeleton
+    )
+    inst2 = Instance.from_numpy(
+        np.array([[11.0, 11.0], [21.0, 21.0]]), skeleton=skeleton
+    )
+    inst3 = Instance.from_numpy(
+        np.array([[50.0, 50.0], [60.0, 60.0]]), skeleton=skeleton
+    )
+
+    # Test with default tolerance
+    assert inst1.same_pose_as(inst2, tolerance=5.0)
+    assert not inst1.same_pose_as(inst3, tolerance=5.0)
+
+    # Test with different tolerance
+    assert inst1.same_pose_as(inst2, tolerance=2.0)
+    assert not inst1.same_pose_as(inst2, tolerance=1.0)
+
+    # Test with different skeletons
+    skeleton2 = Skeleton(["head", "thorax", "tail"])
+    inst4 = Instance.from_numpy(
+        np.array([[10.0, 10.0], [15.0, 15.0], [20.0, 20.0]]), skeleton=skeleton2
+    )
+    assert not inst1.same_pose_as(inst4)
+
+    # Test with different visibility patterns
+    inst5 = Instance.from_numpy(
+        np.array([[10.0, 10.0], [np.nan, np.nan]]), skeleton=skeleton
+    )
+    inst6 = Instance.from_numpy(
+        np.array([[10.0, 10.0], [20.0, 20.0]]), skeleton=skeleton
+    )
+    assert not inst5.same_pose_as(inst6)  # Different visibility
+
+    # Test with both having no visible points
+    inst7 = Instance.from_numpy(
+        np.array([[np.nan, np.nan], [np.nan, np.nan]]), skeleton=skeleton
+    )
+    inst8 = Instance.from_numpy(
+        np.array([[np.nan, np.nan], [np.nan, np.nan]]), skeleton=skeleton
+    )
+    assert inst7.same_pose_as(inst8)
+
+
+def test_instance_same_identity_as():
+    """Test Instance.same_identity_as() method."""
+    skeleton = Skeleton(["head", "tail"])
+    track1 = Track(name="mouse1")
+    track2 = Track(name="mouse2")
+
+    inst1 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, track=track1
+    )
+    inst2 = Instance.from_numpy(
+        np.array([[50, 50], [60, 60]]), skeleton=skeleton, track=track1
+    )
+    inst3 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, track=track2
+    )
+    inst4 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]),
+        skeleton=skeleton,  # No track
+    )
+
+    # Same track object
+    assert inst1.same_identity_as(inst2)
+
+    # Different track objects
+    assert not inst1.same_identity_as(inst3)
+
+    # One or both without tracks
+    assert not inst1.same_identity_as(inst4)
+    assert not inst4.same_identity_as(inst1)
+
+    # Both without tracks
+    inst5 = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton)
+    assert not inst4.same_identity_as(inst5)
+
+
+def test_instance_overlaps_with():
+    """Test Instance.overlaps_with() method."""
+    skeleton = Skeleton(["p1", "p2", "p3", "p4"])
+
+    # Create instances with known bounding boxes
+    # Box 1: (0,0) to (10,10)
+    inst1 = Instance.from_numpy(
+        np.array([[0, 0], [10, 0], [10, 10], [0, 10]]), skeleton=skeleton
+    )
+
+    # Box 2: (5,5) to (15,15) - overlaps with box 1
+    inst2 = Instance.from_numpy(
+        np.array([[5, 5], [15, 5], [15, 15], [5, 15]]), skeleton=skeleton
+    )
+
+    # Box 3: (20,20) to (30,30) - no overlap with box 1
+    inst3 = Instance.from_numpy(
+        np.array([[20, 20], [30, 20], [30, 30], [20, 30]]), skeleton=skeleton
+    )
+
+    # Test overlapping instances
+    assert inst1.overlaps_with(inst2, iou_threshold=0.1)
+
+    # Calculate expected IoU for inst1 and inst2
+    # Intersection: (5,5) to (10,10) = 25
+    # Union: 100 + 100 - 25 = 175
+    # IoU = 25/175 = 0.143
+    assert inst1.overlaps_with(inst2, iou_threshold=0.14)
+    assert not inst1.overlaps_with(inst2, iou_threshold=0.15)
+
+    # Test non-overlapping instances
+    assert not inst1.overlaps_with(inst3, iou_threshold=0.0)
+
+    # Test with invisible points
+    inst4 = Instance.from_numpy(
+        np.array([[np.nan, np.nan], [10, 0], [10, 10], [0, 10]]), skeleton=skeleton
+    )
+    inst5 = Instance.from_numpy(
+        np.array(
+            [[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]]
+        ),
+        skeleton=skeleton,
+    )
+
+    # Should still work with some invisible points
+    assert inst4.overlaps_with(inst2, iou_threshold=0.1)
+
+    # Should return False if either has no visible points
+    assert not inst5.overlaps_with(inst1)
+    assert not inst1.overlaps_with(inst5)
+
+
+def test_instance_bounding_box():
+    """Test Instance.bounding_box() method."""
+    skeleton = Skeleton(["p1", "p2", "p3", "p4"])
+
+    # Test normal case
+    inst1 = Instance.from_numpy(
+        np.array([[5, 10], [15, 20], [10, 30], [0, 25]]), skeleton=skeleton
+    )
+    bbox = inst1.bounding_box()
+    assert_array_equal(bbox, np.array([[0, 10], [15, 30]]))
+
+    # Test with some invisible points
+    inst2 = Instance.from_numpy(
+        np.array([[5, 10], [np.nan, np.nan], [10, 30], [0, 25]]), skeleton=skeleton
+    )
+    bbox = inst2.bounding_box()
+    assert_array_equal(bbox, np.array([[0, 10], [10, 30]]))
+
+    # Test with no visible points
+    inst3 = Instance.from_numpy(
+        np.array(
+            [[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]]
+        ),
+        skeleton=skeleton,
+    )
+    assert inst3.bounding_box() is None
+
+
+def test_track_matches():
+    """Test Track.matches() method."""
+    track1 = Track(name="mouse1")
+    track2 = Track(name="mouse1")  # Same name, different object
+    track3 = Track(name="mouse2")
+
+    # Test name matching
+    assert track1.matches(track2, method="name")
+    assert not track1.matches(track3, method="name")
+
+    # Test identity matching
+    assert not track1.matches(track2, method="identity")
+    assert track1.matches(track1, method="identity")
+
+    # Test invalid method
+    with pytest.raises(ValueError):
+        track1.matches(track2, method="invalid")
+
+
+def test_track_similarity_to():
+    """Test Track.similarity_to() method."""
+    track1 = Track(name="mouse1")
+    track2 = Track(name="mouse1")  # Same name, different object
+    track3 = Track(name="mouse2")
+    track4 = Track(name="")  # Empty name
+
+    # Test with same names
+    sim = track1.similarity_to(track2)
+    assert sim["same_name"] is True
+    assert sim["same_identity"] is False
+    assert sim["name_similarity"] == 1.0
+
+    # Test with different names
+    sim = track1.similarity_to(track3)
+    assert sim["same_name"] is False
+    assert sim["same_identity"] is False
+    assert 0 <= sim["name_similarity"] <= 1.0
+
+    # Test with same object
+    sim = track1.similarity_to(track1)
+    assert sim["same_name"] is True
+    assert sim["same_identity"] is True
+    assert sim["name_similarity"] == 1.0
+
+    # Test with empty names
+    sim = track4.similarity_to(track4)
+    assert sim["same_name"] is True
+    assert sim["name_similarity"] == 1.0

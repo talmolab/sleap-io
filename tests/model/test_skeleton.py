@@ -258,3 +258,100 @@ def test_reorder_nodes():
     # Node not in skeleton
     with pytest.raises(IndexError):
         skel.reorder_nodes(["C", "A", "X"])
+
+
+def test_skeleton_matches():
+    """Test Skeleton.matches() method."""
+    # Create test skeletons
+    skel1 = Skeleton(
+        nodes=["head", "thorax", "abdomen", "left_wing", "right_wing"],
+        edges=[("head", "thorax"), ("thorax", "abdomen")],
+        symmetries=[("left_wing", "right_wing")],
+    )
+
+    skel2 = Skeleton(
+        nodes=["head", "thorax", "abdomen", "left_wing", "right_wing"],
+        edges=[("head", "thorax"), ("thorax", "abdomen")],
+        symmetries=[("left_wing", "right_wing")],
+    )
+
+    skel3 = Skeleton(
+        nodes=[
+            "abdomen",
+            "thorax",
+            "head",
+            "left_wing",
+            "right_wing",
+        ],  # Different order
+        edges=[("head", "thorax"), ("thorax", "abdomen")],
+        symmetries=[("left_wing", "right_wing")],
+    )
+
+    skel4 = Skeleton(
+        nodes=["head", "thorax", "tail"],  # Different node
+        edges=[("head", "thorax"), ("thorax", "tail")],
+    )
+
+    skel5 = Skeleton(
+        nodes=["head", "thorax", "abdomen"],
+        edges=[("head", "abdomen"), ("thorax", "abdomen")],  # Different edges
+    )
+
+    # Test exact match (same order required)
+    assert skel1.matches(skel2, require_same_order=True)
+    assert not skel1.matches(skel3, require_same_order=True)
+
+    # Test structure match (order doesn't matter)
+    assert skel1.matches(skel2, require_same_order=False)
+    assert skel1.matches(skel3, require_same_order=False)
+
+    # Test with different nodes
+    assert not skel1.matches(skel4, require_same_order=False)
+
+    # Test with different edges
+    assert not skel1.matches(skel5, require_same_order=False)
+
+    # Test with different number of nodes
+    skel6 = Skeleton(nodes=["head", "thorax"])
+    assert not skel1.matches(skel6, require_same_order=False)
+
+
+def test_skeleton_node_similarities():
+    """Test Skeleton.node_similarities() method."""
+    skel1 = Skeleton(nodes=["head", "thorax", "abdomen"])
+    skel2 = Skeleton(nodes=["head", "thorax", "tail"])
+    skel3 = Skeleton(nodes=["wing1", "wing2", "antenna"])
+    skel4 = Skeleton(nodes=["head", "thorax", "abdomen"])  # Same as skel1
+
+    # Test partial overlap
+    metrics = skel1.node_similarities(skel2)
+    assert metrics["n_common"] == 2  # head and thorax
+    assert metrics["n_self_only"] == 1  # abdomen
+    assert metrics["n_other_only"] == 1  # tail
+    assert metrics["jaccard"] == 2 / 4  # 2 common / 4 total unique
+    assert metrics["dice"] == 2 * 2 / (3 + 3)  # 2*2 / (3+3)
+
+    # Test no overlap
+    metrics = skel1.node_similarities(skel3)
+    assert metrics["n_common"] == 0
+    assert metrics["n_self_only"] == 3
+    assert metrics["n_other_only"] == 3
+    assert metrics["jaccard"] == 0
+    assert metrics["dice"] == 0
+
+    # Test complete overlap
+    metrics = skel1.node_similarities(skel4)
+    assert metrics["n_common"] == 3
+    assert metrics["n_self_only"] == 0
+    assert metrics["n_other_only"] == 0
+    assert metrics["jaccard"] == 1.0
+    assert metrics["dice"] == 1.0
+
+    # Test with empty skeleton
+    skel_empty = Skeleton(nodes=[])
+    metrics = skel1.node_similarities(skel_empty)
+    assert metrics["n_common"] == 0
+    assert metrics["n_self_only"] == 3
+    assert metrics["n_other_only"] == 0
+    assert metrics["jaccard"] == 0
+    assert metrics["dice"] == 0
