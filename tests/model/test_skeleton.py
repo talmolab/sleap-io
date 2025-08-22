@@ -181,6 +181,61 @@ def test_add_symmetry():
     assert skel.symmetry_inds == [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]
 
 
+def test_no_duplicate_symmetries():
+    """Test that duplicate symmetry edges are not created."""
+    skel = Skeleton(["A", "B", "C", "D", "E", "F"])
+    
+    # Add initial symmetry
+    skel.add_symmetry("A", "B")
+    assert len(skel.symmetries) == 1
+    assert skel.symmetry_inds == [(0, 1)]
+    
+    # Try adding the same symmetry again (should not duplicate)
+    skel.add_symmetry("A", "B")
+    assert len(skel.symmetries) == 1
+    assert skel.symmetry_inds == [(0, 1)]
+    
+    # Try adding the reversed symmetry (should not duplicate)
+    skel.add_symmetry("B", "A")
+    assert len(skel.symmetries) == 1
+    assert skel.symmetry_inds == [(0, 1)]
+    
+    # Add a different symmetry
+    skel.add_symmetry("C", "D")
+    assert len(skel.symmetries) == 2
+    assert skel.symmetry_inds == [(0, 1), (2, 3)]
+    
+    # Try adding duplicates using add_symmetries (batch operation)
+    skel.add_symmetries([("A", "B"), ("B", "A"), ("C", "D"), ("D", "C")])
+    # Should still only have 2 symmetries
+    assert len(skel.symmetries) == 2
+    assert skel.symmetry_inds == [(0, 1), (2, 3)]
+    
+    # Add new symmetry and verify count
+    skel.add_symmetry("E", "F")
+    assert len(skel.symmetries) == 3
+    assert skel.symmetry_inds == [(0, 1), (2, 3), (4, 5)]
+    
+    # Try adding a mix of new and duplicate symmetries
+    initial_count = len(skel.symmetries)
+    skel.add_symmetries([("A", "B"), ("E", "F")])  # Both duplicates
+    assert len(skel.symmetries) == initial_count  # No change
+    
+    # Verify using Node objects directly (not just strings)
+    node_a = skel["A"]
+    node_b = skel["B"]
+    skel.add_symmetry(node_a, node_b)
+    assert len(skel.symmetries) == 3  # Still no duplicate
+    
+    # Verify symmetry set behavior
+    # Note: Symmetry uses sets internally, so order doesn't matter for the nodes collection
+    sym1 = Symmetry([Node("X"), Node("Y")])
+    # The nodes are stored as a set, so we can verify the set contains both nodes
+    assert len(sym1.nodes) == 2
+    node_names = {node.name for node in sym1.nodes}
+    assert node_names == {"X", "Y"}
+
+
 def test_rename_nodes():
     """Test renaming nodes in the skeleton."""
     skel = Skeleton(["A", "B", "C"])
