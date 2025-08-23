@@ -331,6 +331,51 @@ class Track:
 
     name: str = ""
 
+    def matches(self, other: "Track", method: str = "name") -> bool:
+        """Check if this track matches another track.
+
+        Args:
+            other: Another track to compare with.
+            method: Matching method - "name" (match by name) or "identity"
+                (match by object identity).
+
+        Returns:
+            True if the tracks match according to the specified method.
+        """
+        if method == "name":
+            return self.name == other.name
+        elif method == "identity":
+            return self is other
+        else:
+            raise ValueError(f"Unknown matching method: {method}")
+
+    def similarity_to(self, other: "Track") -> dict[str, any]:
+        """Calculate similarity metrics with another track.
+
+        Args:
+            other: Another track to compare with.
+
+        Returns:
+            A dictionary with similarity metrics:
+            - 'same_name': Whether the tracks have the same name
+            - 'same_identity': Whether the tracks are the same object
+            - 'name_similarity': Simple string similarity score (0-1)
+        """
+        # Calculate simple string similarity
+        if self.name and other.name:
+            # Simple character overlap similarity
+            common_chars = set(self.name.lower()) & set(other.name.lower())
+            all_chars = set(self.name.lower()) | set(other.name.lower())
+            name_similarity = len(common_chars) / len(all_chars) if all_chars else 0
+        else:
+            name_similarity = 1.0 if self.name == other.name else 0.0
+
+        return {
+            "same_name": self.name == other.name,
+            "same_identity": self is other,
+            "name_similarity": name_similarity,
+        }
+
 
 @attrs.define(auto_attribs=True, slots=True, eq=False)
 class Instance:
@@ -610,6 +655,144 @@ class Instance:
         new_points[new_node_inds] = self.points[old_node_inds]
         self.points = new_points
         self.points["name"] = self.skeleton.node_names
+
+    def same_pose_as(self, other: "Instance", tolerance: float = 5.0) -> bool:
+        """Check if this instance has the same pose as another instance.
+
+        Args:
+            other: Another instance to compare with.
+            tolerance: Maximum distance (in pixels) between corresponding points
+                for them to be considered the same.
+
+        Returns:
+            True if the instances have the same pose within tolerance, False otherwise.
+
+        Notes:
+            Two instances are considered to have the same pose if:
+            - They have the same skeleton structure
+            - All visible points are within the tolerance distance
+            - They have the same visibility pattern
+        """
+        # Check skeleton compatibility
+        if not self.skeleton.matches(other.skeleton):
+            return False
+
+        # Get visible points for both instances
+        self_visible = self.points["visible"]
+        other_visible = other.points["visible"]
+
+        # Check if visibility patterns match
+        if not np.array_equal(self_visible, other_visible):
+            return False
+
+        # Compare visible points
+        if not self_visible.any():
+            # Both instances have no visible points
+            return True
+
+        # Calculate distances between corresponding visible points
+        self_pts = self.points["xy"][self_visible]
+        other_pts = other.points["xy"][other_visible]
+
+        distances = np.linalg.norm(self_pts - other_pts, axis=1)
+
+        return np.all(distances <= tolerance)
+
+    def same_identity_as(self, other: "Instance") -> bool:
+        """Check if this instance has the same identity (track) as another instance.
+
+        Args:
+            other: Another instance to compare with.
+
+        Returns:
+            True if both instances have the same track identity, False otherwise.
+
+        Notes:
+            Instances have the same identity if they share the same Track object
+            (by identity, not just by name).
+        """
+        if self.track is None or other.track is None:
+            return False
+        return self.track is other.track
+
+    def overlaps_with(self, other: "Instance", iou_threshold: float = 0.5) -> bool:
+        """Check if this instance overlaps with another based on bounding box IoU.
+
+        Args:
+            other: Another instance to compare with.
+            iou_threshold: Minimum IoU (Intersection over Union) value to consider
+                the instances as overlapping.
+
+        Returns:
+            True if the instances overlap above the threshold, False otherwise.
+
+        Notes:
+            Overlap is computed using the bounding boxes of visible points.
+            If either instance has no visible points, they don't overlap.
+        """
+        # Get visible points for both instances
+        self_visible = self.points["visible"]
+        other_visible = other.points["visible"]
+
+        if not self_visible.any() or not other_visible.any():
+            return False
+
+        # Calculate bounding boxes
+        self_pts = self.points["xy"][self_visible]
+        other_pts = other.points["xy"][other_visible]
+
+        self_bbox = np.array(
+            [
+                [np.min(self_pts[:, 0]), np.min(self_pts[:, 1])],  # min x, y
+                [np.max(self_pts[:, 0]), np.max(self_pts[:, 1])],  # max x, y
+            ]
+        )
+
+        other_bbox = np.array(
+            [
+                [np.min(other_pts[:, 0]), np.min(other_pts[:, 1])],
+                [np.max(other_pts[:, 0]), np.max(other_pts[:, 1])],
+            ]
+        )
+
+        # Calculate intersection
+        intersection_min = np.maximum(self_bbox[0], other_bbox[0])
+        intersection_max = np.minimum(self_bbox[1], other_bbox[1])
+
+        if np.any(intersection_min >= intersection_max):
+            # No intersection
+            return False
+
+        intersection_area = np.prod(intersection_max - intersection_min)
+
+        # Calculate union
+        self_area = np.prod(self_bbox[1] - self_bbox[0])
+        other_area = np.prod(other_bbox[1] - other_bbox[0])
+        union_area = self_area + other_area - intersection_area
+
+        # Calculate IoU
+        iou = intersection_area / union_area if union_area > 0 else 0
+
+        return iou >= iou_threshold
+
+    def bounding_box(self) -> Optional[np.ndarray]:
+        """Get the bounding box of visible points.
+
+        Returns:
+            A numpy array of shape (2, 2) with [[min_x, min_y], [max_x, max_y]],
+            or None if there are no visible points.
+        """
+        visible = self.points["visible"]
+        if not visible.any():
+            return None
+
+        pts = self.points["xy"][visible]
+        return np.array(
+            [
+                [np.min(pts[:, 0]), np.min(pts[:, 1])],
+                [np.max(pts[:, 0]), np.max(pts[:, 1])],
+            ]
+        )
 
 
 @attrs.define(eq=False)

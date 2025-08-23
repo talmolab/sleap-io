@@ -436,6 +436,63 @@ class Video:
             else:
                 self.close()
 
+    def matches_path(self, other: "Video", strict: bool = False) -> bool:
+        """Check if this video has the same path as another video.
+
+        Args:
+            other: Another video to compare with.
+            strict: If True, require exact path match. If False, consider videos
+                with the same filename (basename) as matching.
+
+        Returns:
+            True if the videos have matching paths, False otherwise.
+        """
+        if isinstance(self.filename, list) and isinstance(other.filename, list):
+            # Both are image sequences
+            if strict:
+                return self.filename == other.filename
+            else:
+                # Compare basenames
+                self_basenames = [Path(f).name for f in self.filename]
+                other_basenames = [Path(f).name for f in other.filename]
+                return self_basenames == other_basenames
+        elif isinstance(self.filename, list) or isinstance(other.filename, list):
+            # One is image sequence, other is single file
+            return False
+        else:
+            # Both are single files
+            if strict:
+                return Path(self.filename).resolve() == Path(other.filename).resolve()
+            else:
+                return Path(self.filename).name == Path(other.filename).name
+
+    def matches_content(self, other: "Video") -> bool:
+        """Check if this video has the same content as another video.
+
+        Args:
+            other: Another video to compare with.
+
+        Returns:
+            True if the videos have the same shape and backend type.
+
+        Notes:
+            This compares metadata like shape and backend type, not actual frame data.
+        """
+        # Compare shapes
+        self_shape = self.shape
+        other_shape = other.shape
+
+        if self_shape != other_shape:
+            return False
+
+        # Compare backend types
+        if self.backend is None and other.backend is None:
+            return True
+        elif self.backend is None or other.backend is None:
+            return False
+
+        return type(self.backend).__name__ == type(other.backend).__name__
+
     def save(
         self,
         save_path: str | Path,

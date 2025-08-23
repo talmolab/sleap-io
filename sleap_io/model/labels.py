@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Union
 
 import numpy as np
 from attrs import define, field
@@ -30,6 +30,13 @@ from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
     from sleap_io.model.labels_set import LabelsSet
+    from sleap_io.model.matching import (
+        InstanceMatcher,
+        MergeResult,
+        SkeletonMatcher,
+        TrackMatcher,
+        VideoMatcher,
+    )
 
 
 @define
@@ -1628,6 +1635,300 @@ class Labels:
 
         # Make sure everything is properly linked
         self.update()
+
+    def merge(
+        self,
+        other: "Labels",
+        instance_matcher: Optional["InstanceMatcher"] = None,
+        skeleton_matcher: Optional["SkeletonMatcher"] = None,
+        video_matcher: Optional["VideoMatcher"] = None,
+        track_matcher: Optional["TrackMatcher"] = None,
+        frame_strategy: str = "smart",
+        validate: bool = True,
+        progress_callback: Optional[Callable] = None,
+        error_mode: str = "continue",
+    ) -> "MergeResult":
+        """Merge another Labels object into this one.
+
+        Args:
+            other: Another Labels object to merge into this one.
+            instance_matcher: Matcher for comparing instances. If None, uses default
+                spatial matching with 5px tolerance.
+            skeleton_matcher: Matcher for comparing skeletons. If None, uses structure
+                matching.
+            video_matcher: Matcher for comparing videos. If None, uses auto matching.
+            track_matcher: Matcher for comparing tracks. If None, uses name matching.
+            frame_strategy: Strategy for merging frames:
+                - "smart": Keep user labels, update predictions
+                - "keep_original": Keep original frames
+                - "keep_new": Replace with new frames
+                - "keep_both": Keep all frames
+            validate: If True, validate for conflicts before merging.
+            progress_callback: Optional callback for progress updates.
+                Should accept (current, total, message) arguments.
+            error_mode: How to handle errors:
+                - "continue": Log errors but continue
+                - "strict": Raise exception on first error
+                - "warn": Print warnings but continue
+
+        Returns:
+            MergeResult object with statistics and any errors/conflicts.
+
+        Notes:
+            This method modifies the Labels object in place. The merge is designed to
+            handle common workflows like merging predictions back into a project.
+        """
+        from datetime import datetime
+
+        from sleap_io.model.matching import (
+            ConflictResolution,
+            ErrorMode,
+            InstanceMatcher,
+            MergeError,
+            MergeResult,
+            SkeletonMatcher,
+            SkeletonMatchMethod,
+            SkeletonMismatchError,
+            TrackMatcher,
+            VideoMatcher,
+        )
+
+        # Initialize matchers with defaults if not provided
+        if instance_matcher is None:
+            instance_matcher = InstanceMatcher()
+        if skeleton_matcher is None:
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
+        if video_matcher is None:
+            video_matcher = VideoMatcher()
+        if track_matcher is None:
+            track_matcher = TrackMatcher()
+
+        # Parse error mode
+        error_mode_enum = ErrorMode(error_mode)
+
+        # Initialize result
+        result = MergeResult(successful=True)
+
+        # Track merge history in provenance
+        if "merge_history" not in self.provenance:
+            self.provenance["merge_history"] = []
+
+        merge_record = {
+            "timestamp": datetime.now().isoformat(),
+            "source_labels": {
+                "n_frames": len(other.labeled_frames),
+                "n_videos": len(other.videos),
+                "n_skeletons": len(other.skeletons),
+                "n_tracks": len(other.tracks),
+            },
+            "strategy": frame_strategy,
+        }
+
+        try:
+            # Step 1: Match and merge skeletons
+            skeleton_map = {}
+            for other_skel in other.skeletons:
+                matched = False
+                for self_skel in self.skeletons:
+                    if skeleton_matcher.match(self_skel, other_skel):
+                        skeleton_map[other_skel] = self_skel
+                        matched = True
+                        break
+
+                if not matched:
+                    if validate and error_mode_enum == ErrorMode.STRICT:
+                        raise SkeletonMismatchError(
+                            message=f"No matching skeleton found for {other_skel.name}",
+                            details={"skeleton": other_skel},
+                        )
+                    elif error_mode_enum == ErrorMode.WARN:
+                        print(f"Warning: No matching skeleton for {other_skel.name}")
+
+                    # Add new skeleton if no match
+                    self.skeletons.append(other_skel)
+                    skeleton_map[other_skel] = other_skel
+
+            # Step 2: Match and merge videos
+            video_map = {}
+            for other_video in other.videos:
+                matched = False
+                for self_video in self.videos:
+                    if video_matcher.match(self_video, other_video):
+                        video_map[other_video] = self_video
+                        matched = True
+                        break
+
+                if not matched:
+                    # Add new video if no match
+                    self.videos.append(other_video)
+                    video_map[other_video] = other_video
+
+            # Step 3: Match and merge tracks
+            track_map = {}
+            for other_track in other.tracks:
+                matched = False
+                for self_track in self.tracks:
+                    if track_matcher.match(self_track, other_track):
+                        track_map[other_track] = self_track
+                        matched = True
+                        break
+
+                if not matched:
+                    # Add new track if no match
+                    self.tracks.append(other_track)
+                    track_map[other_track] = other_track
+
+            # Step 4: Merge frames
+            total_frames = len(other.labeled_frames)
+
+            for frame_idx, other_frame in enumerate(other.labeled_frames):
+                if progress_callback:
+                    progress_callback(
+                        frame_idx,
+                        total_frames,
+                        f"Merging frame {frame_idx + 1}/{total_frames}",
+                    )
+
+                # Map video to self
+                mapped_video = video_map.get(other_frame.video, other_frame.video)
+
+                # Find matching frame in self
+                matching_frames = self.find(mapped_video, other_frame.frame_idx)
+
+                if len(matching_frames) == 0:
+                    # No matching frame, create new one
+                    new_frame = LabeledFrame(
+                        video=mapped_video,
+                        frame_idx=other_frame.frame_idx,
+                        instances=[],
+                    )
+
+                    # Map instances to new skeleton/track
+                    for inst in other_frame.instances:
+                        new_inst = self._map_instance(inst, skeleton_map, track_map)
+                        new_frame.instances.append(new_inst)
+                        result.instances_added += 1
+
+                    self.append(new_frame)
+                    result.frames_merged += 1
+
+                else:
+                    # Merge into existing frame
+                    self_frame = matching_frames[0]
+
+                    # Merge instances using frame-level merge
+                    merged_instances, conflicts = self_frame.merge(
+                        other_frame,
+                        instance_matcher=instance_matcher,
+                        strategy=frame_strategy,
+                    )
+
+                    # Count changes
+                    n_before = len(self_frame.instances)
+                    n_after = len(merged_instances)
+                    result.instances_added += max(0, n_after - n_before)
+
+                    # Record conflicts
+                    for orig, new, resolution in conflicts:
+                        result.conflicts.append(
+                            ConflictResolution(
+                                frame=self_frame,
+                                conflict_type="instance_conflict",
+                                original_data=orig,
+                                new_data=new,
+                                resolution=resolution,
+                            )
+                        )
+
+                    # Update frame instances
+                    self_frame.instances = merged_instances
+                    result.frames_merged += 1
+
+            # Step 5: Merge suggestions
+            for other_suggestion in other.suggestions:
+                mapped_video = video_map.get(
+                    other_suggestion.video, other_suggestion.video
+                )
+                # Check if suggestion already exists
+                exists = False
+                for self_suggestion in self.suggestions:
+                    if (
+                        self_suggestion.video == mapped_video
+                        and self_suggestion.frame_idx == other_suggestion.frame_idx
+                    ):
+                        exists = True
+                        break
+                if not exists:
+                    # Create new suggestion with mapped video
+                    new_suggestion = SuggestionFrame(
+                        video=mapped_video, frame_idx=other_suggestion.frame_idx
+                    )
+                    self.suggestions.append(new_suggestion)
+
+            # Update merge record
+            merge_record["result"] = {
+                "frames_merged": result.frames_merged,
+                "instances_added": result.instances_added,
+                "conflicts": len(result.conflicts),
+            }
+            self.provenance["merge_history"].append(merge_record)
+
+        except MergeError as e:
+            result.successful = False
+            result.errors.append(e)
+            if error_mode_enum == ErrorMode.STRICT:
+                raise
+        except Exception as e:
+            result.successful = False
+            result.errors.append(
+                MergeError(message=str(e), details={"exception": type(e).__name__})
+            )
+            if error_mode_enum == ErrorMode.STRICT:
+                raise
+
+        if progress_callback:
+            progress_callback(total_frames, total_frames, "Merge complete")
+
+        return result
+
+    def _map_instance(
+        self,
+        instance: Union[Instance, PredictedInstance],
+        skeleton_map: dict[Skeleton, Skeleton],
+        track_map: dict[Track, Track],
+    ) -> Union[Instance, PredictedInstance]:
+        """Map an instance to use mapped skeleton and track.
+
+        Args:
+            instance: Instance to map.
+            skeleton_map: Dictionary mapping old skeletons to new ones.
+            track_map: Dictionary mapping old tracks to new ones.
+
+        Returns:
+            New instance with mapped skeleton and track.
+        """
+        mapped_skeleton = skeleton_map.get(instance.skeleton, instance.skeleton)
+        mapped_track = (
+            track_map.get(instance.track, instance.track) if instance.track else None
+        )
+
+        if type(instance) is PredictedInstance:
+            return PredictedInstance(
+                points=instance.points.copy(),
+                skeleton=mapped_skeleton,
+                score=instance.score,
+                track=mapped_track,
+                tracking_score=instance.tracking_score,
+                from_predicted=instance.from_predicted,
+            )
+        else:
+            return Instance(
+                points=instance.points.copy(),
+                skeleton=mapped_skeleton,
+                track=mapped_track,
+                tracking_score=instance.tracking_score,
+                from_predicted=instance.from_predicted,
+            )
 
     def set_video_plugin(self, plugin: str) -> None:
         """Reopen all media videos with the specified plugin.
