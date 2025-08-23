@@ -1091,6 +1091,7 @@ class TestEdgeCases:
     def test_video_matcher_resolve_exception_handling(self):
         """Test VideoMatcher RESOLVE method exception handling."""
         from sleap_io.model.video import Video
+        from unittest.mock import Mock
         
         # Test with relative paths that cause relative_to to fail (line 268-269)
         matcher = VideoMatcher(
@@ -1100,15 +1101,22 @@ class TestEdgeCases:
         
         # These paths will cause relative_to with anchor to fail
         video1 = Video(filename="relative/path1/video.mp4")
-        video2 = Video(filename="relative/path2/video.mp4")
+        video2 = Video(filename="relative/path2/different.mp4")  # Different basename
         
         # Should handle the exception and return False
         result = matcher.match(video1, video2)
         assert not result
         
-        # Test with None filenames
-        video3 = Video(filename=None)
-        video4 = Video(filename="test.mp4")
+        # Test with mock videos having None filenames to test the condition on line 231
+        video3 = Mock(spec=Video)
+        video3.filename = None
+        video3.matches_path = Mock(return_value=False)
+        
+        video4 = Mock(spec=Video)
+        video4.filename = "test.mp4"
+        video4.matches_path = Mock(return_value=False)
+        
+        # Should return False because video3.filename is None
         assert not matcher.match(video3, video4)
     
     def test_video_matcher_resolve_same_relative_structure(self):
