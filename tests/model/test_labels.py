@@ -3395,8 +3395,8 @@ def test_labels_merge_video_resolve_with_base_path(tmp_path):
     
     result3 = labels6.merge(labels5, video_matcher=video_matcher3)
     assert result3.successful
-    # Should add video5 as it has different path (just basename vs full path)
-    assert len(labels6.videos) == 2
+    # Videos should match because experiment.mp4 exists in base_path
+    assert len(labels6.videos) == 1  # Videos matched via base_path
 
 
 def test_labels_merge_video_resolve_complex_scenario(tmp_path):
