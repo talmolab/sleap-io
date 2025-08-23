@@ -614,3 +614,211 @@ class TestEdgeCases:
         assert "Error 4" in summary
         assert "... and 5 more" in summary
         assert "Error 5" not in summary  # Should be truncated
+
+    def test_skeleton_matcher_invalid_method(self):
+        """Test that SkeletonMatcher raises an error for invalid methods."""
+        import pytest
+        from unittest.mock import Mock
+        
+        skel1 = Skeleton(nodes=["head", "thorax"])
+        skel2 = Skeleton(nodes=["head", "thorax"])
+        
+        # Create a matcher and mock an invalid method
+        matcher = SkeletonMatcher(method=SkeletonMatchMethod.EXACT)
+        
+        # Use object.__setattr__ to bypass the converter
+        object.__setattr__(matcher, 'method', Mock())
+        matcher.method.__str__ = Mock(return_value="INVALID_METHOD")
+        
+        with pytest.raises(ValueError, match="Unknown skeleton match method"):
+            matcher.match(skel1, skel2)
+
+    def test_instance_matcher_invalid_method(self):
+        """Test that InstanceMatcher raises an error for invalid methods."""
+        import pytest
+        from unittest.mock import Mock
+        
+        skel = Skeleton(nodes=["head", "thorax"])
+        inst1 = Instance.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=skel)
+        inst2 = Instance.from_numpy(np.array([[1, 2], [3, 4]]), skeleton=skel)
+        
+        # Create a matcher and mock an invalid method
+        matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL)
+        
+        # Use object.__setattr__ to bypass the converter
+        object.__setattr__(matcher, 'method', Mock())
+        matcher.method.__str__ = Mock(return_value="INVALID_METHOD")
+        
+        with pytest.raises(ValueError, match="Unknown instance match method"):
+            matcher.match(inst1, inst2)
+
+    def test_instance_matcher_spatial_no_overlap(self):
+        """Test spatial matching when instances have no overlapping points."""
+        skel = Skeleton(nodes=["head", "thorax", "abdomen"])
+        
+        # Instance 1 has valid points for head and thorax, NaN for abdomen
+        inst1 = Instance.from_numpy(
+            np.array([[1, 2], [3, 4], [np.nan, np.nan]]), skeleton=skel
+        )
+        
+        # Instance 2 has NaN for head and thorax, valid point for abdomen
+        inst2 = Instance.from_numpy(
+            np.array([[np.nan, np.nan], [np.nan, np.nan], [5, 6]]), skeleton=skel
+        )
+        
+        matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=10.0)
+        
+        # Should not match because no overlapping valid points
+        assert not matcher.match(inst1, inst2)
+        
+        # find_matches should return empty list for no overlap (no match)
+        matches = matcher.find_matches([inst1], [inst2])
+        assert len(matches) == 0  # No matches because no overlapping points
+
+    def test_instance_matcher_iou_no_bounding_box(self):
+        """Test IoU matching when instances have no valid bounding box."""
+        skel = Skeleton(nodes=["head", "thorax"])
+        
+        # Instance with all NaN points (no bounding box)
+        inst1 = Instance.from_numpy(
+            np.array([[np.nan, np.nan], [np.nan, np.nan]]), skeleton=skel
+        )
+        inst2 = Instance.from_numpy(
+            np.array([[1, 2], [3, 4]]), skeleton=skel
+        )
+        
+        matcher = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.5)
+        
+        # Should not match because inst1 has no bounding box
+        assert not matcher.match(inst1, inst2)
+        
+        # find_matches should return empty list (no match)
+        matches = matcher.find_matches([inst1], [inst2])
+        assert len(matches) == 0  # No matches because inst1 has no bounding box
+
+    def test_instance_matcher_iou_no_intersection(self):
+        """Test IoU matching when bounding boxes don't intersect."""
+        skel = Skeleton(nodes=["head", "thorax"])
+        
+        # Two instances with non-overlapping bounding boxes
+        inst1 = Instance.from_numpy(np.array([[0, 0], [1, 1]]), skeleton=skel)
+        inst2 = Instance.from_numpy(np.array([[10, 10], [11, 11]]), skeleton=skel)
+        
+        matcher = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.1)
+        
+        # Should not match because no intersection
+        assert not matcher.match(inst1, inst2)
+        
+        # find_matches should return empty list for no intersection
+        matches = matcher.find_matches([inst1], [inst2])
+        assert len(matches) == 0  # No matches because no intersection
+
+    def test_video_matcher_fallback_directories_complex(self):
+        """Test video matching with fallback directories for complex scenarios."""
+        import tempfile
+        from pathlib import Path
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create fallback directory structure
+            fallback1 = Path(tmpdir) / "fallback1"
+            fallback2 = Path(tmpdir) / "fallback2"
+            fallback1.mkdir()
+            fallback2.mkdir()
+            
+            # Create test video files
+            video_file = fallback2 / "test_video.mp4"
+            video_file.touch()
+            
+            # Videos with same basename but different paths
+            video1 = Video(filename="/original/path/test_video.mp4")
+            video2 = Video(filename="/different/path/test_video.mp4")
+            
+            # Matcher with fallback directories
+            matcher = VideoMatcher(
+                method=VideoMatchMethod.RESOLVE,
+                fallback_directories=[str(fallback1), str(fallback2)]
+            )
+            
+            # Should match because basename matches and file exists in fallback2
+            assert matcher.match(video1, video2)
+            
+            # Test with base_path
+            matcher_with_base = VideoMatcher(
+                method=VideoMatchMethod.RESOLVE,
+                base_path=str(tmpdir),
+                fallback_directories=[]
+            )
+            
+            # Create file at base path
+            base_video = Path(tmpdir) / "test_video.mp4"
+            base_video.touch()
+            
+            # Should match because file exists at base path
+            assert matcher_with_base.match(video1, video2)
+            
+            # Test relative path matching with base_path
+            video3 = Video(filename="subdir/test_video.mp4")
+            video4 = Video(filename="subdir/test_video.mp4")
+            
+            matcher_relative = VideoMatcher(
+                method=VideoMatchMethod.RESOLVE,
+                base_path=str(tmpdir)
+            )
+            
+            # Should match because relative paths are identical
+            assert matcher_relative.match(video3, video4)
+
+    def test_video_matcher_invalid_method(self):
+        """Test that VideoMatcher raises an error for invalid methods."""
+        import pytest
+        from unittest.mock import Mock
+        
+        video1 = Video(filename="test1.mp4")
+        video2 = Video(filename="test2.mp4")
+        
+        # Create a matcher and mock an invalid method
+        matcher = VideoMatcher(method=VideoMatchMethod.PATH)
+        
+        # Use object.__setattr__ to bypass the converter
+        object.__setattr__(matcher, 'method', Mock())
+        matcher.method.__str__ = Mock(return_value="INVALID_METHOD")
+        
+        with pytest.raises(ValueError, match="Unknown video match method"):
+            matcher.match(video1, video2)
+
+    def test_merge_progress_bar_update_with_message(self):
+        """Test MergeProgressBar callback method with message."""
+        # Test the callback method which is the actual update mechanism
+        progress_bar = MergeProgressBar(desc="Merging")
+        
+        # Test callback with message
+        progress_bar.callback(50, 100, "Processing frames")
+        assert progress_bar.pbar is not None
+        assert progress_bar.pbar.n == 50
+        assert "Processing frames" in progress_bar.pbar.desc
+        
+        # Test callback without message
+        progress_bar.callback(75, 100)
+        assert progress_bar.pbar.n == 75
+        assert progress_bar.desc in progress_bar.pbar.desc
+        
+        # Clean up
+        if progress_bar.pbar:
+            progress_bar.pbar.close()
+
+    def test_merge_progress_bar_without_pbar(self):
+        """Test MergeProgressBar callback when pbar is None initially."""
+        # Create progress bar without initializing pbar
+        progress_bar = MergeProgressBar(desc="Merging")
+        
+        # First callback should create the pbar
+        progress_bar.callback(0, 0, "No total")  # total=0 shouldn't create pbar
+        assert progress_bar.pbar is None
+        
+        # Callback with total should create pbar
+        progress_bar.callback(50, 100, "Processing")
+        assert progress_bar.pbar is not None
+        
+        # Clean up
+        if progress_bar.pbar:
+            progress_bar.pbar.close()
