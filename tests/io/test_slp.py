@@ -144,7 +144,9 @@ def test_read_skeleton(centered_pair):
     assert type(skeleton) is Skeleton
     assert len(skeleton.nodes) == 24
     assert len(skeleton.edges) == 23
-    assert len(skeleton.symmetries) == 20
+    # Legacy files may have duplicate symmetries (one for each direction)
+    # After deduplication, we should have 10 unique symmetry pairs
+    assert len(skeleton.symmetries) == 10
     assert "wingR" in skeleton.symmetry_names[0]
     assert "wingL" in skeleton.symmetry_names[0]
 
