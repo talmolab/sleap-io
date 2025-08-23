@@ -437,6 +437,140 @@ def test_skeleton_matches_edge_mismatch():
     # Different number of edges
     assert not skel1.matches(skel3, require_same_order=False)
 
+def test_skeleton_matches_edge_set_difference():
+    """Test that edge set comparison triggers return False at line 731."""
+    # Create skeleton with specific edges
+    skel1 = Skeleton(
+        nodes=["A", "B", "C", "D"],
+        edges=[("A", "B"), ("B", "C"), ("C", "D")]
+    )
+    
+    # Same nodes but completely different edge connections
+    skel2 = Skeleton(
+        nodes=["A", "B", "C", "D"],
+        edges=[("A", "C"), ("B", "D"), ("A", "D")]  # Same count, different connections
+    )
+    
+    # This should trigger line 731: if self_edge_set != other_edge_set: return False
+    assert not skel1.matches(skel2, require_same_order=False)
+    
+    # Try with one edge swapped
+    skel3 = Skeleton(
+        nodes=["A", "B", "C", "D"],
+        edges=[("A", "B"), ("C", "B"), ("C", "D")]  # B->C changed to C->B
+    )
+    
+    assert not skel1.matches(skel3, require_same_order=False)
+    
+    # Try with edges in reverse direction
+    skel4 = Skeleton(
+        nodes=["A", "B", "C", "D"],
+        edges=[("B", "A"), ("C", "B"), ("D", "C")]  # All edges reversed
+    )
+    
+    assert not skel1.matches(skel4, require_same_order=False)
+
+def test_skeleton_matches_exact_edge_case():
+    """Test edge case where skeletons have same node count, same edge count, but different edges."""
+    # This specifically tests line 731 in skeleton.py: if self_edge_set != other_edge_set: return False
+    
+    # Create a linear skeleton
+    linear = Skeleton(
+        nodes=["n1", "n2", "n3", "n4"],
+        edges=[("n1", "n2"), ("n2", "n3"), ("n3", "n4")]  # Linear chain
+    )
+    
+    # Create a branched skeleton with same number of edges
+    branched = Skeleton(
+        nodes=["n1", "n2", "n3", "n4"],
+        edges=[("n1", "n2"), ("n1", "n3"), ("n1", "n4")]  # Star pattern from n1
+    )
+    
+    # Both have 4 nodes and 3 edges, but different connectivity
+    assert len(linear.nodes) == len(branched.nodes)
+    assert len(linear.edges) == len(branched.edges)
+    
+    # Should not match due to different edge sets (line 731)
+    assert not linear.matches(branched, require_same_order=False)
+    
+    # Also test with a ring vs linear
+    ring = Skeleton(
+        nodes=["n1", "n2", "n3", "n4"],
+        edges=[("n1", "n2"), ("n2", "n3"), ("n3", "n1")]  # Forms a triangle with n1,n2,n3
+    )
+    
+    assert not linear.matches(ring, require_same_order=False)
+
+def test_skeleton_matches_comprehensive_edge_coverage():
+    """Comprehensive test to ensure all edge comparison paths are covered."""
+    # Base skeleton
+    base = Skeleton(
+        nodes=["a", "b", "c"],
+        edges=[("a", "b"), ("b", "c")]
+    )
+    
+    # Test 1: Same edges, different order of nodes (should match with require_same_order=False)
+    reordered = Skeleton(
+        nodes=["b", "c", "a"],  # Different order
+        edges=[("a", "b"), ("b", "c")]  # Same edges
+    )
+    assert base.matches(reordered, require_same_order=False)
+    assert not base.matches(reordered, require_same_order=True)
+    
+    # Test 2: Different edges with same nodes (triggers line 731)
+    diff_edges = Skeleton(
+        nodes=["a", "b", "c"],
+        edges=[("a", "c"), ("b", "c")]  # Different edge pattern
+    )
+    assert not base.matches(diff_edges, require_same_order=False)
+    
+    # Test 3: Subset of edges (different count, caught earlier)
+    subset = Skeleton(
+        nodes=["a", "b", "c"],
+        edges=[("a", "b")]  # Only one edge
+    )
+    assert not base.matches(subset, require_same_order=False)
+    
+    # Test 4: Superset of edges (different count)
+    superset = Skeleton(
+        nodes=["a", "b", "c"],
+        edges=[("a", "b"), ("b", "c"), ("a", "c")]  # Extra edge
+    )
+    assert not base.matches(superset, require_same_order=False)
+    
+    # Test 5: Empty edges
+    no_edges1 = Skeleton(nodes=["a", "b", "c"], edges=[])
+    no_edges2 = Skeleton(nodes=["a", "b", "c"], edges=[])
+    assert no_edges1.matches(no_edges2, require_same_order=False)
+
+def test_skeleton_matches_edge_comparison_coverage():
+    """Ensure edge comparison specifically triggers line 731."""
+    # Create skeletons that will have same nodes, same edge count,
+    # but different edge sets to trigger line 731
+    
+    skel_triangle = Skeleton(
+        nodes=["A", "B", "C"],
+        edges=[("A", "B"), ("B", "C"), ("C", "A")]  # Forms a triangle
+    )
+    
+    skel_chain = Skeleton(
+        nodes=["A", "B", "C"],
+        edges=[("A", "B"), ("B", "C"), ("A", "C")]  # Different connections
+    )
+    
+    # Both have 3 nodes and 3 edges
+    assert len(skel_triangle.nodes) == len(skel_chain.nodes) == 3
+    assert len(skel_triangle.edges) == len(skel_chain.edges) == 3
+    
+    # But the edge sets are different, should trigger line 731
+    result = skel_triangle.matches(skel_chain, require_same_order=False)
+    assert result is False  # Explicitly check the return value
+    
+    # Also verify the edge sets are indeed different
+    tri_edges = {(e.source.name, e.destination.name) for e in skel_triangle.edges}
+    chain_edges = {(e.source.name, e.destination.name) for e in skel_chain.edges}
+    assert tri_edges != chain_edges  # Confirm sets are different
+
 
 def test_skeleton_matches_symmetry_mismatch():
     """Test Skeleton.matches() with symmetry mismatches."""

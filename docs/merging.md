@@ -59,6 +59,73 @@ result = base_labels.merge(new_labels, frame_strategy="keep_both")
 
 ## Advanced Configuration
 
+### Video Matching
+
+Control how videos are matched between projects, especially useful for cross-platform workflows:
+
+```python
+from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
+
+# AUTO mode (default) - tries multiple strategies
+auto_matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+
+# PATH mode - exact path matching
+path_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+
+# BASENAME mode - match by filename only
+basename_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+# CONTENT mode - match by video content (shape, fps, etc.)
+content_matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
+
+# RESOLVE mode - smart cross-platform path resolution
+resolve_matcher = VideoMatcher(
+    method=VideoMatchMethod.RESOLVE,
+    base_path="/new/project/root",  # New project base path
+    fallback_directories=[  # Additional search directories
+        "/shared/videos",
+        "/backup/data"
+    ]
+)
+
+# Use in merge
+result = base_labels.merge(
+    new_labels,
+    video_matcher=resolve_matcher
+)
+```
+
+#### RESOLVE Method Details
+
+The RESOLVE method is particularly useful for merging projects across different systems or after reorganizing files:
+
+1. **Same Object Check**: First checks if videos are the same Python object
+2. **Basename Matching**: Compares just the filename (e.g., "video.mp4")
+3. **Fallback Directory Search**: Looks for the video in specified directories
+4. **Base Path Resolution**: Tries to find the video relative to a new base path
+5. **Directory Structure Preservation**: Attempts to match with preserved parent directories
+
+Example workflow:
+```python
+# Original project on Windows
+# Video path: C:\Users\lab\data\experiments\trial1.mp4
+
+# New project on Linux
+# Video moved to: /mnt/storage/experiments/trial1.mp4
+
+matcher = VideoMatcher(
+    method=VideoMatchMethod.RESOLVE,
+    base_path="/mnt/storage",  # New base location
+    fallback_directories=[
+        "/mnt/backup",  # Alternative locations
+        "/tmp/videos"
+    ]
+)
+
+# Will successfully match videos despite different paths
+result = labels.merge(predictions, video_matcher=matcher)
+```
+
 ### Custom Instance Matching
 
 You can customize how instances are matched between frames:

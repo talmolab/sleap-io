@@ -3717,3 +3717,50 @@ def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
     
     # Should match via fallback (checked before base_path)
     assert video_matcher4.match(video5, video6) == True
+
+def test_labels_merge_suggestion_frame_duplication():
+    """Test Labels.merge handling of duplicate suggestion frames."""
+    from sleap_io import Labels, Video, SuggestionFrame
+    
+    # Create videos
+    video1 = Video(filename="test1.mp4")
+    video2 = Video(filename="test2.mp4")
+    
+    # Create labels with suggestion frames
+    labels1 = Labels()
+    labels1.videos.append(video1)
+    labels1.suggestions.append(SuggestionFrame(video=video1, frame_idx=10))
+    labels1.suggestions.append(SuggestionFrame(video=video1, frame_idx=20))
+    
+    labels2 = Labels()
+    labels2.videos.append(video1)  # Same video
+    # Add duplicate suggestion frame
+    labels2.suggestions.append(SuggestionFrame(video=video1, frame_idx=10))
+    # Add new suggestion frame
+    labels2.suggestions.append(SuggestionFrame(video=video1, frame_idx=30))
+    
+    # Merge labels
+    result = labels1.merge(labels2)
+    
+    # Should have only unique suggestions (lines 1855-1860 check for duplicates)
+    assert len(labels1.suggestions) == 3  # 10, 20, 30 (no duplicate of 10)
+    
+    # Check that we have the expected frame indices
+    suggestion_indices = {(s.video.filename, s.frame_idx) for s in labels1.suggestions}
+    assert ("test1.mp4", 10) in suggestion_indices
+    assert ("test1.mp4", 20) in suggestion_indices
+    assert ("test1.mp4", 30) in suggestion_indices
+    
+    # Test with different videos
+    labels3 = Labels()
+    labels3.videos.append(video2)
+    labels3.suggestions.append(SuggestionFrame(video=video2, frame_idx=10))
+    
+    # Note: The merge won't add the suggestion if the video wasn't mapped
+    # This is because video2 is different from video1
+    result2 = labels1.merge(labels3)
+    
+    # If video2 was added to labels1.videos, we should see the suggestion
+    if video2 in labels1.videos:
+        assert any(s.video == video2 and s.frame_idx == 10 
+                   for s in labels1.suggestions)

@@ -251,25 +251,28 @@ class VideoMatcher:
                     
                     # Also check with base_path if provided
                     if self.base_path:
-                        # Try to resolve relative to base path
+                        base = Path(self.base_path)
+                        
+                        # Check if the file exists at the base path with just the basename
+                        potential_path = base / basename2
+                        if potential_path.exists():
+                            return True
+                        
+                        # Try to preserve relative directory structure if possible
                         try:
-                            rel_path1 = Path(video1.filename).relative_to(
-                                Path(video1.filename).anchor
-                            )
-                            rel_path2 = Path(video2.filename).relative_to(
-                                Path(video2.filename).anchor
-                            )
+                            # Get the parent directory name(s) for better matching
+                            path1_parts = Path(video1.filename).parts
+                            path2_parts = Path(video2.filename).parts
                             
-                            if rel_path1 == rel_path2:
-                                # Same relative path structure
-                                return True
-                            
-                            # Check if the file exists at the base path
-                            potential_path = (
-                                Path(self.base_path) / Path(video2.filename).name
-                            )
-                            if potential_path.exists():
-                                return True
+                            # If both paths have at least 2 parts (dir/file), try matching
+                            # with the immediate parent directory
+                            if len(path1_parts) >= 2 and len(path2_parts) >= 2:
+                                # Check if parent dirs match
+                                if path1_parts[-2] == path2_parts[-2]:
+                                    # Try with parent directory preserved
+                                    potential_with_parent = base / path2_parts[-2] / path2_parts[-1]
+                                    if potential_with_parent.exists():
+                                        return True
                         except (ValueError, OSError):
                             pass
                 else:
