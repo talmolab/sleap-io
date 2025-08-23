@@ -325,9 +325,10 @@ class LabeledFrame:
         for self_idx, self_inst in enumerate(self.instances):
             if type(self_inst) is PredictedInstance and self_idx not in used_indices:
                 # Check if this prediction should be kept
-                # NOTE: This defensive logic should be unreachable under normal circumstances
-                # since all matched instances should have been added to used_indices above.
-                # However, we keep this as a safety net for edge cases or future changes.
+                # NOTE: This defensive logic should be unreachable under normal
+                # circumstances since all matched instances should have been added to
+                # used_indices above. However, we keep this as a safety net for edge
+                # cases or future changes.
                 keep = True
                 for other_idx, (matched_self_idx, _) in other_to_self.items():
                     if matched_self_idx == self_idx:

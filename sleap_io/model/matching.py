@@ -226,21 +226,21 @@ class VideoMatcher:
             # Check if same object
             if video1 is video2:
                 return True
-            
+
             # Try to resolve paths with fallback directories
             if video1.filename and video2.filename:
                 from pathlib import Path
-                
+
                 # Get basenames to compare
                 basename1 = Path(video1.filename).name
                 basename2 = Path(video2.filename).name
-                
+
                 # If basenames match, try various resolution strategies
                 if basename1 == basename2:
                     # First check if paths already match
                     if video1.matches_path(video2, strict=False):
                         return True
-                    
+
                     # Try to find the video in fallback directories
                     if self.fallback_directories:
                         for fallback_dir in self.fallback_directories:
@@ -248,29 +248,31 @@ class VideoMatcher:
                             if potential_path.exists():
                                 # Found a matching file in fallback directory
                                 return True
-                    
+
                     # Also check with base_path if provided
                     if self.base_path:
                         base = Path(self.base_path)
-                        
-                        # Check if the file exists at the base path with just the basename
+
+                        # Check if file exists at base path with just basename
                         potential_path = base / basename2
                         if potential_path.exists():
                             return True
-                        
+
                         # Try to preserve relative directory structure if possible
                         try:
                             # Get the parent directory name(s) for better matching
                             path1_parts = Path(video1.filename).parts
                             path2_parts = Path(video2.filename).parts
-                            
-                            # If both paths have at least 2 parts (dir/file), try matching
+
+                            # If both have 2+ parts (dir/file), try matching
                             # with the immediate parent directory
                             if len(path1_parts) >= 2 and len(path2_parts) >= 2:
                                 # Check if parent dirs match
                                 if path1_parts[-2] == path2_parts[-2]:
                                     # Try with parent directory preserved
-                                    potential_with_parent = base / path2_parts[-2] / path2_parts[-1]
+                                    potential_with_parent = (
+                                        base / path2_parts[-2] / path2_parts[-1]
+                                    )
                                     if potential_with_parent.exists():
                                         return True
                         except (ValueError, OSError):
@@ -279,7 +281,7 @@ class VideoMatcher:
                     # Basenames don't match, but check if paths match anyway
                     if video1.matches_path(video2, strict=False):
                         return True
-            
+
             return False
         else:
             raise ValueError(f"Unknown video match method: {self.method}")
