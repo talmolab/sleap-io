@@ -223,27 +223,32 @@ class VideoMatcher:
         elif self.method == VideoMatchMethod.CONTENT:
             return video1.matches_content(video2)
         elif self.method == VideoMatchMethod.RESOLVE:
-            # Try to resolve paths with fallback directories
-            if video1.matches_path(video2, strict=False):
+            # Check if same object
+            if video1 is video2:
                 return True
-
-            # Try to find the video in fallback directories
-            if self.fallback_directories and video1.filename and video2.filename:
+            
+            # Try to resolve paths with fallback directories
+            if video1.filename and video2.filename:
                 from pathlib import Path
-
+                
                 # Get basenames to compare
                 basename1 = Path(video1.filename).name
                 basename2 = Path(video2.filename).name
-
-                # If basenames match, try to resolve paths
+                
+                # If basenames match, try various resolution strategies
                 if basename1 == basename2:
-                    # Check if video2 exists in any fallback directory
-                    for fallback_dir in self.fallback_directories:
-                        potential_path = Path(fallback_dir) / basename2
-                        if potential_path.exists():
-                            # Found a matching file in fallback directory
-                            return True
-
+                    # First check if paths already match
+                    if video1.matches_path(video2, strict=False):
+                        return True
+                    
+                    # Try to find the video in fallback directories
+                    if self.fallback_directories:
+                        for fallback_dir in self.fallback_directories:
+                            potential_path = Path(fallback_dir) / basename2
+                            if potential_path.exists():
+                                # Found a matching file in fallback directory
+                                return True
+                    
                     # Also check with base_path if provided
                     if self.base_path:
                         # Try to resolve relative to base path
@@ -254,11 +259,11 @@ class VideoMatcher:
                             rel_path2 = Path(video2.filename).relative_to(
                                 Path(video2.filename).anchor
                             )
-
+                            
                             if rel_path1 == rel_path2:
                                 # Same relative path structure
                                 return True
-
+                            
                             # Check if the file exists at the base path
                             potential_path = (
                                 Path(self.base_path) / Path(video2.filename).name
@@ -267,7 +272,11 @@ class VideoMatcher:
                                 return True
                         except (ValueError, OSError):
                             pass
-
+                else:
+                    # Basenames don't match, but check if paths match anyway
+                    if video1.matches_path(video2, strict=False):
+                        return True
+            
             return False
         else:
             raise ValueError(f"Unknown video match method: {self.method}")

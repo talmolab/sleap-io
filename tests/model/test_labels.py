@@ -3633,22 +3633,29 @@ def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
     # Should match because shared.mp4 exists in base_path
     assert video_matcher2.match(video3, video4) == True
     
-    # Test 3: Test relative path resolution (this will trigger the exception path)
-    # Create videos with paths that will fail relative_to
-    if os.name != 'nt':  # Skip on Windows
-        # These absolute paths can't be made relative to their anchors
-        abs_video1 = Video(filename="/tmp/video1.mp4")
-        abs_video2 = Video(filename="/tmp/video2.mp4")
-        
-        video_matcher3 = VideoMatcher(
-            method=VideoMatchMethod.RESOLVE,
-            base_path=str(base)
-        )
-        
-        # This should trigger the ValueError exception handler
-        # because relative_to will fail
-        result = video_matcher3.match(abs_video1, abs_video2)
-        assert result == False  # Should not match
+    # Test 3: Test that non-matching basenames don't match via fallback/base when they don't exist there
+    # The key insight: RESOLVE should NOT match videos just because they have the same content
+    # when their basenames differ and they're not in fallback/base directories
+    
+    # Create videos with different basenames  
+    diff_video1_path = dir1 / "unique1.mp4"
+    diff_video2_path = dir2 / "unique2.mp4"  # Different basename
+    
+    shutil.copy(test_video, diff_video1_path)
+    shutil.copy(test_video, diff_video2_path)
+    
+    video5 = Video(filename=str(diff_video1_path))
+    video6 = Video(filename=str(diff_video2_path))
+    
+    video_matcher4 = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        fallback_directories=[str(fallback)],
+        base_path=str(base)
+    )
+    
+    # Should not match because basenames differ and neither exists in fallback/base
+    result = video_matcher4.match(video5, video6)
+    assert result == False  # Should not match
         
     # Test 4: Test with both fallback and base_path
     # Ensure fallback is checked before base_path
