@@ -410,3 +410,75 @@ def test_skeleton_node_similarities():
     assert metrics["n_other_only"] == 0
     assert metrics["jaccard"] == 0
     assert metrics["dice"] == 0
+
+def test_skeleton_matches_edge_mismatch():
+    """Test Skeleton.matches() with edge mismatches."""
+    # Test edge mismatch case (line 720 in skeleton.py)
+    skel1 = Skeleton(
+        nodes=["head", "thorax", "abdomen"],
+        edges=[("head", "thorax"), ("thorax", "abdomen")]
+    )
+    
+    # Same nodes, different edges
+    skel2 = Skeleton(
+        nodes=["head", "thorax", "abdomen"],
+        edges=[("head", "abdomen")]  # Different edge structure
+    )
+    
+    # Should not match in STRUCTURE mode due to different edges
+    assert not skel1.matches(skel2, require_same_order=False)
+    
+    # Test with more edges in other skeleton
+    skel3 = Skeleton(
+        nodes=["head", "thorax", "abdomen"],
+        edges=[("head", "thorax"), ("thorax", "abdomen"), ("head", "abdomen")]
+    )
+    
+    # Different number of edges
+    assert not skel1.matches(skel3, require_same_order=False)
+
+
+def test_skeleton_matches_symmetry_mismatch():
+    """Test Skeleton.matches() with symmetry mismatches."""
+    # Test symmetry mismatch cases (lines 731, 735 in skeleton.py)
+    
+    # Test case 1: Different number of symmetries (line 735)
+    skel1 = Skeleton(
+        nodes=["head", "thorax", "left_wing", "right_wing"],
+        edges=[("head", "thorax")],
+        symmetries=[("left_wing", "right_wing")]
+    )
+    
+    skel2 = Skeleton(
+        nodes=["head", "thorax", "left_wing", "right_wing"],
+        edges=[("head", "thorax")],
+        symmetries=[]  # No symmetries
+    )
+    
+    # Should not match due to different number of symmetries
+    assert not skel1.matches(skel2, require_same_order=False)
+    
+    # Test case 2: Same number of symmetries but different content
+    skel3 = Skeleton(
+        nodes=["head", "thorax", "left_wing", "right_wing", "left_leg", "right_leg"],
+        edges=[("head", "thorax")],
+        symmetries=[("left_wing", "right_wing"), ("left_leg", "right_leg")]
+    )
+    
+    skel4 = Skeleton(
+        nodes=["head", "thorax", "left_wing", "right_wing", "left_leg", "right_leg"],
+        edges=[("head", "thorax")],
+        symmetries=[("left_wing", "right_wing")]  # Only one symmetry
+    )
+    
+    # Should not match due to different number of symmetries
+    assert not skel3.matches(skel4, require_same_order=False)
+    
+    # Same number but different symmetry groups
+    skel3 = Skeleton(
+        nodes=["left_eye", "right_eye", "nose"],
+        edges=[],
+        symmetries=[["left_eye", "nose"]]  # Different pairing
+    )
+    
+    assert not skel1.matches(skel3, require_same_order=False)
