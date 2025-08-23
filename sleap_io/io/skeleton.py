@@ -527,9 +527,19 @@ class SkeletonSLPDecoder:
                 (skeleton_node_inds.index(s), skeleton_node_inds.index(d))
                 for s, d in symmetry_inds
             ]
+
+            # Deduplicate symmetries - legacy files may have duplicates
+            # (one for each direction)
+            seen_symmetries = set()
             symmetries = []
             for symmetry in symmetry_inds:
-                symmetries.append(Symmetry([nodes[symmetry[0]], nodes[symmetry[1]]]))
+                # Create a unique key for this symmetry pair (order-independent)
+                sym_key = tuple(sorted([symmetry[0], symmetry[1]]))
+                if sym_key not in seen_symmetries:
+                    symmetries.append(
+                        Symmetry([nodes[symmetry[0]], nodes[symmetry[1]]])
+                    )
+                    seen_symmetries.add(sym_key)
 
             # Create the full skeleton.
             skel = Skeleton(
