@@ -19,6 +19,21 @@ from sleap_io import (
     load_slp,
 )
 from sleap_io.model.labels import Labels
+from sleap_io.model.matching import (
+    ConflictResolution,
+    ErrorMode,
+    InstanceMatcher,
+    InstanceMatchMethod,
+    MergeResult,
+    SkeletonMatcher,
+    SkeletonMatchMethod,
+    SkeletonMismatchError,
+    TrackMatcher,
+    TrackMatchMethod,
+    VideoMatcher,
+    VideoMatchMethod,
+)
+from sleap_io.model.suggestions import SuggestionFrame
 
 
 def test_labels():
@@ -2657,3 +2672,477 @@ def test_from_numpy_partial_nan_track():
     assert len(labels[0].instances) == 1
     assert labels[0].instances[0].track == labels.tracks[0]
     assert_allclose(labels[0].instances[0].numpy(), np.array([[10, 20], [30, 40]]))
+
+
+def test_labels_merge_basic():
+    """Test basic merge functionality."""
+    # Create first Labels object
+    skel1 = Skeleton(nodes=["head", "tail"])
+    video1 = Video(filename="video1.mp4")
+    track1 = Track(name="track1")
+    
+    labels1 = Labels()
+    labels1.skeletons.append(skel1)
+    labels1.videos.append(video1)
+    labels1.tracks.append(track1)
+    
+    # Add a frame with an instance
+    frame1 = LabeledFrame(
+        video=video1,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel1, track=track1)]
+    )
+    labels1.append(frame1)
+    
+    # Create second Labels object
+    skel2 = Skeleton(nodes=["head", "tail"])  # Same structure
+    video2 = Video(filename="video2.mp4")  # Different video
+    track2 = Track(name="track2")  # Different track
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel2)
+    labels2.videos.append(video2)
+    labels2.tracks.append(track2)
+    
+    # Add a frame with an instance
+    frame2 = LabeledFrame(
+        video=video2,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel2, track=track2)]
+    )
+    labels2.append(frame2)
+    
+    # Merge labels2 into labels1 with explicit video matcher to ensure no matching
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    result = labels1.merge(labels2, video_matcher=video_matcher)
+    
+    # Check result
+    assert result.successful
+    assert result.frames_merged == 1
+    assert result.instances_added == 1
+    assert len(labels1.videos) == 2  # Both videos should be present
+    assert len(labels1.tracks) == 2  # Both tracks should be present
+    assert len(labels1.labeled_frames) == 2  # Both frames should be present
+
+
+def test_labels_merge_skeleton_mismatch_strict():
+    """Test merge with skeleton mismatch in strict mode."""
+    # Create first Labels with one skeleton
+    skel1 = Skeleton(nodes=["head", "tail"])
+    labels1 = Labels()
+    labels1.skeletons.append(skel1)
+    
+    # Create second Labels with different skeleton
+    skel2 = Skeleton(nodes=["nose", "body", "tail"])  # Different structure
+    labels2 = Labels()
+    labels2.skeletons.append(skel2)
+    
+    # Try to merge with strict validation
+    with pytest.raises(SkeletonMismatchError, match="No matching skeleton found"):
+        labels1.merge(labels2, validate=True, error_mode="strict")
+
+
+def test_labels_merge_skeleton_mismatch_warn(capsys):
+    """Test merge with skeleton mismatch in warn mode."""
+    # Create first Labels with one skeleton
+    skel1 = Skeleton(nodes=["head", "tail"])
+    labels1 = Labels()
+    labels1.skeletons.append(skel1)
+    
+    # Create second Labels with different skeleton
+    skel2 = Skeleton(nodes=["nose", "body", "tail"], name="different")
+    labels2 = Labels()
+    labels2.skeletons.append(skel2)
+    
+    # Merge with warn mode (should print warning but continue)
+    result = labels1.merge(labels2, validate=True, error_mode="warn")
+    
+    assert result.successful
+    assert len(labels1.skeletons) == 2  # New skeleton should be added
+    
+    # Check that a warning was printed
+    captured = capsys.readouterr()
+    assert "Warning: No matching skeleton" in captured.out
+
+
+def test_labels_merge_with_progress_callback():
+    """Test merge with progress callback."""
+    # Create two Labels objects with frames
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    
+    # Add multiple frames to labels2
+    for i in range(5):
+        frame = LabeledFrame(
+            video=video,
+            frame_idx=i * 10,  # Different frame indices
+            instances=[Instance.from_numpy(np.array([[i, i], [i+10, i+10]]), skeleton=skel)]
+        )
+        labels2.append(frame)
+    
+    # Track progress
+    progress_calls = []
+    
+    def progress_callback(current, total, message):
+        progress_calls.append((current, total, message))
+    
+    # Merge with progress callback
+    result = labels1.merge(labels2, progress_callback=progress_callback)
+    
+    assert result.successful
+    assert len(progress_calls) == 6  # One call per frame + final
+    assert progress_calls[0] == (0, 5, "Merging frame 1/5")
+    assert progress_calls[-2] == (4, 5, "Merging frame 5/5")
+    assert progress_calls[-1] == (5, 5, "Merge complete")
+
+
+def test_labels_merge_video_not_matched():
+    """Test merge when video is not matched - should add new video."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+    
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video1)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video2)
+    
+    # Add frame to labels2
+    frame = LabeledFrame(
+        video=video2,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)]
+    )
+    labels2.append(frame)
+    
+    # Merge with strict path matching to ensure videos are not matched
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    result = labels1.merge(labels2, video_matcher=video_matcher)
+    
+    assert result.successful
+    assert len(labels1.videos) == 2
+    assert video2 in labels1.videos
+
+
+def test_labels_merge_track_matching():
+    """Test merge with track matching."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    track1 = Track(name="mouse1")
+    track2 = Track(name="mouse1")  # Same name, different object
+    
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    labels1.tracks.append(track1)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    labels2.tracks.append(track2)
+    
+    # Add frames with tracked instances
+    frame1 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel, track=track1)]
+    )
+    labels1.append(frame1)
+    
+    frame2 = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[Instance.from_numpy(np.array([[15, 15], [25, 25]]), skeleton=skel, track=track2)]
+    )
+    labels2.append(frame2)
+    
+    # Merge with track name matching
+    track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
+    result = labels1.merge(labels2, track_matcher=track_matcher)
+    
+    assert result.successful
+    assert len(labels1.tracks) == 1  # Tracks should be matched by name
+
+
+def test_labels_merge_conflict_resolution():
+    """Test merge with instance conflicts."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    
+    # Add overlapping frames
+    frame1 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[
+            Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel),
+            PredictedInstance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel, score=0.8)
+        ]
+    )
+    labels1.append(frame1)
+    
+    frame2 = LabeledFrame(
+        video=video,
+        frame_idx=0,  # Same frame index
+        instances=[
+            Instance.from_numpy(np.array([[11, 11], [21, 21]]), skeleton=skel),  # Close to first
+            PredictedInstance.from_numpy(np.array([[31, 31], [41, 41]]), skeleton=skel, score=0.9)  # Better score
+        ]
+    )
+    labels2.append(frame2)
+    
+    # Merge with spatial matching
+    instance_matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=5.0)
+    result = labels1.merge(labels2, instance_matcher=instance_matcher, frame_strategy="smart")
+    
+    assert result.successful
+    assert result.frames_merged == 1
+    assert len(result.conflicts) > 0  # Should have recorded conflicts
+
+
+def test_labels_merge_frame_strategies():
+    """Test different frame merge strategies."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    
+    # Test keep_original strategy
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    
+    frame1 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)]
+    )
+    labels1.append(frame1)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    
+    frame2 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)]
+    )
+    labels2.append(frame2)
+    
+    # Merge with keep_original
+    original_instances = len(labels1.labeled_frames[0].instances)
+    result = labels1.merge(labels2, frame_strategy="keep_original")
+    
+    assert result.successful
+    assert len(labels1.labeled_frames[0].instances) == original_instances  # Should keep original
+
+
+def test_labels_merge_suggestions():
+    """Test merging of suggestions."""
+    video = Video(filename="test.mp4")
+    
+    labels1 = Labels()
+    labels1.videos.append(video)
+    
+    labels2 = Labels()
+    labels2.videos.append(video)
+    
+    # Add a suggestion to labels2
+    suggestion = SuggestionFrame(video=video, frame_idx=10)
+    labels2.suggestions.append(suggestion)
+    
+    # Merge
+    result = labels1.merge(labels2)
+    
+    assert result.successful
+    assert len(labels1.suggestions) == 1
+    assert labels1.suggestions[0].frame_idx == 10
+
+
+def test_labels_merge_provenance_tracking():
+    """Test that merge history is tracked in provenance."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    
+    # Add frames to labels2
+    for i in range(3):
+        frame = LabeledFrame(
+            video=video,
+            frame_idx=i,
+            instances=[Instance.from_numpy(np.array([[i, i], [i+10, i+10]]), skeleton=skel)]
+        )
+        labels2.append(frame)
+    
+    # Merge and check provenance
+    result = labels1.merge(labels2)
+    
+    assert result.successful
+    assert "merge_history" in labels1.provenance
+    assert len(labels1.provenance["merge_history"]) == 1
+    
+    merge_record = labels1.provenance["merge_history"][0]
+    assert merge_record["source_labels"]["n_frames"] == 3
+    assert merge_record["source_labels"]["n_videos"] == 1
+    assert merge_record["source_labels"]["n_skeletons"] == 1
+    assert merge_record["strategy"] == "smart"
+
+
+def test_labels_merge_custom_matchers():
+    """Test merge with custom matchers."""
+    # Create labels with specific matching requirements
+    skel = Skeleton(nodes=["head", "thorax", "abdomen"])
+    video1 = Video(filename="/path/to/video.mp4")
+    video2 = Video(filename="/different/path/video.mp4")  # Same basename
+    track1 = Track(name="ant1")
+    track2 = Track(name="ant2")
+    
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video1)
+    labels1.tracks.append(track1)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video2)
+    labels2.tracks.append(track2)
+    
+    # Configure custom matchers
+    skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.SUBSET)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)  # Match by basename
+    track_matcher = TrackMatcher(method=TrackMatchMethod.IDENTITY)  # Don't match by name
+    
+    # Merge with custom matchers
+    result = labels1.merge(
+        labels2,
+        skeleton_matcher=skeleton_matcher,
+        video_matcher=video_matcher,
+        track_matcher=track_matcher
+    )
+    
+    assert result.successful
+    assert len(labels1.videos) == 1  # Videos matched by basename
+    assert len(labels1.tracks) == 2  # Tracks not matched (identity matching)
+
+
+def test_labels_merge_empty():
+    """Test merging empty Labels objects."""
+    labels1 = Labels()
+    labels2 = Labels()
+    
+    result = labels1.merge(labels2)
+    
+    assert result.successful
+    assert result.frames_merged == 0
+    assert result.instances_added == 0
+
+
+def test_labels_merge_error_handling(monkeypatch):
+    """Test error handling during merge."""
+    labels1 = Labels()
+    labels2 = Labels()
+    
+    # Add matching skeletons to both labels so matching will be attempted
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    labels1.skeletons.append(skel1)
+    labels2.skeletons.append(skel2)
+    
+    # Mock the skeleton matcher to raise an exception during match
+    def mock_match(self, skeleton1, skeleton2):
+        raise Exception("Test error")
+    
+    # Use monkeypatch to mock the match method
+    monkeypatch.setattr(SkeletonMatcher, "match", mock_match)
+    
+    # Merge should handle the error based on error_mode
+    with pytest.raises(Exception, match="Test error"):
+        labels1.merge(labels2, error_mode="strict")
+
+
+def test_labels_merge_map_instance():
+    """Test the _map_instance helper method."""
+    # Create Labels with skeleton and track
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    track1 = Track(name="track1")
+    track2 = Track(name="track2")
+    
+    labels = Labels()
+    labels.skeletons.append(skel1)
+    labels.tracks.append(track1)
+    
+    # Create maps
+    skeleton_map = {skel2: skel1}
+    track_map = {track2: track1}
+    
+    # Create instance with original skeleton and track
+    inst = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]),
+        skeleton=skel2,
+        track=track2
+    )
+    
+    # Map the instance
+    mapped_inst = labels._map_instance(inst, skeleton_map, track_map)
+    
+    assert mapped_inst.skeleton == skel1
+    assert mapped_inst.track == track1
+    assert np.array_equal(mapped_inst.numpy(), inst.numpy())
+
+
+def test_labels_merge_predicted_instance_mapping():
+    """Test _map_instance with PredictedInstance."""
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    track1 = Track(name="track1")
+    track2 = Track(name="track2")
+    
+    labels = Labels()
+    labels.skeletons.append(skel1)
+    labels.tracks.append(track1)
+    
+    # Create maps
+    skeleton_map = {skel2: skel1}
+    track_map = {track2: track1}
+    
+    # Create PredictedInstance with original skeleton and track
+    inst = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]),
+        skeleton=skel2,
+        track=track2,
+        score=0.95
+    )
+    
+    # Map the instance
+    mapped_inst = labels._map_instance(inst, skeleton_map, track_map)
+    
+    assert isinstance(mapped_inst, PredictedInstance)
+    assert mapped_inst.skeleton == skel1
+    assert mapped_inst.track == track1
+    assert mapped_inst.score == 0.95
+    assert np.array_equal(mapped_inst.numpy(), inst.numpy())
