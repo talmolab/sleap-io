@@ -678,55 +678,47 @@ def test_slp_decoder_duplicate_symmetries():
                     {
                         "source": 0,
                         "target": 1,
-                        "type": {"py/reduce": [{"py/type": "EdgeType"}, {"py/tuple": [1]}]}
+                        "type": {
+                            "py/reduce": [{"py/type": "EdgeType"}, {"py/tuple": [1]}]
+                        },
                     },
                     # First symmetry (0, 2)
                     {
                         "source": 0,
                         "target": 2,
-                        "type": {"py/reduce": [{"py/type": "EdgeType"}, {"py/tuple": [2]}]}
+                        "type": {
+                            "py/reduce": [{"py/type": "EdgeType"}, {"py/tuple": [2]}]
+                        },
                     },
                     # Duplicate of first symmetry (2, 0) - should be deduplicated
-                    {
-                        "source": 2,
-                        "target": 0,
-                        "type": {"py/id": 2}
-                    },
+                    {"source": 2, "target": 0, "type": {"py/id": 2}},
                     # Second symmetry (1, 3)
-                    {
-                        "source": 1,
-                        "target": 3,
-                        "type": {"py/id": 2}
-                    },
+                    {"source": 1, "target": 3, "type": {"py/id": 2}},
                     # Duplicate of second symmetry (3, 1) - should be deduplicated
-                    {
-                        "source": 3,
-                        "target": 1,
-                        "type": {"py/id": 2}
-                    },
+                    {"source": 3, "target": 1, "type": {"py/id": 2}},
                 ],
             }
         ],
-        "nodes": [{"name": "A"}, {"name": "B"}, {"name": "C"}, {"name": "D"}]
+        "nodes": [{"name": "A"}, {"name": "B"}, {"name": "C"}, {"name": "D"}],
     }
     node_names = ["A", "B", "C", "D"]
-    
+
     decoder = SkeletonSLPDecoder()
     skeletons = decoder.decode(metadata, node_names)
-    
+
     assert len(skeletons) == 1
     skeleton = skeletons[0]
-    
+
     # Should have only 2 unique symmetries, not 4
     assert len(skeleton.symmetries) == 2
-    
+
     # Check that the correct symmetries are present
     sym_pairs = set()
     for sym in skeleton.symmetries:
         nodes = list(sym.nodes)
         pair = tuple(sorted([nodes[0].name, nodes[1].name]))
         sym_pairs.add(pair)
-    
+
     assert sym_pairs == {("A", "C"), ("B", "D")}
 
 
