@@ -1394,3 +1394,55 @@ class TestEdgeCases:
 
         matches = matcher.find_matches([inst3], [inst4])
         assert len(matches) == 0  # No intersection, no match
+
+    def test_instance_matcher_iou_score_calculation_coverage(self):
+        """Test to specifically cover the missing IoU score calculation lines."""
+        import numpy as np
+
+        from sleap_io import Instance, Skeleton
+
+        skeleton = Skeleton(nodes=["tl", "tr", "br", "bl"])
+
+        # Create a custom matcher class to bypass the initial match() check
+        # This allows us to test the score calculation logic directly
+        class TestableInstanceMatcher(InstanceMatcher):
+            def match(self, instance1: Instance, instance2: Instance) -> bool:
+                # Always return True to test score calculation
+                return True
+
+        matcher = TestableInstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.0)
+
+        # Test case 1: Bounding boxes don't intersect (lines 170-171)
+        inst1 = Instance.from_numpy(
+            np.array([[0, 0], [2, 0], [2, 2], [0, 2]]), skeleton=skeleton
+        )
+        inst2 = Instance.from_numpy(
+            np.array([[10, 10], [12, 10], [12, 12], [10, 12]]), skeleton=skeleton
+        )
+
+        matches = matcher.find_matches([inst1], [inst2])
+        assert len(matches) == 1
+        assert matches[0][2] == 0.0  # Score should be 0.0 for no intersection
+
+        # Test case 2: One instance has no valid bounding box (lines 172-173)
+        inst3 = Instance.from_numpy(
+            np.array([[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]]), 
+            skeleton=skeleton
+        )
+        inst4 = Instance.from_numpy(
+            np.array([[5, 5], [7, 5], [7, 7], [5, 7]]), skeleton=skeleton
+        )
+
+        matches = matcher.find_matches([inst3], [inst4])
+        assert len(matches) == 1
+        assert matches[0][2] == 0.0  # Score should be 0.0 for no bbox
+
+        # Test case 3: Both instances have no valid bounding box (also lines 172-173)
+        inst5 = Instance.from_numpy(
+            np.array([[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]]), 
+            skeleton=skeleton
+        )
+
+        matches = matcher.find_matches([inst3], [inst5])
+        assert len(matches) == 1
+        assert matches[0][2] == 0.0  # Score should be 0.0 for no bbox on either
