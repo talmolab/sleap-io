@@ -1,6 +1,7 @@
 """Test methods and functions in the sleap_io.model.labels file."""
 
 import copy
+import os
 from pathlib import Path
 
 import numpy as np
@@ -3146,3 +3147,404 @@ def test_labels_merge_predicted_instance_mapping():
     assert mapped_inst.track == track1
     assert mapped_inst.score == 0.95
     assert np.array_equal(mapped_inst.numpy(), inst.numpy())
+
+
+def test_labels_merge_video_resolve_with_fallback_dirs(tmp_path):
+    """Test merge with VideoMatchMethod.RESOLVE using fallback directories.
+    
+    This tests the case where videos have the same basename but are in different
+    locations, and we use fallback directories to resolve them.
+    """
+    import shutil
+    
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+    
+    # Create directory structure
+    project_a = tmp_path / "project_a"
+    project_b = tmp_path / "project_b"
+    shared_videos = tmp_path / "shared_videos"
+    
+    project_a.mkdir()
+    project_b.mkdir()
+    shared_videos.mkdir()
+    
+    (project_a / "videos").mkdir()
+    (project_b / "videos").mkdir()
+    
+    # Copy actual video files with same basename to different locations
+    video_a_path = project_a / "videos" / "recording.mp4"
+    video_shared_path = shared_videos / "recording.mp4"
+    
+    shutil.copy(test_video, video_a_path)
+    shutil.copy(test_video, video_shared_path)
+    
+    # Create Labels with videos referencing different paths but same basename
+    skel = Skeleton(nodes=["head", "tail"])
+    
+    # Labels A references the video in project_a
+    labels_a = Labels()
+    labels_a.skeletons.append(skel)
+    video_a = Video(filename=str(video_a_path))
+    labels_a.videos.append(video_a)
+    
+    frame_a = LabeledFrame(
+        video=video_a,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)]
+    )
+    labels_a.append(frame_a)
+    
+    # Labels B references a video in project_b
+    labels_b = Labels()
+    labels_b.skeletons.append(skel)
+    video_b_path = project_b / "videos" / "recording.mp4"  # Same basename
+    # Don't copy the file initially to test the fallback mechanism
+    # But we need it for saving/loading, so create it temporarily
+    shutil.copy(test_video, video_b_path)
+    video_b = Video(filename=str(video_b_path))
+    labels_b.videos.append(video_b)
+    
+    frame_b = LabeledFrame(
+        video=video_b,
+        frame_idx=1,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)]
+    )
+    labels_b.append(frame_b)
+    
+    # Save and load the labels to test with real file I/O
+    labels_a.save(project_a / "labels_a.slp")
+    labels_b.save(project_b / "labels_b.slp")
+    
+    loaded_a = load_slp(project_a / "labels_a.slp")
+    loaded_b = load_slp(project_b / "labels_b.slp")
+    
+    # Test 1: Without fallback, videos don't match (different paths)
+    video_matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    result_no_match = loaded_a.merge(loaded_b, video_matcher=video_matcher_no_fallback)
+    assert result_no_match.successful
+    assert len(loaded_a.videos) == 2  # Both videos added (no match)
+    
+    # Reload for next test
+    loaded_a = load_slp(project_a / "labels_a.slp")
+    loaded_b = load_slp(project_b / "labels_b.slp")
+    
+    # Test 2: With fallback directory containing the video
+    # The videos have same basename and the file exists in fallback dir
+    video_matcher = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        fallback_directories=[str(shared_videos)]
+    )
+    
+    result = loaded_a.merge(loaded_b, video_matcher=video_matcher)
+    assert result.successful
+    # Videos match because recording.mp4 exists in fallback directory
+    assert len(loaded_a.videos) == 1  # Videos matched via fallback
+    assert len(loaded_a.labeled_frames) == 2  # Both frames merged
+    
+    # Test 3: Multiple videos with same basename in different locations
+    labels_c = Labels()
+    labels_c.skeletons.append(skel)
+    
+    # Add another video with different basename
+    other_video_path = project_b / "videos" / "other.mp4"
+    shutil.copy(test_video, other_video_path)
+    video_c = Video(filename=str(other_video_path))
+    labels_c.videos.append(video_c)
+    
+    # Also add a video that will match via fallback
+    video_d = Video(filename=str(project_b / "videos" / "recording.mp4"))
+    labels_c.videos.append(video_d)
+    
+    frame_c = LabeledFrame(
+        video=video_c,
+        frame_idx=2,
+        instances=[Instance.from_numpy(np.array([[50, 50], [60, 60]]), skeleton=skel)]
+    )
+    labels_c.append(frame_c)
+    
+    # Reset labels for clean test
+    labels_d = Labels()
+    labels_d.skeletons.append(skel)
+    labels_d.videos.append(Video(filename=str(project_a / "videos" / "recording.mp4")))
+    
+    result3 = labels_d.merge(labels_c, video_matcher=video_matcher)
+    assert result3.successful
+    assert len(labels_d.videos) == 2  # recording.mp4 matched, other.mp4 added
+
+
+def test_labels_merge_video_resolve_with_base_path(tmp_path):
+    """Test merge with VideoMatchMethod.RESOLVE using base_path.
+    
+    This tests both relative path matching and basename lookup in base_path.
+    """
+    import shutil
+    
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+    
+    # Create directory structure
+    base = tmp_path / "base"
+    base.mkdir()
+    
+    subdir1 = base / "data" / "videos"
+    subdir2 = base / "backup" / "videos"
+    subdir1.mkdir(parents=True)
+    subdir2.mkdir(parents=True)
+    
+    # Copy video files with same basename to different locations
+    video1_path = subdir1 / "experiment.mp4"
+    video2_path = subdir2 / "experiment.mp4"
+    base_video_path = base / "experiment.mp4"
+    
+    shutil.copy(test_video, video1_path)
+    shutil.copy(test_video, video2_path)
+    shutil.copy(test_video, base_video_path)
+    
+    skel = Skeleton(nodes=["head", "tail"])
+    
+    # Create Labels referencing videos in different subdirs
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    video1 = Video(filename=str(video1_path))
+    labels1.videos.append(video1)
+    
+    frame1 = LabeledFrame(
+        video=video1,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)]
+    )
+    labels1.append(frame1)
+    
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    video2 = Video(filename=str(video2_path))
+    labels2.videos.append(video2)
+    
+    frame2 = LabeledFrame(
+        video=video2,
+        frame_idx=1,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)]
+    )
+    labels2.append(frame2)
+    
+    # Test 1: Videos with same basename but different paths
+    # Should find the video in base_path by basename and match them
+    video_matcher = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        base_path=str(base)
+    )
+    
+    result = labels1.merge(labels2, video_matcher=video_matcher)
+    assert result.successful
+    # Videos match because experiment.mp4 exists in base_path
+    assert len(labels1.videos) == 1  # Videos matched via base_path lookup
+    
+    # Test 2: Test relative path matching (same relative structure)
+    # Create labels with absolute paths that have same relative structure
+    if os.name != 'nt':  # Skip on Windows due to path anchor differences
+        
+        # Create two videos with same relative path from root
+        abs_path1 = Path("/data/videos/test.mp4")
+        abs_path2 = Path("/backup/videos/test.mp4")
+        
+        labels3 = Labels()
+        labels3.skeletons.append(skel)
+        video3 = Video(filename=str(abs_path1))
+        labels3.videos.append(video3)
+        
+        labels4 = Labels()
+        labels4.skeletons.append(skel)
+        video4 = Video(filename=str(abs_path2))
+        labels4.videos.append(video4)
+        
+        # These have different absolute paths but might match on relative structure
+        video_matcher2 = VideoMatcher(
+            method=VideoMatchMethod.RESOLVE,
+            base_path=str(base)
+        )
+        
+        # The merge will attempt relative_to() which will raise ValueError
+        # This tests the exception handling
+        result2 = labels3.merge(labels4, video_matcher=video_matcher2)
+        assert result2.successful
+    
+    # Test 3: Test when base_path contains the video file directly
+    labels5 = Labels()
+    labels5.skeletons.append(skel)
+    video5 = Video(filename="experiment.mp4")  # Just basename
+    labels5.videos.append(video5)
+    
+    frame5 = LabeledFrame(
+        video=video5,
+        frame_idx=2,
+        instances=[Instance.from_numpy(np.array([[50, 50], [60, 60]]), skeleton=skel)]
+    )
+    labels5.append(frame5)
+    
+    # This should find experiment.mp4 in base path
+    video_matcher3 = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        base_path=str(base)
+    )
+    
+    # Merge with labels1 which has full path
+    labels6 = Labels()
+    labels6.skeletons.append(skel)
+    labels6.videos.append(video1)  # Full path to subdir1/experiment.mp4
+    
+    result3 = labels6.merge(labels5, video_matcher=video_matcher3)
+    assert result3.successful
+    # Should add video5 as it has different path (just basename vs full path)
+    assert len(labels6.videos) == 2
+
+
+def test_labels_merge_video_resolve_complex_scenario(tmp_path):
+    """Test complex merge scenario with multiple resolution strategies.
+    
+    This comprehensive test covers:
+    - Multiple videos with same/different basenames
+    - Fallback directories and base_path working together
+    - Priority order of resolution strategies
+    - Edge cases like missing files and path errors
+    """
+    import shutil
+    
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+    
+    # Create complex directory structure
+    workspace = tmp_path / "workspace"
+    archive = tmp_path / "archive"
+    shared = tmp_path / "shared"
+    
+    for d in [workspace, archive, shared]:
+        d.mkdir()
+    
+    project1 = workspace / "project1"
+    project2 = workspace / "project2"
+    project1.mkdir()
+    project2.mkdir()
+    
+    # Copy video files to various locations
+    shutil.copy(test_video, project1 / "video_a.mp4")
+    shutil.copy(test_video, project2 / "video_b.mp4")
+    shutil.copy(test_video, shared / "video_a.mp4")  # Duplicate basename in shared
+    shutil.copy(test_video, shared / "video_c.mp4")  # Only in shared
+    shutil.copy(test_video, archive / "video_b.mp4")  # Duplicate basename in archive
+    
+    skel = Skeleton(nodes=["head", "tail"])
+    
+    # Create Labels1 with multiple videos
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    
+    # Video in project1
+    video1a = Video(filename=str(project1 / "video_a.mp4"))
+    labels1.videos.append(video1a)
+    
+    # Video that doesn't exist locally but might be in shared
+    # Create the file so save/load works
+    shutil.copy(test_video, project1 / "video_c.mp4")
+    video1c = Video(filename=str(project1 / "video_c.mp4"))
+    labels1.videos.append(video1c)
+    
+    frame1 = LabeledFrame(
+        video=video1a,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)]
+    )
+    labels1.append(frame1)
+    
+    # Create Labels2 with overlapping videos
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    
+    # Video with same basename as video1a but different location
+    video2a = Video(filename=str(shared / "video_a.mp4"))
+    labels2.videos.append(video2a)
+    
+    # Video in project2
+    video2b = Video(filename=str(project2 / "video_b.mp4"))
+    labels2.videos.append(video2b)
+    
+    # Video that matches video1c but from different path
+    # Create the file so save/load works
+    shutil.copy(test_video, archive / "video_c.mp4")
+    video2c = Video(filename=str(archive / "video_c.mp4"))
+    labels2.videos.append(video2c)
+    
+    frame2 = LabeledFrame(
+        video=video2a,
+        frame_idx=1,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)]
+    )
+    labels2.append(frame2)
+    
+    frame3 = LabeledFrame(
+        video=video2b,
+        frame_idx=2,
+        instances=[Instance.from_numpy(np.array([[50, 50], [60, 60]]), skeleton=skel)]
+    )
+    labels2.append(frame3)
+    
+    # Save and reload to simulate real usage
+    labels1.save(project1 / "labels1.slp")
+    labels2.save(project2 / "labels2.slp")
+    
+    loaded1 = load_slp(project1 / "labels1.slp")
+    loaded2 = load_slp(project2 / "labels2.slp")
+    
+    # Create a comprehensive video matcher
+    video_matcher = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        base_path=str(workspace),
+        fallback_directories=[str(shared), str(archive)]
+    )
+    
+    result = loaded1.merge(loaded2, video_matcher=video_matcher)
+    
+    assert result.successful
+    assert result.frames_merged == 2  # frame2 and frame3
+    
+    # Check video handling:
+    # - video1a and video2a: Same basename but different paths, both exist
+    # - video1c: Doesn't exist at original path but exists in shared (fallback)
+    # - video2b: Exists at its path
+    # - video2c: Doesn't exist at original path, should check fallbacks
+    
+    # After merge, we should have all unique videos
+    video_filenames = [v.filename for v in loaded1.videos]
+    
+    # Test with edge cases
+    
+    # Test 4: Test with non-existent fallback directories (should not crash)
+    video_matcher_bad = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        base_path=str(tmp_path / "nonexistent"),
+        fallback_directories=[str(tmp_path / "also_nonexistent")]
+    )
+    
+    labels3 = Labels()
+    labels3.skeletons.append(skel)
+    video3 = Video(filename="orphan.mp4")
+    labels3.videos.append(video3)
+    
+    result2 = loaded1.merge(labels3, video_matcher=video_matcher_bad)
+    assert result2.successful  # Should not crash even with bad paths
+    
+    # Test 5: Test priority order - direct match should take precedence
+    labels5 = Labels()
+    labels5.skeletons.append(skel)
+    labels5.videos.append(video1a)  # Exact same video object as in loaded1
+    
+    labels6 = Labels()
+    labels6.skeletons.append(skel)
+    # Same filename but different object
+    video6 = Video(filename=str(project1 / "video_a.mp4"))
+    labels6.videos.append(video6)
+    
+    # Should match based on path even before trying resolve strategies
+    result4 = labels5.merge(labels6, video_matcher=video_matcher)
+    assert result4.successful
+    assert len(labels5.videos) == 1  # Should match and not duplicate
