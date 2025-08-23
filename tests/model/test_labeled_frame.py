@@ -398,3 +398,117 @@ def test_labeled_frame_merge_edge_cases():
     # Should keep the one with higher score
     assert len(merged5) == 1
     assert merged5[0].score == 0.7
+
+def test_labeled_frame_merge_conflict_resolution_missing_score():
+    """Test LabeledFrame.merge() when instances don't have score attributes."""
+    from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
+    
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    
+    # Test case 1: Both predictions but one missing score attribute (lines 315-316)
+    # Create a PredictedInstance without score attribute
+    pred_no_score = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton
+    )
+    # Remove score attribute if it was set
+    if hasattr(pred_no_score, 'score'):
+        delattr(pred_no_score, 'score')
+    
+    pred_with_score = PredictedInstance.from_numpy(
+        np.array([[11, 11], [21, 21]]), skeleton=skeleton, score=0.9
+    )
+    
+    frame1 = LabeledFrame(video=video, frame_idx=0, instances=[pred_no_score])
+    frame2 = LabeledFrame(video=video, frame_idx=0, instances=[pred_with_score])
+    
+    matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=5.0)
+    merged, conflicts = frame1.merge(frame2, instance_matcher=matcher, strategy="smart")
+    
+    # When one doesn't have score, should keep the other instance (line 316)
+    assert len(merged) == 1
+    assert merged[0] is pred_with_score
+    
+    # Test case 2: Both predictions, neither has score
+    pred_no_score2 = PredictedInstance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skeleton
+    )
+    if hasattr(pred_no_score2, 'score'):
+        delattr(pred_no_score2, 'score')
+    
+    pred_no_score3 = PredictedInstance.from_numpy(
+        np.array([[31, 31], [41, 41]]), skeleton=skeleton
+    )
+    if hasattr(pred_no_score3, 'score'):
+        delattr(pred_no_score3, 'score')
+    
+    frame3 = LabeledFrame(video=video, frame_idx=0, instances=[pred_no_score2])
+    frame4 = LabeledFrame(video=video, frame_idx=0, instances=[pred_no_score3])
+    
+    merged2, conflicts2 = frame3.merge(frame4, instance_matcher=matcher, strategy="smart")
+    
+    # When neither has score, should keep the other instance (line 316)
+    assert len(merged2) == 1
+    assert merged2[0] is pred_no_score3
+
+
+def test_labeled_frame_merge_keep_unmatched_predictions():
+    """Test that unmatched predictions are properly kept during merge (lines 329-330)."""
+    from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
+    
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    
+    # Test case for lines 329-330: prediction that was matched but should be removed
+    # Create a scenario where we have:
+    # Frame 1: User instance + Predicted instance
+    # Frame 2: Another predicted instance that matches the first predicted instance
+    
+    user_inst = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton
+    )
+    
+    pred1 = PredictedInstance.from_numpy(
+        np.array([[50, 50], [60, 60]]), skeleton=skeleton, score=0.8
+    )
+    
+    pred2 = PredictedInstance.from_numpy(
+        np.array([[51, 51], [61, 61]]), skeleton=skeleton, score=0.9
+    )
+    
+    # Frame with user instance and prediction
+    frame1 = LabeledFrame(video=video, frame_idx=0, instances=[user_inst, pred1])
+    # Frame with another prediction that matches pred1
+    frame2 = LabeledFrame(video=video, frame_idx=0, instances=[pred2])
+    
+    matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=5.0)
+    merged, conflicts = frame1.merge(frame2, instance_matcher=matcher, strategy="smart")
+    
+    # Should have user instance and the higher score prediction (pred2)
+    assert len(merged) == 2
+    assert user_inst in merged
+    assert pred2 in merged
+    assert pred1 not in merged  # pred1 should be replaced by pred2
+    
+    # Test another case: multiple predictions where some match
+    pred3 = PredictedInstance.from_numpy(
+        np.array([[100, 100], [110, 110]]), skeleton=skeleton, score=0.7
+    )
+    pred4 = PredictedInstance.from_numpy(
+        np.array([[101, 101], [111, 111]]), skeleton=skeleton, score=0.6
+    )
+    pred5 = PredictedInstance.from_numpy(
+        np.array([[200, 200], [210, 210]]), skeleton=skeleton, score=0.5
+    )
+    
+    frame3 = LabeledFrame(video=video, frame_idx=0, instances=[pred3, pred5])
+    frame4 = LabeledFrame(video=video, frame_idx=0, instances=[pred4])
+    
+    merged2, conflicts2 = frame3.merge(frame4, instance_matcher=matcher, strategy="smart")
+    
+    # pred3 matches pred4, should keep pred3 (higher score)
+    # pred5 has no match, should be kept
+    assert len(merged2) == 2
+    assert pred3 in merged2
+    assert pred5 in merged2
+    assert pred4 not in merged2
