@@ -1,13 +1,24 @@
 """Unified matcher system for comparing and matching data structures during merging.
 
 This module provides configurable matchers for comparing skeletons, instances, tracks,
-videos, and frames during merge operations.
+videos, and frames during merge operations. The matchers use various strategies to
+determine when data structures should be considered equivalent during merging.
+
+Key features:
+- Skeleton matching: exact, structure-based, overlap, and subset matching
+- Instance matching: spatial proximity, track identity, and bounding box IoU
+- Track matching: by name or object identity
+- Video matching: path, basename, content, and auto matching
+- Frame matching with configurable video matching requirements
+
+Video matching supports path-based, filename-based, content-based, and
+automatic strategies.
 """
 
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import attrs
 import numpy as np
@@ -19,66 +30,115 @@ from sleap_io.model.video import Video
 
 
 class SkeletonMatchMethod(str, Enum):
-    """Methods for matching skeletons."""
+    """Methods for matching skeletons.
 
-    EXACT = "exact"  # Exact match including node order
-    STRUCTURE = "structure"  # Same nodes and edges, order doesn't matter
-    OVERLAP = "overlap"  # Partial overlap of nodes
-    SUBSET = "subset"  # One skeleton is subset of another
+    Attributes:
+        EXACT: Exact match requiring same nodes in the same order.
+        STRUCTURE: Match requiring same nodes and edges, but order doesn't matter.
+        OVERLAP: Partial match based on overlapping nodes (uses Jaccard similarity).
+        SUBSET: Match if one skeleton's nodes are a subset of another's.
+    """
+
+    EXACT = "exact"
+    STRUCTURE = "structure"
+    OVERLAP = "overlap"
+    SUBSET = "subset"
 
 
 class InstanceMatchMethod(str, Enum):
-    """Methods for matching instances."""
+    """Methods for matching instances.
 
-    SPATIAL = "spatial"  # Match by spatial proximity
-    IDENTITY = "identity"  # Match by track identity
-    IOU = "iou"  # Match by bounding box IoU
+    Attributes:
+        SPATIAL: Match instances by spatial proximity using Euclidean distance.
+        IDENTITY: Match instances by track identity (same track object).
+        IOU: Match instances by bounding box Intersection over Union.
+    """
+
+    SPATIAL = "spatial"
+    IDENTITY = "identity"
+    IOU = "iou"
 
 
 class TrackMatchMethod(str, Enum):
-    """Methods for matching tracks."""
+    """Methods for matching tracks.
 
-    NAME = "name"  # Match by track name
-    IDENTITY = "identity"  # Match by object identity
+    Attributes:
+        NAME: Match tracks by their name attribute.
+        IDENTITY: Match tracks by object identity (same Python object).
+    """
+
+    NAME = "name"
+    IDENTITY = "identity"
 
 
 class VideoMatchMethod(str, Enum):
-    """Methods for matching videos."""
+    """Methods for matching videos.
 
-    PATH = "path"  # Match by file path
-    BASENAME = "basename"  # Match by filename only
-    CONTENT = "content"  # Match by video content (shape, backend)
-    RESOLVE = "resolve"  # Try to resolve paths
-    AUTO = "auto"  # Automatically determine best method
+    Attributes:
+        PATH: Match by exact file path (strict or lenient based on
+            VideoMatcher.strict setting).
+        BASENAME: Match by filename only, ignoring directory paths.
+        CONTENT: Match by video shape (frames, height, width, channels) and
+            backend type.
+        AUTO: Automatic matching - tries BASENAME first, then falls back to CONTENT.
+    """
+
+    PATH = "path"
+    BASENAME = "basename"
+    CONTENT = "content"
+    AUTO = "auto"
 
 
 class FrameStrategy(str, Enum):
-    """Strategies for handling frame merging."""
+    """Strategies for handling frame merging.
 
-    SMART = "smart"  # Smart merging based on instance types
-    KEEP_ORIGINAL = "keep_original"  # Keep original frame instances
-    KEEP_NEW = "keep_new"  # Keep new frame instances
-    KEEP_BOTH = "keep_both"  # Keep all instances from both frames
+    Attributes:
+        SMART: Smart merging that preserves user labels over predictions when
+            they overlap.
+        KEEP_ORIGINAL: Always keep instances from the original (base) frame.
+        KEEP_NEW: Always keep instances from the new (incoming) frame.
+        KEEP_BOTH: Keep all instances from both frames without filtering.
+    """
+
+    SMART = "smart"
+    KEEP_ORIGINAL = "keep_original"
+    KEEP_NEW = "keep_new"
+    KEEP_BOTH = "keep_both"
 
 
 class ErrorMode(str, Enum):
-    """Error handling modes for merge operations."""
+    """Error handling modes for merge operations.
 
-    CONTINUE = "continue"  # Continue on errors, log them
-    STRICT = "strict"  # Raise exception on first error
-    WARN = "warn"  # Warn about errors but continue
+    Attributes:
+        CONTINUE: Continue merging on errors, collecting them in the result.
+        STRICT: Raise an exception on the first error encountered.
+        WARN: Issue warnings about errors but continue merging.
+    """
+
+    CONTINUE = "continue"
+    STRICT = "strict"
+    WARN = "warn"
 
 
 @attrs.define
 class SkeletonMatcher:
-    """Matcher for comparing and matching skeletons."""
+    """Matcher for comparing and matching skeletons.
+
+    Attributes:
+        method: The matching method to use. Can be a SkeletonMatchMethod enum value
+            or a string that will be converted to the enum. Default is STRUCTURE.
+        require_same_order: Whether to require nodes in the same order for STRUCTURE
+            matching. Only used when method is STRUCTURE. Default is False.
+        min_overlap: Minimum Jaccard similarity required for OVERLAP matching.
+            Only used when method is OVERLAP. Default is 0.5.
+    """
 
     method: Union[SkeletonMatchMethod, str] = attrs.field(
         default=SkeletonMatchMethod.STRUCTURE,
         converter=lambda x: SkeletonMatchMethod(x) if isinstance(x, str) else x,
     )
     require_same_order: bool = False
-    min_overlap: float = 0.5  # For OVERLAP method
+    min_overlap: float = 0.5
 
     def match(self, skeleton1: Skeleton, skeleton2: Skeleton) -> bool:
         """Check if two skeletons match according to the configured method."""
@@ -102,13 +162,21 @@ class SkeletonMatcher:
 
 @attrs.define
 class InstanceMatcher:
-    """Matcher for comparing and matching instances."""
+    """Matcher for comparing and matching instances.
+
+    Attributes:
+        method: The matching method to use. Can be an InstanceMatchMethod enum value
+            or a string that will be converted to the enum. Default is SPATIAL.
+        threshold: The threshold value used for matching. For SPATIAL method, this is
+            the maximum pixel distance. For IOU method, this is the minimum IoU value.
+            Not used for IDENTITY method. Default is 5.0.
+    """
 
     method: Union[InstanceMatchMethod, str] = attrs.field(
         default=InstanceMatchMethod.SPATIAL,
         converter=lambda x: InstanceMatchMethod(x) if isinstance(x, str) else x,
     )
-    threshold: float = 5.0  # Distance threshold for SPATIAL, IoU threshold for IOU
+    threshold: float = 5.0
 
     def match(self, instance1: Instance, instance2: Instance) -> bool:
         """Check if two instances match according to the configured method."""
@@ -181,7 +249,12 @@ class InstanceMatcher:
 
 @attrs.define
 class TrackMatcher:
-    """Matcher for comparing and matching tracks."""
+    """Matcher for comparing and matching tracks.
+
+    Attributes:
+        method: The matching method to use. Can be a TrackMatchMethod enum value
+            or a string that will be converted to the enum. Default is NAME.
+    """
 
     method: Union[TrackMatchMethod, str] = attrs.field(
         default=TrackMatchMethod.NAME,
@@ -195,22 +268,27 @@ class TrackMatcher:
 
 @attrs.define
 class VideoMatcher:
-    """Matcher for comparing and matching videos."""
+    """Matcher for comparing and matching videos.
+
+    Attributes:
+        method: The matching method to use. Can be a VideoMatchMethod enum value
+            or a string that will be converted to the enum. Default is AUTO.
+        strict: Whether to use strict path matching for the PATH method.
+            When True, paths must be exactly identical. When False, paths
+            are normalized before comparison. Only used when method is PATH.
+            Default is False.
+    """
 
     method: Union[VideoMatchMethod, str] = attrs.field(
         default=VideoMatchMethod.AUTO,
         converter=lambda x: VideoMatchMethod(x) if isinstance(x, str) else x,
     )
-    strict: bool = False  # For PATH method
-    base_path: Optional[str] = None  # For RESOLVE method
-    fallback_directories: list[str] = attrs.field(factory=list)  # For RESOLVE
+    strict: bool = False
 
     def match(self, video1: Video, video2: Video) -> bool:
         """Check if two videos match according to the configured method."""
         if self.method == VideoMatchMethod.AUTO:
-            # Try different methods in order
-            if video1 is video2:
-                return True
+            # Try different methods in order (identity check is redundant)
             if video1.matches_path(video2, strict=False):
                 return True
             if video1.matches_content(video2):
@@ -222,74 +300,18 @@ class VideoMatcher:
             return video1.matches_path(video2, strict=False)
         elif self.method == VideoMatchMethod.CONTENT:
             return video1.matches_content(video2)
-        elif self.method == VideoMatchMethod.RESOLVE:
-            # Check if same object
-            if video1 is video2:
-                return True
-
-            # Try to resolve paths with fallback directories
-            if video1.filename and video2.filename:
-                from pathlib import Path
-
-                # Get basenames to compare
-                basename1 = Path(video1.filename).name
-                basename2 = Path(video2.filename).name
-
-                # If basenames match, try various resolution strategies
-                if basename1 == basename2:
-                    # First check if paths already match
-                    if video1.matches_path(video2, strict=False):
-                        return True
-
-                    # Try to find the video in fallback directories
-                    if self.fallback_directories:
-                        for fallback_dir in self.fallback_directories:
-                            potential_path = Path(fallback_dir) / basename2
-                            if potential_path.exists():
-                                # Found a matching file in fallback directory
-                                return True
-
-                    # Also check with base_path if provided
-                    if self.base_path:
-                        base = Path(self.base_path)
-
-                        # Check if file exists at base path with just basename
-                        potential_path = base / basename2
-                        if potential_path.exists():
-                            return True
-
-                        # Try to preserve relative directory structure if possible
-                        try:
-                            # Get the parent directory name(s) for better matching
-                            path1_parts = Path(video1.filename).parts
-                            path2_parts = Path(video2.filename).parts
-
-                            # If both have 2+ parts (dir/file), try matching
-                            # with the immediate parent directory
-                            if len(path1_parts) >= 2 and len(path2_parts) >= 2:
-                                # Check if parent dirs match
-                                if path1_parts[-2] == path2_parts[-2]:
-                                    # Try with parent directory preserved
-                                    potential_with_parent = (
-                                        base / path2_parts[-2] / path2_parts[-1]
-                                    )
-                                    if potential_with_parent.exists():
-                                        return True
-                        except (ValueError, OSError):
-                            pass
-                else:
-                    # Basenames don't match, but check if paths match anyway
-                    if video1.matches_path(video2, strict=False):
-                        return True
-
-            return False
         else:
             raise ValueError(f"Unknown video match method: {self.method}")
 
 
 @attrs.define
 class FrameMatcher:
-    """Matcher for comparing and matching labeled frames."""
+    """Matcher for comparing and matching labeled frames.
+
+    Attributes:
+        video_must_match: Whether frames must belong to the same video to be
+            considered a match. Default is True.
+    """
 
     video_must_match: bool = True
 
@@ -313,25 +335,39 @@ NAME_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.NAME)
 IDENTITY_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.IDENTITY)
 
 AUTO_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.AUTO)
-SOURCE_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.RESOLVE)
+SOURCE_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.BASENAME)
 PATH_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
 BASENAME_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
 
 @attrs.define
 class ConflictResolution:
-    """Information about a conflict that was resolved during merging."""
+    """Information about a conflict that was resolved during merging.
+
+    Attributes:
+        frame: The labeled frame where the conflict occurred.
+        conflict_type: Type of conflict (e.g., "duplicate_instance",
+            "skeleton_mismatch").
+        original_data: The original data before resolution.
+        new_data: The new/incoming data that caused the conflict.
+        resolution: Description of how the conflict was resolved.
+    """
 
     frame: LabeledFrame
-    conflict_type: str  # e.g., "duplicate_instance", "skeleton_mismatch"
+    conflict_type: str
     original_data: Any
     new_data: Any
-    resolution: str  # How it was resolved
+    resolution: str
 
 
 @attrs.define
 class MergeError(Exception):
-    """Base exception for merge errors."""
+    """Base exception for merge errors.
+
+    Attributes:
+        message: Human-readable error message.
+        details: Dictionary containing additional error details and context.
+    """
 
     message: str
     details: dict = attrs.field(factory=dict)
@@ -351,7 +387,17 @@ class VideoNotFoundError(MergeError):
 
 @attrs.define
 class MergeResult:
-    """Result of a merge operation."""
+    """Result of a merge operation.
+
+    Attributes:
+        successful: Whether the merge completed successfully.
+        frames_merged: Number of frames that were merged.
+        instances_added: Number of new instances added.
+        instances_updated: Number of existing instances that were updated.
+        instances_skipped: Number of instances that were skipped.
+        conflicts: List of conflicts that were resolved during merging.
+        errors: List of errors encountered during merging.
+    """
 
     successful: bool
     frames_merged: int = 0

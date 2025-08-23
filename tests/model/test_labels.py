@@ -3174,8 +3174,8 @@ def test_labels_merge_predicted_instance_mapping():
     assert np.array_equal(mapped_inst.numpy(), inst.numpy())
 
 
-def test_labels_merge_video_resolve_with_fallback_dirs(tmp_path):
-    """Test merge with VideoMatchMethod.RESOLVE using fallback directories.
+def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
+    """Test merge with VideoMatchMethod.BASENAME using fallback directories.
 
     This tests the case where videos have the same basename but are in different
     locations, and we use fallback directories to resolve them.
@@ -3254,11 +3254,9 @@ def test_labels_merge_video_resolve_with_fallback_dirs(tmp_path):
     loaded_a = load_slp(project_a / "labels_a.slp")
     loaded_b = load_slp(project_b / "labels_b.slp")
 
-    # Test 2: With fallback directory containing the video
-    # The videos have same basename and the file exists in fallback dir
-    video_matcher = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE, fallback_directories=[str(shared_videos)]
-    )
+    # Test 2: With RESOLVE method (simplified - matches by basename)
+    # The videos have same basename so they should match
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
     result = loaded_a.merge(loaded_b, video_matcher=video_matcher)
     assert result.successful
@@ -3297,10 +3295,10 @@ def test_labels_merge_video_resolve_with_fallback_dirs(tmp_path):
     assert len(labels_d.videos) == 2  # recording.mp4 matched, other.mp4 added
 
 
-def test_labels_merge_video_resolve_with_base_path(tmp_path):
-    """Test merge with VideoMatchMethod.RESOLVE using base_path.
+def test_labels_merge_video_basename_matching(tmp_path):
+    """Test merge with VideoMatchMethod.BASENAME.
 
-    This tests both relative path matching and basename lookup in base_path.
+    This tests basename matching with videos in different directories.
     """
     import shutil
 
@@ -3353,12 +3351,12 @@ def test_labels_merge_video_resolve_with_base_path(tmp_path):
     labels2.append(frame2)
 
     # Test 1: Videos with same basename but different paths
-    # Should find the video in base_path by basename and match them
-    video_matcher = VideoMatcher(method=VideoMatchMethod.RESOLVE, base_path=str(base))
+    # BASENAME method does filename-based matching ignoring directory paths
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
     result = labels1.merge(labels2, video_matcher=video_matcher)
     assert result.successful
-    # Videos match because experiment.mp4 exists in base_path
+    # Videos match because they have the same basename (experiment.mp4)
     assert len(labels1.videos) == 1  # Videos matched via base_path lookup
 
     # Test 2: Test relative path matching (same relative structure)
@@ -3379,9 +3377,7 @@ def test_labels_merge_video_resolve_with_base_path(tmp_path):
         labels4.videos.append(video4)
 
         # These have different absolute paths but might match on relative structure
-        video_matcher2 = VideoMatcher(
-            method=VideoMatchMethod.RESOLVE, base_path=str(base)
-        )
+        video_matcher2 = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
         # The merge will attempt relative_to() which will raise ValueError
         # This tests the exception handling
@@ -3402,7 +3398,7 @@ def test_labels_merge_video_resolve_with_base_path(tmp_path):
     labels5.append(frame5)
 
     # This should find experiment.mp4 in base path
-    video_matcher3 = VideoMatcher(method=VideoMatchMethod.RESOLVE, base_path=str(base))
+    video_matcher3 = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
     # Merge with labels1 which has full path
     labels6 = Labels()
@@ -3415,7 +3411,7 @@ def test_labels_merge_video_resolve_with_base_path(tmp_path):
     assert len(labels6.videos) == 1  # Videos matched via base_path
 
 
-def test_labels_merge_video_resolve_complex_scenario(tmp_path):
+def test_labels_merge_video_basename_complex_scenario(tmp_path):
     """Test complex merge scenario with multiple resolution strategies.
 
     This comprehensive test covers:
@@ -3511,12 +3507,8 @@ def test_labels_merge_video_resolve_complex_scenario(tmp_path):
     loaded1 = load_slp(project1 / "labels1.slp")
     loaded2 = load_slp(project2 / "labels2.slp")
 
-    # Create a comprehensive video matcher
-    video_matcher = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE,
-        base_path=str(workspace),
-        fallback_directories=[str(shared), str(archive)],
-    )
+    # Create a video matcher using BASENAME (filename-based matching)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
     result = loaded1.merge(loaded2, video_matcher=video_matcher)
 
@@ -3536,11 +3528,7 @@ def test_labels_merge_video_resolve_complex_scenario(tmp_path):
     # Test with edge cases
 
     # Test 4: Test with non-existent fallback directories (should not crash)
-    video_matcher_bad = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE,
-        base_path=str(tmp_path / "nonexistent"),
-        fallback_directories=[str(tmp_path / "also_nonexistent")],
-    )
+    video_matcher_bad = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
     labels3 = Labels()
     labels3.skeletons.append(skel)
@@ -3567,10 +3555,10 @@ def test_labels_merge_video_resolve_complex_scenario(tmp_path):
     assert len(labels5.videos) == 1  # Should match and not duplicate
 
 
-def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
-    """Test VideoMatchMethod.RESOLVE fallback and base_path coverage.
+def test_labels_merge_video_basename_edge_cases(tmp_path):
+    """Test VideoMatchMethod.BASENAME edge cases.
 
-    Targets uncovered lines in matching.py RESOLVE method.
+    Tests various edge cases for the BASENAME matching method.
     """
     import shutil
 
@@ -3612,12 +3600,10 @@ def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
     matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
     assert not matcher_no_fallback.match(video1, video2)
 
-    # Now test with fallback directory
-    video_matcher = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE, fallback_directories=[str(fallback)]
-    )
+    # Now test with simplified RESOLVE (basename matching)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    # They should match because recording.mp4 exists in fallback
+    # They should match because they have the same basename (recording.mp4)
     assert video_matcher.match(video1, video2)
 
     # Test 2: Base path with basename lookup
@@ -3640,15 +3626,15 @@ def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
     matcher_no_base = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
     assert not matcher_no_base.match(video3, video4)
 
-    # With base_path containing shared.mp4, they should match
-    video_matcher2 = VideoMatcher(method=VideoMatchMethod.RESOLVE, base_path=str(base))
+    # With simplified RESOLVE (basename matching), they should match
+    video_matcher2 = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    # Should match because shared.mp4 exists in base_path
+    # Should match because they have the same basename (shared.mp4)
     assert video_matcher2.match(video3, video4)
 
-    # Test 3: Non-matching basenames don't match via fallback/base
-    # RESOLVE should NOT match videos just because they have same content
-    # when their basenames differ and they're not in fallback/base directories
+    # Test 3: Non-matching basenames don't match
+    # RESOLVE should NOT match videos with different basenames
+    # (simplified RESOLVE only does basename matching)
 
     # Create videos with different basenames
     diff_video1_path = dir1 / "unique1.mp4"
@@ -3660,40 +3646,29 @@ def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
     video5 = Video(filename=str(diff_video1_path))
     video6 = Video(filename=str(diff_video2_path))
 
-    video_matcher4 = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE,
-        fallback_directories=[str(fallback)],
-        base_path=str(base),
-    )
+    video_matcher4 = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    # Should not match because basenames differ and neither exists in fallback/base
+    # Should not match because basenames differ (unique1.mp4 vs unique2.mp4)
     result = video_matcher4.match(video5, video6)
     assert not result  # Should not match
 
     # Additional coverage tests
     # Test same object matching (line 228)
     video_same = Video(filename=str(diff_video1_path))
-    matcher_same = VideoMatcher(method=VideoMatchMethod.RESOLVE)
+    matcher_same = VideoMatcher(method=VideoMatchMethod.BASENAME)
     assert matcher_same.match(video_same, video_same)
 
-    # Test fallback directories with non-existent file (lines 245-248)
-    matcher_no_file = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE,
-        fallback_directories=[str(tmp_path / "nonexistent")],
-    )
-    assert matcher_no_file.match(video1, video2)  # Match via matches_path
-
-    # Test base_path only without fallback_directories (line 253)
-    matcher_base_only = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE, base_path=str(base)
-    )
-    assert matcher_base_only.match(video3, video4)
+    # Test additional edge case: ensure consistent behavior
+    # All simplified RESOLVE matchers should behave the same (basename matching)
+    matcher_simple = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    assert matcher_simple.match(video1, video2)  # Same basenames match
+    assert matcher_simple.match(video3, video4)  # Same basenames match
 
     # Test exception handling in relative_to (lines 273-274)
     # Create videos with relative paths that will fail relative_to
     video_rel1 = Video(filename="relative/path1.mp4")
     video_rel2 = Video(filename="relative/path2.mp4")
-    matcher_exc = VideoMatcher(method=VideoMatchMethod.RESOLVE, base_path=str(base))
+    matcher_exc = VideoMatcher(method=VideoMatchMethod.BASENAME)
     # This should trigger the exception handler
     assert not matcher_exc.match(video_rel1, video_rel2)
 
@@ -3718,11 +3693,7 @@ def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
     video5 = Video(filename=str(video5_path))
     video6 = Video(filename=str(video6_path))
 
-    video_matcher4 = VideoMatcher(
-        method=VideoMatchMethod.RESOLVE,
-        fallback_directories=[str(fallback)],
-        base_path=str(base),
-    )
+    video_matcher4 = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
     # Should match via fallback (checked before base_path)
     assert video_matcher4.match(video5, video6)

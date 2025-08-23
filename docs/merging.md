@@ -75,55 +75,272 @@ path_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
 # BASENAME mode - match by filename only
 basename_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-# CONTENT mode - match by video content (shape, fps, etc.)
+# CONTENT mode - match by video shape and backend type  
 content_matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
 
-# RESOLVE mode - smart cross-platform path resolution
-resolve_matcher = VideoMatcher(
-    method=VideoMatchMethod.RESOLVE,
-    base_path="/new/project/root",  # New project base path
-    fallback_directories=[  # Additional search directories
-        "/shared/videos",
-        "/backup/data"
-    ]
-)
+# Use pre-configured matcher for filename-based matching
+from sleap_io.model.matching import BASENAME_VIDEO_MATCHER
 
 # Use in merge
 result = base_labels.merge(
     new_labels,
-    video_matcher=resolve_matcher
+    video_matcher=BASENAME_VIDEO_MATCHER
 )
 ```
 
-#### RESOLVE Method Details
+#### Cross-Platform Video Matching
 
-The RESOLVE method is particularly useful for merging projects across different systems or after reorganizing files:
+Video paths often differ between systems, especially when collaborating or moving projects. Here's how to handle these scenarios:
 
-1. **Same Object Check**: First checks if videos are the same Python object
-2. **Basename Matching**: Compares just the filename (e.g., "video.mp4")
-3. **Fallback Directory Search**: Looks for the video in specified directories
-4. **Base Path Resolution**: Tries to find the video relative to a new base path
-5. **Directory Structure Preservation**: Attempts to match with preserved parent directories
+##### Scenario 1: Same Files, Different Paths
 
-Example workflow:
+**Problem**: You created annotations on Windows and received predictions generated on Linux:
+
+```
+# Original annotations (Windows)
+├── C:\Users\researcher\Desktop\project\
+│   ├── annotations.slp
+│   └── videos\
+│       ├── day1_trial1.mp4
+│       ├── day1_trial2.mp4
+│       └── day2_trial1.mp4
+
+# New predictions (Linux) 
+├── /home/lab/sleap_projects/mouse_behavior/
+│   ├── predictions.slp
+│   └── video_data/
+│       ├── day1_trial1.mp4  # Same file!
+│       ├── day1_trial2.mp4  # Same file!
+│       └── day2_trial1.mp4  # Same file!
+```
+
+**Solution**: Use BASENAME matching to match by filename only:
+
 ```python
-# Original project on Windows
-# Video path: C:\Users\lab\data\experiments\trial1.mp4
+import sleap_io as sio
+from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
 
-# New project on Linux
-# Video moved to: /mnt/storage/experiments/trial1.mp4
+# Load the files
+annotations = sio.load_file(r"C:\Users\researcher\Desktop\project\annotations.slp")
+predictions = sio.load_file("/home/lab/sleap_projects/mouse_behavior/predictions.slp")
 
-matcher = VideoMatcher(
-    method=VideoMatchMethod.RESOLVE,
-    base_path="/mnt/storage",  # New base location
-    fallback_directories=[
-        "/mnt/backup",  # Alternative locations
-        "/tmp/videos"
+# Create basename matcher - ignores directory paths
+basename_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+# Merge - will match videos despite different directory structures
+result = annotations.merge(predictions, video_matcher=basename_matcher)
+
+print(f"Successfully matched {len(result.videos_matched)} videos")
+# Output: Successfully matched 3 videos
+```
+
+##### Scenario 2: Reorganized Project Structure
+
+**Problem**: You reorganized your project structure after creating annotations:
+
+```
+# Original structure when annotations were created
+├── /data/experiments/
+│   ├── session_001/
+│   │   ├── behavior_recording.mp4
+│   │   └── neural_recording.mp4
+│   ├── session_002/
+│   │   ├── behavior_recording.mp4
+│   │   └── neural_recording.mp4
+│   └── annotations.slp
+
+# New organized structure  
+├── /data/organized_experiments/
+│   ├── behavior_videos/
+│   │   ├── session_001_behavior_recording.mp4  # Renamed!
+│   │   └── session_002_behavior_recording.mp4  # Renamed!
+│   ├── neural_videos/
+│   │   ├── session_001_neural_recording.mp4    # Renamed!
+│   │   └── session_002_neural_recording.mp4    # Renamed!
+│   ├── old_annotations.slp                     # Original annotations
+│   └── new_predictions.slp                     # New predictions with new paths
+```
+
+**Problem**: Filenames changed, so BASENAME won't work. **Solution**: Use CONTENT matching:
+
+```python
+# Load files with mismatched names
+old_annotations = sio.load_file("/data/organized_experiments/old_annotations.slp")
+new_predictions = sio.load_file("/data/organized_experiments/new_predictions.slp")
+
+# Use content matching - matches by video shape and backend type
+content_matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
+
+result = old_annotations.merge(new_predictions, video_matcher=content_matcher)
+print(f"Matched {len(result.videos_matched)} videos by content analysis")
+```
+
+##### Scenario 3: Mixed Situations (Recommended)
+
+**Problem**: Some videos have matching filenames, others have different names but same content:
+
+```
+# Collaboration scenario - mixed file organization
+├── /lab_server/shared_data/
+│   ├── student_annotations.slp
+│   └── videos/
+│       ├── mouse_01_day1.mp4
+│       ├── mouse_01_day2.mp4
+│       └── mouse_02_day1.mp4
+
+# PI's predictions from different system
+├── /home/pi/analysis_results/
+│   ├── sleap_predictions.slp  
+│   └── renamed_videos/
+│       ├── mouse_01_day1.mp4        # Same name ✓
+│       ├── subject01_session02.mp4  # Different name, same content as mouse_01_day2.mp4
+│       └── mouse_02_day1.mp4        # Same name ✓
+```
+
+**Solution**: Use AUTO mode (tries BASENAME first, then CONTENT):
+
+```python
+# Load annotations and predictions
+student_work = sio.load_file("/lab_server/shared_data/student_annotations.slp")
+pi_predictions = sio.load_file("/home/pi/analysis_results/sleap_predictions.slp")
+
+# AUTO mode: tries filename matching first, falls back to content matching
+auto_matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+
+result = student_work.merge(pi_predictions, video_matcher=auto_matcher)
+
+# Check what happened
+for i, (student_video, pred_video) in enumerate(zip(student_work.videos, pi_predictions.videos)):
+    print(f"Video {i+1}:")
+    print(f"  Student: {student_video.filename}")
+    print(f"  Prediction: {pred_video.filename}")
+    print(f"  Matched: {'✓' if auto_matcher.match(student_video, pred_video) else '✗'}")
+
+# Output:
+# Video 1:
+#   Student: /lab_server/shared_data/videos/mouse_01_day1.mp4  
+#   Prediction: /home/pi/analysis_results/renamed_videos/mouse_01_day1.mp4
+#   Matched: ✓ (by filename)
+# 
+# Video 2:
+#   Student: /lab_server/shared_data/videos/mouse_01_day2.mp4
+#   Prediction: /home/pi/analysis_results/renamed_videos/subject01_session02.mp4  
+#   Matched: ✓ (by content)
+#
+# Video 3:
+#   Student: /lab_server/shared_data/videos/mouse_02_day1.mp4
+#   Prediction: /home/pi/analysis_results/renamed_videos/mouse_02_day1.mp4
+#   Matched: ✓ (by filename)
+```
+
+##### Scenario 4: Strict Path Matching
+
+**Problem**: You need exact path matching (same system, no file movement):
+
+```
+# Development workflow - everything in same locations
+├── /project/
+│   ├── manual_labels.slp      # Created manually
+│   ├── predictions.slp        # Generated by model
+│   └── videos/
+│       ├── trial_001.mp4
+│       ├── trial_002.mp4
+│       └── trial_003.mp4
+```
+
+**Solution**: Use PATH matching for strict validation:
+
+```python
+# Load files that should have identical paths
+manual = sio.load_file("/project/manual_labels.slp")  
+predictions = sio.load_file("/project/predictions.slp")
+
+# Strict path matching - paths must be identical
+strict_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+
+try:
+    result = manual.merge(predictions, video_matcher=strict_matcher)
+    print("✓ All video paths matched exactly")
+except Exception as e:
+    print(f"✗ Path mismatch detected: {e}")
+    
+    # Fall back to more lenient matching
+    backup_matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+    result = manual.merge(predictions, video_matcher=backup_matcher)
+    print("✓ Successful merge with AUTO matching")
+```
+
+##### Real-World Workflow Example
+
+Here's a complete example of a typical collaboration workflow:
+
+```python
+import sleap_io as sio
+from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
+
+def smart_merge_with_fallback(base_labels_path, new_labels_path):
+    """Merge labels with intelligent video matching and fallback strategies."""
+    
+    # Load the label files
+    print(f"Loading base labels: {base_labels_path}")
+    base = sio.load_file(base_labels_path)
+    print(f"  - {len(base.videos)} videos, {len(base)} frames")
+    
+    print(f"Loading new labels: {new_labels_path}")
+    new = sio.load_file(new_labels_path)
+    print(f"  - {len(new.videos)} videos, {len(new)} frames")
+    
+    # Try different matching strategies in order of preference
+    strategies = [
+        ("AUTO", VideoMatcher(method=VideoMatchMethod.AUTO)),
+        ("BASENAME", VideoMatcher(method=VideoMatchMethod.BASENAME)),
+        ("CONTENT", VideoMatcher(method=VideoMatchMethod.CONTENT)),
     ]
-)
+    
+    for strategy_name, matcher in strategies:
+        try:
+            print(f"\nTrying {strategy_name} matching...")
+            
+            # Test matching before full merge
+            matched_videos = 0
+            for base_video in base.videos:
+                for new_video in new.videos:
+                    if matcher.match(base_video, new_video):
+                        matched_videos += 1
+                        break
+            
+            if matched_videos == len(base.videos):
+                print(f"✓ All {matched_videos} videos would match with {strategy_name}")
+                
+                # Perform the actual merge
+                result = base.merge(new, video_matcher=matcher)
+                
+                print(f"✓ Merge completed successfully!")
+                print(f"  - Frames merged: {result.frames_merged}")
+                print(f"  - Instances added: {result.instances_added}")
+                
+                return result
+            else:
+                print(f"✗ Only {matched_videos}/{len(base.videos)} videos match with {strategy_name}")
+                
+        except Exception as e:
+            print(f"✗ {strategy_name} matching failed: {e}")
+            continue
+    
+    raise ValueError("Could not match videos with any strategy")
 
-# Will successfully match videos despite different paths
-result = labels.merge(predictions, video_matcher=matcher)
+# Usage example
+try:
+    result = smart_merge_with_fallback(
+        "/lab/annotations/manual_session1.slp",
+        "/home/student/predictions/session1_preds.slp"
+    )
+    print(f"\n🎉 Successfully merged! Summary:")
+    print(result.summary())
+    
+except Exception as e:
+    print(f"❌ Merge failed: {e}")
+    print("💡 Try checking that video files exist and have matching content")
 ```
 
 ### Custom Instance Matching
