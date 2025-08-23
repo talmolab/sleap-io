@@ -316,5 +316,75 @@ frame1.instances = merged_instances
 
 ## API
 
-::: sleap_io.model.SkeletonMatchMethod
+### Enums
+
+::: sleap_io.model.matching.SkeletonMatchMethod
+
+::: sleap_io.model.matching.InstanceMatchMethod
+
+::: sleap_io.model.matching.TrackMatchMethod
+
+::: sleap_io.model.matching.VideoMatchMethod
+
+::: sleap_io.model.matching.FrameStrategy
+
+::: sleap_io.model.matching.ErrorMode
+
+### Matcher Classes
+
+::: sleap_io.model.matching.SkeletonMatcher
+
+::: sleap_io.model.matching.InstanceMatcher
+
+::: sleap_io.model.matching.TrackMatcher
+
+::: sleap_io.model.matching.VideoMatcher
+
+::: sleap_io.model.matching.FrameMatcher
+
+### Pre-configured Matchers
+
+::: sleap_io.model.matching.STRUCTURE_SKELETON_MATCHER
+
+::: sleap_io.model.matching.SUBSET_SKELETON_MATCHER
+
+::: sleap_io.model.matching.OVERLAP_SKELETON_MATCHER
+
+::: sleap_io.model.matching.DUPLICATE_MATCHER
+
+::: sleap_io.model.matching.IOU_MATCHER
+
+::: sleap_io.model.matching.IDENTITY_INSTANCE_MATCHER
+
+::: sleap_io.model.matching.NAME_TRACK_MATCHER
+
+::: sleap_io.model.matching.IDENTITY_TRACK_MATCHER
+
+::: sleap_io.model.matching.AUTO_VIDEO_MATCHER
+
+::: sleap_io.model.matching.SOURCE_VIDEO_MATCHER
+
+::: sleap_io.model.matching.PATH_VIDEO_MATCHER
+
+::: sleap_io.model.matching.BASENAME_VIDEO_MATCHER
+
+### Result Classes
+
+::: sleap_io.model.matching.MergeResult
+
+::: sleap_io.model.matching.ConflictResolution
+
+::: sleap_io.model.matching.MergeError
+
+::: sleap_io.model.matching.SkeletonMismatchError
+
+::: sleap_io.model.matching.VideoNotFoundError
+
+### Progress Tracking
+
+::: sleap_io.model.matching.MergeProgressBar
+
+### Labels Merge Method
+
+::: sleap_io.model.labels.Labels.merge
 
