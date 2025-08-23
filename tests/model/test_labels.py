@@ -3656,6 +3656,41 @@ def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
     # Should not match because basenames differ and neither exists in fallback/base
     result = video_matcher4.match(video5, video6)
     assert result == False  # Should not match
+    
+    # Additional coverage tests
+    # Test same object matching (line 228)
+    video_same = Video(filename=str(diff_video1_path))
+    matcher_same = VideoMatcher(method=VideoMatchMethod.RESOLVE)
+    assert matcher_same.match(video_same, video_same) == True
+    
+    # Test fallback directories with non-existent file (lines 245-248)
+    matcher_no_file = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        fallback_directories=[str(tmp_path / "nonexistent")]
+    )
+    assert matcher_no_file.match(video1, video2) == True  # Should match via matches_path
+    
+    # Test base_path only without fallback_directories (line 253)
+    matcher_base_only = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        base_path=str(base)
+    )
+    assert matcher_base_only.match(video3, video4) == True
+    
+    # Test exception handling in relative_to (lines 273-274)
+    # Create videos with relative paths that will fail relative_to
+    video_rel1 = Video(filename="relative/path1.mp4")
+    video_rel2 = Video(filename="relative/path2.mp4")
+    matcher_exc = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        base_path=str(base)
+    )
+    # This should trigger the exception handler
+    assert matcher_exc.match(video_rel1, video_rel2) == False
+    
+    # Test non-matching basenames with path check (line 278)
+    # These have different basenames, so should go through the else branch
+    assert matcher_same.match(video5, video6) == False
         
     # Test 4: Test with both fallback and base_path
     # Ensure fallback is checked before base_path
