@@ -3548,3 +3548,130 @@ def test_labels_merge_video_resolve_complex_scenario(tmp_path):
     result4 = labels5.merge(labels6, video_matcher=video_matcher)
     assert result4.successful
     assert len(labels5.videos) == 1  # Should match and not duplicate
+
+
+def test_labels_merge_video_resolve_fallback_and_base_path_coverage(tmp_path):
+    """Test VideoMatchMethod.RESOLVE to ensure fallback_directories and base_path code paths are covered.
+    
+    This test specifically targets the uncovered lines in matching.py for the RESOLVE method.
+    """
+    import shutil
+    
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+    
+    # Create directory structure
+    dir1 = tmp_path / "dir1"
+    dir2 = tmp_path / "dir2"
+    fallback = tmp_path / "fallback"
+    base = tmp_path / "base"
+    
+    dir1.mkdir()
+    dir2.mkdir()
+    fallback.mkdir()
+    base.mkdir()
+    
+    # Test 1: Fallback directories with matching basename
+    # The key is that the videos must:
+    # 1. Have the same basename
+    # 2. NOT match via matches_path (different directories)
+    # 3. Have the file exist in fallback directory
+    
+    video1_path = dir1 / "recording.mp4"
+    video2_path = dir2 / "recording.mp4"  # Same basename, different directory
+    fallback_video = fallback / "recording.mp4"
+    
+    shutil.copy(test_video, video1_path)
+    # Copy to video2_path as well so Video() can open it
+    shutil.copy(test_video, video2_path)
+    shutil.copy(test_video, fallback_video)  # Also in fallback
+    
+    # Create videos - the key is they must not match via matches_path
+    # but should match via fallback when basename matches
+    video1 = Video(filename=str(video1_path))
+    video2 = Video(filename=str(video2_path))
+    
+    # First verify they don't match without fallback
+    matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    assert matcher_no_fallback.match(video1, video2) == False
+    
+    # Now test with fallback directory
+    video_matcher = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        fallback_directories=[str(fallback)]
+    )
+    
+    # They should match because recording.mp4 exists in fallback
+    assert video_matcher.match(video1, video2) == True
+    
+    # Test 2: Base path with basename lookup
+    # Create videos with same basename that exists in base_path
+    base_video = base / "shared.mp4"
+    shutil.copy(test_video, base_video)
+    
+    # Create videos that reference files with same basename but different paths
+    # These files don't need to exist
+    video3_path = dir1 / "shared.mp4"
+    video4_path = dir2 / "shared.mp4"
+    
+    shutil.copy(test_video, video3_path)
+    shutil.copy(test_video, video4_path)
+    
+    video3 = Video(filename=str(video3_path))
+    video4 = Video(filename=str(video4_path))
+    
+    # Without base_path, they shouldn't match (different paths)
+    matcher_no_base = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    assert matcher_no_base.match(video3, video4) == False
+    
+    # With base_path containing shared.mp4, they should match
+    video_matcher2 = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        base_path=str(base)
+    )
+    
+    # Should match because shared.mp4 exists in base_path
+    assert video_matcher2.match(video3, video4) == True
+    
+    # Test 3: Test relative path resolution (this will trigger the exception path)
+    # Create videos with paths that will fail relative_to
+    if os.name != 'nt':  # Skip on Windows
+        # These absolute paths can't be made relative to their anchors
+        abs_video1 = Video(filename="/tmp/video1.mp4")
+        abs_video2 = Video(filename="/tmp/video2.mp4")
+        
+        video_matcher3 = VideoMatcher(
+            method=VideoMatchMethod.RESOLVE,
+            base_path=str(base)
+        )
+        
+        # This should trigger the ValueError exception handler
+        # because relative_to will fail
+        result = video_matcher3.match(abs_video1, abs_video2)
+        assert result == False  # Should not match
+        
+    # Test 4: Test with both fallback and base_path
+    # Ensure fallback is checked before base_path
+    combo_video = fallback / "combo.mp4"
+    base_combo = base / "combo.mp4"
+    
+    shutil.copy(test_video, combo_video)  # In fallback
+    shutil.copy(test_video, base_combo)   # Also in base
+    
+    video5_path = dir1 / "combo.mp4"
+    video6_path = dir2 / "combo.mp4"
+    
+    shutil.copy(test_video, video5_path)
+    shutil.copy(test_video, video6_path)
+    
+    video5 = Video(filename=str(video5_path))
+    video6 = Video(filename=str(video6_path))
+    
+    video_matcher4 = VideoMatcher(
+        method=VideoMatchMethod.RESOLVE,
+        fallback_directories=[str(fallback)],
+        base_path=str(base)
+    )
+    
+    # Should match via fallback (checked before base_path)
+    assert video_matcher4.match(video5, video6) == True
