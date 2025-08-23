@@ -12,11 +12,11 @@ The `sleap-io` library provides comprehensive functionality for merging multiple
 ### Merging Two Labels Objects
 
 ```python
-from sleap_io import load_file
+import sleap_io as sio
 
 # Load two annotation files
-base_labels = load_file("base_annotations.slp")
-new_labels = load_file("new_predictions.slp")
+base_labels = sio.load_file("base_annotations.slp")
+new_labels = sio.load_file("new_predictions.slp")
 
 # Merge new labels into base
 result = base_labels.merge(new_labels)
@@ -137,11 +137,11 @@ result = base_labels.merge(new_labels, error_mode="warn")
 Merge predictions back into a manually annotated project:
 
 ```python
-from sleap_io import load_file, save_file
+import sleap_io as sio
 
 # Load manual annotations and predictions
-manual_labels = load_file("manual_annotations.slp")
-predictions = load_file("predictions.slp")
+manual_labels = sio.load_file("manual_annotations.slp")
+predictions = sio.load_file("predictions.slp")
 
 # Merge predictions, preserving manual labels
 result = manual_labels.merge(
@@ -157,7 +157,7 @@ print(f"Instances updated: {result.instances_updated}")
 print(f"Conflicts resolved: {len(result.conflicts)}")
 
 # Save the merged project
-save_file(manual_labels, "merged_project.slp")
+manual_labels.save("merged_project.slp")
 ```
 
 ### Combining Multiple Annotators
@@ -303,7 +303,7 @@ frame1.instances = merged_instances
 4. **Save provenance** for reproducibility:
    ```python
    # Provenance is automatically saved with the Labels
-   save_file(merged_labels, "merged_with_provenance.slp")
+   merged_labels.save("merged_with_provenance.slp")
    ```
 
 5. **Test merge strategies** on a subset first:
@@ -313,3 +313,8 @@ frame1.instances = merged_instances
    test_new = new_labels[:100]
    test_result = test_base.merge(test_new)
    ```
+
+## API
+
+::: sleap_io.model.SkeletonMatchMethod
+

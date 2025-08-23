@@ -1,7 +1,6 @@
 """Tests for the matching module."""
 
 import numpy as np
-import pytest
 
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
@@ -12,6 +11,7 @@ from sleap_io.model.matching import (
     InstanceMatcher,
     InstanceMatchMethod,
     MergeError,
+    MergeProgressBar,
     MergeResult,
     SkeletonMatcher,
     SkeletonMatchMethod,
@@ -351,6 +351,114 @@ class TestMergeErrors:
         assert error.message == "Video not found"
 
 
+class TestMergeProgressBar:
+    """Test MergeProgressBar functionality."""
+
+    def test_progress_bar_context_manager(self):
+        """Test MergeProgressBar as a context manager."""
+        with MergeProgressBar("Test merge") as progress:
+            assert progress.desc == "Test merge"
+            assert progress.pbar is None
+
+            # Test callback
+            progress.callback(0, 10, "Starting")
+            # Since tqdm may or may not be available, just check it runs
+            progress.callback(5, 10, "Halfway")
+            progress.callback(10, 10, "Complete")
+
+
+class TestVideoMatcherWithFallback:
+    """Test VideoMatcher with fallback directories."""
+
+    def test_resolve_with_fallback_directories(self, tmp_path):
+        """Test VideoMatcher RESOLVE method with fallback directories."""
+        # Create test structure
+        fallback1 = tmp_path / "fallback1"
+        fallback2 = tmp_path / "fallback2"
+        fallback1.mkdir()
+        fallback2.mkdir()
+
+        # Create a video file in fallback2
+        video_file = fallback2 / "test_video.mp4"
+        video_file.touch()
+
+        # Create videos with different paths but same basename
+        video1 = Video(filename=str(fallback2 / "test_video.mp4"), open_backend=False)
+        video2 = Video(filename="/original/path/test_video.mp4", open_backend=False)
+
+        # Test with fallback directories
+        matcher = VideoMatcher(
+            method=VideoMatchMethod.RESOLVE,
+            fallback_directories=[str(fallback1), str(fallback2)],
+        )
+
+        assert matcher.match(video1, video2)  # Should find it in fallback2
+
+    def test_resolve_with_base_path(self, tmp_path):
+        """Test VideoMatcher RESOLVE method with base_path."""
+        base_path = tmp_path / "base"
+        base_path.mkdir()
+
+        # Create a video file at base path
+        video_file = base_path / "test_video.mp4"
+        video_file.touch()
+
+        video1 = Video(filename=str(video_file), open_backend=False)
+        video2 = Video(filename="/different/path/test_video.mp4", open_backend=False)
+
+        # Test with base_path
+        matcher = VideoMatcher(
+            method=VideoMatchMethod.RESOLVE, base_path=str(base_path)
+        )
+
+        assert matcher.match(video1, video2)  # Should find it at base_path
+
+
+class TestPreConfiguredMatchers:
+    """Test pre-configured matchers."""
+
+    def test_preconfigured_matchers_exist(self):
+        """Test that all pre-configured matchers are available."""
+        from sleap_io.model.matching import (
+            AUTO_VIDEO_MATCHER,
+            BASENAME_VIDEO_MATCHER,
+            DUPLICATE_MATCHER,
+            IDENTITY_INSTANCE_MATCHER,
+            IDENTITY_TRACK_MATCHER,
+            IOU_MATCHER,
+            NAME_TRACK_MATCHER,
+            OVERLAP_SKELETON_MATCHER,
+            PATH_VIDEO_MATCHER,
+            SOURCE_VIDEO_MATCHER,
+            STRUCTURE_SKELETON_MATCHER,
+            SUBSET_SKELETON_MATCHER,
+        )
+
+        # Test skeleton matchers
+        assert STRUCTURE_SKELETON_MATCHER.method == SkeletonMatchMethod.STRUCTURE
+        assert SUBSET_SKELETON_MATCHER.method == SkeletonMatchMethod.SUBSET
+        assert OVERLAP_SKELETON_MATCHER.method == SkeletonMatchMethod.OVERLAP
+        assert OVERLAP_SKELETON_MATCHER.min_overlap == 0.7
+
+        # Test instance matchers
+        assert DUPLICATE_MATCHER.method == InstanceMatchMethod.SPATIAL
+        assert DUPLICATE_MATCHER.threshold == 5.0
+        assert IOU_MATCHER.method == InstanceMatchMethod.IOU
+        assert IOU_MATCHER.threshold == 0.5
+        assert IDENTITY_INSTANCE_MATCHER.method == InstanceMatchMethod.IDENTITY
+
+        # Test track matchers
+        assert NAME_TRACK_MATCHER.method == TrackMatchMethod.NAME
+        assert IDENTITY_TRACK_MATCHER.method == TrackMatchMethod.IDENTITY
+
+        # Test video matchers
+        assert AUTO_VIDEO_MATCHER.method == VideoMatchMethod.AUTO
+        assert SOURCE_VIDEO_MATCHER.method == VideoMatchMethod.RESOLVE
+        assert PATH_VIDEO_MATCHER.method == VideoMatchMethod.PATH
+        assert PATH_VIDEO_MATCHER.strict is True
+        assert BASENAME_VIDEO_MATCHER.method == VideoMatchMethod.BASENAME
+
+
 class TestEdgeCases:
     """Test edge cases and error handling in matching."""
 
@@ -358,13 +466,13 @@ class TestEdgeCases:
         """Test VideoMatcher with CONTENT method."""
         video1 = Video(filename="test1.mp4", open_backend=False)
         video1.backend_metadata["shape"] = (100, 480, 640, 3)
-        
+
         video2 = Video(filename="test2.mp4", open_backend=False)
         video2.backend_metadata["shape"] = (100, 480, 640, 3)
-        
+
         video3 = Video(filename="test3.mp4", open_backend=False)
         video3.backend_metadata["shape"] = (50, 480, 640, 3)
-        
+
         matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
         assert matcher.match(video1, video2)  # Same content
         assert not matcher.match(video1, video3)  # Different content
@@ -374,7 +482,7 @@ class TestEdgeCases:
         video1 = Video(filename="/path/to/video.mp4", open_backend=False)
         video2 = Video(filename="/other/path/video.mp4", open_backend=False)
         video3 = Video(filename="/path/to/different.mp4", open_backend=False)
-        
+
         matcher = VideoMatcher(method=VideoMatchMethod.RESOLVE)
         assert matcher.match(video1, video2)  # Same basename
         assert not matcher.match(video1, video3)  # Different basename
@@ -383,36 +491,36 @@ class TestEdgeCases:
         """Test VideoMatcher AUTO method falling back to content matching."""
         video1 = Video(filename="video1.mp4", open_backend=False)
         video1.backend_metadata["shape"] = (100, 480, 640, 3)
-        
+
         video2 = Video(filename="video2.mp4", open_backend=False)
         video2.backend_metadata["shape"] = (100, 480, 640, 3)
-        
+
         video3 = Video(filename="video3.mp4", open_backend=False)
         video3.backend_metadata["shape"] = (50, 240, 320, 3)  # Different shape
-        
+
         matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
         # Should match by content since paths don't match
         assert matcher.match(video1, video2)
-        
+
         # Should not match - different paths and different content
         assert not matcher.match(video1, video3)
 
     def test_frame_matcher(self):
         """Test FrameMatcher functionality."""
         from sleap_io.model.matching import FrameMatcher
-        
+
         video1 = Video(filename="test1.mp4", open_backend=False)
         video2 = Video(filename="test2.mp4", open_backend=False)
-        
+
         frame1 = LabeledFrame(video=video1, frame_idx=0)
         frame2 = LabeledFrame(video=video1, frame_idx=0)
         frame3 = LabeledFrame(video=video2, frame_idx=0)
-        
+
         # Test with video must match
         matcher = FrameMatcher(video_must_match=True)
         assert matcher.match(frame1, frame2)  # Same video
         assert not matcher.match(frame1, frame3)  # Different videos
-        
+
         # Test without video must match
         matcher = FrameMatcher(video_must_match=False)
         assert matcher.match(frame1, frame2)
@@ -420,34 +528,32 @@ class TestEdgeCases:
 
     def test_instance_matcher_iou_with_overlap(self):
         """Test InstanceMatcher IoU calculation with actual overlapping boxes."""
-        skeleton = Skeleton(nodes=["tl", "tr", "br", "bl"])  # top-left, top-right, bottom-right, bottom-left
-        
+        skeleton = Skeleton(
+            nodes=["tl", "tr", "br", "bl"]
+        )  # top-left, top-right, bottom-right, bottom-left
+
         # Create box 1: (0, 0) to (10, 10)
         inst1 = Instance.from_numpy(
-            np.array([[0, 0], [10, 0], [10, 10], [0, 10]]), 
-            skeleton=skeleton
+            np.array([[0, 0], [10, 0], [10, 10], [0, 10]]), skeleton=skeleton
         )
-        
+
         # Create box 2: (5, 5) to (15, 15) - overlaps with box 1
         inst2 = Instance.from_numpy(
-            np.array([[5, 5], [15, 5], [15, 15], [5, 15]]), 
-            skeleton=skeleton
+            np.array([[5, 5], [15, 5], [15, 15], [5, 15]]), skeleton=skeleton
         )
-        
+
         # Create box 3: (20, 20) to (30, 30) - no overlap
         inst3 = Instance.from_numpy(
-            np.array([[20, 20], [30, 20], [30, 30], [20, 30]]), 
-            skeleton=skeleton
+            np.array([[20, 20], [30, 20], [30, 30], [20, 30]]), skeleton=skeleton
         )
-        
+
         # Create box 4: (0, 0) to (10, 10) - identical to box 1
         inst4 = Instance.from_numpy(
-            np.array([[0, 0], [10, 0], [10, 10], [0, 10]]), 
-            skeleton=skeleton
+            np.array([[0, 0], [10, 0], [10, 10], [0, 10]]), skeleton=skeleton
         )
-        
+
         matcher = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.0)
-        
+
         # Test find_matches to trigger IoU score calculation
         matches = matcher.find_matches([inst1], [inst2])
         assert len(matches) == 1
@@ -455,11 +561,11 @@ class TestEdgeCases:
         assert matches[0][1] == 0
         # IoU should be 25/175 ≈ 0.143
         assert 0.14 < matches[0][2] < 0.15
-        
+
         # Test with no overlap
         matches = matcher.find_matches([inst1], [inst3])
         assert len(matches) == 0  # No overlap, no match
-        
+
         # Test with identical boxes
         matches = matcher.find_matches([inst1], [inst4])
         assert len(matches) == 1
@@ -468,51 +574,40 @@ class TestEdgeCases:
     def test_instance_matcher_iou_edge_cases(self):
         """Test InstanceMatcher IoU calculation edge cases."""
         skeleton = Skeleton(nodes=["p1", "p2"])
-        
+
         # Instance with missing points (NaN values)
         inst1 = Instance.from_numpy(
-            np.array([[10, 10], [np.nan, np.nan]]), 
-            skeleton=skeleton
+            np.array([[10, 10], [np.nan, np.nan]]), skeleton=skeleton
         )
-        
-        inst2 = Instance.from_numpy(
-            np.array([[11, 11], [21, 21]]), 
-            skeleton=skeleton
-        )
-        
+
+        inst2 = Instance.from_numpy(np.array([[11, 11], [21, 21]]), skeleton=skeleton)
+
         # Instance with all NaN points (no valid bounding box)
         inst3 = Instance.from_numpy(
-            np.array([[np.nan, np.nan], [np.nan, np.nan]]), 
-            skeleton=skeleton
+            np.array([[np.nan, np.nan], [np.nan, np.nan]]), skeleton=skeleton
         )
-        
+
         matcher = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.0)
-        
+
         # Test with instance that has NaN points
         matches = matcher.find_matches([inst1], [inst2])
         # Should handle NaN gracefully
         assert len(matches) == 0 or matches[0][2] == 0.0
-        
+
         # Test with instance that has no valid bounding box
         matches = matcher.find_matches([inst3], [inst2])
         assert len(matches) == 0  # No valid bounding box, no match
-        
+
         # Test both instances with no valid bounding box
         matches = matcher.find_matches([inst3], [inst3])
         assert len(matches) == 0  # Neither has valid bounding box
 
     def test_merge_result_many_errors(self):
         """Test MergeResult summary with more than 5 errors."""
-        errors = [
-            MergeError(message=f"Error {i}") 
-            for i in range(10)
-        ]
-        
-        result = MergeResult(
-            successful=False,
-            errors=errors
-        )
-        
+        errors = [MergeError(message=f"Error {i}") for i in range(10)]
+
+        result = MergeResult(successful=False, errors=errors)
+
         summary = result.summary()
         assert "Errors encountered: 10" in summary
         assert "Error 0" in summary

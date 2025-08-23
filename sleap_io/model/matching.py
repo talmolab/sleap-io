@@ -223,10 +223,51 @@ class VideoMatcher:
         elif self.method == VideoMatchMethod.CONTENT:
             return video1.matches_content(video2)
         elif self.method == VideoMatchMethod.RESOLVE:
-            # Try to resolve paths
+            # Try to resolve paths with fallback directories
             if video1.matches_path(video2, strict=False):
                 return True
-            # TODO: Implement path resolution logic
+
+            # Try to find the video in fallback directories
+            if self.fallback_directories and video1.filename and video2.filename:
+                from pathlib import Path
+
+                # Get basenames to compare
+                basename1 = Path(video1.filename).name
+                basename2 = Path(video2.filename).name
+
+                # If basenames match, try to resolve paths
+                if basename1 == basename2:
+                    # Check if video2 exists in any fallback directory
+                    for fallback_dir in self.fallback_directories:
+                        potential_path = Path(fallback_dir) / basename2
+                        if potential_path.exists():
+                            # Found a matching file in fallback directory
+                            return True
+
+                    # Also check with base_path if provided
+                    if self.base_path:
+                        # Try to resolve relative to base path
+                        try:
+                            rel_path1 = Path(video1.filename).relative_to(
+                                Path(video1.filename).anchor
+                            )
+                            rel_path2 = Path(video2.filename).relative_to(
+                                Path(video2.filename).anchor
+                            )
+
+                            if rel_path1 == rel_path2:
+                                # Same relative path structure
+                                return True
+
+                            # Check if the file exists at the base path
+                            potential_path = (
+                                Path(self.base_path) / Path(video2.filename).name
+                            )
+                            if potential_path.exists():
+                                return True
+                        except (ValueError, OSError):
+                            pass
+
             return False
         else:
             raise ValueError(f"Unknown video match method: {self.method}")
@@ -246,12 +287,21 @@ class FrameMatcher:
 # Pre-configured matchers for common use cases
 STRUCTURE_SKELETON_MATCHER = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
 SUBSET_SKELETON_MATCHER = SkeletonMatcher(method=SkeletonMatchMethod.SUBSET)
+OVERLAP_SKELETON_MATCHER = SkeletonMatcher(
+    method=SkeletonMatchMethod.OVERLAP, min_overlap=0.7
+)
+
 DUPLICATE_MATCHER = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=5.0)
 IOU_MATCHER = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.5)
+IDENTITY_INSTANCE_MATCHER = InstanceMatcher(method=InstanceMatchMethod.IDENTITY)
+
 NAME_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.NAME)
 IDENTITY_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.IDENTITY)
+
 AUTO_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.AUTO)
 SOURCE_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.RESOLVE)
+PATH_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+BASENAME_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
 
 @attrs.define
@@ -326,3 +376,55 @@ class MergeResult:
                 lines.append(f"    ... and {len(self.errors) - 5} more")
 
         return "\n".join(lines)
+
+
+class MergeProgressBar:
+    """Context manager for merge progress tracking using tqdm.
+
+    This provides a clean interface for tracking merge progress with visual feedback.
+
+    Example:
+        with MergeProgressBar("Merging predictions") as progress:
+            result = labels.merge(predictions, progress_callback=progress.callback)
+    """
+
+    def __init__(self, desc: str = "Merging", leave: bool = True):
+        """Initialize the progress bar.
+
+        Args:
+            desc: Description to show in the progress bar.
+            leave: Whether to leave the progress bar on screen after completion.
+        """
+        self.desc = desc
+        self.leave = leave
+        self.pbar = None
+
+    def __enter__(self):
+        """Enter the context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager and close the progress bar."""
+        if self.pbar is not None:
+            self.pbar.close()
+
+    def callback(self, current: int, total: int, message: str = ""):
+        """Progress callback for merge operations.
+
+        Args:
+            current: Current progress value.
+            total: Total items to process.
+            message: Optional message to display.
+        """
+        from tqdm import tqdm
+
+        if self.pbar is None and total:
+            self.pbar = tqdm(total=total, desc=self.desc, leave=self.leave)
+
+        if self.pbar:
+            if message:
+                self.pbar.set_description(f"{self.desc}: {message}")
+            else:
+                self.pbar.set_description(self.desc)
+            self.pbar.n = current
+            self.pbar.refresh()
