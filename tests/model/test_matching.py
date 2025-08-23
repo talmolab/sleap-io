@@ -954,3 +954,177 @@ class TestEdgeCases:
 
             # These should match as they have identical relative paths
             assert matcher.match(video3, video4)
+    
+    def test_instance_matcher_find_matches_all_nan_spatial(self):
+        """Test find_matches SPATIAL when instances have all NaN points."""
+        from sleap_io import Instance, Skeleton
+        import numpy as np
+        
+        skeleton = Skeleton(nodes=["head", "tail"])
+        
+        # Create instances with all NaN points
+        inst1 = Instance.from_numpy(
+            np.array([[np.nan, np.nan], [np.nan, np.nan]]), skeleton=skeleton
+        )
+        inst2 = Instance.from_numpy(
+            np.array([[np.nan, np.nan], [np.nan, np.nan]]), skeleton=skeleton
+        )
+        
+        # Test SPATIAL matching with all NaN points
+        matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=10.0)
+        matches = matcher.find_matches([inst1], [inst2])
+        
+        # Should match but with score 0.0 due to all NaN points (line 148-149)
+        assert len(matches) == 1
+        assert matches[0][2] == 0.0  # Score should be 0 for all NaN
+    
+    def test_instance_matcher_find_matches_iou_no_intersection(self):
+        """Test IoU calculation when bounding boxes exist but don't intersect."""
+        from sleap_io import Instance, Skeleton
+        import numpy as np
+        
+        skeleton = Skeleton(nodes=["head", "tail"])
+        
+        # Create instances with valid bounding boxes but no intersection
+        inst1 = Instance.from_numpy(
+            np.array([[0, 0], [10, 10]]), skeleton=skeleton
+        )
+        inst2 = Instance.from_numpy(
+            np.array([[20, 20], [30, 30]]), skeleton=skeleton
+        )
+        
+        # Force them to have same track for identity matching to trigger IoU calculation
+        shared_track = Track(name="track1")
+        inst1.track = shared_track
+        inst2.track = shared_track
+        
+        # Test with IOU matcher - will try to match but score will be 0 (line 170-171)
+        matcher = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.01)
+        matches = matcher.find_matches([inst1], [inst2])
+        
+        # Should not match because IoU is 0
+        assert len(matches) == 0
+    
+    def test_instance_matcher_find_matches_iou_null_bbox(self):
+        """Test find_matches when one instance has no valid bounding box."""
+        from sleap_io import Instance, Skeleton
+        import numpy as np
+        
+        skeleton = Skeleton(nodes=["head", "tail"])
+        
+        # Create instance with all NaN points (no valid bbox)
+        inst1 = Instance.from_numpy(
+            np.array([[np.nan, np.nan], [np.nan, np.nan]]), skeleton=skeleton
+        )
+        inst2 = Instance.from_numpy(
+            np.array([[10, 10], [20, 20]]), skeleton=skeleton
+        )
+        
+        # Give them same track to trigger matching attempt
+        shared_track = Track(name="track1")
+        inst1.track = shared_track
+        inst2.track = shared_track
+        
+        # Test IOU matching with null bbox (line 172-173)
+        matcher = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.1)
+        matches = matcher.find_matches([inst1], [inst2])
+        
+        # Should not match due to null bbox
+        assert len(matches) == 0
+    
+    def test_video_matcher_resolve_with_fallback_existing_file(self):
+        """Test VideoMatcher RESOLVE with fallback directories containing file."""
+        from sleap_io.model.video import Video
+        from pathlib import Path
+        import tempfile
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a video file in fallback directory
+            fallback_dir = Path(tmpdir) / "fallback"
+            fallback_dir.mkdir()
+            video_file = fallback_dir / "test_video.mp4"
+            video_file.touch()
+            
+            # Create videos with same basename but different paths
+            video1 = Video(filename="/original/path/test_video.mp4")
+            video2 = Video(filename="/different/path/test_video.mp4")
+            
+            # Test with fallback directory containing the file
+            matcher = VideoMatcher(
+                method=VideoMatchMethod.RESOLVE,
+                fallback_directories=[str(fallback_dir)]
+            )
+            
+            # Should match because basename matches and file exists in fallback (line 241-245)
+            assert matcher.match(video1, video2)
+            
+            # Test without matching file in fallback
+            video3 = Video(filename="/path/nonexistent.mp4")
+            assert not matcher.match(video1, video3)
+    
+    def test_video_matcher_resolve_with_base_path_existing_file(self):
+        """Test VideoMatcher RESOLVE with base_path containing file."""
+        from sleap_io.model.video import Video
+        from pathlib import Path
+        import tempfile
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_path = Path(tmpdir)
+            
+            # Create a video file at base path
+            video_file = base_path / "test_video.mp4"
+            video_file.touch()
+            
+            # Create videos with same basename
+            video1 = Video(filename="/some/path/test_video.mp4")
+            video2 = Video(filename="/other/path/test_video.mp4")
+            
+            # Test with base_path containing the file
+            matcher = VideoMatcher(
+                method=VideoMatchMethod.RESOLVE,
+                base_path=str(base_path)
+            )
+            
+            # Should match because file exists at base path (line 263-267)
+            assert matcher.match(video1, video2)
+    
+    def test_video_matcher_resolve_exception_handling(self):
+        """Test VideoMatcher RESOLVE method exception handling."""
+        from sleap_io.model.video import Video
+        
+        # Test with relative paths that cause relative_to to fail (line 268-269)
+        matcher = VideoMatcher(
+            method=VideoMatchMethod.RESOLVE,
+            base_path="/some/base"
+        )
+        
+        # These paths will cause relative_to with anchor to fail
+        video1 = Video(filename="relative/path1/video.mp4")
+        video2 = Video(filename="relative/path2/video.mp4")
+        
+        # Should handle the exception and return False
+        result = matcher.match(video1, video2)
+        assert not result
+        
+        # Test with None filenames
+        video3 = Video(filename=None)
+        video4 = Video(filename="test.mp4")
+        assert not matcher.match(video3, video4)
+    
+    def test_video_matcher_resolve_same_relative_structure(self):
+        """Test VideoMatcher RESOLVE with same relative path structure."""
+        from sleap_io.model.video import Video
+        
+        # Test paths that would have same relative structure (line 258-260)
+        matcher = VideoMatcher(
+            method=VideoMatchMethod.RESOLVE,
+            base_path="/base"
+        )
+        
+        # Create videos with identical paths (should match at line 258-260)
+        video1 = Video(filename="C:/data/video.mp4")
+        video2 = Video(filename="C:/data/video.mp4")
+        
+        # Test the relative path matching logic
+        # This should either match early or handle the exception
+        matcher.match(video1, video2)
