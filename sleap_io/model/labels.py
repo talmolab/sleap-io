@@ -1823,6 +1823,19 @@ class Labels:
                         strategy=frame_strategy,
                     )
 
+                    # Remap skeleton and track references for instances from other frame
+                    remapped_instances = []
+                    for inst in merged_instances:
+                        # Check if this instance needs remapping (i.e., it comes from other_frame)
+                        if inst.skeleton in skeleton_map:
+                            # Instance needs remapping
+                            remapped_inst = self._map_instance(inst, skeleton_map, track_map)
+                            remapped_instances.append(remapped_inst)
+                        else:
+                            # Instance already has correct skeleton (from self_frame)
+                            remapped_instances.append(inst)
+                    merged_instances = remapped_instances
+
                     # Count changes
                     n_before = len(self_frame.instances)
                     n_after = len(merged_instances)

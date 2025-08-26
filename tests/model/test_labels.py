@@ -3745,3 +3745,66 @@ def test_labels_merge_suggestion_frame_duplication():
     # If video2 was added to labels1.videos, we should see the suggestion
     if video2 in labels1.videos:
         assert any(s.video == video2 and s.frame_idx == 10 for s in labels1.suggestions)
+
+
+def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
+    """Test that skeleton references are correctly remapped when merging overlapping frames.
+    
+    This test reproduces the bug where instances from merged frames retain references
+    to the original skeleton objects instead of being remapped to the matching skeleton
+    in the target Labels object.
+    """
+    from sleap_io import Labels, LabeledFrame, Instance, Video, Skeleton
+    import numpy as np
+    
+    # Create skeleton and video (same structure, different objects)
+    skeleton1 = Skeleton(["head", "tail"])
+    skeleton2 = Skeleton(["head", "tail"])  # Same structure, different object
+    video = Video(filename="test.mp4", open_backend=False)
+    
+    # Create first Labels with one frame
+    labels1 = Labels()
+    labels1.skeletons = [skeleton1]
+    labels1.videos = [video]
+    frame1 = LabeledFrame(video=video, frame_idx=0)
+    inst1 = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton1)
+    frame1.instances = [inst1]
+    labels1.append(frame1)
+    
+    # Create second Labels with overlapping frame (same frame_idx)
+    labels2 = Labels()
+    labels2.skeletons = [skeleton2]
+    labels2.videos = [video]
+    frame2 = LabeledFrame(video=video, frame_idx=0)
+    inst2 = Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skeleton2)
+    frame2.instances = [inst2]
+    labels2.append(frame2)
+    
+    # Verify skeletons are different objects but same structure
+    assert skeleton1 is not skeleton2
+    assert skeleton1.matches(skeleton2)
+    
+    # Merge labels2 into labels1
+    result = labels1.merge(labels2, frame_strategy="keep_both")
+    
+    assert result.successful
+    assert len(labels1.skeletons) == 1  # Should reuse existing skeleton
+    assert labels1.skeletons[0] is skeleton1  # Should be the original skeleton
+    
+    # Check that all instances reference the correct skeleton
+    for frame_idx, frame in enumerate(labels1.labeled_frames):
+        for inst_idx, instance in enumerate(frame.instances):
+            assert instance.skeleton is skeleton1, \
+                f"Frame {frame_idx}, Instance {inst_idx}: " \
+                f"skeleton {id(instance.skeleton)} != expected {id(skeleton1)}"
+    
+    # The main test is that the skeleton references are correct.
+    # Previously, saving would fail with ValueError because instances had
+    # skeleton references that weren't in labels1.skeletons.
+    # Now test that save would work (but skip actual save/load due to video backend issues in test)
+    
+    # Simulate what save does - check that all instance skeletons are in labels.skeletons
+    for frame in labels1.labeled_frames:
+        for instance in frame.instances:
+            assert instance.skeleton in labels1.skeletons, \
+                f"Instance skeleton not in labels.skeletons list"
