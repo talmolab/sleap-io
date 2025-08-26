@@ -1,722 +1,650 @@
-# Merging Annotations
+# Merging annotations
 
-The `sleap-io` library provides comprehensive functionality for merging multiple annotation files. This is particularly useful for:
+The merging system in sleap-io provides powerful tools for combining multiple annotation files while intelligently handling conflicts, duplicates, and different data sources. This is essential for collaborative annotation, human-in-the-loop workflows, and consolidating predictions from multiple models.
 
-- Combining predictions with manual labels (human-in-the-loop workflows)
-- Merging annotations from multiple annotators
-- Consolidating partial annotations
-- Updating existing projects with new predictions
+!!! info "Key concepts"
+    
+    - **Merging**: Combining annotations from multiple sources into a single dataset
+    - **Matching**: Determining which objects (skeletons, videos, tracks, instances) correspond between datasets
+    - **Conflict resolution**: Handling overlapping or contradicting annotations using configurable strategies
+    - **Provenance tracking**: Automatic recording of merge history and data sources
 
-## Basic Usage
+## Quick start
 
-### Merging Two Labels Objects
+The simplest and most common use case is merging predictions back into a manually annotated project:
 
-```python
+```python title="Basic merge example" linenums="1"
 import sleap_io as sio
 
-# Load two annotation files
-base_labels = sio.load_file("base_annotations.slp")
-new_labels = sio.load_file("new_predictions.slp")
+# Load your manual annotations and new predictions
+base_labels = sio.load_file("manual_annotations.slp")
+predictions = sio.load_file("model_predictions.slp")
 
-# Merge new labels into base
-result = base_labels.merge(new_labels)
+# Merge predictions into base project
+# Default 'smart' strategy preserves manual labels
+result = base_labels.merge(predictions)
 
-# Check the result
-print(result.summary())
+# Check what happened
+print(f"Frames merged: {result.frames_merged}")
+print(f"Instances added: {result.instances_added}")
+
+# Save the merged project
+base_labels.save("merged_project.slp")
 ```
 
-### Merge Strategies
+!!! tip
+    The default `smart` strategy automatically preserves your manual annotations while adding new predictions, making it ideal for human-in-the-loop workflows.
 
-The merge system supports different strategies for handling overlapping instances:
+## How merging works
 
-#### Smart Strategy (Default)
-Preserves user labels over predictions when they overlap:
+The merge process follows a systematic approach to combine data structures while maintaining consistency:
 
-```python
+```mermaid
+graph TD
+    A[Start Merge] --> B[Match Skeletons]
+    B --> C[Match Videos]
+    C --> D[Match Tracks]
+    D --> E[For Each Frame]
+    E --> F{Frame Exists?}
+    F -->|No| G[Add New Frame]
+    F -->|Yes| H[Match Instances]
+    H --> I[Apply Strategy]
+    I --> J[Resolve Conflicts]
+    G --> K[Next Frame]
+    J --> K
+    K --> E
+    K --> L[Return MergeResult]
+```
+
+### Step-by-step process
+
+1. **Skeleton matching**: Identifies corresponding skeletons between datasets based on node names and structure
+2. **Video matching**: Determines which videos represent the same source data (handles different paths, formats)
+3. **Track matching**: Maps tracks (instance identities) between datasets
+4. **Frame merging**: For each frame, applies the chosen strategy to combine instances
+5. **Conflict resolution**: Handles overlapping instances according to the selected strategy
+
+## Merging strategies
+
+The merge strategy determines how instances are combined when frames overlap. Each strategy is designed for specific workflows and requirements.
+
+### Smart strategy (default)
+
+Intelligently preserves manual annotations while updating predictions. This is the recommended strategy for most use cases.
+
+??? abstract "Algorithm details"
+    
+    ```python title="Smart merge logic (simplified)" linenums="1"
+    def smart_merge(base_frame, new_frame):
+        merged = []
+        
+        # Step 1: Always keep user labels from base
+        for instance in base_frame:
+            if isinstance(instance, Instance):  # User label
+                merged.append(instance)
+        
+        # Step 2: Find spatial matches between frames
+        matches = find_spatial_matches(base_frame, new_frame)
+        
+        # Step 3: Process each match
+        for base_inst, new_inst in matches:
+            if both_are_user_labels:
+                keep(base_inst)  # Preserve original
+            elif base_is_user_label:
+                keep(base_inst)  # User labels always win
+            elif new_is_user_label:
+                keep(new_inst)   # New user label replaces prediction
+            else:  # Both are predictions
+                keep(higher_score_instance)
+        
+        # Step 4: Add unmatched instances from new frame
+        merged.extend(unmatched_new_instances)
+        
+        return merged
+    ```
+
+!!! example "When to use"
+    
+    - Merging model predictions into manually annotated projects
+    - Updating predictions while preserving validated annotations
+    - Human-in-the-loop training workflows
+
+```python title="Using smart strategy"
 result = base_labels.merge(new_labels, frame_strategy="smart")
 ```
 
-#### Keep Original Strategy
-Always keeps instances from the base labels:
+**Behavior matrix:**
 
-```python
+| Base frame | New frame | Result | Reasoning |
+|------------|-----------|--------|-----------|
+| User label | Prediction | User label | Manual annotations are preserved |
+| User label | User label | Base user label | Avoid duplicates, keep original |
+| Prediction | User label | User label | Manual corrections override predictions |
+| Prediction (score: 0.8) | Prediction (score: 0.9) | Prediction (0.9) | Higher confidence wins |
+| Empty | Any | New instance | Add missing annotations |
+
+### Keep original strategy
+
+Preserves all instances from the base dataset, ignoring new instances at matching positions.
+
+!!! example "When to use"
+    
+    - Protecting validated datasets from modification
+    - Reviewing changes without applying them
+    - Maintaining data integrity for published datasets
+
+```python title="Using keep original strategy"
 result = base_labels.merge(new_labels, frame_strategy="keep_original")
 ```
 
-#### Keep New Strategy
-Always keeps instances from the new labels:
+### Keep new strategy
 
-```python
+Replaces matched instances with new ones, effectively updating the base dataset.
+
+!!! example "When to use"
+    
+    - Completely replacing old predictions with new ones
+    - Applying corrections from a revised annotation pass
+    - Updating with higher quality annotations
+
+```python title="Using keep new strategy"
 result = base_labels.merge(new_labels, frame_strategy="keep_new")
 ```
 
-#### Keep Both Strategy
-Keeps all instances from both sources:
+### Keep both strategy
 
-```python
+Retains all instances from both datasets without filtering duplicates.
+
+!!! warning
+    This strategy can create overlapping instances at the same locations. Use with caution and consider post-processing to remove duplicates.
+
+!!! example "When to use"
+    
+    - Combining annotations from multiple annotators
+    - Preserving all data for later review
+    - Creating training data with augmented annotations
+
+```python title="Using keep both strategy"
 result = base_labels.merge(new_labels, frame_strategy="keep_both")
 ```
 
-## Advanced Configuration
+## Matching configuration
 
-### Video Matching
+Matching determines which objects correspond between datasets. Different matchers handle various scenarios and data inconsistencies.
 
-Control how videos are matched between projects, especially useful for cross-platform workflows:
+### Video matching
 
-```python
-from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
+Controls how videos are matched between projects, essential for cross-platform workflows and different file organizations.
 
-# AUTO mode (default) - tries multiple strategies
-auto_matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
-
-# PATH mode - exact path matching
-path_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-
-# BASENAME mode - match by filename only
-basename_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
-
-# CONTENT mode - match by video shape and backend type  
-content_matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
-
-# IMAGE_DEDUP mode (ImageVideo only) - match and deduplicate image sequences
-image_dedup_matcher = VideoMatcher(method=VideoMatchMethod.IMAGE_DEDUP)
-
-# SHAPE mode - match videos by dimensions only
-shape_matcher = VideoMatcher(method=VideoMatchMethod.SHAPE)
-
-# Use pre-configured matcher for filename-based matching
-from sleap_io.model.matching import BASENAME_VIDEO_MATCHER
-
-# Use in merge
-result = base_labels.merge(
-    new_labels,
-    video_matcher=BASENAME_VIDEO_MATCHER
-)
-```
-
-#### Cross-Platform Video Matching
-
-Video paths often differ between systems, especially when collaborating or moving projects. Here's how to handle these scenarios:
-
-##### Scenario 1: Same Files, Different Paths
-
-**Problem**: You created annotations on Windows and received predictions generated on Linux:
-
-```
-# Original annotations (Windows)
-├── C:\Users\researcher\Desktop\project\
-│   ├── annotations.slp
-│   └── videos\
-│       ├── day1_trial1.mp4
-│       ├── day1_trial2.mp4
-│       └── day2_trial1.mp4
-
-# New predictions (Linux) 
-├── /home/lab/sleap_projects/mouse_behavior/
-│   ├── predictions.slp
-│   └── video_data/
-│       ├── day1_trial1.mp4  # Same file!
-│       ├── day1_trial2.mp4  # Same file!
-│       └── day2_trial1.mp4  # Same file!
-```
-
-**Solution**: Use BASENAME matching to match by filename only:
-
-```python
-import sleap_io as sio
-from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
-
-# Load the files
-annotations = sio.load_file(r"C:\Users\researcher\Desktop\project\annotations.slp")
-predictions = sio.load_file("/home/lab/sleap_projects/mouse_behavior/predictions.slp")
-
-# Create basename matcher - ignores directory paths
-basename_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
-
-# Merge - will match videos despite different directory structures
-result = annotations.merge(predictions, video_matcher=basename_matcher)
-
-print(f"Successfully matched {len(result.videos_matched)} videos")
-# Output: Successfully matched 3 videos
-```
-
-##### Scenario 2: Reorganized Project Structure
-
-**Problem**: You reorganized your project structure after creating annotations:
-
-```
-# Original structure when annotations were created
-├── /data/experiments/
-│   ├── session_001/
-│   │   └── behavior_recording.mp4
-│   ├── session_002/
-│   │   └── behavior_recording.mp4
-│   └── annotations.slp
-
-# New organized structure  
-├── /data/organized_experiments/
-│   ├── behavior_videos/
-│   │   ├── session_001_behavior_recording.mp4  # Renamed!
-│   │   └── session_002_behavior_recording.mp4  # Renamed!
-│   ├── old_annotations.slp                     # Original annotations
-│   └── new_predictions.slp                     # New predictions with new paths
-```
-
-**Problem**: Filenames changed, so BASENAME won't work. **Solution**: Use CONTENT matching:
-
-```python
-# Load files with mismatched names
-old_annotations = sio.load_file("/data/organized_experiments/old_annotations.slp")
-new_predictions = sio.load_file("/data/organized_experiments/new_predictions.slp")
-
-# Use content matching - matches by video shape and backend type
-content_matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
-
-result = old_annotations.merge(new_predictions, video_matcher=content_matcher)
-print(f"Matched {len(result.videos_matched)} videos by content analysis")
-```
-
-##### Scenario 3: Mixed Situations (Recommended)
-
-**Problem**: Some videos have matching filenames, others have different names but same content:
-
-```
-# Collaboration scenario - mixed file organization
-├── /lab_server/shared_data/
-│   ├── student_annotations.slp
-│   └── videos/
-│       ├── mouse_01_day1.mp4
-│       ├── mouse_01_day2.mp4
-│       └── mouse_02_day1.mp4
-
-# PI's predictions from different system
-├── /home/pi/analysis_results/
-│   ├── sleap_predictions.slp  
-│   └── renamed_videos/
-│       ├── mouse_01_day1.mp4        # Same name ✓
-│       ├── subject01_session02.mp4  # Different name, same content as mouse_01_day2.mp4
-│       └── mouse_02_day1.mp4        # Same name ✓
-```
-
-**Solution**: Use AUTO mode (tries BASENAME first, then CONTENT):
-
-```python
-# Load annotations and predictions
-student_work = sio.load_file("/lab_server/shared_data/student_annotations.slp")
-pi_predictions = sio.load_file("/home/pi/analysis_results/sleap_predictions.slp")
-
-# AUTO mode: tries filename matching first, falls back to content matching
-auto_matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
-
-result = student_work.merge(pi_predictions, video_matcher=auto_matcher)
-
-# Check what happened
-for i, (student_video, pred_video) in enumerate(zip(student_work.videos, pi_predictions.videos)):
-    print(f"Video {i+1}:")
-    print(f"  Student: {student_video.filename}")
-    print(f"  Prediction: {pred_video.filename}")
-    print(f"  Matched: {'✓' if auto_matcher.match(student_video, pred_video) else '✗'}")
-
-# Output:
-# Video 1:
-#   Student: /lab_server/shared_data/videos/mouse_01_day1.mp4  
-#   Prediction: /home/pi/analysis_results/renamed_videos/mouse_01_day1.mp4
-#   Matched: ✓ (by filename)
-# 
-# Video 2:
-#   Student: /lab_server/shared_data/videos/mouse_01_day2.mp4
-#   Prediction: /home/pi/analysis_results/renamed_videos/subject01_session02.mp4  
-#   Matched: ✓ (by content)
-#
-# Video 3:
-#   Student: /lab_server/shared_data/videos/mouse_02_day1.mp4
-#   Prediction: /home/pi/analysis_results/renamed_videos/mouse_02_day1.mp4
-#   Matched: ✓ (by filename)
-```
-
-##### Scenario 4: Strict Path Matching
-
-**Problem**: You need exact path matching (same system, no file movement):
-
-```
-# Development workflow - everything in same locations
-├── /project/
-│   ├── manual_labels.slp      # Created manually
-│   ├── predictions.slp        # Generated by model
-│   └── videos/
-│       ├── trial_001.mp4
-│       ├── trial_002.mp4
-│       └── trial_003.mp4
-```
-
-**Solution**: Use PATH matching for strict validation:
-
-```python
-# Load files that should have identical paths
-manual = sio.load_file("/project/manual_labels.slp")  
-predictions = sio.load_file("/project/predictions.slp")
-
-# Strict path matching - paths must be identical
-strict_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-
-try:
-    result = manual.merge(predictions, video_matcher=strict_matcher)
-    print("✓ All video paths matched exactly")
-except Exception as e:
-    print(f"✗ Path mismatch detected: {e}")
+=== "AUTO (default)"
     
-    # Fall back to more lenient matching
-    backup_matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
-    result = manual.merge(predictions, video_matcher=backup_matcher)
-    print("✓ Successful merge with AUTO matching")
-```
-
-##### Real-World Workflow Example
-
-Here's a complete example of a typical collaboration workflow:
-
-```python
-import sleap_io as sio
-from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
-
-def smart_merge_with_fallback(base_labels_path, new_labels_path):
-    """Merge labels with intelligent video matching and fallback strategies."""
+    Tries multiple strategies in sequence until a match is found:
     
-    # Load the label files
-    print(f"Loading base labels: {base_labels_path}")
-    base = sio.load_file(base_labels_path)
-    print(f"  - {len(base.videos)} videos, {len(base)} frames")
+    ```mermaid
+    graph LR
+        A[Try PATH match] -->|Fail| B[Try BASENAME match]
+        B -->|Fail| C[Try CONTENT match]
+        C -->|Fail| D[No match]
+        A -->|Success| E[Match found]
+        B -->|Success| E
+        C -->|Success| E
+    ```
     
-    print(f"Loading new labels: {new_labels_path}")
-    new = sio.load_file(new_labels_path)
-    print(f"  - {len(new.videos)} videos, {len(new)} frames")
+    ```python
+    from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
     
-    # Try different matching strategies in order of preference
-    strategies = [
-        ("AUTO", VideoMatcher(method=VideoMatchMethod.AUTO)),
-        ("BASENAME", VideoMatcher(method=VideoMatchMethod.BASENAME)),
-        ("CONTENT", VideoMatcher(method=VideoMatchMethod.CONTENT)),
-    ]
+    matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+    result = base_labels.merge(new_labels, video_matcher=matcher)
+    ```
+
+=== "PATH"
     
-    for strategy_name, matcher in strategies:
-        try:
-            print(f"\nTrying {strategy_name} matching...")
-            
-            # Test matching before full merge
-            matched_videos = 0
-            for base_video in base.videos:
-                for new_video in new.videos:
-                    if matcher.match(base_video, new_video):
-                        matched_videos += 1
-                        break
-            
-            if matched_videos == len(base.videos):
-                print(f"✓ All {matched_videos} videos would match with {strategy_name}")
-                
-                # Perform the actual merge
-                result = base.merge(new, video_matcher=matcher)
-                
-                print(f"✓ Merge completed successfully!")
-                print(f"  - Frames merged: {result.frames_merged}")
-                print(f"  - Instances added: {result.instances_added}")
-                
-                return result
-            else:
-                print(f"✗ Only {matched_videos}/{len(base.videos)} videos match with {strategy_name}")
-                
-        except Exception as e:
-            print(f"✗ {strategy_name} matching failed: {e}")
-            continue
+    Exact path matching with optional strict mode:
     
-    raise ValueError("Could not match videos with any strategy")
-
-# Usage example
-try:
-    result = smart_merge_with_fallback(
-        "/lab/annotations/manual_session1.slp",
-        "/home/student/predictions/session1_preds.slp"
-    )
-    print(f"\n🎉 Successfully merged! Summary:")
-    print(result.summary())
+    ```python
+    # Strict: paths must be identical
+    strict_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
     
-except Exception as e:
-    print(f"❌ Merge failed: {e}")
-    print("💡 Try checking that video files exist and have matching content")
-```
+    # Lenient: normalizes paths before comparison
+    lenient_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=False)
+    ```
 
-### Image Sequence (ImageVideo) Merging
-
-When working with datasets that use image sequences instead of video files (common with COCO/CVAT exports), 
-sleap-io provides special matching modes to handle duplicate images intelligently.
-
-#### IMAGE_DEDUP Mode (ImageVideo Only)
-
-This mode detects and removes duplicate images when merging datasets with `ImageVideo` backends:
-
-```python
-from sleap_io.model.matching import IMAGE_DEDUP_VIDEO_MATCHER
-
-# Load two COCO/CVAT datasets with potential duplicate images
-labels1 = sio.load_file("cvat_batch1.json")
-labels2 = sio.load_file("cvat_batch2.json")
-
-# Both datasets use ImageVideo backends (image sequences)
-print(f"Dataset 1: {len(labels1.videos[0].filename)} images")
-print(f"Dataset 2: {len(labels2.videos[0].filename)} images")
-
-# Merge with automatic duplicate removal
-result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
-
-# The duplicate images from labels2 are automatically removed
-print(f"After merge: {sum(len(v.filename) for v in labels1.videos)} unique images")
-```
-
-**Use Case**: Multiple CVAT/COCO exports from the same project with overlapping images.
-
-#### SHAPE Mode for Image Sequences
-
-This mode merges all videos with the same dimensions into a single `ImageVideo`:
-
-```python
-from sleap_io.model.matching import SHAPE_VIDEO_MATCHER
-
-# Load datasets from same camera but different batches
-batch1 = sio.load_file("annotations_day1.json")
-batch2 = sio.load_file("annotations_day2.json")
-
-# Check if videos have same shape (height, width, channels)
-video1 = batch1.videos[0]
-video2 = batch2.videos[0]
-print(f"Batch 1 shape: {video1.backend_metadata.get('shape')}")
-print(f"Batch 2 shape: {video2.backend_metadata.get('shape')}")
-
-# Merge all same-shaped videos into one
-result = batch1.merge(batch2, video_matcher=SHAPE_VIDEO_MATCHER)
-
-# All images are now in a single video
-print(f"Merged video: {len(batch1.videos[0].filename)} images")
-```
-
-**Use Case**: Combining multiple image sequence batches from the same experimental setup.
-
-#### Example: Handling CVAT Exports with Duplicates
-
-```python
-import sleap_io as sio
-from sleap_io.model.matching import IMAGE_DEDUP_VIDEO_MATCHER, SHAPE_VIDEO_MATCHER
-
-def merge_cvat_exports(file1, file2, strategy="dedup"):
-    """Merge two CVAT exports handling duplicate images.
+=== "BASENAME"
     
-    Args:
-        file1: Path to first CVAT JSON export
-        file2: Path to second CVAT JSON export  
-        strategy: "dedup" to keep videos separate but deduplicate,
-                 "shape" to merge all images into one video
-    """
-    # Load the exports
-    labels1 = sio.load_file(file1)
-    labels2 = sio.load_file(file2)
+    Matches by filename only, ignoring directories:
     
-    # Check for duplicates (only works with ImageVideo)
-    if labels1.videos and labels2.videos:
-        video1 = labels1.videos[0]
-        video2 = labels2.videos[0]
-        
-        if isinstance(video1.filename, list) and isinstance(video2.filename, list):
-            # Both are image sequences
-            from pathlib import Path
-            names1 = set(Path(f).name for f in video1.filename)
-            names2 = set(Path(f).name for f in video2.filename)
-            duplicates = names1 & names2
-            
-            print(f"Found {len(duplicates)} duplicate images")
-            
-            if strategy == "dedup":
-                # Keep videos separate, remove duplicates from newer
-                result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
-                print(f"Result: {len(labels1.videos)} videos, duplicates removed")
-                
-            elif strategy == "shape":
-                # Merge into single video if same shape
-                result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
-                print(f"Result: {len(labels1.videos)} video(s), all images merged")
-                
-            return labels1
+    ```python
+    from sleap_io.model.matching import BASENAME_VIDEO_MATCHER
     
-    # Fall back to regular merging for non-ImageVideo
-    return labels1.merge(labels2)
+    # Matches "video.mp4" regardless of path
+    result = base_labels.merge(new_labels, video_matcher=BASENAME_VIDEO_MATCHER)
+    ```
+    
+    !!! tip
+        Perfect for cross-platform collaboration where the same files exist in different locations.
 
-# Example usage
-merged = merge_cvat_exports(
-    "cvat_export_batch1.json",
-    "cvat_export_batch2.json", 
-    strategy="dedup"  # or "shape" 
-)
-```
+=== "CONTENT"
+    
+    Matches videos by shape and backend type:
+    
+    ```python
+    # Useful when files are renamed but content is identical
+    content_matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
+    ```
 
-**Important Notes**:
-- `IMAGE_DEDUP` and `SHAPE` modes only work with `ImageVideo` backends (image sequences)
-- These modes will return `False` for regular video files (MP4, AVI, etc.)
-- Images are considered duplicates based on filename only (basename comparison)
-- The `SHAPE` mode's `merge_with()` automatically deduplicates by filename
+=== "IMAGE_DEDUP"
+    
+    For image sequences, removes duplicate images:
+    
+    ```python
+    from sleap_io.model.matching import IMAGE_DEDUP_VIDEO_MATCHER
+    
+    # Automatically deduplicates overlapping images
+    result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+    ```
+    
+    !!! note
+        Only works with `ImageVideo` backends (image sequences from COCO/CVAT exports).
 
-### Custom Instance Matching
+### Instance matching
 
-You can customize how instances are matched between frames:
+Determines when two instances represent the same annotation.
 
-```python
-from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
+=== "Spatial (default)"
+    
+    Matches instances by Euclidean distance between corresponding points:
+    
+    ```python
+    from sleap_io.model.matching import InstanceMatcher
+    
+    # Threshold is maximum pixel distance
+    matcher = InstanceMatcher(method="spatial", threshold=5.0)
+    ```
+    
+    !!! info "How it works"
+        Computes average distance between visible points. Instances match if distance < threshold.
 
-# Match instances by spatial proximity (default)
-spatial_matcher = InstanceMatcher(
-    method=InstanceMatchMethod.SPATIAL,
-    threshold=5.0  # pixels
-)
+=== "Identity"
+    
+    Matches instances by track identity:
+    
+    ```python
+    # Only matches if instances belong to the same track
+    matcher = InstanceMatcher(method="identity")
+    ```
 
-# Match instances by track identity
-identity_matcher = InstanceMatcher(
-    method=InstanceMatchMethod.IDENTITY
-)
+=== "IoU"
+    
+    Matches by bounding box overlap:
+    
+    ```python
+    # Threshold is minimum Intersection over Union
+    matcher = InstanceMatcher(method="iou", threshold=0.5)
+    ```
 
-# Match instances by IoU overlap
-iou_matcher = InstanceMatcher(
-    method=InstanceMatchMethod.IOU,
-    threshold=0.5
-)
+### Skeleton matching
 
-# Use custom matcher in merge
-result = base_labels.merge(
-    new_labels,
-    instance_matcher=spatial_matcher
-)
-```
+Controls how skeletons are matched and mapped between datasets.
 
-### Skeleton Matching
+=== "Structure (default)"
+    
+    Same nodes and edges, order doesn't matter:
+    
+    ```python
+    from sleap_io.model.matching import STRUCTURE_SKELETON_MATCHER
+    
+    result = base_labels.merge(new_labels, skeleton_matcher=STRUCTURE_SKELETON_MATCHER)
+    ```
 
-Control how skeletons are matched between projects:
+=== "Exact"
+    
+    Nodes must be identical and in the same order:
+    
+    ```python
+    matcher = SkeletonMatcher(method="exact")
+    ```
 
-```python
-from sleap_io.model.matching import SkeletonMatcher, SkeletonMatchMethod
+=== "Overlap"
+    
+    Partial match based on Jaccard similarity:
+    
+    ```python
+    # Requires 70% node overlap
+    matcher = SkeletonMatcher(method="overlap", min_overlap=0.7)
+    ```
 
-# Exact match (same nodes in same order)
-exact_matcher = SkeletonMatcher(method=SkeletonMatchMethod.EXACT)
+=== "Subset"
+    
+    One skeleton's nodes must be a subset of the other:
+    
+    ```python
+    from sleap_io.model.matching import SUBSET_SKELETON_MATCHER
+    
+    # Useful for adding nodes to existing skeletons
+    result = base_labels.merge(new_labels, skeleton_matcher=SUBSET_SKELETON_MATCHER)
+    ```
 
-# Structure match (same nodes, any order)
-structure_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
+## Common workflows
 
-# Overlap match (partial node overlap)
-overlap_matcher = SkeletonMatcher(
-    method=SkeletonMatchMethod.OVERLAP,
-    min_overlap=0.7  # 70% node overlap required
-)
+### Human-in-the-loop (HITL) training
 
-result = base_labels.merge(
-    new_labels,
-    skeleton_matcher=overlap_matcher
-)
-```
+The most common workflow: merging model predictions back into your training data.
 
-### Error Handling
-
-Configure how merge errors are handled:
-
-```python
-# Continue on errors (default)
-result = base_labels.merge(new_labels, error_mode="continue")
-
-# Stop on first error
-result = base_labels.merge(new_labels, error_mode="strict")
-
-# Warn about errors but continue
-result = base_labels.merge(new_labels, error_mode="warn")
-```
-
-## Common Workflows
-
-### Human-in-the-Loop (HITL) Workflow
-
-Merge predictions back into a manually annotated project:
-
-```python
+```python title="HITL workflow" linenums="1" hl_lines="7-10"
 import sleap_io as sio
 
 # Load manual annotations and predictions
 manual_labels = sio.load_file("manual_annotations.slp")
 predictions = sio.load_file("predictions.slp")
 
-# Merge predictions, preserving manual labels
-result = manual_labels.merge(
-    predictions,
-    frame_strategy="smart",  # Keep manual labels over predictions
-    validate=True  # Validate skeleton compatibility
-)
+# Merge with smart strategy (default)
+# This preserves all manual labels while adding predictions
+result = manual_labels.merge(predictions)
 
-# Check what was merged
+# Review what was merged
 print(f"Frames merged: {result.frames_merged}")
-print(f"Instances added: {result.instances_added}")
-print(f"Instances updated: {result.instances_updated}")
+print(f"New instances: {result.instances_added}")
 print(f"Conflicts resolved: {len(result.conflicts)}")
 
-# Save the merged project
-manual_labels.save("merged_project.slp")
+# Check for any errors
+if result.errors:
+    for error in result.errors:
+        print(f"Error: {error.message}")
+
+# Save the updated project
+manual_labels.save("updated_project.slp")
 ```
 
-### Combining Multiple Annotators
+### Cross-platform collaboration
+
+When working across different operating systems or file structures:
+
+!!! example "Scenario: Windows and Linux collaboration"
+    
+    Your team uses different operating systems with different file paths:
+    
+    - Windows: `C:\research\videos\session_001.mp4`
+    - Linux: `/home/lab/data/videos/session_001.mp4`
+
+```python title="Cross-platform merging" linenums="1"
+from sleap_io.model.matching import BASENAME_VIDEO_MATCHER
+
+# Load annotations from different systems
+windows_annotations = sio.load_file("windows_annotations.slp")
+linux_predictions = sio.load_file("linux_predictions.slp")
+
+# Use basename matching to ignore path differences
+result = windows_annotations.merge(
+    linux_predictions,
+    video_matcher=BASENAME_VIDEO_MATCHER  # Matches by filename only
+)
+
+print(f"Successfully matched {len(result.videos_merged)} videos across platforms")
+```
+
+### Combining multiple annotators
 
 Merge annotations from different team members:
 
-```python
-# Load annotations from multiple annotators
-annotator1 = load_file("annotator1.slp")
-annotator2 = load_file("annotator2.slp")
-annotator3 = load_file("annotator3.slp")
+```python title="Multi-annotator workflow" linenums="1" hl_lines="10-11"
+# Load annotations from multiple sources
+annotator1 = sio.load_file("annotator1.slp")
+annotator2 = sio.load_file("annotator2.slp")
+annotator3 = sio.load_file("annotator3.slp")
 
-# Create base project
+# Start with first annotator
 merged = annotator1
 
-# Merge additional annotators
+# Merge others, keeping all annotations for review
 for labels in [annotator2, annotator3]:
-    result = merged.merge(
-        labels,
-        frame_strategy="keep_both",  # Keep all annotations
-        validate=True
-    )
-    print(f"Merged {result.frames_merged} frames from {labels.filename}")
+    result = merged.merge(labels, frame_strategy="keep_both")
+    print(f"Added {result.instances_added} instances from {labels.filename}")
 
-# Review conflicts
-for conflict in result.conflicts:
-    print(f"Conflict at frame {conflict.frame.frame_idx}: {conflict.conflict_type}")
+# Review overlapping annotations
+for frame in merged:
+    instances = frame.instances
+    if len(instances) > expected_count:
+        print(f"Frame {frame.frame_idx}: {len(instances)} instances (review needed)")
 ```
 
-### Updating Predictions
+### Updating predictions
 
-Replace old predictions with new ones:
+Replace old predictions with improved ones:
 
-```python
-# Load existing project and new predictions
-project = load_file("project.slp")
-new_predictions = load_file("new_predictions.slp")
+```python title="Updating predictions" linenums="1" hl_lines="12-13"
+# Load existing project
+project = sio.load_file("project_with_old_predictions.slp")
 
-# Replace predictions while keeping manual labels
-result = project.merge(
-    new_predictions,
-    frame_strategy="smart",  # Smart replacement
-    instance_matcher=InstanceMatcher(
-        method=InstanceMatchMethod.SPATIAL,
-        threshold=10.0  # More lenient matching
-    )
+# Load new predictions from improved model
+new_predictions = sio.load_file("better_model_predictions.slp")
+
+# Configure matching to be more lenient for predictions
+from sleap_io.model.matching import InstanceMatcher
+
+instance_matcher = InstanceMatcher(
+    method="spatial",
+    threshold=10.0  # More lenient for predictions
 )
 
-print(result.summary())
+# Merge with smart strategy to preserve manual labels
+result = project.merge(
+    new_predictions,
+    frame_strategy="smart",
+    instance_matcher=instance_matcher
+)
+
+print(f"Updated {result.frames_merged} frames with new predictions")
+print(f"Preserved {sum(1 for f in project for i in f.instances if type(i).__name__ == 'Instance')} manual labels")
 ```
 
-## Merge Result Analysis
+## Advanced topics
 
-The merge operation returns a `MergeResult` object with detailed information:
+### Image sequence deduplication
 
-```python
-result = base_labels.merge(new_labels)
+When working with COCO or CVAT exports that contain overlapping images:
 
-# Basic statistics
-print(f"Successful: {result.successful}")
-print(f"Frames merged: {result.frames_merged}")
-print(f"Instances added: {result.instances_added}")
-print(f"Instances updated: {result.instances_updated}")
-print(f"Instances skipped: {result.instances_skipped}")
+??? info "Background"
+    
+    CVAT and COCO exports often use image sequences (ImageVideo) rather than video files. When merging multiple exports, you may have duplicate images that need to be handled intelligently.
 
-# Detailed information
-print(f"Skeletons merged: {result.skeletons_merged}")
-print(f"Videos merged: {result.videos_merged}")
-print(f"Tracks merged: {result.tracks_merged}")
+```python title="Deduplicating image sequences" linenums="1"
+from sleap_io.model.matching import IMAGE_DEDUP_VIDEO_MATCHER, SHAPE_VIDEO_MATCHER
 
-# Error information
+# Load CVAT exports with potential overlaps
+batch1 = sio.load_file("cvat_batch1.json")  # 1000 images
+batch2 = sio.load_file("cvat_batch2.json")  # 1000 images, 22 overlapping
+
+# Option 1: Remove duplicates, keep videos separate
+result = batch1.merge(batch2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+print(f"Result: {sum(len(v.filename) for v in batch1.videos)} unique images")
+
+# Option 2: Merge same-shaped videos into one
+result = batch1.merge(batch2, video_matcher=SHAPE_VIDEO_MATCHER)
+print(f"Result: Single video with {len(batch1.videos[0].filename)} images")
+```
+
+### Frame-level merging
+
+For fine-grained control over individual frames:
+
+```python title="Frame-level merge control" linenums="1"
+from sleap_io.model.matching import InstanceMatcher
+
+# Get specific frames
+frame1 = base_labels.labeled_frames[0]
+frame2 = new_labels.labeled_frames[0]
+
+# Configure matching
+matcher = InstanceMatcher(method="spatial", threshold=5.0)
+
+# Merge at frame level
+merged_instances, conflicts = frame1.merge(
+    frame2,
+    instance_matcher=matcher,
+    strategy="smart"
+)
+
+# Apply merged instances
+frame1.instances = merged_instances
+
+# Review conflicts
+for original, new, resolution in conflicts:
+    print(f"Conflict resolved: {resolution}")
+```
+
+### Error handling
+
+Configure how merge errors are handled:
+
+```python title="Error handling strategies" linenums="1"
+# Strict mode: Stop on first error
+try:
+    result = labels.merge(other, error_mode="strict")
+except Exception as e:
+    print(f"Merge failed: {e}")
+    # Handle error...
+
+# Continue mode: Collect errors but continue (default)
+result = labels.merge(other, error_mode="continue")
 if result.errors:
-    print(f"Errors: {len(result.errors)}")
     for error in result.errors:
-        print(f"  - {error.message}")
+        print(f"Error: {error.message}")
 
-# Conflict information
-if result.conflicts:
-    print(f"Conflicts: {len(result.conflicts)}")
-    for conflict in result.conflicts:
-        print(f"  - Frame {conflict.frame.frame_idx}: {conflict.conflict_type}")
-
-# Get full summary
-print(result.summary())
+# Warning mode: Print warnings but continue
+result = labels.merge(other, error_mode="warn")
 ```
 
-## Provenance Tracking
+### Provenance tracking
 
-Merge operations are automatically tracked in the Labels provenance:
+All merge operations are automatically tracked:
 
-```python
+```python title="Accessing merge history" linenums="1"
 # After merging
 result = base_labels.merge(new_labels)
 
 # Check merge history
 merge_history = base_labels.provenance.get("merge_history", [])
+
 for merge in merge_history:
     print(f"Merged at: {merge['timestamp']}")
-    print(f"Source frames: {merge['source_labels']['n_frames']}")
+    print(f"Source: {merge['source_labels']['filename']}")
     print(f"Frames merged: {merge['result']['frames_merged']}")
+    print(f"Instances added: {merge['result']['instances_added']}")
 ```
 
-## Frame-Level Merging
+## Troubleshooting
 
-For fine-grained control, you can merge individual frames:
+Common issues and solutions when merging datasets.
 
-```python
-from sleap_io.model.labeled_frame import LabeledFrame
+??? failure "No frames merged"
+    
+    **Symptom:** `result.frames_merged == 0`
+    
+    **Possible causes and solutions:**
+    
+    1. **Videos don't match**
+       ```python
+       # Try different video matching strategies
+       result = labels.merge(other, video_matcher=BASENAME_VIDEO_MATCHER)
+       # or
+       result = labels.merge(other, video_matcher=AUTO_VIDEO_MATCHER)
+       ```
+    
+    2. **Frame indices don't align**
+       ```python
+       # Check frame indices
+       print(f"Base frames: {[f.frame_idx for f in base_labels]}")
+       print(f"New frames: {[f.frame_idx for f in new_labels]}")
+       ```
+    
+    3. **Skeleton mismatch**
+       ```python
+       # Validate and use lenient matching
+       result = labels.merge(
+           other,
+           validate=True,
+           skeleton_matcher=OVERLAP_SKELETON_MATCHER
+       )
+       ```
 
-# Get frames from different sources
-frame1 = base_labels.labeled_frames[0]
-frame2 = new_labels.labeled_frames[0]
+??? failure "Manual annotations lost"
+    
+    **Symptom:** User labels disappear after merging
+    
+    **Solution:** Ensure you're using the `smart` strategy (default):
+    ```python
+    # Explicitly set smart strategy
+    result = labels.merge(other, frame_strategy="smart")
+    
+    # Verify manual labels are preserved
+    manual_count_before = sum(1 for f in labels for i in f.instances 
+                             if type(i).__name__ == 'Instance')
+    result = labels.merge(other)
+    manual_count_after = sum(1 for f in labels for i in f.instances 
+                            if type(i).__name__ == 'Instance')
+    assert manual_count_after >= manual_count_before
+    ```
 
-# Merge frames
-merged_instances, conflicts = frame1.merge(
-    frame2,
-    strategy="smart",
-    instance_matcher=InstanceMatcher(method=InstanceMatchMethod.SPATIAL)
-)
+??? failure "Duplicate instances"
+    
+    **Symptom:** Multiple instances at the same location
+    
+    **Solutions:**
+    
+    1. **Tighten spatial matching**
+       ```python
+       matcher = InstanceMatcher(method="spatial", threshold=2.0)  # Stricter
+       result = labels.merge(other, instance_matcher=matcher)
+       ```
+    
+    2. **Use identity matching for tracked data**
+       ```python
+       matcher = InstanceMatcher(method="identity")
+       result = labels.merge(other, instance_matcher=matcher)
+       ```
+    
+    3. **Post-process to remove duplicates**
+       ```python
+       from sleap_io.model.instance import PredictedInstance
+       
+       for frame in labels:
+           # Remove duplicate predictions within threshold
+           cleaned = []
+           for inst in frame.instances:
+               is_duplicate = False
+               for other in cleaned:
+                   if inst.numpy().mean(axis=0).dist(other.numpy().mean(axis=0)) < 5:
+                       is_duplicate = True
+                       break
+               if not is_duplicate:
+                   cleaned.append(inst)
+           frame.instances = cleaned
+       ```
 
-# Update frame with merged instances
-frame1.instances = merged_instances
-```
+??? failure "Memory issues with large datasets"
+    
+    **Symptom:** Out of memory errors during merge
+    
+    **Solutions:**
+    
+    1. **Process in batches**
+       ```python
+       # Split by video
+       for video in new_labels.videos:
+           video_labels = new_labels.extract_video(video)
+           result = base_labels.merge(video_labels)
+       ```
+    
+    2. **Use progress callback to monitor**
+       ```python
+       def progress(current, total, message):
+           print(f"{current}/{total}: {message}")
+           # Add memory monitoring here if needed
+       
+       result = labels.merge(other, progress_callback=progress)
+       ```
 
-## Best Practices
-
-1. **Always validate skeletons** when merging from different sources:
-   ```python
-   result = labels.merge(other, validate=True)
-   ```
-
-2. **Use appropriate matching thresholds** based on your data:
-   - Tighter thresholds (2-5 pixels) for high-precision tracking
-   - Looser thresholds (10-20 pixels) for noisy or low-resolution data
-
-3. **Review conflicts** after merging:
-   ```python
-   for conflict in result.conflicts:
-       # Handle or log conflicts
-       pass
-   ```
-
-4. **Save provenance** for reproducibility:
-   ```python
-   # Provenance is automatically saved with the Labels
-   merged_labels.save("merged_with_provenance.slp")
-   ```
-
-5. **Test merge strategies** on a subset first:
-   ```python
-   # Test on first 100 frames
-   test_base = base_labels[:100]
-   test_new = new_labels[:100]
-   test_result = test_base.merge(test_new)
-   ```
-
-## API
+## API reference
 
 ### Enums
 
@@ -732,7 +660,7 @@ frame1.instances = merged_instances
 
 ::: sleap_io.model.matching.ErrorMode
 
-### Matcher Classes
+### Matcher classes
 
 ::: sleap_io.model.matching.SkeletonMatcher
 
@@ -744,7 +672,7 @@ frame1.instances = merged_instances
 
 ::: sleap_io.model.matching.FrameMatcher
 
-### Pre-configured Matchers
+### Pre-configured matchers
 
 ::: sleap_io.model.matching.STRUCTURE_SKELETON_MATCHER
 
@@ -774,7 +702,7 @@ frame1.instances = merged_instances
 
 ::: sleap_io.model.matching.SHAPE_VIDEO_MATCHER
 
-### Result Classes
+### Result classes
 
 ::: sleap_io.model.matching.MergeResult
 
@@ -786,11 +714,10 @@ frame1.instances = merged_instances
 
 ::: sleap_io.model.matching.VideoNotFoundError
 
-### Progress Tracking
+### Progress tracking
 
 ::: sleap_io.model.matching.MergeProgressBar
 
-### Labels Merge Method
+### Labels merge method
 
 ::: sleap_io.model.labels.Labels.merge
-
