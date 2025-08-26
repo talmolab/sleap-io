@@ -8,8 +8,8 @@ import pytest
 import sleap_io as sio
 from sleap_io.io import coco
 
-# Import COCO fixtures
-pytest_plugins = ["tests.fixtures.coco"]
+# Import COCO and CVAT fixtures
+pytest_plugins = ["tests.fixtures.coco", "tests.fixtures.cvat"]
 
 
 class TestCOCOBasicLoading:
@@ -680,3 +680,90 @@ def test_grayscale_loading(tmp_path):
     # Load as grayscale
     labels_gray = coco.read_labels(json_path, tmp_path, grayscale=True)
     assert labels_gray[0].video.shape == (1, 100, 100, 1)
+
+
+class TestCVATCompatibility:
+    """Test CVAT format compatibility with COCO loader."""
+
+    def test_cvat_tracking(self, cvat_tracking_dataset):
+        """Test that CVAT object_id creates proper tracks."""
+        labels = coco.read_labels(cvat_tracking_dataset / "annotations.json")
+
+        # Check that frames and instances were loaded
+        assert len(labels.labeled_frames) == 2  # Two frames
+        assert len(labels.labeled_frames[0].instances) == 2  # Two mice in frame 1
+        assert len(labels.labeled_frames[1].instances) == 2  # Two mice in frame 2
+
+        # Check tracks were created
+        tracks = set()
+        for frame in labels.labeled_frames:
+            for instance in frame.instances:
+                assert instance.track is not None, "Track should be created from object_id"
+                tracks.add(instance.track)
+
+        assert len(tracks) == 2  # Two unique tracks (mouse 101 and 102)
+
+        # Check track names
+        track_names = sorted([t.name for t in tracks])
+        assert track_names == ["track_101", "track_102"]
+
+        # Verify same track object is used across frames (not just same name)
+        frame1_tracks = [i.track for i in labels.labeled_frames[0].instances]
+        frame2_tracks = [i.track for i in labels.labeled_frames[1].instances]
+
+        # Sort by track name to ensure consistent ordering
+        frame1_tracks.sort(key=lambda t: t.name)
+        frame2_tracks.sort(key=lambda t: t.name)
+
+        # Track objects should be the same instance (identity check)
+        assert frame1_tracks[0] is frame2_tracks[0], "Same track should be reused"
+        assert frame1_tracks[1] is frame2_tracks[1], "Same track should be reused"
+
+    def test_cvat_with_metadata(self, cvat_with_occluded):
+        """Test loading CVAT files with additional metadata."""
+        labels = coco.read_labels(cvat_with_occluded / "annotations.json")
+
+        assert len(labels.labeled_frames) == 1
+        assert len(labels.labeled_frames[0].instances) == 2
+
+        # Check that tracks are created from object_id
+        tracks = [inst.track for inst in labels.labeled_frames[0].instances]
+        assert all(t is not None for t in tracks)
+        assert tracks[0].name == "track_201"
+        assert tracks[1].name == "track_202"
+
+        # Check keypoint visibility (tail should be invisible for second instance)
+        inst2 = labels.labeled_frames[0].instances[1]
+        assert len(inst2.points) == 3
+        # The third keypoint (tail) should have NaN coordinates due to visibility=0
+        assert np.isnan(inst2.points[2]["xy"][0])  # x coordinate is NaN
+        assert np.isnan(inst2.points[2]["xy"][1])  # y coordinate is NaN
+
+    def test_alternative_track_fields(self, cvat_alternative_track_fields):
+        """Test support for track_id and instance_id fields."""
+        # Test track_id field
+        track_id_path = cvat_alternative_track_fields / "track_id"
+        labels_track = coco.read_labels(track_id_path / "annotations.json")
+        assert len(labels_track.labeled_frames) == 1
+        assert labels_track.labeled_frames[0].instances[0].track is not None
+        assert labels_track.labeled_frames[0].instances[0].track.name == "track_301"
+
+        # Test instance_id field
+        instance_id_path = cvat_alternative_track_fields / "instance_id"
+        labels_instance = coco.read_labels(instance_id_path / "annotations.json")
+        assert len(labels_instance.labeled_frames) == 1
+        assert labels_instance.labeled_frames[0].instances[0].track is not None
+        assert labels_instance.labeled_frames[0].instances[0].track.name == "track_401"
+
+    def test_backward_compatibility(self, coco_flat_images):
+        """Test that standard COCO files still work without tracks."""
+        labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+
+        # Standard COCO should load normally
+        assert len(labels.labeled_frames) == 3
+        assert len(labels.skeletons) == 1
+
+        # No tracks should be created for standard COCO without track IDs
+        for frame in labels.labeled_frames:
+            for instance in frame.instances:
+                assert instance.track is None, "No tracks should be created without IDs"
