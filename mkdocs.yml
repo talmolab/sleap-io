@@ -58,7 +58,7 @@ plugins:
         - scripts/gen_ref_pages.py
         - scripts/gen_changelog.py
   - literate-nav:
-      nav_file: SUMMARY.md
+      nav_file: NAV.md
   - section-index
   - mkdocstrings:
       default_handler: python
@@ -131,14 +131,14 @@ extra_css:
 copyright: >
   Copyright &copy; 2022 - 2025 Talmo Lab
 
-nav:
-  - Overview: index.md
-  - Changelog: changelog.md
-  - Releases: https://github.com/talmolab/sleap-io/releases
-  - Guides:
-    - Examples: examples.md
-    - Merging: merging.md
-  - Reference:
-    - Model: model.md
-    - Formats: formats.md
-    - Full API: reference/
+# nav:
+#   - Overview: index.md
+#   - Changelog: changelog.md
+#   - Releases: https://github.com/talmolab/sleap-io/releases
+#   - Guides:
+#     - Examples: examples.md
+#     - Merging: merging.md
+#   - Reference:
+#     - Model: model.md
+#     - Formats: formats.md
+#     - Full API: reference/

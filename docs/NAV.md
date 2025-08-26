@@ -1,0 +1,10 @@
+- [Overview](index.md)
+- [Changelog](changelog.md)
+- [Releases](https://github.com/talmolab/sleap-io/releases)
+- Guides
+  - [Examples](examples.md)
+  - [Merging](merging.md)
+- Reference
+  - [Model](model.md)
+  - [Formats](formats.md)
+  - [Full API](reference/)
