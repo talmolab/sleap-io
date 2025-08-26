@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Union
 
 import numpy as np
 
-from sleap_io.model.instance import Instance
+from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Edge, Node, Skeleton
@@ -217,6 +217,9 @@ def read_labels(
             skeleton = create_skeleton_from_category(category)
             skeletons[category["id"]] = skeleton
 
+    # Track management: maps track_id -> Track object
+    track_dict = {}
+
     # Create image id to annotation mapping
     image_annotations = {}
     for annotation in coco_data["annotations"]:
@@ -260,6 +263,9 @@ def read_labels(
             image_paths,
             grayscale=grayscale,
         )
+        # Store shape metadata from JSON (useful when images can't be read)
+        channels = 1 if grayscale else 3
+        video.backend_metadata["shape"] = (len(image_paths), height, width, channels)
         shape_to_video[shape_key] = video
 
     # Process images and annotations
@@ -298,6 +304,20 @@ def read_labels(
 
                 skeleton = skeletons[category_id]
 
+                # Extract track ID from various possible sources
+                track = None
+                track_id = (
+                    annotation.get("attributes", {}).get("object_id")
+                    or annotation.get("track_id")
+                    or annotation.get("instance_id")
+                )
+
+                if track_id is not None:
+                    # Create or reuse Track object
+                    if track_id not in track_dict:
+                        track_dict[track_id] = Track(name=f"track_{track_id}")
+                    track = track_dict[track_id]
+
                 # Decode keypoints
                 keypoints = annotation.get("keypoints", [])
                 # Always use the skeleton length, not num_keypoints which may count
@@ -309,7 +329,7 @@ def read_labels(
                         keypoints, expected_keypoints, skeleton
                     )
                     instance = Instance.from_numpy(
-                        points_data=points_array, skeleton=skeleton
+                        points_data=points_array, skeleton=skeleton, track=track
                     )
                     instances.append(instance)
 

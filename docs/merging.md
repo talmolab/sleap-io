@@ -78,6 +78,12 @@ basename_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 # CONTENT mode - match by video shape and backend type  
 content_matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
 
+# IMAGE_DEDUP mode (ImageVideo only) - match and deduplicate image sequences
+image_dedup_matcher = VideoMatcher(method=VideoMatchMethod.IMAGE_DEDUP)
+
+# SHAPE mode - match videos by dimensions only
+shape_matcher = VideoMatcher(method=VideoMatchMethod.SHAPE)
+
 # Use pre-configured matcher for filename-based matching
 from sleap_io.model.matching import BASENAME_VIDEO_MATCHER
 
@@ -337,6 +343,123 @@ except Exception as e:
     print(f"❌ Merge failed: {e}")
     print("💡 Try checking that video files exist and have matching content")
 ```
+
+### Image Sequence (ImageVideo) Merging
+
+When working with datasets that use image sequences instead of video files (common with COCO/CVAT exports), 
+sleap-io provides special matching modes to handle duplicate images intelligently.
+
+#### IMAGE_DEDUP Mode (ImageVideo Only)
+
+This mode detects and removes duplicate images when merging datasets with `ImageVideo` backends:
+
+```python
+from sleap_io.model.matching import IMAGE_DEDUP_VIDEO_MATCHER
+
+# Load two COCO/CVAT datasets with potential duplicate images
+labels1 = sio.load_file("cvat_batch1.json")
+labels2 = sio.load_file("cvat_batch2.json")
+
+# Both datasets use ImageVideo backends (image sequences)
+print(f"Dataset 1: {len(labels1.videos[0].filename)} images")
+print(f"Dataset 2: {len(labels2.videos[0].filename)} images")
+
+# Merge with automatic duplicate removal
+result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+
+# The duplicate images from labels2 are automatically removed
+print(f"After merge: {sum(len(v.filename) for v in labels1.videos)} unique images")
+```
+
+**Use Case**: Multiple CVAT/COCO exports from the same project with overlapping images.
+
+#### SHAPE Mode for Image Sequences
+
+This mode merges all videos with the same dimensions into a single `ImageVideo`:
+
+```python
+from sleap_io.model.matching import SHAPE_VIDEO_MATCHER
+
+# Load datasets from same camera but different batches
+batch1 = sio.load_file("annotations_day1.json")
+batch2 = sio.load_file("annotations_day2.json")
+
+# Check if videos have same shape (height, width, channels)
+video1 = batch1.videos[0]
+video2 = batch2.videos[0]
+print(f"Batch 1 shape: {video1.backend_metadata.get('shape')}")
+print(f"Batch 2 shape: {video2.backend_metadata.get('shape')}")
+
+# Merge all same-shaped videos into one
+result = batch1.merge(batch2, video_matcher=SHAPE_VIDEO_MATCHER)
+
+# All images are now in a single video
+print(f"Merged video: {len(batch1.videos[0].filename)} images")
+```
+
+**Use Case**: Combining multiple image sequence batches from the same experimental setup.
+
+#### Example: Handling CVAT Exports with Duplicates
+
+```python
+import sleap_io as sio
+from sleap_io.model.matching import IMAGE_DEDUP_VIDEO_MATCHER, SHAPE_VIDEO_MATCHER
+
+def merge_cvat_exports(file1, file2, strategy="dedup"):
+    """Merge two CVAT exports handling duplicate images.
+    
+    Args:
+        file1: Path to first CVAT JSON export
+        file2: Path to second CVAT JSON export  
+        strategy: "dedup" to keep videos separate but deduplicate,
+                 "shape" to merge all images into one video
+    """
+    # Load the exports
+    labels1 = sio.load_file(file1)
+    labels2 = sio.load_file(file2)
+    
+    # Check for duplicates (only works with ImageVideo)
+    if labels1.videos and labels2.videos:
+        video1 = labels1.videos[0]
+        video2 = labels2.videos[0]
+        
+        if isinstance(video1.filename, list) and isinstance(video2.filename, list):
+            # Both are image sequences
+            from pathlib import Path
+            names1 = set(Path(f).name for f in video1.filename)
+            names2 = set(Path(f).name for f in video2.filename)
+            duplicates = names1 & names2
+            
+            print(f"Found {len(duplicates)} duplicate images")
+            
+            if strategy == "dedup":
+                # Keep videos separate, remove duplicates from newer
+                result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+                print(f"Result: {len(labels1.videos)} videos, duplicates removed")
+                
+            elif strategy == "shape":
+                # Merge into single video if same shape
+                result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
+                print(f"Result: {len(labels1.videos)} video(s), all images merged")
+                
+            return labels1
+    
+    # Fall back to regular merging for non-ImageVideo
+    return labels1.merge(labels2)
+
+# Example usage
+merged = merge_cvat_exports(
+    "cvat_export_batch1.json",
+    "cvat_export_batch2.json", 
+    strategy="dedup"  # or "shape" 
+)
+```
+
+**Important Notes**:
+- `IMAGE_DEDUP` and `SHAPE` modes only work with `ImageVideo` backends (image sequences)
+- These modes will return `False` for regular video files (MP4, AVI, etc.)
+- Images are considered duplicates based on filename only (basename comparison)
+- The `SHAPE` mode's `merge_with()` automatically deduplicates by filename
 
 ### Custom Instance Matching
 
@@ -646,6 +769,10 @@ frame1.instances = merged_instances
 ::: sleap_io.model.matching.PATH_VIDEO_MATCHER
 
 ::: sleap_io.model.matching.BASENAME_VIDEO_MATCHER
+
+::: sleap_io.model.matching.IMAGE_DEDUP_VIDEO_MATCHER
+
+::: sleap_io.model.matching.SHAPE_VIDEO_MATCHER
 
 ### Result Classes
 

@@ -493,6 +493,147 @@ class Video:
 
         return type(self.backend).__name__ == type(other.backend).__name__
 
+    def matches_shape(self, other: "Video") -> bool:
+        """Check if this video has the same shape as another video.
+
+        Args:
+            other: Another video to compare with.
+
+        Returns:
+            True if the videos have the same height, width, and channels.
+
+        Notes:
+            This only compares spatial dimensions, not the number of frames.
+        """
+        # Try to get shape from backend metadata first if shape is not available
+        if self.backend is None and "shape" in self.backend_metadata:
+            self_shape = self.backend_metadata["shape"]
+        else:
+            self_shape = self.shape
+
+        if other.backend is None and "shape" in other.backend_metadata:
+            other_shape = other.backend_metadata["shape"]
+        else:
+            other_shape = other.shape
+
+        # Handle None shapes
+        if self_shape is None or other_shape is None:
+            return False
+
+        # Compare only height, width, channels (not frames)
+        return self_shape[1:] == other_shape[1:]
+
+    def has_overlapping_images(self, other: "Video") -> bool:
+        """Check if this video has overlapping images with another video.
+
+        This method is specifically for ImageVideo backends (image sequences).
+
+        Args:
+            other: Another video to compare with.
+
+        Returns:
+            True if both are ImageVideo instances with overlapping image files.
+            False if either video is not an ImageVideo or no overlap exists.
+
+        Notes:
+            Only works with ImageVideo backends where filename is a list.
+            Compares individual image filenames (basenames only).
+        """
+        # Both must be image sequences
+        if not (isinstance(self.filename, list) and isinstance(other.filename, list)):
+            return False
+
+        # Get basenames for comparison
+        self_basenames = set(Path(f).name for f in self.filename)
+        other_basenames = set(Path(f).name for f in other.filename)
+
+        # Check if there's any overlap
+        return len(self_basenames & other_basenames) > 0
+
+    def deduplicate_with(self, other: "Video") -> "Video":
+        """Create a new video with duplicate images removed.
+
+        This method is specifically for ImageVideo backends (image sequences).
+
+        Args:
+            other: Another video to deduplicate against. Must also be ImageVideo.
+
+        Returns:
+            A new Video object with duplicate images removed from this video,
+            or None if all images were duplicates.
+
+        Raises:
+            ValueError: If either video is not an ImageVideo backend.
+
+        Notes:
+            Only works with ImageVideo backends where filename is a list.
+            Images are considered duplicates if they have the same basename.
+            The returned video contains only images from this video that are
+            not present in the other video.
+        """
+        if not isinstance(self.filename, list):
+            raise ValueError("deduplicate_with only works with ImageVideo backends")
+        if not isinstance(other.filename, list):
+            raise ValueError("Other video must also be ImageVideo backend")
+
+        # Get basenames from other video
+        other_basenames = set(Path(f).name for f in other.filename)
+
+        # Keep only non-duplicate images
+        deduplicated_paths = [
+            f for f in self.filename if Path(f).name not in other_basenames
+        ]
+
+        if not deduplicated_paths:
+            # All images were duplicates
+            return None
+
+        # Create new video with deduplicated images
+        return Video.from_filename(deduplicated_paths, grayscale=self.grayscale)
+
+    def merge_with(self, other: "Video") -> "Video":
+        """Merge another video's images into this one.
+
+        This method is specifically for ImageVideo backends (image sequences).
+
+        Args:
+            other: Another video to merge with. Must also be ImageVideo.
+
+        Returns:
+            A new Video object with unique images from both videos.
+
+        Raises:
+            ValueError: If either video is not an ImageVideo backend.
+
+        Notes:
+            Only works with ImageVideo backends where filename is a list.
+            The merged video contains all unique images from both videos,
+            with automatic deduplication based on image basename.
+        """
+        if not isinstance(self.filename, list):
+            raise ValueError("merge_with only works with ImageVideo backends")
+        if not isinstance(other.filename, list):
+            raise ValueError("Other video must also be ImageVideo backend")
+
+        # Get all unique images (by basename) preserving order
+        seen_basenames = set()
+        merged_paths = []
+
+        for path in self.filename:
+            basename = Path(path).name
+            if basename not in seen_basenames:
+                merged_paths.append(path)
+                seen_basenames.add(basename)
+
+        for path in other.filename:
+            basename = Path(path).name
+            if basename not in seen_basenames:
+                merged_paths.append(path)
+                seen_basenames.add(basename)
+
+        # Create new video with merged images
+        return Video.from_filename(merged_paths, grayscale=self.grayscale)
+
     def save(
         self,
         save_path: str | Path,

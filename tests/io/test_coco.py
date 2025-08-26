@@ -1,5 +1,6 @@
 """Tests for sleap_io.io.coco module."""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -7,9 +8,10 @@ import pytest
 
 import sleap_io as sio
 from sleap_io.io import coco
-
-# Import COCO fixtures
-pytest_plugins = ["tests.fixtures.coco"]
+from sleap_io.model.matching import (
+    IMAGE_DEDUP_VIDEO_MATCHER,
+    SHAPE_VIDEO_MATCHER,
+)
 
 
 class TestCOCOBasicLoading:
@@ -680,3 +682,428 @@ def test_grayscale_loading(tmp_path):
     # Load as grayscale
     labels_gray = coco.read_labels(json_path, tmp_path, grayscale=True)
     assert labels_gray[0].video.shape == (1, 100, 100, 1)
+
+
+class TestCVATCompatibility:
+    """Test CVAT format compatibility with COCO loader."""
+
+    def test_cvat_tracking(self, cvat_tracking_dataset):
+        """Test that CVAT object_id creates proper tracks."""
+        labels = coco.read_labels(cvat_tracking_dataset / "annotations.json")
+
+        # Check that frames and instances were loaded
+        assert len(labels.labeled_frames) == 2  # Two frames
+        assert len(labels.labeled_frames[0].instances) == 2  # Two mice in frame 1
+        assert len(labels.labeled_frames[1].instances) == 2  # Two mice in frame 2
+
+        # Check tracks were created
+        tracks = set()
+        for frame in labels.labeled_frames:
+            for instance in frame.instances:
+                assert instance.track is not None, (
+                    "Track should be created from object_id"
+                )
+                tracks.add(instance.track)
+
+        assert len(tracks) == 2  # Two unique tracks (mouse 101 and 102)
+
+        # Check track names
+        track_names = sorted([t.name for t in tracks])
+        assert track_names == ["track_101", "track_102"]
+
+        # Verify same track object is used across frames (not just same name)
+        frame1_tracks = [i.track for i in labels.labeled_frames[0].instances]
+        frame2_tracks = [i.track for i in labels.labeled_frames[1].instances]
+
+        # Sort by track name to ensure consistent ordering
+        frame1_tracks.sort(key=lambda t: t.name)
+        frame2_tracks.sort(key=lambda t: t.name)
+
+        # Track objects should be the same instance (identity check)
+        assert frame1_tracks[0] is frame2_tracks[0], "Same track should be reused"
+        assert frame1_tracks[1] is frame2_tracks[1], "Same track should be reused"
+
+    def test_cvat_with_metadata(self, cvat_with_occluded):
+        """Test loading CVAT files with additional metadata."""
+        labels = coco.read_labels(cvat_with_occluded / "annotations.json")
+
+        assert len(labels.labeled_frames) == 1
+        assert len(labels.labeled_frames[0].instances) == 2
+
+        # Check that tracks are created from object_id
+        tracks = [inst.track for inst in labels.labeled_frames[0].instances]
+        assert all(t is not None for t in tracks)
+        assert tracks[0].name == "track_201"
+        assert tracks[1].name == "track_202"
+
+        # Check keypoint visibility (tail should be invisible for second instance)
+        inst2 = labels.labeled_frames[0].instances[1]
+        assert len(inst2.points) == 3
+        # The third keypoint (tail) should have NaN coordinates due to visibility=0
+        assert np.isnan(inst2.points[2]["xy"][0])  # x coordinate is NaN
+        assert np.isnan(inst2.points[2]["xy"][1])  # y coordinate is NaN
+
+    def test_alternative_track_fields(self, cvat_alternative_track_fields):
+        """Test support for track_id and instance_id fields."""
+        # Test track_id field
+        track_id_path = cvat_alternative_track_fields / "track_id"
+        labels_track = coco.read_labels(track_id_path / "annotations.json")
+        assert len(labels_track.labeled_frames) == 1
+        assert labels_track.labeled_frames[0].instances[0].track is not None
+        assert labels_track.labeled_frames[0].instances[0].track.name == "track_301"
+
+        # Test instance_id field
+        instance_id_path = cvat_alternative_track_fields / "instance_id"
+        labels_instance = coco.read_labels(instance_id_path / "annotations.json")
+        assert len(labels_instance.labeled_frames) == 1
+        assert labels_instance.labeled_frames[0].instances[0].track is not None
+        assert labels_instance.labeled_frames[0].instances[0].track.name == "track_401"
+
+    def test_backward_compatibility(self, coco_flat_images):
+        """Test that standard COCO files still work without tracks."""
+        labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+
+        # Standard COCO should load normally
+        assert len(labels.labeled_frames) == 3
+        assert len(labels.skeletons) == 1
+
+        # No tracks should be created for standard COCO without track IDs
+        for frame in labels.labeled_frames:
+            for instance in frame.instances:
+                assert instance.track is None, "No tracks should be created without IDs"
+
+
+class TestImageDeduplication:
+    """Test image deduplication functionality for merging COCO datasets."""
+
+    def test_image_dedup_matcher(self, tmp_path):
+        """Test IMAGE_DEDUP video matching with overlapping images."""
+        # Create two datasets with overlapping images
+        images1 = ["img1.jpg", "img2.jpg", "img3.jpg"]
+        images2 = ["img2.jpg", "img3.jpg", "img4.jpg", "img5.jpg"]
+
+        # Create actual image files
+        for img in set(images1 + images2):
+            (tmp_path / img).touch()
+
+        # Create annotations for dataset 1
+        ann1 = {
+            "images": [
+                {"id": i, "file_name": img, "width": 100, "height": 100}
+                for i, img in enumerate(images1)
+            ],
+            "annotations": [
+                {
+                    "id": i,
+                    "image_id": i,
+                    "category_id": 1,
+                    "keypoints": [10, 10, 2, 20, 20, 2],
+                    "num_keypoints": 2,
+                }
+                for i in range(len(images1))
+            ],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "animal",
+                    "keypoints": ["nose", "tail"],
+                    "skeleton": [[1, 2]],
+                }
+            ],
+        }
+
+        # Create annotations for dataset 2
+        ann2 = {
+            "images": [
+                {"id": i, "file_name": img, "width": 100, "height": 100}
+                for i, img in enumerate(images2)
+            ],
+            "annotations": [
+                {
+                    "id": i,
+                    "image_id": i,
+                    "category_id": 1,
+                    "keypoints": [30, 30, 2, 40, 40, 2],
+                    "num_keypoints": 2,
+                }
+                for i in range(len(images2))
+            ],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "animal",
+                    "keypoints": ["nose", "tail"],
+                    "skeleton": [[1, 2]],
+                }
+            ],
+        }
+
+        # Save JSON files
+        with open(tmp_path / "ann1.json", "w") as f:
+            json.dump(ann1, f)
+        with open(tmp_path / "ann2.json", "w") as f:
+            json.dump(ann2, f)
+
+        # Load labels
+        labels1 = coco.read_labels(tmp_path / "ann1.json")
+        labels2 = coco.read_labels(tmp_path / "ann2.json")
+
+        # Test video matching with IMAGE_DEDUP
+        assert len(labels1.videos) == 1
+        assert len(labels2.videos) == 1
+
+        video1 = labels1.videos[0]
+        video2 = labels2.videos[0]
+
+        # Should detect overlapping images
+        assert video1.has_overlapping_images(video2)
+        assert video2.has_overlapping_images(video1)
+
+        # Test deduplication
+        deduped = video2.deduplicate_with(video1)
+        assert deduped is not None
+        assert len(deduped.filename) == 2  # Only img4.jpg and img5.jpg remain
+        assert Path(deduped.filename[0]).name == "img4.jpg"
+        assert Path(deduped.filename[1]).name == "img5.jpg"
+
+        # Test merging with deduplication
+        result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+        assert result.successful
+
+        # Should have original video plus deduplicated new images
+        assert len(labels1.videos) == 2  # Original + deduplicated
+
+    def test_complete_duplicate_handling(self, tmp_path):
+        """Test when all images in new dataset are duplicates."""
+        # Create two datasets with complete overlap
+        images = ["img1.jpg", "img2.jpg"]
+
+        # Create actual image files
+        for img in images:
+            (tmp_path / img).touch()
+
+        # Create identical annotations
+        ann = {
+            "images": [
+                {"id": i, "file_name": img, "width": 100, "height": 100}
+                for i, img in enumerate(images)
+            ],
+            "annotations": [
+                {
+                    "id": i,
+                    "image_id": i,
+                    "category_id": 1,
+                    "keypoints": [10, 10, 2, 20, 20, 2],
+                    "num_keypoints": 2,
+                }
+                for i in range(len(images))
+            ],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "animal",
+                    "keypoints": ["nose", "tail"],
+                    "skeleton": [[1, 2]],
+                }
+            ],
+        }
+
+        # Save JSON files
+        with open(tmp_path / "ann1.json", "w") as f:
+            json.dump(ann, f)
+        with open(tmp_path / "ann2.json", "w") as f:
+            json.dump(ann, f)
+
+        # Load labels
+        labels1 = coco.read_labels(tmp_path / "ann1.json")
+        labels2 = coco.read_labels(tmp_path / "ann2.json")
+
+        video1 = labels1.videos[0]
+        video2 = labels2.videos[0]
+
+        # All images are duplicates
+        deduped = video2.deduplicate_with(video1)
+        assert deduped is None  # All images were duplicates
+
+        # Test merging - should map to existing video
+        result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+        assert result.successful
+        assert len(labels1.videos) == 1  # No new video added
+
+
+class TestShapeBasedMerging:
+    """Test shape-based video merging functionality."""
+
+    def test_shape_matcher(self, tmp_path):
+        """Test SHAPE video matching based on dimensions only."""
+        # Create two datasets with same shape but different images
+        images1 = ["batch1_img1.jpg", "batch1_img2.jpg"]
+        images2 = ["batch2_img1.jpg", "batch2_img2.jpg"]
+
+        # Create actual image files
+        for img in images1 + images2:
+            (tmp_path / img).touch()
+
+        # Create annotations for dataset 1
+        ann1 = {
+            "images": [
+                {"id": i, "file_name": img, "width": 640, "height": 480}
+                for i, img in enumerate(images1)
+            ],
+            "annotations": [
+                {
+                    "id": i,
+                    "image_id": i,
+                    "category_id": 1,
+                    "keypoints": [10, 10, 2, 20, 20, 2],
+                    "num_keypoints": 2,
+                }
+                for i in range(len(images1))
+            ],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "animal",
+                    "keypoints": ["nose", "tail"],
+                    "skeleton": [[1, 2]],
+                }
+            ],
+        }
+
+        # Create annotations for dataset 2 (same shape)
+        ann2 = {
+            "images": [
+                {"id": i, "file_name": img, "width": 640, "height": 480}
+                for i, img in enumerate(images2)
+            ],
+            "annotations": [
+                {
+                    "id": i,
+                    "image_id": i,
+                    "category_id": 1,
+                    "keypoints": [30, 30, 2, 40, 40, 2],
+                    "num_keypoints": 2,
+                }
+                for i in range(len(images2))
+            ],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "animal",
+                    "keypoints": ["nose", "tail"],
+                    "skeleton": [[1, 2]],
+                }
+            ],
+        }
+
+        # Save JSON files
+        with open(tmp_path / "ann1.json", "w") as f:
+            json.dump(ann1, f)
+        with open(tmp_path / "ann2.json", "w") as f:
+            json.dump(ann2, f)
+
+        # Load labels
+        labels1 = coco.read_labels(tmp_path / "ann1.json")
+        labels2 = coco.read_labels(tmp_path / "ann2.json")
+
+        video1 = labels1.videos[0]
+        video2 = labels2.videos[0]
+
+        # Should match by shape
+        assert video1.matches_shape(video2)
+        assert video2.matches_shape(video1)
+
+        # Test merging
+        merged = video1.merge_with(video2)
+        assert len(merged.filename) == 4  # All 4 images
+        assert all(
+            Path(f).name
+            in [
+                "batch1_img1.jpg",
+                "batch1_img2.jpg",
+                "batch2_img1.jpg",
+                "batch2_img2.jpg",
+            ]
+            for f in merged.filename
+        )
+
+        # Test Labels merge with SHAPE matcher
+        result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
+        assert result.successful
+        assert len(labels1.videos) == 1  # Videos merged into one
+        assert len(labels1.videos[0].filename) == 4  # All images combined
+
+    def test_shape_mismatch(self, tmp_path):
+        """Test that videos with different shapes don't match."""
+        # Create two datasets with different shapes
+        images1 = ["img1.jpg"]
+        images2 = ["img2.jpg"]
+
+        # Create actual image files
+        for img in images1 + images2:
+            (tmp_path / img).touch()
+
+        # Create annotations with different dimensions
+        ann1 = {
+            "images": [{"id": 0, "file_name": "img1.jpg", "width": 640, "height": 480}],
+            "annotations": [
+                {
+                    "id": 0,
+                    "image_id": 0,
+                    "category_id": 1,
+                    "keypoints": [10, 10, 2, 20, 20, 2],
+                    "num_keypoints": 2,
+                }
+            ],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "animal",
+                    "keypoints": ["nose", "tail"],
+                    "skeleton": [[1, 2]],
+                }
+            ],
+        }
+
+        ann2 = {
+            "images": [{"id": 0, "file_name": "img2.jpg", "width": 320, "height": 240}],
+            "annotations": [
+                {
+                    "id": 0,
+                    "image_id": 0,
+                    "category_id": 1,
+                    "keypoints": [5, 5, 2, 10, 10, 2],
+                    "num_keypoints": 2,
+                }
+            ],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "animal",
+                    "keypoints": ["nose", "tail"],
+                    "skeleton": [[1, 2]],
+                }
+            ],
+        }
+
+        # Save JSON files
+        with open(tmp_path / "ann1.json", "w") as f:
+            json.dump(ann1, f)
+        with open(tmp_path / "ann2.json", "w") as f:
+            json.dump(ann2, f)
+
+        # Load labels
+        labels1 = coco.read_labels(tmp_path / "ann1.json")
+        labels2 = coco.read_labels(tmp_path / "ann2.json")
+
+        video1 = labels1.videos[0]
+        video2 = labels2.videos[0]
+
+        # Should not match due to different shapes
+        assert not video1.matches_shape(video2)
+        assert not video2.matches_shape(video1)
+
+        # Test merge - should keep separate videos
+        result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
+        assert result.successful
+        assert len(labels1.videos) == 2  # Videos kept separate
