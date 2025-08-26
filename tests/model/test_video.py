@@ -297,7 +297,105 @@ def test_video_matches_path():
     # Test basename matching
     assert video1.matches_path(video2, strict=False)
     assert video1.matches_path(video3, strict=False)  # Same basename
-    assert not video1.matches_path(video4, strict=False)  # Different basename
+    assert not video1.matches_path(video4, strict=False)
+
+
+def test_video_matches_shape():
+    """Test Video.matches_shape() method."""
+    # Test with backend metadata (when backend is None)
+    video1 = Video(filename="video1.mp4", open_backend=False)
+    video1.backend_metadata["shape"] = (100, 480, 640, 3)
+    
+    video2 = Video(filename="video2.mp4", open_backend=False)
+    video2.backend_metadata["shape"] = (50, 480, 640, 3)  # Different frames, same shape
+    
+    video3 = Video(filename="video3.mp4", open_backend=False)
+    video3.backend_metadata["shape"] = (100, 720, 1280, 3)  # Different shape
+    
+    # Should match (same height, width, channels)
+    assert video1.matches_shape(video2)
+    assert not video1.matches_shape(video3)
+    
+    # Test with None shape (should return False)
+    video4 = Video(filename="video4.mp4", open_backend=False)
+    assert not video1.matches_shape(video4)  # video4 has None shape
+    assert not video4.matches_shape(video1)  # video4 has None shape
+    
+    # Test with ImageVideo list
+    video5 = Video(filename=["img1.jpg", "img2.jpg"], open_backend=False)
+    video5.backend_metadata["shape"] = (2, 480, 640, 3)
+    assert video1.matches_shape(video5)  # Same spatial dimensions
+
+
+def test_video_has_overlapping_images():
+    """Test Video.has_overlapping_images() method."""
+    # Test with ImageVideo (lists)
+    video1 = Video(filename=["/path/to/img1.jpg", "/path/to/img2.jpg"], open_backend=False)
+    video2 = Video(filename=["/other/img2.jpg", "/other/img3.jpg"], open_backend=False)
+    video3 = Video(filename=["/path/img4.jpg", "/path/img5.jpg"], open_backend=False)
+    
+    # Should detect overlap (img2.jpg is in both)
+    assert video1.has_overlapping_images(video2)
+    
+    # No overlap
+    assert not video1.has_overlapping_images(video3)
+    
+    # Test with non-ImageVideo (should return False)
+    regular_video = Video(filename="video.mp4", open_backend=False)
+    assert not video1.has_overlapping_images(regular_video)
+    assert not regular_video.has_overlapping_images(video1)
+    assert not regular_video.has_overlapping_images(regular_video)
+
+
+def test_video_deduplicate_with():
+    """Test Video.deduplicate_with() method."""
+    # Test with ImageVideo
+    video1 = Video(filename=["/path/img1.jpg", "/path/img2.jpg", "/path/img3.jpg"], 
+                   open_backend=False)
+    video2 = Video(filename=["/other/img2.jpg", "/other/img4.jpg"], open_backend=False)
+    
+    # Deduplicate - should remove img2.jpg from video1
+    deduped = video1.deduplicate_with(video2)
+    assert len(deduped.filename) == 2
+    assert "img1.jpg" in Path(deduped.filename[0]).name
+    assert "img3.jpg" in Path(deduped.filename[1]).name
+    
+    # Test when all images are duplicates (returns None)
+    video3 = Video(filename=["/path/img2.jpg"], open_backend=False)
+    assert video3.deduplicate_with(video2) is None
+    
+    # Test with non-ImageVideo (should raise ValueError)
+    regular_video = Video(filename="video.mp4", open_backend=False)
+    with pytest.raises(ValueError, match="deduplicate_with only works with ImageVideo"):
+        regular_video.deduplicate_with(video2)
+    
+    with pytest.raises(ValueError, match="Other video must also be ImageVideo"):
+        video1.deduplicate_with(regular_video)
+
+
+def test_video_merge_with():
+    """Test Video.merge_with() method."""
+    # Test with ImageVideo
+    video1 = Video(filename=["/path/img1.jpg", "/path/img2.jpg"], open_backend=False)
+    video1.grayscale = False
+    video2 = Video(filename=["/other/img2.jpg", "/other/img3.jpg"], open_backend=False)
+    
+    # Merge - should combine unique images
+    merged = video1.merge_with(video2)
+    assert len(merged.filename) == 3  # img1, img2, img3 (deduplicated)
+    basenames = [Path(f).name for f in merged.filename]
+    assert "img1.jpg" in basenames
+    assert "img2.jpg" in basenames
+    assert "img3.jpg" in basenames
+    assert basenames.count("img2.jpg") == 1  # No duplicates
+    
+    # Test with non-ImageVideo (should raise ValueError)
+    regular_video = Video(filename="video.mp4", open_backend=False)
+    with pytest.raises(ValueError, match="merge_with only works with ImageVideo"):
+        regular_video.merge_with(video2)
+    
+    with pytest.raises(ValueError, match="Other video must also be ImageVideo"):
+        video1.merge_with(regular_video)  # Different basename
 
     # Test with image sequences
     video_seq1 = Video(filename=["img1.png", "img2.png"], open_backend=False)
