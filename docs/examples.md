@@ -25,7 +25,7 @@ This page provides practical examples for common tasks with sleap-io. Each examp
 
 Convert between supported formats with automatic format detection.
 
-```python title="format_conversion.py" linenums="1" hl_lines="6 9"
+```python title="format_conversion.py" linenums="1"
 import sleap_io as sio
 
 # Load from SLEAP file
@@ -41,14 +41,14 @@ labels.save("predictions.nwb")
     sleap-io automatically detects the format from the file extension. Supported formats include `.slp`, `.nwb`, `.labelstudio.json`, and `.jabs`.
 
 !!! note "See also"
-    - [`Labels.save`](model.md#sleap_io.Labels.save) - Save method with format options
-    - [Formats](formats.md) - Complete list of supported formats
+    - [`Labels.save`](model.md#sleap_io.Labels.save): Save method with format options
+    - [Formats](formats.md): Complete list of supported formats
 
 ### Convert labels to raw arrays
 
 Extract pose data as NumPy arrays for analysis or visualization.
 
-```python title="labels_to_numpy.py" linenums="1" hl_lines="6 11"
+```python title="labels_to_numpy.py" linenums="1"
 import sleap_io as sio
 
 labels = sio.load_slp("tests/data/slp/centered_pair_predictions.slp")
@@ -66,11 +66,12 @@ assert xy_score == 3  # x, y, and confidence score
 
 ??? example "Expected output shapes"
     For a dataset with 100 frames, 2 tracks, and 3 nodes:
+    
     - Without scores: `(100, 2, 3, 2)` 
     - With scores: `(100, 2, 3, 3)`
 
 !!! note "See also"
-    [`Labels.numpy`](model.md#sleap_io.Labels.numpy) - Full documentation of array conversion options
+    [`Labels.numpy`](model.md#sleap_io.Labels.numpy): Full documentation of array conversion options
 
 ## Video operations
 
@@ -78,7 +79,7 @@ assert xy_score == 3  # x, y, and confidence score
 
 Load and access video frames directly.
 
-```python title="read_video.py" linenums="1" hl_lines="3 6"
+```python title="read_video.py" linenums="1"
 import sleap_io as sio
 
 video = sio.load_video("test.mp4")
@@ -92,21 +93,24 @@ middle_frame = video[n_frames // 2]
 last_frame = video[-1]
 ```
 
-!!! warning
-    Loading videos requires either `opencv-python` or `pyav`. Install with:
+!!! info
+    Video loading uses `imageio-ffmpeg` by default. For alternative backends, install optional dependencies:
+    
     ```bash
-    pip install sleap-io[opencv]  # or sleap-io[pyav]
+    pip install sleap-io[opencv]  # OpenCV backend
+    pip install sleap-io[pyav]    # PyAV backend  
+    pip install sleap-io[all]     # All backends
     ```
 
 !!! note "See also"
-    - [`sio.load_video`](formats.md#sleap_io.load_video) - Video loading function
-    - [`Video`](model.md#sleap_io.Video) - Video class documentation
+    - [`sio.load_video`](formats.md#sleap_io.load_video): Video loading function
+    - [`Video`](model.md#sleap_io.Video): Video class documentation
 
 ### Re-encode video
 
 Fix video seeking issues by re-encoding with optimal settings.
 
-```python title="reencode_video.py" linenums="1" hl_lines="3"
+```python title="reencode_video.py" linenums="1"
 import sleap_io as sio
 
 sio.save_video(sio.load_video("input.mp4"), "output.mp4")
@@ -116,13 +120,13 @@ sio.save_video(sio.load_video("input.mp4"), "output.mp4")
     Some video formats are not readily seekable at frame-level accuracy. Re-encoding with default settings ensures reliable seeking with minimal quality loss.
 
 !!! note "See also"
-    [`save_video`](formats.md#sleap_io.save_video) - Video saving options and codec settings
+    [`save_video`](formats.md#sleap_io.save_video): Video saving options and codec settings
 
 ### Trim labels and video
 
 Extract a subset of frames with corresponding labels.
 
-```python title="trim_video.py" linenums="1" hl_lines="7"
+```python title="trim_video.py" linenums="1"
 import sleap_io as sio
 
 # Load existing data
@@ -138,12 +142,13 @@ clip = labels.trim("clip.slp", list(range(1_000, 2_000)), video=0)
 
 !!! tip
     The `trim` method automatically:
+    
     - Creates a new video file with only the specified frames
     - Adjusts frame indices in the labels to match the new video
     - Preserves all instance data and tracks
 
 !!! note "See also"
-    [`Labels.trim`](model.md#sleap_io.Labels.trim) - Full trim method documentation
+    [`Labels.trim`](model.md#sleap_io.Labels.trim): Full trim method documentation
 
 ## Data creation
 
@@ -151,7 +156,7 @@ clip = labels.trim("clip.slp", list(range(1_000, 2_000)), video=0)
 
 Build a complete labels dataset programmatically.
 
-```python title="create_labels.py" linenums="1" hl_lines="4-7 12-18 21 24 27"
+```python title="create_labels.py" linenums="1"
 import sleap_io as sio
 import numpy as np
 
@@ -195,10 +200,10 @@ labels.save("labels.slp")
     ```
 
 !!! note "See also"
-    - [Model](model.md) - Complete data model documentation
-    - [`Labels`](model.md#sleap_io.Labels) - Labels container class
-    - [`Instance`](model.md#sleap_io.Instance) - Instance class for manual annotations
-    - [`PredictedInstance`](model.md#sleap_io.PredictedInstance) - Instance class for predictions
+    - [Model](model.md): Complete data model documentation
+    - [`Labels`](model.md#sleap_io.Labels): Labels container class
+    - [`Instance`](model.md#sleap_io.Instance): Instance class for manual annotations
+    - [`PredictedInstance`](model.md#sleap_io.PredictedInstance): Instance class for predictions
 
 ## Dataset management
 
@@ -206,58 +211,38 @@ labels.save("labels.slp")
 
 Split your dataset for machine learning workflows.
 
-=== "Basic splits"
-    
-    ```python title="make_splits.py" linenums="1" hl_lines="6"
-    import sleap_io as sio
-    
-    # Load source labels
-    labels = sio.load_file("labels.v001.slp")
-    
-    # Make splits and export with embedded images
-    labels.make_training_splits(
-        n_train=0.8, 
-        n_val=0.1, 
-        n_test=0.1, 
-        save_dir="split1", 
-        seed=42
-    )
-    
-    # Splits are saved as self-contained SLP package files
-    labels_train = sio.load_file("split1/train.pkg.slp")
-    labels_val = sio.load_file("split1/val.pkg.slp")
-    labels_test = sio.load_file("split1/test.pkg.slp")
-    ```
+```python title="make_splits.py" linenums="1"
+import sleap_io as sio
 
-=== "With stratification"
-    
-    ```python title="stratified_splits.py" linenums="1" hl_lines="7"
-    import sleap_io as sio
-    
-    labels = sio.load_file("labels.v001.slp")
-    
-    # Stratify by video to ensure each split has diverse data
-    labels.make_training_splits(
-        n_train=0.8,
-        n_val=0.1, 
-        n_test=0.1,
-        save_dir="stratified_split",
-        stratify="video",  # Ensures videos are distributed across splits
-        seed=42
-    )
-    ```
+# Load source labels
+labels = sio.load_file("labels.v001.slp")
+
+# Make splits and export with embedded images
+labels.make_training_splits(
+    n_train=0.8, 
+    n_val=0.1, 
+    n_test=0.1, 
+    save_dir="split1", 
+    seed=42
+)
+
+# Splits are saved as self-contained SLP package files
+labels_train = sio.load_file("split1/train.pkg.slp")
+labels_val = sio.load_file("split1/val.pkg.slp")
+labels_test = sio.load_file("split1/test.pkg.slp")
+```
 
 !!! info
     The `.pkg.slp` extension indicates a self-contained package with embedded images, making the splits portable and shareable.
 
 !!! note "See also"
-    [`Labels.make_training_splits`](model.md#sleap_io.Labels.make_training_splits) - Full documentation of splitting options
+    [`Labels.make_training_splits`](model.md#sleap_io.Labels.make_training_splits): Full documentation of splitting options
 
 ### Working with dataset splits (LabelsSet)
 
 Manage multiple related datasets as a group.
 
-```python title="labels_set.py" linenums="1" hl_lines="6 9-11 14 17 20"
+```python title="labels_set.py" linenums="1"
 import sleap_io as sio
 
 # Load source labels
@@ -296,8 +281,8 @@ loaded_set = sio.load_labels_set("splits/")
     LabelsSet is particularly useful when exporting to formats that expect separate train/val/test files, like YOLO.
 
 !!! note "See also"
-    - [`LabelsSet`](model.md#sleap_io.LabelsSet) - LabelsSet class documentation
-    - [`load_labels_set`](formats.md#sleap_io.load_labels_set) - Loading function for label sets
+    - [`LabelsSet`](model.md#sleap_io.LabelsSet): LabelsSet class documentation
+    - [`load_labels_set`](formats.md#sleap_io.load_labels_set): Loading function for label sets
 
 ## Data manipulation
 
@@ -305,7 +290,7 @@ loaded_set = sio.load_labels_set("splits/")
 
 Update file paths when moving projects between systems.
 
-```python title="fix_paths.py" linenums="1" hl_lines="3 6-9"
+```python title="fix_paths.py" linenums="1"
 import sleap_io as sio
 
 # Load labels without trying to open the video files
@@ -328,62 +313,37 @@ labels.save("labels.v002.slp")
     Use `open_videos=False` when loading to avoid errors from missing videos at the old paths.
 
 !!! note "See also"
-    [`Labels.replace_filenames`](model.md#sleap_io.Labels.replace_filenames) - Additional path manipulation options
+    [`Labels.replace_filenames`](model.md#sleap_io.Labels.replace_filenames): Additional path manipulation options
 
 ### Save labels with embedded images
 
 Create self-contained label files with embedded video frames.
 
-=== "User labels only"
-    
-    ```python title="embed_user.py" linenums="1" hl_lines="6"
-    import sleap_io as sio
-    
-    # Load source labels
-    labels = sio.load_file("labels.v001.slp")
-    
-    # Embed frames with user-labeled data only
-    labels.save("labels.v001.pkg.slp", embed="user")
-    ```
+```python title="embed_images.py" linenums="1"
+import sleap_io as sio
 
-=== "User + suggestions"
-    
-    ```python title="embed_suggestions.py" linenums="1" hl_lines="6"
-    import sleap_io as sio
-    
-    # Load source labels
-    labels = sio.load_file("labels.v001.slp")
-    
-    # Embed frames with user labels and suggested frames
-    labels.save("labels.v001.pkg.slp", embed="user+suggestions")
-    ```
+# Load source labels
+labels = sio.load_file("labels.v001.slp")
 
-=== "All frames"
-    
-    ```python title="embed_all.py" linenums="1" hl_lines="6"
-    import sleap_io as sio
-    
-    # Load source labels
-    labels = sio.load_file("labels.v001.slp")
-    
-    # Embed all labeled frames (including predictions)
-    labels.save("labels.v001.pkg.slp", embed="all")
-    ```
+# Save with embedded images for frames with user labeled data and suggested frames
+labels.save("labels.v001.pkg.slp", embed="user+suggestions")
+```
 
 !!! info "Embedding options"
+    
     - `"user"`: Only frames with manual annotations
     - `"user+suggestions"`: Manual annotations plus suggested frames
     - `"all"`: All frames with any labels (including predictions)
     - `"source"`: Embed source video if labels were loaded from embedded data
 
 !!! note "See also"
-    [`Labels.save`](model.md#sleap_io.Labels.save) - Complete save options including embedding
+    [`Labels.save`](model.md#sleap_io.Labels.save): Complete save options including embedding
 
 ### Replace skeleton
 
 Change the skeleton structure while preserving existing annotations.
 
-```python title="replace_skeleton.py" linenums="1" hl_lines="7 10-15"
+```python title="replace_skeleton.py" linenums="1"
 import sleap_io as sio
 
 # Load existing labels with skeleton nodes: "head", "trunk", "tti"
@@ -414,13 +374,13 @@ labels.save("labels_with_new_skeleton.slp")
     This is particularly useful when converting between different annotation tools or skeleton conventions.
 
 !!! note "See also"
-    [`Labels.replace_skeleton`](model.md#sleap_io.Labels.replace_skeleton) - Additional skeleton manipulation options
+    [`Labels.replace_skeleton`](model.md#sleap_io.Labels.replace_skeleton): Additional skeleton manipulation options
 
 ### Convert to and from numpy arrays
 
 Work with pose data as NumPy arrays for filtering or analysis.
 
-```python title="numpy_filtering.py" linenums="1" hl_lines="6 11 14"
+```python title="numpy_filtering.py" linenums="1"
 import sleap_io as sio
 import numpy as np
 
@@ -441,48 +401,13 @@ labels.save("predictions.filtered.slp")
 ```
 
 ??? tip "Advanced filtering with movement"
-    For more sophisticated analysis and filtering:
-    ```python
-    # Check out the movement library for pose processing
-    # https://movement.neuroinformatics.dev/
-    import movement
-    ```
+    For more sophisticated analysis and filtering, check out the [`movement`](https://movement.neuroinformatics.dev/) library for pose processing.
 
 !!! warning
     When updating from numpy, the array shape must match the original data structure exactly.
 
 !!! note "See also"
-    - [`Labels.numpy`](model.md#sleap_io.Labels.numpy) - Array conversion options
-    - [`Labels.update_from_numpy`](model.md#sleap_io.Labels.update_from_numpy) - Updating labels from arrays
-    - [`movement`](https://movement.neuroinformatics.dev/) - Advanced pose processing library
+    - [`Labels.numpy`](model.md#sleap_io.Labels.numpy): Array conversion options
+    - [`Labels.update_from_numpy`](model.md#sleap_io.Labels.update_from_numpy): Updating labels from arrays
+    - [`movement`](https://movement.neuroinformatics.dev/): Advanced pose processing library
 
-## Troubleshooting
-
-??? failure "Video not found after loading"
-    
-    **Problem:** Video files can't be found after loading a project on a different system.
-    
-    **Solution:** Use `open_videos=False` and fix paths:
-    ```python
-    labels = sio.load_file("project.slp", open_videos=False)
-    labels.replace_filenames(prefix_map={"old/path": "new/path"})
-    ```
-
-??? failure "Memory issues with large videos"
-    
-    **Problem:** Loading large videos consumes too much memory.
-    
-    **Solution:** Use embedded frames for specific frames only:
-    ```python
-    # Only embed frames with labels
-    labels.save("compact.pkg.slp", embed="user")
-    ```
-
-??? failure "Cannot seek to specific frame"
-    
-    **Problem:** Some video formats don't support accurate frame seeking.
-    
-    **Solution:** Re-encode the video:
-    ```python
-    sio.save_video(sio.load_video("problematic.avi"), "fixed.mp4")
-    ```
