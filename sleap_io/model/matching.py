@@ -81,10 +81,12 @@ class VideoMatchMethod(str, Enum):
         CONTENT: Match by video shape (frames, height, width, channels) and
             backend type.
         AUTO: Automatic matching - tries BASENAME first, then falls back to CONTENT.
-        IMAGE_DEDUP: Match ImageVideo instances with overlapping image files.
-            Used to deduplicate individual images when merging.
+        IMAGE_DEDUP: (ImageVideo only) Match ImageVideo instances with overlapping 
+            image files. Used to deduplicate individual images when merging datasets
+            where videos are image sequences.
         SHAPE: Match videos by shape only (height, width, channels), ignoring
-            filenames and frame count. Used to merge same-shaped videos.
+            filenames and frame count. Commonly used with ImageVideo to merge 
+            same-shaped image sequences.
     """
 
     PATH = "path"
@@ -307,7 +309,7 @@ class VideoMatcher:
         elif self.method == VideoMatchMethod.CONTENT:
             return video1.matches_content(video2)
         elif self.method == VideoMatchMethod.IMAGE_DEDUP:
-            # Match ImageVideo instances with overlapping images
+            # Match ImageVideo instances with overlapping images (ImageVideo only)
             return video1.has_overlapping_images(video2)
         elif self.method == VideoMatchMethod.SHAPE:
             # Match videos by shape only (height, width, channels)
