@@ -140,3 +140,6 @@ dmypy.json
 
 # Serena
 .serena/
+
+# Temporary test files
+tmp/
