@@ -1826,10 +1826,12 @@ class Labels:
                     # Remap skeleton and track references for instances from other frame
                     remapped_instances = []
                     for inst in merged_instances:
-                        # Check if this instance needs remapping (i.e., it comes from other_frame)
+                        # Check if instance needs remapping (from other_frame)
                         if inst.skeleton in skeleton_map:
                             # Instance needs remapping
-                            remapped_inst = self._map_instance(inst, skeleton_map, track_map)
+                            remapped_inst = self._map_instance(
+                                inst, skeleton_map, track_map
+                            )
                             remapped_instances.append(remapped_inst)
                         else:
                             # Instance already has correct skeleton (from self_frame)
