@@ -568,7 +568,7 @@ class Video:
         Notes:
             Only works with ImageVideo backends where filename is a list.
             Images are considered duplicates if they have the same basename.
-            The returned video contains only images from this video that are 
+            The returned video contains only images from this video that are
             not present in the other video.
         """
         if not isinstance(self.filename, list):

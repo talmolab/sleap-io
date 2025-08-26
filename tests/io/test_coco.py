@@ -11,8 +11,6 @@ from sleap_io.io import coco
 from sleap_io.model.matching import (
     IMAGE_DEDUP_VIDEO_MATCHER,
     SHAPE_VIDEO_MATCHER,
-    VideoMatcher,
-    VideoMatchMethod,
 )
 
 
@@ -783,11 +781,11 @@ class TestImageDeduplication:
         # Create two datasets with overlapping images
         images1 = ["img1.jpg", "img2.jpg", "img3.jpg"]
         images2 = ["img2.jpg", "img3.jpg", "img4.jpg", "img5.jpg"]
-        
+
         # Create actual image files
         for img in set(images1 + images2):
             (tmp_path / img).touch()
-        
+
         # Create annotations for dataset 1
         ann1 = {
             "images": [
@@ -813,7 +811,7 @@ class TestImageDeduplication:
                 }
             ],
         }
-        
+
         # Create annotations for dataset 2
         ann2 = {
             "images": [
@@ -839,51 +837,51 @@ class TestImageDeduplication:
                 }
             ],
         }
-        
+
         # Save JSON files
         with open(tmp_path / "ann1.json", "w") as f:
             json.dump(ann1, f)
         with open(tmp_path / "ann2.json", "w") as f:
             json.dump(ann2, f)
-        
+
         # Load labels
         labels1 = coco.read_labels(tmp_path / "ann1.json")
         labels2 = coco.read_labels(tmp_path / "ann2.json")
-        
+
         # Test video matching with IMAGE_DEDUP
         assert len(labels1.videos) == 1
         assert len(labels2.videos) == 1
-        
+
         video1 = labels1.videos[0]
         video2 = labels2.videos[0]
-        
+
         # Should detect overlapping images
         assert video1.has_overlapping_images(video2)
         assert video2.has_overlapping_images(video1)
-        
+
         # Test deduplication
         deduped = video2.deduplicate_with(video1)
         assert deduped is not None
         assert len(deduped.filename) == 2  # Only img4.jpg and img5.jpg remain
         assert Path(deduped.filename[0]).name == "img4.jpg"
         assert Path(deduped.filename[1]).name == "img5.jpg"
-        
+
         # Test merging with deduplication
         result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
         assert result.successful
-        
+
         # Should have original video plus deduplicated new images
         assert len(labels1.videos) == 2  # Original + deduplicated
-    
+
     def test_complete_duplicate_handling(self, tmp_path):
         """Test when all images in new dataset are duplicates."""
         # Create two datasets with complete overlap
         images = ["img1.jpg", "img2.jpg"]
-        
+
         # Create actual image files
         for img in images:
             (tmp_path / img).touch()
-        
+
         # Create identical annotations
         ann = {
             "images": [
@@ -909,24 +907,24 @@ class TestImageDeduplication:
                 }
             ],
         }
-        
+
         # Save JSON files
         with open(tmp_path / "ann1.json", "w") as f:
             json.dump(ann, f)
         with open(tmp_path / "ann2.json", "w") as f:
             json.dump(ann, f)
-        
+
         # Load labels
         labels1 = coco.read_labels(tmp_path / "ann1.json")
         labels2 = coco.read_labels(tmp_path / "ann2.json")
-        
+
         video1 = labels1.videos[0]
         video2 = labels2.videos[0]
-        
+
         # All images are duplicates
         deduped = video2.deduplicate_with(video1)
         assert deduped is None  # All images were duplicates
-        
+
         # Test merging - should map to existing video
         result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
         assert result.successful
@@ -935,17 +933,17 @@ class TestImageDeduplication:
 
 class TestShapeBasedMerging:
     """Test shape-based video merging functionality."""
-    
+
     def test_shape_matcher(self, tmp_path):
         """Test SHAPE video matching based on dimensions only."""
         # Create two datasets with same shape but different images
         images1 = ["batch1_img1.jpg", "batch1_img2.jpg"]
         images2 = ["batch2_img1.jpg", "batch2_img2.jpg"]
-        
+
         # Create actual image files
         for img in images1 + images2:
             (tmp_path / img).touch()
-        
+
         # Create annotations for dataset 1
         ann1 = {
             "images": [
@@ -971,7 +969,7 @@ class TestShapeBasedMerging:
                 }
             ],
         }
-        
+
         # Create annotations for dataset 2 (same shape)
         ann2 = {
             "images": [
@@ -997,47 +995,54 @@ class TestShapeBasedMerging:
                 }
             ],
         }
-        
+
         # Save JSON files
         with open(tmp_path / "ann1.json", "w") as f:
             json.dump(ann1, f)
         with open(tmp_path / "ann2.json", "w") as f:
             json.dump(ann2, f)
-        
+
         # Load labels
         labels1 = coco.read_labels(tmp_path / "ann1.json")
         labels2 = coco.read_labels(tmp_path / "ann2.json")
-        
+
         video1 = labels1.videos[0]
         video2 = labels2.videos[0]
-        
+
         # Should match by shape
         assert video1.matches_shape(video2)
         assert video2.matches_shape(video1)
-        
+
         # Test merging
         merged = video1.merge_with(video2)
         assert len(merged.filename) == 4  # All 4 images
-        assert all(Path(f).name in ["batch1_img1.jpg", "batch1_img2.jpg", 
-                                     "batch2_img1.jpg", "batch2_img2.jpg"]
-                   for f in merged.filename)
-        
+        assert all(
+            Path(f).name
+            in [
+                "batch1_img1.jpg",
+                "batch1_img2.jpg",
+                "batch2_img1.jpg",
+                "batch2_img2.jpg",
+            ]
+            for f in merged.filename
+        )
+
         # Test Labels merge with SHAPE matcher
         result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
         assert result.successful
         assert len(labels1.videos) == 1  # Videos merged into one
         assert len(labels1.videos[0].filename) == 4  # All images combined
-    
+
     def test_shape_mismatch(self, tmp_path):
         """Test that videos with different shapes don't match."""
         # Create two datasets with different shapes
         images1 = ["img1.jpg"]
         images2 = ["img2.jpg"]
-        
+
         # Create actual image files
         for img in images1 + images2:
             (tmp_path / img).touch()
-        
+
         # Create annotations with different dimensions
         ann1 = {
             "images": [{"id": 0, "file_name": "img1.jpg", "width": 640, "height": 480}],
@@ -1059,7 +1064,7 @@ class TestShapeBasedMerging:
                 }
             ],
         }
-        
+
         ann2 = {
             "images": [{"id": 0, "file_name": "img2.jpg", "width": 320, "height": 240}],
             "annotations": [
@@ -1080,24 +1085,24 @@ class TestShapeBasedMerging:
                 }
             ],
         }
-        
+
         # Save JSON files
         with open(tmp_path / "ann1.json", "w") as f:
             json.dump(ann1, f)
         with open(tmp_path / "ann2.json", "w") as f:
             json.dump(ann2, f)
-        
+
         # Load labels
         labels1 = coco.read_labels(tmp_path / "ann1.json")
         labels2 = coco.read_labels(tmp_path / "ann2.json")
-        
+
         video1 = labels1.videos[0]
         video2 = labels2.videos[0]
-        
+
         # Should not match due to different shapes
         assert not video1.matches_shape(video2)
         assert not video2.matches_shape(video1)
-        
+
         # Test merge - should keep separate videos
         result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
         assert result.successful
