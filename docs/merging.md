@@ -142,11 +142,9 @@ print(f"Successfully matched {len(result.videos_matched)} videos")
 # Original structure when annotations were created
 ├── /data/experiments/
 │   ├── session_001/
-│   │   ├── behavior_recording.mp4
-│   │   └── neural_recording.mp4
+│   │   └── behavior_recording.mp4
 │   ├── session_002/
-│   │   ├── behavior_recording.mp4
-│   │   └── neural_recording.mp4
+│   │   └── behavior_recording.mp4
 │   └── annotations.slp
 
 # New organized structure  
@@ -154,9 +152,6 @@ print(f"Successfully matched {len(result.videos_matched)} videos")
 │   ├── behavior_videos/
 │   │   ├── session_001_behavior_recording.mp4  # Renamed!
 │   │   └── session_002_behavior_recording.mp4  # Renamed!
-│   ├── neural_videos/
-│   │   ├── session_001_neural_recording.mp4    # Renamed!
-│   │   └── session_002_neural_recording.mp4    # Renamed!
 │   ├── old_annotations.slp                     # Original annotations
 │   └── new_predictions.slp                     # New predictions with new paths
 ```
