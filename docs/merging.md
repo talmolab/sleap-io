@@ -115,13 +115,13 @@ result = base_labels.merge(new_labels, frame_strategy="smart")
 
 **Behavior matrix:**
 
-| Base frame | New frame | Result | Reasoning |
-|------------|-----------|--------|-----------|
-| User label | Prediction | User label | Manual annotations are preserved |
-| User label | User label | Base user label | Avoid duplicates, keep original |
-| Prediction | User label | User label | Manual corrections override predictions |
-| Prediction (score: 0.8) | Prediction (score: 0.9) | Prediction (0.9) | Higher confidence wins |
-| Empty | Any | New instance | Add missing annotations |
+| Base frame              | New frame               | Result           | Reasoning                               |
+| ----------------------- | ----------------------- | ---------------- | --------------------------------------- |
+| User label              | Prediction              | User label       | Manual annotations are preserved        |
+| User label              | User label              | Base user label  | Avoid duplicates, keep original         |
+| Prediction              | User label              | User label       | Manual corrections override predictions |
+| Prediction (score: 0.8) | Prediction (score: 0.9) | Prediction (0.9) | Higher confidence wins                  |
+| Empty                   | Any                     | New instance     | Add missing annotations                 |
 
 ### Keep original strategy
 
@@ -646,78 +646,142 @@ Common issues and solutions when merging datasets.
 
 ## API reference
 
+### Labels merge method
+
+::: sleap_io.model.labels.Labels.merge
+    options:
+        heading_level: 4
+
 ### Enums
 
 ::: sleap_io.model.matching.SkeletonMatchMethod
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.InstanceMatchMethod
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.TrackMatchMethod
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.VideoMatchMethod
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.FrameStrategy
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.ErrorMode
+    options:
+        heading_level: 4
 
 ### Matcher classes
 
 ::: sleap_io.model.matching.SkeletonMatcher
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.InstanceMatcher
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.TrackMatcher
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.VideoMatcher
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.FrameMatcher
+    options:
+        heading_level: 4
 
 ### Pre-configured matchers
 
 ::: sleap_io.model.matching.STRUCTURE_SKELETON_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.SUBSET_SKELETON_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.OVERLAP_SKELETON_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.DUPLICATE_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.IOU_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.IDENTITY_INSTANCE_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.NAME_TRACK_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.IDENTITY_TRACK_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.AUTO_VIDEO_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.SOURCE_VIDEO_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.PATH_VIDEO_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.BASENAME_VIDEO_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.IMAGE_DEDUP_VIDEO_MATCHER
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.SHAPE_VIDEO_MATCHER
+    options:
+        heading_level: 4
 
 ### Result classes
 
 ::: sleap_io.model.matching.MergeResult
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.ConflictResolution
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.MergeError
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.SkeletonMismatchError
+    options:
+        heading_level: 4
 
 ::: sleap_io.model.matching.VideoNotFoundError
+    options:
+        heading_level: 4
 
 ### Progress tracking
 
 ::: sleap_io.model.matching.MergeProgressBar
-
-### Labels merge method
-
-::: sleap_io.model.labels.Labels.merge
+    options:
+        heading_level: 4
