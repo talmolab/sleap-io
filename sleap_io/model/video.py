@@ -510,12 +510,12 @@ class Video:
             self_shape = self.backend_metadata["shape"]
         else:
             self_shape = self.shape
-            
+
         if other.backend is None and "shape" in other.backend_metadata:
             other_shape = other.backend_metadata["shape"]
         else:
             other_shape = other.shape
-        
+
         # Handle None shapes
         if self_shape is None or other_shape is None:
             return False
