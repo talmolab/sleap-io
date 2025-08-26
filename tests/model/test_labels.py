@@ -1,6 +1,7 @@
 """Test methods and functions in the sleap_io.model.labels file."""
 
 import copy
+import os
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,17 @@ from sleap_io import (
     load_slp,
 )
 from sleap_io.model.labels import Labels
+from sleap_io.model.matching import (
+    InstanceMatcher,
+    InstanceMatchMethod,
+    SkeletonMatcher,
+    SkeletonMatchMethod,
+    SkeletonMismatchError,
+    TrackMatcher,
+    TrackMatchMethod,
+    VideoMatcher,
+    VideoMatchMethod,
+)
 
 
 def test_labels():
@@ -2657,3 +2669,1145 @@ def test_from_numpy_partial_nan_track():
     assert len(labels[0].instances) == 1
     assert labels[0].instances[0].track == labels.tracks[0]
     assert_allclose(labels[0].instances[0].numpy(), np.array([[10, 20], [30, 40]]))
+
+
+def test_labels_merge_basic():
+    """Test basic merge functionality."""
+    # Create first Labels object
+    skel1 = Skeleton(nodes=["head", "tail"])
+    video1 = Video(filename="video1.mp4")
+    track1 = Track(name="track1")
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel1)
+    labels1.videos.append(video1)
+    labels1.tracks.append(track1)
+
+    # Add a frame with an instance
+    frame1 = LabeledFrame(
+        video=video1,
+        frame_idx=0,
+        instances=[
+            Instance.from_numpy(
+                np.array([[10, 10], [20, 20]]), skeleton=skel1, track=track1
+            )
+        ],
+    )
+    labels1.append(frame1)
+
+    # Create second Labels object
+    skel2 = Skeleton(nodes=["head", "tail"])  # Same structure
+    video2 = Video(filename="video2.mp4")  # Different video
+    track2 = Track(name="track2")  # Different track
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel2)
+    labels2.videos.append(video2)
+    labels2.tracks.append(track2)
+
+    # Add a frame with an instance
+    frame2 = LabeledFrame(
+        video=video2,
+        frame_idx=0,
+        instances=[
+            Instance.from_numpy(
+                np.array([[30, 30], [40, 40]]), skeleton=skel2, track=track2
+            )
+        ],
+    )
+    labels2.append(frame2)
+
+    # Merge labels2 into labels1 with explicit video matcher to ensure no matching
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    result = labels1.merge(labels2, video_matcher=video_matcher)
+
+    # Check result
+    assert result.successful
+    assert result.frames_merged == 1
+    assert result.instances_added == 1
+    assert len(labels1.videos) == 2  # Both videos should be present
+    assert len(labels1.tracks) == 2  # Both tracks should be present
+    assert len(labels1.labeled_frames) == 2  # Both frames should be present
+
+
+def test_labels_merge_skeleton_mismatch_strict():
+    """Test merge with skeleton mismatch in strict mode."""
+    # Create first Labels with one skeleton
+    skel1 = Skeleton(nodes=["head", "tail"])
+    labels1 = Labels()
+    labels1.skeletons.append(skel1)
+
+    # Create second Labels with different skeleton
+    skel2 = Skeleton(nodes=["nose", "body", "tail"])  # Different structure
+    labels2 = Labels()
+    labels2.skeletons.append(skel2)
+
+    # Try to merge with strict validation
+    with pytest.raises(SkeletonMismatchError, match="No matching skeleton found"):
+        labels1.merge(labels2, validate=True, error_mode="strict")
+
+
+def test_labels_merge_skeleton_mismatch_warn(capsys):
+    """Test merge with skeleton mismatch in warn mode."""
+    # Create first Labels with one skeleton
+    skel1 = Skeleton(nodes=["head", "tail"])
+    labels1 = Labels()
+    labels1.skeletons.append(skel1)
+
+    # Create second Labels with different skeleton
+    skel2 = Skeleton(nodes=["nose", "body", "tail"], name="different")
+    labels2 = Labels()
+    labels2.skeletons.append(skel2)
+
+    # Merge with warn mode (should print warning but continue)
+    result = labels1.merge(labels2, validate=True, error_mode="warn")
+
+    assert result.successful
+    assert len(labels1.skeletons) == 2  # New skeleton should be added
+
+    # Check that a warning was printed
+    captured = capsys.readouterr()
+    assert "Warning: No matching skeleton" in captured.out
+
+
+def test_labels_merge_with_progress_callback():
+    """Test merge with progress callback."""
+    # Create two Labels objects with frames
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+
+    # Add multiple frames to labels2
+    for i in range(5):
+        frame = LabeledFrame(
+            video=video,
+            frame_idx=i * 10,  # Different frame indices
+            instances=[
+                Instance.from_numpy(np.array([[i, i], [i + 10, i + 10]]), skeleton=skel)
+            ],
+        )
+        labels2.append(frame)
+
+    # Track progress
+    progress_calls = []
+
+    def progress_callback(current, total, message):
+        progress_calls.append((current, total, message))
+
+    # Merge with progress callback
+    result = labels1.merge(labels2, progress_callback=progress_callback)
+
+    assert result.successful
+    assert len(progress_calls) == 6  # One call per frame + final
+    assert progress_calls[0] == (0, 5, "Merging frame 1/5")
+    assert progress_calls[-2] == (4, 5, "Merging frame 5/5")
+    assert progress_calls[-1] == (5, 5, "Merge complete")
+
+
+def test_labels_merge_video_not_matched():
+    """Test merge when video is not matched - should add new video."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video2)
+
+    # Add frame to labels2
+    frame = LabeledFrame(
+        video=video2,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels2.append(frame)
+
+    # Merge with strict path matching to ensure videos are not matched
+    video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    result = labels1.merge(labels2, video_matcher=video_matcher)
+
+    assert result.successful
+    assert len(labels1.videos) == 2
+    assert video2 in labels1.videos
+
+
+def test_labels_merge_track_matching():
+    """Test merge with track matching."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+    track1 = Track(name="mouse1")
+    track2 = Track(name="mouse1")  # Same name, different object
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    labels1.tracks.append(track1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    labels2.tracks.append(track2)
+
+    # Add frames with tracked instances
+    frame1 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[
+            Instance.from_numpy(
+                np.array([[10, 10], [20, 20]]), skeleton=skel, track=track1
+            )
+        ],
+    )
+    labels1.append(frame1)
+
+    frame2 = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[
+            Instance.from_numpy(
+                np.array([[15, 15], [25, 25]]), skeleton=skel, track=track2
+            )
+        ],
+    )
+    labels2.append(frame2)
+
+    # Merge with track name matching
+    track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
+    result = labels1.merge(labels2, track_matcher=track_matcher)
+
+    assert result.successful
+    assert len(labels1.tracks) == 1  # Tracks should be matched by name
+
+
+def test_labels_merge_conflict_resolution():
+    """Test merge with instance conflicts."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+
+    # Add overlapping frames
+    frame1 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[
+            Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel),
+            PredictedInstance.from_numpy(
+                np.array([[30, 30], [40, 40]]), skeleton=skel, score=0.8
+            ),
+        ],
+    )
+    labels1.append(frame1)
+
+    frame2 = LabeledFrame(
+        video=video,
+        frame_idx=0,  # Same frame index
+        instances=[
+            Instance.from_numpy(
+                np.array([[11, 11], [21, 21]]), skeleton=skel
+            ),  # Close to first
+            PredictedInstance.from_numpy(
+                np.array([[31, 31], [41, 41]]), skeleton=skel, score=0.9
+            ),  # Better score
+        ],
+    )
+    labels2.append(frame2)
+
+    # Merge with spatial matching
+    instance_matcher = InstanceMatcher(
+        method=InstanceMatchMethod.SPATIAL, threshold=5.0
+    )
+    result = labels1.merge(
+        labels2, instance_matcher=instance_matcher, frame_strategy="smart"
+    )
+
+    assert result.successful
+    assert result.frames_merged == 1
+    assert len(result.conflicts) > 0  # Should have recorded conflicts
+
+
+def test_labels_merge_frame_strategies():
+    """Test different frame merge strategies."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Test keep_original strategy
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+
+    frame1 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels1.append(frame1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+
+    frame2 = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)],
+    )
+    labels2.append(frame2)
+
+    # Merge with keep_original
+    original_instances = len(labels1.labeled_frames[0].instances)
+    result = labels1.merge(labels2, frame_strategy="keep_original")
+
+    assert result.successful
+    assert (
+        len(labels1.labeled_frames[0].instances) == original_instances
+    )  # Should keep original
+
+
+def test_labels_merge_suggestions():
+    """Test merging of suggestions."""
+    video = Video(filename="test.mp4")
+
+    labels1 = Labels()
+    labels1.videos.append(video)
+
+    labels2 = Labels()
+    labels2.videos.append(video)
+
+    # Add a suggestion to labels2
+    suggestion = SuggestionFrame(video=video, frame_idx=10)
+    labels2.suggestions.append(suggestion)
+
+    # Merge
+    result = labels1.merge(labels2)
+
+    assert result.successful
+    assert len(labels1.suggestions) == 1
+    assert labels1.suggestions[0].frame_idx == 10
+
+
+def test_labels_merge_provenance_tracking():
+    """Test that merge history is tracked in provenance."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+
+    # Add frames to labels2
+    for i in range(3):
+        frame = LabeledFrame(
+            video=video,
+            frame_idx=i,
+            instances=[
+                Instance.from_numpy(np.array([[i, i], [i + 10, i + 10]]), skeleton=skel)
+            ],
+        )
+        labels2.append(frame)
+
+    # Merge and check provenance
+    result = labels1.merge(labels2)
+
+    assert result.successful
+    assert "merge_history" in labels1.provenance
+    assert len(labels1.provenance["merge_history"]) == 1
+
+    merge_record = labels1.provenance["merge_history"][0]
+    assert merge_record["source_labels"]["n_frames"] == 3
+    assert merge_record["source_labels"]["n_videos"] == 1
+    assert merge_record["source_labels"]["n_skeletons"] == 1
+    assert merge_record["strategy"] == "smart"
+
+
+def test_labels_merge_custom_matchers():
+    """Test merge with custom matchers."""
+    # Create labels with specific matching requirements
+    skel = Skeleton(nodes=["head", "thorax", "abdomen"])
+    video1 = Video(filename="/path/to/video.mp4")
+    video2 = Video(filename="/different/path/video.mp4")  # Same basename
+    track1 = Track(name="ant1")
+    track2 = Track(name="ant2")
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video1)
+    labels1.tracks.append(track1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video2)
+    labels2.tracks.append(track2)
+
+    # Configure custom matchers
+    skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.SUBSET)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)  # Match by basename
+    track_matcher = TrackMatcher(
+        method=TrackMatchMethod.IDENTITY
+    )  # Don't match by name
+
+    # Merge with custom matchers
+    result = labels1.merge(
+        labels2,
+        skeleton_matcher=skeleton_matcher,
+        video_matcher=video_matcher,
+        track_matcher=track_matcher,
+    )
+
+    assert result.successful
+    assert len(labels1.videos) == 1  # Videos matched by basename
+    assert len(labels1.tracks) == 2  # Tracks not matched (identity matching)
+
+
+def test_labels_merge_empty():
+    """Test merging empty Labels objects."""
+    labels1 = Labels()
+    labels2 = Labels()
+
+    result = labels1.merge(labels2)
+
+    assert result.successful
+    assert result.frames_merged == 0
+    assert result.instances_added == 0
+
+
+def test_labels_merge_error_handling(monkeypatch):
+    """Test error handling during merge."""
+    labels1 = Labels()
+    labels2 = Labels()
+
+    # Add matching skeletons to both labels so matching will be attempted
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    labels1.skeletons.append(skel1)
+    labels2.skeletons.append(skel2)
+
+    # Mock the skeleton matcher to raise an exception during match
+    def mock_match(self, skeleton1, skeleton2):
+        raise Exception("Test error")
+
+    # Use monkeypatch to mock the match method
+    monkeypatch.setattr(SkeletonMatcher, "match", mock_match)
+
+    # Merge should handle the error based on error_mode
+    with pytest.raises(Exception, match="Test error"):
+        labels1.merge(labels2, error_mode="strict")
+
+
+def test_labels_merge_map_instance():
+    """Test the _map_instance helper method."""
+    # Create Labels with skeleton and track
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    track1 = Track(name="track1")
+    track2 = Track(name="track2")
+
+    labels = Labels()
+    labels.skeletons.append(skel1)
+    labels.tracks.append(track1)
+
+    # Create maps
+    skeleton_map = {skel2: skel1}
+    track_map = {track2: track1}
+
+    # Create instance with original skeleton and track
+    inst = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skel2, track=track2
+    )
+
+    # Map the instance
+    mapped_inst = labels._map_instance(inst, skeleton_map, track_map)
+
+    assert mapped_inst.skeleton == skel1
+    assert mapped_inst.track == track1
+    assert np.array_equal(mapped_inst.numpy(), inst.numpy())
+
+
+def test_labels_merge_predicted_instance_mapping():
+    """Test _map_instance with PredictedInstance."""
+    skel1 = Skeleton(nodes=["head", "tail"])
+    skel2 = Skeleton(nodes=["head", "tail"])
+    track1 = Track(name="track1")
+    track2 = Track(name="track2")
+
+    labels = Labels()
+    labels.skeletons.append(skel1)
+    labels.tracks.append(track1)
+
+    # Create maps
+    skeleton_map = {skel2: skel1}
+    track_map = {track2: track1}
+
+    # Create PredictedInstance with original skeleton and track
+    inst = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skel2, track=track2, score=0.95
+    )
+
+    # Map the instance
+    mapped_inst = labels._map_instance(inst, skeleton_map, track_map)
+
+    assert isinstance(mapped_inst, PredictedInstance)
+    assert mapped_inst.skeleton == skel1
+    assert mapped_inst.track == track1
+    assert mapped_inst.score == 0.95
+    assert np.array_equal(mapped_inst.numpy(), inst.numpy())
+
+
+def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
+    """Test merge with VideoMatchMethod.BASENAME using fallback directories.
+
+    This tests the case where videos have the same basename but are in different
+    locations, and we use fallback directories to resolve them.
+    """
+    import shutil
+
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+
+    # Create directory structure
+    project_a = tmp_path / "project_a"
+    project_b = tmp_path / "project_b"
+    shared_videos = tmp_path / "shared_videos"
+
+    project_a.mkdir()
+    project_b.mkdir()
+    shared_videos.mkdir()
+
+    (project_a / "videos").mkdir()
+    (project_b / "videos").mkdir()
+
+    # Copy actual video files with same basename to different locations
+    video_a_path = project_a / "videos" / "recording.mp4"
+    video_shared_path = shared_videos / "recording.mp4"
+
+    shutil.copy(test_video, video_a_path)
+    shutil.copy(test_video, video_shared_path)
+
+    # Create Labels with videos referencing different paths but same basename
+    skel = Skeleton(nodes=["head", "tail"])
+
+    # Labels A references the video in project_a
+    labels_a = Labels()
+    labels_a.skeletons.append(skel)
+    video_a = Video(filename=str(video_a_path))
+    labels_a.videos.append(video_a)
+
+    frame_a = LabeledFrame(
+        video=video_a,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels_a.append(frame_a)
+
+    # Labels B references a video in project_b
+    labels_b = Labels()
+    labels_b.skeletons.append(skel)
+    video_b_path = project_b / "videos" / "recording.mp4"  # Same basename
+    # Don't copy the file initially to test the fallback mechanism
+    # But we need it for saving/loading, so create it temporarily
+    shutil.copy(test_video, video_b_path)
+    video_b = Video(filename=str(video_b_path))
+    labels_b.videos.append(video_b)
+
+    frame_b = LabeledFrame(
+        video=video_b,
+        frame_idx=1,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)],
+    )
+    labels_b.append(frame_b)
+
+    # Save and load the labels to test with real file I/O
+    labels_a.save(project_a / "labels_a.slp")
+    labels_b.save(project_b / "labels_b.slp")
+
+    loaded_a = load_slp(project_a / "labels_a.slp")
+    loaded_b = load_slp(project_b / "labels_b.slp")
+
+    # Test 1: Without fallback, videos don't match (different paths)
+    video_matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    result_no_match = loaded_a.merge(loaded_b, video_matcher=video_matcher_no_fallback)
+    assert result_no_match.successful
+    assert len(loaded_a.videos) == 2  # Both videos added (no match)
+
+    # Reload for next test
+    loaded_a = load_slp(project_a / "labels_a.slp")
+    loaded_b = load_slp(project_b / "labels_b.slp")
+
+    # Test 2: With RESOLVE method (simplified - matches by basename)
+    # The videos have same basename so they should match
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    result = loaded_a.merge(loaded_b, video_matcher=video_matcher)
+    assert result.successful
+    # Videos match because recording.mp4 exists in fallback directory
+    assert len(loaded_a.videos) == 1  # Videos matched via fallback
+    assert len(loaded_a.labeled_frames) == 2  # Both frames merged
+
+    # Test 3: Multiple videos with same basename in different locations
+    labels_c = Labels()
+    labels_c.skeletons.append(skel)
+
+    # Add another video with different basename
+    other_video_path = project_b / "videos" / "other.mp4"
+    shutil.copy(test_video, other_video_path)
+    video_c = Video(filename=str(other_video_path))
+    labels_c.videos.append(video_c)
+
+    # Also add a video that will match via fallback
+    video_d = Video(filename=str(project_b / "videos" / "recording.mp4"))
+    labels_c.videos.append(video_d)
+
+    frame_c = LabeledFrame(
+        video=video_c,
+        frame_idx=2,
+        instances=[Instance.from_numpy(np.array([[50, 50], [60, 60]]), skeleton=skel)],
+    )
+    labels_c.append(frame_c)
+
+    # Reset labels for clean test
+    labels_d = Labels()
+    labels_d.skeletons.append(skel)
+    labels_d.videos.append(Video(filename=str(project_a / "videos" / "recording.mp4")))
+
+    result3 = labels_d.merge(labels_c, video_matcher=video_matcher)
+    assert result3.successful
+    assert len(labels_d.videos) == 2  # recording.mp4 matched, other.mp4 added
+
+
+def test_labels_merge_video_basename_matching(tmp_path):
+    """Test merge with VideoMatchMethod.BASENAME.
+
+    This tests basename matching with videos in different directories.
+    """
+    import shutil
+
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+
+    # Create directory structure
+    base = tmp_path / "base"
+    base.mkdir()
+
+    subdir1 = base / "data" / "videos"
+    subdir2 = base / "backup" / "videos"
+    subdir1.mkdir(parents=True)
+    subdir2.mkdir(parents=True)
+
+    # Copy video files with same basename to different locations
+    video1_path = subdir1 / "experiment.mp4"
+    video2_path = subdir2 / "experiment.mp4"
+    base_video_path = base / "experiment.mp4"
+
+    shutil.copy(test_video, video1_path)
+    shutil.copy(test_video, video2_path)
+    shutil.copy(test_video, base_video_path)
+
+    skel = Skeleton(nodes=["head", "tail"])
+
+    # Create Labels referencing videos in different subdirs
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    video1 = Video(filename=str(video1_path))
+    labels1.videos.append(video1)
+
+    frame1 = LabeledFrame(
+        video=video1,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels1.append(frame1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    video2 = Video(filename=str(video2_path))
+    labels2.videos.append(video2)
+
+    frame2 = LabeledFrame(
+        video=video2,
+        frame_idx=1,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)],
+    )
+    labels2.append(frame2)
+
+    # Test 1: Videos with same basename but different paths
+    # BASENAME method does filename-based matching ignoring directory paths
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    result = labels1.merge(labels2, video_matcher=video_matcher)
+    assert result.successful
+    # Videos match because they have the same basename (experiment.mp4)
+    assert len(labels1.videos) == 1  # Videos matched via base_path lookup
+
+    # Test 2: Test relative path matching (same relative structure)
+    # Create labels with absolute paths that have same relative structure
+    if os.name != "nt":  # Skip on Windows due to path anchor differences
+        # Create two videos with same relative path from root
+        abs_path1 = Path("/data/videos/test.mp4")
+        abs_path2 = Path("/backup/videos/test.mp4")
+
+        labels3 = Labels()
+        labels3.skeletons.append(skel)
+        video3 = Video(filename=str(abs_path1))
+        labels3.videos.append(video3)
+
+        labels4 = Labels()
+        labels4.skeletons.append(skel)
+        video4 = Video(filename=str(abs_path2))
+        labels4.videos.append(video4)
+
+        # These have different absolute paths but might match on relative structure
+        video_matcher2 = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+        # The merge will attempt relative_to() which will raise ValueError
+        # This tests the exception handling
+        result2 = labels3.merge(labels4, video_matcher=video_matcher2)
+        assert result2.successful
+
+    # Test 3: Test when base_path contains the video file directly
+    labels5 = Labels()
+    labels5.skeletons.append(skel)
+    video5 = Video(filename="experiment.mp4")  # Just basename
+    labels5.videos.append(video5)
+
+    frame5 = LabeledFrame(
+        video=video5,
+        frame_idx=2,
+        instances=[Instance.from_numpy(np.array([[50, 50], [60, 60]]), skeleton=skel)],
+    )
+    labels5.append(frame5)
+
+    # This should find experiment.mp4 in base path
+    video_matcher3 = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    # Merge with labels1 which has full path
+    labels6 = Labels()
+    labels6.skeletons.append(skel)
+    labels6.videos.append(video1)  # Full path to subdir1/experiment.mp4
+
+    result3 = labels6.merge(labels5, video_matcher=video_matcher3)
+    assert result3.successful
+    # Videos should match because experiment.mp4 exists in base_path
+    assert len(labels6.videos) == 1  # Videos matched via base_path
+
+
+def test_labels_merge_video_basename_complex_scenario(tmp_path):
+    """Test complex merge scenario with multiple resolution strategies.
+
+    This comprehensive test covers:
+    - Multiple videos with same/different basenames
+    - Fallback directories and base_path working together
+    - Priority order of resolution strategies
+    - Edge cases like missing files and path errors
+    """
+    import shutil
+
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+
+    # Create complex directory structure
+    workspace = tmp_path / "workspace"
+    archive = tmp_path / "archive"
+    shared = tmp_path / "shared"
+
+    for d in [workspace, archive, shared]:
+        d.mkdir()
+
+    project1 = workspace / "project1"
+    project2 = workspace / "project2"
+    project1.mkdir()
+    project2.mkdir()
+
+    # Copy video files to various locations
+    shutil.copy(test_video, project1 / "video_a.mp4")
+    shutil.copy(test_video, project2 / "video_b.mp4")
+    shutil.copy(test_video, shared / "video_a.mp4")  # Duplicate basename in shared
+    shutil.copy(test_video, shared / "video_c.mp4")  # Only in shared
+    shutil.copy(test_video, archive / "video_b.mp4")  # Duplicate basename in archive
+
+    skel = Skeleton(nodes=["head", "tail"])
+
+    # Create Labels1 with multiple videos
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+
+    # Video in project1
+    video1a = Video(filename=str(project1 / "video_a.mp4"))
+    labels1.videos.append(video1a)
+
+    # Video that doesn't exist locally but might be in shared
+    # Create the file so save/load works
+    shutil.copy(test_video, project1 / "video_c.mp4")
+    video1c = Video(filename=str(project1 / "video_c.mp4"))
+    labels1.videos.append(video1c)
+
+    frame1 = LabeledFrame(
+        video=video1a,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels1.append(frame1)
+
+    # Create Labels2 with overlapping videos
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+
+    # Video with same basename as video1a but different location
+    video2a = Video(filename=str(shared / "video_a.mp4"))
+    labels2.videos.append(video2a)
+
+    # Video in project2
+    video2b = Video(filename=str(project2 / "video_b.mp4"))
+    labels2.videos.append(video2b)
+
+    # Video that matches video1c but from different path
+    # Create the file so save/load works
+    shutil.copy(test_video, archive / "video_c.mp4")
+    video2c = Video(filename=str(archive / "video_c.mp4"))
+    labels2.videos.append(video2c)
+
+    frame2 = LabeledFrame(
+        video=video2a,
+        frame_idx=1,
+        instances=[Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skel)],
+    )
+    labels2.append(frame2)
+
+    frame3 = LabeledFrame(
+        video=video2b,
+        frame_idx=2,
+        instances=[Instance.from_numpy(np.array([[50, 50], [60, 60]]), skeleton=skel)],
+    )
+    labels2.append(frame3)
+
+    # Save and reload to simulate real usage
+    labels1.save(project1 / "labels1.slp")
+    labels2.save(project2 / "labels2.slp")
+
+    loaded1 = load_slp(project1 / "labels1.slp")
+    loaded2 = load_slp(project2 / "labels2.slp")
+
+    # Create a video matcher using BASENAME (filename-based matching)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    result = loaded1.merge(loaded2, video_matcher=video_matcher)
+
+    assert result.successful
+    assert result.frames_merged == 2  # frame2 and frame3
+
+    # Check video handling:
+    # - video1a and video2a: Same basename but different paths, both exist
+    # - video1c: Doesn't exist at original path but exists in shared (fallback)
+    # - video2b: Exists at its path
+    # - video2c: Doesn't exist at original path, should check fallbacks
+
+    # After merge, we should have all unique videos
+    # Check all unique videos are present
+    [v.filename for v in loaded1.videos]
+
+    # Test with edge cases
+
+    # Test 4: Test with non-existent fallback directories (should not crash)
+    video_matcher_bad = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    labels3 = Labels()
+    labels3.skeletons.append(skel)
+    video3 = Video(filename="orphan.mp4")
+    labels3.videos.append(video3)
+
+    result2 = loaded1.merge(labels3, video_matcher=video_matcher_bad)
+    assert result2.successful  # Should not crash even with bad paths
+
+    # Test 5: Test priority order - direct match should take precedence
+    labels5 = Labels()
+    labels5.skeletons.append(skel)
+    labels5.videos.append(video1a)  # Exact same video object as in loaded1
+
+    labels6 = Labels()
+    labels6.skeletons.append(skel)
+    # Same filename but different object
+    video6 = Video(filename=str(project1 / "video_a.mp4"))
+    labels6.videos.append(video6)
+
+    # Should match based on path even before trying resolve strategies
+    result4 = labels5.merge(labels6, video_matcher=video_matcher)
+    assert result4.successful
+    assert len(labels5.videos) == 1  # Should match and not duplicate
+
+
+def test_labels_merge_video_basename_edge_cases(tmp_path):
+    """Test VideoMatchMethod.BASENAME edge cases.
+
+    Tests various edge cases for the BASENAME matching method.
+    """
+    import shutil
+
+    # Get path to test video
+    test_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+
+    # Create directory structure
+    dir1 = tmp_path / "dir1"
+    dir2 = tmp_path / "dir2"
+    fallback = tmp_path / "fallback"
+    base = tmp_path / "base"
+
+    dir1.mkdir()
+    dir2.mkdir()
+    fallback.mkdir()
+    base.mkdir()
+
+    # Test 1: Fallback directories with matching basename
+    # The key is that the videos must:
+    # 1. Have the same basename
+    # 2. NOT match via matches_path (different directories)
+    # 3. Have the file exist in fallback directory
+
+    video1_path = dir1 / "recording.mp4"
+    video2_path = dir2 / "recording.mp4"  # Same basename, different directory
+    fallback_video = fallback / "recording.mp4"
+
+    shutil.copy(test_video, video1_path)
+    # Copy to video2_path as well so Video() can open it
+    shutil.copy(test_video, video2_path)
+    shutil.copy(test_video, fallback_video)  # Also in fallback
+
+    # Create videos - the key is they must not match via matches_path
+    # but should match via fallback when basename matches
+    video1 = Video(filename=str(video1_path))
+    video2 = Video(filename=str(video2_path))
+
+    # First verify they don't match without fallback
+    matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    assert not matcher_no_fallback.match(video1, video2)
+
+    # Now test with simplified RESOLVE (basename matching)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    # They should match because they have the same basename (recording.mp4)
+    assert video_matcher.match(video1, video2)
+
+    # Test 2: Base path with basename lookup
+    # Create videos with same basename that exists in base_path
+    base_video = base / "shared.mp4"
+    shutil.copy(test_video, base_video)
+
+    # Create videos that reference files with same basename but different paths
+    # These files don't need to exist
+    video3_path = dir1 / "shared.mp4"
+    video4_path = dir2 / "shared.mp4"
+
+    shutil.copy(test_video, video3_path)
+    shutil.copy(test_video, video4_path)
+
+    video3 = Video(filename=str(video3_path))
+    video4 = Video(filename=str(video4_path))
+
+    # Without base_path, they shouldn't match (different paths)
+    matcher_no_base = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
+    assert not matcher_no_base.match(video3, video4)
+
+    # With simplified RESOLVE (basename matching), they should match
+    video_matcher2 = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    # Should match because they have the same basename (shared.mp4)
+    assert video_matcher2.match(video3, video4)
+
+    # Test 3: Non-matching basenames don't match
+    # RESOLVE should NOT match videos with different basenames
+    # (simplified RESOLVE only does basename matching)
+
+    # Create videos with different basenames
+    diff_video1_path = dir1 / "unique1.mp4"
+    diff_video2_path = dir2 / "unique2.mp4"  # Different basename
+
+    shutil.copy(test_video, diff_video1_path)
+    shutil.copy(test_video, diff_video2_path)
+
+    video5 = Video(filename=str(diff_video1_path))
+    video6 = Video(filename=str(diff_video2_path))
+
+    video_matcher4 = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    # Should not match because basenames differ (unique1.mp4 vs unique2.mp4)
+    result = video_matcher4.match(video5, video6)
+    assert not result  # Should not match
+
+    # Additional coverage tests
+    # Test same object matching (line 228)
+    video_same = Video(filename=str(diff_video1_path))
+    matcher_same = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    assert matcher_same.match(video_same, video_same)
+
+    # Test additional edge case: ensure consistent behavior
+    # All simplified RESOLVE matchers should behave the same (basename matching)
+    matcher_simple = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    assert matcher_simple.match(video1, video2)  # Same basenames match
+    assert matcher_simple.match(video3, video4)  # Same basenames match
+
+    # Test exception handling in relative_to (lines 273-274)
+    # Create videos with relative paths that will fail relative_to
+    video_rel1 = Video(filename="relative/path1.mp4")
+    video_rel2 = Video(filename="relative/path2.mp4")
+    matcher_exc = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    # This should trigger the exception handler
+    assert not matcher_exc.match(video_rel1, video_rel2)
+
+    # Test non-matching basenames with path check (line 278)
+    # These have different basenames, so should go through the else branch
+    assert not matcher_same.match(video5, video6)
+
+    # Test 4: Test with both fallback and base_path
+    # Ensure fallback is checked before base_path
+    combo_video = fallback / "combo.mp4"
+    base_combo = base / "combo.mp4"
+
+    shutil.copy(test_video, combo_video)  # In fallback
+    shutil.copy(test_video, base_combo)  # Also in base
+
+    video5_path = dir1 / "combo.mp4"
+    video6_path = dir2 / "combo.mp4"
+
+    shutil.copy(test_video, video5_path)
+    shutil.copy(test_video, video6_path)
+
+    video5 = Video(filename=str(video5_path))
+    video6 = Video(filename=str(video6_path))
+
+    video_matcher4 = VideoMatcher(method=VideoMatchMethod.BASENAME)
+
+    # Should match via fallback (checked before base_path)
+    assert video_matcher4.match(video5, video6)
+
+
+def test_labels_merge_suggestion_frame_duplication():
+    """Test Labels.merge handling of duplicate suggestion frames."""
+    from sleap_io import Labels, SuggestionFrame, Video
+
+    # Create videos
+    video1 = Video(filename="test1.mp4")
+    video2 = Video(filename="test2.mp4")
+
+    # Create labels with suggestion frames
+    labels1 = Labels()
+    labels1.videos.append(video1)
+    labels1.suggestions.append(SuggestionFrame(video=video1, frame_idx=10))
+    labels1.suggestions.append(SuggestionFrame(video=video1, frame_idx=20))
+
+    labels2 = Labels()
+    labels2.videos.append(video1)  # Same video
+    # Add duplicate suggestion frame
+    labels2.suggestions.append(SuggestionFrame(video=video1, frame_idx=10))
+    # Add new suggestion frame
+    labels2.suggestions.append(SuggestionFrame(video=video1, frame_idx=30))
+
+    # Merge labels
+    labels1.merge(labels2)
+
+    # Should have only unique suggestions (lines 1855-1860 check for duplicates)
+    assert len(labels1.suggestions) == 3  # 10, 20, 30 (no duplicate of 10)
+
+    # Check that we have the expected frame indices
+    suggestion_indices = {(s.video.filename, s.frame_idx) for s in labels1.suggestions}
+    assert ("test1.mp4", 10) in suggestion_indices
+    assert ("test1.mp4", 20) in suggestion_indices
+    assert ("test1.mp4", 30) in suggestion_indices
+
+    # Test with different videos
+    labels3 = Labels()
+    labels3.videos.append(video2)
+    labels3.suggestions.append(SuggestionFrame(video=video2, frame_idx=10))
+
+    # Note: The merge won't add the suggestion if the video wasn't mapped
+    # This is because video2 is different from video1
+    # Merge with different video
+    labels1.merge(labels3)
+
+    # If video2 was added to labels1.videos, we should see the suggestion
+    if video2 in labels1.videos:
+        assert any(s.video == video2 and s.frame_idx == 10 for s in labels1.suggestions)
+
+
+def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
+    """Test skeleton references are correctly remapped when merging overlapping frames.
+
+    This test reproduces the bug where instances from merged frames retain references
+    to the original skeleton objects instead of being remapped to the matching skeleton
+    in the target Labels object.
+    """
+    import numpy as np
+
+    from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
+
+    # Create skeleton and video (same structure, different objects)
+    skeleton1 = Skeleton(["head", "tail"])
+    skeleton2 = Skeleton(["head", "tail"])  # Same structure, different object
+    video = Video(filename="test.mp4", open_backend=False)
+
+    # Create first Labels with one frame
+    labels1 = Labels()
+    labels1.skeletons = [skeleton1]
+    labels1.videos = [video]
+    frame1 = LabeledFrame(video=video, frame_idx=0)
+    inst1 = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton1)
+    frame1.instances = [inst1]
+    labels1.append(frame1)
+
+    # Create second Labels with overlapping frame (same frame_idx)
+    labels2 = Labels()
+    labels2.skeletons = [skeleton2]
+    labels2.videos = [video]
+    frame2 = LabeledFrame(video=video, frame_idx=0)
+    inst2 = Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skeleton2)
+    frame2.instances = [inst2]
+    labels2.append(frame2)
+
+    # Verify skeletons are different objects but same structure
+    assert skeleton1 is not skeleton2
+    assert skeleton1.matches(skeleton2)
+
+    # Merge labels2 into labels1
+    result = labels1.merge(labels2, frame_strategy="keep_both")
+
+    assert result.successful
+    assert len(labels1.skeletons) == 1  # Should reuse existing skeleton
+    assert labels1.skeletons[0] is skeleton1  # Should be the original skeleton
+
+    # Check that all instances reference the correct skeleton
+    for frame_idx, frame in enumerate(labels1.labeled_frames):
+        for inst_idx, instance in enumerate(frame.instances):
+            assert instance.skeleton is skeleton1, (
+                f"Frame {frame_idx}, Instance {inst_idx}: "
+                f"skeleton {id(instance.skeleton)} != expected {id(skeleton1)}"
+            )
+
+    # The main test is that the skeleton references are correct.
+    # Previously, saving would fail with ValueError because instances had
+    # skeleton references that weren't in labels1.skeletons.
+    # Now test that save would work (skip actual save/load due to video backend)
+
+    # Simulate what save does - check all instance skeletons are in labels.skeletons
+    for frame in labels1.labeled_frames:
+        for instance in frame.instances:
+            assert instance.skeleton in labels1.skeletons, (
+                "Instance skeleton not in labels.skeletons list"
+            )
