@@ -8,9 +8,6 @@ import pytest
 import sleap_io as sio
 from sleap_io.io import coco
 
-# Import COCO and CVAT fixtures
-pytest_plugins = ["tests.fixtures.coco", "tests.fixtures.cvat"]
-
 
 class TestCOCOBasicLoading:
     """Test basic COCO dataset loading functionality."""
