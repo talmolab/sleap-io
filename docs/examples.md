@@ -9,6 +9,14 @@ This page provides practical examples for common tasks with sleap-io. Each examp
     pip install sleap-io
     ```
     
+    Or run any example script directly with [`uv`](https://docs.astral.sh/uv/):
+    ```bash
+    # Save any example to a file (e.g., example.py)
+    uv run --with sleap-io example.py
+    ```
+    
+    This automatically handles dependencies without needing to manage environments.
+    
     Most examples use `import sleap_io as sio` for brevity.
 
 ## Basic I/O operations
