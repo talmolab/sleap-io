@@ -263,6 +263,9 @@ def read_labels(
             image_paths,
             grayscale=grayscale,
         )
+        # Store shape metadata from JSON (useful when images can't be read)
+        channels = 1 if grayscale else 3
+        video.backend_metadata["shape"] = (len(image_paths), height, width, channels)
         shape_to_video[shape_key] = video
 
     # Process images and annotations

@@ -1679,6 +1679,7 @@ class Labels:
             handle common workflows like merging predictions back into a project.
         """
         from datetime import datetime
+        from pathlib import Path
 
         from sleap_io.model.matching import (
             ConflictResolution,
@@ -1691,6 +1692,7 @@ class Labels:
             SkeletonMismatchError,
             TrackMatcher,
             VideoMatcher,
+            VideoMatchMethod,
         )
 
         # Initialize matchers with defaults if not provided
@@ -1750,11 +1752,58 @@ class Labels:
 
             # Step 2: Match and merge videos
             video_map = {}
+            frame_idx_map = {}  # Maps (old_video, old_idx) -> (new_video, new_idx)
+            
             for other_video in other.videos:
                 matched = False
                 for self_video in self.videos:
                     if video_matcher.match(self_video, other_video):
-                        video_map[other_video] = self_video
+                        # Special handling for different match methods
+                        if video_matcher.method == VideoMatchMethod.IMAGE_DEDUP:
+                            # Deduplicate images from other_video
+                            deduped_video = other_video.deduplicate_with(self_video)
+                            if deduped_video is None:
+                                # All images were duplicates, map to existing video
+                                video_map[other_video] = self_video
+                                # Build frame index mapping for deduplicated frames
+                                if isinstance(other_video.filename, list) and isinstance(self_video.filename, list):
+                                    other_basenames = [Path(f).name for f in other_video.filename]
+                                    self_basenames = [Path(f).name for f in self_video.filename]
+                                    for old_idx, basename in enumerate(other_basenames):
+                                        if basename in self_basenames:
+                                            new_idx = self_basenames.index(basename)
+                                            frame_idx_map[(other_video, old_idx)] = (self_video, new_idx)
+                            else:
+                                # Add deduplicated video as new
+                                self.videos.append(deduped_video)
+                                video_map[other_video] = deduped_video
+                                # Build frame index mapping for remaining frames
+                                if isinstance(other_video.filename, list) and isinstance(deduped_video.filename, list):
+                                    other_basenames = [Path(f).name for f in other_video.filename]
+                                    deduped_basenames = [Path(f).name for f in deduped_video.filename]
+                                    for old_idx, basename in enumerate(other_basenames):
+                                        if basename in deduped_basenames:
+                                            new_idx = deduped_basenames.index(basename)
+                                            frame_idx_map[(other_video, old_idx)] = (deduped_video, new_idx)
+                        elif video_matcher.method == VideoMatchMethod.SHAPE:
+                            # Merge videos with same shape
+                            merged_video = self_video.merge_with(other_video)
+                            # Replace self_video with merged version
+                            self_video_idx = self.videos.index(self_video)
+                            self.videos[self_video_idx] = merged_video
+                            video_map[other_video] = merged_video
+                            video_map[self_video] = merged_video  # Update mapping for self too
+                            # Build frame index mapping
+                            if isinstance(other_video.filename, list) and isinstance(merged_video.filename, list):
+                                other_basenames = [Path(f).name for f in other_video.filename]
+                                merged_basenames = [Path(f).name for f in merged_video.filename]
+                                for old_idx, basename in enumerate(other_basenames):
+                                    if basename in merged_basenames:
+                                        new_idx = merged_basenames.index(basename)
+                                        frame_idx_map[(other_video, old_idx)] = (merged_video, new_idx)
+                        else:
+                            # Regular matching, no special handling
+                            video_map[other_video] = self_video
                         matched = True
                         break
 
@@ -1789,17 +1838,22 @@ class Labels:
                         f"Merging frame {frame_idx + 1}/{total_frames}",
                     )
 
-                # Map video to self
-                mapped_video = video_map.get(other_frame.video, other_frame.video)
+                # Check if frame index needs remapping (for deduplicated/merged videos)
+                if (other_frame.video, other_frame.frame_idx) in frame_idx_map:
+                    mapped_video, mapped_frame_idx = frame_idx_map[(other_frame.video, other_frame.frame_idx)]
+                else:
+                    # Map video to self
+                    mapped_video = video_map.get(other_frame.video, other_frame.video)
+                    mapped_frame_idx = other_frame.frame_idx
 
                 # Find matching frame in self
-                matching_frames = self.find(mapped_video, other_frame.frame_idx)
+                matching_frames = self.find(mapped_video, mapped_frame_idx)
 
                 if len(matching_frames) == 0:
                     # No matching frame, create new one
                     new_frame = LabeledFrame(
                         video=mapped_video,
-                        frame_idx=other_frame.frame_idx,
+                        frame_idx=mapped_frame_idx,
                         instances=[],
                     )
 
