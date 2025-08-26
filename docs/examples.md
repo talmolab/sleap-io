@@ -33,8 +33,6 @@ labels = sio.load_file("predictions.slp")
 
 # Save to NWB file
 labels.save("predictions.nwb")
-
-# The format is automatically detected from the extension
 ```
 
 !!! tip
