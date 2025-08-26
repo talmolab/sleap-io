@@ -695,7 +695,9 @@ class TestCVATCompatibility:
         tracks = set()
         for frame in labels.labeled_frames:
             for instance in frame.instances:
-                assert instance.track is not None, "Track should be created from object_id"
+                assert instance.track is not None, (
+                    "Track should be created from object_id"
+                )
                 tracks.add(instance.track)
 
         assert len(tracks) == 2  # Two unique tracks (mouse 101 and 102)
