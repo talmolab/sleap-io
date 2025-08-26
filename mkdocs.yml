@@ -27,7 +27,7 @@ theme:
 
   features:
     - navigation.tracking
-    # - toc.integrate
+    - toc.integrate
     - toc.follow
     # Tabs
     # - navigation.tabs
