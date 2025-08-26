@@ -336,6 +336,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v051" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v050" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.0
@@ -591,15 +600,6 @@
   <a href="#v002" class="md-nav__link">
     <span class="md-ellipsis">
       v0.0.2
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v001" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.1
     </span>
   </a>
   
@@ -877,6 +877,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v051" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v050" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.0
@@ -1137,15 +1146,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v001" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.1
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1163,6 +1163,111 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v051"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.1">v0.5.1</a><a class="headerlink" href="#v051" title="Permanent link">&para;</a></h2>
+<h2>🎯 Summary</h2>
+<p>This release introduces powerful merging capabilities for annotation workflows, enhanced image sequence handling, and improved developer tooling. The highlight is the new comprehensive merging system that enables human-in-the-loop (HITL) workflows and smart combination of multiple annotation sources.</p>
+<h2>✨ New Features</h2>
+<h3>Comprehensive Merging System (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3342451262" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/216" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/216/hovercard" href="https://github.com/talmolab/sleap-io/pull/216">#216</a>)</h3>
+<ul>
+<li><strong>New <code>Labels.merge()</code> method</strong> with configurable strategies for combining annotations from multiple sources</li>
+<li><strong>Smart merge strategies</strong> that preserve user labels over predictions</li>
+<li><strong>Instance matching</strong> with spatial, identity, and IoU-based methods</li>
+<li><strong>Skeleton harmonization</strong> for consistent structure across merged data</li>
+<li><strong>Video path resolution</strong> with automatic path repair</li>
+<li><strong>Progress tracking</strong> and provenance metadata for merge operations</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Merge annotations with smart conflict resolution
+merged = labels1.merge(labels2, strategy=&quot;smart&quot;)
+
+# Custom merge with specific matchers
+merged = labels1.merge(
+    labels2,
+    video_matcher=&quot;shape&quot;,  # Match videos by dimensions
+    instance_matcher=&quot;iou&quot;,  # Match instances by overlap
+    conflict_strategy=&quot;user&quot;  # Prefer user annotations
+)"><pre><span class="pl-c"># Merge annotations with smart conflict resolution</span>
+<span class="pl-s1">merged</span> <span class="pl-c1">=</span> <span class="pl-s1">labels1</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">labels2</span>, <span class="pl-s1">strategy</span><span class="pl-c1">=</span><span class="pl-s">"smart"</span>)
+
+<span class="pl-c"># Custom merge with specific matchers</span>
+<span class="pl-s1">merged</span> <span class="pl-c1">=</span> <span class="pl-s1">labels1</span>.<span class="pl-c1">merge</span>(
+    <span class="pl-s1">labels2</span>,
+    <span class="pl-s1">video_matcher</span><span class="pl-c1">=</span><span class="pl-s">"shape"</span>,  <span class="pl-c"># Match videos by dimensions</span>
+    <span class="pl-s1">instance_matcher</span><span class="pl-c1">=</span><span class="pl-s">"iou"</span>,  <span class="pl-c"># Match instances by overlap</span>
+    <span class="pl-s1">conflict_strategy</span><span class="pl-c1">=</span><span class="pl-s">"user"</span>  <span class="pl-c"># Prefer user annotations</span>
+)</pre></div>
+<p>See the new <a href="https://io.sleap.ai/v0.5.1/merging/" rel="nofollow">Merging guide</a> for more information.</p>
+<h3>Enhanced <code>ImageVideo</code> support for merging (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3354172442" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/219" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/219/hovercard" href="https://github.com/talmolab/sleap-io/pull/219">#219</a>)</h3>
+<ul>
+<li><strong>Image deduplication</strong> with new <code>IMAGE_DEDUP</code> matcher</li>
+<li><strong>Shape-based matching</strong> for merging videos with same dimensions</li>
+<li><strong>CVAT format support</strong> with automatic track preservation</li>
+<li><strong>New Video methods</strong>:
+<ul>
+<li><code>has_overlapping_images()</code> - Check for duplicate frames</li>
+<li><code>matches_shape()</code> - Compare video dimensions</li>
+<li><code>deduplicate_with()</code> - Remove duplicate frames</li>
+<li><code>merge_with()</code> - Combine image sequences</li>
+</ul>
+</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Remove duplicate images from a video
+video_dedup = video.deduplicate_with(other_video)
+
+# Check if videos have the same shape
+if video1.matches_shape(video2):
+    merged = video1.merge_with(video2)"><pre><span class="pl-c"># Remove duplicate images from a video</span>
+<span class="pl-s1">video_dedup</span> <span class="pl-c1">=</span> <span class="pl-s1">video</span>.<span class="pl-c1">deduplicate_with</span>(<span class="pl-s1">other_video</span>)
+
+<span class="pl-c"># Check if videos have the same shape</span>
+<span class="pl-k">if</span> <span class="pl-s1">video1</span>.<span class="pl-c1">matches_shape</span>(<span class="pl-s1">video2</span>):
+    <span class="pl-s1">merged</span> <span class="pl-c1">=</span> <span class="pl-s1">video1</span>.<span class="pl-c1">merge_with</span>(<span class="pl-s1">video2</span>)</pre></div>
+<h2>🐛 Bug Fixes</h2>
+<h3>Fixed Duplicate Skeleton Symmetries (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3347305496" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/217" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/217/hovercard" href="https://github.com/talmolab/sleap-io/pull/217">#217</a>)</h3>
+<ul>
+<li>Resolved issue where legacy SLEAP files could create duplicate symmetry relationships</li>
+<li>Ensures clean YAML exports without redundant symmetry definitions</li>
+</ul>
+<h2>🔧 Improvements</h2>
+<h3>Developer Tooling (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3348494294" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/218" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/218/hovercard" href="https://github.com/talmolab/sleap-io/pull/218">#218</a>)</h3>
+<ul>
+<li><strong>New coverage analysis script</strong> (<code>scripts/cov_summary.py</code>) for PR-aware coverage reporting</li>
+<li><strong>GitHub CLI integration</strong> for targeted coverage analysis of changed files</li>
+<li><strong>Simplified coverage command</strong> with line-by-line annotations</li>
+</ul>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Quick coverage check with annotations
+uv run pytest -q --maxfail=1 --cov --cov-branch &amp;&amp; uv run coverage annotate
+
+# Get coverage for PR changes only
+uv run python scripts/cov_summary.py"><pre><span class="pl-c"><span class="pl-c">#</span> Quick coverage check with annotations</span>
+uv run pytest -q --maxfail=1 --cov --cov-branch <span class="pl-k">&amp;&amp;</span> uv run coverage annotate
+
+<span class="pl-c"><span class="pl-c">#</span> Get coverage for PR changes only</span>
+uv run python scripts/cov_summary.py</pre></div>
+<h2>📚 Documentation</h2>
+<h3>Improved Documentation Structure (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3354358963" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/220" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/220/hovercard" href="https://github.com/talmolab/sleap-io/pull/220">#220</a>)</h3>
+<ul>
+<li>Restructured merging documentation with detailed algorithm explanations</li>
+<li>Enhanced examples with visual improvements using MkDocs Material</li>
+<li>Added mermaid flowcharts and behavior matrices for better understanding</li>
+<li>Improved organization with progressive disclosure of complex topics</li>
+</ul>
+<h2>💡 Why These Changes Matter</h2>
+<p>The v0.5.1 release significantly enhances sleap-io's capabilities for real-world annotation workflows:</p>
+<ul>
+<li><strong>HITL Workflows</strong>: The new merging system enables seamless integration of manual corrections with model predictions</li>
+<li><strong>Data Consolidation</strong>: Easily combine annotations from multiple annotators or sessions</li>
+<li><strong>Video Management</strong>: Better handling of image sequences with automatic deduplication</li>
+<li><strong>Developer Experience</strong>: Improved tooling for maintaining code quality and test coverage</li>
+</ul>
+<h2>📋 Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3342451262" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/216" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/216/hovercard" href="https://github.com/talmolab/sleap-io/pull/216">#216</a>: Implement comprehensive merging system for annotation files (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3347305496" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/217" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/217/hovercard" href="https://github.com/talmolab/sleap-io/pull/217">#217</a>: Fix duplicate skeleton symmetries from legacy SLEAP files (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3348494294" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/218" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/218/hovercard" href="https://github.com/talmolab/sleap-io/pull/218">#218</a>: Add coverage summary script and update coverage command (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3354172442" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/219" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/219/hovercard" href="https://github.com/talmolab/sleap-io/pull/219">#219</a>: Deduplicate merging for <code>ImageVideo</code> and add better CVAT support (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3354358963" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/220" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/220/hovercard" href="https://github.com/talmolab/sleap-io/pull/220">#220</a>: Documentation improvements for merging capabilities (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.5.0...v0.5.1"><tt>v0.5.0...v0.5.1</tt></a></p>
 <h2 id="v050"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.0">v0.5.0</a><a class="headerlink" href="#v050" title="Permanent link">&para;</a></h2>
 <h2>Summary</h2>
 <h3>Overview</h3>
@@ -2219,33 +2324,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/quantumdot/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/quantumdot">@quantumdot</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1391093840" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/21" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/21/hovercard" href="https://github.com/talmolab/sleap-io/pull/21">#21</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.1...v0.0.2"><tt>v0.0.1...v0.0.2</tt></a></p>
-<h2 id="v001"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.1">v0.0.1</a><a class="headerlink" href="#v001" title="Permanent link">&para;</a></h2>
-<p>Initial stable release of the package.</p>
-<h2>What's Changed</h2>
-<ul>
-<li>Initial setup by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1272768163" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/1" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/1/hovercard" href="https://github.com/talmolab/sleap-io/pull/1">#1</a></li>
-<li>Docstring linting and contributor guide by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1290882306" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/4" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/4/hovercard" href="https://github.com/talmolab/sleap-io/pull/4">#4</a></li>
-<li>Create sleap-io structures by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/davidasamy/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/davidasamy">@davidasamy</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1282937684" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/2" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/2/hovercard" href="https://github.com/talmolab/sleap-io/pull/2">#2</a></li>
-<li>Read SLP files by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/davidasamy/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/davidasamy">@davidasamy</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1287722583" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/3" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/3/hovercard" href="https://github.com/talmolab/sleap-io/pull/3">#3</a></li>
-<li>Initial refactor by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1309910584" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/5" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/5/hovercard" href="https://github.com/talmolab/sleap-io/pull/5">#5</a></li>
-<li>Performance fixes by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1326666119" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/6" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/6/hovercard" href="https://github.com/talmolab/sleap-io/pull/6">#6</a></li>
-<li>Added dunder <code>__repr__</code> to labels object by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/h-mayorquin/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/h-mayorquin">@h-mayorquin</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1339974534" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/8" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/8/hovercard" href="https://github.com/talmolab/sleap-io/pull/8">#8</a></li>
-<li>Add fix for PR CI and add a test by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1340682999" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/9" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/9/hovercard" href="https://github.com/talmolab/sleap-io/pull/9">#9</a></li>
-<li>Add write utilities by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/roomrys/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/roomrys">@roomrys</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1344921480" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/11" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/11/hovercard" href="https://github.com/talmolab/sleap-io/pull/11">#11</a></li>
-<li>Add nwb support I by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/h-mayorquin/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/h-mayorquin">@h-mayorquin</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1346412949" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/12" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/12/hovercard" href="https://github.com/talmolab/sleap-io/pull/12">#12</a></li>
-<li>Add Labels.numpy and organize fixtures by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/roomrys/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/roomrys">@roomrys</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1351536176" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/13" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/13/hovercard" href="https://github.com/talmolab/sleap-io/pull/13">#13</a></li>
-<li>Add NWB support II by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/h-mayorquin/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/h-mayorquin">@h-mayorquin</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1369877105" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/15" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/15/hovercard" href="https://github.com/talmolab/sleap-io/pull/15">#15</a></li>
-<li>Add tests and functionality for loading provenance data by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/h-mayorquin/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/h-mayorquin">@h-mayorquin</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1369727110" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/14" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/14/hovercard" href="https://github.com/talmolab/sleap-io/pull/14">#14</a></li>
-<li>Build workflow by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1371944150" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/16" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/16/hovercard" href="https://github.com/talmolab/sleap-io/pull/16">#16</a></li>
-</ul>
-<h2>New Contributors</h2>
-<ul>
-<li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1272768163" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/1" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/1/hovercard" href="https://github.com/talmolab/sleap-io/pull/1">#1</a></li>
-<li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/davidasamy/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/davidasamy">@davidasamy</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1282937684" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/2" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/2/hovercard" href="https://github.com/talmolab/sleap-io/pull/2">#2</a></li>
-<li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/h-mayorquin/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/h-mayorquin">@h-mayorquin</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1339974534" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/8" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/8/hovercard" href="https://github.com/talmolab/sleap-io/pull/8">#8</a></li>
-<li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/roomrys/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/roomrys">@roomrys</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1344921480" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/11" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/11/hovercard" href="https://github.com/talmolab/sleap-io/pull/11">#11</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a href="https://github.com/talmolab/sleap-io/commits/v0.0.1">https://github.com/talmolab/sleap-io/commits/v0.0.1</a></p>
 
 
 
