@@ -493,7 +493,7 @@ class SkeletonSLPDecoder:
         for skel in metadata["skeletons"]:
             # Parse out the cattr-based serialization stuff from the skeleton links.
             if "nx_graph" in skel:
-                # New format introduced in SLEAP v1.4.0
+                # New format introduced in SLEAP v1.3.2
                 # TODO: Do something with the "description" and "preview_image" keys?
                 skel = skel["nx_graph"]
             edge_inds, symmetry_inds = [], []
