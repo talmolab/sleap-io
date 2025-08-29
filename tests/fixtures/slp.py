@@ -213,3 +213,13 @@ def skeleton_json_13pt_fly():
     - Useful for isolated skeleton decoding tests
     """
     return "tests/data/slp/skeleton-order-bug/skeleton_13pt_fly.json"
+
+
+@pytest.fixture
+def clip_2nodes_slp():
+    """SLP file with a 2-node clip.
+
+    This uses a new-ish format for the skeleton introduced in SLEAP
+    v1.3.2. It allows for more metadata, but breaks legacy decoders.
+    """
+    return "tests/data/slp/clip.2node.slp"

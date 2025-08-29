@@ -1456,3 +1456,11 @@ def test_all_skeleton_formats_consistency(
         hasattr(edge, "source") and hasattr(edge, "destination")
         for edge in skeleton_from_config.edges
     )
+
+
+def test_clip_2nodes_slp(clip_2nodes_slp):
+    """Test loading the 2-node clip SLP file."""
+    labels = sio.load_slp(clip_2nodes_slp)
+    assert labels is not None
+    assert len(labels.skeletons) == 1
+    assert len(labels.skeletons[0].nodes) == 2
