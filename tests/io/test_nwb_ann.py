@@ -1,37 +1,56 @@
 """Tests for nwb_ann I/O functionality."""
 
 import json
-import subprocess
-from pathlib import Path
 
 import cv2
 import numpy as np
-import pytest
 
 import sleap_io.io.nwb_ann as ann
 
 
-def test_make_mjpeg_error(tmp_path, monkeypatch):
-    image_list = [("img1.png", 0.5), ("img2.jpg", 1.0)]
+def test_make_mjpeg_basic(tmp_path, monkeypatch):
+    # Create dummy frames
+    frames = [
+        np.zeros((10, 10, 3), dtype=np.uint8),
+        np.ones((10, 10, 3), dtype=np.uint8) * 255,
+    ]
+    durations = [0.5, 1.0]
     frame_map = {0: [[0, "video1"]], 1: [[1, "video1"]]}
+
     monkeypatch.chdir(tmp_path)
 
-    def fake_run(cmd, check):
-        raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
+    # Mock MJPEGFrameWriter to avoid actual video writing
+    written_frames = []
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    class MockMJPEGWriter:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
 
-    with pytest.raises(subprocess.CalledProcessError):
-        ann.make_mjpeg(image_list, frame_map)
+        def __enter__(self):
+            return self
 
-    txt_file = tmp_path / "input.txt"
+        def __exit__(self, *args):
+            pass
+
+        def write_frame(self, frame):
+            written_frames.append(frame)
+
+    # Patch in the ann module since it imports MJPEGFrameWriter
+    monkeypatch.setattr(ann, "MJPEGFrameWriter", MockMJPEGWriter)
+
+    output_path = ann.make_mjpeg(frames, durations, frame_map)
+
+    # Check that frame_map.json was created
     json_file = tmp_path / "frame_map.json"
-    assert txt_file.exists(), "input.txt not created"
     assert json_file.exists(), "frame_map.json not created"
 
     loaded = json.loads(json_file.read_text())
     expected = {str(k): v for k, v in frame_map.items()}
     assert loaded == expected
+
+    # Check that frames were written
+    assert len(written_frames) == 2
+    assert output_path == "annotated_frames.avi"
 
 
 def test_create_skeletons_basic():
@@ -109,16 +128,17 @@ def test_get_frames_from_slp_basic(tmp_path, monkeypatch):
     labels.labeled_frames = [DummyLF(0, "video1.mp4"), DummyLF(1, "video1.mp4")]
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(cv2, "imwrite", lambda fname, img: True)
 
-    image_list, frame_map = ann.get_frames_from_slp(labels, mjpeg_frame_duration=5.0)
+    frames, durations, frame_map = ann.get_frames_from_slp(
+        labels, mjpeg_frame_duration=5.0
+    )
 
-    # Should produce two entries
-    assert len(image_list) == 2
-    # Filenames should include the 'frames' directory
-    assert all(Path(path).parent.name == "frames" for path, _ in image_list)
-    # Durations match
-    assert [dur for _, dur in image_list] == [5.0, 5.0]
+    # Should produce two frames
+    assert len(frames) == 2
+    # All frames should be numpy arrays
+    assert all(isinstance(f, np.ndarray) for f in frames)
+    # Durations match (converted from ms to seconds)
+    assert durations == [0.005, 0.005]  # 5.0 ms = 0.005 s
     # frame_map keys as integers
     assert set(frame_map.keys()) == {0, 1}
     assert frame_map[0] == [0, "video1"]
@@ -222,7 +242,8 @@ def test_write_annotations_nwb_success(tmp_path, monkeypatch):
     fake_skeletons = object()
     fake_frame_indices = {}
     fake_unique = {}
-    fake_images = []
+    fake_frames = []
+    fake_durations = []
     fake_frame_map = {}
     fake_mjpeg = "out.avi"
     fake_source_videos = object()
@@ -235,9 +256,11 @@ def test_write_annotations_nwb_success(tmp_path, monkeypatch):
         lambda labels: (fake_skeletons, fake_frame_indices, fake_unique),
     )
     monkeypatch.setattr(
-        ann, "get_frames_from_slp", lambda labels: (fake_images, fake_frame_map)
+        ann,
+        "get_frames_from_slp",
+        lambda labels: (fake_frames, fake_durations, fake_frame_map),
     )
-    monkeypatch.setattr(ann, "make_mjpeg", lambda imgs, fmap: fake_mjpeg)
+    monkeypatch.setattr(ann, "make_mjpeg", lambda frames, durations, fmap: fake_mjpeg)
     monkeypatch.setattr(
         ann,
         "create_source_videos",
@@ -318,3 +341,45 @@ def test_write_annotations_nwb_success(tmp_path, monkeypatch):
     assert name == "behavior"
     assert proc.added[0] is fake_skeletons
     assert isinstance(proc.added[1], FakePose)
+
+
+def test_mjpeg_integration(tmp_path, monkeypatch):
+    """Test that MJPEGFrameWriter actually creates a valid MJPEG video."""
+    from sleap_io.io.video_writing import MJPEGFrameWriter
+
+    # Create some test frames
+    frames = [
+        np.zeros((100, 100, 3), dtype=np.uint8),  # Black frame
+        np.ones((100, 100, 3), dtype=np.uint8) * 128,  # Gray frame
+        np.ones((100, 100, 3), dtype=np.uint8) * 255,  # White frame
+    ]
+
+    mjpeg_path = tmp_path / "test.avi"
+
+    # Write frames to MJPEG
+    with MJPEGFrameWriter(
+        filename=mjpeg_path,
+        fps=10.0,
+        quality=2,
+    ) as writer:
+        for frame in frames:
+            writer.write_frame(frame)
+
+    # Verify the file was created
+    assert mjpeg_path.exists()
+    assert mjpeg_path.stat().st_size > 0
+
+    # Verify we can read it back with cv2
+    cap = cv2.VideoCapture(str(mjpeg_path))
+    assert cap.isOpened()
+
+    # Read frames back and verify count
+    frame_count = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame_count += 1
+
+    cap.release()
+    assert frame_count == 3

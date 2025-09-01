@@ -2,10 +2,9 @@
 
 import datetime
 import json
-import subprocess
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -31,6 +30,7 @@ from pynwb.image import ImageSeries
 from sleap_io import (
     Labels,
 )
+from sleap_io.io.video_writing import MJPEGFrameWriter
 
 
 def create_skeletons(
@@ -104,10 +104,10 @@ def create_skeletons(
 def get_frames_from_slp(
     labels: Labels,
     mjpeg_frame_duration: float = 30.0,
-) -> tuple[list[tuple[str, float]], dict[int, list[list[object]]]]:
-    """Write individual frames from slp and get mapping to original video.
+) -> Tuple[List[np.ndarray], List[float], Dict[int, List[List[object]]]]:
+    """Extract frames from slp and get mapping to original video.
 
-    Write all unique video frames referenced and build
+    Extract all unique video frames referenced and build
     lookup tables for MJPEG assembly and cross-video frame alignment.
 
     Args:
@@ -118,20 +118,16 @@ def get_frames_from_slp(
 
     Returns:
         A tuple containing:
-            - image_list: Ordered list whose elements are
-                `(filepath, mjpeg_frame_duration)` pairs. `filepath` is the PNG
-                written to `frames/`, `mjpeg_frame_duration` is the per-frame
-                delay in milliseconds.
+            - frames: List of frame arrays extracted from videos.
+            - durations: List of per-frame durations in seconds.
             - frame_map: Maps each `frame_idx` (key) to a list of
                 `[global_idx, video_name]` pairs. `global_idx` is the zero-based
-                index of the frame within `image_list`; `video_name` is the stem
+                index of the frame within the frames list; `video_name` is the stem
                 of the source video file. A given `frame_idx` may map to multiple
                 videos if frames share an index across videos.
     """
-    out_dir = Path("frames")
-    out_dir.mkdir(exist_ok=True)
-
-    image_list = []
+    frames = []
+    durations = []
     frame_map = {}
 
     written = set()
@@ -156,11 +152,8 @@ def get_frames_from_slp(
             continue
 
         frame = lf.video.backend.get_frame(frame_idx)
-
-        out_path = out_dir / f"v{v_idx}_f{frame_idx}.png"
-        filename = str(out_path)
-        cv2.imwrite(filename, frame)
-        image_list.append((filename, mjpeg_frame_duration))
+        frames.append(frame)
+        durations.append(mjpeg_frame_duration / 1000.0)  # Convert ms to seconds
 
         if frame_idx not in frame_map:
             frame_map[frame_idx] = [global_idx, video_name]
@@ -173,28 +166,26 @@ def get_frames_from_slp(
 
         written.add(cache_key)
 
-    return image_list, frame_map
+    return frames, durations, frame_map
 
 
 def make_mjpeg(
-    image_list: list[tuple[str, float]],
-    frame_map: dict[int, list[list[object]]],
+    frames: List[np.ndarray],
+    durations: List[float],
+    frame_map: Dict[int, List[List[object]]],
 ) -> str:
-    """Encode an MJPEG (Motion-JPEG) video from extracted frame images.
+    """Encode an MJPEG (Motion-JPEG) video from extracted frames.
 
-    Builds an ffmpeg concat script, writes it to input.txt, serialises
-    `frame_map` to frame_map.json, and invokes ffmpeg to generate
-    annotated_frames.avi.
+    Writes frames directly to an MJPEG video file using MJPEGFrameWriter
+    and serializes `frame_map` to frame_map.json.
 
     Creates/overwrites the following files in the current working directory:
-        - input.txt: ffmpeg concat descriptor.
         - frame_map.json: JSON dump of the provided `frame_map`.
         - annotated_frames.avi: Resulting MJPEG container.
 
     Args:
-        image_list: List of `(filepath, duration)` tuples. `filepath` is the
-            on-disk image (PNG, JPEG, etc.); `duration` is the per-frame display
-            time in seconds for variable-frame-rate (VFR) encoding.
+        frames: List of frame arrays to write to the MJPEG.
+        durations: List of per-frame durations in seconds for VFR encoding.
         frame_map: Mapping of `frame_idx` to `[global_idx, video_name]` pairs
             (or list of such pairs) used for downstream alignment; dumped
             verbatim to JSON.
@@ -202,47 +193,23 @@ def make_mjpeg(
     Returns:
         Absolute or relative path to the generated MJPEG file
         (annotated_frames.avi).
-
-    Raises:
-        subprocess.CalledProcessError: Propagated if ffmpeg returns a non-zero
-            exit status.
     """
-    input_txt_path = "input.txt"
     frame_map_json_path = "frame_map.json"
     output_mjpeg = "annotated_frames.avi"
 
-    # write input.txt for ffmpeg
-    with open(input_txt_path, "w") as f:
-        for image_path, duration in image_list:
-            f.write(f"file '{image_path}'\n")
-            f.write(f"duration {duration:.6f}\n")
-        f.write(f"file '{image_list[-1][0]}'\n")  # repeat last frame for mpjeg
-
-    # dump frame map
+    # Dump frame map for metadata
     with open(frame_map_json_path, "w") as f_map:
         json.dump(frame_map, f_map, indent=2)
 
-    # ffmpeg encode
-    cmd = [
-        "ffmpeg",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        input_txt_path,
-        "-fps_mode",
-        "vfr",
-        "-c:v",
-        "mjpeg",
-        "-q:v",
-        "2",
-        "-quality",
-        "90",
-        output_mjpeg,
-    ]
-
-    subprocess.run(cmd, check=True)
+    # Write MJPEG using MJPEGFrameWriter
+    with MJPEGFrameWriter(
+        filename=output_mjpeg,
+        fps=30.0,  # Nominal FPS for the container
+        quality=2,  # High quality (same as original -q:v 2)
+        frame_durations=durations,  # Per-frame durations for VFR
+    ) as writer:
+        for frame in frames:
+            writer.write_frame(frame)
 
     return output_mjpeg
 
@@ -412,9 +379,8 @@ def write_annotations_nwb(
 ) -> None:
     """Export SLEAP pose data and metadata to an NWB file.
 
-    Creates a frames/ directory of PNGs extracted from every annotated video frame.
-    Generates annotated_frames.avi via ffmpeg and dumps frame_map.json and
-    input.txt to the working directory. Writes the assembled NWB file to
+    Generates annotated_frames.avi containing all annotated frames and dumps
+    frame_map.json to the working directory. Writes the assembled NWB file to
     nwbfile_path using pynwb.NWBHDF5IO.
 
     Args:
@@ -435,7 +401,6 @@ def write_annotations_nwb(
     Raises:
         RuntimeError: If an original video cannot be opened or its FPS is
             unobtainable.
-        subprocess.CalledProcessError: If ffmpeg fails during MJPEG generation.
     """
     nwb_file_kwargs = nwb_file_kwargs or dict()
 
@@ -478,8 +443,8 @@ def write_annotations_nwb(
 
     skeletons, frame_indices, unique_skeletons = create_skeletons(labels)
 
-    image_list, frame_map = get_frames_from_slp(labels)
-    output_mjpeg = make_mjpeg(image_list, frame_map)
+    frames, durations, frame_map = get_frames_from_slp(labels)
+    output_mjpeg = make_mjpeg(frames, durations, frame_map)
 
     source_videos, annotations_mjpeg = create_source_videos(frame_indices, output_mjpeg)
     training_frames = create_training_frames(
