@@ -30,6 +30,8 @@
 
 ::: sleap_io.load_dlc
 
+::: sleap_io.load_leap
+
 ::: sleap_io.load_ultralytics
 
 ::: sleap_io.save_ultralytics

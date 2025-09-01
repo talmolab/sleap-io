@@ -36,7 +36,7 @@ labels.save("predictions.nwb")
 ```
 
 !!! tip
-    sleap-io automatically detects the format from the file extension. Supported formats include `.slp`, `.nwb`, `.labelstudio.json`, and `.jabs`.
+    sleap-io automatically detects the format from the file extension. Supported formats include `.slp`, `.nwb`, `.labelstudio.json`, `.jabs`, and `.mat` (LEAP).
 
 !!! note "See also"
     - [`Labels.save`](model.md#sleap_io.Labels.save): Save method with format options
