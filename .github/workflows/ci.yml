@@ -37,7 +37,7 @@ jobs:
     - name: Setup UV
       uses: astral-sh/setup-uv@v6
       with:
-        python-version: "3.12"
+        python-version: "3.13"
 
     - name: Install dependencies
       run: |
@@ -83,7 +83,8 @@ jobs:
       - name: Print environment info
         run: |
           uv run python --version
-          uv run pip freeze
+          uv run pip list
+          uv run python -c "import imageio_ffmpeg as iiof; print(f'FFMPEG: {iiof.get_ffmpeg_exe()} ({iiof.get_ffmpeg_version()})')"
 
       - name: Install graphics dependencies on Ubuntu
         # https://github.com/conda-forge/opencv-feedstock/issues/401
