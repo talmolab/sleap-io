@@ -302,7 +302,12 @@ def test_write_annotations_nwb_success(tmp_path, monkeypatch):
     monkeypatch.setattr(
         ann,
         "create_training_frames",
-        lambda labels, uniq, ann_mjp, fmap, identity=False, annotator="SLEAP": fake_training,
+        lambda labels,
+        uniq,
+        ann_mjp,
+        fmap,
+        identity=False,
+        annotator="SLEAP": fake_training,
     )
 
     class FakePose:
@@ -772,67 +777,65 @@ def test_reconstruct_instances_single_skeleton_fallback():
 def test_roundtrip_nwb_annotations(tmp_path):
     """Test writing and reading NWB annotations roundtrip."""
     import sleap_io as sio
-    
+
     # Create test data with tracks
     skeleton = Skeleton(
-        name="test_skeleton",
-        nodes=["head", "thorax", "tail"],
-        edges=[[0, 1], [1, 2]]
+        name="test_skeleton", nodes=["head", "thorax", "tail"], edges=[[0, 1], [1, 2]]
     )
-    
+
     # Create video with mock backend
     video = Video(filename="test_video.mp4", backend=None)
     mock_backend = MagicMock()
     mock_backend.get_frame.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
     video.backend = mock_backend
-    
+
     # Create instances with and without tracks
     track1 = Track(name="mouse1")
     track2 = Track(name="mouse2")
-    
+
     instances_frame0 = [
         Instance.from_numpy(
             points_data=np.array([[10, 20, 1.0], [30, 40, 0.9], [50, 60, 0.8]]),
             skeleton=skeleton,
-            track=track1
+            track=track1,
         ),
         Instance.from_numpy(
             points_data=np.array([[70, 80, 1.0], [90, 100, 0.95], [110, 120, 0.85]]),
             skeleton=skeleton,
-            track=track2
-        )
+            track=track2,
+        ),
     ]
-    
+
     instances_frame5 = [
         Instance.from_numpy(
             points_data=np.array([[15, 25, 0.95], [35, 45, 0.88], [55, 65, 0.82]]),
             skeleton=skeleton,
-            track=track1
+            track=track1,
         )
     ]
-    
+
     instances_frame10 = [
         Instance.from_numpy(
             points_data=np.array([[100, 110, 0.9], [120, 130, 0.85], [140, 150, 0.8]]),
             skeleton=skeleton,
-            track=None  # Instance without track
+            track=None,  # Instance without track
         )
     ]
-    
+
     lf0 = LabeledFrame(video=video, frame_idx=0, instances=instances_frame0)
     lf5 = LabeledFrame(video=video, frame_idx=5, instances=instances_frame5)
     lf10 = LabeledFrame(video=video, frame_idx=10, instances=instances_frame10)
-    
+
     original_labels = Labels(
         labeled_frames=[lf0, lf5, lf10],
         videos=[video],
         skeletons=[skeleton],
-        tracks=[track1, track2]
+        tracks=[track1, track2],
     )
-    
+
     # Write to NWB
     nwb_path = tmp_path / "test_roundtrip.nwb"
-    
+
     # Mock video capture for writing
     with patch("cv2.VideoCapture") as mock_cap:
         mock_video_cap = MagicMock()
@@ -840,10 +843,10 @@ def test_roundtrip_nwb_annotations(tmp_path):
         mock_video_cap.get.side_effect = lambda prop: {
             cv2.CAP_PROP_FPS: 30.0,
             cv2.CAP_PROP_FRAME_WIDTH: 640,
-            cv2.CAP_PROP_FRAME_HEIGHT: 480
+            cv2.CAP_PROP_FRAME_HEIGHT: 480,
         }.get(prop, 0)
         mock_cap.return_value = mock_video_cap
-        
+
         # Write the annotations (with identity=True to preserve tracks)
         # Note: We need to call the lower-level function directly to pass identity flag
         ann.write_annotations_nwb(
@@ -855,36 +858,38 @@ def test_roundtrip_nwb_annotations(tmp_path):
             nwb_file_kwargs=None,
             nwb_subject_kwargs=None,
         )
-    
+
     # Verify files were created
     assert nwb_path.exists()
     assert (tmp_path / "frame_map.json").exists()
     assert (tmp_path / "annotated_frames.avi").exists()
-    
+
     # Read back the annotations
     loaded_labels = sio.load_nwb_annotations(
         str(nwb_path),
         frame_map_path=str(tmp_path / "frame_map.json"),
-        load_source_videos=False
+        load_source_videos=False,
     )
-    
+
     # Verify structure is preserved
     assert len(loaded_labels.skeletons) == 1
     assert loaded_labels.skeletons[0].name == "test_skeleton"
     assert loaded_labels.skeletons[0].node_names == ["head", "thorax", "tail"]
     assert loaded_labels.skeletons[0].edge_inds == [(0, 1), (1, 2)]
-    
+
     # Verify frames
     assert len(loaded_labels.labeled_frames) == 3
     frame_indices = [lf.frame_idx for lf in loaded_labels.labeled_frames]
     assert sorted(frame_indices) == [0, 5, 10]
-    
+
     # Verify instances and tracks
     for lf in loaded_labels.labeled_frames:
         if lf.frame_idx == 0:
             assert len(lf.instances) == 2
             # Check that tracks were preserved
-            tracks_found = [inst.track.name if inst.track else None for inst in lf.instances]
+            tracks_found = [
+                inst.track.name if inst.track else None for inst in lf.instances
+            ]
             assert set(tracks_found) == {"mouse1", "mouse2"}
         elif lf.frame_idx == 5:
             assert len(lf.instances) == 1
@@ -892,11 +897,13 @@ def test_roundtrip_nwb_annotations(tmp_path):
         elif lf.frame_idx == 10:
             assert len(lf.instances) == 1
             assert lf.instances[0].track is None  # No track
-    
+
     # Verify point data (spot check)
     frame0 = next(lf for lf in loaded_labels.labeled_frames if lf.frame_idx == 0)
     # Find the instance with track "mouse1"
-    mouse1_inst = next(inst for inst in frame0.instances if inst.track and inst.track.name == "mouse1")
+    mouse1_inst = next(
+        inst for inst in frame0.instances if inst.track and inst.track.name == "mouse1"
+    )
     points = mouse1_inst.numpy()
     assert np.allclose(points[:, :2], [[10, 20], [30, 40], [50, 60]], atol=0.1)
 

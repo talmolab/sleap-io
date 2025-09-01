@@ -514,10 +514,14 @@ def write_annotations_nwb(
     )
     # Check if we have tracks to determine if we should use identity
     has_tracks = any(inst.track is not None for lf in labels for inst in lf.instances)
-    
+
     training_frames = create_training_frames(
-        labels, unique_skeletons, annotations_mjpeg, frame_map, 
-        identity=has_tracks, annotator=annotator
+        labels,
+        unique_skeletons,
+        annotations_mjpeg,
+        frame_map,
+        identity=has_tracks,
+        annotator=annotator,
     )
 
     pose_training = PoseTraining(
