@@ -745,7 +745,7 @@ def test_reconstruct_instances_malformed_names():
 
 def test_reconstruct_instances_single_skeleton_fallback():
     """Test fallback to single skeleton when name parsing fails."""
-    # Create mock skeleton instance with unparseable name
+    # Create mock skeleton instance with unparsable name
     mock_skeleton_instance = MagicMock()
     mock_skeleton_instance.name = "some_random_format_12345"
     mock_skeleton_instance.node_locations = np.array([[10, 20]])
