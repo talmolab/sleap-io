@@ -13,28 +13,23 @@ on:
 jobs:
   pypi:
     name: PyPI Wheel
-    runs-on: "ubuntu-22.04"
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write  # Required for PyPI trusted publishing
     steps:
 
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Setup UV
+      uses: astral-sh/setup-uv@v6
       with:
         python-version: "3.12"
 
-    - name: Install dependencies
+    - name: Build distributions
       run: |
-        pip install --editable .[dev]
+        uv build
 
-    - name: Build wheel
+    - name: Publish to PyPI
       run: |
-        python -m build --wheel --sdist
-        twine check dist/*
-    
-    - name: Upload
-      env:
-        PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-      run: |
-        twine upload -u __token__ -p "$PYPI_TOKEN" dist/* --non-interactive --skip-existing --disable-progress-bar
+        uv publish

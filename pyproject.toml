@@ -9,16 +9,16 @@ authors = [
     {name = "David Samy", email = "davidasamy@gmail.com"},
     {name = "Talmo Pereira", email = "talmo@salk.edu"}]
 description="Standalone utilities for working with pose data from SLEAP and other tools."
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 keywords = ["sleap", "pose tracking", "pose estimation", "behavior"]
 license = {text = "BSD-3-Clause"}
 classifiers = [
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12"]
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13"]
 dependencies = [
     "numpy",
     "attrs",
@@ -53,6 +53,10 @@ dev = [
     "mkdocs-literate-nav",
     "mkdocs-section-index",
     "mike"]
+opencv = ["opencv-python"]
+av = ["av"]
+mat = ["pymatreader"]
+all = ["opencv-python", "av", "mat"]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"
@@ -86,3 +90,29 @@ skip = '.git*,*.css'
 check-hidden = true
 # ignore-regex = ''
 ignore-words-list = 'THW,HWT,THWC,CHWT'
+
+[tool.coverage.run]
+branch = true
+parallel = true
+concurrency = ["multiprocessing", "thread"]
+source = ["sleap_io"]
+omit = [
+  "*/tests/*",
+  "*/.venv/*",
+  "*/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "if TYPE_CHECKING:",
+  "pragma: no cover",
+  "if __name__ == \"__main__\":",
+]
+precision = 1
+skip_covered = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.coverage.html]
+directory = "htmlcov"

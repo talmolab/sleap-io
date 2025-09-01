@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import cv2
 import numpy as np
 import pytest
 
 import sleap_io
+from sleap_io.model.camera import rodrigues_transformation
 
 
 @pytest.fixture
@@ -151,8 +151,8 @@ def camera_group_345():
     # Define rotation and translation vectors
     rvec_1 = np.array([0, 0, 1]) * angle_a  # axis-angle representation
     rvec_2 = -rvec_1  # Opposite rotation
-    rotation_matrix_1 = cv2.Rodrigues(rvec_1)[0]
-    rotation_matrix_2 = cv2.Rodrigues(rvec_2)[0]
+    rotation_matrix_1 = rodrigues_transformation(rvec_1)[0]
+    rotation_matrix_2 = rodrigues_transformation(rvec_2)[0]
     tvec_1 = -rotation_matrix_1 @ camera1_origin  # Rotated camera origin
     tvec_2 = -rotation_matrix_2 @ camera2_origin  # Rotated camera origin
 

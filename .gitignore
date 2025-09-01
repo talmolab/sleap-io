@@ -26,6 +26,8 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+uv.lock
+.ruff_cache/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -52,6 +54,7 @@ coverage.xml
 .pytest_cache/
 lcov.info
 coverage.json
+coverage.lcov
 
 # Translations
 *.mo
@@ -137,3 +140,6 @@ dmypy.json
 
 # Serena
 .serena/
+
+# Temporary test files
+tmp/

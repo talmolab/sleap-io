@@ -19,7 +19,7 @@ have any functionality related to labeling, training, or inference.
 The main purpose of this library is to provide utilities to load/save from different
 [formats](formats.md) for pose data and standardize them into our common [Data Model](model.md).
 
-- Read/write labels in [SLP](formats.md#sleap_io.load_slp), [NWB](formats.md#sleap_io.load_nwb), [DeepLabCut](formats.md#sleap_io.load_dlc), [JABS](formats.md#sleap_io.load_jabs), [LabelStudio](formats.md#sleap_io.load_labelstudio) and [Ultralytics YOLO](formats.md#sleap_io.load_ultralytics) formats.
+- Read/write labels in [SLP](formats.md#sleap_io.load_slp), [NWB](formats.md#sleap_io.load_nwb), [AlphaTracker](formats.md#sleap_io.load_alphatracker), [DeepLabCut](formats.md#sleap_io.load_dlc), [JABS](formats.md#sleap_io.load_jabs), [LabelStudio](formats.md#sleap_io.load_labelstudio), [LEAP](formats.md#sleap_io.load_leap) and [Ultralytics YOLO](formats.md#sleap_io.load_ultralytics) formats.
 - Support for [LabelsSet](model.md#sleap_io.LabelsSet) to manage multiple dataset splits (train/val/test) and export to different formats.
 - [Read videos in any format](formats.md#sleap_io.load_video), work them in a [numpy-like interface](model.md#sleap_io.Video) whether the video files are accessible or not, and [easily save them out](formats.md#sleap_io.save_video).
 
@@ -37,6 +37,8 @@ See [Examples](examples.md) for more usage examples and recipes.
 
 
 ## Installation
+
+### From PyPI
 ```
 pip install sleap-io
 ```
@@ -47,12 +49,32 @@ or
 conda install -c conda-forge sleap-io
 ```
 
-For development, use one of the following syntaxes:
+### From source (latest version)
+```
+pip install git+https://github.com/talmolab/sleap-io.git@main
+```
+
+### Optional Dependencies
+
+For video backend support, install with extras:
+```
+pip install sleap-io[opencv]  # For OpenCV backend
+pip install sleap-io[av]       # For PyAV backend
+pip install sleap-io[mat]      # For LEAP .mat file support
+pip install sleap-io[all]      # For all backends and formats
+```
+
+### Development Installation
+
+For development, use one of the following:
+```
+uv sync --all-extras           # Recommended: install with uv
+```
 ```
 conda env create -f environment.yml
 ```
 ```
-pip install -e .[dev]
+pip install -e .[dev,all]      # Install with all extras for development
 ```
 
 

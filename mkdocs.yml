@@ -27,7 +27,7 @@ theme:
 
   features:
     - navigation.tracking
-    # - toc.integrate
+    # - toc.integrate  # TOC integrated into left nav
     - toc.follow
     # Tabs
     # - navigation.tabs
@@ -57,8 +57,6 @@ plugins:
       scripts:
         - scripts/gen_ref_pages.py
         - scripts/gen_changelog.py
-  - literate-nav:
-      nav_file: SUMMARY.md
   - section-index
   - mkdocstrings:
       default_handler: python
@@ -116,22 +114,6 @@ markdown_extensions:
   - pymdownx.tilde
 
 extra:
-  consent:
-    title: Cookie consent
-    description: >- 
-      We use cookies to recognize your repeated visits and preferences, as well
-      as to measure the effectiveness of our documentation and whether users
-      find what they're searching for. With your consent, you're helping us to
-      make our documentation better.
-    actions:
-      - accept
-      - reject
-      - manage
-
-  analytics:
-    provider: google
-    property: G-V7MWLE7LXW
-
   version:
     provider: mike
 
@@ -145,15 +127,16 @@ extra_css:
   - css/mkdocstrings.css
 
 copyright: >
-  Copyright &copy; 2022 - 2024 Talmo Lab –
-  <a href="#__consent">Change cookie settings</a>
+  Copyright &copy; 2022 - 2025 Talmo Lab
 
 nav:
   - Overview: index.md
-  - Examples: examples.md
   - Changelog: changelog.md
   - Releases: https://github.com/talmolab/sleap-io/releases
-  - Core API:
+  - Guides:
+    - Examples: examples.md
+    - Merging: merging.md
+  - Reference:
     - Model: model.md
     - Formats: formats.md
-  - Full API: reference/
+    - Full API: reference/

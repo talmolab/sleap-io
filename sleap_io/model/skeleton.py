@@ -688,6 +688,98 @@ class Skeleton:
 
         return list(skeleton_inds), list(other_inds)
 
+    def matches(self, other: "Skeleton", require_same_order: bool = False) -> bool:
+        """Check if this skeleton matches another skeleton's structure.
+
+        Args:
+            other: Another skeleton to compare with.
+            require_same_order: If True, nodes must be in the same order.
+                If False, only the node names and edges need to match.
+
+        Returns:
+            True if the skeletons match, False otherwise.
+
+        Notes:
+            Two skeletons match if they have the same nodes (by name) and edges.
+            If require_same_order is True, the nodes must also be in the same order.
+        """
+        # Check if we have the same number of nodes
+        if len(self.nodes) != len(other.nodes):
+            return False
+
+        # Check node names
+        if require_same_order:
+            if self.node_names != other.node_names:
+                return False
+        else:
+            if set(self.node_names) != set(other.node_names):
+                return False
+
+        # Check edges (considering node name mapping if order differs)
+        if len(self.edges) != len(other.edges):
+            return False
+
+        # Create edge sets for comparison
+        self_edge_set = {
+            (edge.source.name, edge.destination.name) for edge in self.edges
+        }
+        other_edge_set = {
+            (edge.source.name, edge.destination.name) for edge in other.edges
+        }
+
+        if self_edge_set != other_edge_set:
+            return False
+
+        # Check symmetries
+        if len(self.symmetries) != len(other.symmetries):
+            return False
+
+        self_sym_set = {
+            frozenset(node.name for node in sym.nodes) for sym in self.symmetries
+        }
+        other_sym_set = {
+            frozenset(node.name for node in sym.nodes) for sym in other.symmetries
+        }
+
+        return self_sym_set == other_sym_set
+
+    def node_similarities(self, other: "Skeleton") -> dict[str, float]:
+        """Calculate node overlap metrics with another skeleton.
+
+        Args:
+            other: Another skeleton to compare with.
+
+        Returns:
+            A dictionary with similarity metrics:
+            - 'n_common': Number of nodes in common
+            - 'n_self_only': Number of nodes only in this skeleton
+            - 'n_other_only': Number of nodes only in the other skeleton
+            - 'jaccard': Jaccard similarity (intersection/union)
+            - 'dice': Dice coefficient (2*intersection/(n_self + n_other))
+        """
+        self_nodes = set(self.node_names)
+        other_nodes = set(other.node_names)
+
+        n_common = len(self_nodes & other_nodes)
+        n_self_only = len(self_nodes - other_nodes)
+        n_other_only = len(other_nodes - self_nodes)
+        n_union = len(self_nodes | other_nodes)
+
+        jaccard = n_common / n_union if n_union > 0 else 0
+        dice = (
+            2 * n_common / (len(self_nodes) + len(other_nodes))
+            if (len(self_nodes) + len(other_nodes)) > 0
+            else 0
+        )
+
+        return {
+            "n_common": n_common,
+            "n_self_only": n_self_only,
+            "n_other_only": n_other_only,
+            "jaccard": jaccard,
+            "dice": dice,
+        }
+
 
 @lru_cache
 def match_nodes_cached(
