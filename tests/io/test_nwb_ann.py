@@ -1,11 +1,15 @@
 """Tests for nwb_ann I/O functionality."""
 
 import json
+from unittest.mock import MagicMock, patch
 
 import cv2
 import numpy as np
+import pytest
 
 import sleap_io.io.nwb_ann as ann
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton
 
 
 def test_make_mjpeg_basic(tmp_path, monkeypatch):
@@ -411,3 +415,229 @@ def test_mjpeg_integration(tmp_path, monkeypatch):
 
     cap.release()
     assert frame_count == 3
+
+
+def test_extract_skeletons_from_nwb():
+    """Test extracting SLEAP skeletons from NWB Skeletons container."""
+    # Create mock NWB skeleton
+    mock_nwb_skeleton = MagicMock()
+    mock_nwb_skeleton.nodes = ["head", "thorax", "tail"]
+    mock_nwb_skeleton.edges = np.array([[0, 1], [1, 2]], dtype="uint8")
+
+    # Create mock Skeletons container
+    mock_skeletons_container = MagicMock()
+    mock_skeletons_container.skeletons = {"test_skeleton": mock_nwb_skeleton}
+
+    # Extract skeletons
+    sleap_skeletons = ann._extract_skeletons_from_nwb(mock_skeletons_container)
+
+    assert "test_skeleton" in sleap_skeletons
+    skeleton = sleap_skeletons["test_skeleton"]
+    assert skeleton.name == "test_skeleton"
+    assert skeleton.node_names == ["head", "thorax", "tail"]
+    assert skeleton.edge_inds == [(0, 1), (1, 2)]
+
+
+def test_load_frame_map(tmp_path):
+    """Test loading frame map from JSON."""
+    # Create test frame map
+    frame_map_data = {"0": [[0, "video1"], [1, "video2"]], "5": [[2, "video1"]]}
+
+    frame_map_path = tmp_path / "frame_map.json"
+    with open(frame_map_path, "w") as f:
+        json.dump(frame_map_data, f)
+
+    # Load and verify
+    loaded_map = ann._load_frame_map(frame_map_path)
+
+    assert loaded_map[0] == [(0, "video1"), (1, "video2")]
+    assert loaded_map[5] == [(2, "video1")]
+
+
+def test_invert_frame_map():
+    """Test inverting frame map for lookup."""
+    frame_map = {0: [(0, "video1"), (1, "video2")], 5: [(2, "video1")]}
+
+    inverted = ann._invert_frame_map(frame_map)
+
+    assert inverted[("video1", 0)] == 0
+    assert inverted[("video2", 1)] == 0
+    assert inverted[("video1", 2)] == 5
+
+
+def test_reconstruct_instances_from_training():
+    """Test reconstructing SLEAP instances from NWB TrainingFrame."""
+    # Create mock skeleton instance
+    mock_skeleton_instance = MagicMock()
+    mock_skeleton_instance.name = "test_skeleton_instance_0"
+    mock_skeleton_instance.node_locations = np.array([[10, 20], [30, 40]])
+    mock_skeleton_instance.node_visibility = [1.0, 0.5]
+    mock_skeleton_instance.skeleton = MagicMock(name="test_skeleton")
+
+    # Create mock skeleton instances container
+    mock_skeleton_instances = MagicMock()
+    mock_skeleton_instances.skeleton_instances = {"instance_0": mock_skeleton_instance}
+
+    # Create mock training frame
+    mock_training_frame = MagicMock()
+    mock_training_frame.skeleton_instances = mock_skeleton_instances
+
+    # Create SLEAP skeleton
+    sleap_skeleton = Skeleton(name="test_skeleton", nodes=["node1", "node2"])
+    sleap_skeletons = {"test_skeleton": sleap_skeleton}
+
+    # Reconstruct instances
+    instances = ann._reconstruct_instances_from_training(
+        mock_training_frame, sleap_skeletons
+    )
+
+    assert len(instances) == 1
+    instance = instances[0]
+    assert instance.skeleton == sleap_skeleton
+    assert np.allclose(instance.numpy()[:, :2], [[10, 20], [30, 40]])
+
+
+def test_read_nwb_annotations_basic(tmp_path):
+    """Test basic reading of NWB annotations."""
+    # Create a simple NWB file with mocked PoseTraining data
+    nwb_path = tmp_path / "test.nwb"
+    frame_map_path = tmp_path / "frame_map.json"
+
+    # Create frame map
+    frame_map = {"0": [[0, "test_video"]], "1": [[1, "test_video"]]}
+    with open(frame_map_path, "w") as f:
+        json.dump(frame_map, f)
+
+    # Mock NWB file reading
+    with patch("sleap_io.io.nwb_ann.NWBHDF5IO") as mock_io:
+        # Setup mock NWB file structure
+        mock_nwbfile = MagicMock()
+        mock_behavior_pm = MagicMock()
+
+        # Mock Skeletons container
+        mock_skeleton = MagicMock()
+        mock_skeleton.nodes = ["head", "tail"]
+        mock_skeleton.edges = np.array([[0, 1]], dtype="uint8")
+        mock_skeletons = MagicMock()
+        mock_skeletons.skeletons = {"test_skeleton": mock_skeleton}
+
+        # Mock PoseTraining container
+        mock_pose_training = MagicMock()
+        mock_pose_training.__class__.__name__ = "PoseTraining"
+
+        # Mock source videos
+        mock_image_series = MagicMock()
+        mock_image_series.external_file = ["test_video.mp4"]
+        mock_source_videos = MagicMock()
+        mock_source_videos.image_series = {"original_video_0": mock_image_series}
+        mock_pose_training.source_videos = mock_source_videos
+
+        # Mock training frames
+        mock_training_frame = MagicMock()
+        mock_training_frame.source_video_frame_index = 0
+
+        # Mock skeleton instance
+        mock_skel_instance = MagicMock()
+        mock_skel_instance.name = "test_skeleton_instance_0"
+        mock_skel_instance.node_locations = np.array([[10, 20], [30, 40]])
+        mock_skel_instance.node_visibility = [1.0, 1.0]
+        mock_skel_instance.skeleton = mock_skeleton
+
+        mock_skel_instances = MagicMock()
+        mock_skel_instances.skeleton_instances = {"instance_0": mock_skel_instance}
+        mock_training_frame.skeleton_instances = mock_skel_instances
+
+        mock_training_frames = MagicMock()
+        mock_training_frames.training_frames = {"frame_0": mock_training_frame}
+        mock_pose_training.training_frames = mock_training_frames
+
+        # Setup behavior processing module
+        mock_behavior_pm.data_interfaces = {
+            "Skeletons": mock_skeletons,
+            "PoseTraining": mock_pose_training,
+        }
+
+        # Make PoseTraining identifiable
+        from ndx_pose import PoseTraining
+
+        mock_pose_training.__class__ = PoseTraining
+
+        mock_nwbfile.processing = {"behavior": mock_behavior_pm}
+
+        # Setup IO mock
+        mock_io_instance = mock_io.return_value.__enter__.return_value
+        mock_io_instance.read.return_value = mock_nwbfile
+
+        # Read the annotations
+        labels = ann.read_nwb_annotations(
+            nwb_path=str(nwb_path),
+            frame_map_path=str(frame_map_path),
+            load_source_videos=False,
+        )
+
+        # Verify results
+        assert isinstance(labels, Labels)
+        assert len(labels.skeletons) == 1
+        assert labels.skeletons[0].name == "test_skeleton"
+        assert len(labels.labeled_frames) == 1
+        assert labels.labeled_frames[0].frame_idx == 0
+
+
+def test_read_nwb_annotations_no_frame_map(tmp_path):
+    """Test reading NWB annotations without frame map."""
+    nwb_path = tmp_path / "test.nwb"
+
+    with patch("sleap_io.io.nwb_ann.NWBHDF5IO") as mock_io:
+        # Setup minimal mock structure
+        mock_nwbfile = MagicMock()
+        mock_behavior_pm = MagicMock()
+
+        # Mock Skeletons
+        mock_skeleton = MagicMock()
+        mock_skeleton.nodes = ["node1"]
+        mock_skeleton.edges = np.array([], dtype="uint8")
+        mock_skeletons = MagicMock()
+        mock_skeletons.skeletons = {"skel1": mock_skeleton}
+
+        # Mock PoseTraining
+        mock_pose_training = MagicMock()
+        from ndx_pose import PoseTraining
+
+        mock_pose_training.__class__ = PoseTraining
+
+        # Empty source videos and training frames
+        mock_pose_training.source_videos = None
+        mock_training_frames = MagicMock()
+        mock_training_frames.training_frames = {}
+        mock_pose_training.training_frames = mock_training_frames
+
+        mock_behavior_pm.data_interfaces = {
+            "Skeletons": mock_skeletons,
+            "PoseTraining": mock_pose_training,
+        }
+
+        mock_nwbfile.processing = {"behavior": mock_behavior_pm}
+        mock_io_instance = mock_io.return_value.__enter__.return_value
+        mock_io_instance.read.return_value = mock_nwbfile
+
+        # Should work without frame map
+        labels = ann.read_nwb_annotations(str(nwb_path))
+
+        assert isinstance(labels, Labels)
+        assert len(labels.skeletons) == 1
+        assert len(labels.labeled_frames) == 0  # No training frames
+
+
+def test_read_nwb_annotations_missing_data(tmp_path):
+    """Test error handling for missing PoseTraining data."""
+    nwb_path = tmp_path / "test.nwb"
+
+    with patch("sleap_io.io.nwb_ann.NWBHDF5IO") as mock_io:
+        mock_nwbfile = MagicMock()
+        mock_nwbfile.processing = {}  # No behavior module
+
+        mock_io_instance = mock_io.return_value.__enter__.return_value
+        mock_io_instance.read.return_value = mock_nwbfile
+
+        with pytest.raises(ValueError, match="behavior"):
+            ann.read_nwb_annotations(str(nwb_path))

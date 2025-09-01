@@ -118,6 +118,47 @@ def save_nwb(labels: Labels, filename: str, append: bool = True):
         nwb.write_nwb(labels, filename)
 
 
+def load_nwb_annotations(
+    filename: str,
+    frame_map_path: Optional[str] = None,
+    load_source_videos: bool = False,
+) -> Labels:
+    """Load NWB file with PoseTraining annotations to SLEAP Labels.
+
+    This reads NWB files containing manual annotations and training data that
+    were exported using the ndx-pose extension's PoseTraining schema.
+
+    Args:
+        filename: Path to NWB file containing PoseTraining data.
+        frame_map_path: Optional path to frame_map.json. If None, will look
+            for it in the same directory as the NWB file.
+        load_source_videos: If True, attempt to load source videos from
+            paths in the NWB file. If False, create Video placeholders.
+
+    Returns:
+        Labels object containing the reconstructed annotations.
+
+    Raises:
+        ValueError: If NWB file doesn't contain PoseTraining data.
+
+    Example:
+        >>> import sleap_io as sio
+        >>> labels = sio.load_nwb_annotations("training_annotations.nwb")
+        >>> # With custom frame map location
+        >>> labels = sio.load_nwb_annotations(
+        ...     "training_annotations.nwb",
+        ...     frame_map_path="/tmp/frame_map.json"
+        ... )
+
+    See also: nwb_ann.read_nwb_annotations
+    """
+    return nwb_ann.read_nwb_annotations(
+        nwb_path=filename,
+        frame_map_path=frame_map_path,
+        load_source_videos=load_source_videos,
+    )
+
+
 def save_nwb_annotations(
     labels: Labels,
     filename: str,

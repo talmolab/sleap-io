@@ -1,11 +1,11 @@
-"""Functions to write user annotated frames to NWB format."""
+"""Functions to write and read user annotated frames to/from NWB format."""
 
 import datetime
 import json
 import uuid
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -29,7 +29,11 @@ from pynwb.file import Subject
 from pynwb.image import ImageSeries
 
 from sleap_io.io.video_writing import MJPEGFrameWriter
+from sleap_io.model.instance import Instance, Track
+from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+from sleap_io.model.video import Video
 
 
 def create_skeletons(
@@ -526,3 +530,320 @@ def write_annotations_nwb(
 
     with NWBHDF5IO(str(nwbfile_path), "w") as io:
         io.write(nwbfile)
+
+
+def _extract_skeletons_from_nwb(
+    skeletons_container: Skeletons,
+) -> Dict[str, SleapSkeleton]:
+    """Extract SLEAP Skeleton objects from NWB Skeletons container.
+
+    Args:
+        skeletons_container: NWB Skeletons container with skeleton definitions.
+
+    Returns:
+        Dictionary mapping skeleton names to SLEAP Skeleton objects.
+    """
+    sleap_skeletons = {}
+
+    for skeleton_name in skeletons_container.skeletons:
+        nwb_skeleton = skeletons_container.skeletons[skeleton_name]
+
+        # Convert nodes (list of strings) and edges (numpy array) to SLEAP format
+        sleap_skeleton = SleapSkeleton(
+            name=skeleton_name,
+            nodes=list(nwb_skeleton.nodes),
+            edges=nwb_skeleton.edges.tolist() if len(nwb_skeleton.edges) > 0 else [],
+        )
+        sleap_skeletons[skeleton_name] = sleap_skeleton
+
+    return sleap_skeletons
+
+
+def _load_frame_map(
+    frame_map_path: Union[str, Path],
+) -> Dict[int, List[Tuple[int, str]]]:
+    """Load frame mapping from JSON file.
+
+    Args:
+        frame_map_path: Path to frame_map.json file.
+
+    Returns:
+        Dictionary mapping MJPEG frame indices to (original_idx, video_name) tuples.
+
+    Raises:
+        FileNotFoundError: If frame_map.json doesn't exist.
+        json.JSONDecodeError: If JSON file is malformed.
+    """
+    with open(frame_map_path, "r") as f:
+        json_data = json.load(f)
+
+    # Convert string keys back to integers and lists back to tuples
+    frame_map = {}
+    for key, value in json_data.items():
+        frame_map[int(key)] = [tuple(item) for item in value]
+
+    return frame_map
+
+
+def _invert_frame_map(
+    frame_map: Dict[int, List[Tuple[int, str]]],
+) -> Dict[Tuple[str, int], int]:
+    """Invert frame mapping for efficient lookup.
+
+    Args:
+        frame_map: Original frame mapping from frame_map.json.
+
+    Returns:
+        Dictionary mapping (video_name, mjpeg_idx) to original frame index.
+    """
+    inverted = {}
+    for orig_idx, mappings in frame_map.items():
+        for mjpeg_idx, video_name in mappings:
+            inverted[(video_name, mjpeg_idx)] = orig_idx
+    return inverted
+
+
+def _reconstruct_instances_from_training(
+    training_frame: TrainingFrame,
+    sleap_skeletons: Dict[str, SleapSkeleton],
+    tracks: Optional[Dict[str, Track]] = None,
+) -> List[Instance]:
+    """Reconstruct SLEAP instances from NWB TrainingFrame.
+
+    Args:
+        training_frame: NWB TrainingFrame containing SkeletonInstances.
+        sleap_skeletons: Dictionary mapping skeleton names to SLEAP Skeletons.
+        tracks: Optional dictionary mapping track names to Track objects.
+
+    Returns:
+        List of SLEAP Instance objects.
+    """
+    instances = []
+
+    skeleton_instances = training_frame.skeleton_instances
+    for skeleton_instance_name in skeleton_instances.skeleton_instances:
+        skeleton_instance = skeleton_instances.skeleton_instances[
+            skeleton_instance_name
+        ]
+
+        # Extract skeleton name from instance name
+        # Instance names are like "skeleton_name_instance_0" or
+        # "skeleton_name_track_name_instance_0"
+        instance_name = skeleton_instance.name
+
+        # Find the skeleton by matching against known skeleton names
+        skeleton_obj = None
+        for skel_name in sleap_skeletons:
+            if instance_name.startswith(skel_name):
+                skeleton_obj = sleap_skeletons[skel_name]
+                break
+
+        if skeleton_obj is None:
+            # Try to extract from the NWB skeleton reference
+            nwb_skeleton = skeleton_instance.skeleton
+            if nwb_skeleton and nwb_skeleton.name in sleap_skeletons:
+                skeleton_obj = sleap_skeletons[nwb_skeleton.name]
+            else:
+                warnings.warn(f"Could not find skeleton for instance {instance_name}")
+                continue
+
+        # Extract track information if present
+        track = None
+        if tracks and "_instance_" in instance_name:
+            # Try to extract track name from instance name
+            parts = instance_name.split("_instance_")[0].split("_")
+            if len(parts) > 1:
+                # Remove skeleton name parts to get track name
+                skeleton_parts = skeleton_obj.name.split("_")
+                track_parts = []
+                for i, part in enumerate(parts):
+                    if i >= len(skeleton_parts) or part != skeleton_parts[i]:
+                        track_parts.append(part)
+                if track_parts:
+                    track_name = "_".join(track_parts)
+                    if track_name not in tracks:
+                        tracks[track_name] = Track(name=track_name)
+                    track = tracks[track_name]
+
+        # Create SLEAP Instance from node locations and visibility
+        points = np.column_stack(
+            [skeleton_instance.node_locations, skeleton_instance.node_visibility]
+        )
+
+        instance = Instance.from_numpy(
+            points_data=points, skeleton=skeleton_obj, track=track
+        )
+        instances.append(instance)
+
+    return instances
+
+
+def read_nwb_annotations(
+    nwb_path: str,
+    frame_map_path: Optional[str] = None,
+    load_source_videos: bool = False,
+) -> Labels:
+    """Read NWB file with PoseTraining annotations to SLEAP Labels.
+
+    Args:
+        nwb_path: Path to NWB file containing PoseTraining data.
+        frame_map_path: Optional path to frame_map.json. If None, will look
+            for it in the same directory as the NWB file.
+        load_source_videos: If True, attempt to load source videos from
+            paths in the NWB file. If False, create Video placeholders.
+
+    Returns:
+        Labels object containing the reconstructed annotations.
+
+    Raises:
+        ValueError: If NWB file doesn't contain PoseTraining data.
+        FileNotFoundError: If frame_map.json is needed but not found.
+    """
+    # Determine frame_map.json path
+    if frame_map_path is None:
+        nwb_dir = Path(nwb_path).parent
+        frame_map_path = nwb_dir / "frame_map.json"
+    else:
+        frame_map_path = Path(frame_map_path)
+
+    # Try to load frame map if it exists
+    frame_map = None
+    inverted_map = None
+    if frame_map_path.exists():
+        try:
+            frame_map = _load_frame_map(frame_map_path)
+            inverted_map = _invert_frame_map(frame_map)
+        except (json.JSONDecodeError, KeyError) as e:
+            warnings.warn(f"Could not load frame_map.json: {e}")
+
+    # Open NWB file and read PoseTraining data
+    with NWBHDF5IO(str(nwb_path), "r", load_namespaces=True) as io:
+        nwbfile = io.read()
+
+        # Find behavior processing module
+        if "behavior" not in nwbfile.processing:
+            raise ValueError("NWB file does not contain 'behavior' processing module")
+
+        behavior_pm = nwbfile.processing["behavior"]
+
+        # Extract Skeletons
+        if "Skeletons" not in behavior_pm.data_interfaces:
+            raise ValueError("NWB file does not contain Skeletons data")
+
+        skeletons_container = behavior_pm.data_interfaces["Skeletons"]
+        sleap_skeletons = _extract_skeletons_from_nwb(skeletons_container)
+
+        # Find PoseTraining container
+        pose_training = None
+        for data_interface_name in behavior_pm.data_interfaces:
+            data_interface = behavior_pm.data_interfaces[data_interface_name]
+            if isinstance(data_interface, PoseTraining):
+                pose_training = data_interface
+                break
+
+        if pose_training is None:
+            raise ValueError("NWB file does not contain PoseTraining data")
+
+        # Extract source video information
+        video_map = {}  # Maps video names to Video objects
+        mjpeg_video = None
+
+        if pose_training.source_videos:
+            for series_name in pose_training.source_videos.image_series:
+                image_series = pose_training.source_videos.image_series[series_name]
+
+                if series_name == "annotated_frames":
+                    # This is the MJPEG video
+                    mjpeg_path = image_series.external_file[0]
+                    if load_source_videos:
+                        mjpeg_video = Video(filename=mjpeg_path)
+                    else:
+                        mjpeg_video = Video(filename=mjpeg_path, backend=None)
+                else:
+                    # Original source video
+                    video_path = image_series.external_file[0]
+                    video_name = Path(video_path).stem
+
+                    if load_source_videos:
+                        video_map[video_name] = Video(filename=video_path)
+                    else:
+                        video_map[video_name] = Video(filename=video_path, backend=None)
+
+        # Process TrainingFrames
+        labeled_frames = []
+        tracks = {}  # Track objects by name
+
+        training_frames_container = pose_training.training_frames
+        for frame_name in training_frames_container.training_frames:
+            training_frame = training_frames_container.training_frames[frame_name]
+
+            # Get MJPEG frame index
+            mjpeg_frame_idx = int(training_frame.source_video_frame_index)
+
+            # Reconstruct instances
+            instances = _reconstruct_instances_from_training(
+                training_frame, sleap_skeletons, tracks
+            )
+
+            if not instances:
+                continue
+
+            # Determine original video and frame index
+            if inverted_map:
+                # Try to find in frame map
+                found = False
+                for video_name in video_map:
+                    key = (video_name, mjpeg_frame_idx)
+                    if key in inverted_map:
+                        orig_frame_idx = inverted_map[key]
+                        video = video_map[video_name]
+                        found = True
+                        break
+
+                if not found:
+                    # Fall back to MJPEG video if available
+                    if mjpeg_video:
+                        video = mjpeg_video
+                        orig_frame_idx = mjpeg_frame_idx
+                    else:
+                        warnings.warn(
+                            f"Could not map MJPEG frame {mjpeg_frame_idx} "
+                            f"to original video"
+                        )
+                        continue
+            else:
+                # No frame map, use MJPEG video or first available video
+                if mjpeg_video:
+                    video = mjpeg_video
+                    orig_frame_idx = mjpeg_frame_idx
+                elif video_map:
+                    # Use first video as fallback
+                    video = next(iter(video_map.values()))
+                    orig_frame_idx = mjpeg_frame_idx
+                else:
+                    # Create placeholder video
+                    video = Video(filename="unknown_video.mp4", backend=None)
+                    orig_frame_idx = mjpeg_frame_idx
+
+            # Create LabeledFrame
+            lf = LabeledFrame(
+                video=video, frame_idx=orig_frame_idx, instances=instances
+            )
+            labeled_frames.append(lf)
+
+    # Create Labels object
+    videos = list(video_map.values())
+    if mjpeg_video and mjpeg_video not in videos:
+        videos.append(mjpeg_video)
+
+    labels = Labels(
+        labeled_frames=labeled_frames,
+        videos=videos if videos else None,
+        skeletons=list(sleap_skeletons.values()),
+        tracks=list(tracks.values()) if tracks else None,
+    )
+
+    labels.provenance["filename"] = nwb_path
+    labels.provenance["source_format"] = "nwb_pose_training"
+
+    return labels
