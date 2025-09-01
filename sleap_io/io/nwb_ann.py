@@ -372,9 +372,9 @@ def create_training_frames(
             skeleton_base_name = val.skeleton.name
 
             if identity and val.track is not None:
-                instance_name = f"{skeleton_base_name}_{val.track.name}_instance_{j}"
+                instance_name = f"{skeleton_base_name}.{val.track.name}.instance_{j}"
             else:
-                instance_name = f"{skeleton_base_name}_instance_{j}"
+                instance_name = f"{skeleton_base_name}.instance_{j}"
 
             node_locations_sk1 = np.array([[pt[0][0], pt[0][1]] for pt in val.points])
 
@@ -627,43 +627,67 @@ def _reconstruct_instances_from_training(
         ]
 
         # Extract skeleton name from instance name
-        # Instance names are like "skeleton_name_instance_0" or
-        # "skeleton_name_track_name_instance_0"
+        # Instance names are like "skeleton_name.instance_0" or
+        # "skeleton_name.track_name.instance_0"
         instance_name = skeleton_instance.name
+
+        # Parse the instance name using '.' as delimiter
+        parts = instance_name.split(".")
 
         # Find the skeleton by matching against known skeleton names
         skeleton_obj = None
-        for skel_name in sleap_skeletons:
-            if instance_name.startswith(skel_name):
-                skeleton_obj = sleap_skeletons[skel_name]
-                break
+        track = None
+
+        # First, try to find skeleton from the NWB skeleton reference
+        nwb_skeleton = skeleton_instance.skeleton
+        if nwb_skeleton and nwb_skeleton.name in sleap_skeletons:
+            skeleton_obj = sleap_skeletons[nwb_skeleton.name]
+
+        # If not found, try to parse from instance name
+        if skeleton_obj is None:
+            # Check if the first part matches a known skeleton
+            if parts[0] in sleap_skeletons:
+                skeleton_obj = sleap_skeletons[parts[0]]
+            else:
+                # Try to find skeleton by prefix match (for backward compatibility)
+                for skel_name in sleap_skeletons:
+                    if instance_name.startswith(skel_name):
+                        skeleton_obj = sleap_skeletons[skel_name]
+                        # Re-parse with the matched skeleton name
+                        # Handle old format "skeleton_name_instance_0" or
+                        # "skeleton_name_track_instance_0"
+                        if "_instance_" in instance_name:
+                            old_parts = instance_name.split("_instance_")[0].split("_")
+                            skel_parts = skel_name.split("_")
+                            if len(old_parts) > len(skel_parts):
+                                # Extract track from old format
+                                track_parts = old_parts[len(skel_parts) :]
+                                track_name = "_".join(track_parts)
+                                if track_name and track_name not in tracks:
+                                    tracks[track_name] = Track(name=track_name)
+                                track = tracks.get(track_name)
+                        break
 
         if skeleton_obj is None:
-            # Try to extract from the NWB skeleton reference
-            nwb_skeleton = skeleton_instance.skeleton
-            if nwb_skeleton and nwb_skeleton.name in sleap_skeletons:
-                skeleton_obj = sleap_skeletons[nwb_skeleton.name]
-            else:
-                warnings.warn(f"Could not find skeleton for instance {instance_name}")
-                continue
+            warnings.warn(f"Could not find skeleton for instance {instance_name}")
+            continue
 
-        # Extract track information if present
-        track = None
-        if tracks and "_instance_" in instance_name:
-            # Try to extract track name from instance name
-            parts = instance_name.split("_instance_")[0].split("_")
-            if len(parts) > 1:
-                # Remove skeleton name parts to get track name
-                skeleton_parts = skeleton_obj.name.split("_")
-                track_parts = []
-                for i, part in enumerate(parts):
-                    if i >= len(skeleton_parts) or part != skeleton_parts[i]:
-                        track_parts.append(part)
-                if track_parts:
-                    track_name = "_".join(track_parts)
+        # Extract track information if present (for new format)
+        if track is None and len(parts) == 3 and parts[1] != "instance":
+            # Format: skeleton_name.track_name.instance_X
+            track_name = parts[1]
+            if track_name not in tracks:
+                tracks[track_name] = Track(name=track_name)
+            track = tracks[track_name]
+        elif track is None and tracks is not None and len(parts) > 2:
+            # Check for any middle parts that could be track names
+            for i in range(1, len(parts) - 1):
+                if not parts[i].startswith("instance"):
+                    track_name = parts[i]
                     if track_name not in tracks:
                         tracks[track_name] = Track(name=track_name)
                     track = tracks[track_name]
+                    break
 
         # Create SLEAP Instance from node locations and visibility
         points = np.column_stack(

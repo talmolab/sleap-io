@@ -469,7 +469,7 @@ def test_reconstruct_instances_from_training():
     """Test reconstructing SLEAP instances from NWB TrainingFrame."""
     # Create mock skeleton instance
     mock_skeleton_instance = MagicMock()
-    mock_skeleton_instance.name = "test_skeleton_instance_0"
+    mock_skeleton_instance.name = "test_skeleton.instance_0"
     mock_skeleton_instance.node_locations = np.array([[10, 20], [30, 40]])
     mock_skeleton_instance.node_visibility = [1.0, 0.5]
     mock_skeleton_instance.skeleton = MagicMock(name="test_skeleton")
@@ -538,7 +538,7 @@ def test_read_nwb_annotations_basic(tmp_path):
 
         # Mock skeleton instance
         mock_skel_instance = MagicMock()
-        mock_skel_instance.name = "test_skeleton_instance_0"
+        mock_skel_instance.name = "test_skeleton.instance_0"
         mock_skel_instance.node_locations = np.array([[10, 20], [30, 40]])
         mock_skel_instance.node_visibility = [1.0, 1.0]
         mock_skel_instance.skeleton = mock_skeleton
@@ -626,6 +626,96 @@ def test_read_nwb_annotations_no_frame_map(tmp_path):
         assert isinstance(labels, Labels)
         assert len(labels.skeletons) == 1
         assert len(labels.labeled_frames) == 0  # No training frames
+
+
+def test_reconstruct_instances_with_tracks():
+    """Test reconstructing instances with track identity."""
+    # Create mock skeleton instances with tracks
+    mock_instance1 = MagicMock()
+    mock_instance1.name = "mouse_skeleton.track_1.instance_0"
+    mock_instance1.node_locations = np.array([[10, 20], [30, 40]])
+    mock_instance1.node_visibility = [1.0, 1.0]
+    mock_instance1.skeleton = MagicMock(name="mouse_skeleton")
+
+    mock_instance2 = MagicMock()
+    mock_instance2.name = "mouse_skeleton.track_2.instance_1"
+    mock_instance2.node_locations = np.array([[50, 60], [70, 80]])
+    mock_instance2.node_visibility = [0.9, 0.8]
+    mock_instance2.skeleton = MagicMock(name="mouse_skeleton")
+
+    # Create mock skeleton instances container
+    mock_skeleton_instances = MagicMock()
+    mock_skeleton_instances.skeleton_instances = {
+        "instance_0": mock_instance1,
+        "instance_1": mock_instance2,
+    }
+
+    # Create mock training frame
+    mock_training_frame = MagicMock()
+    mock_training_frame.skeleton_instances = mock_skeleton_instances
+
+    # Create SLEAP skeleton
+    sleap_skeleton = Skeleton(name="mouse_skeleton", nodes=["head", "tail"])
+    sleap_skeletons = {"mouse_skeleton": sleap_skeleton}
+
+    # Reconstruct instances
+    tracks = {}
+    instances = ann._reconstruct_instances_from_training(
+        mock_training_frame, sleap_skeletons, tracks
+    )
+
+    assert len(instances) == 2
+    assert len(tracks) == 2
+
+    # Check first instance
+    assert instances[0].skeleton == sleap_skeleton
+    assert instances[0].track.name == "track_1"
+    assert np.allclose(instances[0].numpy()[:, :2], [[10, 20], [30, 40]])
+
+    # Check second instance
+    assert instances[1].skeleton == sleap_skeleton
+    assert instances[1].track.name == "track_2"
+    assert np.allclose(instances[1].numpy()[:, :2], [[50, 60], [70, 80]])
+
+    # Verify tracks are properly created
+    assert "track_1" in tracks
+    assert "track_2" in tracks
+    assert tracks["track_1"] == instances[0].track
+    assert tracks["track_2"] == instances[1].track
+
+
+def test_reconstruct_instances_backward_compatibility():
+    """Test that old underscore format still works."""
+    # Create mock skeleton instance with old format
+    mock_skeleton_instance = MagicMock()
+    mock_skeleton_instance.name = "test_skeleton_track1_instance_0"
+    mock_skeleton_instance.node_locations = np.array([[10, 20], [30, 40]])
+    mock_skeleton_instance.node_visibility = [1.0, 0.5]
+    mock_skeleton_instance.skeleton = MagicMock(name="test_skeleton")
+
+    # Create mock skeleton instances container
+    mock_skeleton_instances = MagicMock()
+    mock_skeleton_instances.skeleton_instances = {"instance_0": mock_skeleton_instance}
+
+    # Create mock training frame
+    mock_training_frame = MagicMock()
+    mock_training_frame.skeleton_instances = mock_skeleton_instances
+
+    # Create SLEAP skeleton
+    sleap_skeleton = Skeleton(name="test_skeleton", nodes=["node1", "node2"])
+    sleap_skeletons = {"test_skeleton": sleap_skeleton}
+
+    # Reconstruct instances
+    tracks = {}
+    instances = ann._reconstruct_instances_from_training(
+        mock_training_frame, sleap_skeletons, tracks
+    )
+
+    assert len(instances) == 1
+    instance = instances[0]
+    assert instance.skeleton == sleap_skeleton
+    assert instance.track.name == "track1"
+    assert "track1" in tracks
 
 
 def test_read_nwb_annotations_missing_data(tmp_path):
