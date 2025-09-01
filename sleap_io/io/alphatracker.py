@@ -45,7 +45,7 @@ def read_labels(labels_path: str) -> Labels:
     max_points = 0
     for frame_data in data:
         annotations = frame_data.get("annotations", [])
-        
+
         # Count points per instance by finding Face followed by points
         current_points = 0
         for i, ann in enumerate(annotations):
@@ -58,7 +58,7 @@ def read_labels(labels_path: str) -> Labels:
                     else:
                         break  # Stop at next Face or other annotation
                 max_points = max(max_points, current_points)
-    
+
     # Create skeleton with dynamically determined nodes
     nodes = [Node(str(i + 1)) for i in range(max_points)]
     skeleton = Skeleton(nodes=nodes)
@@ -93,17 +93,17 @@ def read_labels(labels_path: str) -> Labels:
                 while j < len(annotations) and annotations[j].get("class") == "point":
                     inst_points.append(annotations[j])
                     j += 1
-                
+
                 # Create points array for this instance
                 points = np.full((len(skeleton.nodes), 2), np.nan)
                 for point_idx, point_data in enumerate(inst_points):
                     if point_idx < len(skeleton.nodes):
                         points[point_idx] = [point_data["x"], point_data["y"]]
-                
+
                 # Create instance
                 instance = Instance(points=points, skeleton=skeleton)
                 instances.append(instance)
-                
+
                 # Move to next annotation after the points
                 i = j
             else:
