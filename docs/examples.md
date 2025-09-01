@@ -68,11 +68,8 @@ loaded_labels = sio.load_nwb_annotations(
     frame_map_path="nwb_export/frame_map.json"  # Optional, auto-detected if in same dir
 )
 
-# Track identity is preserved
-for lf in loaded_labels.labeled_frames:
-    for instance in lf.instances:
-        if instance.track:
-            print(f"Frame {lf.frame_idx}: Track {instance.track.name}")
+# Image data is immediately accessible
+img = loaded_labels[0].image
 ```
 
 !!! info "NWB PoseTraining format"
@@ -81,7 +78,6 @@ for lf in loaded_labels.labeled_frames:
     - **MJPEG video**: Contains only the annotated frames for efficient storage
     - **Frame mapping**: JSON file mapping MJPEG frames to original video frames
     - **Skeleton definitions**: Complete skeletal structure with nodes and edges
-    - **Track identity**: Preserved when instances have associated tracks
     
     This is different from `save_nwb()` which exports pose *predictions* using the PoseEstimation format.
 
