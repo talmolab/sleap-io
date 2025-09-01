@@ -7,7 +7,6 @@ import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-import cv2
 import numpy as np
 from ndx_pose import (
     PoseTraining,
@@ -49,7 +48,7 @@ def _sanitize_nwb_name(name: str) -> str:
 
 def create_skeletons(
     labels: Labels,
-) -> Tuple[Skeletons, Dict[str, List[int]], Dict[str, Skeleton]]:
+) -> Tuple[Skeletons, Dict[str, List[int]], Dict[str, Skeleton], Dict[str, Video]]:
     """Create NWB skeleton containers and per-video frame-index mappings.
 
     Iterates through the provided SLEAP `Labels` objects, extracts every
@@ -72,9 +71,12 @@ def create_skeletons(
             - Dict[str, Skeleton]: Maps each skeleton name to the corresponding
                 NWB `Skeleton` object included in the returned `Skeletons`
                 container.
+            - Dict[str, Video]: Maps each video file path to the corresponding
+                Video object.
     """
     unique_skeletons = {}  # create a new NWB skeleton obj per unique skeleton in SLEAP
     frame_indices = {}
+    video_objects = {}  # Track Video objects
 
     for j, label in enumerate(labels):
         video_filename = label.video.filename
@@ -86,6 +88,7 @@ def create_skeletons(
 
         if video not in frame_indices:
             frame_indices[video] = []
+            video_objects[video] = label.video  # Store the Video object
 
         frame_indices[video].append(label.frame_idx)
 
@@ -131,7 +134,7 @@ def create_skeletons(
     for key in frame_indices:
         frame_indices[key] = list(sorted(set(frame_indices[key])))
 
-    return skeletons, frame_indices, unique_skeletons
+    return skeletons, frame_indices, unique_skeletons, video_objects
 
 
 def get_frames_from_slp(
@@ -260,6 +263,7 @@ def make_mjpeg(
 
 def create_source_videos(
     frame_indices: Dict[str, List[int]],
+    video_objects: Dict[str, Video],
     output_mjpeg: str,
     mjpeg_frame_rate: float = 30.0,
     include_devices: bool = False,
@@ -267,11 +271,12 @@ def create_source_videos(
 ) -> Tuple[SourceVideos, ImageSeries, Dict[str, Tuple[int, int]]]:
     """Assemble NWB `SourceVideos` for original and annotated footage.
 
-    Opens every path in `frame_indices` via OpenCV to obtain the original FPS.
+    Uses Video objects to obtain metadata without breaking the abstraction layer.
 
     Args:
         frame_indices: Mapping from absolute or relative video file paths to the
             list of frame indices that were annotated in each file.
+        video_objects: Mapping from video file paths to Video objects.
         output_mjpeg: Path to the MJPEG file containing only annotated frames
             (output from `make_mjpeg`).
         mjpeg_frame_rate: Nominal frame rate assigned to the MJPEG `ImageSeries`.
@@ -288,29 +293,37 @@ def create_source_videos(
                 container.
             - Dict[str, Tuple[int, int]]: Mapping of video names to (width, height)
                 dimensions.
-
-    Raises:
-        RuntimeError: If a video cannot be opened or its FPS is unavailable.
     """
     original_videos = []
     video_dimensions = {}
 
-    for i, video in enumerate(frame_indices):
-        cap = cv2.VideoCapture(video)
-        if not cap.isOpened():
-            raise RuntimeError(f"Cannot open video: {video}")
+    for i, (video_path, video_obj) in enumerate(video_objects.items()):
+        # Get video dimensions from the Video object's shape property
+        # Shape is (frames, height, width, channels)
+        shape = video_obj.shape
+        if shape is not None:
+            _, height, width, _ = shape
+        else:
+            # If shape is not available, use default dimensions
+            height, width = 480, 640
+            warnings.warn(
+                f"Could not get dimensions for video {video_path}, "
+                f"using defaults ({width}x{height})"
+            )
 
-        orig_fps = cap.get(cv2.CAP_PROP_FPS)
-        if orig_fps <= 0:
-            raise RuntimeError(f"Cannot get fps from: {video}")
-
-        # Get video dimensions
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        cap.release()
-
-        video_name = Path(video).name
+        video_name = Path(video_path).name
         video_dimensions[video_name] = (width, height)
+
+        # Check if this is an embedded video (HDF5Video backend)
+        is_embedded = (
+            video_obj.backend is not None
+            and type(video_obj.backend).__name__ == "HDF5Video"
+        )
+
+        if is_embedded:
+            # Skip creating external file reference for embedded videos
+            # The MJPEG will be the only video reference
+            continue
 
         # Create camera device if requested
         device = None
@@ -321,13 +334,17 @@ def create_source_videos(
                 manufacturer="unknown",
             )
 
+        # Use a default FPS since it's not a standard property in sleap-io
+        # This matches the convention used for MJPEG
+        default_fps = 30.0
+
         series_kwargs = {
             "name": f"original_video_{i}",  # must have unique names
             "description": "Full original video",
             "format": "external",
             "external_file": [video_name],
             "starting_frame": [0],
-            "rate": orig_fps,
+            "rate": default_fps,
             "dimension": [width, height],
         }
         if device is not None:
@@ -536,13 +553,17 @@ def write_annotations_nwb(
     subject = Subject(**nwb_subject_kwargs)
     nwbfile.subject = subject
 
-    skeletons, frame_indices, unique_skeletons = create_skeletons(labels)
+    skeletons, frame_indices, unique_skeletons, video_objects = create_skeletons(labels)
 
     frames, durations, frame_map = get_frames_from_slp(labels)
     output_mjpeg = make_mjpeg(frames, durations, frame_map, output_dir=output_dir)
 
     source_videos, annotations_mjpeg, video_dimensions = create_source_videos(
-        frame_indices, output_mjpeg, include_devices=include_devices, nwbfile=nwbfile
+        frame_indices,
+        video_objects,
+        output_mjpeg,
+        include_devices=include_devices,
+        nwbfile=nwbfile,
     )
     # Check if we have tracks to determine if we should use identity
     has_tracks = any(inst.track is not None for lf in labels for inst in lf.instances)
