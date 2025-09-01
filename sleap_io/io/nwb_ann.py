@@ -31,6 +31,22 @@ from sleap_io.model.skeleton import Skeleton as SleapSkeleton
 from sleap_io.model.video import Video
 
 
+def _sanitize_nwb_name(name: str) -> str:
+    """Sanitize a name for use in NWB files.
+
+    NWB names cannot contain '/' or ':' characters.
+
+    Args:
+        name: The name to sanitize.
+
+    Returns:
+        The sanitized name with invalid characters replaced.
+    """
+    # Replace forward slashes and colons with underscores
+    sanitized = name.replace("/", "_").replace(":", "_")
+    return sanitized
+
+
 def create_skeletons(
     labels: Labels,
 ) -> Tuple[Skeletons, Dict[str, List[int]], Dict[str, Skeleton]]:
@@ -75,7 +91,10 @@ def create_skeletons(
 
         for inst in label.instances:
             skel = inst.skeleton
-            skel_name = inst.skeleton.name  # assumes skels are named uniquely
+            # Sanitize skeleton name to remove invalid characters for NWB
+            skel_name = _sanitize_nwb_name(
+                inst.skeleton.name
+            )  # assumes skels are named uniquely
 
             if skel_name not in unique_skeletons:
                 node_names = [node.name for node in skel.nodes]
@@ -376,8 +395,8 @@ def create_training_frames(
         for j in range(len(lf.instances)):
             val = lf.instances[j]
 
-            # Use skeleton name and instance index for clarity
-            skeleton_base_name = val.skeleton.name
+            # Use sanitized skeleton name and instance index for clarity
+            skeleton_base_name = _sanitize_nwb_name(val.skeleton.name)
 
             if identity and val.track is not None:
                 instance_name = f"{skeleton_base_name}.{val.track.name}.instance_{j}"
@@ -391,7 +410,7 @@ def create_training_frames(
                 id=np.uint64(unique_ids),
                 node_locations=node_locations_sk1,
                 node_visibility=[pt[1] for pt in val.points],
-                skeleton=unique_skeletons[val.skeleton.name],
+                skeleton=unique_skeletons[skeleton_base_name],
             )
             skeleton_instances_list.append(instance_sk1)
             unique_ids += 1

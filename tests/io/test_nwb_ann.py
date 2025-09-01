@@ -1860,3 +1860,59 @@ def test_resolve_video_and_frame_no_inverted_map():
     result_video, result_frame = ann._resolve_video_and_frame(5, None, {}, None)
     assert result_video.filename == "unknown_video.mp4"
     assert result_frame == 5
+
+
+def test_sanitize_nwb_name():
+    """Test that NWB names are properly sanitized."""
+    # Test with path-like name containing slashes and colons
+    path_name = (
+        "M:/talmo/data/leap_datasets/BermanFlies/"
+        "2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    )
+    sanitized = ann._sanitize_nwb_name(path_name)
+    assert "/" not in sanitized
+    assert ":" not in sanitized
+    expected = (
+        "M__talmo_data_leap_datasets_BermanFlies_"
+        "2018-05-03_cluster-sampled.k=10,n=150.labels.mat"
+    )
+    assert sanitized == expected
+
+    # Test with normal name
+    normal_name = "skeleton_name"
+    assert ann._sanitize_nwb_name(normal_name) == normal_name
+
+    # Test with mixed invalid characters
+    mixed_name = "prefix:middle/suffix"
+    sanitized = ann._sanitize_nwb_name(mixed_name)
+    assert sanitized == "prefix_middle_suffix"
+
+
+def test_create_skeletons_with_invalid_names():
+    """Test that skeletons with invalid NWB names are properly sanitized."""
+    # Create a skeleton with invalid characters in name (file path)
+    skeleton_name = "C:/path/to/file:with:colons.mat"
+    skeleton = Skeleton(nodes=["node1", "node2"], name=skeleton_name)
+
+    # Create instances and labels
+    instance = Instance.from_numpy(
+        np.array([[10, 20, 1.0], [30, 40, 1.0]]), skeleton=skeleton
+    )
+    video = Video(filename="test_video.mp4", backend=None)
+    labeled_frame = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels(
+        labeled_frames=[labeled_frame], videos=[video], skeletons=[skeleton]
+    )
+
+    # Create NWB skeletons
+    skeletons, frame_indices, unique_skeletons = ann.create_skeletons(labels)
+
+    # Check that the skeleton name was sanitized
+    sanitized_name = "C__path_to_file_with_colons.mat"
+    assert sanitized_name in unique_skeletons
+    assert unique_skeletons[sanitized_name].name == sanitized_name
+
+    # Verify the Skeletons container has the sanitized skeleton
+    assert len(skeletons.skeletons) == 1
+    nwb_skeleton = skeletons.skeletons[sanitized_name]
+    assert nwb_skeleton.name == sanitized_name
