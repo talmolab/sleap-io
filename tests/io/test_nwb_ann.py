@@ -50,7 +50,7 @@ def test_make_mjpeg_basic(tmp_path, monkeypatch):
 
     # Check that frames were written
     assert len(written_frames) == 2
-    assert output_path == "annotated_frames.avi"
+    assert output_path == str(tmp_path / "annotated_frames.avi")
 
 
 def test_create_skeletons_basic():
@@ -141,8 +141,8 @@ def test_get_frames_from_slp_basic(tmp_path, monkeypatch):
     assert durations == [0.005, 0.005]  # 5.0 ms = 0.005 s
     # frame_map keys as integers
     assert set(frame_map.keys()) == {0, 1}
-    assert frame_map[0] == [0, "video1"]
-    assert frame_map[1] == [1, "video1"]
+    assert frame_map[0] == [(0, "video1")]
+    assert frame_map[1] == [(1, "video1")]
 
 
 def test_create_source_videos_basic(monkeypatch):
@@ -158,7 +158,16 @@ def test_create_source_videos_basic(monkeypatch):
             return True
 
         def get(self, prop):
-            return 30.0
+            if prop == cv2.CAP_PROP_FPS:
+                return 30.0
+            elif prop == cv2.CAP_PROP_FRAME_WIDTH:
+                return 640
+            elif prop == cv2.CAP_PROP_FRAME_HEIGHT:
+                return 480
+            return 0
+
+        def release(self):
+            pass
 
     monkeypatch.setattr(cv2, "VideoCapture", FakeCap)
 
@@ -175,7 +184,7 @@ def test_create_source_videos_basic(monkeypatch):
     monkeypatch.setattr(ann, "ImageSeries", FakeImageSeries)
     monkeypatch.setattr(ann, "SourceVideos", FakeSourceVideos)
 
-    source_videos, annotations_series = ann.create_source_videos(
+    source_videos, annotations_series, video_dims = ann.create_source_videos(
         frame_indices, output_mjpeg, mjpeg_frame_rate
     )
 
@@ -183,6 +192,8 @@ def test_create_source_videos_basic(monkeypatch):
     assert isinstance(annotations_series, FakeImageSeries)
     assert len(source_videos.series) == len(frame_indices) + 1
     assert source_videos.series[-1] is annotations_series
+    assert "video1.mp4" in video_dims
+    assert "video2.avi" in video_dims
 
 
 def test_create_training_frames_basic(monkeypatch):
@@ -190,11 +201,13 @@ def test_create_training_frames_basic(monkeypatch):
         def __init__(self):
             self.points = [((1, 2), True), ((3, 4), False)]
             self.skeleton = type("Skel", (), {"name": "TestSkel"})()
+            self.track = None
 
     class DummyLF:
         def __init__(self, idx):
             self.frame_idx = idx
             self.instances = [DummyVal()]
+            self.video = type("Video", (), {"filename": "video.mp4"})()
 
     labels = type("Labels", (), {})()
     labels.labeled_frames = [DummyLF(5), DummyLF(7)]
@@ -206,15 +219,21 @@ def test_create_training_frames_basic(monkeypatch):
     )
     fake_unique = {"TestSkel": fake_skel}
     fake_annotations = object()
-    fake_frame_map = {5: [0, "video"], 7: [1, "video"]}
+    fake_frame_map = {5: [(0, "video")], 7: [(1, "video")]}
 
     created = []
 
     class FakeTrainingFrame:
         def __init__(
-            self, name, skeleton_instances, source_video, source_video_frame_index
+            self,
+            name,
+            annotator,
+            skeleton_instances,
+            source_video,
+            source_video_frame_index,
         ):
             self.name = name
+            self.annotator = annotator
             self.source_video = source_video
             self.source_video_frame_index = source_video_frame_index
             created.append(self)
@@ -227,12 +246,13 @@ def test_create_training_frames_basic(monkeypatch):
     monkeypatch.setattr(ann, "TrainingFrames", FakeTrainingFrames)
 
     result = ann.create_training_frames(
-        labels, fake_unique, fake_annotations, fake_frame_map
+        labels, fake_unique, fake_annotations, fake_frame_map, annotator="test"
     )
 
     assert isinstance(result, FakeTrainingFrames)
     assert len(result.training_frames) == 2
     assert result.training_frames[0].name == "frame_0"
+    assert created[0].annotator == "test"  # Check annotator was set
     assert int(result.training_frames[0].source_video_frame_index) == 0
     assert int(result.training_frames[1].source_video_frame_index) == 1
     assert result.training_frames[0].source_video is fake_annotations
@@ -260,14 +280,22 @@ def test_write_annotations_nwb_success(tmp_path, monkeypatch):
         "get_frames_from_slp",
         lambda labels: (fake_frames, fake_durations, fake_frame_map),
     )
-    monkeypatch.setattr(ann, "make_mjpeg", lambda frames, durations, fmap: fake_mjpeg)
+    monkeypatch.setattr(
+        ann, "make_mjpeg", lambda frames, durations, fmap, output_dir=None: fake_mjpeg
+    )
     monkeypatch.setattr(
         ann,
         "create_source_videos",
-        lambda fidx, mjp, rate=None: (fake_source_videos, fake_annotations),
+        lambda fidx, mjp, rate=None, include_devices=False, nwbfile=None: (
+            fake_source_videos,
+            fake_annotations,
+            {},
+        ),
     )
     monkeypatch.setattr(
-        ann, "create_training_frames", lambda labels, uniq, ann_mjp, fmap: fake_training
+        ann,
+        "create_training_frames",
+        lambda labels, uniq, ann_mjp, fmap, annotator="SLEAP": fake_training,
     )
 
     class FakePose:

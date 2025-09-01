@@ -3,6 +3,7 @@
 import datetime
 import json
 import uuid
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -79,13 +80,21 @@ def create_skeletons(
                 node_name_to_index = {name: i for i, name in enumerate(node_names)}
 
                 edge_index_pairs = []
+                skipped_edges = []
                 for src_node, dst_node in skel.edges:
                     try:
                         src_idx = node_name_to_index[src_node.name]
                         dst_idx = node_name_to_index[dst_node.name]
                         edge_index_pairs.append([src_idx, dst_idx])
                     except KeyError:
+                        skipped_edges.append((src_node.name, dst_node.name))
                         continue  # skip edge if node name is missing
+
+                if skipped_edges:
+                    warnings.warn(
+                        f"Skipped {len(skipped_edges)} edges in skeleton '{skel_name}' "
+                        f"due to missing nodes: {skipped_edges}"
+                    )
 
                 edge_array = np.array(edge_index_pairs, dtype="uint8")
 
@@ -104,7 +113,7 @@ def create_skeletons(
 def get_frames_from_slp(
     labels: Labels,
     mjpeg_frame_duration: float = 30.0,
-) -> Tuple[List[np.ndarray], List[float], Dict[int, List[List[object]]]]:
+) -> Tuple[List[np.ndarray], List[float], Dict[int, List[Tuple[int, str]]]]:
     """Extract frames from slp and get mapping to original video.
 
     Extract all unique video frames referenced and build
@@ -121,7 +130,7 @@ def get_frames_from_slp(
             - frames: List of frame arrays extracted from videos.
             - durations: List of per-frame durations in seconds.
             - frame_map: Maps each `frame_idx` (key) to a list of
-                `[global_idx, video_name]` pairs. `global_idx` is the zero-based
+                `(global_idx, video_name)` tuples. `global_idx` is the zero-based
                 index of the frame within the frames list; `video_name` is the stem
                 of the source video file. A given `frame_idx` may map to multiple
                 videos if frames share an index across videos.
@@ -156,11 +165,9 @@ def get_frames_from_slp(
         durations.append(mjpeg_frame_duration / 1000.0)  # Convert ms to seconds
 
         if frame_idx not in frame_map:
-            frame_map[frame_idx] = [global_idx, video_name]
-        elif isinstance(frame_map[frame_idx][0], list):
-            frame_map[frame_idx].append([global_idx, video_name])
+            frame_map[frame_idx] = [(global_idx, video_name)]
         else:
-            frame_map[frame_idx] = [frame_map[frame_idx], [global_idx, video_name]]
+            frame_map[frame_idx].append((global_idx, video_name))
 
         global_idx += 1
 
@@ -172,34 +179,42 @@ def get_frames_from_slp(
 def make_mjpeg(
     frames: List[np.ndarray],
     durations: List[float],
-    frame_map: Dict[int, List[List[object]]],
+    frame_map: Dict[int, List[Tuple[int, str]]],
+    output_dir: Optional[Path] = None,
 ) -> str:
     """Encode an MJPEG (Motion-JPEG) video from extracted frames.
 
     Writes frames directly to an MJPEG video file using MJPEGFrameWriter
     and serializes `frame_map` to frame_map.json.
 
-    Creates/overwrites the following files in the current working directory:
-        - frame_map.json: JSON dump of the provided `frame_map`.
-        - annotated_frames.avi: Resulting MJPEG container.
+    Creates/overwrites the following files:
+        - frame_map.json: JSON dump of the provided `frame_map` (in output_dir).
+        - annotated_frames.avi: Resulting MJPEG container (in output_dir).
 
     Args:
         frames: List of frame arrays to write to the MJPEG.
         durations: List of per-frame durations in seconds for VFR encoding.
-        frame_map: Mapping of `frame_idx` to `[global_idx, video_name]` pairs
-            (or list of such pairs) used for downstream alignment; dumped
-            verbatim to JSON.
+        frame_map: Mapping of `frame_idx` to list of `(global_idx, video_name)` tuples
+            used for downstream alignment; dumped verbatim to JSON.
+        output_dir: Directory to write output files. If None, uses current directory.
 
     Returns:
         Absolute or relative path to the generated MJPEG file
         (annotated_frames.avi).
     """
-    frame_map_json_path = "frame_map.json"
-    output_mjpeg = "annotated_frames.avi"
+    if output_dir is None:
+        output_dir = Path.cwd()
+    else:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Dump frame map for metadata
+    frame_map_json_path = output_dir / "frame_map.json"
+    output_mjpeg = output_dir / "annotated_frames.avi"
+
+    # Convert tuples to lists for JSON serialization and dump frame map
+    json_frame_map = {k: [list(t) for t in v] for k, v in frame_map.items()}
     with open(frame_map_json_path, "w") as f_map:
-        json.dump(frame_map, f_map, indent=2)
+        json.dump(json_frame_map, f_map, indent=2)
 
     # Write MJPEG using MJPEGFrameWriter
     with MJPEGFrameWriter(
@@ -211,14 +226,16 @@ def make_mjpeg(
         for frame in frames:
             writer.write_frame(frame)
 
-    return output_mjpeg
+    return str(output_mjpeg)
 
 
 def create_source_videos(
     frame_indices: dict[str, list[int]],
     output_mjpeg: str,
     mjpeg_frame_rate: float = 30.0,
-) -> tuple[SourceVideos, ImageSeries]:
+    include_devices: bool = False,
+    nwbfile: Optional[NWBFile] = None,
+) -> tuple[SourceVideos, ImageSeries, Dict[str, Tuple[int, int]]]:
     """Assemble NWB `SourceVideos` for original and annotated footage.
 
     Opens every path in `frame_indices` via OpenCV to obtain the original FPS.
@@ -230,6 +247,8 @@ def create_source_videos(
             (output from `make_mjpeg`).
         mjpeg_frame_rate: Nominal frame rate assigned to the MJPEG `ImageSeries`.
             Defaults to 30.0 Hz.
+        include_devices: If True and nwbfile is provided, create camera devices.
+        nwbfile: Optional NWBFile to add camera devices to.
 
     Returns:
         A tuple containing:
@@ -238,11 +257,14 @@ def create_source_videos(
             - ImageSeries: The `ImageSeries` object corresponding to the
                 annotated MJPEG; also present in the returned `SourceVideos`
                 container.
+            - Dict[str, Tuple[int, int]]: Mapping of video names to (width, height)
+                dimensions.
 
     Raises:
         RuntimeError: If a video cannot be opened or its FPS is unavailable.
     """
     original_videos = []
+    video_dimensions = {}
 
     for i, video in enumerate(frame_indices):
         cap = cv2.VideoCapture(video)
@@ -253,18 +275,36 @@ def create_source_videos(
         if orig_fps <= 0:
             raise RuntimeError(f"Cannot get fps from: {video}")
 
-        video_name = Path(video).name
+        # Get video dimensions
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
 
-        original_videos.append(
-            ImageSeries(
-                name=f"original_video_{i}",  # must have unique names
-                description="Full original video",
-                format="external",
-                external_file=[video_name],
-                starting_frame=[0],
-                rate=orig_fps,
+        video_name = Path(video).name
+        video_dimensions[video_name] = (width, height)
+
+        # Create camera device if requested
+        device = None
+        if include_devices and nwbfile is not None:
+            device = nwbfile.create_device(
+                name=f"camera_{i}",
+                description=f"Camera for {video_name}",
+                manufacturer="unknown",
             )
-        )
+
+        series_kwargs = {
+            "name": f"original_video_{i}",  # must have unique names
+            "description": "Full original video",
+            "format": "external",
+            "external_file": [video_name],
+            "starting_frame": [0],
+            "rate": orig_fps,
+            "dimension": [width, height],
+        }
+        if device is not None:
+            series_kwargs["device"] = device
+
+        original_videos.append(ImageSeries(**series_kwargs))
 
     annotations_mjpeg = ImageSeries(
         name="annotated_frames",
@@ -279,15 +319,16 @@ def create_source_videos(
 
     source_videos = SourceVideos(image_series=all_videos)
 
-    return source_videos, annotations_mjpeg
+    return source_videos, annotations_mjpeg, video_dimensions
 
 
 def create_training_frames(
     labels: Labels,
     unique_skeletons: dict[str, Skeleton],
     annotations_mjpeg: ImageSeries,
-    frame_map: dict[int, list[list[object]]],
+    frame_map: dict[int, list[tuple[int, str]]],
     identity: bool = False,
+    annotator: str = "SLEAP",
 ) -> TrainingFrames:
     """Convert SLEAP annotations into NWB `TrainingFrames`.
 
@@ -298,11 +339,12 @@ def create_training_frames(
             `create_skeletons`.
         annotations_mjpeg: The `ImageSeries` object pointing to the MJPEG of
             annotated frames (output from `create_source_videos`).
-        frame_map: Mapping from original `frame_idx` to `[global_idx, video_name]`
-            entries created by `get_frames_from_slp`.
+        frame_map: Mapping from original `frame_idx` to list of
+            `(global_idx, video_name)` tuples created by `get_frames_from_slp`.
         identity: If True, append each instance's track name to its skeleton
             name to guarantee uniqueness when identity tracking is present.
             Defaults to False.
+        annotator: Name of the annotator or annotation software. Defaults to "SLEAP".
 
     Returns:
         An NWB `TrainingFrames` container, where every `TrainingFrame` holds
@@ -324,16 +366,18 @@ def create_training_frames(
         for j in range(len(lf.instances)):
             val = lf.instances[j]
 
-            skel_name = "Skeleton" + str(j)
+            # Use skeleton name and instance index for clarity
+            skeleton_base_name = val.skeleton.name
 
-            if identity:
-                iden_string = val.track.name
-                skel_name = skel_name + "_" + str(iden_string)  # identity tracking
+            if identity and val.track is not None:
+                instance_name = f"{skeleton_base_name}_{val.track.name}_instance_{j}"
+            else:
+                instance_name = f"{skeleton_base_name}_instance_{j}"
 
             node_locations_sk1 = np.array([[pt[0][0], pt[0][1]] for pt in val.points])
 
             instance_sk1 = SkeletonInstance(
-                name=skel_name,
+                name=instance_name,
                 id=np.uint64(unique_ids),
                 node_locations=node_locations_sk1,
                 node_visibility=[pt[1] for pt in val.points],
@@ -347,22 +391,32 @@ def create_training_frames(
             skeleton_instances=skeleton_instances_list
         )
 
-        mapped = frame_map.get(frame_idx)
+        # Get the global frame index from the frame map
+        mapped = frame_map.get(frame_idx, [])
 
-        if isinstance(mapped[0], list):  # loop through if mult videos same frame idx
-            video_path = val.video.filename
-            video_name = Path(video_path).stem
-            for vid in mapped:
-                if vid[1] == video_name:
-                    frame_idx = vid[0]
-        else:
-            frame_idx = mapped[0]
+        # Find the correct mapping for this video
+        video_name = Path(lf.video.filename).stem
+        global_frame_idx = None
+
+        for global_idx, vid_name in mapped:
+            if vid_name == video_name:
+                global_frame_idx = global_idx
+                break
+
+        if global_frame_idx is None:
+            # If we can't find the mapping, use the first one as fallback
+            if mapped:
+                global_frame_idx = mapped[0][0]
+            else:
+                warnings.warn(f"No frame mapping found for frame {frame_idx}")
+                global_frame_idx = frame_idx
 
         training_frame = TrainingFrame(
             name=f"frame_{lf_idx}",  # must be unique
+            annotator=annotator,
             skeleton_instances=skeleton_instances,
             source_video=annotations_mjpeg,
-            source_video_frame_index=np.uint64(frame_idx),
+            source_video_frame_index=np.uint64(global_frame_idx),
         )
         training_frames_list.append(training_frame)
 
@@ -376,11 +430,14 @@ def write_annotations_nwb(
     nwbfile_path: str,
     nwb_file_kwargs: Optional[dict] = None,
     nwb_subject_kwargs: Optional[dict] = None,
+    output_dir: Optional[str] = None,
+    include_devices: bool = False,
+    annotator: str = "SLEAP",
 ) -> None:
     """Export SLEAP pose data and metadata to an NWB file.
 
     Generates annotated_frames.avi containing all annotated frames and dumps
-    frame_map.json to the working directory. Writes the assembled NWB file to
+    frame_map.json to the specified output directory. Writes the assembled NWB file to
     nwbfile_path using pynwb.NWBHDF5IO.
 
     Args:
@@ -397,6 +454,10 @@ def write_annotations_nwb(
             pynwb.file.Subject. Missing DANDI-required fields are auto-filled:
             subject_id ("subject1"), species ("Mus musculus"), sex ("F"),
             and age ("P10W/P12W"). Defaults to None.
+        output_dir: Directory for intermediate output files (frame_map.json,
+            annotated_frames.avi). If None, uses current directory.
+        include_devices: If True, create camera device metadata in NWB file.
+        annotator: Name of annotator or annotation software. Defaults to "SLEAP".
 
     Raises:
         RuntimeError: If an original video cannot be opened or its FPS is
@@ -444,11 +505,13 @@ def write_annotations_nwb(
     skeletons, frame_indices, unique_skeletons = create_skeletons(labels)
 
     frames, durations, frame_map = get_frames_from_slp(labels)
-    output_mjpeg = make_mjpeg(frames, durations, frame_map)
+    output_mjpeg = make_mjpeg(frames, durations, frame_map, output_dir=output_dir)
 
-    source_videos, annotations_mjpeg = create_source_videos(frame_indices, output_mjpeg)
+    source_videos, annotations_mjpeg, video_dimensions = create_source_videos(
+        frame_indices, output_mjpeg, include_devices=include_devices, nwbfile=nwbfile
+    )
     training_frames = create_training_frames(
-        labels, unique_skeletons, annotations_mjpeg, frame_map
+        labels, unique_skeletons, annotations_mjpeg, frame_map, annotator=annotator
     )
 
     pose_training = PoseTraining(
