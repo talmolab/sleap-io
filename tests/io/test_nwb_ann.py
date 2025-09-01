@@ -531,18 +531,6 @@ def test_extract_skeletons_from_nwb():
     assert len(skel2.edges) == 1
 
 
-def test_resolve_video_and_frame():
-    """Test video and frame resolution - function signature changed."""
-    # This function signature has changed, skip test
-    pytest.skip("_resolve_video_and_frame function signature has changed")
-
-
-def test_reconstruct_instances_from_training():
-    """Test instance reconstruction - internal API changed."""
-    # The internal _reconstruct_instances_from_training API has changed
-    pytest.skip("Internal API for _reconstruct_instances_from_training has changed")
-
-
 def test_write_annotations_nwb_error_cases(tmp_path):
     """Test handling of edge cases in write_annotations_nwb."""
     # Create labels without predicted instances
@@ -575,10 +563,6 @@ def test_duplicate_frame_indices(tmp_path, slp_minimal_pkg):
     """Test handling of duplicate frame indices."""
     labels = sio.load_slp(slp_minimal_pkg)
 
-    # Can't extract non-existent indices, so just test with existing frames
-    if len(labels) < 2:
-        pytest.skip("Not enough frames to test duplicates")
-
     # Should handle duplicates gracefully
     frames, durations, frame_map = ann.get_frames_from_slp(labels)
 
@@ -589,12 +573,6 @@ def test_duplicate_frame_indices(tmp_path, slp_minimal_pkg):
     # Frame map should contain all unique frame indices
     unique_indices = set(lf.frame_idx for lf in labels.labeled_frames)
     assert len(frame_map) == len(unique_indices)
-
-
-def test_create_skeletons_with_missing_edge_nodes():
-    """Test skeleton creation with edges referencing missing nodes."""
-    # Skeleton creation now validates edges, so we can't create invalid ones
-    pytest.skip("Skeleton class now validates edges during creation")
 
 
 def test_read_nwb_annotations_missing_data(tmp_path):
@@ -664,18 +642,6 @@ def test_read_nwb_annotations_no_frame_map(tmp_path, slp_typical):
     # Frames might not match exactly without frame map
     assert len(loaded_labels.labeled_frames) >= 0
 
-
-def test_reconstruct_instances_with_tracks():
-    """Test instance reconstruction with tracks - internal API changed."""
-    # The internal _reconstruct_instances_from_training API has changed
-    pytest.skip("Internal API for _reconstruct_instances_from_training has changed")
-
-
-def test_create_training_frames_missing_frame_mapping():
-    """Test training frames creation with missing frame in mapping."""
-    pytest.skip("create_training_frames requires NWB skeleton objects")
-
-
 def test_multiview_with_different_skeletons(tmp_path):
     """Test multiview data with different skeletons per view."""
     # Create two different skeletons
@@ -735,3 +701,249 @@ def test_multiview_with_different_skeletons(tmp_path):
     skeleton_names = [s.name for s in loaded_labels.skeletons]
     assert "skeleton_view1" in skeleton_names
     assert "skeleton_view2" in skeleton_names
+
+
+def test_malformed_frame_map_json(tmp_path):
+    """Test reading NWB annotations with malformed frame_map.json."""
+    # This tests lines 879-880 in nwb_ann.py
+    from datetime import datetime, timezone
+
+    from pynwb import NWBHDF5IO, NWBFile
+
+    # Create a simple NWB file
+    nwbfile = NWBFile(
+        session_description="test",
+        identifier="test_id",
+        session_start_time=datetime.now(timezone.utc),
+    )
+    
+    nwb_path = tmp_path / "test.nwb"
+    with NWBHDF5IO(str(nwb_path), "w") as io:
+        io.write(nwbfile)
+    
+    # Create malformed JSON file
+    frame_map_path = tmp_path / "frame_map.json"
+    frame_map_path.write_text("{invalid json")
+    
+    # Try to load - should warn but not crash
+    with pytest.warns(UserWarning, match="Could not load frame_map.json"):
+        # This will fail because no behavior module exists, but that's ok
+        # We just want to test the frame_map loading error handling
+        try:
+            labels = ann.read_nwb_annotations(str(nwb_path), str(frame_map_path))
+        except ValueError as e:
+            assert "behavior" in str(e)
+
+
+def test_nwb_device_creation(tmp_path, slp_typical):
+    """Test creating NWB files with device information."""
+    # This tests lines 351-355 and 371 in nwb_ann.py  
+    labels = sio.load_slp(slp_typical)
+    
+    # Limit to one frame for speed
+    labels.labeled_frames = labels.labeled_frames[:1]
+    
+    # Write with devices enabled
+    nwb_path = tmp_path / "test_devices.nwb"
+    ann.write_annotations_nwb(
+        labels=labels,
+        nwbfile_path=str(nwb_path),
+        output_dir=str(tmp_path),
+        include_devices=True,  # This triggers device creation
+    )
+    
+    # Read back and verify devices were created
+    from pynwb import NWBHDF5IO
+    
+    with NWBHDF5IO(str(nwb_path), "r", load_namespaces=True) as io:
+        nwbfile = io.read()
+        
+        # Check that devices were created
+        assert len(nwbfile.devices) > 0
+        device_names = list(nwbfile.devices.keys())
+        assert any("camera" in name for name in device_names)
+        
+        # Check that image series reference the devices
+        if hasattr(nwbfile, "acquisition") and nwbfile.acquisition:
+            for image_series in nwbfile.acquisition.values():
+                if hasattr(image_series, "device"):
+                    assert image_series.device is not None
+
+
+def test_missing_nwb_processing_modules(tmp_path):
+    """Test reading NWB file with missing processing modules."""
+    # This tests lines 888 and 894 in nwb_ann.py
+    from datetime import datetime, timezone
+
+    from pynwb import NWBHDF5IO, NWBFile
+
+    # Create NWB file without behavior module
+    nwbfile = NWBFile(
+        session_description="test",
+        identifier="test_id",
+        session_start_time=datetime.now(timezone.utc),
+    )
+    
+    nwb_path = tmp_path / "no_behavior.nwb"
+    with NWBHDF5IO(str(nwb_path), "w") as io:
+        io.write(nwbfile)
+    
+    # Try to read - should raise ValueError about missing behavior module
+    with pytest.raises(ValueError, match="behavior"):
+        ann.read_nwb_annotations(str(nwb_path))
+    
+    # Create NWB file with behavior but no Skeletons
+    nwbfile = NWBFile(
+        session_description="test",
+        identifier="test_id",
+        session_start_time=datetime.now(timezone.utc),
+    )
+    behavior_pm = nwbfile.create_processing_module(
+        name="behavior", description="behavior"
+    )
+    
+    nwb_path = tmp_path / "no_skeletons.nwb"
+    with NWBHDF5IO(str(nwb_path), "w") as io:
+        io.write(nwbfile)
+    
+    # Try to read - should raise ValueError about missing Skeletons
+    with pytest.raises(ValueError, match="Skeletons"):
+        ann.read_nwb_annotations(str(nwb_path))
+
+
+def test_video_loading_branches(tmp_path, slp_typical):
+    """Test load_source_videos parameter branches."""
+    # This tests lines 928 and 937 in nwb_ann.py
+    labels = sio.load_slp(slp_typical)
+    labels.labeled_frames = labels.labeled_frames[:1]
+    
+    # Write NWB first
+    nwb_path = tmp_path / "test.nwb"
+    ann.write_annotations_nwb(
+        labels=labels,
+        nwbfile_path=str(nwb_path),
+        output_dir=str(tmp_path),
+    )
+    
+    # Read with load_source_videos=True (default)
+    loaded1 = ann.read_nwb_annotations(str(nwb_path), load_source_videos=True)
+    # MJPEG video should have backend (but source videos may not exist)
+    assert loaded1 is not None
+    
+    # Read with load_source_videos=False
+    loaded2 = ann.read_nwb_annotations(str(nwb_path), load_source_videos=False)
+    # Should still load successfully
+    assert loaded2 is not None
+
+
+def test_empty_instances_handling(tmp_path):
+    """Test handling of training frames with no instances."""
+    # This tests lines 958 and 965 in nwb_ann.py
+    from datetime import datetime, timezone
+
+    from ndx_pose import (
+        Skeleton as NWBSkeleton,
+        SkeletonInstances,
+        Skeletons,
+        TrainingFrame,
+        TrainingFrames,
+    )
+    from pynwb import NWBHDF5IO, NWBFile
+    from pynwb.image import ImageSeries
+
+    # Create NWB file
+    nwbfile = NWBFile(
+        session_description="test",
+        identifier="test_id",
+        session_start_time=datetime.now(timezone.utc),
+    )
+    
+    # Add skeleton
+    skeleton = NWBSkeleton(
+        name="test_skeleton", 
+        nodes=["head", "tail"],
+        edges=np.array([[0, 1]])
+    )
+    skeletons_group = Skeletons(name="Skeletons", skeletons=[skeleton])
+    
+    behavior_pm = nwbfile.create_processing_module(
+        name="behavior", description="behavior"
+    )
+    behavior_pm.add(skeletons_group)
+    
+    # Add MJPEG video
+    mjpeg_series = ImageSeries(
+        name="annotated_frames",
+        external_file=["test.avi"],
+        starting_frame=[0],
+        rate=30.0,
+        format="external",
+    )
+    nwbfile.add_acquisition(mjpeg_series)
+    
+    # Create training frame with empty skeleton instances
+    skeleton_instances = SkeletonInstances(
+        name="skeleton_instances",
+        skeleton_instances=[],  # Empty!
+    )
+    
+    training_frame = TrainingFrame(
+        name="frame_0",
+        annotator="test",
+        skeleton_instances=skeleton_instances,
+        source_video=mjpeg_series,
+        source_video_frame_index=np.uint64(0),
+    )
+    
+    training_frames_group = TrainingFrames(
+        name="TrainingFrames", training_frames=[training_frame]
+    )
+    behavior_pm.add(training_frames_group)
+    
+    # Write to file
+    nwb_path = tmp_path / "test_empty.nwb"
+    with NWBHDF5IO(str(nwb_path), "w") as io:
+        io.write(nwbfile)
+    
+    # Read back - should handle empty instances gracefully
+    loaded = ann.read_nwb_annotations(str(nwb_path))
+    
+    # Should have no labeled frames (empty instances are skipped)
+    assert len(loaded.labeled_frames) == 0
+
+
+def test_duplicate_frame_handling(tmp_path, slp_typical):
+    """Test handling of duplicate frame writes."""
+    # This tests line 193 in nwb_ann.py
+    labels = sio.load_slp(slp_typical)
+    
+    # Duplicate the first frame
+    first_frame = labels.labeled_frames[0]
+    duplicate_frame = LabeledFrame(
+        video=first_frame.video,
+        frame_idx=first_frame.frame_idx,
+        instances=first_frame.instances,
+    )
+    labels.labeled_frames.append(duplicate_frame)
+    
+    # Write annotations - should skip duplicate
+    nwb_path = tmp_path / "test_duplicates.nwb"
+    ann.write_annotations_nwb(
+        labels=labels,
+        nwbfile_path=str(nwb_path),
+        output_dir=str(tmp_path),
+    )
+    
+    # Check that MJPEG was created with unique frames only
+    mjpeg_path = tmp_path / "annotated_frames.avi"
+    assert mjpeg_path.exists()
+    
+    # Read back the frame map
+    frame_map_path = tmp_path / "frame_map.json"
+    frame_map = ann._load_frame_map(frame_map_path)
+    
+    # Should have unique frames only
+    total_frames = sum(len(frames) for frames in frame_map.values())
+    # Original frames minus duplicate
+    expected_frames = len(labels.labeled_frames) - 1
+    assert total_frames == expected_frames
