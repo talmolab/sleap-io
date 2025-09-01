@@ -47,9 +47,10 @@ def test_nwb(tmp_path, slp_typical):
 def test_nwb_annotations(tmp_path):
     """Test save_nwb_annotations and load_nwb_annotations from main API."""
     import numpy as np
-    from sleap_io import Skeleton, Instance, LabeledFrame, Video
+
+    from sleap_io import Instance, LabeledFrame, Skeleton, Video
     from sleap_io.io.video_reading import ImageVideo
-    
+
     # Create minimal test data
     # Save test images
     img_files = []
@@ -57,40 +58,38 @@ def test_nwb_annotations(tmp_path):
         img_path = tmp_path / f"frame_{i}.png"
         img = np.zeros((10, 10, 1), dtype=np.uint8)
         import imageio
+
         imageio.imwrite(img_path, img[:, :, 0])
         img_files.append(str(img_path))
-    
+
     skeleton = Skeleton(nodes=["A", "B"], name="test_skeleton")
     video = Video(filename=img_files, backend=ImageVideo(img_files))
-    
+
     instance = Instance.from_numpy(
-        np.array([[1.0, 2.0], [3.0, 4.0]]),
-        skeleton=skeleton
+        np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
     )
-    
+
     labels = Labels(
         videos=[video],
         skeletons=[skeleton],
-        labeled_frames=[
-            LabeledFrame(video=video, frame_idx=0, instances=[instance])
-        ]
+        labeled_frames=[LabeledFrame(video=video, frame_idx=0, instances=[instance])],
     )
-    
+
     # Save annotations using the main API
     save_nwb_annotations(
         labels,
         str(tmp_path / "test_annotations.nwb"),
         output_dir=str(tmp_path),
         annotator="Test Suite",
-        nwb_subject_kwargs={"subject_id": "test_subject"}
+        nwb_subject_kwargs={"subject_id": "test_subject"},
     )
-    
+
     # Load annotations using the main API
     loaded_labels = load_nwb_annotations(
         str(tmp_path / "test_annotations.nwb"),
-        frame_map_path=str(tmp_path / "frame_map.json")
+        frame_map_path=str(tmp_path / "frame_map.json"),
     )
-    
+
     assert type(loaded_labels) is Labels
     assert len(loaded_labels.skeletons) == len(labels.skeletons)
     assert len(loaded_labels.labeled_frames) == len(labels.labeled_frames)

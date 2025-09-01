@@ -23,15 +23,15 @@ def test_mjpeg_frame_writer_write_frames(tmp_path):
     frames = [
         np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8) for _ in range(5)
     ]
-    
+
     # Test write_frames method
     output_path = tmp_path / "test_mjpeg.avi"
     with MJPEGFrameWriter(output_path) as writer:
         writer.write_frames(frames)
-    
+
     # Verify the video was created
     assert output_path.exists()
-    
+
     # Load and verify the video
     vid = sio.load_video(str(output_path))
     assert vid.shape[0] == 5  # 5 frames

@@ -9,8 +9,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
-
-from numpy.typing import ArrayLike
 from ndx_pose import (
     PoseTraining,
     Skeleton,
@@ -742,13 +740,13 @@ def _resolve_video_and_frame(
     mjpeg_video: Optional[Video],
 ) -> Tuple[Optional[Video], int]:
     """Resolve video and original frame index from MJPEG frame index.
-    
+
     Args:
         mjpeg_frame_idx: Frame index in MJPEG video.
         inverted_map: Inverted frame mapping or None.
         video_map: Mapping of video names to Video objects.
         mjpeg_video: MJPEG Video object or None.
-        
+
     Returns:
         Tuple of (Video, original_frame_idx) or (None, -1) if resolution fails.
     """
@@ -758,17 +756,15 @@ def _resolve_video_and_frame(
             key = (video_name, mjpeg_frame_idx)
             if key in inverted_map:
                 return video_map[video_name], inverted_map[key]
-        
+
         # Fall back to MJPEG video if available
-        if mjpeg_video:
+        if mjpeg_video is not None:
             return mjpeg_video, mjpeg_frame_idx
-        
+
         # No resolution possible
-        warnings.warn(
-            f"Could not map MJPEG frame {mjpeg_frame_idx} to original video"
-        )
+        warnings.warn(f"Could not map MJPEG frame {mjpeg_frame_idx} to original video")
         return None, -1
-    
+
     # No frame map, use fallback strategies
     if mjpeg_video is not None:
         return mjpeg_video, mjpeg_frame_idx
