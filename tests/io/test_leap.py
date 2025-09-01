@@ -188,3 +188,114 @@ def test_parse_pose_data():
     inst2 = frame2.instances[0]
     assert np.allclose(inst2.points[0]["xy"], [3.0, 6.0])
     assert np.allclose(inst2.points[1]["xy"], [9.0, 12.0])
+
+
+def test_parse_pose_data_alternative_fields():
+    """Test parsing pose data from alternative field names."""
+    from sleap_io.model.skeleton import Node
+
+    nodes = [Node("A"), Node("B")]
+    skeleton = Skeleton(nodes=nodes)
+    video = Video.from_filename("test.mp4")
+
+    # Test with 'pose' field - shape (nodes=2, xy=2, frames=1)
+    mat_data = {"pose": np.array([[[1.0], [2.0]], [[3.0], [4.0]]])}
+    labeled_frames = leap._parse_pose_data(mat_data, video, skeleton)
+    assert len(labeled_frames) == 1
+
+    # Test with 'posedata' field
+    mat_data = {"posedata": np.array([[[1.0], [2.0]], [[3.0], [4.0]]])}
+    labeled_frames = leap._parse_pose_data(mat_data, video, skeleton)
+    assert len(labeled_frames) == 1
+
+    # Test with no position data
+    mat_data = {}
+    labeled_frames = leap._parse_pose_data(mat_data, video, skeleton)
+    assert len(labeled_frames) == 0
+
+
+def test_parse_pose_data_single_frame():
+    """Test parsing single frame (2D array) pose data."""
+    from sleap_io.model.skeleton import Node
+
+    nodes = [Node("A"), Node("B")]
+    skeleton = Skeleton(nodes=nodes)
+    video = Video.from_filename("test.mp4")
+
+    # Single frame, shape is (nodes=2, xy=2)
+    positions = np.array([[1.0, 2.0], [3.0, 4.0]])
+    mat_data = {"positions": positions}
+
+    labeled_frames = leap._parse_pose_data(mat_data, video, skeleton)
+
+    # Check we got 1 frame
+    assert len(labeled_frames) == 1
+    frame0 = labeled_frames[0]
+    assert frame0.frame_idx == 0
+    inst0 = frame0.instances[0]
+    assert np.allclose(inst0.points[0]["xy"], [1.0, 2.0])
+    assert np.allclose(inst0.points[1]["xy"], [3.0, 4.0])
+
+
+def test_parse_skeleton_edge_cases():
+    """Test skeleton parsing edge cases."""
+    # Test with numpy array node names
+    mat_data = {
+        "skeleton": {
+            "nodes": np.array(["node1", "node2"]),
+            "edges": np.array([1, 2]).reshape(-1, 2),  # 1D array that needs reshaping
+        }
+    }
+    skeleton = leap._parse_skeleton(mat_data)
+    assert len(skeleton.nodes) == 2
+    assert skeleton.nodes[0].name == "node1"
+    assert len(skeleton.edges) == 1
+
+    # Test with nested numpy arrays for node names
+    mat_data = {
+        "skeleton": {
+            "nodes": [np.array(["node1"]), np.array(["node2"])],
+            "edges": [],
+        }
+    }
+    skeleton = leap._parse_skeleton(mat_data)
+    assert len(skeleton.nodes) == 2
+    assert skeleton.nodes[0].name == "node1"
+
+    # Test with non-string node names
+    mat_data = {
+        "skeleton": {
+            "nodes": [1, 2, 3],
+            "edges": [],
+        }
+    }
+    skeleton = leap._parse_skeleton(mat_data)
+    assert len(skeleton.nodes) == 3
+    assert skeleton.nodes[0].name == "1"
+    assert skeleton.nodes[1].name == "2"
+
+
+def test_load_leap_no_video_path(tmp_path, monkeypatch):
+    """Test loading LEAP file without boxPath field."""
+    pytest.importorskip("pymatreader")
+
+    # Create a minimal .mat file without boxPath
+    mat_file = tmp_path / "test.mat"
+    avi_file = tmp_path / "test.avi"
+    
+    # Create a dummy video file
+    avi_file.write_text("dummy")
+    
+    # Mock pymatreader to return data without boxPath
+    def mock_read_mat(path):
+        return {
+            "skeleton": {"nodes": ["A", "B"], "edges": []},
+            "positions": np.array([[[1.0, 2.0]], [[3.0, 4.0]]]),
+        }
+    
+    monkeypatch.setattr("pymatreader.read_mat", mock_read_mat)
+    
+    # This should try to infer video path from mat file path
+    labels = leap.read_labels(str(mat_file))
+    assert isinstance(labels, Labels)
+    assert len(labels.videos) == 1
