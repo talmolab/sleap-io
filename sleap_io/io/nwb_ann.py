@@ -192,7 +192,27 @@ def get_frames_from_slp(
         if cache_key in written:
             continue
 
-        frame = lf.video.backend.get_frame(frame_idx)
+        # Try to get frame from video backend
+        if lf.video.backend is not None:
+            try:
+                frame = lf.video.backend.get_frame(frame_idx)
+            except (IndexError, OSError, RuntimeError) as e:
+                # If we can't read the frame, create a placeholder
+                import warnings
+
+                warnings.warn(
+                    f"Could not read frame {frame_idx} from {lf.video.filename}: {e}"
+                )
+                # Create a black frame as placeholder
+                if lf.video.shape is not None:
+                    _, h, w, c = lf.video.shape
+                else:
+                    h, w, c = 100, 100, 1  # Default size
+                frame = np.zeros((h, w, c), dtype=np.uint8)
+        else:
+            # No backend, create placeholder frame
+            h, w, c = 100, 100, 1  # Default size
+            frame = np.zeros((h, w, c), dtype=np.uint8)
         frames.append(frame)
         durations.append(mjpeg_frame_duration / 1000.0)  # Convert ms to seconds
 
@@ -420,13 +440,20 @@ def create_training_frames(
             else:
                 instance_name = f"{skeleton_base_name}.instance_{j}"
 
-            node_locations_sk1 = np.array([[pt[0][0], pt[0][1]] for pt in val.points])
+            # Get points as numpy array
+            pts_array = val.numpy()
+            node_locations_sk1 = pts_array
+
+            # Calculate visibility based on non-NaN values
+            node_visibility = [
+                not (np.isnan(pt[0]) or np.isnan(pt[1])) for pt in pts_array
+            ]
 
             instance_sk1 = SkeletonInstance(
                 name=instance_name,
                 id=np.uint64(unique_ids),
                 node_locations=node_locations_sk1,
-                node_visibility=[pt[1] for pt in val.points],
+                node_visibility=node_visibility,
                 skeleton=unique_skeletons[skeleton_base_name],
             )
             skeleton_instances_list.append(instance_sk1)
@@ -878,7 +905,13 @@ def read_nwb_annotations(
                 break
 
         if pose_training is None:
-            raise ValueError("NWB file does not contain PoseTraining data")
+            # No PoseTraining data - return just skeletons with empty frames/videos
+            return Labels(
+                labeled_frames=[],
+                videos=[],
+                skeletons=list(sleap_skeletons.values()),
+                tracks=[],
+            )
 
         # Extract source video information
         video_map = {}  # Maps video names to Video objects
@@ -944,9 +977,9 @@ def read_nwb_annotations(
 
     labels = Labels(
         labeled_frames=labeled_frames,
-        videos=videos if videos else None,
+        videos=videos if videos else [],
         skeletons=list(sleap_skeletons.values()),
-        tracks=list(tracks.values()) if tracks else None,
+        tracks=list(tracks.values()) if tracks else [],
     )
 
     labels.provenance["filename"] = nwb_path
