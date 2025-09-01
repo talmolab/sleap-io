@@ -308,9 +308,14 @@ def test_skeleton_name_sanitization_with_real_data(tmp_path):
         edges=[["node1", "node2"]],
     )
 
-    # Create simple test data with a dummy backend
+    # Create a temporary image file for testing
+    import imageio.v3 as iio
+    test_image = np.zeros((100, 100, 1), dtype=np.uint8)
+    temp_image_path = tmp_path / "test_frame.png"
+    iio.imwrite(temp_image_path, test_image.squeeze())
+    
     from sleap_io.io.video_reading import ImageVideo
-    video = Video(filename="test.mp4", backend=ImageVideo(["tests/data/videos/single_frame.mp4"]))
+    video = Video(filename="test.mp4", backend=ImageVideo([str(temp_image_path)]))
 
     instance = Instance.from_numpy(
         np.array([[10, 20], [30, 40]]), skeleton=skeleton
@@ -532,8 +537,14 @@ def test_write_annotations_nwb_error_cases(tmp_path):
     """Test error handling in write_annotations_nwb."""
     # Create labels without predicted instances
     skeleton = Skeleton(name="test", nodes=["a", "b"], edges=[["a", "b"]])
+    # Create a temporary image file for testing
+    import imageio.v3 as iio
+    test_image = np.zeros((100, 100, 1), dtype=np.uint8)
+    temp_image_path = tmp_path / "test_frame.png"
+    iio.imwrite(temp_image_path, test_image.squeeze())
+    
     from sleap_io.io.video_reading import ImageVideo
-    video = Video(filename="test.mp4", backend=ImageVideo(["tests/data/videos/single_frame.mp4"]))
+    video = Video(filename="test.mp4", backend=ImageVideo([str(temp_image_path)]))
     lf = LabeledFrame(video=video, frame_idx=0, instances=[])
     labels = Labels([lf], videos=[video], skeletons=[skeleton])
 
@@ -708,10 +719,17 @@ def test_multiview_with_different_skeletons(tmp_path):
         name="skeleton_view2", nodes=["a", "b", "c"], edges=[["a", "b"], ["b", "c"]]
     )
 
-    # Create videos for different views with backends
+    # Create temporary image files for testing
+    import imageio.v3 as iio
+    test_image = np.zeros((100, 100, 1), dtype=np.uint8)
+    temp_image_path1 = tmp_path / "test_frame1.png"
+    temp_image_path2 = tmp_path / "test_frame2.png"
+    iio.imwrite(temp_image_path1, test_image.squeeze())
+    iio.imwrite(temp_image_path2, test_image.squeeze())
+    
     from sleap_io.io.video_reading import ImageVideo
-    video1 = Video(filename="view1.mp4", backend=ImageVideo(["tests/data/videos/single_frame.mp4"]))
-    video2 = Video(filename="view2.mp4", backend=ImageVideo(["tests/data/videos/single_frame.mp4"]))
+    video1 = Video(filename="view1.mp4", backend=ImageVideo([str(temp_image_path1)]))
+    video2 = Video(filename="view2.mp4", backend=ImageVideo([str(temp_image_path2)]))
 
     # Create instances with different skeletons
     instance1 = Instance.from_numpy(np.array([[10, 20], [30, 40]]), skeleton=skeleton1)
