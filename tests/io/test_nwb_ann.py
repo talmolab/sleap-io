@@ -684,14 +684,64 @@ def test_reconstruct_instances_with_tracks():
     assert tracks["track_2"] == instances[1].track
 
 
-def test_reconstruct_instances_backward_compatibility():
-    """Test that old underscore format still works."""
-    # Create mock skeleton instance with old format
+def test_reconstruct_instances_malformed_names():
+    """Test that reconstruction doesn't break with unexpected name formats."""
+    # Test various malformed or unexpected instance names
+    test_cases = [
+        ("completely_random_name", "test_skeleton"),  # No recognizable format
+        ("", "test_skeleton"),  # Empty name
+        ("instance_0", "test_skeleton"),  # Missing skeleton name
+        ("test_skeleton", "test_skeleton"),  # Missing instance marker
+        (
+            "test.skeleton.with.dots.instance_0",
+            "test_skeleton",
+        ),  # Skeleton name with dots
+    ]
+
+    for instance_name, skeleton_name in test_cases:
+        # Create mock skeleton instance
+        mock_skeleton_instance = MagicMock()
+        mock_skeleton_instance.name = instance_name
+        mock_skeleton_instance.node_locations = np.array([[10, 20], [30, 40]])
+        mock_skeleton_instance.node_visibility = [1.0, 0.5]
+
+        # Create a mock skeleton object with a name attribute
+        mock_nwb_skeleton = MagicMock()
+        mock_nwb_skeleton.name = skeleton_name
+        mock_skeleton_instance.skeleton = mock_nwb_skeleton
+
+        # Create mock skeleton instances container
+        mock_skeleton_instances = MagicMock()
+        mock_skeleton_instances.skeleton_instances = {
+            "instance_0": mock_skeleton_instance
+        }
+
+        # Create mock training frame
+        mock_training_frame = MagicMock()
+        mock_training_frame.skeleton_instances = mock_skeleton_instances
+
+        # Create SLEAP skeleton
+        sleap_skeleton = Skeleton(name=skeleton_name, nodes=["node1", "node2"])
+        sleap_skeletons = {skeleton_name: sleap_skeleton}
+
+        # Reconstruct instances - should not raise an error
+        instances = ann._reconstruct_instances_from_training(
+            mock_training_frame, sleap_skeletons
+        )
+
+        # Should successfully create an instance using the NWB skeleton reference
+        assert len(instances) == 1
+        assert instances[0].skeleton == sleap_skeleton
+
+
+def test_reconstruct_instances_single_skeleton_fallback():
+    """Test fallback to single skeleton when name parsing fails."""
+    # Create mock skeleton instance with unparseable name
     mock_skeleton_instance = MagicMock()
-    mock_skeleton_instance.name = "test_skeleton_track1_instance_0"
-    mock_skeleton_instance.node_locations = np.array([[10, 20], [30, 40]])
-    mock_skeleton_instance.node_visibility = [1.0, 0.5]
-    mock_skeleton_instance.skeleton = MagicMock(name="test_skeleton")
+    mock_skeleton_instance.name = "some_random_format_12345"
+    mock_skeleton_instance.node_locations = np.array([[10, 20]])
+    mock_skeleton_instance.node_visibility = [1.0]
+    mock_skeleton_instance.skeleton = None  # No NWB skeleton reference
 
     # Create mock skeleton instances container
     mock_skeleton_instances = MagicMock()
@@ -701,21 +751,18 @@ def test_reconstruct_instances_backward_compatibility():
     mock_training_frame = MagicMock()
     mock_training_frame.skeleton_instances = mock_skeleton_instances
 
-    # Create SLEAP skeleton
-    sleap_skeleton = Skeleton(name="test_skeleton", nodes=["node1", "node2"])
-    sleap_skeletons = {"test_skeleton": sleap_skeleton}
+    # Create single SLEAP skeleton
+    sleap_skeleton = Skeleton(name="only_skeleton", nodes=["node1"])
+    sleap_skeletons = {"only_skeleton": sleap_skeleton}
 
-    # Reconstruct instances
-    tracks = {}
-    instances = ann._reconstruct_instances_from_training(
-        mock_training_frame, sleap_skeletons, tracks
-    )
+    # Reconstruct instances - should use the only available skeleton
+    with pytest.warns(UserWarning, match="using the only available skeleton"):
+        instances = ann._reconstruct_instances_from_training(
+            mock_training_frame, sleap_skeletons
+        )
 
     assert len(instances) == 1
-    instance = instances[0]
-    assert instance.skeleton == sleap_skeleton
-    assert instance.track.name == "track1"
-    assert "track1" in tracks
+    assert instances[0].skeleton == sleap_skeleton
 
 
 def test_read_nwb_annotations_missing_data(tmp_path):

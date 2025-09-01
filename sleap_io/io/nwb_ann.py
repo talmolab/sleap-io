@@ -627,63 +627,71 @@ def _reconstruct_instances_from_training(
         ]
 
         # Extract skeleton name from instance name
-        # Instance names are like "skeleton_name.instance_0" or
-        # "skeleton_name.track_name.instance_0"
+        # Expected formats:
+        # - "skeleton_name.instance_0" (no track)
+        # - "skeleton_name.track_name.instance_0" (with track)
+        # But we need to handle any format gracefully
         instance_name = skeleton_instance.name
-
-        # Parse the instance name using '.' as delimiter
-        parts = instance_name.split(".")
 
         # Find the skeleton by matching against known skeleton names
         skeleton_obj = None
         track = None
 
-        # First, try to find skeleton from the NWB skeleton reference
+        # First, try to find skeleton from the NWB skeleton reference (most reliable)
         nwb_skeleton = skeleton_instance.skeleton
-        if nwb_skeleton and nwb_skeleton.name in sleap_skeletons:
+        if (
+            nwb_skeleton
+            and hasattr(nwb_skeleton, "name")
+            and nwb_skeleton.name in sleap_skeletons
+        ):
             skeleton_obj = sleap_skeletons[nwb_skeleton.name]
 
         # If not found, try to parse from instance name
         if skeleton_obj is None:
+            # Try parsing with '.' delimiter
+            parts = instance_name.split(".")
+
             # Check if the first part matches a known skeleton
-            if parts[0] in sleap_skeletons:
+            if len(parts) > 0 and parts[0] in sleap_skeletons:
                 skeleton_obj = sleap_skeletons[parts[0]]
             else:
-                # Try to find skeleton by prefix match (for backward compatibility)
+                # Fallback: try to find any skeleton that matches as a prefix
                 for skel_name in sleap_skeletons:
                     if instance_name.startswith(skel_name):
                         skeleton_obj = sleap_skeletons[skel_name]
-                        # Re-parse with the matched skeleton name
-                        # Handle old format "skeleton_name_instance_0" or
-                        # "skeleton_name_track_instance_0"
-                        if "_instance_" in instance_name:
-                            old_parts = instance_name.split("_instance_")[0].split("_")
-                            skel_parts = skel_name.split("_")
-                            if len(old_parts) > len(skel_parts):
-                                # Extract track from old format
-                                track_parts = old_parts[len(skel_parts) :]
-                                track_name = "_".join(track_parts)
-                                if track_name and track_name not in tracks:
-                                    tracks[track_name] = Track(name=track_name)
-                                track = tracks.get(track_name)
                         break
 
         if skeleton_obj is None:
-            warnings.warn(f"Could not find skeleton for instance {instance_name}")
-            continue
+            # Last resort: if only one skeleton exists, use it
+            if len(sleap_skeletons) == 1:
+                skeleton_obj = next(iter(sleap_skeletons.values()))
+                warnings.warn(
+                    f"Could not parse skeleton from instance name '{instance_name}', "
+                    f"using the only available skeleton: {skeleton_obj.name}"
+                )
+            else:
+                warnings.warn(
+                    f"Could not find skeleton for instance '{instance_name}'. "
+                    f"Available skeletons: {list(sleap_skeletons.keys())}"
+                )
+                continue
 
-        # Extract track information if present (for new format)
-        if track is None and len(parts) == 3 and parts[1] != "instance":
-            # Format: skeleton_name.track_name.instance_X
-            track_name = parts[1]
-            if track_name not in tracks:
-                tracks[track_name] = Track(name=track_name)
-            track = tracks[track_name]
-        elif track is None and tracks is not None and len(parts) > 2:
-            # Check for any middle parts that could be track names
-            for i in range(1, len(parts) - 1):
-                if not parts[i].startswith("instance"):
-                    track_name = parts[i]
+        # Extract track information if present
+        # Only try to parse tracks if we have a dot-delimited format
+        if tracks is not None and "." in instance_name:
+            parts = instance_name.split(".")
+
+            # Expected format: skeleton_name.track_name.instance_X
+            # But be flexible in case format varies
+            if len(parts) >= 3:
+                # Look for track name between skeleton and instance marker
+                for i in range(1, len(parts)):
+                    part = parts[i]
+                    # Skip if this looks like an instance marker
+                    if part.startswith("instance"):
+                        break
+                    # This could be a track name
+                    track_name = part
                     if track_name not in tracks:
                         tracks[track_name] = Track(name=track_name)
                     track = tracks[track_name]
