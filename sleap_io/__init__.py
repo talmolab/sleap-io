@@ -1,6 +1,7 @@
 """This module exposes all high level APIs for sleap-io."""
 
 from sleap_io.io.main import (
+    load_alphatracker,
     load_coco,
     load_dlc,
     load_file,
@@ -50,6 +51,7 @@ from sleap_io.version import __version__
 
 __all__ = [
     "__version__",
+    "load_alphatracker",
     "load_coco",
     "load_dlc",
     "load_file",
