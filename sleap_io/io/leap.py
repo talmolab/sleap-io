@@ -40,9 +40,7 @@ def read_labels(labels_path: str, skeleton: Optional[Skeleton] = None) -> Labels
     video_path = mat_data.get("boxPath", None)
     if video_path is None:
         # Try to infer video path from labels path
-        video_path = Path(labels_path).with_suffix(".avi")
-        if not video_path.exists():
-            video_path = Path(labels_path).with_suffix(".mp4")
+        video_path = Path(labels_path).with_suffix(".mp4")
 
     # Create Video object
     video = Video.from_filename(str(video_path))

@@ -274,6 +274,26 @@ def test_parse_skeleton_edge_cases():
     assert skeleton.nodes[0].name == "1"
     assert skeleton.nodes[1].name == "2"
 
+    # Test with 1D numpy array edges that need reshaping
+    mat_data = {
+        "skeleton": {
+            "nodes": ["A", "B", "C", "D"],
+            "edges": np.array(
+                [1, 2, 2, 3, 3, 4]
+            ),  # 1D array: edges (1,2), (2,3), (3,4)
+        }
+    }
+    skeleton = leap._parse_skeleton(mat_data)
+    assert len(skeleton.nodes) == 4
+    assert len(skeleton.edges) == 3
+    # Check the edges are correctly parsed (remember 1-based to 0-based conversion)
+    assert skeleton.edges[0].source == skeleton.nodes[0]  # A
+    assert skeleton.edges[0].destination == skeleton.nodes[1]  # B
+    assert skeleton.edges[1].source == skeleton.nodes[1]  # B
+    assert skeleton.edges[1].destination == skeleton.nodes[2]  # C
+    assert skeleton.edges[2].source == skeleton.nodes[2]  # C
+    assert skeleton.edges[2].destination == skeleton.nodes[3]  # D
+
 
 def test_load_leap_no_video_path(tmp_path, monkeypatch):
     """Test loading LEAP file without boxPath field."""
@@ -281,20 +301,20 @@ def test_load_leap_no_video_path(tmp_path, monkeypatch):
 
     # Create a minimal .mat file without boxPath
     mat_file = tmp_path / "test.mat"
-    avi_file = tmp_path / "test.avi"
-    
+    mp4_file = tmp_path / "test.mp4"
+
     # Create a dummy video file
-    avi_file.write_text("dummy")
-    
+    mp4_file.write_text("dummy")
+
     # Mock pymatreader to return data without boxPath
     def mock_read_mat(path):
         return {
             "skeleton": {"nodes": ["A", "B"], "edges": []},
             "positions": np.array([[[1.0, 2.0]], [[3.0, 4.0]]]),
         }
-    
+
     monkeypatch.setattr("pymatreader.read_mat", mock_read_mat)
-    
+
     # This should try to infer video path from mat file path
     labels = leap.read_labels(str(mat_file))
     assert isinstance(labels, Labels)
