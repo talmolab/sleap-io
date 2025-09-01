@@ -8,7 +8,7 @@ and prints a concise per-file summary of missed line ranges like:
 
 It supports:
 - Restricting to files changed in your branch: --only-changed (via `git merge-base`)
-- Restricting to *added/modified* lines in a PR diff: --only-pr-diff-lines (via `gh pr diff --patch`)
+- Restricting to *added/modified* lines in a PR diff: --only-pr-diff-lines (via `gh pr diff`)
 - JSON output and CI-friendly failure codes.
 
 Examples:
@@ -72,7 +72,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--only-pr-diff-lines",
         action="store_true",
-        help="Restrict to *added/modified* line numbers from the unified diff of a PR (via `gh pr diff --patch`).",
+        help="Restrict to *added/modified* line numbers from the unified diff of a PR (via `gh pr diff`).",
     )
     parser.add_argument(
         "--pr",
@@ -240,12 +240,13 @@ def collect_pr_new_lines(pr: Optional[str] = None) -> Dict[str, List[int]]:
     if not gh_available():
         return {}
 
-    cmd = ["gh", "pr", "diff", "--patch"]
+    # Note: Don't use --patch as it outputs git format-patch, use plain diff
+    cmd = ["gh", "pr", "diff"]
     if pr:
-        cmd.insert(2, str(pr))
+        cmd.append(str(pr))
 
     try:
-        patch = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
+        patch = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         return {}
 
