@@ -166,10 +166,10 @@ class MJPEGFrameWriter:
             "-g",
             "1",
             # Use full range (JPEG) color
-            # "-vf",
-            # "scale=in_range=pc:out_range=pc,format=yuv420p",
-            # "-color_range",
-            # "pc",
+            "-vf",
+            "scale=in_range=pc:out_range=pc,format=yuv420p",
+            "-color_range",
+            "pc",
         ]
 
         # Add VFR mode if frame durations are provided
