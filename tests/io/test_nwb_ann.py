@@ -18,6 +18,7 @@ def test_make_mjpeg_error(tmp_path, monkeypatch):
 
     def fake_run(cmd, check):
         raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
+
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     with pytest.raises(subprocess.CalledProcessError):
@@ -81,7 +82,7 @@ def test_create_skeletons_basic():
     assert frame_indices["vid1.mp4"] == [0, 1]
 
     # Verify Skeletons container
-    assert hasattr(skeletons, 'skeletons')
+    assert hasattr(skeletons, "skeletons")
     assert len(skeletons.skeletons) == 1
     sk0 = skeletons.skeletons["TestSkel"]
     assert sk0.name == "TestSkel"
@@ -93,10 +94,12 @@ def test_get_frames_from_slp_basic(tmp_path, monkeypatch):
     class DummyBackend:
         def get_frame(self, idx):
             return np.zeros((2, 2, 3), dtype=np.uint8)
+
     class DummyVideo:
         def __init__(self, filename):
             self.filename = filename
             self.backend = DummyBackend()
+
     class DummyLF:
         def __init__(self, frame_idx, filename):
             self.frame_idx = frame_idx
@@ -128,18 +131,27 @@ def test_create_source_videos_basic(monkeypatch):
     mjpeg_frame_rate = 24.0
 
     class FakeCap:
-        def __init__(self, path): self.path = path
-        def isOpened(self): return True
-        def get(self, prop): return 30.0
+        def __init__(self, path):
+            self.path = path
+
+        def isOpened(self):
+            return True
+
+        def get(self, prop):
+            return 30.0
+
     monkeypatch.setattr(cv2, "VideoCapture", FakeCap)
 
     created_series = []
+
     class FakeImageSeries:
         def __init__(self, *args, **kwargs):
             created_series.append((args, kwargs))
+
     class FakeSourceVideos:
         def __init__(self, image_series):
             self.series = image_series
+
     monkeypatch.setattr(ann, "ImageSeries", FakeImageSeries)
     monkeypatch.setattr(ann, "SourceVideos", FakeSourceVideos)
 
@@ -158,31 +170,39 @@ def test_create_training_frames_basic(monkeypatch):
         def __init__(self):
             self.points = [((1, 2), True), ((3, 4), False)]
             self.skeleton = type("Skel", (), {"name": "TestSkel"})()
+
     class DummyLF:
         def __init__(self, idx):
             self.frame_idx = idx
             self.instances = [DummyVal()]
+
     labels = type("Labels", (), {})()
     labels.labeled_frames = [DummyLF(5), DummyLF(7)]
 
     from sleap_io.io.nwb_ann import Skeleton
-    fake_skel = Skeleton(name="TestSkel", nodes=[],
-                         edges=np.empty((0, 2), dtype="uint8"))
+
+    fake_skel = Skeleton(
+        name="TestSkel", nodes=[], edges=np.empty((0, 2), dtype="uint8")
+    )
     fake_unique = {"TestSkel": fake_skel}
     fake_annotations = object()
     fake_frame_map = {5: [0, "video"], 7: [1, "video"]}
 
     created = []
+
     class FakeTrainingFrame:
-        def __init__(self, name, skeleton_instances,
-                     source_video, source_video_frame_index):
+        def __init__(
+            self, name, skeleton_instances, source_video, source_video_frame_index
+        ):
             self.name = name
             self.source_video = source_video
             self.source_video_frame_index = source_video_frame_index
             created.append(self)
+
     class FakeTrainingFrames:
         def __init__(self, training_frames):
             self.training_frames = training_frames
+
     monkeypatch.setattr(ann, "TrainingFrame", FakeTrainingFrame)
     monkeypatch.setattr(ann, "TrainingFrames", FakeTrainingFrames)
 
@@ -209,54 +229,81 @@ def test_write_annotations_nwb_success(tmp_path, monkeypatch):
     fake_annotations = object()
     fake_training = object()
 
-    monkeypatch.setattr(ann, "create_skeletons", lambda labels:
-                        (fake_skeletons, fake_frame_indices, fake_unique))
-    monkeypatch.setattr(ann, "get_frames_from_slp", lambda labels:
-                        (fake_images, fake_frame_map))
+    monkeypatch.setattr(
+        ann,
+        "create_skeletons",
+        lambda labels: (fake_skeletons, fake_frame_indices, fake_unique),
+    )
+    monkeypatch.setattr(
+        ann, "get_frames_from_slp", lambda labels: (fake_images, fake_frame_map)
+    )
     monkeypatch.setattr(ann, "make_mjpeg", lambda imgs, fmap: fake_mjpeg)
-    monkeypatch.setattr(ann, "create_source_videos", lambda fidx, mjp, rate=None:
-                        (fake_source_videos, fake_annotations))
-    monkeypatch.setattr(ann, "create_training_frames", lambda labels, uniq, ann_mjp,
-                        fmap: fake_training)
+    monkeypatch.setattr(
+        ann,
+        "create_source_videos",
+        lambda fidx, mjp, rate=None: (fake_source_videos, fake_annotations),
+    )
+    monkeypatch.setattr(
+        ann, "create_training_frames", lambda labels, uniq, ann_mjp, fmap: fake_training
+    )
 
     class FakePose:
         def __init__(self, training_frames, source_videos):
             self.training_frames = training_frames
             self.source_videos = source_videos
+
     monkeypatch.setattr(ann, "PoseTraining", FakePose)
 
     class FakeSubject:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
+
     monkeypatch.setattr(ann, "Subject", FakeSubject)
 
     class FakeNWBFile:
         def __init__(self, **kwargs):
             self.modules = []
             self.kwargs = kwargs
+
         def create_processing_module(self, name, description):
             mod = type("Mod", (), {"added": []})()
-            def add(iface): mod.added.append(iface)
+
+            def add(iface):
+                mod.added.append(iface)
+
             mod.add = add
             self.modules.append((name, mod))
             return mod
+
     monkeypatch.setattr(ann, "NWBFile", FakeNWBFile)
 
     created_ios = []
+
     class FakeIO:
         def __init__(self, path, mode):
             self.path = path
             self.mode = mode
             created_ios.append(self)
-        def __enter__(self): return self
-        def __exit__(self, exc_type, exc, tb): return False
-        def write(self, nwbfile): self.written = nwbfile
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def write(self, nwbfile):
+            self.written = nwbfile
+
     monkeypatch.setattr(ann, "NWBHDF5IO", FakeIO)
 
     labels = object()
     out_path = tmp_path / "test.nwb"
-    ann.write_annotations_nwb(labels, str(out_path), nwb_file_kwargs={"foo": True},
-                              nwb_subject_kwargs={"subject_id": "sub1"})
+    ann.write_annotations_nwb(
+        labels,
+        str(out_path),
+        nwb_file_kwargs={"foo": True},
+        nwb_subject_kwargs={"subject_id": "sub1"},
+    )
 
     assert len(created_ios) == 1
     io_inst = created_ios[0]

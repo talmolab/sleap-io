@@ -34,7 +34,7 @@ from sleap_io import (
 
 
 def create_skeletons(
-        labels: Labels
+    labels: Labels,
 ) -> tuple[Skeletons, Dict[str, List[int]], Dict[str, Skeleton]]:
     """Create NWB skeleton containers and per-video frame-index mappings.
 
@@ -59,7 +59,7 @@ def create_skeletons(
                 NWB `Skeleton` object included in the returned `Skeletons`
                 container.
     """
-    unique_skeletons = {} # create a new NWB skeleton obj per unique skeleton in SLEAP
+    unique_skeletons = {}  # create a new NWB skeleton obj per unique skeleton in SLEAP
     frame_indices = {}
 
     for j, label in enumerate(labels):
@@ -71,9 +71,8 @@ def create_skeletons(
         frame_indices[video].append(labels[j].frame_idx)
 
         for inst in label.instances:
-
             skel = inst.skeleton
-            skel_name = inst.skeleton.name # assumes skels are named uniquely
+            skel_name = inst.skeleton.name  # assumes skels are named uniquely
 
             if skel_name not in unique_skeletons:
                 node_names = [node.name for node in skel.nodes]
@@ -91,9 +90,7 @@ def create_skeletons(
                 edge_array = np.array(edge_index_pairs, dtype="uint8")
 
                 unique_skeletons[skel_name] = Skeleton(
-                    name=skel_name,
-                    nodes=node_names,
-                    edges=edge_array
+                    name=skel_name, nodes=node_names, edges=edge_array
                 )
 
     skeletons = Skeletons(skeletons=list(unique_skeletons.values()))
@@ -103,10 +100,11 @@ def create_skeletons(
 
     return skeletons, frame_indices, unique_skeletons
 
+
 def get_frames_from_slp(
-        labels: Labels,
-        mjpeg_frame_duration: float = 30.0,
-    ) -> tuple[list[tuple[str, float]], dict[int, list[list[object]]]]:
+    labels: Labels,
+    mjpeg_frame_duration: float = 30.0,
+) -> tuple[list[tuple[str, float]], dict[int, list[list[object]]]]:
     """Write individual frames from slp and get mapping to original video.
 
     Write all unique video frames referenced and build
@@ -143,17 +141,16 @@ def get_frames_from_slp(
     track = 0
 
     for lf in labels.labeled_frames:
+        frame_idx = lf.frame_idx
+        video_name = Path(lf.video.filename).stem
 
-        frame_idx   = lf.frame_idx
-        video_name  = Path(lf.video.filename).stem
-
-        if video_name not in video_idx: #track how many videos there are
+        if video_name not in video_idx:  # track how many videos there are
             track += 1
             video_idx[video_name] = track
 
         v_idx = video_idx[video_name]
 
-        cache_key   = (v_idx, frame_idx)
+        cache_key = (v_idx, frame_idx)
 
         if cache_key in written:
             continue
@@ -177,6 +174,7 @@ def get_frames_from_slp(
         written.add(cache_key)
 
     return image_list, frame_map
+
 
 def make_mjpeg(
     image_list: list[tuple[str, float]],
@@ -227,19 +225,27 @@ def make_mjpeg(
     # ffmpeg encode
     cmd = [
         "ffmpeg",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", input_txt_path,
-        "-fps_mode", "vfr",
-        "-c:v", "mjpeg",
-        "-q:v", "2",
-        "-quality", "90",
-        output_mjpeg
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        input_txt_path,
+        "-fps_mode",
+        "vfr",
+        "-c:v",
+        "mjpeg",
+        "-q:v",
+        "2",
+        "-quality",
+        "90",
+        output_mjpeg,
     ]
 
     subprocess.run(cmd, check=True)
 
     return output_mjpeg
+
 
 def create_source_videos(
     frame_indices: dict[str, list[int]],
@@ -272,7 +278,6 @@ def create_source_videos(
     original_videos = []
 
     for i, video in enumerate(frame_indices):
-
         cap = cv2.VideoCapture(video)
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video: {video}")
@@ -283,14 +288,16 @@ def create_source_videos(
 
         video_name = Path(video).name
 
-        original_videos.append(ImageSeries(
-            name=f"original_video_{i}", # must have unique names
-            description="Full original video",
-            format="external",
-            external_file=[video_name],
-            starting_frame=[0],
-            rate=orig_fps,
-        ))
+        original_videos.append(
+            ImageSeries(
+                name=f"original_video_{i}",  # must have unique names
+                description="Full original video",
+                format="external",
+                external_file=[video_name],
+                starting_frame=[0],
+                rate=orig_fps,
+            )
+        )
 
     annotations_mjpeg = ImageSeries(
         name="annotated_frames",
@@ -298,7 +305,7 @@ def create_source_videos(
         format="external",
         external_file=[output_mjpeg],
         starting_frame=[0],
-        rate=mjpeg_frame_rate, #mjpeg hard coded to have a 30 fps
+        rate=mjpeg_frame_rate,  # mjpeg hard coded to have a 30 fps
     )
 
     all_videos = original_videos + [annotations_mjpeg]
@@ -306,6 +313,7 @@ def create_source_videos(
     source_videos = SourceVideos(image_series=all_videos)
 
     return source_videos, annotations_mjpeg
+
 
 def create_training_frames(
     labels: Labels,
@@ -344,7 +352,7 @@ def create_training_frames(
     for lf_idx, lf in enumerate(labels.labeled_frames):
         skeleton_instances_list = []
 
-        frame_idx  = lf.frame_idx
+        frame_idx = lf.frame_idx
 
         for j in range(len(lf.instances)):
             val = lf.instances[j]
@@ -353,7 +361,7 @@ def create_training_frames(
 
             if identity:
                 iden_string = val.track.name
-                skel_name = skel_name + "_" + str(iden_string) # identity tracking
+                skel_name = skel_name + "_" + str(iden_string)  # identity tracking
 
             node_locations_sk1 = np.array([[pt[0][0], pt[0][1]] for pt in val.points])
 
@@ -369,11 +377,12 @@ def create_training_frames(
 
         # store the skeleton instances in a SkeletonInstances object
         skeleton_instances = SkeletonInstances(
-            skeleton_instances=skeleton_instances_list)
+            skeleton_instances=skeleton_instances_list
+        )
 
         mapped = frame_map.get(frame_idx)
 
-        if isinstance(mapped[0], list): #loop through if mult videos same frame idx
+        if isinstance(mapped[0], list):  # loop through if mult videos same frame idx
             video_path = val.video.filename
             video_name = Path(video_path).stem
             for vid in mapped:
@@ -383,7 +392,7 @@ def create_training_frames(
             frame_idx = mapped[0]
 
         training_frame = TrainingFrame(
-            name=f"frame_{lf_idx}", # must be unique
+            name=f"frame_{lf_idx}",  # must be unique
             skeleton_instances=skeleton_instances,
             source_video=annotations_mjpeg,
             source_video_frame_index=np.uint64(frame_idx),
@@ -393,6 +402,7 @@ def create_training_frames(
     training_frames = TrainingFrames(training_frames=training_frames_list)
 
     return training_frames
+
 
 def write_annotations_nwb(
     labels: Labels,
@@ -449,20 +459,12 @@ def write_annotations_nwb(
     nwb_subject_kwargs = nwb_subject_kwargs or dict()
 
     # Add required subject metadata for DANDI if not present
-    subject_id = nwb_subject_kwargs.get(
-        "subject_id", "subject1"
-    )
-    species = nwb_subject_kwargs.get(
-        "species", "Mus musculus"
-    )
+    subject_id = nwb_subject_kwargs.get("subject_id", "subject1")
+    species = nwb_subject_kwargs.get("species", "Mus musculus")
 
-    sex = nwb_subject_kwargs.get(
-        "sex", "F"
-    )
+    sex = nwb_subject_kwargs.get("sex", "F")
 
-    age = nwb_subject_kwargs.get(
-        "age", "P10W/P12W"
-    )
+    age = nwb_subject_kwargs.get("age", "P10W/P12W")
 
     nwb_subject_kwargs.update(
         subject_id=subject_id,
@@ -480,8 +482,9 @@ def write_annotations_nwb(
     output_mjpeg = make_mjpeg(image_list, frame_map)
 
     source_videos, annotations_mjpeg = create_source_videos(frame_indices, output_mjpeg)
-    training_frames = create_training_frames(labels, unique_skeletons,
-                                             annotations_mjpeg, frame_map)
+    training_frames = create_training_frames(
+        labels, unique_skeletons, annotations_mjpeg, frame_map
+    )
 
     pose_training = PoseTraining(
         training_frames=training_frames,
