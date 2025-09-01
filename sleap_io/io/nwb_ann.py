@@ -1,14 +1,20 @@
 """NWB formatted annotations."""
 
+from pathlib import Path
+
 import numpy as np
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
+from pynwb.image import ImageSeries
 
 from sleap_io import Instance as SleapInstance
 from sleap_io import Skeleton as SleapSkeleton
+from sleap_io import Video as SleapVideo
+from sleap_io.io.utils import sanitize_filename
+from sleap_io.io.video_reading import ImageVideo, MediaVideo
 
 
-def _sanitize_nwb_name(name: str | None) -> str:
+def sanitize_nwb_name(name: str) -> str:
     """Sanitize a name for use in NWB files.
 
     NWB names cannot contain '/' or ':' characters.
@@ -19,8 +25,9 @@ def _sanitize_nwb_name(name: str | None) -> str:
     Returns:
         The sanitized name with invalid characters replaced.
     """
-    if name is None:
-        return "skeleton"
+    if isinstance(name, Path):
+        name = sanitize_filename(name)
+
     # Replace forward slashes and colons with underscores
     sanitized = name.replace("/", "_").replace(":", "_")
     return sanitized
@@ -46,7 +53,7 @@ def sleap_skeleton_to_nwb_skeleton(
         edges = edges.reshape(0, 2)
 
     # Use skeleton name or default
-    name = _sanitize_nwb_name(sleap_skeleton.name)
+    name = sanitize_nwb_name(sleap_skeleton.name) if sleap_skeleton.name else "skeleton"
 
     return NwbSkeleton(name=name, nodes=nodes, edges=edges)
 
@@ -89,7 +96,7 @@ def sleap_instance_to_nwb_skeleton_instance(
     Returns:
         An ndx-pose SkeletonInstance object with equivalent data.
     """
-    # Get node locations as (n_nodes, 2) array - always use visible points as NaN for invisible
+    # Get node locations as (n_nodes, 2) array
     node_locations = sleap_instance.numpy(invisible_as_nan=True)
 
     # Get node visibility - True where points are not NaN
@@ -136,3 +143,97 @@ def nwb_skeleton_instance_to_sleap_instance(
     points_array[~node_visibility] = np.nan
 
     return SleapInstance.from_numpy(points_array, skeleton)
+
+
+def sleap_video_to_nwb_image_series(
+    sleap_video: SleapVideo,
+    name: str | None = None,
+    description: str = "no description",
+) -> ImageSeries:
+    """Convert a sleap-io Video to pynwb ImageSeries.
+
+    Args:
+        sleap_video: The sleap-io Video object to convert.
+        name: String identifier for the ImageSeries. If None, uses the filename.
+        description: String description for the ImageSeries.
+
+    Returns:
+        A pynwb ImageSeries object with external file references.
+
+    Raises:
+        ValueError: If the video backend is not supported for NWB export.
+    """
+    # Validate supported backend
+    if not isinstance(sleap_video.backend, (MediaVideo, ImageVideo)):
+        raise ValueError(
+            f"Unsupported video backend for NWB export: {type(sleap_video.backend)}. "
+            f"Supported backends: MediaVideo, ImageVideo"
+        )
+
+    # Set default name if not provided
+    if name is None:
+        if isinstance(sleap_video.filename, list):
+            name = sanitize_nwb_name(sleap_video.filename[0])
+        else:
+            name = sanitize_nwb_name(sleap_video.filename)
+
+    # Pull out filename
+    filename = sanitize_filename(sleap_video.filename)
+    if isinstance(filename, str):
+        filename = [filename]
+
+    # Get video metadata
+    shape = sleap_video.shape
+    if shape is not None:
+        height, width = shape[1:3]
+    else:
+        height, width = 0, 0
+
+    fps = getattr(sleap_video, "fps", 30.0)
+
+    starting_frame = [0] * len(filename)  # needs to match length of filenames
+
+    # Create ImageSeries with external file reference
+    image_series = ImageSeries(
+        name=name,
+        description=description,
+        unit="NA",  # Standard for video data
+        format="external",  # External file reference
+        external_file=filename,
+        dimension=[width, height],
+        rate=fps,
+        starting_frame=starting_frame,
+    )
+
+    return image_series
+
+
+def nwb_image_series_to_sleap_video(
+    image_series: ImageSeries,
+) -> SleapVideo:
+    """Convert a pynwb ImageSeries to sleap-io Video.
+
+    Args:
+        image_series: The pynwb ImageSeries object to convert.
+
+    Returns:
+        A sleap-io Video object with equivalent data.
+
+    Raises:
+        ValueError: If the ImageSeries format is not "external".
+    """
+    # Check that this is an external file reference
+    if image_series.format != "external":
+        raise ValueError(
+            f"Unsupported ImageSeries format: {image_series.format}. "
+            f"Only 'external' format is supported for conversion to sleap-io Video."
+        )
+
+    filename = image_series.external_file
+    if len(filename) == 1:
+        filename = filename[0]
+
+    # Create sleap-io Video
+    sleap_video = SleapVideo.from_filename(filename)
+
+    return sleap_video

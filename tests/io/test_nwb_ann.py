@@ -8,11 +8,14 @@ from ndx_pose import SkeletonInstance as NwbInstance
 
 from sleap_io import Instance as SleapInstance
 from sleap_io import Skeleton as SleapSkeleton
+from sleap_io import Video as SleapVideo
 from sleap_io.io.nwb_ann import (
+    nwb_image_series_to_sleap_video,
     nwb_skeleton_instance_to_sleap_instance,
     nwb_skeleton_to_sleap_skeleton,
     sleap_instance_to_nwb_skeleton_instance,
     sleap_skeleton_to_nwb_skeleton,
+    sleap_video_to_nwb_image_series,
 )
 
 
@@ -301,7 +304,7 @@ def test_instance_roundtrip_conversion():
     # Convert to NWB and back
     nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
     nwb_skeleton_instance = sleap_instance_to_nwb_skeleton_instance(
-        original_instance, nwb_skeleton, name="test_roundtrip", id=999
+        original_instance, nwb_skeleton, name="test_roundtrip", id=0
     )
     recovered_instance = nwb_skeleton_instance_to_sleap_instance(
         nwb_skeleton_instance, skeleton
@@ -335,3 +338,29 @@ def test_instance_roundtrip_all_visible():
 
     np.testing.assert_array_equal(recovered_instance.numpy(), original_instance.numpy())
     assert recovered_instance.n_visible == 3
+
+
+def test_video_roundtrip_media_video(centered_pair_low_quality_path):
+    """Test roundtrip conversion for MediaVideo backend."""
+    # Create original video
+    original_video = SleapVideo.from_filename(centered_pair_low_quality_path)
+
+    # Convert to ImageSeries and back
+    image_series = sleap_video_to_nwb_image_series(original_video, name="test_media")
+    recovered_video = nwb_image_series_to_sleap_video(image_series)
+
+    # Verify file path is preserved
+    assert str(recovered_video.filename) == str(original_video.filename)
+
+
+def test_video_roundtrip_image_video(centered_pair_frame_paths):
+    """Test roundtrip conversion for ImageVideo backend."""
+    # Create original video
+    original_video = SleapVideo.from_filename(centered_pair_frame_paths)
+
+    # Convert to ImageSeries and back
+    image_series = sleap_video_to_nwb_image_series(original_video, name="test_images")
+    recovered_video = nwb_image_series_to_sleap_video(image_series)
+
+    # Verify file path is preserved (should be the directory path for ImageVideo)
+    assert str(recovered_video.filename) == str(original_video.filename)
