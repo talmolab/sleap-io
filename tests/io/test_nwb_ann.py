@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import numpy as np
-from ndx_pose import Skeleton as NdxSkeleton
+from ndx_pose import Skeleton as NwbSkeleton
+from ndx_pose import SkeletonInstance as NwbInstance
 
-from sleap_io import Skeleton
+from sleap_io import Instance as SleapInstance
+from sleap_io import Skeleton as SleapSkeleton
 from sleap_io.io.nwb_ann import (
+    nwb_skeleton_instance_to_sleap_instance,
     nwb_skeleton_to_sleap_skeleton,
+    sleap_instance_to_nwb_skeleton_instance,
     sleap_skeleton_to_nwb_skeleton,
 )
 
@@ -15,7 +19,7 @@ from sleap_io.io.nwb_ann import (
 def test_sleap_skeleton_to_nwb_skeleton_basic():
     """Test basic conversion from sleap-io Skeleton to ndx-pose Skeleton."""
     # Create sleap-io skeleton
-    sleap_skeleton = Skeleton(
+    sleap_skeleton = SleapSkeleton(
         nodes=["nose", "head", "neck", "body"],
         edges=[("nose", "head"), ("head", "neck"), ("neck", "body")],
         name="test_skeleton",
@@ -37,7 +41,7 @@ def test_sleap_skeleton_to_nwb_skeleton_basic():
 
 def test_sleap_skeleton_to_nwb_skeleton_no_name():
     """Test conversion when sleap skeleton has no name."""
-    sleap_skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    sleap_skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
 
     nwb_skeleton = sleap_skeleton_to_nwb_skeleton(sleap_skeleton)
 
@@ -47,7 +51,7 @@ def test_sleap_skeleton_to_nwb_skeleton_no_name():
 
 def test_sleap_skeleton_to_nwb_skeleton_empty():
     """Test conversion with empty skeleton."""
-    sleap_skeleton = Skeleton(nodes=[], edges=[], name="empty")
+    sleap_skeleton = SleapSkeleton(nodes=[], edges=[], name="empty")
 
     nwb_skeleton = sleap_skeleton_to_nwb_skeleton(sleap_skeleton)
 
@@ -59,7 +63,7 @@ def test_sleap_skeleton_to_nwb_skeleton_empty():
 def test_nwb_skeleton_to_sleap_skeleton_basic():
     """Test basic conversion from ndx-pose Skeleton to sleap-io Skeleton."""
     # Create ndx-pose skeleton
-    nwb_skeleton = NdxSkeleton(
+    nwb_skeleton = NwbSkeleton(
         name="test_skeleton",
         nodes=["nose", "head", "neck", "body"],
         edges=np.array([[0, 1], [1, 2], [2, 3]], dtype=np.uint8),
@@ -81,7 +85,7 @@ def test_nwb_skeleton_to_sleap_skeleton_basic():
 
 def test_nwb_skeleton_to_sleap_skeleton_empty():
     """Test conversion with empty ndx-pose skeleton."""
-    nwb_skeleton = NdxSkeleton(
+    nwb_skeleton = NwbSkeleton(
         name="empty", nodes=[], edges=np.array([], dtype=np.uint8).reshape(0, 2)
     )
 
@@ -95,7 +99,7 @@ def test_nwb_skeleton_to_sleap_skeleton_empty():
 def test_skeleton_roundtrip_conversion():
     """Test that roundtrip conversion preserves skeleton structure."""
     # Create original sleap-io skeleton
-    original_skeleton = Skeleton(
+    original_skeleton = SleapSkeleton(
         nodes=["nose", "head", "neck", "left_shoulder", "right_shoulder", "body"],
         edges=[
             ("nose", "head"),
@@ -123,7 +127,7 @@ def test_skeleton_roundtrip_conversion():
 def test_skeleton_roundtrip_with_symmetries():
     """Test that skeleton conversion handles symmetries correctly."""
     # Create skeleton with symmetries
-    original_skeleton = Skeleton(
+    original_skeleton = SleapSkeleton(
         nodes=["nose", "left_eye", "right_eye", "body"],
         edges=[("nose", "left_eye"), ("nose", "right_eye"), ("nose", "body")],
         symmetries=[("left_eye", "right_eye")],
@@ -139,3 +143,195 @@ def test_skeleton_roundtrip_with_symmetries():
     assert recovered_skeleton.edge_inds == original_skeleton.edge_inds
     assert recovered_skeleton.name == original_skeleton.name
     assert len(recovered_skeleton.symmetries) == 0  # Symmetries are lost
+
+
+def test_sleap_instance_to_nwb_skeleton_instance_basic():
+    """Test basic conversion from sleap-io Instance to ndx-pose SkeletonInstance."""
+    # Create skeleton and instance
+    skeleton = SleapSkeleton(
+        nodes=["nose", "head", "body"], edges=[("nose", "head"), ("head", "body")]
+    )
+
+    # Create NWB skeleton
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+
+    # Create instance with some visible and invisible points
+    points_array = np.array([[10.0, 20.0], [15.0, 25.0], [np.nan, np.nan]])
+    sleap_instance = SleapInstance.from_numpy(points_array, skeleton)
+
+    # Convert to NWB
+    nwb_skeleton_instance = sleap_instance_to_nwb_skeleton_instance(
+        sleap_instance, nwb_skeleton
+    )
+
+    # Verify node locations
+    expected_locations = np.array([[10.0, 20.0], [15.0, 25.0], [np.nan, np.nan]])
+    np.testing.assert_array_equal(
+        nwb_skeleton_instance.node_locations, expected_locations
+    )
+
+    # Verify node visibility
+    expected_visibility = np.array([True, True, False])
+    np.testing.assert_array_equal(
+        nwb_skeleton_instance.node_visibility, expected_visibility
+    )
+
+    # Verify defaults
+    assert nwb_skeleton_instance.name == "skeleton_instance"
+    assert nwb_skeleton_instance.id is None
+
+
+def test_sleap_instance_to_nwb_skeleton_instance_custom_params():
+    """Test conversion with custom name and id parameters."""
+    skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+    points_array = np.array([[1.0, 2.0], [3.0, 4.0]])
+    sleap_instance = SleapInstance.from_numpy(points_array, skeleton)
+
+    nwb_skeleton_instance = sleap_instance_to_nwb_skeleton_instance(
+        sleap_instance, nwb_skeleton, name="custom_instance", id=42
+    )
+
+    assert nwb_skeleton_instance.name == "custom_instance"
+    assert nwb_skeleton_instance.id == 42
+
+
+def test_sleap_instance_to_nwb_skeleton_instance_all_invisible():
+    """Test conversion with all invisible points."""
+    skeleton = SleapSkeleton(nodes=["a", "b"], edges=[])
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+    points_array = np.array([[np.nan, np.nan], [np.nan, np.nan]])
+    sleap_instance = SleapInstance.from_numpy(points_array, skeleton)
+
+    nwb_skeleton_instance = sleap_instance_to_nwb_skeleton_instance(
+        sleap_instance, nwb_skeleton
+    )
+
+    # All locations should be NaN
+    assert np.isnan(nwb_skeleton_instance.node_locations).all()
+
+    # All visibility should be False
+    expected_visibility = np.array([False, False])
+    np.testing.assert_array_equal(
+        nwb_skeleton_instance.node_visibility, expected_visibility
+    )
+
+
+def test_nwb_skeleton_instance_to_sleap_instance_basic():
+    """Test basic conversion from ndx-pose SkeletonInstance to sleap-io Instance."""
+    skeleton = SleapSkeleton(
+        nodes=["nose", "head", "body"], edges=[("nose", "head"), ("head", "body")]
+    )
+
+    # Create NWB skeleton
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+
+    # Create NWB skeleton instance
+    node_locations = np.array([[10.0, 20.0], [15.0, 25.0], [30.0, 40.0]])
+    node_visibility = np.array([True, True, False])
+
+    nwb_skeleton_instance = NwbInstance(
+        node_locations=node_locations,
+        skeleton=nwb_skeleton,
+        name="test_instance",
+        id=np.uint32(123),
+        node_visibility=node_visibility,
+    )
+
+    # Convert to sleap-io
+    sleap_instance = nwb_skeleton_instance_to_sleap_instance(
+        nwb_skeleton_instance, skeleton
+    )
+
+    # Verify points - invisible points should be NaN
+    expected_points = np.array([[10.0, 20.0], [15.0, 25.0], [np.nan, np.nan]])
+    np.testing.assert_array_equal(sleap_instance.numpy(), expected_points)
+
+    # Verify visibility
+    expected_visibility = np.array([True, True, False])
+    np.testing.assert_array_equal(sleap_instance.points["visible"], expected_visibility)
+
+
+def test_nwb_skeleton_instance_to_sleap_instance_no_visibility():
+    """Test conversion when node_visibility is None (inferred from NaN)."""
+    skeleton = SleapSkeleton(nodes=["a", "b", "c"], edges=[])
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+
+    # Create NWB skeleton instance with NaN values but no explicit visibility
+    node_locations = np.array([[1.0, 2.0], [np.nan, np.nan], [5.0, 6.0]])
+
+    nwb_skeleton_instance = NwbInstance(
+        node_locations=node_locations,
+        skeleton=nwb_skeleton,
+        name="test_instance",
+        node_visibility=None,  # Will be inferred
+    )
+
+    sleap_instance = nwb_skeleton_instance_to_sleap_instance(
+        nwb_skeleton_instance, skeleton
+    )
+
+    # Verify points
+    expected_points = np.array([[1.0, 2.0], [np.nan, np.nan], [5.0, 6.0]])
+    np.testing.assert_array_equal(sleap_instance.numpy(), expected_points)
+
+    # Verify inferred visibility
+    expected_visibility = np.array([True, False, True])
+    np.testing.assert_array_equal(sleap_instance.points["visible"], expected_visibility)
+
+
+def test_instance_roundtrip_conversion():
+    """Test that roundtrip conversion preserves instance data."""
+    # Create original instance
+    skeleton = SleapSkeleton(
+        nodes=["nose", "left_eye", "right_eye", "body"],
+        edges=[("nose", "left_eye"), ("nose", "right_eye"), ("nose", "body")],
+    )
+
+    points_array = np.array(
+        [
+            [10.0, 20.0],  # nose - visible
+            [5.0, 15.0],  # left_eye - visible
+            [np.nan, np.nan],  # right_eye - invisible
+            [10.0, 30.0],  # body - visible
+        ]
+    )
+    original_instance = SleapInstance.from_numpy(points_array, skeleton)
+
+    # Convert to NWB and back
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+    nwb_skeleton_instance = sleap_instance_to_nwb_skeleton_instance(
+        original_instance, nwb_skeleton, name="test_roundtrip", id=999
+    )
+    recovered_instance = nwb_skeleton_instance_to_sleap_instance(
+        nwb_skeleton_instance, skeleton
+    )
+
+    # Verify points are preserved
+    np.testing.assert_array_equal(recovered_instance.numpy(), original_instance.numpy())
+
+    # Verify visibility is preserved
+    np.testing.assert_array_equal(
+        recovered_instance.points["visible"], original_instance.points["visible"]
+    )
+
+    # Verify skeleton is the same
+    assert recovered_instance.skeleton is skeleton
+
+
+def test_instance_roundtrip_all_visible():
+    """Test roundtrip with all visible points."""
+    skeleton = SleapSkeleton(nodes=["a", "b", "c"], edges=[])
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+    points_array = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    original_instance = SleapInstance.from_numpy(points_array, skeleton)
+
+    nwb_skeleton_instance = sleap_instance_to_nwb_skeleton_instance(
+        original_instance, nwb_skeleton
+    )
+    recovered_instance = nwb_skeleton_instance_to_sleap_instance(
+        nwb_skeleton_instance, skeleton
+    )
+
+    np.testing.assert_array_equal(recovered_instance.numpy(), original_instance.numpy())
+    assert recovered_instance.n_visible == 3
