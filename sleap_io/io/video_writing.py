@@ -159,10 +159,17 @@ class MJPEGFrameWriter:
     def build_output_params(self) -> list[str]:
         """Build the output parameters for FFMPEG MJPEG encoding."""
         params = [
+            # MJPEG quality (2-32)
             "-q:v",
-            str(self.quality),  # MJPEG quality
+            str(self.quality),
+            # All frames are keyframes (I-frames)
             "-g",
-            "1",  # All frames are keyframes (I-frames)
+            "1",
+            # Use full range (JPEG) color
+            # "-vf",
+            # "scale=in_range=pc:out_range=pc,format=yuv420p",
+            # "-color_range",
+            # "pc",
         ]
 
         # Add VFR mode if frame durations are provided
@@ -191,7 +198,7 @@ class MJPEGFrameWriter:
             format="FFMPEG",
             fps=self.fps,
             codec="mjpeg",
-            pixelformat="yuvj420p",  # Use full range YUV for MJPEG
+            pixelformat="yuv420p",  # Use full range YUV for MJPEG
             output_params=self.build_output_params(),
         )
 
