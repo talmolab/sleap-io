@@ -13,9 +13,11 @@ from sleap_io.io.nwb_ann import (
     nwb_image_series_to_sleap_video,
     nwb_skeleton_instance_to_sleap_instance,
     nwb_skeleton_to_sleap_skeleton,
+    nwb_source_videos_to_sleap_videos,
     sleap_instance_to_nwb_skeleton_instance,
     sleap_skeleton_to_nwb_skeleton,
     sleap_video_to_nwb_image_series,
+    sleap_videos_to_nwb_source_videos,
 )
 
 
@@ -364,3 +366,67 @@ def test_video_roundtrip_image_video(centered_pair_frame_paths):
 
     # Verify file path is preserved (should be the directory path for ImageVideo)
     assert str(recovered_video.filename) == str(original_video.filename)
+
+
+def test_source_videos_roundtrip_media_video(centered_pair_low_quality_path):
+    """Test SourceVideos roundtrip conversion with MediaVideo backend."""
+    # Create Video object
+    video = SleapVideo.from_filename(centered_pair_low_quality_path)
+
+    # Convert to NWB SourceVideos and back
+    nwb_source_videos = sleap_videos_to_nwb_source_videos([video])
+    recovered_videos = nwb_source_videos_to_sleap_videos(nwb_source_videos)
+
+    # Check that we got one video back
+    assert len(recovered_videos) == 1
+    recovered_video = recovered_videos[0]
+
+    # Check video properties match
+    assert str(recovered_video.filename) == str(video.filename)
+    assert recovered_video.shape == video.shape
+
+
+def test_source_videos_roundtrip_image_video(centered_pair_frame_paths):
+    """Test SourceVideos roundtrip conversion with ImageVideo backend."""
+    # Create Video object
+    video = SleapVideo.from_filename(centered_pair_frame_paths)
+
+    # Convert to NWB SourceVideos and back
+    nwb_source_videos = sleap_videos_to_nwb_source_videos([video])
+    recovered_videos = nwb_source_videos_to_sleap_videos(nwb_source_videos)
+
+    # Check that we got one video back
+    assert len(recovered_videos) == 1
+    recovered_video = recovered_videos[0]
+
+    # Check video properties match
+    assert recovered_video.filename == video.filename
+    assert recovered_video.shape == video.shape
+
+
+def test_source_videos_multiple_videos(
+    centered_pair_low_quality_path, centered_pair_frame_paths
+):
+    """Test SourceVideos conversion with multiple videos."""
+    # Create Video objects
+    video1 = SleapVideo.from_filename(centered_pair_low_quality_path)
+    video2 = SleapVideo.from_filename(centered_pair_frame_paths)
+
+    # Convert to NWB SourceVideos and back
+    nwb_source_videos = sleap_videos_to_nwb_source_videos([video1, video2])
+    recovered_videos = nwb_source_videos_to_sleap_videos(nwb_source_videos)
+
+    # Check that we got both videos back
+    assert len(recovered_videos) == 2
+
+    # Check first video
+    assert str(recovered_videos[0].filename) == str(video1.filename)
+    assert recovered_videos[0].shape == video1.shape
+
+    # Check second video
+    assert recovered_videos[1].filename == video2.filename
+    assert recovered_videos[1].shape == video2.shape
+
+    # Check that videos were named correctly in the container
+    assert "video_0" in nwb_source_videos.image_series
+    assert "video_1" in nwb_source_videos.image_series

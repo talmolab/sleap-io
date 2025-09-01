@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
+from ndx_pose import SourceVideos as NwbSourceVideos
 from pynwb.image import ImageSeries
 
 from sleap_io import Instance as SleapInstance
@@ -237,3 +238,50 @@ def nwb_image_series_to_sleap_video(
     sleap_video = SleapVideo.from_filename(filename)
 
     return sleap_video
+
+
+def sleap_videos_to_nwb_source_videos(
+    sleap_videos: list[SleapVideo],
+    name: str = "SourceVideos",
+) -> NwbSourceVideos:
+    """Convert a list of sleap-io Videos to ndx-pose SourceVideos container.
+
+    Args:
+        sleap_videos: List of sleap-io Video objects to convert.
+        name: String identifier for the SourceVideos container.
+
+    Returns:
+        An ndx-pose SourceVideos container with ImageSeries for each video.
+
+    Raises:
+        ValueError: If any video backend is not supported for NWB export.
+    """
+    image_series_list = []
+    for video_ind, sleap_video in enumerate(sleap_videos):
+        video_name = f"video_{video_ind}"
+        image_series = sleap_video_to_nwb_image_series(sleap_video, name=video_name)
+        image_series_list.append(image_series)
+
+    return NwbSourceVideos(name=name, image_series=image_series_list)
+
+
+def nwb_source_videos_to_sleap_videos(
+    nwb_source_videos: NwbSourceVideos,
+) -> list[SleapVideo]:
+    """Convert ndx-pose SourceVideos to a list of sleap-io Videos.
+
+    Args:
+        nwb_source_videos: The ndx-pose SourceVideos container to convert.
+
+    Returns:
+        A list of sleap-io Video objects with equivalent data.
+
+    Raises:
+        ValueError: If any ImageSeries format is not supported.
+    """
+    sleap_videos = []
+    for image_series in nwb_source_videos.image_series.values():
+        sleap_video = nwb_image_series_to_sleap_video(image_series)
+        sleap_videos.append(sleap_video)
+
+    return sleap_videos
