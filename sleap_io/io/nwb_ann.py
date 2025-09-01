@@ -104,21 +104,12 @@ def create_skeletons(
                 node_name_to_index = {name: i for i, name in enumerate(node_names)}
 
                 edge_index_pairs = []
-                skipped_edges = []
                 for src_node, dst_node in skel.edges:
-                    try:
-                        src_idx = node_name_to_index[src_node.name]
-                        dst_idx = node_name_to_index[dst_node.name]
-                        edge_index_pairs.append([src_idx, dst_idx])
-                    except KeyError:
-                        skipped_edges.append((src_node.name, dst_node.name))
-                        continue  # skip edge if node name is missing
-
-                if skipped_edges:
-                    warnings.warn(
-                        f"Skipped {len(skipped_edges)} edges in skeleton '{skel_name}' "
-                        f"due to missing nodes: {skipped_edges}"
-                    )
+                    # Node indices are guaranteed to exist since we built node_name_to_index
+                    # from the same nodes list. Skeleton class will validate during creation.
+                    src_idx = node_name_to_index[src_node.name]
+                    dst_idx = node_name_to_index[dst_node.name]
+                    edge_index_pairs.append([src_idx, dst_idx])
 
                 # Ensure edge array has shape (n, 2) even when empty
                 edge_array = np.array(edge_index_pairs, dtype="uint8")
