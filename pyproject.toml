@@ -55,7 +55,8 @@ dev = [
     "mike"]
 opencv = ["opencv-python"]
 av = ["av"]
-all = ["opencv-python", "av"]
+mat = ["pymatreader"]
+all = ["opencv-python", "av", "mat"]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"

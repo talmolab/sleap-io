@@ -1,12 +1,14 @@
 """This module exposes all high level APIs for sleap-io."""
 
 from sleap_io.io.main import (
+    load_alphatracker,
     load_coco,
     load_dlc,
     load_file,
     load_jabs,
     load_labels_set,
     load_labelstudio,
+    load_leap,
     load_nwb,
     load_skeleton,
     load_slp,
@@ -49,12 +51,14 @@ from sleap_io.version import __version__
 
 __all__ = [
     "__version__",
+    "load_alphatracker",
     "load_coco",
     "load_dlc",
     "load_file",
     "load_jabs",
     "load_labels_set",
     "load_labelstudio",
+    "load_leap",
     "load_nwb",
     "load_skeleton",
     "load_slp",

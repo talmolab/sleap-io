@@ -13,6 +13,7 @@ from sleap_io.io import (
     dlc,
     jabs,
     labelstudio,
+    leap,
     nwb,
     slp,
     ultralytics,
@@ -339,6 +340,25 @@ def _detect_coco_format(json_path: str) -> bool:
         return False
 
 
+def load_leap(
+    filename: str,
+    skeleton: Optional[Skeleton] = None,
+    **kwargs,
+) -> Labels:
+    """Load a LEAP dataset from a .mat file.
+
+    Args:
+        filename: Path to a LEAP .mat file.
+        skeleton: An optional `Skeleton` object. If not provided, will be constructed
+            from the data in the file.
+        **kwargs: Additional arguments (currently unused).
+
+    Returns:
+        The dataset as a `Labels` object.
+    """
+    return leap.read_labels(filename, skeleton=skeleton)
+
+
 def load_coco(
     json_path: str,
     dataset_root: Optional[str] = None,
@@ -484,11 +504,13 @@ def load_file(
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "alphatracker", 
-            "labelstudio", "coco", "jabs", "dlc", "ultralytics", and "video".
+            "labelstudio", "coco", "jabs", "dlc", "ultralytics", "leap", and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
             - For "alphatracker" format: No additional arguments.
+            - For "leap" format: skeleton (Optional[Skeleton]): Skeleton to use if not
+              defined in the file.
             - For "labelstudio" format: skeleton (Optional[Skeleton]): Skeleton to
               use for
               the labels.
@@ -513,6 +535,8 @@ def load_file(
             format = "slp"
         elif filename.endswith(".nwb"):
             format = "nwb"
+        elif filename.endswith(".mat"):
+            format = "leap"
         elif filename.endswith(".json"):
             # Detect JSON format: AlphaTracker, COCO, or Label Studio
             if _detect_alphatracker_format(filename):
@@ -541,6 +565,8 @@ def load_file(
         return load_slp(filename, **kwargs)
     elif filename.endswith(".nwb"):
         return load_nwb(filename, **kwargs)
+    elif filename.endswith(".mat"):
+        return load_leap(filename, **kwargs)
     elif filename.endswith(".json"):
         if format == "alphatracker":
             return load_alphatracker(filename, **kwargs)
