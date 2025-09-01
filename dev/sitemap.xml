@@ -41,10 +41,6 @@
          <lastmod>2025-09-01</lastmod>
     </url>
     <url>
-         <loc>https://io.sleap.ai/dev/reference/sleap_io/io/alphatracker/</loc>
-         <lastmod>2025-09-01</lastmod>
-    </url>
-    <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/coco/</loc>
          <lastmod>2025-09-01</lastmod>
     </url>
@@ -58,6 +54,10 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/io/labelstudio/</loc>
+         <lastmod>2025-09-01</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/io/leap/</loc>
          <lastmod>2025-09-01</lastmod>
     </url>
     <url>
