@@ -9,6 +9,7 @@ from typing import List, Optional, Type
 import attrs
 import imageio
 import imageio.v2 as iio_v2
+import imageio_ffmpeg
 import numpy as np
 
 
@@ -165,8 +166,17 @@ class MJPEGFrameWriter:
         ]
 
         # Add VFR mode if frame durations are provided
+        # fps_mode option was added in ffmpeg 5.0, so check version
         if self.frame_durations is not None:
-            params.extend(["-fps_mode", "vfr"])
+            try:
+                ffmpeg_version = imageio_ffmpeg.get_ffmpeg_version()
+                # Parse major version (e.g., "7.1" -> 7, "4.2.2" -> 4)
+                major_version = int(ffmpeg_version.split(".")[0])
+                if major_version >= 5:
+                    params.extend(["-fps_mode", "vfr"])
+            except (AttributeError, ValueError):
+                # If we can't determine version, skip the parameter
+                pass
 
         return params + self.output_params
 
