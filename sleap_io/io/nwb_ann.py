@@ -66,12 +66,17 @@ def create_skeletons(
     frame_indices = {}
 
     for j, label in enumerate(labels):
-        video = labels[j].video.filename
+        video_filename = label.video.filename
+        # Handle ImageVideo case where filename is a list
+        if isinstance(video_filename, list):
+            video = str(video_filename[0]) if video_filename else "unknown"
+        else:
+            video = video_filename
 
         if video not in frame_indices:
             frame_indices[video] = []
 
-        frame_indices[video].append(labels[j].frame_idx)
+        frame_indices[video].append(label.frame_idx)
 
         for inst in label.instances:
             skel = inst.skeleton
@@ -98,7 +103,10 @@ def create_skeletons(
                         f"due to missing nodes: {skipped_edges}"
                     )
 
+                # Ensure edge array has shape (n, 2) even when empty
                 edge_array = np.array(edge_index_pairs, dtype="uint8")
+                if len(edge_index_pairs) == 0:
+                    edge_array = edge_array.reshape(0, 2)
 
                 unique_skeletons[skel_name] = Skeleton(
                     name=skel_name, nodes=node_names, edges=edge_array
@@ -149,7 +157,12 @@ def get_frames_from_slp(
 
     for lf in labels.labeled_frames:
         frame_idx = lf.frame_idx
-        video_name = Path(lf.video.filename).stem
+        # Handle ImageVideo case where filename is a list
+        video_filename = lf.video.filename
+        if isinstance(video_filename, list):
+            video_name = Path(video_filename[0]).stem if video_filename else "unknown"
+        else:
+            video_name = Path(video_filename).stem
 
         if video_name not in video_idx:  # track how many videos there are
             track += 1
@@ -397,7 +410,12 @@ def create_training_frames(
         mapped = frame_map.get(frame_idx, [])
 
         # Find the correct mapping for this video
-        video_name = Path(lf.video.filename).stem
+        # Handle ImageVideo case where filename is a list
+        video_filename = lf.video.filename
+        if isinstance(video_filename, list):
+            video_name = Path(video_filename[0]).stem if video_filename else "unknown"
+        else:
+            video_name = Path(video_filename).stem
         global_frame_idx = None
 
         for global_idx, vid_name in mapped:
