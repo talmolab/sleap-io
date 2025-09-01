@@ -2,7 +2,6 @@
 
 import datetime
 import json
-import os
 import subprocess
 import uuid
 from pathlib import Path
@@ -37,7 +36,7 @@ from sleap_io import (
 def create_skeletons(
         labels: Labels
 ) -> tuple[Skeletons, Dict[str, List[int]], Dict[str, Skeleton]]:
-    """Create NWB skeleton containers and per‑video frame‑index mappings.
+    """Create NWB skeleton containers and per-video frame-index mappings.
 
     Iterates through the provided SLEAP `Labels` objects, extracts every
     unique `Skeleton`, and builds a single NWB `Skeletons` container. While
@@ -49,15 +48,16 @@ def create_skeletons(
             one `Video` and `Instance` collection.
 
     Returns:
-        Skeletons: An NWB `Skeletons` container comprising one `Skeleton`
-            object for every unique skeleton encountered across *all* input
-            labels.
-        Dict[str, List[int]]: Maps each video file path to the sorted,
-            unique frame indices that contain at least one `Instance` in that
-            video.
-        Dict[str, Skeleton]: Maps each skeleton name to the corresponding
-            NWB `Skeleton` object included in the returned `Skeletons`
-            container.
+        A tuple containing:
+            - Skeletons: An NWB `Skeletons` container comprising one `Skeleton`
+                object for every unique skeleton encountered across all input
+                labels.
+            - Dict[str, List[int]]: Maps each video file path to the sorted,
+                unique frame indices that contain at least one `Instance` in that
+                video.
+            - Dict[str, Skeleton]: Maps each skeleton name to the corresponding
+                NWB `Skeleton` object included in the returned `Skeletons`
+                container.
     """
     unique_skeletons = {} # create a new NWB skeleton obj per unique skeleton in SLEAP
     frame_indices = {}
@@ -110,25 +110,25 @@ def get_frames_from_slp(
     """Write individual frames from slp and get mapping to original video.
 
     Write all unique video frames referenced and build
-    lookup tables for MJPEG assembly and cross‑video frame alignment.
+    lookup tables for MJPEG assembly and cross-video frame alignment.
 
     Args:
         labels: A single SLEAP `Labels` object containing `LabeledFrame`
             records with associated `Video` backends.
         mjpeg_frame_duration: Duration (in milliseconds) to associate with
-            each frame when generating an MJPEG stream.
+            each frame when generating an MJPEG stream. Defaults to 30.0.
 
     Returns:
-        list[tuple[str, float]]: `image_list`. Ordered list whose elements are
-            `(filepath, mjpeg_frame_duration)` pairs. `filepath` is the PNG
-            written to `frames/`, `mjpeg_frame_duration` is the per‑frame
-            delay in milliseconds.
-        dict[int, list[list[object]]]: `frame_map`. Maps each `frame_idx`
-            (key) to a list of `[global_idx, video_name]` pairs. `global_idx`
-            is the zero‑based index of the frame within `image_list`;
-            `video_name` is the stem of the source video file. A given
-            `frame_idx` may map to multiple videos if frames share an index
-            across videos.
+        A tuple containing:
+            - image_list: Ordered list whose elements are
+                `(filepath, mjpeg_frame_duration)` pairs. `filepath` is the PNG
+                written to `frames/`, `mjpeg_frame_duration` is the per-frame
+                delay in milliseconds.
+            - frame_map: Maps each `frame_idx` (key) to a list of
+                `[global_idx, video_name]` pairs. `global_idx` is the zero-based
+                index of the frame within `image_list`; `video_name` is the stem
+                of the source video file. A given `frame_idx` may map to multiple
+                videos if frames share an index across videos.
     """
     out_dir = Path("frames")
     out_dir.mkdir(exist_ok=True)
@@ -182,39 +182,32 @@ def make_mjpeg(
     image_list: list[tuple[str, float]],
     frame_map: dict[int, list[list[object]]],
 ) -> str:
-    """Encode an MJPEG (Motion‑JPEG) video from extracted frame images.
+    """Encode an MJPEG (Motion-JPEG) video from extracted frame images.
 
-    Builds an ffmpeg concat script, writes it to *input.txt*, serialises
-    `frame_map` to *frame_map.json*, and invokes ffmpeg to generate
-    *annotated_frames.avi*.
+    Builds an ffmpeg concat script, writes it to input.txt, serialises
+    `frame_map` to frame_map.json, and invokes ffmpeg to generate
+    annotated_frames.avi.
 
-    Parameters
-    ----------
-    image_list :
-        List of `(filepath, duration)` tuples. `filepath` is the on‑disk image
-        (PNG, JPEG, etc.); `duration` is the per‑frame display time in
-        seconds for variable‑frame‑rate (VFR) encoding.
-    frame_map :
-        Mapping of `frame_idx` → `[global_idx, video_name]` pairs (or list of
-        such pairs) used for downstream alignment; dumped verbatim to JSON.
+    Creates/overwrites the following files in the current working directory:
+        - input.txt: ffmpeg concat descriptor.
+        - frame_map.json: JSON dump of the provided `frame_map`.
+        - annotated_frames.avi: Resulting MJPEG container.
+
+    Args:
+        image_list: List of `(filepath, duration)` tuples. `filepath` is the
+            on-disk image (PNG, JPEG, etc.); `duration` is the per-frame display
+            time in seconds for variable-frame-rate (VFR) encoding.
+        frame_map: Mapping of `frame_idx` to `[global_idx, video_name]` pairs
+            (or list of such pairs) used for downstream alignment; dumped
+            verbatim to JSON.
 
     Returns:
-    -------
-    str
         Absolute or relative path to the generated MJPEG file
-        (*annotated_frames.avi*).
-
-    Side Effects
-    ------------
-    Creates/overwrites the following files in the current working directory:
-      * *input.txt*          – ffmpeg concat descriptor.
-      * *frame_map.json*     – JSON dump of the provided `frame_map`.
-      * *annotated_frames.avi* – Resulting MJPEG container.
+        (annotated_frames.avi).
 
     Raises:
-    ------
-    subprocess.CalledProcessError
-        Propagated if ffmpeg returns a non‑zero exit status.
+        subprocess.CalledProcessError: Propagated if ffmpeg returns a non-zero
+            exit status.
     """
     input_txt_path = "input.txt"
     frame_map_json_path = "frame_map.json"
@@ -255,32 +248,26 @@ def create_source_videos(
 ) -> tuple[SourceVideos, ImageSeries]:
     """Assemble NWB `SourceVideos` for original and annotated footage.
 
-    Parameters
-    ----------
-    frame_indices :
-        Mapping from absolute or relative video file paths to the list of
-        frame indices that were annotated in each file.
-    output_mjpeg :
-        Path to the MJPEG file containing only annotated frames (output from
-        :pyfunc:`make_mjpeg`).
-    mjpeg_frame_rate :
-        Nominal frame rate assigned to the MJPEG `ImageSeries`. Defaults to
-        ``30.0`` Hz.
+    Opens every path in `frame_indices` via OpenCV to obtain the original FPS.
+
+    Args:
+        frame_indices: Mapping from absolute or relative video file paths to the
+            list of frame indices that were annotated in each file.
+        output_mjpeg: Path to the MJPEG file containing only annotated frames
+            (output from `make_mjpeg`).
+        mjpeg_frame_rate: Nominal frame rate assigned to the MJPEG `ImageSeries`.
+            Defaults to 30.0 Hz.
 
     Returns:
-    -------
-    SourceVideos
-        NWB container holding one `ImageSeries` per original video plus an
-        additional series for the annotated MJPEG.
-    ImageSeries
-        The `ImageSeries` object corresponding to the annotated MJPEG; also
-        present in the returned `SourceVideos` container.
+        A tuple containing:
+            - SourceVideos: NWB container holding one `ImageSeries` per original
+                video plus an additional series for the annotated MJPEG.
+            - ImageSeries: The `ImageSeries` object corresponding to the
+                annotated MJPEG; also present in the returned `SourceVideos`
+                container.
 
-    Side Effects
-    ------------
-    Opens every path in `frame_indices` via OpenCV to obtain the original FPS.
-    Raises :class:`RuntimeError` if a video cannot be opened or its FPS is
-    unavailable.
+    Raises:
+        RuntimeError: If a video cannot be opened or its FPS is unavailable.
     """
     original_videos = []
 
@@ -294,7 +281,7 @@ def create_source_videos(
         if orig_fps <= 0:
             raise RuntimeError(f"Cannot get fps from: {video}")
 
-        video_name = os.path.basename(video)
+        video_name = Path(video).name
 
         original_videos.append(ImageSeries(
             name=f"original_video_{i}", # must have unique names
@@ -329,36 +316,27 @@ def create_training_frames(
 ) -> TrainingFrames:
     """Convert SLEAP annotations into NWB `TrainingFrames`.
 
-    Parameters
-    ----------
-    labels :
-        A SLEAP `Labels` object whose `LabeledFrame` records contain the
-        annotations to export.
-    unique_skeletons :
-        Mapping of skeleton name → NWB `Skeleton` produced by
-        :pyfunc:`create_skeletons`.
-    annotations_mjpeg :
-        The `ImageSeries` object pointing to the MJPEG of annotated frames
-        (output from :pyfunc:`create_source_videos`).
-    frame_map :
-        Mapping from original `frame_idx` to `[global_idx, video_name]`
-        entries created by :pyfunc:`get_frames_from_slp`.
-    identity :
-        If ``True``, append each instance’s track name to its skeleton name to
-        guarantee uniqueness when identity tracking is present.
+    Args:
+        labels: A SLEAP `Labels` object whose `LabeledFrame` records contain the
+            annotations to export.
+        unique_skeletons: Mapping of skeleton name to NWB `Skeleton` produced by
+            `create_skeletons`.
+        annotations_mjpeg: The `ImageSeries` object pointing to the MJPEG of
+            annotated frames (output from `create_source_videos`).
+        frame_map: Mapping from original `frame_idx` to `[global_idx, video_name]`
+            entries created by `get_frames_from_slp`.
+        identity: If True, append each instance's track name to its skeleton
+            name to guarantee uniqueness when identity tracking is present.
+            Defaults to False.
 
     Returns:
-    -------
-    TrainingFrames
         An NWB `TrainingFrames` container, where every `TrainingFrame` holds
-        one `SkeletonInstances` composed of the per‑frame
+        one `SkeletonInstances` composed of the per-frame
         `SkeletonInstance`(s) and references the MJPEG via
-        ``source_video``/``source_video_frame_index``.
+        `source_video`/`source_video_frame_index`.
 
     Raises:
-    ------
-    KeyError
-        If an instance’s skeleton name is absent from `unique_skeletons`.
+        KeyError: If an instance's skeleton name is absent from `unique_skeletons`.
     """
     training_frames_list = []
 
@@ -397,7 +375,7 @@ def create_training_frames(
 
         if isinstance(mapped[0], list): #loop through if mult videos same frame idx
             video_path = val.video.filename
-            video_name = os.path.splitext(os.path.basename(video_path))[0]
+            video_name = Path(video_path).stem
             for vid in mapped:
                 if vid[1] == video_name:
                     frame_idx = vid[0]
@@ -424,46 +402,30 @@ def write_annotations_nwb(
 ) -> None:
     """Export SLEAP pose data and metadata to an NWB file.
 
-    Parameters
-    ----------
-    labels :
-        A SLEAP `Labels` object whose `LabeledFrame` entries contain the
-        pose annotations to be written.
-    nwbfile_path :
-        Destination path for the NWB file. Will be overwritten if it
-        already exists.
-    nwb_file_kwargs :
-        Optional keyword arguments forwarded directly to
-        :class:`pynwb.NWBFile`. Missing required fields are auto‑filled:
-        ``session_description`` (default ``"Processed SLEAP pose data"``),
-        ``session_start_time`` (UTC ``datetime.now``), and ``identifier``
-        (``uuid.uuid1()``).
-    nwb_subject_kwargs :
-        Optional keyword arguments forwarded to :class:`pynwb.file.Subject`.
-        Missing DANDI‑required fields are auto‑filled: ``subject_id``
-        (``"subject1"``), ``species`` (``"Mus musculus"``), ``sex`` (``"F"``),
-        and ``age`` (``"P10W/P12W"``).
+    Creates a frames/ directory of PNGs extracted from every annotated video frame.
+    Generates annotated_frames.avi via ffmpeg and dumps frame_map.json and
+    input.txt to the working directory. Writes the assembled NWB file to
+    nwbfile_path using pynwb.NWBHDF5IO.
 
-    Returns:
-    -------
-    None
-        The function writes the NWB file to disk and has no return value.
-
-    Side Effects
-    ------------
-    * Creates a *frames/* directory of PNGs extracted from every annotated
-      video frame.
-    * Generates *annotated_frames.avi* via ffmpeg and dumps
-      *frame_map.json* and *input.txt* to the working directory.
-    * Writes the assembled NWB file to *nwbfile_path* using
-      :class:`pynwb.NWBHDF5IO`.
+    Args:
+        labels: A SLEAP `Labels` object whose `LabeledFrame` entries contain the
+            pose annotations to be written.
+        nwbfile_path: Destination path for the NWB file. Will be overwritten if
+            it already exists.
+        nwb_file_kwargs: Optional keyword arguments forwarded directly to
+            pynwb.NWBFile. Missing required fields are auto-filled:
+            session_description (default "Processed SLEAP pose data"),
+            session_start_time (UTC datetime.now), and identifier (uuid.uuid1()).
+            Defaults to None.
+        nwb_subject_kwargs: Optional keyword arguments forwarded to
+            pynwb.file.Subject. Missing DANDI-required fields are auto-filled:
+            subject_id ("subject1"), species ("Mus musculus"), sex ("F"),
+            and age ("P10W/P12W"). Defaults to None.
 
     Raises:
-    ------
-    RuntimeError
-        If an original video cannot be opened or its FPS is unobtainable.
-    subprocess.CalledProcessError
-        If ffmpeg fails during MJPEG generation.
+        RuntimeError: If an original video cannot be opened or its FPS is
+            unobtainable.
+        subprocess.CalledProcessError: If ffmpeg fails during MJPEG generation.
     """
     nwb_file_kwargs = nwb_file_kwargs or dict()
 

@@ -1,4 +1,4 @@
-"""Tests for annotations_nwb I/O functionality."""
+"""Tests for nwb_ann I/O functionality."""
 
 import json
 import subprocess
@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import pytest
 
-import sleap_io.io.annotations_nwb as ann
+import sleap_io.io.nwb_ann as ann
 
 
 def test_make_mjpeg_error(tmp_path, monkeypatch):
@@ -165,7 +165,7 @@ def test_create_training_frames_basic(monkeypatch):
     labels = type("Labels", (), {})()
     labels.labeled_frames = [DummyLF(5), DummyLF(7)]
 
-    from sleap_io.io.annotations_nwb import Skeleton
+    from sleap_io.io.nwb_ann import Skeleton
     fake_skel = Skeleton(name="TestSkel", nodes=[],
                          edges=np.empty((0, 2), dtype="uint8"))
     fake_unique = {"TestSkel": fake_skel}
