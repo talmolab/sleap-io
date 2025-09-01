@@ -42,6 +42,54 @@ labels.save("predictions.nwb")
     - [`Labels.save`](model.md#sleap_io.Labels.save): Save method with format options
     - [Formats](formats.md): Complete list of supported formats
 
+### Export and import training annotations to NWB
+
+Save manual annotations for archival using the NWB PoseTraining format.
+
+```python title="nwb_annotations.py" linenums="1"
+import sleap_io as sio
+
+# Load training data with manual annotations
+labels = sio.load_file("training_data.slp")
+
+# Export to NWB with PoseTraining format
+# This creates an MJPEG video of annotated frames and metadata
+sio.save_nwb_annotations(
+    labels,
+    "training_annotations.nwb",
+    output_dir="nwb_export/",  # Directory for frame_map.json and MJPEG
+    annotator="Alice",
+    nwb_subject_kwargs={"subject_id": "mouse_01", "sex": "M"}
+)
+
+# Read back the NWB annotations
+loaded_labels = sio.load_nwb_annotations(
+    "training_annotations.nwb",
+    frame_map_path="nwb_export/frame_map.json"  # Optional, auto-detected if in same dir
+)
+
+# Track identity is preserved
+for lf in loaded_labels.labeled_frames:
+    for instance in lf.instances:
+        if instance.track:
+            print(f"Frame {lf.frame_idx}: Track {instance.track.name}")
+```
+
+!!! info "NWB PoseTraining format"
+    The PoseTraining format is designed for archiving training datasets with full provenance. It includes:
+    
+    - **MJPEG video**: Contains only the annotated frames for efficient storage
+    - **Frame mapping**: JSON file mapping MJPEG frames to original video frames
+    - **Skeleton definitions**: Complete skeletal structure with nodes and edges
+    - **Track identity**: Preserved when instances have associated tracks
+    
+    This is different from `save_nwb()` which exports pose *predictions* using the PoseEstimation format.
+
+!!! note "See also"
+    - [`save_nwb_annotations`](formats.md#sleap_io.save_nwb_annotations): Save training annotations
+    - [`load_nwb_annotations`](formats.md#sleap_io.load_nwb_annotations): Load training annotations
+    - [`save_nwb`](formats.md#sleap_io.save_nwb): Save pose predictions
+
 ### Convert labels to raw arrays
 
 Extract pose data as NumPy arrays for analysis or visualization.
