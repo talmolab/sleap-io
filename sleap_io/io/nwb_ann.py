@@ -10,10 +10,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import cv2
 import numpy as np
 
-try:
-    from numpy.typing import ArrayLike
-except ImportError:
-    ArrayLike = np.ndarray
+from numpy.typing import ArrayLike
 from ndx_pose import (
     PoseTraining,
     Skeleton,
@@ -738,6 +735,49 @@ def _reconstruct_instances_from_training(
     return instances
 
 
+def _resolve_video_and_frame(
+    mjpeg_frame_idx: int,
+    inverted_map: Optional[Dict],
+    video_map: Dict[str, Video],
+    mjpeg_video: Optional[Video],
+) -> Tuple[Optional[Video], int]:
+    """Resolve video and original frame index from MJPEG frame index.
+    
+    Args:
+        mjpeg_frame_idx: Frame index in MJPEG video.
+        inverted_map: Inverted frame mapping or None.
+        video_map: Mapping of video names to Video objects.
+        mjpeg_video: MJPEG Video object or None.
+        
+    Returns:
+        Tuple of (Video, original_frame_idx) or (None, -1) if resolution fails.
+    """
+    if inverted_map:
+        # Try to find in frame map
+        for video_name in video_map:
+            key = (video_name, mjpeg_frame_idx)
+            if key in inverted_map:
+                return video_map[video_name], inverted_map[key]
+        
+        # Fall back to MJPEG video if available
+        if mjpeg_video:
+            return mjpeg_video, mjpeg_frame_idx
+        
+        # No resolution possible
+        warnings.warn(
+            f"Could not map MJPEG frame {mjpeg_frame_idx} to original video"
+        )
+        return None, -1
+    
+    # No frame map, use fallback strategies
+    if mjpeg_video:
+        return mjpeg_video, mjpeg_frame_idx
+    elif video_map:
+        return next(iter(video_map.values())), mjpeg_frame_idx
+    else:
+        return Video(filename="unknown_video.mp4", backend=None), mjpeg_frame_idx
+
+
 def read_nwb_annotations(
     nwb_path: str,
     frame_map_path: Optional[str] = None,
@@ -849,41 +889,11 @@ def read_nwb_annotations(
                 continue
 
             # Determine original video and frame index
-            if inverted_map:
-                # Try to find in frame map
-                found = False
-                for video_name in video_map:
-                    key = (video_name, mjpeg_frame_idx)
-                    if key in inverted_map:
-                        orig_frame_idx = inverted_map[key]
-                        video = video_map[video_name]
-                        found = True
-                        break
-
-                if not found:
-                    # Fall back to MJPEG video if available
-                    if mjpeg_video:
-                        video = mjpeg_video
-                        orig_frame_idx = mjpeg_frame_idx
-                    else:
-                        warnings.warn(
-                            f"Could not map MJPEG frame {mjpeg_frame_idx} "
-                            f"to original video"
-                        )
-                        continue
-            else:
-                # No frame map, use MJPEG video or first available video
-                if mjpeg_video:
-                    video = mjpeg_video
-                    orig_frame_idx = mjpeg_frame_idx
-                elif video_map:
-                    # Use first video as fallback
-                    video = next(iter(video_map.values()))
-                    orig_frame_idx = mjpeg_frame_idx
-                else:
-                    # Create placeholder video
-                    video = Video(filename="unknown_video.mp4", backend=None)
-                    orig_frame_idx = mjpeg_frame_idx
+            video, orig_frame_idx = _resolve_video_and_frame(
+                mjpeg_frame_idx, inverted_map, video_map, mjpeg_video
+            )
+            if video is None:
+                continue
 
             # Create LabeledFrame
             lf = LabeledFrame(

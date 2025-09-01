@@ -921,3 +921,389 @@ def test_read_nwb_annotations_missing_data(tmp_path):
 
         with pytest.raises(ValueError, match="behavior"):
             ann.read_nwb_annotations(str(nwb_path))
+
+
+def test_create_source_videos_unopenable_video(tmp_path):
+    """Test error handling for unopenable video."""
+    frame_indices = {"nonexistent_video.mp4": [0, 1, 2]}
+    
+    with patch("sleap_io.io.nwb_ann.cv2.VideoCapture") as mock_cap:
+        mock_cap_instance = mock_cap.return_value
+        mock_cap_instance.isOpened.return_value = False
+        
+        with pytest.raises(RuntimeError, match="Cannot open video"):
+            ann.create_source_videos(frame_indices, [], "test_annotations.avi", (640, 480))
+
+
+def test_create_source_videos_invalid_fps(tmp_path):
+    """Test error handling for video with invalid FPS."""
+    frame_indices = {"test_video.mp4": [0, 1, 2]}
+    
+    with patch("sleap_io.io.nwb_ann.cv2.VideoCapture") as mock_cap:
+        mock_cap_instance = mock_cap.return_value
+        mock_cap_instance.isOpened.return_value = True
+        mock_cap_instance.get.return_value = 0  # Invalid FPS
+        
+        with pytest.raises(RuntimeError, match="Cannot get fps"):
+            ann.create_source_videos(frame_indices, [], "test_annotations.avi", (640, 480))
+
+
+def test_write_annotations_nwb_with_devices(tmp_path, monkeypatch):
+    """Test write_annotations_nwb with include_devices=True."""
+    import numpy as np
+    from sleap_io import Skeleton, Instance, LabeledFrame, Video, Labels
+    from sleap_io.io.video_reading import ImageVideo
+
+    # Create test images  
+    img_files = []
+    for i in range(2):
+        img_path = tmp_path / f"frame_{i}.png"
+        img = np.zeros((32, 32, 1), dtype=np.uint8)  # Use 32x32 (divisible by 16)
+        import imageio
+        imageio.imwrite(img_path, img[:, :, 0])
+        img_files.append(str(img_path))
+
+    skeleton = Skeleton(nodes=["A", "B"], name="test_skeleton")
+    video = Video(filename=img_files, backend=ImageVideo(img_files))
+
+    instance = Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        ]
+    )
+
+    # Test with include_devices=True
+    ann.write_annotations_nwb(
+        labels,
+        str(tmp_path / "test_with_devices.nwb"),
+        output_dir=str(tmp_path),
+        include_devices=True,
+        annotator="Test",
+        nwb_subject_kwargs={"subject_id": "test"}
+    )
+
+    # Verify the NWB file was created
+    assert (tmp_path / "test_with_devices.nwb").exists()
+
+
+def test_get_frames_from_slp_duplicate_frames(tmp_path, monkeypatch):
+    """Test get_frames_from_slp with duplicate frame indices."""
+    import numpy as np
+    from sleap_io import Skeleton, Instance, LabeledFrame, Video, Labels
+    from sleap_io.io.video_reading import ImageVideo
+
+    # Create test images  
+    img_files = []
+    for i in range(2):
+        img_path = tmp_path / f"frame_{i}.png"
+        img = np.zeros((32, 32, 1), dtype=np.uint8)
+        import imageio
+        imageio.imwrite(img_path, img[:, :, 0])
+        img_files.append(str(img_path))
+
+    skeleton = Skeleton(nodes=["A", "B"], name="test_skeleton")
+    video = Video(filename=img_files, backend=ImageVideo(img_files))
+
+    instance1 = Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton
+    )
+    instance2 = Instance.from_numpy(
+        np.array([[5.0, 6.0], [7.0, 8.0]]),
+        skeleton=skeleton
+    )
+
+    # Create labels with duplicate frame indices
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[instance1]),
+            LabeledFrame(video=video, frame_idx=0, instances=[instance2])  # Same frame
+        ]
+    )
+
+    frames, durations, frame_map = ann.get_frames_from_slp(labels)
+    
+    # Should only have 1 frame despite 2 labeled frames with same index
+    assert len(frames) == 1
+    assert len(durations) == 1
+    assert len(frame_map) == 1
+    assert 0 in frame_map  # Frame 0 should be in map
+
+
+def test_create_skeletons_with_missing_edge_nodes():
+    """Test create_skeletons with edges referencing non-existent nodes."""
+    import numpy as np
+    import warnings
+    from sleap_io import Skeleton, Edge, Instance, LabeledFrame, Video, Labels
+    from sleap_io.io.video_reading import ImageVideo
+
+    # Create skeleton with edges pointing to non-existent nodes
+    skeleton = Skeleton(
+        nodes=["A", "B"],  # Only 2 nodes
+        edges=[Edge("A", "B"), Edge("B", "C")],  # Edge to non-existent "C"
+        name="test_skeleton"
+    )
+
+    # Mock video
+    video = Video(filename=["test.png"], backend=None)
+
+    instance = Instance.from_numpy(
+        np.array([[1.0, 2.0], [3.0, 4.0]]),  # Only 2 points for A, B
+        skeleton=skeleton
+    )
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        labeled_frames=[
+            LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        ]
+    )
+
+    # Should warn about missing nodes and continue
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        skeletons, frame_indices, unique_skeletons = ann.create_skeletons(labels)
+        
+        # Should have warned about missing edge
+        assert len(w) == 1
+        assert "Skipped 1 edges" in str(w[0].message)
+        assert "missing nodes" in str(w[0].message)
+
+
+def test_load_frame_map_malformed_json(tmp_path):
+    """Test load_frame_map with malformed JSON."""
+    import warnings
+    
+    # Create malformed JSON file
+    malformed_json_path = tmp_path / "malformed_frame_map.json"
+    malformed_json_path.write_text("{ invalid json content")
+    
+    # Should warn and return empty dict
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = ann.load_frame_map(str(malformed_json_path))
+        
+        # Should warn about JSON decode error
+        assert len(w) == 1
+        assert "Could not load frame_map.json" in str(w[0].message)
+        assert result == {}
+
+
+def test_read_nwb_annotations_missing_skeletons(tmp_path):
+    """Test error handling for missing Skeletons data."""
+    nwb_path = tmp_path / "test.nwb"
+
+    with patch("sleap_io.io.nwb_ann.NWBHDF5IO") as mock_io:
+        mock_nwbfile = MagicMock()
+        mock_behavior = MagicMock()
+        mock_nwbfile.processing = {"behavior": mock_behavior}
+        mock_behavior.data_interfaces = {}  # No Skeletons
+
+        mock_io_instance = mock_io.return_value.__enter__.return_value
+        mock_io_instance.read.return_value = mock_nwbfile
+
+        with pytest.raises(ValueError, match="Skeletons"):
+            ann.read_nwb_annotations(str(nwb_path))
+
+
+def test_read_nwb_annotations_missing_pose_training(tmp_path):
+    """Test error handling for missing PoseTraining data."""
+    nwb_path = tmp_path / "test.nwb"
+
+    with patch("sleap_io.io.nwb_ann.NWBHDF5IO") as mock_io:
+        mock_nwbfile = MagicMock()
+        mock_behavior = MagicMock()
+        mock_skeletons = MagicMock()
+        
+        mock_nwbfile.processing = {"behavior": mock_behavior}
+        mock_behavior.data_interfaces = {"Skeletons": mock_skeletons}
+        # No PoseTraining in data_interfaces
+
+        mock_io_instance = mock_io.return_value.__enter__.return_value
+        mock_io_instance.read.return_value = mock_nwbfile
+
+        with pytest.raises(ValueError, match="PoseTraining"):
+            ann.read_nwb_annotations(str(nwb_path))
+
+
+def test_reconstruct_instances_skeleton_from_nwb_reference():
+    """Test skeleton matching using NWB skeleton reference."""
+    from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+    
+    # Create SLEAP skeleton
+    sleap_skeleton = SleapSkeleton(nodes=["A", "B"], name="test_skeleton")
+    sleap_skeletons = {"test_skeleton": sleap_skeleton}
+    
+    # Mock NWB skeleton instance with skeleton reference
+    mock_nwb_skeleton = MagicMock()
+    mock_nwb_skeleton.name = "test_skeleton"
+    
+    mock_skeleton_instance = MagicMock()
+    mock_skeleton_instance.name = "some_instance_name"
+    mock_skeleton_instance.skeleton = mock_nwb_skeleton  # Has NWB skeleton reference
+    mock_skeleton_instance.node_locations = np.array([[10, 20]])
+    mock_skeleton_instance.node_visibility = [1.0]
+    
+    instances = ann.reconstruct_instances_from_training(
+        [mock_skeleton_instance], sleap_skeletons, set()
+    )
+    
+    # Should find skeleton from NWB reference
+    assert len(instances) == 1
+    assert instances[0].skeleton == sleap_skeleton
+
+
+def test_reconstruct_instances_skeleton_from_name_parsing():
+    """Test skeleton matching by parsing instance name."""
+    from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+    
+    # Create SLEAP skeleton
+    sleap_skeleton = SleapSkeleton(nodes=["A", "B"], name="test_skeleton")
+    sleap_skeletons = {"test_skeleton": sleap_skeleton}
+    
+    # Mock skeleton instance with no NWB skeleton reference
+    mock_skeleton_instance = MagicMock()
+    mock_skeleton_instance.name = "test_skeleton.track_1.instance_0"
+    mock_skeleton_instance.skeleton = None  # No NWB skeleton reference
+    mock_skeleton_instance.node_locations = np.array([[10, 20]])
+    mock_skeleton_instance.node_visibility = [1.0]
+    
+    instances = ann.reconstruct_instances_from_training(
+        [mock_skeleton_instance], sleap_skeletons, set()
+    )
+    
+    # Should find skeleton by parsing name
+    assert len(instances) == 1
+    assert instances[0].skeleton == sleap_skeleton
+
+
+def test_reconstruct_instances_skeleton_from_prefix_fallback():
+    """Test skeleton matching using prefix fallback."""
+    from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+    
+    # Create SLEAP skeleton
+    sleap_skeleton = SleapSkeleton(nodes=["A", "B"], name="test_skeleton")
+    sleap_skeletons = {"test_skeleton": sleap_skeleton}
+    
+    # Mock skeleton instance with name that starts with skeleton name but doesn't parse
+    mock_skeleton_instance = MagicMock()
+    mock_skeleton_instance.name = "test_skeleton_some_other_format"
+    mock_skeleton_instance.skeleton = None
+    mock_skeleton_instance.node_locations = np.array([[10, 20]])
+    mock_skeleton_instance.node_visibility = [1.0]
+    
+    instances = ann.reconstruct_instances_from_training(
+        [mock_skeleton_instance], sleap_skeletons, set()
+    )
+    
+    # Should find skeleton by prefix matching
+    assert len(instances) == 1
+    assert instances[0].skeleton == sleap_skeleton
+
+
+def test_create_training_frames_missing_frame_mapping():
+    """Test create_training_frames with missing frame mapping."""
+    import warnings
+    from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+    
+    # Create mock skeleton instance
+    mock_skeleton_instance = MagicMock()
+    mock_skeleton_instance.name = "test_skeleton.instance_0"
+    mock_skeleton_instance.node_locations = np.array([[10, 20]])
+    mock_skeleton_instance.node_visibility = [1.0]
+    
+    # Create mock labeled frame with frame_idx that's not in frame_map
+    mock_lf = MagicMock()
+    mock_lf.frame_idx = 99  # Not in frame_map
+    mock_lf.instances = [mock_skeleton_instance]
+    mock_lf.video.filename = "test_video.mp4"
+    
+    # Mock video
+    mock_video = Video(filename="test_video.mp4", backend=None)
+    
+    frame_map = {}  # Empty frame map
+    sleap_skeletons = {"test_skeleton": SleapSkeleton(nodes=["A"], name="test_skeleton")}
+    
+    # Should warn about missing frame mapping
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        training_frames = ann.create_training_frames(
+            [mock_lf], frame_map, sleap_skeletons, {}, mock_video
+        )
+        
+        # Should warn about missing frame mapping
+        assert len(w) == 1
+        assert "No frame mapping found" in str(w[0].message)
+
+
+def test_resolve_video_and_frame_with_inverted_map():
+    """Test _resolve_video_and_frame with inverted frame map."""
+    import warnings
+    
+    # Mock video
+    video1 = Video(filename="video1.mp4", backend=None)
+    video_map = {"video1": video1}
+    
+    # Test successful resolution
+    inverted_map = {("video1", 5): 10}
+    result_video, result_frame = ann._resolve_video_and_frame(
+        5, inverted_map, video_map, None
+    )
+    assert result_video == video1
+    assert result_frame == 10
+    
+    # Test fallback to MJPEG video when frame not found
+    mjpeg_video = Video(filename="mjpeg.avi", backend=None)
+    result_video, result_frame = ann._resolve_video_and_frame(
+        99, inverted_map, video_map, mjpeg_video
+    )
+    assert result_video == mjpeg_video
+    assert result_frame == 99
+    
+    # Test failure when no MJPEG video available
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result_video, result_frame = ann._resolve_video_and_frame(
+            99, inverted_map, video_map, None
+        )
+        assert result_video is None
+        assert result_frame == -1
+        assert len(w) == 1
+        assert "Could not map MJPEG frame" in str(w[0].message)
+
+
+def test_resolve_video_and_frame_no_inverted_map():
+    """Test _resolve_video_and_frame without inverted frame map."""
+    # Test with MJPEG video
+    mjpeg_video = Video(filename="mjpeg.avi", backend=None)
+    result_video, result_frame = ann._resolve_video_and_frame(
+        5, None, {}, mjpeg_video
+    )
+    assert result_video == mjpeg_video
+    assert result_frame == 5
+    
+    # Test with video map fallback
+    video1 = Video(filename="video1.mp4", backend=None)
+    video_map = {"video1": video1}
+    result_video, result_frame = ann._resolve_video_and_frame(
+        5, None, video_map, None
+    )
+    assert result_video == video1
+    assert result_frame == 5
+    
+    # Test with no videos - creates placeholder
+    result_video, result_frame = ann._resolve_video_and_frame(
+        5, None, {}, None
+    )
+    assert result_video.filename == "unknown_video.mp4"
+    assert result_frame == 5
