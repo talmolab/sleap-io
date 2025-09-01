@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 import numpy as np
 
 from sleap_io.io import (
+    alphatracker,
     coco,
     dlc,
     jabs,
@@ -143,6 +144,18 @@ def save_labelstudio(labels: Labels, filename: str):
     labelstudio.write_labels(labels, filename)
 
 
+def load_alphatracker(filename: str) -> Labels:
+    """Read AlphaTracker annotations from a file and return a `Labels` object.
+
+    Args:
+        filename: Path to the AlphaTracker annotation file in JSON format.
+
+    Returns:
+        Parsed labels as a `Labels` instance.
+    """
+    return alphatracker.read_labels(filename)
+
+
 def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
     """Read JABS-style predictions from a file and return a `Labels` object.
 
@@ -243,6 +256,58 @@ def save_ultralytics(
               use_multiprocessing=True.
     """
     ultralytics.write_labels(labels, dataset_path, split_ratios=split_ratios, **kwargs)
+
+
+def _detect_alphatracker_format(json_path: str) -> bool:
+    """Detect if a JSON file is in AlphaTracker format.
+
+    Args:
+        json_path: Path to JSON file to check.
+
+    Returns:
+        True if the file appears to be AlphaTracker format, False otherwise.
+    """
+    try:
+        import json
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        # AlphaTracker format is a list of frame objects
+        if not isinstance(data, list):
+            return False
+
+        if len(data) == 0:
+            return False
+
+        # Check first frame structure
+        first_frame = data[0]
+        if not isinstance(first_frame, dict):
+            return False
+
+        # AlphaTracker frames have "filename", "class": "image", and "annotations"
+        has_required = (
+            "filename" in first_frame
+            and first_frame.get("class") == "image"
+            and "annotations" in first_frame
+        )
+
+        if not has_required:
+            return False
+
+        # Check annotations structure
+        annotations = first_frame.get("annotations", [])
+        if not isinstance(annotations, list):
+            return False
+
+        # Check for Face and point classes
+        has_face = any(a.get("class") == "Face" for a in annotations)
+        has_point = any(a.get("class") == "point" for a in annotations)
+
+        return has_face and has_point
+
+    except Exception:
+        return False
 
 
 def _detect_coco_format(json_path: str) -> bool:
@@ -448,8 +513,10 @@ def load_file(
         elif filename.endswith(".nwb"):
             format = "nwb"
         elif filename.endswith(".json"):
-            # Detect if this is COCO format or Label Studio format
-            if _detect_coco_format(filename):
+            # Detect JSON format: AlphaTracker, COCO, or Label Studio
+            if _detect_alphatracker_format(filename):
+                format = "alphatracker"
+            elif _detect_coco_format(filename):
                 format = "coco"
             else:
                 format = "json"
@@ -474,7 +541,9 @@ def load_file(
     elif filename.endswith(".nwb"):
         return load_nwb(filename, **kwargs)
     elif filename.endswith(".json"):
-        if format == "coco":
+        if format == "alphatracker":
+            return load_alphatracker(filename, **kwargs)
+        elif format == "coco":
             return load_coco(filename, **kwargs)
         else:
             return load_labelstudio(filename, **kwargs)
