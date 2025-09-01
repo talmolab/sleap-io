@@ -1,4 +1,14 @@
-"""This module handles direct I/O operations for working with AlphaTracker files."""
+"""This module handles direct I/O operations for working with AlphaTracker files.
+
+AlphaTracker is a multi-animal pose tracking system that exports annotations in JSON format.
+Each JSON file contains an array of frame objects, where each frame includes:
+- filename: Reference to the image file
+- class: Always "image" for frame objects  
+- annotations: Array containing bounding boxes (class: "Face") and keypoints (class: "point")
+
+The format groups annotations by animal, with each animal having a Face bounding box
+followed by its keypoint annotations.
+"""
 
 from __future__ import annotations
 
