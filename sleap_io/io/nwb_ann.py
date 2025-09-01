@@ -105,8 +105,9 @@ def create_skeletons(
 
                 edge_index_pairs = []
                 for src_node, dst_node in skel.edges:
-                    # Node indices are guaranteed to exist since we built node_name_to_index
-                    # from the same nodes list. Skeleton class will validate during creation.
+                    # Node indices are guaranteed to exist since we built
+                    # node_name_to_index from the same nodes list.
+                    # Skeleton class will validate during creation.
                     src_idx = node_name_to_index[src_node.name]
                     dst_idx = node_name_to_index[dst_node.name]
                     edge_index_pairs.append([src_idx, dst_idx])

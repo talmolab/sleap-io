@@ -46,32 +46,31 @@ def test_mjpeg_ffmpeg_version_handling(tmp_path, monkeypatch):
     # Test with version parsing error
     def bad_get_version():
         return "invalid.version.string"
-    
+
     monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_version", bad_get_version)
-    
+
     output_path = tmp_path / "test_version_error.avi"
-    
+
     # Create writer with frame_durations to trigger version check
     writer = MJPEGFrameWriter(
         str(output_path),
-        frame_durations=[0.033] * 5  # This triggers version detection
+        frame_durations=[0.033] * 5,  # This triggers version detection
     )
-    
+
     # Should not crash despite version parsing error
-    frames = [np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8) for _ in range(5)]
+    frames = [
+        np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8) for _ in range(5)
+    ]
     writer.write_frames(frames)
-    
+
     assert output_path.exists()
-    
+
     # Test with AttributeError (missing get_ffmpeg_version)
     del imageio_ffmpeg.get_ffmpeg_version
-    
+
     output_path2 = tmp_path / "test_attr_error.avi"
-    writer2 = MJPEGFrameWriter(
-        str(output_path2),
-        frame_durations=[0.033] * 5
-    )
-    
+    writer2 = MJPEGFrameWriter(str(output_path2), frame_durations=[0.033] * 5)
+
     # Should not crash despite missing function
     writer2.write_frames(frames)
     assert output_path2.exists()
