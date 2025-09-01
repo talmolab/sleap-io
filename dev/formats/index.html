@@ -677,6 +677,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sleap_io.load_leap" class="md-nav__link">
+    <span class="md-ellipsis">
+      load_leap
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sleap_io.load_ultralytics" class="md-nav__link">
     <span class="md-ellipsis">
       load_ultralytics
@@ -907,6 +916,15 @@
   <a href="#sleap_io.load_dlc" class="md-nav__link">
     <span class="md-ellipsis">
       load_dlc
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sleap_io.load_leap" class="md-nav__link">
+    <span class="md-ellipsis">
+      load_leap
     </span>
   </a>
   
@@ -3138,6 +3156,131 @@ the skeleton.</p>
 <a id="__codelineno-0-185" name="__codelineno-0-185"></a><a href="#__codelineno-0-185"><span class="linenos" data-linenos="185 "></span></a><span class="sd">        Parsed labels as a `Labels` instance.</span>
 <a id="__codelineno-0-186" name="__codelineno-0-186"></a><a href="#__codelineno-0-186"><span class="linenos" data-linenos="186 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-187" name="__codelineno-0-187"></a><a href="#__codelineno-0-187"><span class="linenos" data-linenos="187 "></span></a>    <span class="k">return</span> <span class="n">dlc</span><span class="o">.</span><span class="n">load_dlc</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">video_search_paths</span><span class="o">=</span><span class="n">video_search_paths</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="sleap_io.load_leap" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">load_leap</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+<a href="#sleap_io.load_leap" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Load a LEAP dataset from a .mat file.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>filename</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to a LEAP .mat file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>skeleton</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>An optional <code>Skeleton</code> object. If not provided, will be constructed
+from the data in the file.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>**kwargs</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Additional arguments (currently unused).</p>
+              </div>
+            </td>
+            <td>
+                  <code>{}</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../reference/sleap_io/model/labels/#sleap_io.model.labels.Labels">Labels</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The dataset as a <code>Labels</code> object.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/main.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-278" name="__codelineno-0-278"></a><a href="#__codelineno-0-278"><span class="linenos" data-linenos="278 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_leap</span><span class="p">(</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><a href="#__codelineno-0-279"><span class="linenos" data-linenos="279 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><a href="#__codelineno-0-280"><span class="linenos" data-linenos="280 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a><a href="#__codelineno-0-281"><span class="linenos" data-linenos="281 "></span></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a><a href="#__codelineno-0-282"><span class="linenos" data-linenos="282 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a><a href="#__codelineno-0-283"><span class="linenos" data-linenos="283 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a LEAP dataset from a .mat file.</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a><a href="#__codelineno-0-284"><span class="linenos" data-linenos="284 "></span></a>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a><a href="#__codelineno-0-285"><span class="linenos" data-linenos="285 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a><a href="#__codelineno-0-286"><span class="linenos" data-linenos="286 "></span></a><span class="sd">        filename: Path to a LEAP .mat file.</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a><a href="#__codelineno-0-287"><span class="linenos" data-linenos="287 "></span></a><span class="sd">        skeleton: An optional `Skeleton` object. If not provided, will be constructed</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a><a href="#__codelineno-0-288"><span class="linenos" data-linenos="288 "></span></a><span class="sd">            from the data in the file.</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a><a href="#__codelineno-0-289"><span class="linenos" data-linenos="289 "></span></a><span class="sd">        **kwargs: Additional arguments (currently unused).</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a><a href="#__codelineno-0-290"><span class="linenos" data-linenos="290 "></span></a>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a><a href="#__codelineno-0-291"><span class="linenos" data-linenos="291 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a><a href="#__codelineno-0-292"><span class="linenos" data-linenos="292 "></span></a><span class="sd">        The dataset as a `Labels` object.</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a><a href="#__codelineno-0-293"><span class="linenos" data-linenos="293 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a><a href="#__codelineno-0-294"><span class="linenos" data-linenos="294 "></span></a>    <span class="k">return</span> <span class="n">leap</span><span class="o">.</span><span class="n">read_labels</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="n">skeleton</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>

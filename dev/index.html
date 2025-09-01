@@ -711,7 +711,7 @@ have any functionality related to labeling, training, or inference.</p>
 <p>The main purpose of this library is to provide utilities to load/save from different
 <a href="formats/">formats</a> for pose data and standardize them into our common <a href="model/">Data Model</a>.</p>
 <ul>
-<li>Read/write labels in <a href="formats/#sleap_io.load_slp">SLP</a>, <a href="formats/#sleap_io.load_nwb">NWB</a>, <a href="formats/#sleap_io.load_dlc">DeepLabCut</a>, <a href="formats/#sleap_io.load_jabs">JABS</a>, <a href="formats/#sleap_io.load_labelstudio">LabelStudio</a> and <a href="formats/#sleap_io.load_ultralytics">Ultralytics YOLO</a> formats.</li>
+<li>Read/write labels in <a href="formats/#sleap_io.load_slp">SLP</a>, <a href="formats/#sleap_io.load_nwb">NWB</a>, <a href="formats/#sleap_io.load_dlc">DeepLabCut</a>, <a href="formats/#sleap_io.load_jabs">JABS</a>, <a href="formats/#sleap_io.load_labelstudio">LabelStudio</a>, <a href="formats/#sleap_io.load_leap">LEAP</a> and <a href="formats/#sleap_io.load_ultralytics">Ultralytics YOLO</a> formats.</li>
 <li>Support for <a href="model/#sleap_io.LabelsSet">LabelsSet</a> to manage multiple dataset splits (train/val/test) and export to different formats.</li>
 <li><a href="formats/#sleap_io.load_video">Read videos in any format</a>, work them in a <a href="model/#sleap_io.Video">numpy-like interface</a> whether the video files are accessible or not, and <a href="formats/#sleap_io.save_video">easily save them out</a>.</li>
 </ul>
@@ -739,8 +739,9 @@ with pose data, including utilities for common tasks. Some of these include:</p>
 <h3 id="optional-dependencies">Optional Dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">&para;</a></h3>
 <p>For video backend support, install with extras:
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip install sleap-io[opencv]  # For OpenCV backend
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pip install sleap-io[av]       # For PyAV backend  
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip install sleap-io[all]      # For all video backends
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pip install sleap-io[av]       # For PyAV backend
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip install sleap-io[mat]      # For LEAP .mat file support
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>pip install sleap-io[all]      # For all backends and formats
 </code></pre></div></p>
 <h3 id="development-installation">Development Installation<a class="headerlink" href="#development-installation" title="Permanent link">&para;</a></h3>
 <p>For development, use one of the following:
