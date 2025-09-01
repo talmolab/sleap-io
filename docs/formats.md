@@ -18,6 +18,8 @@
 
 ::: sleap_io.save_nwb
 
+::: sleap_io.save_nwb_annotations
+
 ::: sleap_io.load_jabs
 
 ::: sleap_io.save_jabs

@@ -15,6 +15,7 @@ from sleap_io.io import (
     labelstudio,
     leap,
     nwb,
+    nwb_ann,
     slp,
     ultralytics,
     video_writing,
@@ -115,6 +116,72 @@ def save_nwb(labels: Labels, filename: str, append: bool = True):
         nwb.append_nwb(labels, filename)
     else:
         nwb.write_nwb(labels, filename)
+
+
+def save_nwb_annotations(
+    labels: Labels,
+    filename: str,
+    output_dir: Optional[str] = None,
+    include_devices: bool = False,
+    annotator: str = "SLEAP",
+    nwb_file_kwargs: Optional[dict] = None,
+    nwb_subject_kwargs: Optional[dict] = None,
+):
+    """Save SLEAP annotations to NWB PoseTraining format.
+
+    This exports manual annotations and training data to NWB format using the
+    ndx-pose extension's PoseTraining schema. This is useful for archiving
+    training datasets with full provenance.
+
+    The export creates an MJPEG video containing only annotated frames for
+    efficient storage and generates frame mappings to original videos.
+
+    Args:
+        labels: A SLEAP `Labels` object containing training annotations.
+        filename: Path to NWB file to save to. Must end in `.nwb`.
+        output_dir: Directory for intermediate files (frame_map.json,
+            annotated_frames.avi). If None, uses current directory.
+        include_devices: If True, include camera device metadata in NWB file.
+        annotator: Name of annotator or annotation software. Defaults to "SLEAP".
+        nwb_file_kwargs: Optional dict of keyword arguments for NWBFile.
+            Defaults are provided for required fields:
+            - session_description: "Processed SLEAP pose data"
+            - session_start_time: current UTC time
+            - identifier: auto-generated UUID
+        nwb_subject_kwargs: Optional dict of keyword arguments for Subject.
+            DANDI-required defaults are provided:
+            - subject_id: "subject1"
+            - species: "Mus musculus"
+            - sex: "F"
+            - age: "P10W/P12W"
+
+    Notes:
+        This function creates intermediate files in the output directory:
+        - annotated_frames.avi: MJPEG video of only annotated frames
+        - frame_map.json: Mapping between frame indices and videos
+
+    Example:
+        >>> import sleap_io as sio
+        >>> labels = sio.load_file("training_data.slp")
+        >>> sio.save_nwb_annotations(
+        ...     labels,
+        ...     "training_annotations.nwb",
+        ...     output_dir="/tmp/nwb_export",
+        ...     annotator="Alice",
+        ...     nwb_subject_kwargs={"subject_id": "mouse_01", "sex": "M"}
+        ... )
+
+    See also: nwb_ann.write_annotations_nwb
+    """
+    nwb_ann.write_annotations_nwb(
+        labels=labels,
+        nwbfile_path=filename,
+        output_dir=output_dir,
+        include_devices=include_devices,
+        annotator=annotator,
+        nwb_file_kwargs=nwb_file_kwargs,
+        nwb_subject_kwargs=nwb_subject_kwargs,
+    )
 
 
 def load_labelstudio(

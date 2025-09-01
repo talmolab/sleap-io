@@ -28,15 +28,13 @@ from pynwb import NWBHDF5IO, NWBFile
 from pynwb.file import Subject
 from pynwb.image import ImageSeries
 
-from sleap_io import (
-    Labels,
-)
 from sleap_io.io.video_writing import MJPEGFrameWriter
+from sleap_io.model.labels import Labels
 
 
 def create_skeletons(
     labels: Labels,
-) -> tuple[Skeletons, Dict[str, List[int]], Dict[str, Skeleton]]:
+) -> Tuple[Skeletons, Dict[str, List[int]], Dict[str, Skeleton]]:
     """Create NWB skeleton containers and per-video frame-index mappings.
 
     Iterates through the provided SLEAP `Labels` objects, extracts every
@@ -230,12 +228,12 @@ def make_mjpeg(
 
 
 def create_source_videos(
-    frame_indices: dict[str, list[int]],
+    frame_indices: Dict[str, List[int]],
     output_mjpeg: str,
     mjpeg_frame_rate: float = 30.0,
     include_devices: bool = False,
     nwbfile: Optional[NWBFile] = None,
-) -> tuple[SourceVideos, ImageSeries, Dict[str, Tuple[int, int]]]:
+) -> Tuple[SourceVideos, ImageSeries, Dict[str, Tuple[int, int]]]:
     """Assemble NWB `SourceVideos` for original and annotated footage.
 
     Opens every path in `frame_indices` via OpenCV to obtain the original FPS.
@@ -324,9 +322,9 @@ def create_source_videos(
 
 def create_training_frames(
     labels: Labels,
-    unique_skeletons: dict[str, Skeleton],
+    unique_skeletons: Dict[str, Skeleton],
     annotations_mjpeg: ImageSeries,
-    frame_map: dict[int, list[tuple[int, str]]],
+    frame_map: Dict[int, List[Tuple[int, str]]],
     identity: bool = False,
     annotator: str = "SLEAP",
 ) -> TrainingFrames:
