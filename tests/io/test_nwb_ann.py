@@ -6,6 +6,7 @@ import numpy as np
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
 
+import sleap_io as sio
 from sleap_io import Instance as SleapInstance
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
@@ -14,7 +15,9 @@ from sleap_io.io.nwb_ann import (
     nwb_skeleton_instance_to_sleap_instance,
     nwb_skeleton_to_sleap_skeleton,
     nwb_source_videos_to_sleap_videos,
+    nwb_training_frame_to_sleap_labeled_frame,
     sleap_instance_to_nwb_skeleton_instance,
+    sleap_labeled_frame_to_nwb_training_frame,
     sleap_skeleton_to_nwb_skeleton,
     sleap_video_to_nwb_image_series,
     sleap_videos_to_nwb_source_videos,
@@ -430,3 +433,47 @@ def test_source_videos_multiple_videos(
     # Check that videos were named correctly in the container
     assert "video_0" in nwb_source_videos.image_series
     assert "video_1" in nwb_source_videos.image_series
+
+
+def test_training_frame_roundtrip(slp_real_data):
+    """Test TrainingFrame roundtrip conversion."""
+    # Get a labeled frame with instances
+    labels = sio.load_slp(slp_real_data)
+    labeled_frame = labels.labeled_frames[0]
+
+    # Convert skeleton to NWB
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(labels.skeleton)
+
+    # Convert video to ImageSeries
+    source_video = sleap_video_to_nwb_image_series(
+        labeled_frame.video, name="test_video"
+    )
+
+    # Convert to NWB TrainingFrame
+    nwb_training_frame = sleap_labeled_frame_to_nwb_training_frame(
+        labeled_frame,
+        nwb_skeleton,
+        source_video=source_video,
+        name="test_frame",
+        annotator="test_annotator",
+    )
+
+    # Convert back to sleap-io
+    recovered_frame = nwb_training_frame_to_sleap_labeled_frame(
+        nwb_training_frame, labels.skeleton, labeled_frame.video
+    )
+
+    # Check frame properties
+    assert recovered_frame.frame_idx == labeled_frame.frame_idx
+    assert len(recovered_frame.instances) == len(labeled_frame.instances)
+    assert recovered_frame.video == labeled_frame.video
+
+    # Check instance data
+    for orig_inst, recovered_inst in zip(
+        labeled_frame.instances, recovered_frame.instances
+    ):
+        np.testing.assert_array_equal(
+            orig_inst.numpy(invisible_as_nan=True),
+            recovered_inst.numpy(invisible_as_nan=True),
+            err_msg="Instance points should match",
+        )

@@ -5,10 +5,13 @@ from pathlib import Path
 import numpy as np
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
+from ndx_pose import SkeletonInstances as NwbSkeletonInstances
 from ndx_pose import SourceVideos as NwbSourceVideos
+from ndx_pose import TrainingFrame as NwbTrainingFrame
 from pynwb.image import ImageSeries
 
 from sleap_io import Instance as SleapInstance
+from sleap_io import LabeledFrame as SleapLabeledFrame
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.utils import sanitize_filename
@@ -192,7 +195,7 @@ def sleap_video_to_nwb_image_series(
 
     fps = getattr(sleap_video, "fps", 30.0)
 
-    starting_frame = [0] * len(filename)  # needs to match length of filenames
+    starting_frame = list(range(len(filename)))  # needs to match length of filenames
 
     # Create ImageSeries with external file reference
     image_series = ImageSeries(
@@ -285,3 +288,92 @@ def nwb_source_videos_to_sleap_videos(
         sleap_videos.append(sleap_video)
 
     return sleap_videos
+
+
+def sleap_labeled_frame_to_nwb_training_frame(
+    sleap_labeled_frame: SleapLabeledFrame,
+    nwb_skeleton: NwbSkeleton,
+    source_video: ImageSeries | None = None,
+    name: str = "training_frame",
+    annotator: str | None = None,
+) -> NwbTrainingFrame:
+    """Convert a sleap-io LabeledFrame to ndx-pose TrainingFrame.
+
+    Args:
+        sleap_labeled_frame: The sleap-io LabeledFrame object to convert.
+        nwb_skeleton: The ndx-pose Skeleton object to associate with instances.
+        source_video: Optional ImageSeries representing the source video.
+        name: String identifier for the TrainingFrame.
+        annotator: Optional name of annotator who labeled the frame.
+
+    Returns:
+        An ndx-pose TrainingFrame object with equivalent data.
+    """
+    # Convert instances to NWB SkeletonInstances
+    nwb_instances = []
+    for i, sleap_instance in enumerate(sleap_labeled_frame.instances):
+        instance_name = f"instance_{i}"
+        nwb_instance = sleap_instance_to_nwb_skeleton_instance(
+            sleap_instance, nwb_skeleton, name=instance_name, id=i
+        )
+        nwb_instances.append(nwb_instance)
+
+    # Create SkeletonInstances container
+    skeleton_instances = NwbSkeletonInstances(
+        name="skeleton_instances", skeleton_instances=nwb_instances
+    )
+
+    # Create TrainingFrame
+    training_frame_kwargs = {
+        "name": name,
+        "skeleton_instances": skeleton_instances,
+    }
+
+    # Add optional attributes
+    if annotator is not None:
+        training_frame_kwargs["annotator"] = annotator
+
+    if source_video is not None:
+        training_frame_kwargs["source_video"] = source_video
+        training_frame_kwargs["source_video_frame_index"] = np.uint32(
+            sleap_labeled_frame.frame_idx
+        )
+
+    return NwbTrainingFrame(**training_frame_kwargs)
+
+
+def nwb_training_frame_to_sleap_labeled_frame(
+    nwb_training_frame: NwbTrainingFrame,
+    sleap_skeleton: SleapSkeleton,
+    sleap_video: SleapVideo,
+) -> SleapLabeledFrame:
+    """Convert an ndx-pose TrainingFrame to sleap-io LabeledFrame.
+
+    Args:
+        nwb_training_frame: The ndx-pose TrainingFrame object to convert.
+        sleap_skeleton: The sleap-io Skeleton to associate with instances.
+        sleap_video: The sleap-io Video to associate with the frame.
+
+    Returns:
+        A sleap-io LabeledFrame object with equivalent data.
+    """
+    # Convert instances from NWB SkeletonInstances
+    sleap_instances = []
+    for (
+        nwb_instance
+    ) in nwb_training_frame.skeleton_instances.skeleton_instances.values():
+        sleap_instance = nwb_skeleton_instance_to_sleap_instance(
+            nwb_instance, sleap_skeleton
+        )
+        sleap_instances.append(sleap_instance)
+
+    # Get frame index - use source_video_frame_index if available, otherwise 0
+    frame_idx = (
+        int(nwb_training_frame.source_video_frame_index)
+        if nwb_training_frame.source_video_frame_index is not None
+        else 0
+    )
+
+    return SleapLabeledFrame(
+        video=sleap_video, frame_idx=frame_idx, instances=sleap_instances
+    )
