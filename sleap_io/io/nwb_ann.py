@@ -512,8 +512,12 @@ def write_annotations_nwb(
     source_videos, annotations_mjpeg, video_dimensions = create_source_videos(
         frame_indices, output_mjpeg, include_devices=include_devices, nwbfile=nwbfile
     )
+    # Check if we have tracks to determine if we should use identity
+    has_tracks = any(inst.track is not None for lf in labels for inst in lf.instances)
+    
     training_frames = create_training_frames(
-        labels, unique_skeletons, annotations_mjpeg, frame_map, annotator=annotator
+        labels, unique_skeletons, annotations_mjpeg, frame_map, 
+        identity=has_tracks, annotator=annotator
     )
 
     pose_training = PoseTraining(
@@ -549,10 +553,12 @@ def _extract_skeletons_from_nwb(
         nwb_skeleton = skeletons_container.skeletons[skeleton_name]
 
         # Convert nodes (list of strings) and edges (numpy array) to SLEAP format
+        # Note: edges might be an HDF5 Dataset when read from file
+        edges_array = np.array(nwb_skeleton.edges)
         sleap_skeleton = SleapSkeleton(
             name=skeleton_name,
             nodes=list(nwb_skeleton.nodes),
-            edges=nwb_skeleton.edges.tolist() if len(nwb_skeleton.edges) > 0 else [],
+            edges=edges_array.tolist() if len(edges_array) > 0 else [],
         )
         sleap_skeletons[skeleton_name] = sleap_skeleton
 
