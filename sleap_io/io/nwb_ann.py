@@ -770,7 +770,7 @@ def _resolve_video_and_frame(
         return None, -1
     
     # No frame map, use fallback strategies
-    if mjpeg_video:
+    if mjpeg_video is not None:
         return mjpeg_video, mjpeg_frame_idx
     elif video_map:
         return next(iter(video_map.values())), mjpeg_frame_idx

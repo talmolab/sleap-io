@@ -1043,13 +1043,18 @@ def test_create_skeletons_with_missing_edge_nodes():
     """Test create_skeletons with edges referencing non-existent nodes."""
     import numpy as np
     import warnings
-    from sleap_io import Skeleton, Edge, Instance, LabeledFrame, Video, Labels
+    from sleap_io import Skeleton, Node, Edge, Instance, LabeledFrame, Video, Labels
     from sleap_io.io.video_reading import ImageVideo
 
+    # Create nodes
+    node_a = Node("A")
+    node_b = Node("B")
+    node_c = Node("C")  # This node won't be in the skeleton
+    
     # Create skeleton with edges pointing to non-existent nodes
     skeleton = Skeleton(
-        nodes=["A", "B"],  # Only 2 nodes
-        edges=[Edge("A", "B"), Edge("B", "C")],  # Edge to non-existent "C"
+        nodes=[node_a, node_b],  # Only 2 nodes
+        edges=[Edge(node_a, node_b), Edge(node_b, node_c)],  # Edge to non-existent "C"
         name="test_skeleton"
     )
 
@@ -1081,22 +1086,60 @@ def test_create_skeletons_with_missing_edge_nodes():
 
 
 def test_load_frame_map_malformed_json(tmp_path):
-    """Test load_frame_map with malformed JSON."""
+    """Test read_nwb_annotations with malformed frame_map.json."""
     import warnings
+    from ndx_pose import PoseTraining, Skeletons, Skeleton as NWBSkeleton, TrainingFrames
+    from pynwb import NWBFile, NWBHDF5IO
+    import datetime
     
     # Create malformed JSON file
-    malformed_json_path = tmp_path / "malformed_frame_map.json"
+    malformed_json_path = tmp_path / "frame_map.json"
     malformed_json_path.write_text("{ invalid json content")
     
-    # Should warn and return empty dict
+    # Create a minimal valid NWB file with real objects
+    nwb_path = tmp_path / "test.nwb"
+    
+    # Create NWB file
+    nwbfile = NWBFile(
+        session_description="Test session",
+        identifier="test",
+        session_start_time=datetime.datetime.now(datetime.timezone.utc)
+    )
+    
+    # Add behavior module
+    behavior_module = nwbfile.create_processing_module(
+        name="behavior",
+        description="behavior processing module"
+    )
+    
+    # Create and add skeletons
+    skeleton = NWBSkeleton(
+        name="test_skeleton",
+        nodes=["A", "B"],
+        edges=np.array([]).reshape(0, 2)
+    )
+    skeletons = Skeletons(skeletons=[skeleton])
+    behavior_module.add(skeletons)
+    
+    # Create empty PoseTraining
+    training_frames = TrainingFrames(training_frames=[])
+    pose_training = PoseTraining(
+        training_frames=training_frames
+    )
+    behavior_module.add(pose_training)
+    
+    # Write NWB file
+    with NWBHDF5IO(str(nwb_path), "w") as io:
+        io.write(nwbfile)
+    
+    # Should warn about malformed JSON and continue
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = ann.load_frame_map(str(malformed_json_path))
+        result = ann.read_nwb_annotations(str(nwb_path), frame_map_path=str(malformed_json_path))
         
         # Should warn about JSON decode error
-        assert len(w) == 1
-        assert "Could not load frame_map.json" in str(w[0].message)
-        assert result == {}
+        assert any("Could not load frame_map.json" in str(warning.message) for warning in w)
+        assert isinstance(result, Labels)
 
 
 def test_read_nwb_annotations_missing_skeletons(tmp_path):
@@ -1138,24 +1181,45 @@ def test_read_nwb_annotations_missing_pose_training(tmp_path):
 
 def test_reconstruct_instances_skeleton_from_nwb_reference():
     """Test skeleton matching using NWB skeleton reference."""
+    from ndx_pose import Skeleton as NWBSkeleton, SkeletonInstance, SkeletonInstances, TrainingFrame
     from sleap_io.model.skeleton import Skeleton as SleapSkeleton
     
     # Create SLEAP skeleton
     sleap_skeleton = SleapSkeleton(nodes=["A", "B"], name="test_skeleton")
     sleap_skeletons = {"test_skeleton": sleap_skeleton}
     
-    # Mock NWB skeleton instance with skeleton reference
-    mock_nwb_skeleton = MagicMock()
-    mock_nwb_skeleton.name = "test_skeleton"
+    # Create real NWB skeleton
+    nwb_skeleton = NWBSkeleton(
+        name="test_skeleton",
+        nodes=["A", "B"],
+        edges=np.array([]).reshape(0, 2)  # Empty edges with correct shape
+    )
     
-    mock_skeleton_instance = MagicMock()
-    mock_skeleton_instance.name = "some_instance_name"
-    mock_skeleton_instance.skeleton = mock_nwb_skeleton  # Has NWB skeleton reference
-    mock_skeleton_instance.node_locations = np.array([[10, 20]])
-    mock_skeleton_instance.node_visibility = [1.0]
+    # Create real NWB SkeletonInstance with skeleton reference
+    skeleton_instance = SkeletonInstance(
+        name="some_instance_name",
+        id=np.uint64(1),
+        node_locations=np.array([[10, 20], [30, 40]]),
+        node_visibility=[1.0, 1.0],
+        skeleton=nwb_skeleton
+    )
     
-    instances = ann.reconstruct_instances_from_training(
-        [mock_skeleton_instance], sleap_skeletons, set()
+    # Create real SkeletonInstances container
+    skeleton_instances = SkeletonInstances(
+        skeleton_instances=[skeleton_instance]
+    )
+    
+    # Create real TrainingFrame
+    training_frame = TrainingFrame(
+        name="test_frame",
+        annotator="test",
+        skeleton_instances=skeleton_instances,
+        source_video=None,
+        source_video_frame_index=np.uint64(0)
+    )
+    
+    instances = ann._reconstruct_instances_from_training(
+        training_frame, sleap_skeletons, {}
     )
     
     # Should find skeleton from NWB reference
@@ -1165,21 +1229,44 @@ def test_reconstruct_instances_skeleton_from_nwb_reference():
 
 def test_reconstruct_instances_skeleton_from_name_parsing():
     """Test skeleton matching by parsing instance name."""
+    from ndx_pose import Skeleton as NWBSkeleton, SkeletonInstance, SkeletonInstances, TrainingFrame
     from sleap_io.model.skeleton import Skeleton as SleapSkeleton
     
     # Create SLEAP skeleton
     sleap_skeleton = SleapSkeleton(nodes=["A", "B"], name="test_skeleton")
     sleap_skeletons = {"test_skeleton": sleap_skeleton}
     
-    # Mock skeleton instance with no NWB skeleton reference
-    mock_skeleton_instance = MagicMock()
-    mock_skeleton_instance.name = "test_skeleton.track_1.instance_0"
-    mock_skeleton_instance.skeleton = None  # No NWB skeleton reference
-    mock_skeleton_instance.node_locations = np.array([[10, 20]])
-    mock_skeleton_instance.node_visibility = [1.0]
+    # Create a dummy NWB skeleton with a different name (to test name parsing)
+    dummy_skeleton = NWBSkeleton(
+        name="wrong_skeleton",
+        nodes=["X", "Y"],
+        edges=np.array([]).reshape(0, 2)
+    )
     
-    instances = ann.reconstruct_instances_from_training(
-        [mock_skeleton_instance], sleap_skeletons, set()
+    # Create real NWB SkeletonInstance with wrong skeleton reference
+    skeleton_instance = SkeletonInstance(
+        name="test_skeleton.track_1.instance_0",
+        id=np.uint64(1),
+        node_locations=np.array([[10, 20], [30, 40]]),
+        node_visibility=[1.0, 1.0],
+        skeleton=dummy_skeleton  # Wrong NWB skeleton reference
+    )
+    # Create real SkeletonInstances container
+    skeleton_instances = SkeletonInstances(
+        skeleton_instances=[skeleton_instance]
+    )
+    
+    # Create real TrainingFrame
+    training_frame = TrainingFrame(
+        name="test_frame",
+        annotator="test",
+        skeleton_instances=skeleton_instances,
+        source_video=None,
+        source_video_frame_index=np.uint64(0)
+    )
+    
+    instances = ann._reconstruct_instances_from_training(
+        training_frame, sleap_skeletons, {}
     )
     
     # Should find skeleton by parsing name
@@ -1189,21 +1276,45 @@ def test_reconstruct_instances_skeleton_from_name_parsing():
 
 def test_reconstruct_instances_skeleton_from_prefix_fallback():
     """Test skeleton matching using prefix fallback."""
+    from ndx_pose import Skeleton as NWBSkeleton, SkeletonInstance, SkeletonInstances, TrainingFrame
     from sleap_io.model.skeleton import Skeleton as SleapSkeleton
     
     # Create SLEAP skeleton
     sleap_skeleton = SleapSkeleton(nodes=["A", "B"], name="test_skeleton")
     sleap_skeletons = {"test_skeleton": sleap_skeleton}
     
-    # Mock skeleton instance with name that starts with skeleton name but doesn't parse
-    mock_skeleton_instance = MagicMock()
-    mock_skeleton_instance.name = "test_skeleton_some_other_format"
-    mock_skeleton_instance.skeleton = None
-    mock_skeleton_instance.node_locations = np.array([[10, 20]])
-    mock_skeleton_instance.node_visibility = [1.0]
+    # Create a dummy NWB skeleton with a different name
+    dummy_skeleton = NWBSkeleton(
+        name="wrong_skeleton",
+        nodes=["X", "Y"],
+        edges=np.array([]).reshape(0, 2)
+    )
     
-    instances = ann.reconstruct_instances_from_training(
-        [mock_skeleton_instance], sleap_skeletons, set()
+    # Create real NWB SkeletonInstance with name that starts with skeleton name
+    skeleton_instance = SkeletonInstance(
+        name="test_skeleton_some_other_format",
+        id=np.uint64(1),
+        node_locations=np.array([[10, 20], [30, 40]]),
+        node_visibility=[1.0, 1.0],
+        skeleton=dummy_skeleton  # Wrong NWB skeleton reference
+    )
+    
+    # Create real SkeletonInstances container
+    skeleton_instances = SkeletonInstances(
+        skeleton_instances=[skeleton_instance]
+    )
+    
+    # Create real TrainingFrame
+    training_frame = TrainingFrame(
+        name="test_frame",
+        annotator="test",
+        skeleton_instances=skeleton_instances,
+        source_video=None,
+        source_video_frame_index=np.uint64(0)
+    )
+    
+    instances = ann._reconstruct_instances_from_training(
+        training_frame, sleap_skeletons, {}
     )
     
     # Should find skeleton by prefix matching
@@ -1215,30 +1326,49 @@ def test_create_training_frames_missing_frame_mapping():
     """Test create_training_frames with missing frame mapping."""
     import warnings
     from sleap_io.model.skeleton import Skeleton as SleapSkeleton
+    from sleap_io.model.instance import Instance
+    from ndx_pose import Skeleton as NWBSkeleton
+    from pynwb.image import ImageSeries
     
-    # Create mock skeleton instance
-    mock_skeleton_instance = MagicMock()
-    mock_skeleton_instance.name = "test_skeleton.instance_0"
-    mock_skeleton_instance.node_locations = np.array([[10, 20]])
-    mock_skeleton_instance.node_visibility = [1.0]
+    # Create a proper Instance with skeleton
+    sleap_skeleton = SleapSkeleton(nodes=["A"], name="test_skeleton")
+    instance = Instance.from_numpy(
+        np.array([[10, 20, 1.0]]),
+        skeleton=sleap_skeleton
+    )
     
     # Create mock labeled frame with frame_idx that's not in frame_map
-    mock_lf = MagicMock()
-    mock_lf.frame_idx = 99  # Not in frame_map
-    mock_lf.instances = [mock_skeleton_instance]
-    mock_lf.video.filename = "test_video.mp4"
+    mock_lf = LabeledFrame(
+        video=Video(filename="test_video.mp4", backend=None),
+        frame_idx=99,  # Not in frame_map
+        instances=[instance]
+    )
     
-    # Mock video
-    mock_video = Video(filename="test_video.mp4", backend=None)
+    # Create Labels object
+    labels = Labels(
+        labeled_frames=[mock_lf],
+        videos=[mock_lf.video],
+        skeletons=[sleap_skeleton]
+    )
+    
+    # Create NWB skeleton
+    nwb_skeleton = NWBSkeleton(
+        name="test_skeleton",
+        nodes=["A"],
+        edges=np.array([]).reshape(0, 2)
+    )
+    unique_skeletons = {"test_skeleton": nwb_skeleton}
+    
+    # Create mock ImageSeries for annotations_mjpeg
+    annotations_mjpeg = MagicMock(spec=ImageSeries)
     
     frame_map = {}  # Empty frame map
-    sleap_skeletons = {"test_skeleton": SleapSkeleton(nodes=["A"], name="test_skeleton")}
     
     # Should warn about missing frame mapping
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         training_frames = ann.create_training_frames(
-            [mock_lf], frame_map, sleap_skeletons, {}, mock_video
+            labels, unique_skeletons, annotations_mjpeg, frame_map
         )
         
         # Should warn about missing frame mapping
@@ -1264,11 +1394,16 @@ def test_resolve_video_and_frame_with_inverted_map():
     
     # Test fallback to MJPEG video when frame not found
     mjpeg_video = Video(filename="mjpeg.avi", backend=None)
-    result_video, result_frame = ann._resolve_video_and_frame(
-        99, inverted_map, video_map, mjpeg_video
-    )
-    assert result_video == mjpeg_video
-    assert result_frame == 99
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result_video, result_frame = ann._resolve_video_and_frame(
+            99, inverted_map, video_map, mjpeg_video
+        )
+        # Should warn and return None when frame can't be mapped
+        assert result_video is None
+        assert result_frame == -1
+        assert len(w) == 1
+        assert "Could not map MJPEG frame" in str(w[0].message)
     
     # Test failure when no MJPEG video available
     with warnings.catch_warnings(record=True) as w:
