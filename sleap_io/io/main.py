@@ -503,7 +503,7 @@ def load_file(
     Args:
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
-            file extension. Available formats are: "slp", "nwb", "alphatracker", 
+            file extension. Available formats are: "slp", "nwb", "alphatracker",
             "labelstudio", "coco", "jabs", "dlc", "ultralytics", "leap", and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.

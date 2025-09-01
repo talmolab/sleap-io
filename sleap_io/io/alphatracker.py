@@ -41,8 +41,27 @@ def read_labels(labels_path: str) -> Labels:
     with open(labels_path, "r") as f:
         data = json.load(f)
 
-    # Create skeleton with 3 nodes named "1", "2", "3"
-    skeleton = Skeleton(nodes=[Node("1"), Node("2"), Node("3")])
+    # First pass: determine the number of nodes by scanning all frames
+    max_points = 0
+    for frame_data in data:
+        annotations = frame_data.get("annotations", [])
+        
+        # Count points per instance by finding Face followed by points
+        current_points = 0
+        for i, ann in enumerate(annotations):
+            if ann.get("class") == "Face":
+                # Count subsequent point annotations
+                current_points = 0
+                for j in range(i + 1, len(annotations)):
+                    if annotations[j].get("class") == "point":
+                        current_points += 1
+                    else:
+                        break  # Stop at next Face or other annotation
+                max_points = max(max_points, current_points)
+    
+    # Create skeleton with dynamically determined nodes
+    nodes = [Node(str(i + 1)) for i in range(max_points)]
+    skeleton = Skeleton(nodes=nodes)
 
     # Collect all image filenames to create video
     image_files = []
@@ -63,27 +82,33 @@ def read_labels(labels_path: str) -> Labels:
         # Get all annotations for this frame
         annotations = frame_data.get("annotations", [])
 
-        # Group annotations into instances (Face + 3 points per instance)
-        # Skip Face annotations, only use point annotations
-        point_annotations = [a for a in annotations if a["class"] == "point"]
-
-        # Split points into instances (3 points per instance)
-        points_per_instance = 3
-        num_instances = len(point_annotations) // points_per_instance
-
-        for inst_idx in range(num_instances):
-            # Get the 3 points for this instance
-            start_idx = inst_idx * points_per_instance
-            inst_points = point_annotations[start_idx : start_idx + points_per_instance]
-
-            # Create points array for this instance
-            points = np.full((len(skeleton.nodes), 2), np.nan)
-            for point_idx, point_data in enumerate(inst_points):
-                points[point_idx] = [point_data["x"], point_data["y"]]
-
-            # Create instance
-            instance = Instance(points=points, skeleton=skeleton)
-            instances.append(instance)
+        # Group annotations into instances (Face + subsequent points per instance)
+        i = 0
+        while i < len(annotations):
+            if annotations[i].get("class") == "Face":
+                # Found a new instance
+                # Collect subsequent point annotations
+                inst_points = []
+                j = i + 1
+                while j < len(annotations) and annotations[j].get("class") == "point":
+                    inst_points.append(annotations[j])
+                    j += 1
+                
+                # Create points array for this instance
+                points = np.full((len(skeleton.nodes), 2), np.nan)
+                for point_idx, point_data in enumerate(inst_points):
+                    if point_idx < len(skeleton.nodes):
+                        points[point_idx] = [point_data["x"], point_data["y"]]
+                
+                # Create instance
+                instance = Instance(points=points, skeleton=skeleton)
+                instances.append(instance)
+                
+                # Move to next annotation after the points
+                i = j
+            else:
+                # Skip non-Face annotations that aren't part of an instance
+                i += 1
 
         # Create labeled frame
         labeled_frame = LabeledFrame(
