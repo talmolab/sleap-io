@@ -13,6 +13,7 @@ from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.nwb_ann import (
+    FrameMap,
     create_nwb_to_slp_skeleton_map,
     create_nwb_to_slp_video_map,
     create_slp_to_nwb_skeleton_map,
@@ -618,6 +619,7 @@ def test_pose_training_roundtrip(slp_real_data):
                 err_msg="Instance points should match",
             )
 
+
 def test_save_load_labels_roundtrip(slp_real_data, tmp_path):
     """Test save_labels and load_labels roundtrip."""
     from sleap_io.io.nwb_ann import load_labels, save_labels
@@ -642,9 +644,7 @@ def test_save_load_labels_roundtrip(slp_real_data, tmp_path):
     # Check basic structure
     assert len(recovered_labels.skeletons) == len(limited_labels.skeletons)
     assert len(recovered_labels.videos) == len(limited_labels.videos)
-    assert len(recovered_labels.labeled_frames) == len(
-        limited_labels.labeled_frames
-    )
+    assert len(recovered_labels.labeled_frames) == len(limited_labels.labeled_frames)
 
     # Test with custom parameters
     nwb_path_custom = tmp_path / "test_custom.nwb"
@@ -669,6 +669,116 @@ def test_save_load_labels_roundtrip(slp_real_data, tmp_path):
     assert len(recovered_labels_custom.labeled_frames) == len(
         limited_labels.labeled_frames
     )
+
+
+def test_export_labeled_frames(slp_real_data, tmp_path):
+    """Test export_labeled_frames function."""
+    import json
+
+    from sleap_io.io.nwb_ann import export_labeled_frames
+
+    # Load original labels
+    original_labels = sio.load_slp(slp_real_data)
+
+    # Use first few frames to keep test manageable
+    limited_labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=original_labels.labeled_frames[:3],
+    )
+
+    # Test basic export
+    export_dir = tmp_path / "export_test"
+    frame_map = export_labeled_frames(
+        limited_labels,
+        output_dir=export_dir,
+        mjpeg_filename="test_frames.avi",
+        frame_map_filename="test_frame_map.json",
+    )
+
+    # Check that files were created
+    mjpeg_path = export_dir / "test_frames.avi"
+    frame_map_path = export_dir / "test_frame_map.json"
+
+    assert mjpeg_path.exists()
+    assert frame_map_path.exists()
+
+    # Check FrameMap structure
+    assert isinstance(frame_map, FrameMap)
+    assert len(frame_map.frames) == 3  # Should match number of labeled frames
+    assert len(frame_map.videos) == len(limited_labels.videos)
+    assert frame_map.mjpeg_filename == str(mjpeg_path)
+    assert frame_map.frame_map_filename == str(frame_map_path)
+
+    # Check frame mapping data
+    for i, frame_info in enumerate(frame_map.frames):
+        labeled_frame = limited_labels.labeled_frames[i]
+        assert frame_info.video_ind == limited_labels.videos.index(labeled_frame.video)
+        assert frame_info.frame_idx == labeled_frame.frame_idx
+
+    # Check JSON file content
+    with open(frame_map_path, "r") as f:
+        json_data = json.load(f)
+
+    assert "videos" in json_data
+    assert "frames" in json_data
+    assert len(json_data["frames"]) == 3
+    assert len(json_data["videos"]) == len(limited_labels.videos)
+
+    # Test with NWB filename parameter
+    nwb_path = tmp_path / "test.nwb"
+    frame_map_with_nwb = export_labeled_frames(
+        limited_labels,
+        output_dir=tmp_path / "export_with_nwb",
+        nwb_filename=nwb_path,
+    )
+
+    assert frame_map_with_nwb.nwb_filename == str(nwb_path)
+
+    # Test clean=False with empty labeled frames
+    labels_with_empty = SleapLabels(
+        skeletons=limited_labels.skeletons,
+        videos=limited_labels.videos,
+        labeled_frames=[
+            sio.LabeledFrame(video=limited_labels.videos[0], frame_idx=0, instances=[]),
+            *limited_labels.labeled_frames[:2],
+        ],
+    )
+
+    # Should include empty frame when clean=False
+    frame_map_no_clean = export_labeled_frames(
+        labels_with_empty,
+        output_dir=tmp_path / "export_no_clean",
+        clean=False,
+    )
+    assert len(frame_map_no_clean.frames) == 3  # Includes empty frame
+
+    # Should exclude empty frame when clean=True (default)
+    frame_map_clean = export_labeled_frames(
+        labels_with_empty,
+        output_dir=tmp_path / "export_clean",
+        clean=True,
+    )
+    assert len(frame_map_clean.frames) == 2  # Excludes empty frame
+
+    # Test error handling - empty labels after cleaning
+    empty_labels = SleapLabels(
+        skeletons=limited_labels.skeletons,
+        videos=limited_labels.videos,
+        labeled_frames=[
+            sio.LabeledFrame(video=limited_labels.videos[0], frame_idx=0, instances=[])
+        ],
+    )
+
+    try:
+        export_labeled_frames(
+            empty_labels,
+            output_dir=tmp_path / "export_empty",
+            clean=True,
+        )
+        assert False, "Should have raised ValueError for empty labels"
+    except ValueError as e:
+        assert "No labeled frames found to export" in str(e)
 
 
 def test_pose_training_structure(slp_real_data):

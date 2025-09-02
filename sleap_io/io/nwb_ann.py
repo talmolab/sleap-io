@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import attrs
 import numpy as np
@@ -25,6 +25,7 @@ from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.utils import sanitize_filename
 from sleap_io.io.video_reading import ImageVideo, MediaVideo
+from sleap_io.io.video_writing import MJPEGFrameWriter
 
 
 def sanitize_nwb_name(name: str) -> str:
@@ -842,6 +843,7 @@ class FrameMap:
 
     Attributes:
         frame_map_filename: Path to the frame_map.json file.
+        sleap_labels_filename: Path to the SLEAP labels (.slp) file.
         nwb_filename: Path to the NWB file.
         mjpeg_filename: Path to the MJPEG video file.
         videos: List of Video objects representing the source videos.
@@ -850,6 +852,7 @@ class FrameMap:
     """
 
     frame_map_filename: Optional[str] = None
+    sleap_labels_filename: Optional[str] = None
     nwb_filename: Optional[str] = None
     mjpeg_filename: Optional[str] = None
     videos: List[SleapVideo] = attrs.field(factory=list)
@@ -886,21 +889,21 @@ class FrameMap:
 
         return cls(videos=videos, frames=frames)
 
-    def save(self, path: Union[str, Path]) -> None:
-        """Save the frame map to a JSON file.
+    def to_json(self) -> dict[str, Any]:
+        """Convert the FrameMap to a JSON-serializable dictionary.
 
-        Args:
-            path: Path to save the frame_map.json file.
+        Returns:
+            Dictionary representation of the FrameMap suitable for JSON serialization.
         """
-        path = Path(path)
-
-        # Prepare data for JSON serialization
-        json_data = {
-            "frame_map_filename": str(path),
-            "nwb_filename": str(self.nwb_filename) if self.nwb_filename else None,
-            "mjpeg_filename": str(self.mjpeg_filename) if self.mjpeg_filename else None,
+        return {
+            "frame_map_filename": self.frame_map_filename,
+            "nwb_filename": self.nwb_filename,
+            "mjpeg_filename": self.mjpeg_filename,
             "videos": [
-                {"filename": video.filename, "backend_metadata": video.backend_metadata}
+                {
+                    "filename": video.filename,
+                    "backend_metadata": video.backend_metadata,
+                }
                 for video in self.videos
             ],
             "frames": [
@@ -909,7 +912,21 @@ class FrameMap:
             ],
         }
 
-        with open(path, "w") as f:
+    def save(self, frame_map_filename: str | Path):
+        """Save the frame map to a JSON file.
+
+        Args:
+            frame_map_filename: Path to save the frame_map.json file.
+        """
+        # Update frame map filename with specified input.
+        frame_map_filename = Path(frame_map_filename)
+        self.frame_map_filename = sanitize_filename(frame_map_filename)
+
+        # Prepare data for JSON serialization.
+        json_data = self.to_json()
+
+        # Write to disk.
+        with open(self.frame_map_filename, "w") as f:
             json.dump(json_data, f, indent=2)
 
     @classmethod
@@ -956,3 +973,84 @@ class FrameMap:
             videos=videos,
             frames=frames,
         )
+
+
+def export_labeled_frames(
+    labels: SleapLabels,
+    output_dir: Path | str,
+    mjpeg_filename: str = "annotated_frames.avi",
+    frame_map_filename: str = "frame_map.json",
+    nwb_filename: str | Path | None = None,
+    clean: bool = True,
+) -> FrameMap:
+    """Export labeled frames to an MJPEG video with provenance tracking.
+
+    This function exports all labeled frames from a Labels object to a seekable
+    MJPEG video file, along with a JSON frame map that tracks the provenance of
+    each frame back to its original source video and frame index.
+
+    Args:
+        labels: Labels object containing labeled frames and videos to export.
+        output_dir: Directory path where MJPEG and frame map files will be saved.
+        mjpeg_filename: Name of the output MJPEG video file. Defaults to
+            "annotated_frames.avi".
+        frame_map_filename: Name of the frame map JSON file. Defaults to
+            "frame_map.json".
+        nwb_filename: Optional path to associated NWB file for cross-referencing.
+        clean: If True, remove empty frames and predictions before export using
+            Labels.clean(). Defaults to True.
+
+    Returns:
+        FrameMap object containing all metadata and mappings for the exported
+            video, including paths to output files and frame-to-video provenance.
+
+    Raises:
+        ValueError: If labels contain no labeled frames after cleaning.
+        OSError: If output directory cannot be created or files cannot be written.
+
+    Example:
+        ```python
+        labels = load_file("dataset.slp")
+        frame_map = export_labeled_frames(
+            labels,
+            output_dir="exports",
+            mjpeg_filename="training_data.avi",
+            nwb_filename="dataset.nwb"
+        )
+        print(f"Exported {len(frame_map.frames)} frames to {frame_map.mjpeg_filename}")
+        ```
+    """
+    # Convert paths to Path objects and create output directory
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build full paths for output files
+    mjpeg_path = output_dir / mjpeg_filename
+    frame_map_path = output_dir / frame_map_filename
+
+    # Clean labels if requested to remove empty frames and predictions
+    if clean:
+        labels.clean()
+
+    # Check that we have frames to export after cleaning
+    if len(labels.labeled_frames) == 0:
+        raise ValueError("No labeled frames found to export (labels may be empty)")
+
+    # Build FrameMap from labels and set metadata
+    frame_map = FrameMap.from_labels(labels)
+    frame_map.mjpeg_filename = sanitize_filename(mjpeg_path)
+    frame_map.frame_map_filename = sanitize_filename(frame_map_path)
+    if nwb_filename is not None:
+        frame_map.nwb_filename = sanitize_filename(nwb_filename)
+
+    # Export frames to MJPEG using MJPEGFrameWriter
+    with MJPEGFrameWriter(mjpeg_path) as writer:
+        for lf in labels.labeled_frames:
+            # Get frame data from the video at the specified frame index
+            frame_data = lf.video[lf.frame_idx]
+            writer.write_frame(frame_data)
+
+    # Save the frame map JSON alongside the MJPEG file
+    frame_map.save(frame_map_path)
+
+    return frame_map
