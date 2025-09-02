@@ -5,19 +5,29 @@ from __future__ import annotations
 import numpy as np
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
+from ndx_pose import Skeletons as NwbSkeletons
 
 import sleap_io as sio
 from sleap_io import Instance as SleapInstance
+from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.nwb_ann import (
+    create_nwb_to_slp_skeleton_map,
+    create_nwb_to_slp_video_map,
+    create_slp_to_nwb_skeleton_map,
+    create_slp_to_nwb_video_map,
     nwb_image_series_to_sleap_video,
+    nwb_pose_training_to_sleap_labels,
     nwb_skeleton_instance_to_sleap_instance,
     nwb_skeleton_to_sleap_skeleton,
     nwb_source_videos_to_sleap_videos,
     nwb_training_frame_to_sleap_labeled_frame,
+    nwb_training_frames_to_sleap_labeled_frames,
     sleap_instance_to_nwb_skeleton_instance,
     sleap_labeled_frame_to_nwb_training_frame,
+    sleap_labeled_frames_to_nwb_training_frames,
+    sleap_labels_to_nwb_pose_training,
     sleap_skeleton_to_nwb_skeleton,
     sleap_video_to_nwb_image_series,
     sleap_videos_to_nwb_source_videos,
@@ -441,8 +451,10 @@ def test_training_frame_roundtrip(slp_real_data):
     labels = sio.load_slp(slp_real_data)
     labeled_frame = labels.labeled_frames[0]
 
-    # Convert skeleton to NWB
-    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(labels.skeleton)
+    # Convert skeleton to NWB and create mapping
+    nwb_skeleton_list = [sleap_skeleton_to_nwb_skeleton(skeleton) for skeleton in labels.skeletons]
+    nwb_skeletons = NwbSkeletons(name="Skeletons", skeletons=nwb_skeleton_list)
+    slp_to_nwb_skeleton_map = create_slp_to_nwb_skeleton_map(labels.skeletons, nwb_skeletons)
 
     # Convert video to ImageSeries
     source_video = sleap_video_to_nwb_image_series(
@@ -452,15 +464,16 @@ def test_training_frame_roundtrip(slp_real_data):
     # Convert to NWB TrainingFrame
     nwb_training_frame = sleap_labeled_frame_to_nwb_training_frame(
         labeled_frame,
-        nwb_skeleton,
+        slp_to_nwb_skeleton_map=slp_to_nwb_skeleton_map,
         source_video=source_video,
         name="test_frame",
         annotator="test_annotator",
     )
 
     # Convert back to sleap-io
+    nwb_to_slp_skeleton_map = create_nwb_to_slp_skeleton_map(nwb_skeletons, labels.skeletons)
     recovered_frame = nwb_training_frame_to_sleap_labeled_frame(
-        nwb_training_frame, labels.skeleton, labeled_frame.video
+        nwb_training_frame, nwb_to_slp_skeleton_map, labeled_frame.video
     )
 
     # Check frame properties
@@ -477,3 +490,168 @@ def test_training_frame_roundtrip(slp_real_data):
             recovered_inst.numpy(invisible_as_nan=True),
             err_msg="Instance points should match",
         )
+
+
+def test_training_frames_roundtrip(slp_real_data):
+    """Test TrainingFrames roundtrip conversion."""
+    # Get labeled frames
+    labels = sio.load_slp(slp_real_data)
+    labeled_frames = labels.labeled_frames[:3]  # Use first 3 frames
+
+    # Convert skeleton to NWB and create containers
+    nwb_skeleton_list = [sleap_skeleton_to_nwb_skeleton(skeleton) for skeleton in labels.skeletons]
+    nwb_skeletons = NwbSkeletons(skeletons=nwb_skeleton_list)
+
+    # Create source videos container
+    source_videos = sleap_videos_to_nwb_source_videos(labels.videos)
+
+    # Create mappings
+    slp_to_nwb_video_map = create_slp_to_nwb_video_map(labels.videos, source_videos)
+    nwb_to_slp_video_map = create_nwb_to_slp_video_map(
+        list(source_videos.image_series.values()), labels.videos
+    )
+    slp_to_nwb_skeleton_map = create_slp_to_nwb_skeleton_map(labels.skeletons, nwb_skeletons)
+    nwb_to_slp_skeleton_map = create_nwb_to_slp_skeleton_map(nwb_skeletons, labels.skeletons)
+
+    # Convert to NWB TrainingFrames
+    nwb_training_frames = sleap_labeled_frames_to_nwb_training_frames(
+        labeled_frames,
+        slp_to_nwb_skeleton_map=slp_to_nwb_skeleton_map,
+        slp_to_nwb_video_map=slp_to_nwb_video_map,
+        name="test_frames",
+        annotator="test_annotator",
+    )
+
+    # Convert back to sleap-io
+    recovered_frames = nwb_training_frames_to_sleap_labeled_frames(
+        nwb_training_frames, nwb_to_slp_skeleton_map, nwb_to_slp_video_map
+    )
+
+    # Check frame count
+    assert len(recovered_frames) == len(labeled_frames)
+
+    # Check each frame
+    for orig_frame, recovered_frame in zip(labeled_frames, recovered_frames):
+        assert recovered_frame.frame_idx == orig_frame.frame_idx
+        assert len(recovered_frame.instances) == len(orig_frame.instances)
+        assert str(recovered_frame.video.filename) == str(orig_frame.video.filename)
+
+        # Check instance data
+        for orig_inst, recovered_inst in zip(
+            orig_frame.instances, recovered_frame.instances
+        ):
+            np.testing.assert_array_equal(
+                orig_inst.numpy(invisible_as_nan=True),
+                recovered_inst.numpy(invisible_as_nan=True),
+                err_msg="Instance points should match",
+            )
+
+
+def test_pose_training_roundtrip(slp_real_data):
+    """Test PoseTraining roundtrip conversion."""
+    # Load original labels
+    original_labels = sio.load_slp(slp_real_data)
+
+    # Use first few frames to keep test manageable
+    limited_labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=original_labels.labeled_frames[:3],
+    )
+
+    # Convert to NWB PoseTraining
+    nwb_pose_training, nwb_skeletons = sleap_labels_to_nwb_pose_training(
+        limited_labels, name="test_pose_training", annotator="test_annotator"
+    )
+
+    # Convert back to sleap-io Labels
+    recovered_labels = nwb_pose_training_to_sleap_labels(nwb_pose_training, nwb_skeletons)
+
+    # Check skeletons
+    assert len(recovered_labels.skeletons) == len(limited_labels.skeletons)
+    for orig_skeleton, recovered_skeleton in zip(limited_labels.skeletons, recovered_labels.skeletons):
+        assert recovered_skeleton.node_names == orig_skeleton.node_names
+        assert recovered_skeleton.edge_inds == orig_skeleton.edge_inds
+        assert recovered_skeleton.name == orig_skeleton.name
+
+    # Check videos
+    assert len(recovered_labels.videos) == len(limited_labels.videos)
+    for orig_video, recovered_video in zip(
+        limited_labels.videos, recovered_labels.videos
+    ):
+        assert str(recovered_video.filename) == str(orig_video.filename)
+        assert recovered_video.shape == orig_video.shape
+
+    # Check labeled frames
+    assert len(recovered_labels.labeled_frames) == len(limited_labels.labeled_frames)
+
+    for orig_frame, recovered_frame in zip(
+        limited_labels.labeled_frames, recovered_labels.labeled_frames
+    ):
+        assert recovered_frame.frame_idx == orig_frame.frame_idx
+        assert len(recovered_frame.instances) == len(orig_frame.instances)
+        assert str(recovered_frame.video.filename) == str(orig_frame.video.filename)
+
+        # Check instance data
+        for orig_inst, recovered_inst in zip(
+            orig_frame.instances, recovered_frame.instances
+        ):
+            np.testing.assert_array_equal(
+                orig_inst.numpy(invisible_as_nan=True),
+                recovered_inst.numpy(invisible_as_nan=True),
+                err_msg="Instance points should match",
+            )
+
+
+def test_pose_training_structure(slp_real_data):
+    """Test that PoseTraining has the expected structure."""
+    # Load labels and convert
+    labels = sio.load_slp(slp_real_data)
+    limited_labels = SleapLabels(
+        skeletons=labels.skeletons,
+        videos=labels.videos,
+        labeled_frames=labels.labeled_frames[:2],
+    )
+
+    nwb_pose_training, nwb_skeletons = sleap_labels_to_nwb_pose_training(
+        limited_labels, name="test_structure"
+    )
+
+    # Check that PoseTraining has the expected components
+    assert nwb_pose_training.name == "test_structure"
+    assert hasattr(nwb_pose_training, "training_frames")
+    assert hasattr(nwb_pose_training, "source_videos")
+
+    # Check training frames structure
+    assert len(nwb_pose_training.training_frames.training_frames) == 2
+
+    # Check source videos structure
+    assert len(nwb_pose_training.source_videos.image_series) == len(labels.videos)
+
+    # Check that each training frame has a source video reference
+    for training_frame in nwb_pose_training.training_frames.training_frames.values():
+        assert training_frame.source_video is not None
+        assert (
+            training_frame.source_video
+            in nwb_pose_training.source_videos.image_series.values()
+        )
+
+
+def test_pose_training_with_annotator(slp_real_data):
+    """Test PoseTraining conversion with annotator information."""
+    labels = sio.load_slp(slp_real_data)
+    limited_labels = SleapLabels(
+        skeletons=labels.skeletons,
+        videos=labels.videos,
+        labeled_frames=labels.labeled_frames[:1],
+    )
+
+    nwb_pose_training, nwb_skeletons = sleap_labels_to_nwb_pose_training(
+        limited_labels, name="annotated_data", annotator="expert_annotator"
+    )
+
+    # Check that annotator information is preserved
+    training_frame = next(
+        iter(nwb_pose_training.training_frames.training_frames.values())
+    )
+    assert training_frame.annotator == "expert_annotator"

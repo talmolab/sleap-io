@@ -3,15 +3,19 @@
 from pathlib import Path
 
 import numpy as np
+from ndx_pose import PoseTraining as NwbPoseTraining
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
 from ndx_pose import SkeletonInstances as NwbSkeletonInstances
+from ndx_pose import Skeletons as NwbSkeletons
 from ndx_pose import SourceVideos as NwbSourceVideos
 from ndx_pose import TrainingFrame as NwbTrainingFrame
+from ndx_pose import TrainingFrames as NwbTrainingFrames
 from pynwb.image import ImageSeries
 
 from sleap_io import Instance as SleapInstance
 from sleap_io import LabeledFrame as SleapLabeledFrame
+from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.utils import sanitize_filename
@@ -290,9 +294,140 @@ def nwb_source_videos_to_sleap_videos(
     return sleap_videos
 
 
+def create_slp_to_nwb_video_map(
+    sleap_videos: list[SleapVideo],
+    nwb_source_videos: NwbSourceVideos,
+) -> dict[SleapVideo, ImageSeries]:
+    """Create mapping from sleap-io Videos to NWB ImageSeries.
+
+    Args:
+        sleap_videos: List of sleap-io Video objects.
+        nwb_source_videos: NWB SourceVideos container with ImageSeries.
+
+    Returns:
+        Dictionary mapping each sleap-io Video to its corresponding ImageSeries.
+
+    Raises:
+        ValueError: If the number of videos doesn't match or mapping fails.
+    """
+    if len(sleap_videos) != len(nwb_source_videos.image_series):
+        raise ValueError(
+            f"Number of sleap videos ({len(sleap_videos)}) does not match "
+            f"number of NWB ImageSeries ({len(nwb_source_videos.image_series)})"
+        )
+
+    # Create mapping based on order (assuming videos were created with
+    # sleap_videos_to_nwb_source_videos)
+    video_map = {}
+    for i, sleap_video in enumerate(sleap_videos):
+        video_name = f"video_{i}"
+        if video_name in nwb_source_videos.image_series:
+            video_map[sleap_video] = nwb_source_videos.image_series[video_name]
+        else:
+            raise ValueError(
+                f"Could not find ImageSeries with name '{video_name}' in SourceVideos"
+            )
+
+    return video_map
+
+
+def create_nwb_to_slp_video_map(
+    nwb_image_series: list[ImageSeries],
+    sleap_videos: list[SleapVideo],
+) -> dict[ImageSeries, SleapVideo]:
+    """Create mapping from NWB ImageSeries to sleap-io Videos.
+
+    Args:
+        nwb_image_series: List of NWB ImageSeries objects.
+        sleap_videos: List of sleap-io Video objects.
+
+    Returns:
+        Dictionary mapping each ImageSeries to its corresponding sleap-io Video.
+
+    Raises:
+        ValueError: If the number of videos doesn't match or mapping fails.
+    """
+    if len(nwb_image_series) != len(sleap_videos):
+        raise ValueError(
+            f"Number of NWB ImageSeries ({len(nwb_image_series)}) does not match "
+            f"number of sleap videos ({len(sleap_videos)})"
+        )
+
+    # Create mapping based on order (assuming consistent ordering)
+    video_map = {}
+    for image_series, sleap_video in zip(nwb_image_series, sleap_videos):
+        video_map[image_series] = sleap_video
+
+    return video_map
+
+
+def create_slp_to_nwb_skeleton_map(
+    sleap_skeletons: list[SleapSkeleton],
+    nwb_skeletons: NwbSkeletons,
+) -> dict[SleapSkeleton, NwbSkeleton]:
+    """Create mapping from sleap-io Skeletons to NWB Skeletons.
+
+    Args:
+        sleap_skeletons: List of sleap-io Skeleton objects.
+        nwb_skeletons: NWB Skeletons container with Skeleton objects.
+
+    Returns:
+        Dictionary mapping each sleap-io Skeleton to its corresponding NWB Skeleton.
+
+    Raises:
+        ValueError: If the number of skeletons doesn't match or mapping fails.
+    """
+    nwb_skeleton_list = list(nwb_skeletons.skeletons.values())
+    
+    if len(sleap_skeletons) != len(nwb_skeleton_list):
+        raise ValueError(
+            f"Number of sleap skeletons ({len(sleap_skeletons)}) does not match "
+            f"number of NWB Skeletons ({len(nwb_skeleton_list)})"
+        )
+
+    # Create mapping based on order (assuming skeletons were created consistently)
+    skeleton_map = {}
+    for sleap_skeleton, nwb_skeleton in zip(sleap_skeletons, nwb_skeleton_list):
+        skeleton_map[sleap_skeleton] = nwb_skeleton
+
+    return skeleton_map
+
+
+def create_nwb_to_slp_skeleton_map(
+    nwb_skeletons: NwbSkeletons,
+    sleap_skeletons: list[SleapSkeleton],
+) -> dict[NwbSkeleton, SleapSkeleton]:
+    """Create mapping from NWB Skeletons to sleap-io Skeletons.
+
+    Args:
+        nwb_skeletons: NWB Skeletons container with Skeleton objects.
+        sleap_skeletons: List of sleap-io Skeleton objects.
+
+    Returns:
+        Dictionary mapping each NWB Skeleton to its corresponding sleap-io Skeleton.
+
+    Raises:
+        ValueError: If the number of skeletons doesn't match or mapping fails.
+    """
+    nwb_skeleton_list = list(nwb_skeletons.skeletons.values())
+    
+    if len(nwb_skeleton_list) != len(sleap_skeletons):
+        raise ValueError(
+            f"Number of NWB Skeletons ({len(nwb_skeleton_list)}) does not match "
+            f"number of sleap skeletons ({len(sleap_skeletons)})"
+        )
+
+    # Create mapping based on order (assuming consistent ordering)
+    skeleton_map = {}
+    for nwb_skeleton, sleap_skeleton in zip(nwb_skeleton_list, sleap_skeletons):
+        skeleton_map[nwb_skeleton] = sleap_skeleton
+
+    return skeleton_map
+
+
 def sleap_labeled_frame_to_nwb_training_frame(
     sleap_labeled_frame: SleapLabeledFrame,
-    nwb_skeleton: NwbSkeleton,
+    slp_to_nwb_skeleton_map: dict[SleapSkeleton, NwbSkeleton],
     source_video: ImageSeries | None = None,
     name: str = "training_frame",
     annotator: str | None = None,
@@ -301,7 +436,7 @@ def sleap_labeled_frame_to_nwb_training_frame(
 
     Args:
         sleap_labeled_frame: The sleap-io LabeledFrame object to convert.
-        nwb_skeleton: The ndx-pose Skeleton object to associate with instances.
+        slp_to_nwb_skeleton_map: Mapping from sleap-io Skeletons to NWB Skeletons.
         source_video: Optional ImageSeries representing the source video.
         name: String identifier for the TrainingFrame.
         annotator: Optional name of annotator who labeled the frame.
@@ -313,6 +448,10 @@ def sleap_labeled_frame_to_nwb_training_frame(
     nwb_instances = []
     for i, sleap_instance in enumerate(sleap_labeled_frame.instances):
         instance_name = f"instance_{i}"
+
+        # Get the appropriate NWB skeleton for this instance
+        nwb_skeleton = slp_to_nwb_skeleton_map[sleap_instance.skeleton]
+
         nwb_instance = sleap_instance_to_nwb_skeleton_instance(
             sleap_instance, nwb_skeleton, name=instance_name, id=i
         )
@@ -344,14 +483,14 @@ def sleap_labeled_frame_to_nwb_training_frame(
 
 def nwb_training_frame_to_sleap_labeled_frame(
     nwb_training_frame: NwbTrainingFrame,
-    sleap_skeleton: SleapSkeleton,
+    nwb_to_slp_skeleton_map: dict[NwbSkeleton, SleapSkeleton],
     sleap_video: SleapVideo,
 ) -> SleapLabeledFrame:
     """Convert an ndx-pose TrainingFrame to sleap-io LabeledFrame.
 
     Args:
         nwb_training_frame: The ndx-pose TrainingFrame object to convert.
-        sleap_skeleton: The sleap-io Skeleton to associate with instances.
+        nwb_to_slp_skeleton_map: Required mapping from NWB Skeletons to sleap-io Skeletons.
         sleap_video: The sleap-io Video to associate with the frame.
 
     Returns:
@@ -362,6 +501,9 @@ def nwb_training_frame_to_sleap_labeled_frame(
     for (
         nwb_instance
     ) in nwb_training_frame.skeleton_instances.skeleton_instances.values():
+        # Get the appropriate sleap skeleton for this instance
+        sleap_skeleton = nwb_to_slp_skeleton_map[nwb_instance.skeleton]
+
         sleap_instance = nwb_skeleton_instance_to_sleap_instance(
             nwb_instance, sleap_skeleton
         )
@@ -376,4 +518,204 @@ def nwb_training_frame_to_sleap_labeled_frame(
 
     return SleapLabeledFrame(
         video=sleap_video, frame_idx=frame_idx, instances=sleap_instances
+    )
+
+
+def sleap_labeled_frames_to_nwb_training_frames(
+    sleap_labeled_frames: list[SleapLabeledFrame],
+    slp_to_nwb_skeleton_map: dict[SleapSkeleton, NwbSkeleton],
+    slp_to_nwb_video_map: dict[SleapVideo, ImageSeries],
+    name: str = "TrainingFrames",
+    annotator: str | None = None,
+) -> NwbTrainingFrames:
+    """Convert a list of sleap-io LabeledFrames to ndx-pose TrainingFrames container.
+
+    Args:
+        sleap_labeled_frames: List of sleap-io LabeledFrame objects to convert.
+        slp_to_nwb_skeleton_map: Required mapping from sleap-io Skeletons to NWB Skeletons.
+        slp_to_nwb_video_map: Required mapping from sleap-io Videos to ImageSeries.
+        name: String identifier for the TrainingFrames container.
+        annotator: Optional name of annotator who labeled the frames.
+
+    Returns:
+        An ndx-pose TrainingFrames container with TrainingFrame objects.
+    """
+    nwb_training_frames = []
+
+    for frame_ind, sleap_labeled_frame in enumerate(sleap_labeled_frames):
+        frame_name = f"frame_{frame_ind}"
+
+        # Get corresponding source video from the mapping
+        source_video = slp_to_nwb_video_map[sleap_labeled_frame.video]
+
+        nwb_training_frame = sleap_labeled_frame_to_nwb_training_frame(
+            sleap_labeled_frame,
+            slp_to_nwb_skeleton_map=slp_to_nwb_skeleton_map,
+            source_video=source_video,
+            name=frame_name,
+            annotator=annotator,
+        )
+        nwb_training_frames.append(nwb_training_frame)
+
+    return NwbTrainingFrames(name=name, training_frames=nwb_training_frames)
+
+
+def nwb_training_frames_to_sleap_labeled_frames(
+    nwb_training_frames: NwbTrainingFrames,
+    nwb_to_slp_skeleton_map: dict[NwbSkeleton, SleapSkeleton],
+    nwb_to_slp_video_map: dict[ImageSeries, SleapVideo],
+) -> list[SleapLabeledFrame]:
+    """Convert ndx-pose TrainingFrames to a list of sleap-io LabeledFrames.
+
+    Args:
+        nwb_training_frames: The ndx-pose TrainingFrames container to convert.
+        nwb_to_slp_skeleton_map: Required mapping from NWB Skeletons to sleap-io Skeletons.
+        nwb_to_slp_video_map: Required mapping from ImageSeries to sleap-io Videos.
+
+    Returns:
+        A list of sleap-io LabeledFrame objects with equivalent data.
+
+    Raises:
+        ValueError: If a TrainingFrame's source_video is None.
+        KeyError: If a TrainingFrame's source_video is not found in the mapping.
+    """
+    sleap_labeled_frames = []
+
+    for nwb_training_frame in nwb_training_frames.training_frames.values():
+        # Get corresponding sleap video using the required mapping
+        if nwb_training_frame.source_video is None:
+            raise ValueError(
+                "TrainingFrame must have a source_video to convert to sleap-io LabeledFrame"
+            )
+
+        sleap_video = nwb_to_slp_video_map[nwb_training_frame.source_video]
+
+        sleap_labeled_frame = nwb_training_frame_to_sleap_labeled_frame(
+            nwb_training_frame, nwb_to_slp_skeleton_map, sleap_video
+        )
+        sleap_labeled_frames.append(sleap_labeled_frame)
+
+    return sleap_labeled_frames
+
+
+def sleap_labels_to_nwb_pose_training(
+    sleap_labels: SleapLabels,
+    name: str = "PoseTraining",
+    annotator: str | None = None,
+) -> tuple[NwbPoseTraining, NwbSkeletons]:
+    """Convert sleap-io Labels to ndx-pose PoseTraining container and Skeletons.
+
+    Args:
+        sleap_labels: The sleap-io Labels object to convert.
+        name: String identifier for the PoseTraining container.
+        annotator: Optional name of annotator who labeled the data.
+
+    Returns:
+        A tuple containing:
+        - An ndx-pose PoseTraining container with training frames and source videos
+        - An ndx-pose Skeletons container with all skeletons
+
+    Raises:
+        ValueError: If any video backend is not supported for NWB export.
+    """
+    # Convert all skeletons
+    nwb_skeleton_list = []
+    for i, sleap_skeleton in enumerate(sleap_labels.skeletons):
+        # Ensure skeleton will have a unique name
+        skeleton_name = sleap_skeleton.name if sleap_skeleton.name else f"skeleton_{i}"
+        if skeleton_name == "skeleton":  # Default name, make it unique
+            skeleton_name = f"skeleton_{i}"
+        
+        # Create temporary skeleton with the desired name
+        temp_skeleton = sleap_skeleton_to_nwb_skeleton(sleap_skeleton)
+        # Create new skeleton with proper name
+        nwb_skeleton = NwbSkeleton(
+            name=skeleton_name,
+            nodes=temp_skeleton.nodes,
+            edges=temp_skeleton.edges
+        )
+        nwb_skeleton_list.append(nwb_skeleton)
+
+    # Create NwbSkeletons container
+    nwb_skeletons = NwbSkeletons(name="Skeletons", skeletons=nwb_skeleton_list)
+
+    # Convert videos to source videos container
+    source_videos = sleap_videos_to_nwb_source_videos(sleap_labels.videos, name="source_videos")
+
+    # Create video mapping
+    slp_to_nwb_video_map = create_slp_to_nwb_video_map(
+        sleap_labels.videos, source_videos
+    )
+
+    # Create skeleton mapping
+    slp_to_nwb_skeleton_map = create_slp_to_nwb_skeleton_map(
+        sleap_labels.skeletons, nwb_skeletons
+    )
+
+    # Convert labeled frames to training frames
+    training_frames = sleap_labeled_frames_to_nwb_training_frames(
+        sleap_labels.labeled_frames,
+        slp_to_nwb_skeleton_map=slp_to_nwb_skeleton_map,
+        slp_to_nwb_video_map=slp_to_nwb_video_map,
+        name="training_frames",  # Must be named this for PoseTraining
+        annotator=annotator,
+    )
+
+    pose_training = NwbPoseTraining(
+        name=name,
+        training_frames=training_frames,
+        source_videos=source_videos,
+    )
+
+    return pose_training, nwb_skeletons
+
+
+def nwb_pose_training_to_sleap_labels(
+    nwb_pose_training: NwbPoseTraining,
+    nwb_skeletons: NwbSkeletons,
+) -> SleapLabels:
+    """Convert ndx-pose PoseTraining and Skeletons to sleap-io Labels.
+
+    Args:
+        nwb_pose_training: The ndx-pose PoseTraining container to convert.
+        nwb_skeletons: The ndx-pose Skeletons container with skeleton definitions.
+
+    Returns:
+        A sleap-io Labels object with equivalent data.
+
+    Raises:
+        ValueError: If any ImageSeries format is not supported.
+        KeyError: If video or skeleton mapping fails.
+    """
+    # Convert source videos back to sleap videos
+    sleap_videos = nwb_source_videos_to_sleap_videos(nwb_pose_training.source_videos)
+
+    # Convert all skeletons from NwbSkeletons container
+    sleap_skeletons = [
+        nwb_skeleton_to_sleap_skeleton(nwb_skeleton)
+        for nwb_skeleton in nwb_skeletons.skeletons.values()
+    ]
+
+    # Create video mapping for conversion back
+    nwb_to_slp_video_map = create_nwb_to_slp_video_map(
+        list(nwb_pose_training.source_videos.image_series.values()), sleap_videos
+    )
+
+    # Create skeleton mapping for conversion back
+    nwb_to_slp_skeleton_map = create_nwb_to_slp_skeleton_map(
+        nwb_skeletons,
+        sleap_skeletons,
+    )
+
+    # Convert training frames back to labeled frames
+    labeled_frames = nwb_training_frames_to_sleap_labeled_frames(
+        nwb_pose_training.training_frames,
+        nwb_to_slp_skeleton_map,
+        nwb_to_slp_video_map,
+    )
+
+    return SleapLabels(
+        skeletons=sleap_skeletons,
+        videos=sleap_videos,
+        labeled_frames=labeled_frames,
     )
