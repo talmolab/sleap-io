@@ -9,7 +9,6 @@ from typing import List, Optional, Type
 import attrs
 import imageio
 import imageio.v2 as iio_v2
-import imageio_ffmpeg
 import numpy as np
 
 

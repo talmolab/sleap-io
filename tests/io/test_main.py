@@ -32,13 +32,13 @@ def test_nwb(tmp_path, slp_typical, slp_real_data):
     loaded_labels = load_nwb(tmp_path / "test_nwb_pred.nwb")
     assert type(loaded_labels) is Labels
     assert type(load_file(tmp_path / "test_nwb_pred.nwb")) is Labels
-    
+
     # Test with annotations (slp_real_data has user instances)
     labels_ann = load_slp(slp_real_data)
     save_nwb(labels_ann, tmp_path / "test_nwb_ann.nwb")
     loaded_labels = load_nwb(tmp_path / "test_nwb_ann.nwb")
     assert type(loaded_labels) is Labels
-    
+
     # Test overwriting (no append)
     save_nwb(labels_pred, tmp_path / "test_nwb_pred.nwb")  # Overwrites
     loaded_labels = load_nwb(tmp_path / "test_nwb_pred.nwb")
