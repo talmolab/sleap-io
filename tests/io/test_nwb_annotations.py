@@ -13,7 +13,7 @@ from sleap_io import Instance as SleapInstance
 from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
-from sleap_io.io.nwb_ann import (
+from sleap_io.io.nwb_annotations import (
     FrameMap,
     create_nwb_to_slp_skeleton_map,
     create_nwb_to_slp_video_map,

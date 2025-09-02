@@ -97,24 +97,17 @@ def load_nwb(filename: str) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
-    return nwb.read_nwb(filename)
+    return nwb.load_nwb(filename)
 
 
-def save_nwb(labels: Labels, filename: str, append: bool = True):
+def save_nwb(labels: Labels, filename: str):
     """Save a SLEAP dataset to NWB format.
 
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to NWB file to save to. Must end in `.nwb`.
-        append: If `True` (the default), append to existing NWB file. File will be
-            created if it does not exist.
-
-    See also: nwb.write_nwb, nwb.append_nwb
     """
-    if append and Path(filename).exists():
-        nwb.append_nwb(labels, filename)
-    else:
-        nwb.write_nwb(labels, filename)
+    nwb.save_nwb(labels, filename)
 
 
 def load_labelstudio(

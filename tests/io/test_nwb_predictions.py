@@ -8,7 +8,7 @@ import pytest
 from pynwb import NWBHDF5IO, NWBFile
 
 from sleap_io import load_slp
-from sleap_io.io.nwb import append_nwb_data, get_timestamps, write_nwb
+from sleap_io.io.nwb_predictions import append_nwb_data, get_timestamps, write_nwb
 
 
 @pytest.fixture
