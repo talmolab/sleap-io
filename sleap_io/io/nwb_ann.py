@@ -1,5 +1,6 @@
 """NWB formatted annotations."""
 
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional, Union
@@ -977,11 +978,9 @@ class FrameMap:
 
 def export_labeled_frames(
     labels: SleapLabels,
-    output_dir: Path | str,
-    mjpeg_filename: str = "annotated_frames.avi",
-    frame_map_filename: str = "frame_map.json",
-    nwb_filename: str | Path | None = None,
-    clean: bool = True,
+    frame_map_path: Union[str, Path],
+    mjpeg_path: Union[str, Path],
+    nwb_path: Optional[Union[str, Path]] = None,
 ) -> FrameMap:
     """Export labeled frames to an MJPEG video with provenance tracking.
 
@@ -991,58 +990,37 @@ def export_labeled_frames(
 
     Args:
         labels: Labels object containing labeled frames and videos to export.
-        output_dir: Directory path where MJPEG and frame map files will be saved.
-        mjpeg_filename: Name of the output MJPEG video file. Defaults to
-            "annotated_frames.avi".
-        frame_map_filename: Name of the frame map JSON file. Defaults to
-            "frame_map.json".
-        nwb_filename: Optional path to associated NWB file for cross-referencing.
-        clean: If True, remove empty frames and predictions before export using
-            `Labels.remove_predictions(clean=True)`. Defaults to True.
+        frame_map_path: Path where the frame map JSON file will be saved.
+        mjpeg_path: Path where the output MJPEG video file will be saved.
+        nwb_path: Optional path to associated NWB file for cross-referencing.
 
     Returns:
         FrameMap object containing all metadata and mappings for the exported
-            video, including paths to output files and frame-to-video provenance.
+        video, including paths to output files and frame-to-video provenance.
 
     Raises:
-        ValueError: If labels contain no labeled frames after cleaning.
-        OSError: If output directory cannot be created or files cannot be written.
+        ValueError: If labels contain no labeled frames.
+        OSError: If output files cannot be written.
 
     Example:
         ```python
         labels = load_file("dataset.slp")
         frame_map = export_labeled_frames(
             labels,
-            output_dir="exports",
-            mjpeg_filename="training_data.avi",
-            nwb_filename="dataset.nwb"
+            frame_map_path="exports/frame_map.json",
+            mjpeg_path="exports/training_data.avi",
+            nwb_path="exports/dataset.nwb"
         )
         print(f"Exported {len(frame_map.frames)} frames to {frame_map.mjpeg_filename}")
         ```
     """
-    # Convert paths to Path objects and create output directory
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Build full paths for output files
-    mjpeg_path = output_dir / mjpeg_filename
-    frame_map_path = output_dir / frame_map_filename
-
-    # Clean labels if requested to remove empty frames and predictions
-    if clean:
-        labels.remove_predictions(clean=True)
-
-    # Check that we have frames to export after cleaning
-    if len(labels.labeled_frames) == 0:
-        raise ValueError("No labeled frames found to export (labels may be empty). "
-                         "Try exporting with clean=False if you want to export empty frames.")
-
     # Build FrameMap from labels and set metadata
     frame_map = FrameMap.from_labels(labels)
     frame_map.mjpeg_filename = sanitize_filename(mjpeg_path)
     frame_map.frame_map_filename = sanitize_filename(frame_map_path)
-    if nwb_filename is not None:
-        frame_map.nwb_filename = sanitize_filename(nwb_filename)
+    frame_map.nwb_filename = (
+        sanitize_filename(nwb_path) if nwb_path is not None else None
+    )
 
     # Export frames to MJPEG using MJPEGFrameWriter
     with MJPEGFrameWriter(mjpeg_path) as writer:
@@ -1056,3 +1034,95 @@ def export_labeled_frames(
 
     return frame_map
 
+
+def export_labels(
+    labels: SleapLabels,
+    output_dir: Union[Path, str],
+    mjpeg_filename: str = "annotated_frames.avi",
+    frame_map_filename: str = "frame_map.json",
+    nwb_filename: str = "pose_training.nwb",
+    clean: bool = True,
+) -> None:
+    """Export Labels to NWB format with MJPEG video and frame map.
+
+    This function exports a Labels object to NWB format along with an MJPEG video
+    containing all labeled frames and a JSON frame map for provenance tracking.
+    The exported NWB file will reference the MJPEG video, allowing for efficient
+    storage and retrieval of training data.
+
+    Args:
+        labels: Labels object containing labeled frames to export.
+        output_dir: Directory path where all output files will be saved.
+        mjpeg_filename: Name of the output MJPEG video file.
+            Defaults to "annotated_frames.avi".
+        frame_map_filename: Name of the frame map JSON file.
+            Defaults to "frame_map.json".
+        nwb_filename: Name of the output NWB file.
+            Defaults to "pose_training.nwb".
+        clean: If True, remove empty frames and predictions before export using
+            `Labels.remove_predictions(clean=True)`. Defaults to True.
+
+    Raises:
+        ValueError: If labels contain no labeled frames after cleaning.
+
+    Example:
+        ```python
+        labels = load_file("dataset.slp")
+        export_labels(
+            labels,
+            output_dir="exports",
+            mjpeg_filename="training_data.avi",
+            nwb_filename="dataset.nwb"
+        )
+        ```
+
+    Notes:
+        The function creates a copy of the labels before processing to avoid
+        modifying the original data. All file paths are relative to the specified
+        output directory, which will be created if it doesn't exist.
+    """
+    # Make a copy of the labels since we'll be mutating them
+    labels = deepcopy(labels)
+
+    # Clean labels if requested to remove empty frames and predictions
+    if clean:
+        labels.remove_predictions(clean=True)
+
+    # Check that we have frames to export after cleaning
+    if len(labels.labeled_frames) == 0:
+        raise ValueError(
+            "No labeled frames found to export (labels may be empty). "
+            "Try exporting with clean=False if you want to export empty frames."
+        )
+
+    # Convert paths to Path objects and create output directory
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build full paths for output files
+    mjpeg_path = output_dir / mjpeg_filename
+    frame_map_path = output_dir / frame_map_filename
+    nwb_path = output_dir / nwb_filename
+
+    # Export labeled frames to MJPEG AVI file and create frame map
+    frame_map = export_labeled_frames(
+        labels, frame_map_path, mjpeg_path, nwb_path=nwb_path
+    )
+
+    # Update the labels to point to the new MJPEG video
+    mjpeg_video = SleapVideo.from_filename(mjpeg_path)
+    for lf_ind in range(len(labels)):
+        lf = labels[lf_ind]
+
+        # Sanity checks:
+        video_ind, frame_idx = labels.videos.index(lf.video), lf.frame_idx
+        frame_info = frame_map.frames[lf_ind]
+        assert video_ind == frame_info.video_ind
+        assert frame_idx == frame_info.frame_idx
+
+        lf.video = mjpeg_video
+        lf.frame_idx = lf_ind
+    labels.videos = [mjpeg_video]
+
+    # Now save the NWB file as normal
+    save_labels(labels, nwb_path)
