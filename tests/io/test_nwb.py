@@ -1,6 +1,5 @@
 """Tests for the NWB harmonization layer."""
 
-
 import h5py
 import pytest
 
