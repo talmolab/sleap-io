@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import numpy as np
+import simplejson as json
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
 from ndx_pose import Skeletons as NwbSkeletons
 
-import simplejson as json
 import sleap_io as sio
 from sleap_io import Instance as SleapInstance
 from sleap_io import Labels as SleapLabels
@@ -19,6 +19,9 @@ from sleap_io.io.nwb_ann import (
     create_nwb_to_slp_video_map,
     create_slp_to_nwb_skeleton_map,
     create_slp_to_nwb_video_map,
+    export_labeled_frames,
+    export_labels,
+    load_labels,
     nwb_image_series_to_sleap_video,
     nwb_pose_training_to_sleap_labels,
     nwb_skeleton_instance_to_sleap_instance,
@@ -26,6 +29,7 @@ from sleap_io.io.nwb_ann import (
     nwb_source_videos_to_sleap_videos,
     nwb_training_frame_to_sleap_labeled_frame,
     nwb_training_frames_to_sleap_labeled_frames,
+    save_labels,
     sleap_instance_to_nwb_skeleton_instance,
     sleap_labeled_frame_to_nwb_training_frame,
     sleap_labeled_frames_to_nwb_training_frames,
@@ -33,7 +37,6 @@ from sleap_io.io.nwb_ann import (
     sleap_skeleton_to_nwb_skeleton,
     sleap_video_to_nwb_image_series,
     sleap_videos_to_nwb_source_videos,
-    export_labeled_frames
 )
 
 
@@ -624,8 +627,6 @@ def test_pose_training_roundtrip(slp_real_data):
 
 def test_save_load_labels_roundtrip(slp_real_data, tmp_path):
     """Test save_labels and load_labels roundtrip."""
-    from sleap_io.io.nwb_ann import load_labels, save_labels
-
     # Load original labels
     original_labels = sio.load_slp(slp_real_data)
 
@@ -671,6 +672,7 @@ def test_save_load_labels_roundtrip(slp_real_data, tmp_path):
     assert len(recovered_labels_custom.labeled_frames) == len(
         limited_labels.labeled_frames
     )
+
 
 def test_pose_training_structure(slp_real_data):
     """Test that PoseTraining has the expected structure."""
@@ -726,10 +728,8 @@ def test_pose_training_with_annotator(slp_real_data):
     assert training_frame.annotator == "expert_annotator"
 
 
-
 def test_export_labeled_frames(slp_real_data, tmp_path):
     """Test export_labeled_frames function."""
-    
     # Load original labels
     original_labels = sio.load_slp(slp_real_data)
 
@@ -742,17 +742,18 @@ def test_export_labeled_frames(slp_real_data, tmp_path):
 
     # Test basic export
     export_dir = tmp_path / "export_test"
-    frame_map = export_labeled_frames(
-        limited_labels,
-        output_dir=export_dir,
-        mjpeg_filename="test_frames.avi",
-        frame_map_filename="test_frame_map.json",
-    )
+    export_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check that files were created
     mjpeg_path = export_dir / "test_frames.avi"
     frame_map_path = export_dir / "test_frame_map.json"
 
+    frame_map = export_labeled_frames(
+        limited_labels,
+        frame_map_path=frame_map_path,
+        mjpeg_path=mjpeg_path,
+    )
+
+    # Check that files were created
     assert mjpeg_path.exists()
     assert frame_map_path.exists()
 
@@ -779,16 +780,23 @@ def test_export_labeled_frames(slp_real_data, tmp_path):
     assert len(json_data["videos"]) == len(limited_labels.videos)
 
     # Test with NWB filename parameter
+    nwb_export_dir = tmp_path / "export_with_nwb"
+    nwb_export_dir.mkdir(parents=True, exist_ok=True)
+
     nwb_path = tmp_path / "test.nwb"
+    nwb_mjpeg_path = nwb_export_dir / "test_frames_nwb.avi"
+    nwb_frame_map_path = nwb_export_dir / "test_frame_map_nwb.json"
+
     frame_map_with_nwb = export_labeled_frames(
         limited_labels,
-        output_dir=tmp_path / "export_with_nwb",
-        nwb_filename=nwb_path,
+        frame_map_path=nwb_frame_map_path,
+        mjpeg_path=nwb_mjpeg_path,
+        nwb_path=nwb_path,
     )
 
     assert frame_map_with_nwb.nwb_filename == str(nwb_path)
 
-    # Test clean=False with empty labeled frames
+    # Test with labels containing empty frames
     labels_with_empty = SleapLabels(
         skeletons=limited_labels.skeletons,
         videos=limited_labels.videos,
@@ -798,23 +806,150 @@ def test_export_labeled_frames(slp_real_data, tmp_path):
         ],
     )
 
-    # Should include empty frame when clean=False
-    frame_map_no_clean = export_labeled_frames(
+    # Should export all frames (including empty ones)
+    empty_export_dir = tmp_path / "export_with_empty"
+    empty_export_dir.mkdir(parents=True, exist_ok=True)
+
+    empty_mjpeg_path = empty_export_dir / "test_frames_empty.avi"
+    empty_frame_map_path = empty_export_dir / "test_frame_map_empty.json"
+
+    frame_map_with_empty = export_labeled_frames(
         labels_with_empty,
-        output_dir=tmp_path / "export_no_clean",
+        frame_map_path=empty_frame_map_path,
+        mjpeg_path=empty_mjpeg_path,
+    )
+    assert len(frame_map_with_empty.frames) == 3  # Includes empty frame
+
+    # Test with completely empty labels (should create empty video and frame map)
+    empty_labels = SleapLabels(
+        skeletons=limited_labels.skeletons,
+        videos=limited_labels.videos,
+        labeled_frames=[],
+    )
+
+    error_export_dir = tmp_path / "export_empty"
+    error_export_dir.mkdir(parents=True, exist_ok=True)
+
+    empty_mjpeg_path = error_export_dir / "test_frames_empty.avi"
+    empty_frame_map_path = error_export_dir / "test_frame_map_empty.json"
+
+    frame_map_empty = export_labeled_frames(
+        empty_labels,
+        frame_map_path=empty_frame_map_path,
+        mjpeg_path=empty_mjpeg_path,
+    )
+    assert len(frame_map_empty.frames) == 0  # No frames
+
+
+def test_export_labels(slp_real_data, tmp_path):
+    """Test export_labels function."""
+    # Load original labels
+    original_labels = sio.load_slp(slp_real_data)
+
+    # Use first few frames to keep test manageable
+    limited_labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=original_labels.labeled_frames[:3],
+    )
+
+    # Test basic export
+    export_dir = tmp_path / "export_labels_test"
+
+    export_labels(
+        limited_labels,
+        output_dir=export_dir,
+        mjpeg_filename="annotated.avi",
+        frame_map_filename="map.json",
+        nwb_filename="training.nwb",
+        clean=False,  # Don't clean since we have no predictions
+    )
+
+    # Check that all files were created
+    assert (export_dir / "annotated.avi").exists()
+    assert (export_dir / "map.json").exists()
+    assert (export_dir / "training.nwb").exists()
+
+    # Load and verify the NWB file
+    loaded_labels = load_labels(export_dir / "training.nwb")
+
+    # Check that labels were correctly exported and loaded
+    assert len(loaded_labels.labeled_frames) == 3
+    assert len(loaded_labels.videos) == 1  # Should have single MJPEG video
+    assert loaded_labels.videos[0].filename == str(export_dir / "annotated.avi")
+
+    # Verify frame indices are updated to sequential
+    for i, lf in enumerate(loaded_labels.labeled_frames):
+        assert lf.frame_idx == i
+        assert lf.video == loaded_labels.videos[0]
+
+    # Test with custom filenames
+    export_dir2 = tmp_path / "export_custom"
+
+    export_labels(
+        limited_labels,
+        output_dir=export_dir2,
+        mjpeg_filename="custom_video.avi",
+        frame_map_filename="custom_map.json",
+        nwb_filename="custom_training.nwb",
         clean=False,
     )
-    assert len(frame_map_no_clean.frames) == 3  # Includes empty frame
 
-    # Should exclude empty frame when clean=True (default)
-    frame_map_clean = export_labeled_frames(
-        labels_with_empty,
-        output_dir=tmp_path / "export_clean",
-        clean=True,
+    assert (export_dir2 / "custom_video.avi").exists()
+    assert (export_dir2 / "custom_map.json").exists()
+    assert (export_dir2 / "custom_training.nwb").exists()
+
+    # The original labels already contain predictions, so use them directly
+
+    # Test with clean=True (should remove predictions from original data)
+    export_dir3 = tmp_path / "export_clean"
+
+    export_labels(
+        original_labels,  # Use original labels which have predictions
+        output_dir=export_dir3,
+        clean=True,  # Should remove predicted instances
     )
-    assert len(frame_map_clean.frames) == 2  # Excludes empty frame
 
-    # Test error handling - empty labels after cleaning
+    loaded_clean = load_labels(export_dir3 / "pose_training.nwb")
+
+    # Check that predictions were removed
+    # The clean=True flag should have removed predicted instances
+    assert len(loaded_clean.labeled_frames) > 0  # Should have some frames left
+
+    # Test with empty frames that should be removed when clean=True
+    labels_with_empty = SleapLabels(
+        skeletons=limited_labels.skeletons,
+        videos=limited_labels.videos,
+        labeled_frames=[
+            sio.LabeledFrame(video=limited_labels.videos[0], frame_idx=0, instances=[]),
+            *limited_labels.labeled_frames[:2],
+        ],
+    )
+
+    export_dir4 = tmp_path / "export_no_empty"
+
+    export_labels(
+        labels_with_empty,
+        output_dir=export_dir4,
+        clean=True,  # Should remove empty frames
+    )
+
+    loaded_no_empty = load_labels(export_dir4 / "pose_training.nwb")
+    assert len(loaded_no_empty.labeled_frames) == 2  # Empty frame removed
+
+    # Test with clean=False to keep empty frames
+    export_dir5 = tmp_path / "export_with_empty"
+
+    export_labels(
+        labels_with_empty,
+        output_dir=export_dir5,
+        clean=False,  # Should keep empty frames
+    )
+
+    loaded_with_empty = load_labels(export_dir5 / "pose_training.nwb")
+    assert len(loaded_with_empty.labeled_frames) == 3  # Empty frame kept
+
+    # Test error handling - completely empty labels after cleaning
     empty_labels = SleapLabels(
         skeletons=limited_labels.skeletons,
         videos=limited_labels.videos,
@@ -824,10 +959,10 @@ def test_export_labeled_frames(slp_real_data, tmp_path):
     )
 
     try:
-        export_labeled_frames(
+        export_labels(
             empty_labels,
-            output_dir=tmp_path / "export_empty",
-            clean=True,
+            output_dir=tmp_path / "export_error",
+            clean=True,  # Will result in no frames
         )
         assert False, "Should have raised ValueError for empty labels"
     except ValueError as e:

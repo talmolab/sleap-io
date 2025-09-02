@@ -134,8 +134,7 @@ class MJPEGFrameWriter:
         filename: Path to output MJPEG video file.
         fps: Nominal frames per second. Defaults to 30.
         quality: MJPEG quality level (2-31, lower is better). Defaults to 2.
-        frame_durations: Optional list of per-frame durations in seconds for VFR
-            encoding. If provided, must have one duration per frame written.
+
         output_params: Additional output parameters for FFMPEG.
 
     Notes:
@@ -151,7 +150,7 @@ class MJPEGFrameWriter:
     filename: Path = attrs.field(converter=Path)
     fps: float = 30
     quality: int = 2
-    frame_durations: Optional[List[float]] = None
+
     output_params: list[str] = attrs.field(factory=list)
     _writer: "imageio.plugins.ffmpeg.FfmpegFormat.Writer" | None = None
     _frame_index: int = 0
@@ -171,19 +170,6 @@ class MJPEGFrameWriter:
             "-color_range",
             "pc",
         ]
-
-        # Add VFR mode if frame durations are provided
-        # fps_mode option was added in ffmpeg 5.0, so check version
-        if self.frame_durations is not None:
-            try:
-                ffmpeg_version = imageio_ffmpeg.get_ffmpeg_version()
-                # Parse major version (e.g., "7.1" -> 7, "4.2.2" -> 4)
-                major_version = int(ffmpeg_version.split(".")[0])
-                if major_version >= 5:
-                    params.extend(["-fps_mode", "vfr"])
-            except (AttributeError, ValueError):
-                # If we can't determine version, skip the parameter
-                pass
 
         return params + self.output_params
 
