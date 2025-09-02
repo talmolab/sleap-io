@@ -452,9 +452,13 @@ def test_training_frame_roundtrip(slp_real_data):
     labeled_frame = labels.labeled_frames[0]
 
     # Convert skeleton to NWB and create mapping
-    nwb_skeleton_list = [sleap_skeleton_to_nwb_skeleton(skeleton) for skeleton in labels.skeletons]
+    nwb_skeleton_list = [
+        sleap_skeleton_to_nwb_skeleton(skeleton) for skeleton in labels.skeletons
+    ]
     nwb_skeletons = NwbSkeletons(name="Skeletons", skeletons=nwb_skeleton_list)
-    slp_to_nwb_skeleton_map = create_slp_to_nwb_skeleton_map(labels.skeletons, nwb_skeletons)
+    slp_to_nwb_skeleton_map = create_slp_to_nwb_skeleton_map(
+        labels.skeletons, nwb_skeletons
+    )
 
     # Convert video to ImageSeries
     source_video = sleap_video_to_nwb_image_series(
@@ -471,7 +475,9 @@ def test_training_frame_roundtrip(slp_real_data):
     )
 
     # Convert back to sleap-io
-    nwb_to_slp_skeleton_map = create_nwb_to_slp_skeleton_map(nwb_skeletons, labels.skeletons)
+    nwb_to_slp_skeleton_map = create_nwb_to_slp_skeleton_map(
+        nwb_skeletons, labels.skeletons
+    )
     recovered_frame = nwb_training_frame_to_sleap_labeled_frame(
         nwb_training_frame, nwb_to_slp_skeleton_map, labeled_frame.video
     )
@@ -499,7 +505,9 @@ def test_training_frames_roundtrip(slp_real_data):
     labeled_frames = labels.labeled_frames[:3]  # Use first 3 frames
 
     # Convert skeleton to NWB and create containers
-    nwb_skeleton_list = [sleap_skeleton_to_nwb_skeleton(skeleton) for skeleton in labels.skeletons]
+    nwb_skeleton_list = [
+        sleap_skeleton_to_nwb_skeleton(skeleton) for skeleton in labels.skeletons
+    ]
     nwb_skeletons = NwbSkeletons(skeletons=nwb_skeleton_list)
 
     # Create source videos container
@@ -510,8 +518,12 @@ def test_training_frames_roundtrip(slp_real_data):
     nwb_to_slp_video_map = create_nwb_to_slp_video_map(
         list(source_videos.image_series.values()), labels.videos
     )
-    slp_to_nwb_skeleton_map = create_slp_to_nwb_skeleton_map(labels.skeletons, nwb_skeletons)
-    nwb_to_slp_skeleton_map = create_nwb_to_slp_skeleton_map(nwb_skeletons, labels.skeletons)
+    slp_to_nwb_skeleton_map = create_slp_to_nwb_skeleton_map(
+        labels.skeletons, nwb_skeletons
+    )
+    nwb_to_slp_skeleton_map = create_nwb_to_slp_skeleton_map(
+        nwb_skeletons, labels.skeletons
+    )
 
     # Convert to NWB TrainingFrames
     nwb_training_frames = sleap_labeled_frames_to_nwb_training_frames(
@@ -565,11 +577,15 @@ def test_pose_training_roundtrip(slp_real_data):
     )
 
     # Convert back to sleap-io Labels
-    recovered_labels = nwb_pose_training_to_sleap_labels(nwb_pose_training, nwb_skeletons)
+    recovered_labels = nwb_pose_training_to_sleap_labels(
+        nwb_pose_training, nwb_skeletons
+    )
 
     # Check skeletons
     assert len(recovered_labels.skeletons) == len(limited_labels.skeletons)
-    for orig_skeleton, recovered_skeleton in zip(limited_labels.skeletons, recovered_labels.skeletons):
+    for orig_skeleton, recovered_skeleton in zip(
+        limited_labels.skeletons, recovered_labels.skeletons
+    ):
         assert recovered_skeleton.node_names == orig_skeleton.node_names
         assert recovered_skeleton.edge_inds == orig_skeleton.edge_inds
         assert recovered_skeleton.name == orig_skeleton.name
@@ -601,6 +617,58 @@ def test_pose_training_roundtrip(slp_real_data):
                 recovered_inst.numpy(invisible_as_nan=True),
                 err_msg="Instance points should match",
             )
+
+def test_save_load_labels_roundtrip(slp_real_data, tmp_path):
+    """Test save_labels and load_labels roundtrip."""
+    from sleap_io.io.nwb_ann import load_labels, save_labels
+
+    # Load original labels
+    original_labels = sio.load_slp(slp_real_data)
+
+    # Use first few frames to keep test manageable
+    limited_labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=original_labels.labeled_frames[:2],
+    )
+
+    # Test with minimal parameters (required only)
+    nwb_path = tmp_path / "test_minimal.nwb"
+    save_labels(limited_labels, nwb_path)
+
+    # Load back and verify
+    recovered_labels = load_labels(nwb_path)
+
+    # Check basic structure
+    assert len(recovered_labels.skeletons) == len(limited_labels.skeletons)
+    assert len(recovered_labels.videos) == len(limited_labels.videos)
+    assert len(recovered_labels.labeled_frames) == len(
+        limited_labels.labeled_frames
+    )
+
+    # Test with custom parameters
+    nwb_path_custom = tmp_path / "test_custom.nwb"
+    save_labels(
+        limited_labels,
+        nwb_path_custom,
+        session_description="Custom test session",
+        identifier="custom_test_id",
+        annotator="test_user",
+        nwb_kwargs={
+            "session_id": "custom_session_001",
+            "experimenter": ["Test User"],
+            "lab": "Test Lab",
+            "institution": "Test University",
+        },
+    )
+
+    # Load back and verify custom metadata preserved in conversion
+    recovered_labels_custom = load_labels(nwb_path_custom)
+    assert len(recovered_labels_custom.skeletons) == len(limited_labels.skeletons)
+    assert len(recovered_labels_custom.videos) == len(limited_labels.videos)
+    assert len(recovered_labels_custom.labeled_frames) == len(
+        limited_labels.labeled_frames
+    )
 
 
 def test_pose_training_structure(slp_real_data):

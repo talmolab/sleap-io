@@ -1,5 +1,6 @@
 """NWB formatted annotations."""
 
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,7 @@ from ndx_pose import Skeletons as NwbSkeletons
 from ndx_pose import SourceVideos as NwbSourceVideos
 from ndx_pose import TrainingFrame as NwbTrainingFrame
 from ndx_pose import TrainingFrames as NwbTrainingFrames
+from pynwb import NWBHDF5IO, NWBFile
 from pynwb.image import ImageSeries
 
 from sleap_io import Instance as SleapInstance
@@ -136,11 +138,11 @@ def nwb_skeleton_instance_to_sleap_instance(
         A sleap-io Instance object with equivalent data.
     """
     # Get node locations and visibility
-    node_locations = nwb_skeleton_instance.node_locations
+    node_locations = np.array(nwb_skeleton_instance.node_locations)
 
     # Handle visibility - use provided visibility or infer from NaN values
     if nwb_skeleton_instance.node_visibility is not None:
-        node_visibility = nwb_skeleton_instance.node_visibility
+        node_visibility = np.array(nwb_skeleton_instance.node_visibility)
     else:
         # Infer visibility from non-NaN values
         node_visibility = ~np.isnan(node_locations).any(axis=1)
@@ -378,7 +380,7 @@ def create_slp_to_nwb_skeleton_map(
         ValueError: If the number of skeletons doesn't match or mapping fails.
     """
     nwb_skeleton_list = list(nwb_skeletons.skeletons.values())
-    
+
     if len(sleap_skeletons) != len(nwb_skeleton_list):
         raise ValueError(
             f"Number of sleap skeletons ({len(sleap_skeletons)}) does not match "
@@ -410,7 +412,7 @@ def create_nwb_to_slp_skeleton_map(
         ValueError: If the number of skeletons doesn't match or mapping fails.
     """
     nwb_skeleton_list = list(nwb_skeletons.skeletons.values())
-    
+
     if len(nwb_skeleton_list) != len(sleap_skeletons):
         raise ValueError(
             f"Number of NWB Skeletons ({len(nwb_skeleton_list)}) does not match "
@@ -490,7 +492,8 @@ def nwb_training_frame_to_sleap_labeled_frame(
 
     Args:
         nwb_training_frame: The ndx-pose TrainingFrame object to convert.
-        nwb_to_slp_skeleton_map: Required mapping from NWB Skeletons to sleap-io Skeletons.
+        nwb_to_slp_skeleton_map: Required mapping from NWB Skeletons to sleap-io
+            Skeletons.
         sleap_video: The sleap-io Video to associate with the frame.
 
     Returns:
@@ -532,7 +535,8 @@ def sleap_labeled_frames_to_nwb_training_frames(
 
     Args:
         sleap_labeled_frames: List of sleap-io LabeledFrame objects to convert.
-        slp_to_nwb_skeleton_map: Required mapping from sleap-io Skeletons to NWB Skeletons.
+        slp_to_nwb_skeleton_map: Required mapping from sleap-io Skeletons to NWB
+            Skeletons.
         slp_to_nwb_video_map: Required mapping from sleap-io Videos to ImageSeries.
         name: String identifier for the TrainingFrames container.
         annotator: Optional name of annotator who labeled the frames.
@@ -569,7 +573,8 @@ def nwb_training_frames_to_sleap_labeled_frames(
 
     Args:
         nwb_training_frames: The ndx-pose TrainingFrames container to convert.
-        nwb_to_slp_skeleton_map: Required mapping from NWB Skeletons to sleap-io Skeletons.
+        nwb_to_slp_skeleton_map: Required mapping from NWB Skeletons to sleap-io
+            Skeletons.
         nwb_to_slp_video_map: Required mapping from ImageSeries to sleap-io Videos.
 
     Returns:
@@ -585,7 +590,8 @@ def nwb_training_frames_to_sleap_labeled_frames(
         # Get corresponding sleap video using the required mapping
         if nwb_training_frame.source_video is None:
             raise ValueError(
-                "TrainingFrame must have a source_video to convert to sleap-io LabeledFrame"
+                "TrainingFrame must have a source_video to convert to sleap-io "
+                "LabeledFrame"
             )
 
         sleap_video = nwb_to_slp_video_map[nwb_training_frame.source_video]
@@ -625,14 +631,12 @@ def sleap_labels_to_nwb_pose_training(
         skeleton_name = sleap_skeleton.name if sleap_skeleton.name else f"skeleton_{i}"
         if skeleton_name == "skeleton":  # Default name, make it unique
             skeleton_name = f"skeleton_{i}"
-        
+
         # Create temporary skeleton with the desired name
         temp_skeleton = sleap_skeleton_to_nwb_skeleton(sleap_skeleton)
         # Create new skeleton with proper name
         nwb_skeleton = NwbSkeleton(
-            name=skeleton_name,
-            nodes=temp_skeleton.nodes,
-            edges=temp_skeleton.edges
+            name=skeleton_name, nodes=temp_skeleton.nodes, edges=temp_skeleton.edges
         )
         nwb_skeleton_list.append(nwb_skeleton)
 
@@ -640,7 +644,9 @@ def sleap_labels_to_nwb_pose_training(
     nwb_skeletons = NwbSkeletons(name="Skeletons", skeletons=nwb_skeleton_list)
 
     # Convert videos to source videos container
-    source_videos = sleap_videos_to_nwb_source_videos(sleap_labels.videos, name="source_videos")
+    source_videos = sleap_videos_to_nwb_source_videos(
+        sleap_labels.videos, name="source_videos"
+    )
 
     # Create video mapping
     slp_to_nwb_video_map = create_slp_to_nwb_video_map(
@@ -719,3 +725,91 @@ def nwb_pose_training_to_sleap_labels(
         videos=sleap_videos,
         labeled_frames=labeled_frames,
     )
+
+
+def save_labels(
+    labels: SleapLabels,
+    path: Path | str,
+    session_description: str = "SLEAP pose training data",
+    identifier: str | None = None,
+    session_start_time: str | None = None,
+    annotator: str | None = None,
+    nwb_kwargs: dict | None = None,
+) -> None:
+    """Save sleap-io Labels to an NWB file.
+
+    Args:
+        labels: The sleap-io Labels object to save.
+        path: Path to save the NWB file.
+        session_description: Description of the session (required).
+        identifier: Unique identifier for the NWB file. If None, auto-generated.
+        session_start_time: Start time of session (ISO format string). If None,
+            uses current time.
+        annotator: Name of the annotator who labeled the data. Optional.
+        nwb_kwargs: Additional keyword arguments to pass to NWBFile constructor.
+            Can include: session_id, experimenter, lab, institution,
+            experiment_description, etc.
+    """
+    # Set defaults for required fields
+    if session_start_time is None:
+        session_start_time = datetime.now().astimezone()
+    elif isinstance(session_start_time, str):
+        session_start_time = datetime.fromisoformat(session_start_time)
+
+    if identifier is None:
+        identifier = f"sleap_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Create NWB file with required parameters
+    nwbfile_kwargs = {
+        "session_description": session_description,
+        "identifier": identifier,
+        "session_start_time": session_start_time,
+    }
+
+    # Add any additional kwargs provided by user
+    if nwb_kwargs is not None:
+        nwbfile_kwargs.update(nwb_kwargs)
+
+    nwbfile = NWBFile(**nwbfile_kwargs)
+
+    # Convert SLEAP labels to NWB format
+    pose_training, skeletons = sleap_labels_to_nwb_pose_training(
+        labels, annotator=annotator
+    )
+
+    # Create behavior processing module
+    behavior_pm = nwbfile.create_processing_module(
+        name="behavior",
+        description="processed behavioral data",
+    )
+    behavior_pm.add(skeletons)
+    behavior_pm.add(pose_training)
+
+    # Write to file
+    with NWBHDF5IO(path, mode="w") as io:
+        io.write(nwbfile)
+
+
+def load_labels(path: Path | str) -> SleapLabels:
+    """Load sleap-io Labels from an NWB file.
+
+    Args:
+        path: Path to the NWB file to load.
+
+    Returns:
+        A sleap-io Labels object with data from the NWB file.
+    """
+    with NWBHDF5IO(path, mode="r") as io:
+        nwbfile = io.read()
+
+        # Get the behavior processing module
+        behavior_pm = nwbfile.processing["behavior"]
+
+        # Get PoseTraining and Skeletons containers
+        pose_training = behavior_pm["PoseTraining"]
+        skeletons = behavior_pm["Skeletons"]
+
+        # Convert back to SLEAP format
+        labels = nwb_pose_training_to_sleap_labels(pose_training, skeletons)
+
+        return labels
