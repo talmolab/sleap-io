@@ -2,8 +2,11 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional, Union
 
+import attrs
 import numpy as np
+import simplejson as json
 from ndx_pose import PoseTraining as NwbPoseTraining
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
@@ -813,3 +816,143 @@ def load_labels(path: Path | str) -> SleapLabels:
         labels = nwb_pose_training_to_sleap_labels(pose_training, skeletons)
 
         return labels
+
+
+@attrs.define
+class FrameInfo:
+    """Information about a single frame in the MJPEG video.
+
+    Attributes:
+        video_ind: Index into the videos list indicating which video this frame
+            came from.
+        frame_idx: Original frame index in the source video.
+    """
+
+    video_ind: int
+    frame_idx: int
+
+
+@attrs.define
+class FrameMap:
+    """Map frames in an MJPEG video back to source videos for provenance tracking.
+
+    This class stores the mapping between frames in an exported MJPEG video and their
+    original source videos. It is serialized to/from a frame_map.json file alongside
+    the MJPEG video.
+
+    Attributes:
+        frame_map_filename: Path to the frame_map.json file.
+        nwb_filename: Path to the NWB file.
+        mjpeg_filename: Path to the MJPEG video file.
+        videos: List of Video objects representing the source videos.
+        frames: List of FrameInfo objects, one per frame in the MJPEG video,
+            indicating which source video and frame index each MJPEG frame came from.
+    """
+
+    frame_map_filename: Optional[str] = None
+    nwb_filename: Optional[str] = None
+    mjpeg_filename: Optional[str] = None
+    videos: List[SleapVideo] = attrs.field(factory=list)
+    frames: List[FrameInfo] = attrs.field(factory=list)
+
+    @classmethod
+    def from_labels(cls, labels: SleapLabels) -> "FrameMap":
+        """Construct a FrameMap from a Labels object.
+
+        Args:
+            labels: Labels object containing labeled frames and videos.
+
+        Returns:
+            FrameMap instance with videos and frame mappings extracted from the
+                labels.
+        """
+        # Copy videos from labels, preserving order
+        videos = []
+        for video in labels.videos:
+            video_copy = SleapVideo(
+                filename=video.filename,
+                backend_metadata=video.backend_metadata,
+                open_backend=False,
+            )
+            videos.append(video_copy)
+
+        # Build frames list following labeled_frames order
+        frames = []
+        for lf in labels.labeled_frames:
+            # Find video index in the videos list
+            video_ind = labels.videos.index(lf.video)
+            frame_info = FrameInfo(video_ind=video_ind, frame_idx=lf.frame_idx)
+            frames.append(frame_info)
+
+        return cls(videos=videos, frames=frames)
+
+    def save(self, path: Union[str, Path]) -> None:
+        """Save the frame map to a JSON file.
+
+        Args:
+            path: Path to save the frame_map.json file.
+        """
+        path = Path(path)
+
+        # Prepare data for JSON serialization
+        json_data = {
+            "frame_map_filename": str(path),
+            "nwb_filename": str(self.nwb_filename) if self.nwb_filename else None,
+            "mjpeg_filename": str(self.mjpeg_filename) if self.mjpeg_filename else None,
+            "videos": [
+                {"filename": video.filename, "backend_metadata": video.backend_metadata}
+                for video in self.videos
+            ],
+            "frames": [
+                {"video_ind": frame.video_ind, "frame_idx": frame.frame_idx}
+                for frame in self.frames
+            ],
+        }
+
+        with open(path, "w") as f:
+            json.dump(json_data, f, indent=2)
+
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> "FrameMap":
+        """Load a frame map from a JSON file.
+
+        Args:
+            path: Path to the frame_map.json file.
+
+        Returns:
+            FrameMap instance reconstructed from the JSON data.
+
+        Raises:
+            FileNotFoundError: If the frame_map.json file doesn't exist.
+            json.JSONDecodeError: If the JSON file is malformed.
+        """
+        path = Path(path)
+
+        with open(path, "r") as f:
+            json_data = json.load(f)
+
+        # Reconstruct Video objects without opening backends
+        videos = []
+        for video_data in json_data["videos"]:
+            video = SleapVideo(
+                filename=video_data["filename"],
+                backend_metadata=video_data.get("backend_metadata", {}),
+                open_backend=False,
+            )
+            videos.append(video)
+
+        # Reconstruct FrameInfo objects
+        frames = []
+        for frame_data in json_data["frames"]:
+            frames.append(
+                FrameInfo(
+                    video_ind=frame_data["video_ind"], frame_idx=frame_data["frame_idx"]
+                )
+            )
+
+        return cls(
+            frame_map_filename=str(path),
+            nwb_filename=json_data.get("nwb_filename", None),
+            videos=videos,
+            frames=frames,
+        )
