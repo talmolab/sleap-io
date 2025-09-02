@@ -7,6 +7,7 @@ from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
 from ndx_pose import Skeletons as NwbSkeletons
 
+import simplejson as json
 import sleap_io as sio
 from sleap_io import Instance as SleapInstance
 from sleap_io import Labels as SleapLabels
@@ -32,6 +33,7 @@ from sleap_io.io.nwb_ann import (
     sleap_skeleton_to_nwb_skeleton,
     sleap_video_to_nwb_image_series,
     sleap_videos_to_nwb_source_videos,
+    export_labeled_frames
 )
 
 
@@ -670,13 +672,64 @@ def test_save_load_labels_roundtrip(slp_real_data, tmp_path):
         limited_labels.labeled_frames
     )
 
+def test_pose_training_structure(slp_real_data):
+    """Test that PoseTraining has the expected structure."""
+    # Load labels and convert
+    labels = sio.load_slp(slp_real_data)
+    limited_labels = SleapLabels(
+        skeletons=labels.skeletons,
+        videos=labels.videos,
+        labeled_frames=labels.labeled_frames[:2],
+    )
+
+    nwb_pose_training, nwb_skeletons = sleap_labels_to_nwb_pose_training(
+        limited_labels, name="test_structure"
+    )
+
+    # Check that PoseTraining has the expected components
+    assert nwb_pose_training.name == "test_structure"
+    assert hasattr(nwb_pose_training, "training_frames")
+    assert hasattr(nwb_pose_training, "source_videos")
+
+    # Check training frames structure
+    assert len(nwb_pose_training.training_frames.training_frames) == 2
+
+    # Check source videos structure
+    assert len(nwb_pose_training.source_videos.image_series) == len(labels.videos)
+
+    # Check that each training frame has a source video reference
+    for training_frame in nwb_pose_training.training_frames.training_frames.values():
+        assert training_frame.source_video is not None
+        assert (
+            training_frame.source_video
+            in nwb_pose_training.source_videos.image_series.values()
+        )
+
+
+def test_pose_training_with_annotator(slp_real_data):
+    """Test PoseTraining conversion with annotator information."""
+    labels = sio.load_slp(slp_real_data)
+    limited_labels = SleapLabels(
+        skeletons=labels.skeletons,
+        videos=labels.videos,
+        labeled_frames=labels.labeled_frames[:1],
+    )
+
+    nwb_pose_training, nwb_skeletons = sleap_labels_to_nwb_pose_training(
+        limited_labels, name="annotated_data", annotator="expert_annotator"
+    )
+
+    # Check that annotator information is preserved
+    training_frame = next(
+        iter(nwb_pose_training.training_frames.training_frames.values())
+    )
+    assert training_frame.annotator == "expert_annotator"
+
+
 
 def test_export_labeled_frames(slp_real_data, tmp_path):
     """Test export_labeled_frames function."""
-    import json
-
-    from sleap_io.io.nwb_ann import export_labeled_frames
-
+    
     # Load original labels
     original_labels = sio.load_slp(slp_real_data)
 
@@ -779,57 +832,3 @@ def test_export_labeled_frames(slp_real_data, tmp_path):
         assert False, "Should have raised ValueError for empty labels"
     except ValueError as e:
         assert "No labeled frames found to export" in str(e)
-
-
-def test_pose_training_structure(slp_real_data):
-    """Test that PoseTraining has the expected structure."""
-    # Load labels and convert
-    labels = sio.load_slp(slp_real_data)
-    limited_labels = SleapLabels(
-        skeletons=labels.skeletons,
-        videos=labels.videos,
-        labeled_frames=labels.labeled_frames[:2],
-    )
-
-    nwb_pose_training, nwb_skeletons = sleap_labels_to_nwb_pose_training(
-        limited_labels, name="test_structure"
-    )
-
-    # Check that PoseTraining has the expected components
-    assert nwb_pose_training.name == "test_structure"
-    assert hasattr(nwb_pose_training, "training_frames")
-    assert hasattr(nwb_pose_training, "source_videos")
-
-    # Check training frames structure
-    assert len(nwb_pose_training.training_frames.training_frames) == 2
-
-    # Check source videos structure
-    assert len(nwb_pose_training.source_videos.image_series) == len(labels.videos)
-
-    # Check that each training frame has a source video reference
-    for training_frame in nwb_pose_training.training_frames.training_frames.values():
-        assert training_frame.source_video is not None
-        assert (
-            training_frame.source_video
-            in nwb_pose_training.source_videos.image_series.values()
-        )
-
-
-def test_pose_training_with_annotator(slp_real_data):
-    """Test PoseTraining conversion with annotator information."""
-    labels = sio.load_slp(slp_real_data)
-    limited_labels = SleapLabels(
-        skeletons=labels.skeletons,
-        videos=labels.videos,
-        labeled_frames=labels.labeled_frames[:1],
-    )
-
-    nwb_pose_training, nwb_skeletons = sleap_labels_to_nwb_pose_training(
-        limited_labels, name="annotated_data", annotator="expert_annotator"
-    )
-
-    # Check that annotator information is preserved
-    training_frame = next(
-        iter(nwb_pose_training.training_frames.training_frames.values())
-    )
-    assert training_frame.annotator == "expert_annotator"

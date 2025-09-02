@@ -998,7 +998,7 @@ def export_labeled_frames(
             "frame_map.json".
         nwb_filename: Optional path to associated NWB file for cross-referencing.
         clean: If True, remove empty frames and predictions before export using
-            Labels.clean(). Defaults to True.
+            `Labels.remove_predictions(clean=True)`. Defaults to True.
 
     Returns:
         FrameMap object containing all metadata and mappings for the exported
@@ -1030,11 +1030,12 @@ def export_labeled_frames(
 
     # Clean labels if requested to remove empty frames and predictions
     if clean:
-        labels.clean()
+        labels.remove_predictions(clean=True)
 
     # Check that we have frames to export after cleaning
     if len(labels.labeled_frames) == 0:
-        raise ValueError("No labeled frames found to export (labels may be empty)")
+        raise ValueError("No labeled frames found to export (labels may be empty). "
+                         "Try exporting with clean=False if you want to export empty frames.")
 
     # Build FrameMap from labels and set metadata
     frame_map = FrameMap.from_labels(labels)
@@ -1054,3 +1055,4 @@ def export_labeled_frames(
     frame_map.save(frame_map_path)
 
     return frame_map
+
