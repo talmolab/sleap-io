@@ -764,7 +764,7 @@
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sanitize_nwb_name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;List&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.nwb_annotations.sanitize_nwb_name&lt;/code&gt;)" href="#sleap_io.io.nwb_annotations.sanitize_nwb_name">sanitize_nwb_name</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sanitize_nwb_name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.nwb_annotations.sanitize_nwb_name&lt;/code&gt;)" href="#sleap_io.io.nwb_annotations.sanitize_nwb_name">sanitize_nwb_name</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Sanitize a name for use in NWB files.</p>
@@ -3846,7 +3846,7 @@ Skeletons.</p>
 
 
 <h3 id="sleap_io.io.nwb_annotations.sanitize_nwb_name" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">List</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
 
 <a href="#sleap_io.io.nwb_annotations.sanitize_nwb_name" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3913,7 +3913,7 @@ Skeletons.</p>
 
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-32" name="__codelineno-0-32"></a><a href="#__codelineno-0-32"><span class="linenos" data-linenos="32 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-32" name="__codelineno-0-32"></a><a href="#__codelineno-0-32"><span class="linenos" data-linenos="32 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33"></a><a href="#__codelineno-0-33"><span class="linenos" data-linenos="33 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sanitize a name for use in NWB files.</span>
 <a id="__codelineno-0-34" name="__codelineno-0-34"></a><a href="#__codelineno-0-34"><span class="linenos" data-linenos="34 "></span></a>
 <a id="__codelineno-0-35" name="__codelineno-0-35"></a><a href="#__codelineno-0-35"><span class="linenos" data-linenos="35 "></span></a><span class="sd">    NWB names cannot contain &#39;/&#39; or &#39;:&#39; characters.</span>
