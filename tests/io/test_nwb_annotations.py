@@ -14,6 +14,7 @@ from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.nwb_annotations import (
+    FrameInfo,
     FrameMap,
     create_nwb_to_slp_skeleton_map,
     create_nwb_to_slp_video_map,
@@ -970,3 +971,109 @@ def test_export_labels(slp_real_data, tmp_path):
         assert False, "Should have raised ValueError for empty labels"
     except ValueError as e:
         assert "No labeled frames found to export" in str(e)
+
+
+def test_frame_map_json_roundtrip(slp_real_data, tmp_path):
+    """Test FrameMap JSON serialization and deserialization roundtrip."""
+    # Load original labels
+    original_labels = sio.load_slp(slp_real_data)
+    
+    # Use first few frames to keep test manageable
+    limited_labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=original_labels.labeled_frames[:3],
+    )
+    
+    # Export labels to create a FrameMap
+    export_dir = tmp_path / "frame_map_test"
+    
+    export_labels(
+        limited_labels,
+        output_dir=export_dir,
+        mjpeg_filename="test_video.avi",
+        frame_map_filename="test_map.json",
+        nwb_filename="test_training.nwb",
+        clean=False,
+    )
+    
+    # Check that the JSON file was created
+    json_path = export_dir / "test_map.json"
+    assert json_path.exists()
+    
+    # Load the FrameMap from JSON
+    frame_map_loaded = FrameMap.load(json_path)
+    
+    # Verify the loaded FrameMap has correct attributes
+    assert frame_map_loaded.frame_map_filename == str(json_path)
+    assert frame_map_loaded.nwb_filename == str(export_dir / "test_training.nwb")
+    assert frame_map_loaded.mjpeg_filename == str(export_dir / "test_video.avi")
+    assert len(frame_map_loaded.videos) == len(limited_labels.videos)
+    assert len(frame_map_loaded.frames) == 3
+    
+    # Verify frame info
+    for i, frame_info in enumerate(frame_map_loaded.frames):
+        assert frame_info.video_ind == 0  # All frames from first video
+        assert frame_info.frame_idx == limited_labels.labeled_frames[i].frame_idx
+    
+    # Test roundtrip: save loaded FrameMap back to JSON
+    json_path2 = tmp_path / "roundtrip_map.json"
+    frame_map_loaded.save(json_path2)
+    
+    # Load again and verify
+    frame_map_roundtrip = FrameMap.load(json_path2)
+    
+    assert frame_map_roundtrip.nwb_filename == frame_map_loaded.nwb_filename
+    assert frame_map_roundtrip.mjpeg_filename == frame_map_loaded.mjpeg_filename
+    assert len(frame_map_roundtrip.videos) == len(frame_map_loaded.videos)
+    assert len(frame_map_roundtrip.frames) == len(frame_map_loaded.frames)
+    
+    # Verify videos match
+    for v1, v2 in zip(frame_map_loaded.videos, frame_map_roundtrip.videos):
+        assert sanitize_filename(v1.filename) == sanitize_filename(v2.filename)
+    
+    # Verify frames match
+    for f1, f2 in zip(frame_map_loaded.frames, frame_map_roundtrip.frames):
+        assert f1.video_ind == f2.video_ind
+        assert f1.frame_idx == f2.frame_idx
+    
+    # Test with custom FrameMap creation
+    custom_videos = [
+        SleapVideo(filename="video1.mp4", open_backend=False),
+        SleapVideo(filename="video2.mp4", open_backend=False)
+    ]
+    
+    custom_frames = [
+        FrameInfo(video_ind=0, frame_idx=10),
+        FrameInfo(video_ind=1, frame_idx=20),
+        FrameInfo(video_ind=0, frame_idx=30),
+    ]
+    
+    custom_frame_map = FrameMap(
+        frame_map_filename="custom_map.json",
+        nwb_filename="custom.nwb",
+        mjpeg_filename="custom.avi",
+        videos=custom_videos,
+        frames=custom_frames,
+    )
+    
+    # Save to JSON
+    custom_json_path = tmp_path / "custom_map.json"
+    custom_frame_map.save(custom_json_path)
+    
+    # Load and verify
+    custom_loaded = FrameMap.load(custom_json_path)
+    
+    assert custom_loaded.frame_map_filename == str(custom_json_path)
+    assert custom_loaded.nwb_filename == "custom.nwb"
+    assert custom_loaded.mjpeg_filename == "custom.avi"
+    assert len(custom_loaded.videos) == 2
+    assert len(custom_loaded.frames) == 3
+    
+    # Verify custom frame data preserved
+    assert custom_loaded.frames[0].video_ind == 0
+    assert custom_loaded.frames[0].frame_idx == 10
+    assert custom_loaded.frames[1].video_ind == 1
+    assert custom_loaded.frames[1].frame_idx == 20
+    assert custom_loaded.frames[2].video_ind == 0
+    assert custom_loaded.frames[2].frame_idx == 30

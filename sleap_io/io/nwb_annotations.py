@@ -971,6 +971,7 @@ class FrameMap:
         return cls(
             frame_map_filename=str(path),
             nwb_filename=json_data.get("nwb_filename", None),
+            mjpeg_filename=json_data.get("mjpeg_filename", None),
             videos=videos,
             frames=frames,
         )
