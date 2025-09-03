@@ -19,6 +19,7 @@ from sleap_io.io import (
     ultralytics,
     video_writing,
 )
+from sleap_io.io.nwb import NwbFormat
 from sleap_io.io.skeleton import (
     SkeletonDecoder,
     SkeletonEncoder,
@@ -100,14 +101,26 @@ def load_nwb(filename: str) -> Labels:
     return nwb.load_nwb(filename)
 
 
-def save_nwb(labels: Labels, filename: str):
+def save_nwb(
+    labels: Labels,
+    filename: Union[str, Path],
+    nwb_format: Union[NwbFormat, str] = NwbFormat.AUTO,
+) -> None:
     """Save a SLEAP dataset to NWB format.
 
     Args:
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to NWB file to save to. Must end in `.nwb`.
+        nwb_format: Format to use for saving. Options are:
+            - "auto" (default): Automatically detect based on data
+            - "annotations": Save training annotations (PoseTraining)
+            - "annotations_export": Export annotations with video frames
+            - "predictions": Save predictions (PoseEstimation)
+
+    Raises:
+        ValueError: If an invalid format is specified.
     """
-    nwb.save_nwb(labels, filename)
+    nwb.save_nwb(labels, filename, nwb_format)
 
 
 def load_labelstudio(
