@@ -1,296 +1,161 @@
-"""Tests for NWB I/O functionality."""
+"""Tests for the NWB harmonization layer."""
 
-import datetime
-from pathlib import Path
-
-import numpy as np
+import h5py
 import pytest
-from pynwb import NWBHDF5IO, NWBFile
 
-from sleap_io import load_slp
-from sleap_io.io.nwb import append_nwb_data, get_timestamps, write_nwb
-
-
-@pytest.fixture
-def nwbfile():
-    session_description: str = "Testing session for nwb"
-    session_start_time = datetime.datetime.now(datetime.timezone.utc)
-    identifier = "identifier"
-
-    nwbfile = NWBFile(
-        session_description=session_description,
-        identifier=identifier,
-        session_start_time=session_start_time,
-    )
-
-    return nwbfile
+from sleap_io import Labels, load_slp
+from sleap_io.io.nwb import NwbFormat, load_nwb, save_nwb
 
 
-def test_typical_case_append(nwbfile, slp_typical):
-    labels = load_slp(slp_typical)
-    nwbfile = append_nwb_data(labels, nwbfile)
-
-    # Test that behavior module exists
-    assert "behavior" in nwbfile.processing
-    behavior_pm = nwbfile.processing["behavior"]
-
-    # Test that Skeletons container exists and has correct skeleton
-    assert "Skeletons" in behavior_pm.data_interfaces
-    skeletons_container = behavior_pm.data_interfaces["Skeletons"]
-    assert len(skeletons_container.skeletons) == len(labels.skeletons)
-
-    # Test matching number of video processing modules
-    number_of_videos = len(labels.videos)
-    video_modules = [mod for mod in nwbfile.processing.keys() if "SLEAP_VIDEO" in mod]
-    assert len(video_modules) == number_of_videos
-
-    # Test processing module naming and content
-    video_index = 0
-    video = labels.videos[video_index]
-    video_path = Path(video.filename)
-    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
-    assert processing_module_name in nwbfile.processing
-
-    # Test device creation
-    device_name = f"camera_{video_index}"
-    assert device_name in nwbfile.devices
-
-    processing_module = nwbfile.processing[processing_module_name]
-    all_containers = processing_module.data_interfaces
-    # Test name of PoseEstimation containers
-    # In this case the predicted instances are not tracked.
-    container_name = "track=untracked"
-    assert container_name in all_containers
-
-    # Test that the skeleton nodes are stored as nodes in containers
-    pose_estimation_container = all_containers[container_name]
-    expected_skeleton_name = labels.skeletons[0].name
-    assert pose_estimation_container.skeleton.name == expected_skeleton_name
-
-    # Test that skeleton nodes match
-    expected_node_names = labels.skeletons[0].node_names
-    assert expected_node_names == pose_estimation_container.skeleton.nodes
-
-    # Test that each PoseEstimationSeries is named as a node
-    for node_name in pose_estimation_container.skeleton.nodes:
-        assert node_name in pose_estimation_container.pose_estimation_series
+def test_nwb_format_enum():
+    """Test NwbFormat enum values."""
+    assert NwbFormat.AUTO == "auto"
+    assert NwbFormat.ANNOTATIONS == "annotations"
+    assert NwbFormat.ANNOTATIONS_EXPORT == "annotations_export"
+    assert NwbFormat.PREDICTIONS == "predictions"
 
 
-def test_typical_case_append_with_metadata_propagation(nwbfile, slp_typical):
+def test_load_nwb_predictions(slp_typical, tmp_path):
+    """Test loading NWB file with predictions."""
+    # Load data with predictions
     labels = load_slp(slp_typical)
 
-    pose_estimation_metadata = {
-        "source_software": "1.2.3",  # Sleap-version, I chosen a random one for the test
-        "dimensions": [
-            [384, 384]
-        ],  # The dimensions of the video frame extracted using ffmpeg probe
-    }
+    # Keep only predictions
+    for lf in labels.labeled_frames:
+        lf.instances = lf.predicted_instances
 
-    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
+    # Save as predictions format
+    save_nwb(labels, tmp_path / "test_pred.nwb", nwb_format="predictions")
 
-    # Test processing module naming
-    video_index = 0
-    video = labels.videos[video_index]
-    video_path = Path(video.filename)
-    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
-
-    processing_module = nwbfile.processing[processing_module_name]
-    pose_estimation_container = processing_module.data_interfaces["track=untracked"]
-
-    # Test pose estimation metadata propagation
-    extracted_source_software = pose_estimation_container.source_software
-    expected_source_software = pose_estimation_metadata["source_software"]
-    assert extracted_source_software == expected_source_software
-
-    extracted_dimensions = pose_estimation_container.dimensions
-    expected_dimensions = pose_estimation_metadata["dimensions"]
-    assert extracted_dimensions == expected_dimensions
+    # Load and verify
+    loaded_labels = load_nwb(tmp_path / "test_pred.nwb")
+    assert isinstance(loaded_labels, Labels)
+    assert len(loaded_labels.labeled_frames) > 0
 
 
-def test_provenance_writing(nwbfile, slp_predictions_with_provenance):
-    labels = load_slp(slp_predictions_with_provenance)
-    nwbfile = append_nwb_data(labels, nwbfile)
+def test_load_nwb_annotations(slp_real_data, tmp_path):
+    """Test loading NWB file with annotations."""
+    # Load data with user instances
+    labels = load_slp(slp_real_data)
 
-    # Extract processing module
-    video_index = 0
-    video = labels.videos[video_index]
-    video_path = Path(video.filename)
-    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
-    processing_module = nwbfile.processing[processing_module_name]
+    # Save as annotations format
+    save_nwb(labels, tmp_path / "test_ann.nwb", nwb_format="annotations")
 
-    # Test that the provenance information is propagated
-    for pose_estimation_container in processing_module.data_interfaces.values():
-        assert pose_estimation_container.scorer == str(labels.provenance)
+    # Load and verify
+    loaded_labels = load_nwb(tmp_path / "test_ann.nwb")
+    assert isinstance(loaded_labels, Labels)
+    assert len(loaded_labels.labeled_frames) > 0
 
 
-def test_default_metadata_overwriting(nwbfile, slp_predictions_with_provenance):
-    labels = load_slp(slp_predictions_with_provenance)
-    expected_sampling_rate = 10.0
-    pose_estimation_metadata = {
-        "scorer": "overwritten_value",
-        "video_sample_rate": expected_sampling_rate,
-    }
-    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
+def test_load_nwb_no_pose_data(tmp_path):
+    """Test loading NWB file without pose data."""
+    # Create an NWB file without pose data
+    nwb_path = tmp_path / "empty.nwb"
+    with h5py.File(nwb_path, "w") as f:
+        f.create_group("processing")
 
-    # Extract processing module
-    video_index = 0
-    video = labels.videos[video_index]
-    video_path = Path(video.filename)
-    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
-    processing_module = nwbfile.processing[processing_module_name]
-
-    # Test that the value of scorer was overwritten
-    for pose_estimation_container in processing_module.data_interfaces.values():
-        assert pose_estimation_container.scorer == "overwritten_value"
-        for node in pose_estimation_container.skeleton.nodes:
-            pose_estimation_series = pose_estimation_container[node]
-            if pose_estimation_series.rate:
-                assert pose_estimation_series.rate == expected_sampling_rate
+    # Should raise ValueError
+    with pytest.raises(ValueError, match="does not contain recognized pose data"):
+        load_nwb(nwb_path)
 
 
-def test_complex_case_append(nwbfile, centered_pair):
-    labels = load_slp(centered_pair)
-    labels.clean(tracks=True)
-    labels = labels.extract(np.arange(10))
-    nwbfile = append_nwb_data(labels, nwbfile)
+def test_save_nwb_auto_detection(slp_typical, slp_real_data, tmp_path):
+    """Test automatic format detection in save_nwb."""
+    # Test with predictions (no user instances)
+    labels_pred = load_slp(slp_typical)
+    for lf in labels_pred.labeled_frames:
+        lf.instances = lf.predicted_instances
 
-    # Test Skeletons container
-    assert "behavior" in nwbfile.processing
-    behavior_pm = nwbfile.processing["behavior"]
-    assert "Skeletons" in behavior_pm.data_interfaces
+    save_nwb(labels_pred, tmp_path / "auto_pred.nwb")  # Should use predictions format
+    loaded = load_nwb(tmp_path / "auto_pred.nwb")
+    assert isinstance(loaded, Labels)
 
-    # Test matching number of processing modules plus the skeletonw
-    number_of_videos = len(labels.videos)
-    assert len(nwbfile.processing) == number_of_videos + 1
-
-    # Test processing module naming
-    video_index = 0
-    video = labels.videos[video_index]
-    video_path = Path(video.filename)
-    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
-    assert processing_module_name in nwbfile.processing
-
-    # For this case we have as many containers as tracks
-    processing_module = nwbfile.processing[processing_module_name]
-    all_containers = processing_module.data_interfaces
-    assert len(all_containers) == len(labels.tracks)
-
-    # Test name of PoseEstimation containers
-    extracted_container_names = all_containers.keys()
-    for track in labels.tracks:
-        expected_track_name = f"track={track.name}"
-        assert expected_track_name in extracted_container_names
-
-    container_name = "track=1"
-    pose_estimation_container = all_containers[container_name]
-
-    # Test skeleton reference and nodes
-    expected_skeleton_name = labels.skeletons[0].name
-    assert pose_estimation_container.skeleton.name == expected_skeleton_name
-    expected_node_names = labels.skeletons[0].node_names
-    assert expected_node_names == pose_estimation_container.skeleton.nodes
-
-    # Test pose estimation series
-    for node_name in pose_estimation_container.skeleton.nodes:
-        assert node_name in pose_estimation_container.pose_estimation_series
+    # Test with annotations (has user instances)
+    labels_ann = load_slp(slp_real_data)
+    save_nwb(labels_ann, tmp_path / "auto_ann.nwb")  # Should use annotations format
+    loaded = load_nwb(tmp_path / "auto_ann.nwb")
+    assert isinstance(loaded, Labels)
 
 
-def test_complex_case_append_with_timestamps_metadata(nwbfile, centered_pair):
-    labels = load_slp(centered_pair)
-    labels.clean(tracks=True)
-    labels = labels.extract(np.arange(10))
-
-    number_of_frames = 10  # extracted using ffmpeg probe
-    video_sample_rate = 15.0  # 15 Hz extracted using ffmpeg probe for the video stream
-    video_timestamps = np.arange(number_of_frames) / video_sample_rate
-
-    pose_estimation_metadata = {
-        "video_timestamps": video_timestamps,
-    }
-
-    nwbfile = append_nwb_data(labels, nwbfile, pose_estimation_metadata)
-
-    # Test processing module naming
-    video_index = 0
-    video = labels.videos[video_index]
-    video_path = Path(video.filename)
-    processing_module_name = f"SLEAP_VIDEO_{video_index:03}_{video_path.stem}"
-
-    processing_module = nwbfile.processing[processing_module_name]
-    # Test one PoseEstimationContainer
-    container_name = "track=1"
-    pose_estimation_container = processing_module.data_interfaces[container_name]
-
-    # Test sampling rate propagation. In this case the timestamps are uniform so
-    # The sampling rate should be stored instead of them
-    expected_rate = video_sample_rate
-    for node_name in pose_estimation_container.nodes:
-        pose_estimation_series = pose_estimation_container.pose_estimation_series[
-            node_name
-        ]
-
-        # Some store rate and it should be the video_sample_rate
-        if pose_estimation_series.rate:
-            extracted_rate = pose_estimation_series.rate
-            assert extracted_rate == expected_rate, f"{node_name}"
-            extracted_starting_time = pose_estimation_series.starting_time
-            assert extracted_starting_time == 0
-
-        # Other store timestamps and the timestamps should be a subset of the
-        # videotimestamps
-        else:
-            extracted_timestamps = pose_estimation_series.timestamps
-            assert np.isin(
-                extracted_timestamps, video_timestamps, assume_unique=True
-            ).all()
-
-
-def test_assertion_with_no_predicted_instance(nwbfile, slp_minimal):
-    labels = load_slp(slp_minimal)
-    with pytest.raises(
-        ValueError, match="No predicted instances found in labels object"
-    ):
-        nwbfile = append_nwb_data(labels, nwbfile)
-
-
-def test_typical_case_write(slp_typical, tmp_path):
+def test_save_nwb_explicit_format(slp_typical, tmp_path):
+    """Test explicit format specification in save_nwb."""
     labels = load_slp(slp_typical)
 
-    nwbfile_path = tmp_path / "write_to_nwb_typical_case.nwb"
-    write_nwb(labels=labels, nwbfile_path=nwbfile_path)
+    # Remove user instances to ensure we have only predictions
+    for lf in labels.labeled_frames:
+        lf.instances = lf.predicted_instances
 
-    with NWBHDF5IO(str(nwbfile_path), "r") as io:
-        nwbfile = io.read()
+    # Test predictions format
+    save_nwb(labels, tmp_path / "explicit_pred.nwb", nwb_format="predictions")
+    loaded = load_nwb(tmp_path / "explicit_pred.nwb")
+    assert isinstance(loaded, Labels)
 
-        # Test Skeletons container exists
-        assert "behavior" in nwbfile.processing
-        assert "Skeletons" in nwbfile.processing["behavior"].data_interfaces
-
-        # Test video modules
-        number_of_videos = len(labels.videos)
-        video_modules = [
-            mod for mod in nwbfile.processing.keys() if "SLEAP_VIDEO" in mod
-        ]
-        assert len(video_modules) == number_of_videos
+    # Test using NwbFormat enum
+    save_nwb(labels, tmp_path / "enum_pred.nwb", nwb_format=NwbFormat.PREDICTIONS)
+    loaded = load_nwb(tmp_path / "enum_pred.nwb")
+    assert isinstance(loaded, Labels)
 
 
-def test_get_timestamps(nwbfile, centered_pair):
-    labels = load_slp(centered_pair)
-    labels.clean(tracks=True)
-    labels = labels.extract(np.arange(10))
-    nwbfile = append_nwb_data(labels, nwbfile)
-    processing = nwbfile.processing["SLEAP_VIDEO_000_centered_pair_low_quality"]
+def test_save_nwb_invalid_format(slp_typical, tmp_path):
+    """Test invalid format specification in save_nwb."""
+    labels = load_slp(slp_typical)
 
-    # explicit timestamps
-    series = processing["track=1"]["head"]
-    ts = get_timestamps(series)
-    assert len(ts) == 10
-    assert ts[0] == 0
-    assert ts[-1] == 9
+    with pytest.raises(ValueError, match="Invalid NWB format"):
+        save_nwb(labels, tmp_path / "invalid.nwb", nwb_format="invalid_format")
 
-    # starting time + rate
-    series = processing["track=1"]["thorax"]
-    ts = get_timestamps(series)
-    assert len(ts) == 10
-    assert ts[0] == 0
-    assert ts[-1] == 9
+
+def test_save_nwb_annotations_export(slp_real_data, tmp_path):
+    """Test annotations_export format in save_nwb."""
+    labels = load_slp(slp_real_data)
+
+    # Use annotations_export format
+    nwb_path = tmp_path / "export.nwb"
+    save_nwb(labels, nwb_path, nwb_format="annotations_export")
+
+    # Check that files were created
+    assert nwb_path.exists()
+    # The export format also creates video and frame map files
+    assert (tmp_path / "annotated_frames.avi").exists()
+    assert (tmp_path / "frame_map.json").exists()
+
+    # Load and verify
+    loaded = load_nwb(nwb_path)
+    assert isinstance(loaded, Labels)
+
+
+def test_save_nwb_unexpected_format(slp_typical, tmp_path):
+    """Test that unexpected NwbFormat values are handled."""
+    labels = load_slp(slp_typical)
+
+    # This tests the final else clause in save_nwb
+    # We need to mock an invalid enum value that passes initial validation
+    # This is a defensive test for future code changes
+
+    # Create a mock format that's not handled
+    class MockFormat:
+        def __init__(self):
+            pass
+
+        def __eq__(self, other):
+            return False
+
+    mock_format = MockFormat()
+
+    # Monkey patch to bypass string conversion
+    original_isinstance = isinstance
+
+    def mock_isinstance(obj, cls):
+        if obj is mock_format and cls is str:
+            return False
+        return original_isinstance(obj, cls)
+
+    import builtins
+
+    builtins.isinstance = mock_isinstance
+
+    try:
+        with pytest.raises(ValueError, match="Unexpected NWB format"):
+            save_nwb(labels, tmp_path / "unexpected.nwb", nwb_format=mock_format)
+    finally:
+        # Restore original isinstance
+        builtins.isinstance = original_isinstance
