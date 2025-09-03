@@ -3,7 +3,7 @@
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import attrs
 import numpy as np
@@ -304,7 +304,7 @@ def nwb_source_videos_to_sleap_videos(
 def create_slp_to_nwb_video_map(
     sleap_videos: List[SleapVideo],
     nwb_source_videos: NwbSourceVideos,
-) -> dict[SleapVideo, ImageSeries]:
+) -> Dict[SleapVideo, ImageSeries]:
     """Create mapping from sleap-io Videos to NWB ImageSeries.
 
     Args:
@@ -335,7 +335,7 @@ def create_slp_to_nwb_video_map(
 def create_nwb_to_slp_video_map(
     nwb_image_series: List[ImageSeries],
     sleap_videos: List[SleapVideo],
-) -> dict[ImageSeries, SleapVideo]:
+) -> Dict[ImageSeries, SleapVideo]:
     """Create mapping from NWB ImageSeries to sleap-io Videos.
 
     Args:
@@ -365,7 +365,7 @@ def create_nwb_to_slp_video_map(
 def create_slp_to_nwb_skeleton_map(
     sleap_skeletons: List[SleapSkeleton],
     nwb_skeletons: NwbSkeletons,
-) -> dict[SleapSkeleton, NwbSkeleton]:
+) -> Dict[SleapSkeleton, NwbSkeleton]:
     """Create mapping from sleap-io Skeletons to NWB Skeletons.
 
     Args:
@@ -397,7 +397,7 @@ def create_slp_to_nwb_skeleton_map(
 def create_nwb_to_slp_skeleton_map(
     nwb_skeletons: NwbSkeletons,
     sleap_skeletons: List[SleapSkeleton],
-) -> dict[NwbSkeleton, SleapSkeleton]:
+) -> Dict[NwbSkeleton, SleapSkeleton]:
     """Create mapping from NWB Skeletons to sleap-io Skeletons.
 
     Args:
@@ -567,7 +567,7 @@ def nwb_training_frames_to_sleap_labeled_frames(
     nwb_training_frames: NwbTrainingFrames,
     nwb_to_slp_skeleton_map: dict[NwbSkeleton, SleapSkeleton],
     nwb_to_slp_video_map: dict[ImageSeries, SleapVideo],
-) -> list[SleapLabeledFrame]:
+) -> List[SleapLabeledFrame]:
     """Convert ndx-pose TrainingFrames to a list of sleap-io LabeledFrames.
 
     Args:
@@ -607,7 +607,7 @@ def sleap_labels_to_nwb_pose_training(
     sleap_labels: SleapLabels,
     name: str = "PoseTraining",
     annotator: Optional[str] = None,
-) -> tuple[NwbPoseTraining, NwbSkeletons]:
+) -> Tuple[NwbPoseTraining, NwbSkeletons]:
     """Convert sleap-io Labels to ndx-pose PoseTraining container and Skeletons.
 
     Args:
@@ -884,7 +884,7 @@ class FrameMap:
 
         return cls(videos=videos, frames=frames)
 
-    def to_json(self) -> dict[str, Any]:
+    def to_json(self) -> Dict[str, Any]:
         """Convert the FrameMap to a JSON-serializable dictionary.
 
         Returns:
