@@ -469,6 +469,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#nwb-format-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      NWB format operations
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -693,6 +702,15 @@
   <a href="#data-manipulation" class="md-nav__link">
     <span class="md-ellipsis">
       Data manipulation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nwb-format-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      NWB format operations
     </span>
   </a>
   
@@ -1103,6 +1121,153 @@
 <li><a href="../model/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a>: Array conversion options</li>
 <li><a href="../model/#sleap_io.Labels.update_from_numpy"><code>Labels.update_from_numpy</code></a>: Updating labels from arrays</li>
 <li><a href="https://movement.neuroinformatics.dev/"><code>movement</code></a>: Advanced pose processing library</li>
+</ul>
+</div>
+<h2 id="nwb-format-operations">NWB format operations<a class="headerlink" href="#nwb-format-operations" title="Permanent link">&para;</a></h2>
+<h3 id="working-with-nwb-files">Working with NWB files<a class="headerlink" href="#working-with-nwb-files" title="Permanent link">&para;</a></h3>
+<p><a href="https://www.nwb.org/">Neurodata Without Borders (NWB)</a> provides a standardized format for neurophysiology data. sleap-io offers comprehensive NWB support with automatic format detection.</p>
+<div class="highlight"><span class="filename">nwb_basic.py</span><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1"></a><a href="#__codelineno-17-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2"></a><a href="#__codelineno-17-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-17-3" name="__codelineno-17-3"></a><a href="#__codelineno-17-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="c1"># Load any NWB file - automatically detects if it contains</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4"></a><a href="#__codelineno-17-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="c1"># annotations (PoseTraining) or predictions (PoseEstimation)</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5"></a><a href="#__codelineno-17-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_nwb</span><span class="p">(</span><span class="s2">&quot;pose_data.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6"></a><a href="#__codelineno-17-6"><span class="linenos" data-linenos=" 6 "></span></a>
+<a id="__codelineno-17-7" name="__codelineno-17-7"></a><a href="#__codelineno-17-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="c1"># Save with automatic format detection</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8"></a><a href="#__codelineno-17-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="c1"># Uses &quot;annotations&quot; if data has user labels, &quot;predictions&quot; otherwise</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9"></a><a href="#__codelineno-17-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10"></a><a href="#__codelineno-17-10"><span class="linenos" data-linenos="10 "></span></a>
+<a id="__codelineno-17-11" name="__codelineno-17-11"></a><a href="#__codelineno-17-11"><span class="linenos" data-linenos="11 "></span></a><span class="c1"># Force specific format</span>
+<a id="__codelineno-17-12" name="__codelineno-17-12"></a><a href="#__codelineno-17-12"><span class="linenos" data-linenos="12 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;training.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;annotations&quot;</span><span class="p">)</span>
+<a id="__codelineno-17-13" name="__codelineno-17-13"></a><a href="#__codelineno-17-13"><span class="linenos" data-linenos="13 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;inference.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;predictions&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition info">
+<p class="admonition-title">Format auto-detection</p>
+<p>The harmonization layer automatically determines the appropriate format:</p>
+<ul>
+<li><strong>Annotations</strong>: Used when data contains user-labeled instances (training data)</li>
+<li><strong>Predictions</strong>: Used when data contains only predicted instances (inference results)</li>
+</ul>
+</div>
+<h3 id="save-training-data-with-rich-metadata">Save training data with rich metadata<a class="headerlink" href="#save-training-data-with-rich-metadata" title="Permanent link">&para;</a></h3>
+<p>Include detailed experimental metadata when saving training annotations.</p>
+<div class="highlight"><span class="filename">nwb_metadata.py</span><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1"></a><a href="#__codelineno-18-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io.nwb_annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">save_labels</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2"></a><a href="#__codelineno-18-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-18-3" name="__codelineno-18-3"></a><a href="#__codelineno-18-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="c1"># Save with comprehensive metadata</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4"></a><a href="#__codelineno-18-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">save_labels</span><span class="p">(</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5"></a><a href="#__codelineno-18-5"><span class="linenos" data-linenos=" 5 "></span></a>    <span class="n">labels</span><span class="p">,</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6"></a><a href="#__codelineno-18-6"><span class="linenos" data-linenos=" 6 "></span></a>    <span class="s2">&quot;training_data.nwb&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7"></a><a href="#__codelineno-18-7"><span class="linenos" data-linenos=" 7 "></span></a>    <span class="n">session_description</span><span class="o">=</span><span class="s2">&quot;Mouse skilled reaching task - training dataset&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8"></a><a href="#__codelineno-18-8"><span class="linenos" data-linenos=" 8 "></span></a>    <span class="n">identifier</span><span class="o">=</span><span class="s2">&quot;mouse_01_session_03_annotations&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9"></a><a href="#__codelineno-18-9"><span class="linenos" data-linenos=" 9 "></span></a>    <span class="n">session_start_time</span><span class="o">=</span><span class="s2">&quot;2024-01-15T09:30:00&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10"></a><a href="#__codelineno-18-10"><span class="linenos" data-linenos="10 "></span></a>    <span class="n">annotator</span><span class="o">=</span><span class="s2">&quot;John Doe&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11"></a><a href="#__codelineno-18-11"><span class="linenos" data-linenos="11 "></span></a>    <span class="n">nwb_kwargs</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12"></a><a href="#__codelineno-18-12"><span class="linenos" data-linenos="12 "></span></a>        <span class="c1"># Session metadata</span>
+<a id="__codelineno-18-13" name="__codelineno-18-13"></a><a href="#__codelineno-18-13"><span class="linenos" data-linenos="13 "></span></a>        <span class="s2">&quot;session_id&quot;</span><span class="p">:</span> <span class="s2">&quot;session_003&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-14" name="__codelineno-18-14"></a><a href="#__codelineno-18-14"><span class="linenos" data-linenos="14 "></span></a>        <span class="s2">&quot;experimenter&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;John Doe&quot;</span><span class="p">,</span> <span class="s2">&quot;Jane Smith&quot;</span><span class="p">],</span>
+<a id="__codelineno-18-15" name="__codelineno-18-15"></a><a href="#__codelineno-18-15"><span class="linenos" data-linenos="15 "></span></a>        <span class="s2">&quot;lab&quot;</span><span class="p">:</span> <span class="s2">&quot;Motor Control Lab&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-16" name="__codelineno-18-16"></a><a href="#__codelineno-18-16"><span class="linenos" data-linenos="16 "></span></a>        <span class="s2">&quot;institution&quot;</span><span class="p">:</span> <span class="s2">&quot;University of Example&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-17" name="__codelineno-18-17"></a><a href="#__codelineno-18-17"><span class="linenos" data-linenos="17 "></span></a>
+<a id="__codelineno-18-18" name="__codelineno-18-18"></a><a href="#__codelineno-18-18"><span class="linenos" data-linenos="18 "></span></a>        <span class="c1"># Experimental details</span>
+<a id="__codelineno-18-19" name="__codelineno-18-19"></a><a href="#__codelineno-18-19"><span class="linenos" data-linenos="19 "></span></a>        <span class="s2">&quot;experiment_description&quot;</span><span class="p">:</span> <span class="s2">&quot;Skilled reaching task with food pellet reward&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-20" name="__codelineno-18-20"></a><a href="#__codelineno-18-20"><span class="linenos" data-linenos="20 "></span></a>        <span class="s2">&quot;protocol&quot;</span><span class="p">:</span> <span class="s2">&quot;Protocol 2024-001&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-21" name="__codelineno-18-21"></a><a href="#__codelineno-18-21"><span class="linenos" data-linenos="21 "></span></a>        <span class="s2">&quot;surgery&quot;</span><span class="p">:</span> <span class="s2">&quot;Cranial window implant over M1&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-22" name="__codelineno-18-22"></a><a href="#__codelineno-18-22"><span class="linenos" data-linenos="22 "></span></a>
+<a id="__codelineno-18-23" name="__codelineno-18-23"></a><a href="#__codelineno-18-23"><span class="linenos" data-linenos="23 "></span></a>        <span class="c1"># Subject information</span>
+<a id="__codelineno-18-24" name="__codelineno-18-24"></a><a href="#__codelineno-18-24"><span class="linenos" data-linenos="24 "></span></a>        <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-18-25" name="__codelineno-18-25"></a><a href="#__codelineno-18-25"><span class="linenos" data-linenos="25 "></span></a>            <span class="s2">&quot;subject_id&quot;</span><span class="p">:</span> <span class="s2">&quot;mouse_01&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-26" name="__codelineno-18-26"></a><a href="#__codelineno-18-26"><span class="linenos" data-linenos="26 "></span></a>            <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="s2">&quot;P90&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-27" name="__codelineno-18-27"></a><a href="#__codelineno-18-27"><span class="linenos" data-linenos="27 "></span></a>            <span class="s2">&quot;sex&quot;</span><span class="p">:</span> <span class="s2">&quot;M&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-28" name="__codelineno-18-28"></a><a href="#__codelineno-18-28"><span class="linenos" data-linenos="28 "></span></a>            <span class="s2">&quot;species&quot;</span><span class="p">:</span> <span class="s2">&quot;Mus musculus&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-29" name="__codelineno-18-29"></a><a href="#__codelineno-18-29"><span class="linenos" data-linenos="29 "></span></a>            <span class="s2">&quot;strain&quot;</span><span class="p">:</span> <span class="s2">&quot;C57BL/6J&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-30" name="__codelineno-18-30"></a><a href="#__codelineno-18-30"><span class="linenos" data-linenos="30 "></span></a>            <span class="s2">&quot;weight&quot;</span><span class="p">:</span> <span class="s2">&quot;25g&quot;</span>
+<a id="__codelineno-18-31" name="__codelineno-18-31"></a><a href="#__codelineno-18-31"><span class="linenos" data-linenos="31 "></span></a>        <span class="p">}</span>
+<a id="__codelineno-18-32" name="__codelineno-18-32"></a><a href="#__codelineno-18-32"><span class="linenos" data-linenos="32 "></span></a>    <span class="p">}</span>
+<a id="__codelineno-18-33" name="__codelineno-18-33"></a><a href="#__codelineno-18-33"><span class="linenos" data-linenos="33 "></span></a><span class="p">)</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Metadata best practices</p>
+<p>Include as much metadata as possible for reproducibility:</p>
+<ul>
+<li>Experimental protocol details</li>
+<li>Subject information</li>
+<li>Recording conditions</li>
+<li>Annotator identity for tracking labeling provenance</li>
+</ul>
+</div>
+<h3 id="export-dataset-with-embedded-videos">Export dataset with embedded videos<a class="headerlink" href="#export-dataset-with-embedded-videos" title="Permanent link">&para;</a></h3>
+<p>Create self-contained NWB files with video frames for sharing complete datasets.</p>
+<div class="highlight"><span class="filename">nwb_export.py</span><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1"></a><a href="#__codelineno-19-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io.nwb_annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_labels</span><span class="p">,</span> <span class="n">export_labeled_frames</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2"></a><a href="#__codelineno-19-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-19-3" name="__codelineno-19-3"></a><a href="#__codelineno-19-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="c1"># Method 1: Export complete dataset with all videos</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4"></a><a href="#__codelineno-19-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">export_labels</span><span class="p">(</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5"></a><a href="#__codelineno-19-5"><span class="linenos" data-linenos=" 5 "></span></a>    <span class="n">labels</span><span class="p">,</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6"></a><a href="#__codelineno-19-6"><span class="linenos" data-linenos=" 6 "></span></a>    <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;export/&quot;</span><span class="p">,</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7"></a><a href="#__codelineno-19-7"><span class="linenos" data-linenos=" 7 "></span></a>    <span class="n">nwb_filename</span><span class="o">=</span><span class="s2">&quot;complete_dataset.nwb&quot;</span><span class="p">,</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8"></a><a href="#__codelineno-19-8"><span class="linenos" data-linenos=" 8 "></span></a>    <span class="n">as_training</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>      <span class="c1"># Include manual annotations</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9"></a><a href="#__codelineno-19-9"><span class="linenos" data-linenos=" 9 "></span></a>    <span class="n">include_videos</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># Embed all video frames</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10"></a><a href="#__codelineno-19-10"><span class="linenos" data-linenos="10 "></span></a>    <span class="n">include_skeleton</span><span class="o">=</span><span class="kc">True</span>   <span class="c1"># Include skeleton definition</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11"></a><a href="#__codelineno-19-11"><span class="linenos" data-linenos="11 "></span></a><span class="p">)</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12"></a><a href="#__codelineno-19-12"><span class="linenos" data-linenos="12 "></span></a>
+<a id="__codelineno-19-13" name="__codelineno-19-13"></a><a href="#__codelineno-19-13"><span class="linenos" data-linenos="13 "></span></a><span class="c1"># Method 2: Export only frames with labels as a new video</span>
+<a id="__codelineno-19-14" name="__codelineno-19-14"></a><a href="#__codelineno-19-14"><span class="linenos" data-linenos="14 "></span></a><span class="n">export_labeled_frames</span><span class="p">(</span>
+<a id="__codelineno-19-15" name="__codelineno-19-15"></a><a href="#__codelineno-19-15"><span class="linenos" data-linenos="15 "></span></a>    <span class="n">labels</span><span class="p">,</span>
+<a id="__codelineno-19-16" name="__codelineno-19-16"></a><a href="#__codelineno-19-16"><span class="linenos" data-linenos="16 "></span></a>    <span class="n">output_path</span><span class="o">=</span><span class="s2">&quot;labeled_frames.avi&quot;</span><span class="p">,</span>         <span class="c1"># MJPEG video output</span>
+<a id="__codelineno-19-17" name="__codelineno-19-17"></a><a href="#__codelineno-19-17"><span class="linenos" data-linenos="17 "></span></a>    <span class="n">labels_output_path</span><span class="o">=</span><span class="s2">&quot;labeled_frames.nwb&quot;</span><span class="p">,</span>  <span class="c1"># Corresponding labels</span>
+<a id="__codelineno-19-18" name="__codelineno-19-18"></a><a href="#__codelineno-19-18"><span class="linenos" data-linenos="18 "></span></a>    <span class="n">fps</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>                                  <span class="c1"># Output frame rate</span>
+<a id="__codelineno-19-19" name="__codelineno-19-19"></a><a href="#__codelineno-19-19"><span class="linenos" data-linenos="19 "></span></a>    <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span>                                  <span class="c1"># Video scale factor</span>
+<a id="__codelineno-19-20" name="__codelineno-19-20"></a><a href="#__codelineno-19-20"><span class="linenos" data-linenos="20 "></span></a><span class="p">)</span>
+<a id="__codelineno-19-21" name="__codelineno-19-21"></a><a href="#__codelineno-19-21"><span class="linenos" data-linenos="21 "></span></a>
+<a id="__codelineno-19-22" name="__codelineno-19-22"></a><a href="#__codelineno-19-22"><span class="linenos" data-linenos="22 "></span></a><span class="c1"># The export includes a FrameMap JSON file tracking frame origins</span>
+<a id="__codelineno-19-23" name="__codelineno-19-23"></a><a href="#__codelineno-19-23"><span class="linenos" data-linenos="23 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<a id="__codelineno-19-24" name="__codelineno-19-24"></a><a href="#__codelineno-19-24"><span class="linenos" data-linenos="24 "></span></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;labeled_frames.frame_map.json&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-19-25" name="__codelineno-19-25"></a><a href="#__codelineno-19-25"><span class="linenos" data-linenos="25 "></span></a>    <span class="n">frame_map</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<a id="__codelineno-19-26" name="__codelineno-19-26"></a><a href="#__codelineno-19-26"><span class="linenos" data-linenos="26 "></span></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exported </span><span class="si">{</span><span class="n">frame_map</span><span class="p">[</span><span class="s1">&#39;total_frames&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> frames from </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">frame_map</span><span class="p">[</span><span class="s1">&#39;videos&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> videos&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition info">
+<p class="admonition-title">Export formats</p>
+<ul>
+<li><strong>Full export</strong>: Includes all video frames, creating large but complete files</li>
+<li><strong>Labeled frames only</strong>: Exports just frames with annotations, reducing file size</li>
+<li><strong>Frame provenance</strong>: JSON metadata tracks which frames came from which source videos</li>
+</ul>
+</div>
+<h3 id="convert-between-nwb-and-other-formats">Convert between NWB and other formats<a class="headerlink" href="#convert-between-nwb-and-other-formats" title="Permanent link">&para;</a></h3>
+<p>Use NWB as an interchange format between different pose tracking tools.</p>
+<div class="highlight"><span class="filename">nwb_conversion.py</span><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1"></a><a href="#__codelineno-20-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2"></a><a href="#__codelineno-20-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-20-3" name="__codelineno-20-3"></a><a href="#__codelineno-20-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="c1"># Load from DeepLabCut</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4"></a><a href="#__codelineno-20-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">dlc_data</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;dlc_predictions.h5&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5"></a><a href="#__codelineno-20-5"><span class="linenos" data-linenos=" 5 "></span></a>
+<a id="__codelineno-20-6" name="__codelineno-20-6"></a><a href="#__codelineno-20-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="c1"># Save as NWB predictions</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7"></a><a href="#__codelineno-20-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">dlc_data</span><span class="p">,</span> <span class="s2">&quot;dlc_in_nwb.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;predictions&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8"></a><a href="#__codelineno-20-8"><span class="linenos" data-linenos=" 8 "></span></a>
+<a id="__codelineno-20-9" name="__codelineno-20-9"></a><a href="#__codelineno-20-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="c1"># Load SLEAP training data</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10"></a><a href="#__codelineno-20-10"><span class="linenos" data-linenos="10 "></span></a><span class="n">sleap_labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;training.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-11" name="__codelineno-20-11"></a><a href="#__codelineno-20-11"><span class="linenos" data-linenos="11 "></span></a>
+<a id="__codelineno-20-12" name="__codelineno-20-12"></a><a href="#__codelineno-20-12"><span class="linenos" data-linenos="12 "></span></a><span class="c1"># Export as NWB with videos for sharing</span>
+<a id="__codelineno-20-13" name="__codelineno-20-13"></a><a href="#__codelineno-20-13"><span class="linenos" data-linenos="13 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">sleap_labels</span><span class="p">,</span> <span class="s2">&quot;training_export.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;annotations_export&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-14" name="__codelineno-20-14"></a><a href="#__codelineno-20-14"><span class="linenos" data-linenos="14 "></span></a>
+<a id="__codelineno-20-15" name="__codelineno-20-15"></a><a href="#__codelineno-20-15"><span class="linenos" data-linenos="15 "></span></a><span class="c1"># Convert NWB back to SLEAP format</span>
+<a id="__codelineno-20-16" name="__codelineno-20-16"></a><a href="#__codelineno-20-16"><span class="linenos" data-linenos="16 "></span></a><span class="n">nwb_labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_nwb</span><span class="p">(</span><span class="s2">&quot;training_export.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-17" name="__codelineno-20-17"></a><a href="#__codelineno-20-17"><span class="linenos" data-linenos="17 "></span></a><span class="n">nwb_labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;converted.slp&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Format preservation</p>
+<p>NWB format preserves:</p>
+<ul>
+<li>Complete skeleton structure with node names</li>
+<li>Track identities</li>
+<li>Confidence scores</li>
+<li>User vs predicted instance types</li>
+<li>Video metadata (when using <code>annotations_export</code>)</li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">See also</p>
+<ul>
+<li><a href="../formats/#nwb-format-nwb">NWB Format Documentation</a>: Complete NWB format reference</li>
+<li><a href="../formats/#sleap_io.load_nwb"><code>load_nwb</code></a>: NWB loading function</li>
+<li><a href="../formats/#sleap_io.save_nwb"><code>save_nwb</code></a>: NWB saving function with format options</li>
 </ul>
 </div>
 
