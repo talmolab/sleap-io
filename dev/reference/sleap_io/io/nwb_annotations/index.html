@@ -764,7 +764,7 @@
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sanitize_nwb_name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.nwb_annotations.sanitize_nwb_name&lt;/code&gt;)" href="#sleap_io.io.nwb_annotations.sanitize_nwb_name">sanitize_nwb_name</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;sanitize_nwb_name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;List&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.nwb_annotations.sanitize_nwb_name&lt;/code&gt;)" href="#sleap_io.io.nwb_annotations.sanitize_nwb_name">sanitize_nwb_name</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Sanitize a name for use in NWB files.</p>
@@ -1737,7 +1737,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
                 <code>sleap_skeletons</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>]</code>
+                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1802,7 +1802,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-403" name="__codelineno-0-403"></a><a href="#__codelineno-0-403"><span class="linenos" data-linenos="403 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">create_nwb_to_slp_skeleton_map</span><span class="p">(</span>
 <a id="__codelineno-0-404" name="__codelineno-0-404"></a><a href="#__codelineno-0-404"><span class="linenos" data-linenos="404 "></span></a>    <span class="n">nwb_skeletons</span><span class="p">:</span> <span class="n">NwbSkeletons</span><span class="p">,</span>
-<a id="__codelineno-0-405" name="__codelineno-0-405"></a><a href="#__codelineno-0-405"><span class="linenos" data-linenos="405 "></span></a>    <span class="n">sleap_skeletons</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">],</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a><a href="#__codelineno-0-405"><span class="linenos" data-linenos="405 "></span></a>    <span class="n">sleap_skeletons</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">],</span>
 <a id="__codelineno-0-406" name="__codelineno-0-406"></a><a href="#__codelineno-0-406"><span class="linenos" data-linenos="406 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="n">NwbSkeleton</span><span class="p">,</span> <span class="n">SleapSkeleton</span><span class="p">]:</span>
 <a id="__codelineno-0-407" name="__codelineno-0-407"></a><a href="#__codelineno-0-407"><span class="linenos" data-linenos="407 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Create mapping from NWB Skeletons to sleap-io Skeletons.</span>
 <a id="__codelineno-0-408" name="__codelineno-0-408"></a><a href="#__codelineno-0-408"><span class="linenos" data-linenos="408 "></span></a>
@@ -1866,7 +1866,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
                 <code>nwb_image_series</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<span title="pynwb.image.ImageSeries">ImageSeries</span>]</code>
+                  <code><span title="typing.List">List</span>[<span title="pynwb.image.ImageSeries">ImageSeries</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1882,7 +1882,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
                 <code>sleap_videos</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../../../model/#sleap_io.Video">Video</a>]</code>
+                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../../../model/#sleap_io.Video">Video</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1946,8 +1946,8 @@ indicating which source video and frame index each MJPEG frame came from.</p>
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-341" name="__codelineno-0-341"></a><a href="#__codelineno-0-341"><span class="linenos" data-linenos="341 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">create_nwb_to_slp_video_map</span><span class="p">(</span>
-<a id="__codelineno-0-342" name="__codelineno-0-342"></a><a href="#__codelineno-0-342"><span class="linenos" data-linenos="342 "></span></a>    <span class="n">nwb_image_series</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ImageSeries</span><span class="p">],</span>
-<a id="__codelineno-0-343" name="__codelineno-0-343"></a><a href="#__codelineno-0-343"><span class="linenos" data-linenos="343 "></span></a>    <span class="n">sleap_videos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">],</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a><a href="#__codelineno-0-342"><span class="linenos" data-linenos="342 "></span></a>    <span class="n">nwb_image_series</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ImageSeries</span><span class="p">],</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a><a href="#__codelineno-0-343"><span class="linenos" data-linenos="343 "></span></a>    <span class="n">sleap_videos</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">],</span>
 <a id="__codelineno-0-344" name="__codelineno-0-344"></a><a href="#__codelineno-0-344"><span class="linenos" data-linenos="344 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="n">ImageSeries</span><span class="p">,</span> <span class="n">SleapVideo</span><span class="p">]:</span>
 <a id="__codelineno-0-345" name="__codelineno-0-345"></a><a href="#__codelineno-0-345"><span class="linenos" data-linenos="345 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Create mapping from NWB ImageSeries to sleap-io Videos.</span>
 <a id="__codelineno-0-346" name="__codelineno-0-346"></a><a href="#__codelineno-0-346"><span class="linenos" data-linenos="346 "></span></a>
@@ -2009,7 +2009,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
                 <code>sleap_skeletons</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>]</code>
+                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../../../model/#sleap_io.Skeleton">Skeleton</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2089,7 +2089,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-371" name="__codelineno-0-371"></a><a href="#__codelineno-0-371"><span class="linenos" data-linenos="371 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">create_slp_to_nwb_skeleton_map</span><span class="p">(</span>
-<a id="__codelineno-0-372" name="__codelineno-0-372"></a><a href="#__codelineno-0-372"><span class="linenos" data-linenos="372 "></span></a>    <span class="n">sleap_skeletons</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">],</span>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a><a href="#__codelineno-0-372"><span class="linenos" data-linenos="372 "></span></a>    <span class="n">sleap_skeletons</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">],</span>
 <a id="__codelineno-0-373" name="__codelineno-0-373"></a><a href="#__codelineno-0-373"><span class="linenos" data-linenos="373 "></span></a>    <span class="n">nwb_skeletons</span><span class="p">:</span> <span class="n">NwbSkeletons</span><span class="p">,</span>
 <a id="__codelineno-0-374" name="__codelineno-0-374"></a><a href="#__codelineno-0-374"><span class="linenos" data-linenos="374 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">,</span> <span class="n">NwbSkeleton</span><span class="p">]:</span>
 <a id="__codelineno-0-375" name="__codelineno-0-375"></a><a href="#__codelineno-0-375"><span class="linenos" data-linenos="375 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Create mapping from sleap-io Skeletons to NWB Skeletons.</span>
@@ -2154,7 +2154,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
                 <code>sleap_videos</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../../../model/#sleap_io.Video">Video</a>]</code>
+                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../../../model/#sleap_io.Video">Video</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2234,7 +2234,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-304" name="__codelineno-0-304"></a><a href="#__codelineno-0-304"><span class="linenos" data-linenos="304 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">create_slp_to_nwb_video_map</span><span class="p">(</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a><a href="#__codelineno-0-305"><span class="linenos" data-linenos="305 "></span></a>    <span class="n">sleap_videos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">],</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a><a href="#__codelineno-0-305"><span class="linenos" data-linenos="305 "></span></a>    <span class="n">sleap_videos</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">],</span>
 <a id="__codelineno-0-306" name="__codelineno-0-306"></a><a href="#__codelineno-0-306"><span class="linenos" data-linenos="306 "></span></a>    <span class="n">nwb_source_videos</span><span class="p">:</span> <span class="n">NwbSourceVideos</span><span class="p">,</span>
 <a id="__codelineno-0-307" name="__codelineno-0-307"></a><a href="#__codelineno-0-307"><span class="linenos" data-linenos="307 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">,</span> <span class="n">ImageSeries</span><span class="p">]:</span>
 <a id="__codelineno-0-308" name="__codelineno-0-308"></a><a href="#__codelineno-0-308"><span class="linenos" data-linenos="308 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Create mapping from sleap-io Videos to NWB ImageSeries.</span>
@@ -3846,7 +3846,7 @@ Skeletons.</p>
 
 
 <h3 id="sleap_io.io.nwb_annotations.sanitize_nwb_name" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">List</span><span class="p">)</span></code>
 
 <a href="#sleap_io.io.nwb_annotations.sanitize_nwb_name" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3913,7 +3913,7 @@ Skeletons.</p>
 
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-32" name="__codelineno-0-32"></a><a href="#__codelineno-0-32"><span class="linenos" data-linenos="32 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-32" name="__codelineno-0-32"></a><a href="#__codelineno-0-32"><span class="linenos" data-linenos="32 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sanitize_nwb_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33"></a><a href="#__codelineno-0-33"><span class="linenos" data-linenos="33 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sanitize a name for use in NWB files.</span>
 <a id="__codelineno-0-34" name="__codelineno-0-34"></a><a href="#__codelineno-0-34"><span class="linenos" data-linenos="34 "></span></a>
 <a id="__codelineno-0-35" name="__codelineno-0-35"></a><a href="#__codelineno-0-35"><span class="linenos" data-linenos="35 "></span></a><span class="sd">    NWB names cannot contain &#39;/&#39; or &#39;:&#39; characters.</span>
@@ -4531,7 +4531,7 @@ experiment_description, etc.</p>
                 <code>sleap_labeled_frames</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../../../model/#sleap_io.LabeledFrame">LabeledFrame</a>]</code>
+                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../../../model/#sleap_io.LabeledFrame">LabeledFrame</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4637,7 +4637,7 @@ Skeletons.</p>
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-532" name="__codelineno-0-532"></a><a href="#__codelineno-0-532"><span class="linenos" data-linenos="532 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sleap_labeled_frames_to_nwb_training_frames</span><span class="p">(</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a><a href="#__codelineno-0-533"><span class="linenos" data-linenos="533 "></span></a>    <span class="n">sleap_labeled_frames</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SleapLabeledFrame</span><span class="p">],</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><a href="#__codelineno-0-533"><span class="linenos" data-linenos="533 "></span></a>    <span class="n">sleap_labeled_frames</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SleapLabeledFrame</span><span class="p">],</span>
 <a id="__codelineno-0-534" name="__codelineno-0-534"></a><a href="#__codelineno-0-534"><span class="linenos" data-linenos="534 "></span></a>    <span class="n">slp_to_nwb_skeleton_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">,</span> <span class="n">NwbSkeleton</span><span class="p">],</span>
 <a id="__codelineno-0-535" name="__codelineno-0-535"></a><a href="#__codelineno-0-535"><span class="linenos" data-linenos="535 "></span></a>    <span class="n">slp_to_nwb_video_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">,</span> <span class="n">ImageSeries</span><span class="p">],</span>
 <a id="__codelineno-0-536" name="__codelineno-0-536"></a><a href="#__codelineno-0-536"><span class="linenos" data-linenos="536 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;TrainingFrames&quot;</span><span class="p">,</span>
@@ -5204,7 +5204,7 @@ Skeletons.</p>
                 <code>sleap_videos</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../../../model/#sleap_io.Video">Video</a>]</code>
+                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../../../model/#sleap_io.Video">Video</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5284,7 +5284,7 @@ Skeletons.</p>
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-257" name="__codelineno-0-257"></a><a href="#__codelineno-0-257"><span class="linenos" data-linenos="257 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sleap_videos_to_nwb_source_videos</span><span class="p">(</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a><a href="#__codelineno-0-258"><span class="linenos" data-linenos="258 "></span></a>    <span class="n">sleap_videos</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">],</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a><a href="#__codelineno-0-258"><span class="linenos" data-linenos="258 "></span></a>    <span class="n">sleap_videos</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">],</span>
 <a id="__codelineno-0-259" name="__codelineno-0-259"></a><a href="#__codelineno-0-259"><span class="linenos" data-linenos="259 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;SourceVideos&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-260" name="__codelineno-0-260"></a><a href="#__codelineno-0-260"><span class="linenos" data-linenos="260 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NwbSourceVideos</span><span class="p">:</span>
 <a id="__codelineno-0-261" name="__codelineno-0-261"></a><a href="#__codelineno-0-261"><span class="linenos" data-linenos="261 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a list of sleap-io Videos to ndx-pose SourceVideos container.</span>
