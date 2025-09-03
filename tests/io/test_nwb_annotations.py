@@ -1178,3 +1178,23 @@ def test_training_frame_without_source_video():
             nwb_to_slp_skeleton_map,
             nwb_to_slp_video_map
         )
+
+
+def test_non_external_image_series_format():
+    """Test error handling for non-external ImageSeries format."""
+    from pynwb.image import ImageSeries
+    import numpy as np
+    
+    # Create ImageSeries with 'raw' format (embedded data, not external file)
+    image_series = ImageSeries(
+        name="raw_video",
+        description="Test video with raw data",
+        data=np.zeros((10, 100, 100)),  # 10 frames of 100x100
+        unit="NA",
+        format="raw",  # Not 'external' format
+        rate=30.0,
+    )
+    
+    # Try to convert to sleap-io Video - should raise ValueError
+    with pytest.raises(ValueError, match="Unsupported ImageSeries format: raw"):
+        nwb_image_series_to_sleap_video(image_series)

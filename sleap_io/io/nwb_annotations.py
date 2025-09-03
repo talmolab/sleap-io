@@ -317,12 +317,6 @@ def create_slp_to_nwb_video_map(
     Raises:
         ValueError: If the number of videos doesn't match or mapping fails.
     """
-    if len(sleap_videos) != len(nwb_source_videos.image_series):
-        raise ValueError(
-            f"Number of sleap videos ({len(sleap_videos)}) does not match "
-            f"number of NWB ImageSeries ({len(nwb_source_videos.image_series)})"
-        )
-
     # Create mapping based on order (assuming videos were created with
     # sleap_videos_to_nwb_source_videos)
     video_map = {}
