@@ -91,6 +91,23 @@ def test_load_slp_with_provenance(slp_predictions_with_provenance):
     assert provenance["sleap_version"] == "1.2.7"
 
 
+def test_legacy_coordinate_system(slp_legacy_grid_labels):
+    """Test that legacy SLP files with FORMAT_ID = 1.0 have correct coordinates.
+
+    Legacy files use a coordinate system where the top-left of the pixel is at (0, 0).
+    Newer files (FORMAT_ID >= 1.1) use (-0.5, -0.5) for the top-left of the pixel,
+    with the pixel center at the origin.
+    """
+    labels = read_labels(slp_legacy_grid_labels)
+
+    # Get the first instance from the first frame
+    inst = labels[0][0]
+
+    # Check that the coordinates match the expected legacy coordinate system
+    # These coordinates should reflect the adjustment from pixel corners to centers
+    np.testing.assert_array_equal(inst.numpy(), [[-1, -1], [-0.5, -0.5], [-1, 0]])
+
+
 def test_read_instances_from_predicted(slp_real_data):
     labels = read_labels(slp_real_data)
 

@@ -1144,8 +1144,13 @@ def read_instances(
 
         if instance_type == InstanceType.USER:
             pts_data = points[point_id_start:point_id_end]
+            coords = np.column_stack([pts_data["x"], pts_data["y"]])
+            if format_id < 1.1:
+                # Legacy coordinate system: top-left of pixel is (0, 0)
+                # Adjust to new system: center of pixel is (0, 0)
+                coords = coords - 0.5
             inst = Instance(
-                np.column_stack([pts_data["x"], pts_data["y"]]),
+                coords,
                 skeleton=skeleton,
                 track=track,
                 tracking_score=tracking_score,
@@ -1156,8 +1161,13 @@ def read_instances(
 
         elif instance_type == InstanceType.PREDICTED:
             pts_data = pred_points[point_id_start:point_id_end]
+            coords = np.column_stack([pts_data["x"], pts_data["y"]])
+            if format_id < 1.1:
+                # Legacy coordinate system: top-left of pixel is (0, 0)
+                # Adjust to new system: center of pixel is (0, 0)
+                coords = coords - 0.5
             inst = PredictedInstance(
-                np.column_stack([pts_data["x"], pts_data["y"]]),
+                coords,
                 skeleton=skeleton,
                 track=track,
                 score=instance_score,

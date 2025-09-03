@@ -223,3 +223,18 @@ def clip_2nodes_slp():
     v1.3.2. It allows for more metadata, but breaks legacy decoders.
     """
     return "tests/data/slp/clip.2node.slp"
+
+
+@pytest.fixture
+def slp_legacy_grid_labels():
+    """Legacy SLP file with FORMAT_ID = 1.0 and old coordinate system.
+
+    This file uses the legacy coordinate system where:
+    - The top-left corner of the pixel is at (0, 0)
+    - This differs from newer files (FORMAT_ID >= 1.1) where the top-left
+      of the pixel is at (-0.5, -0.5), with the pixel center at the origin
+
+    This coordinate system change affects how instance points are interpreted
+    relative to the image pixels.
+    """
+    return "tests/data/slp/test_grid_labels.legacy.slp"
