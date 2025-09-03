@@ -543,7 +543,7 @@ class MediaVideo(VideoBackend):
 
         if not success:
             raise IndexError(f"Failed to read frame index {frame_idx}.")
-        
+
         return img
 
     def _read_frames(self, frame_inds: list) -> np.ndarray:
