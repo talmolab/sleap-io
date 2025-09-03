@@ -978,17 +978,17 @@ def test_frame_map_json_roundtrip(slp_real_data, tmp_path):
     """Test FrameMap JSON serialization and deserialization roundtrip."""
     # Load original labels
     original_labels = sio.load_slp(slp_real_data)
-    
+
     # Use first few frames to keep test manageable
     limited_labels = SleapLabels(
         skeletons=original_labels.skeletons,
         videos=original_labels.videos,
         labeled_frames=original_labels.labeled_frames[:3],
     )
-    
+
     # Export labels to create a FrameMap
     export_dir = tmp_path / "frame_map_test"
-    
+
     export_labels(
         limited_labels,
         output_dir=export_dir,
@@ -997,59 +997,59 @@ def test_frame_map_json_roundtrip(slp_real_data, tmp_path):
         nwb_filename="test_training.nwb",
         clean=False,
     )
-    
+
     # Check that the JSON file was created
     json_path = export_dir / "test_map.json"
     assert json_path.exists()
-    
+
     # Load the FrameMap from JSON
     frame_map_loaded = FrameMap.load(json_path)
-    
+
     # Verify the loaded FrameMap has correct attributes
     assert frame_map_loaded.frame_map_filename == str(json_path)
     assert frame_map_loaded.nwb_filename == str(export_dir / "test_training.nwb")
     assert frame_map_loaded.mjpeg_filename == str(export_dir / "test_video.avi")
     assert len(frame_map_loaded.videos) == len(limited_labels.videos)
     assert len(frame_map_loaded.frames) == 3
-    
+
     # Verify frame info
     for i, frame_info in enumerate(frame_map_loaded.frames):
         assert frame_info.video_ind == 0  # All frames from first video
         assert frame_info.frame_idx == limited_labels.labeled_frames[i].frame_idx
-    
+
     # Test roundtrip: save loaded FrameMap back to JSON
     json_path2 = tmp_path / "roundtrip_map.json"
     frame_map_loaded.save(json_path2)
-    
+
     # Load again and verify
     frame_map_roundtrip = FrameMap.load(json_path2)
-    
+
     assert frame_map_roundtrip.nwb_filename == frame_map_loaded.nwb_filename
     assert frame_map_roundtrip.mjpeg_filename == frame_map_loaded.mjpeg_filename
     assert len(frame_map_roundtrip.videos) == len(frame_map_loaded.videos)
     assert len(frame_map_roundtrip.frames) == len(frame_map_loaded.frames)
-    
+
     # Verify videos match
     for v1, v2 in zip(frame_map_loaded.videos, frame_map_roundtrip.videos):
         assert sanitize_filename(v1.filename) == sanitize_filename(v2.filename)
-    
+
     # Verify frames match
     for f1, f2 in zip(frame_map_loaded.frames, frame_map_roundtrip.frames):
         assert f1.video_ind == f2.video_ind
         assert f1.frame_idx == f2.frame_idx
-    
+
     # Test with custom FrameMap creation
     custom_videos = [
         SleapVideo(filename="video1.mp4", open_backend=False),
-        SleapVideo(filename="video2.mp4", open_backend=False)
+        SleapVideo(filename="video2.mp4", open_backend=False),
     ]
-    
+
     custom_frames = [
         FrameInfo(video_ind=0, frame_idx=10),
         FrameInfo(video_ind=1, frame_idx=20),
         FrameInfo(video_ind=0, frame_idx=30),
     ]
-    
+
     custom_frame_map = FrameMap(
         frame_map_filename="custom_map.json",
         nwb_filename="custom.nwb",
@@ -1057,20 +1057,20 @@ def test_frame_map_json_roundtrip(slp_real_data, tmp_path):
         videos=custom_videos,
         frames=custom_frames,
     )
-    
+
     # Save to JSON
     custom_json_path = tmp_path / "custom_map.json"
     custom_frame_map.save(custom_json_path)
-    
+
     # Load and verify
     custom_loaded = FrameMap.load(custom_json_path)
-    
+
     assert custom_loaded.frame_map_filename == str(custom_json_path)
     assert custom_loaded.nwb_filename == "custom.nwb"
     assert custom_loaded.mjpeg_filename == "custom.avi"
     assert len(custom_loaded.videos) == 2
     assert len(custom_loaded.frames) == 3
-    
+
     # Verify custom frame data preserved
     assert custom_loaded.frames[0].video_ind == 0
     assert custom_loaded.frames[0].frame_idx == 10
@@ -1084,13 +1084,14 @@ def test_unsupported_video_backend(slp_minimal_pkg):
     """Test error handling for unsupported video backend (HDF5Video)."""
     # Load labels with HDF5Video backend
     labels = sio.load_slp(slp_minimal_pkg)
-    
+
     # The pkg.slp file should have HDF5Video backend
     assert len(labels.videos) > 0
     video = labels.videos[0]
-    
+
     # Try to convert to NWB ImageSeries - should raise ValueError
     from sleap_io.io.video_reading import HDF5Video
+
     if isinstance(video.backend, HDF5Video):
         with pytest.raises(ValueError, match="Unsupported video backend"):
             sleap_video_to_nwb_image_series(video)
@@ -1104,19 +1105,21 @@ def test_unsupported_video_backend(slp_minimal_pkg):
 def test_default_name_generation_from_video():
     """Test default name generation when name is None."""
     from sleap_io.io.video_reading import ImageVideo
-    
+
     # Test with single filename
     video_single = SleapVideo(filename="test_video.mp4", open_backend=False)
     video_single.backend = ImageVideo(["dummy.png"])  # Use ImageVideo backend
-    
+
     # Call without name - should generate from filename
     image_series = sleap_video_to_nwb_image_series(video_single, name=None)
-    assert image_series.name == "test_video.mp4"  # Uses filename as-is (dots are allowed)
-    
+    assert (
+        image_series.name == "test_video.mp4"
+    )  # Uses filename as-is (dots are allowed)
+
     # Test with list of filenames
     video_list = SleapVideo(filename=["frame1.png", "frame2.png"], open_backend=False)
     video_list.backend = ImageVideo(["frame1.png", "frame2.png"])
-    
+
     # Call without name - should use first filename
     image_series_list = sleap_video_to_nwb_image_series(video_list, name=None)
     assert image_series_list.name == "frame1.png"  # Uses first filename as-is
@@ -1127,64 +1130,58 @@ def test_training_frame_without_source_video():
     # Create skeleton
     skeleton = SleapSkeleton(nodes=["A", "B"], edges=[(0, 1)])
     nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
-    
-    # Create NWB Skeletons container
-    nwb_skeletons = NwbSkeletons(name="Skeletons", skeletons=[nwb_skeleton])
-    
+
+    # Create NWB Skeletons container (not used but would be in real scenario)
+    _ = NwbSkeletons(name="Skeletons", skeletons=[nwb_skeleton])
+
     # Create a simple instance
-    instance = SleapInstance.from_numpy(
-        np.array([[0, 0], [1, 1]]), 
-        skeleton=skeleton
-    )
+    instance = SleapInstance.from_numpy(np.array([[0, 0], [1, 1]]), skeleton=skeleton)
     nwb_instance = sleap_instance_to_nwb_skeleton_instance(
         instance, nwb_skeleton, name="instance_0"
     )
-    
+
     # Create SkeletonInstances container
     from ndx_pose import SkeletonInstances as NwbSkeletonInstances
+
     skeleton_instances = NwbSkeletonInstances(
-        name="skeleton_instances", 
-        skeleton_instances=[nwb_instance]
+        name="skeleton_instances", skeleton_instances=[nwb_instance]
     )
-    
+
     # Create TrainingFrame WITHOUT source_video (set to None explicitly)
     from ndx_pose import TrainingFrame as NwbTrainingFrame
     from ndx_pose import TrainingFrames as NwbTrainingFrames
-    
+
     training_frame = NwbTrainingFrame(
         name="frame_0",
         skeleton_instances=skeleton_instances,
         source_video=None,  # No source video
-        source_video_frame_index=None
+        source_video_frame_index=None,
     )
-    
+
     # Create TrainingFrames container
     training_frames = NwbTrainingFrames(
-        name="training_frames",
-        training_frames=[training_frame]
+        name="training_frames", training_frames=[training_frame]
     )
-    
+
     # Create skeleton mapping
     nwb_to_slp_skeleton_map = {nwb_skeleton: skeleton}
-    
+
     # Create a dummy video for the mapping (won't be used due to None source_video)
-    dummy_video = SleapVideo(filename="dummy.mp4", open_backend=False)
+    _ = SleapVideo(filename="dummy.mp4", open_backend=False)
     nwb_to_slp_video_map = {}  # Empty map since source_video is None
-    
+
     # This should raise ValueError because source_video is None
     with pytest.raises(ValueError, match="TrainingFrame must have a source_video"):
         nwb_training_frames_to_sleap_labeled_frames(
-            training_frames,
-            nwb_to_slp_skeleton_map,
-            nwb_to_slp_video_map
+            training_frames, nwb_to_slp_skeleton_map, nwb_to_slp_video_map
         )
 
 
 def test_non_external_image_series_format():
     """Test error handling for non-external ImageSeries format."""
-    from pynwb.image import ImageSeries
     import numpy as np
-    
+    from pynwb.image import ImageSeries
+
     # Create ImageSeries with 'raw' format (embedded data, not external file)
     image_series = ImageSeries(
         name="raw_video",
@@ -1194,7 +1191,7 @@ def test_non_external_image_series_format():
         format="raw",  # Not 'external' format
         rate=30.0,
     )
-    
+
     # Try to convert to sleap-io Video - should raise ValueError
     with pytest.raises(ValueError, match="Unsupported ImageSeries format: raw"):
         nwb_image_series_to_sleap_video(image_series)
