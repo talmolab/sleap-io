@@ -16,6 +16,11 @@ from sleap_io.io.video_reading import (
     VideoBackend,
 )
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 
 def test_video_backend_from_filename(centered_pair_low_quality_path, slp_minimal_pkg):
     """Test initialization of `VideoBackend` object from filename."""
@@ -181,6 +186,134 @@ def test_imagevideo(centered_pair_frame_paths):
     backend = VideoBackend.from_filename(centered_pair_frame_paths[0])
     assert type(backend) is ImageVideo
     assert backend.shape == (1, 384, 384, 1)
+
+
+def test_opencv_bgr_to_rgb_conversion(tmp_path):
+    """Test that OpenCV backend correctly converts BGR to RGB."""
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        pytest.skip("OpenCV not installed")
+    
+    # Create a test video with known color pattern
+    # We'll create a simple video with distinct R, G, B channels
+    video_path = tmp_path / "test_color.mp4"
+    height, width = 100, 100
+    fps = 1
+    num_frames = 3
+    
+    # Create video writer
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(str(video_path), fourcc, fps, (width, height))
+    
+    # Frame 1: Pure red (BGR: [0, 0, 255])
+    frame1 = np.zeros((height, width, 3), dtype=np.uint8)
+    frame1[:, :, 2] = 255  # Red channel in BGR
+    writer.write(frame1)
+    
+    # Frame 2: Pure green (BGR: [0, 255, 0])
+    frame2 = np.zeros((height, width, 3), dtype=np.uint8)
+    frame2[:, :, 1] = 255  # Green channel
+    writer.write(frame2)
+    
+    # Frame 3: Pure blue (BGR: [255, 0, 0])
+    frame3 = np.zeros((height, width, 3), dtype=np.uint8)
+    frame3[:, :, 0] = 255  # Blue channel in BGR
+    writer.write(frame3)
+    
+    writer.release()
+    
+    # Test reading with OpenCV backend
+    backend = MediaVideo(str(video_path), plugin="opencv", keep_open=False)
+    
+    # Test single frame reading (with tolerance for compression artifacts)
+    frame = backend._read_frame(0)
+    # Should be red in RGB (255, 0, 0) - allow for compression artifacts
+    assert frame[50, 50, 0] > 240  # R channel should be high
+    assert frame[50, 50, 1] < 20   # G channel should be low
+    assert frame[50, 50, 2] < 20   # B channel should be low
+    
+    frame = backend._read_frame(1)
+    # Should be green in RGB (0, 255, 0)
+    assert frame[50, 50, 0] < 20   # R channel should be low
+    assert frame[50, 50, 1] > 240  # G channel should be high
+    assert frame[50, 50, 2] < 20   # B channel should be low
+    
+    frame = backend._read_frame(2)
+    # Should be blue in RGB (0, 0, 255)
+    assert frame[50, 50, 0] < 20   # R channel should be low
+    assert frame[50, 50, 1] < 20   # G channel should be low
+    assert frame[50, 50, 2] > 240  # B channel should be high
+    
+    # Test batch frame reading
+    frames = backend._read_frames([0, 1, 2])
+    # Frame 0: red (with tolerance)
+    assert frames[0, 50, 50, 0] > 240 and frames[0, 50, 50, 1] < 20 and frames[0, 50, 50, 2] < 20
+    # Frame 1: green
+    assert frames[1, 50, 50, 0] < 20 and frames[1, 50, 50, 1] > 240 and frames[1, 50, 50, 2] < 20
+    # Frame 2: blue
+    assert frames[2, 50, 50, 0] < 20 and frames[2, 50, 50, 1] < 20 and frames[2, 50, 50, 2] > 240
+
+
+def test_opencv_keep_open_reader_initialization(tmp_path):
+    """Test that OpenCV backend correctly initializes reader with keep_open=True."""
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        pytest.skip("OpenCV not installed")
+    
+    # Create a simple test video
+    video_path = tmp_path / "test_keep_open.mp4"
+    height, width = 50, 50
+    fps = 1
+    num_frames = 5
+    
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(str(video_path), fourcc, fps, (width, height))
+    
+    for i in range(num_frames):
+        # Create frames with different intensities for identification
+        frame = np.full((height, width, 3), i * 50, dtype=np.uint8)
+        writer.write(frame)
+    
+    writer.release()
+    
+    # Test with keep_open=True
+    backend = MediaVideo(str(video_path), plugin="opencv", keep_open=True)
+    
+    # Initially no open reader
+    assert backend._open_reader is None
+    
+    # First read should create the reader
+    frame1 = backend._read_frame(0)
+    assert backend._open_reader is not None
+    assert type(backend._open_reader).__name__ == "VideoCapture"
+    first_reader = backend._open_reader
+    
+    # Subsequent reads should use the same reader
+    frame2 = backend._read_frame(1)
+    assert backend._open_reader is first_reader  # Same object
+    
+    # Test random access with the persistent reader
+    frame4 = backend._read_frame(3)
+    assert backend._open_reader is first_reader
+    
+    # Verify frame content is correct (intensity should match frame index * 50)
+    # Allow for compression artifacts
+    assert np.mean(frame1) == pytest.approx(0, abs=5)
+    assert np.mean(frame2) == pytest.approx(50, abs=5)
+    assert np.mean(frame4) == pytest.approx(150, abs=5)
+    
+    # Test with keep_open=False for comparison
+    backend2 = MediaVideo(str(video_path), plugin="opencv", keep_open=False)
+    
+    # Should not maintain an open reader
+    assert backend2._open_reader is None
+    frame = backend2._read_frame(0)
+    assert backend2._open_reader is None  # Reader not kept after read
+    
+    # Verify we can still read frames correctly
+    assert np.mean(frame) == pytest.approx(0, abs=5)
 
 
 def test_tiff_single_page(single_page_tiff_path):
