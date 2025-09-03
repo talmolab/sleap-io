@@ -98,7 +98,7 @@ def sleap_instance_to_nwb_skeleton_instance(
     sleap_instance: SleapInstance,
     nwb_skeleton: NwbSkeleton,
     name: str = "skeleton_instance",
-    id: int | None = None,
+    id: Optional[int] = None,
 ) -> NwbInstance:
     """Convert a sleap-io Instance to ndx-pose SkeletonInstance.
 
@@ -162,7 +162,7 @@ def nwb_skeleton_instance_to_sleap_instance(
 
 def sleap_video_to_nwb_image_series(
     sleap_video: SleapVideo,
-    name: str | None = None,
+    name: Optional[str] = None,
     description: str = "no description",
 ) -> ImageSeries:
     """Convert a sleap-io Video to pynwb ImageSeries.
@@ -435,9 +435,9 @@ def create_nwb_to_slp_skeleton_map(
 def sleap_labeled_frame_to_nwb_training_frame(
     sleap_labeled_frame: SleapLabeledFrame,
     slp_to_nwb_skeleton_map: dict[SleapSkeleton, NwbSkeleton],
-    source_video: ImageSeries | None = None,
+    source_video: Optional[ImageSeries] = None,
     name: str = "training_frame",
-    annotator: str | None = None,
+    annotator: Optional[str] = None,
 ) -> NwbTrainingFrame:
     """Convert a sleap-io LabeledFrame to ndx-pose TrainingFrame.
 
@@ -534,7 +534,7 @@ def sleap_labeled_frames_to_nwb_training_frames(
     slp_to_nwb_skeleton_map: dict[SleapSkeleton, NwbSkeleton],
     slp_to_nwb_video_map: dict[SleapVideo, ImageSeries],
     name: str = "TrainingFrames",
-    annotator: str | None = None,
+    annotator: Optional[str] = None,
 ) -> NwbTrainingFrames:
     """Convert a list of sleap-io LabeledFrames to ndx-pose TrainingFrames container.
 
@@ -612,7 +612,7 @@ def nwb_training_frames_to_sleap_labeled_frames(
 def sleap_labels_to_nwb_pose_training(
     sleap_labels: SleapLabels,
     name: str = "PoseTraining",
-    annotator: str | None = None,
+    annotator: Optional[str] = None,
 ) -> tuple[NwbPoseTraining, NwbSkeletons]:
     """Convert sleap-io Labels to ndx-pose PoseTraining container and Skeletons.
 
@@ -734,12 +734,12 @@ def nwb_pose_training_to_sleap_labels(
 
 def save_labels(
     labels: SleapLabels,
-    path: Path | str,
+    path: Union[Path, str],
     session_description: str = "SLEAP pose training data",
-    identifier: str | None = None,
-    session_start_time: str | None = None,
-    annotator: str | None = None,
-    nwb_kwargs: dict | None = None,
+    identifier: Optional[str] = None,
+    session_start_time: Optional[str] = None,
+    annotator: Optional[str] = None,
+    nwb_kwargs: Optional[dict] = None,
 ) -> None:
     """Save sleap-io Labels to an NWB file.
 
@@ -795,7 +795,7 @@ def save_labels(
         io.write(nwbfile)
 
 
-def load_labels(path: Path | str) -> SleapLabels:
+def load_labels(path: Union[Path, str]) -> SleapLabels:
     """Load sleap-io Labels from an NWB file.
 
     Args:
@@ -913,7 +913,7 @@ class FrameMap:
             ],
         }
 
-    def save(self, frame_map_filename: str | Path):
+    def save(self, frame_map_filename: Union[str, Path]):
         """Save the frame map to a JSON file.
 
         Args:
