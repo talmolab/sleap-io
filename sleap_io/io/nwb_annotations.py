@@ -29,7 +29,7 @@ from sleap_io.io.video_reading import ImageVideo, MediaVideo
 from sleap_io.io.video_writing import MJPEGFrameWriter
 
 
-def sanitize_nwb_name(name: str, List) -> str:
+def sanitize_nwb_name(name: str) -> str:
     """Sanitize a name for use in NWB files.
 
     NWB names cannot contain '/' or ':' characters.
