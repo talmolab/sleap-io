@@ -38,6 +38,7 @@ from sleap_io.io.nwb_annotations import (
     sleap_video_to_nwb_image_series,
     sleap_videos_to_nwb_source_videos,
 )
+from sleap_io.io.utils import sanitize_filename
 
 
 def test_sleap_skeleton_to_nwb_skeleton_basic():
@@ -761,8 +762,8 @@ def test_export_labeled_frames(slp_real_data, tmp_path):
     assert isinstance(frame_map, FrameMap)
     assert len(frame_map.frames) == 3  # Should match number of labeled frames
     assert len(frame_map.videos) == len(limited_labels.videos)
-    assert frame_map.mjpeg_filename == str(mjpeg_path)
-    assert frame_map.frame_map_filename == str(frame_map_path)
+    assert frame_map.mjpeg_filename == sanitize_filename(str(mjpeg_path))
+    assert frame_map.frame_map_filename == sanitize_filename(str(frame_map_path))
 
     # Check frame mapping data
     for i, frame_info in enumerate(frame_map.frames):
@@ -794,7 +795,7 @@ def test_export_labeled_frames(slp_real_data, tmp_path):
         nwb_path=nwb_path,
     )
 
-    assert frame_map_with_nwb.nwb_filename == str(nwb_path)
+    assert frame_map_with_nwb.nwb_filename == sanitize_filename(str(nwb_path))
 
     # Test with labels containing empty frames
     labels_with_empty = SleapLabels(
@@ -876,7 +877,9 @@ def test_export_labels(slp_real_data, tmp_path):
     # Check that labels were correctly exported and loaded
     assert len(loaded_labels.labeled_frames) == 3
     assert len(loaded_labels.videos) == 1  # Should have single MJPEG video
-    assert loaded_labels.videos[0].filename == str(export_dir / "annotated.avi")
+    assert loaded_labels.videos[0].filename == sanitize_filename(
+        str(export_dir / "annotated.avi")
+    )
 
     # Verify frame indices are updated to sequential
     for i, lf in enumerate(loaded_labels.labeled_frames):
