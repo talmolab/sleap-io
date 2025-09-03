@@ -29,7 +29,7 @@ from sleap_io.io.video_reading import ImageVideo, MediaVideo
 from sleap_io.io.video_writing import MJPEGFrameWriter
 
 
-def sanitize_nwb_name(name: str) -> str:
+def sanitize_nwb_name(name: str, List) -> str:
     """Sanitize a name for use in NWB files.
 
     NWB names cannot contain '/' or ':' characters.
@@ -255,7 +255,7 @@ def nwb_image_series_to_sleap_video(
 
 
 def sleap_videos_to_nwb_source_videos(
-    sleap_videos: list[SleapVideo],
+    sleap_videos: List[SleapVideo],
     name: str = "SourceVideos",
 ) -> NwbSourceVideos:
     """Convert a list of sleap-io Videos to ndx-pose SourceVideos container.
@@ -302,7 +302,7 @@ def nwb_source_videos_to_sleap_videos(
 
 
 def create_slp_to_nwb_video_map(
-    sleap_videos: list[SleapVideo],
+    sleap_videos: List[SleapVideo],
     nwb_source_videos: NwbSourceVideos,
 ) -> dict[SleapVideo, ImageSeries]:
     """Create mapping from sleap-io Videos to NWB ImageSeries.
@@ -339,8 +339,8 @@ def create_slp_to_nwb_video_map(
 
 
 def create_nwb_to_slp_video_map(
-    nwb_image_series: list[ImageSeries],
-    sleap_videos: list[SleapVideo],
+    nwb_image_series: List[ImageSeries],
+    sleap_videos: List[SleapVideo],
 ) -> dict[ImageSeries, SleapVideo]:
     """Create mapping from NWB ImageSeries to sleap-io Videos.
 
@@ -369,7 +369,7 @@ def create_nwb_to_slp_video_map(
 
 
 def create_slp_to_nwb_skeleton_map(
-    sleap_skeletons: list[SleapSkeleton],
+    sleap_skeletons: List[SleapSkeleton],
     nwb_skeletons: NwbSkeletons,
 ) -> dict[SleapSkeleton, NwbSkeleton]:
     """Create mapping from sleap-io Skeletons to NWB Skeletons.
@@ -402,7 +402,7 @@ def create_slp_to_nwb_skeleton_map(
 
 def create_nwb_to_slp_skeleton_map(
     nwb_skeletons: NwbSkeletons,
-    sleap_skeletons: list[SleapSkeleton],
+    sleap_skeletons: List[SleapSkeleton],
 ) -> dict[NwbSkeleton, SleapSkeleton]:
     """Create mapping from NWB Skeletons to sleap-io Skeletons.
 
@@ -530,7 +530,7 @@ def nwb_training_frame_to_sleap_labeled_frame(
 
 
 def sleap_labeled_frames_to_nwb_training_frames(
-    sleap_labeled_frames: list[SleapLabeledFrame],
+    sleap_labeled_frames: List[SleapLabeledFrame],
     slp_to_nwb_skeleton_map: dict[SleapSkeleton, NwbSkeleton],
     slp_to_nwb_video_map: dict[SleapVideo, ImageSeries],
     name: str = "TrainingFrames",
