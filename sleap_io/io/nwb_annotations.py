@@ -281,7 +281,7 @@ def sleap_videos_to_nwb_source_videos(
 
 def nwb_source_videos_to_sleap_videos(
     nwb_source_videos: NwbSourceVideos,
-) -> list[SleapVideo]:
+) -> List[SleapVideo]:
     """Convert ndx-pose SourceVideos to a list of sleap-io Videos.
 
     Args:
