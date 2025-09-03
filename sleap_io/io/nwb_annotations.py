@@ -428,7 +428,7 @@ def create_nwb_to_slp_skeleton_map(
 
 def sleap_labeled_frame_to_nwb_training_frame(
     sleap_labeled_frame: SleapLabeledFrame,
-    slp_to_nwb_skeleton_map: dict[SleapSkeleton, NwbSkeleton],
+    slp_to_nwb_skeleton_map: Dict[SleapSkeleton, NwbSkeleton],
     source_video: Optional[ImageSeries] = None,
     name: str = "training_frame",
     annotator: Optional[str] = None,
@@ -484,7 +484,7 @@ def sleap_labeled_frame_to_nwb_training_frame(
 
 def nwb_training_frame_to_sleap_labeled_frame(
     nwb_training_frame: NwbTrainingFrame,
-    nwb_to_slp_skeleton_map: dict[NwbSkeleton, SleapSkeleton],
+    nwb_to_slp_skeleton_map: Dict[NwbSkeleton, SleapSkeleton],
     sleap_video: SleapVideo,
 ) -> SleapLabeledFrame:
     """Convert an ndx-pose TrainingFrame to sleap-io LabeledFrame.
@@ -525,8 +525,8 @@ def nwb_training_frame_to_sleap_labeled_frame(
 
 def sleap_labeled_frames_to_nwb_training_frames(
     sleap_labeled_frames: List[SleapLabeledFrame],
-    slp_to_nwb_skeleton_map: dict[SleapSkeleton, NwbSkeleton],
-    slp_to_nwb_video_map: dict[SleapVideo, ImageSeries],
+    slp_to_nwb_skeleton_map: Dict[SleapSkeleton, NwbSkeleton],
+    slp_to_nwb_video_map: Dict[SleapVideo, ImageSeries],
     name: str = "TrainingFrames",
     annotator: Optional[str] = None,
 ) -> NwbTrainingFrames:
@@ -565,8 +565,8 @@ def sleap_labeled_frames_to_nwb_training_frames(
 
 def nwb_training_frames_to_sleap_labeled_frames(
     nwb_training_frames: NwbTrainingFrames,
-    nwb_to_slp_skeleton_map: dict[NwbSkeleton, SleapSkeleton],
-    nwb_to_slp_video_map: dict[ImageSeries, SleapVideo],
+    nwb_to_slp_skeleton_map: Dict[NwbSkeleton, SleapSkeleton],
+    nwb_to_slp_video_map: Dict[ImageSeries, SleapVideo],
 ) -> List[SleapLabeledFrame]:
     """Convert ndx-pose TrainingFrames to a list of sleap-io LabeledFrames.
 
