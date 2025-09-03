@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import simplejson as json
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
@@ -1077,3 +1078,103 @@ def test_frame_map_json_roundtrip(slp_real_data, tmp_path):
     assert custom_loaded.frames[1].frame_idx == 20
     assert custom_loaded.frames[2].video_ind == 0
     assert custom_loaded.frames[2].frame_idx == 30
+
+
+def test_unsupported_video_backend(slp_minimal_pkg):
+    """Test error handling for unsupported video backend (HDF5Video)."""
+    # Load labels with HDF5Video backend
+    labels = sio.load_slp(slp_minimal_pkg)
+    
+    # The pkg.slp file should have HDF5Video backend
+    assert len(labels.videos) > 0
+    video = labels.videos[0]
+    
+    # Try to convert to NWB ImageSeries - should raise ValueError
+    from sleap_io.io.video_reading import HDF5Video
+    if isinstance(video.backend, HDF5Video):
+        with pytest.raises(ValueError, match="Unsupported video backend"):
+            sleap_video_to_nwb_image_series(video)
+    else:
+        # If not HDF5Video, manually create one for testing
+        video.backend = HDF5Video(video.filename)
+        with pytest.raises(ValueError, match="Unsupported video backend"):
+            sleap_video_to_nwb_image_series(video)
+
+
+def test_default_name_generation_from_video():
+    """Test default name generation when name is None."""
+    from sleap_io.io.video_reading import ImageVideo
+    
+    # Test with single filename
+    video_single = SleapVideo(filename="test_video.mp4", open_backend=False)
+    video_single.backend = ImageVideo(["dummy.png"])  # Use ImageVideo backend
+    
+    # Call without name - should generate from filename
+    image_series = sleap_video_to_nwb_image_series(video_single, name=None)
+    assert image_series.name == "test_video.mp4"  # Uses filename as-is (dots are allowed)
+    
+    # Test with list of filenames
+    video_list = SleapVideo(filename=["frame1.png", "frame2.png"], open_backend=False)
+    video_list.backend = ImageVideo(["frame1.png", "frame2.png"])
+    
+    # Call without name - should use first filename
+    image_series_list = sleap_video_to_nwb_image_series(video_list, name=None)
+    assert image_series_list.name == "frame1.png"  # Uses first filename as-is
+
+
+def test_training_frame_without_source_video():
+    """Test that TrainingFrame without source_video is handled correctly."""
+    # Create skeleton
+    skeleton = SleapSkeleton(nodes=["A", "B"], edges=[(0, 1)])
+    nwb_skeleton = sleap_skeleton_to_nwb_skeleton(skeleton)
+    
+    # Create NWB Skeletons container
+    nwb_skeletons = NwbSkeletons(name="Skeletons", skeletons=[nwb_skeleton])
+    
+    # Create a simple instance
+    instance = SleapInstance.from_numpy(
+        np.array([[0, 0], [1, 1]]), 
+        skeleton=skeleton
+    )
+    nwb_instance = sleap_instance_to_nwb_skeleton_instance(
+        instance, nwb_skeleton, name="instance_0"
+    )
+    
+    # Create SkeletonInstances container
+    from ndx_pose import SkeletonInstances as NwbSkeletonInstances
+    skeleton_instances = NwbSkeletonInstances(
+        name="skeleton_instances", 
+        skeleton_instances=[nwb_instance]
+    )
+    
+    # Create TrainingFrame WITHOUT source_video (set to None explicitly)
+    from ndx_pose import TrainingFrame as NwbTrainingFrame
+    from ndx_pose import TrainingFrames as NwbTrainingFrames
+    
+    training_frame = NwbTrainingFrame(
+        name="frame_0",
+        skeleton_instances=skeleton_instances,
+        source_video=None,  # No source video
+        source_video_frame_index=None
+    )
+    
+    # Create TrainingFrames container
+    training_frames = NwbTrainingFrames(
+        name="training_frames",
+        training_frames=[training_frame]
+    )
+    
+    # Create skeleton mapping
+    nwb_to_slp_skeleton_map = {nwb_skeleton: skeleton}
+    
+    # Create a dummy video for the mapping (won't be used due to None source_video)
+    dummy_video = SleapVideo(filename="dummy.mp4", open_backend=False)
+    nwb_to_slp_video_map = {}  # Empty map since source_video is None
+    
+    # This should raise ValueError because source_video is None
+    with pytest.raises(ValueError, match="TrainingFrame must have a source_video"):
+        nwb_training_frames_to_sleap_labeled_frames(
+            training_frames,
+            nwb_to_slp_skeleton_map,
+            nwb_to_slp_video_map
+        )
