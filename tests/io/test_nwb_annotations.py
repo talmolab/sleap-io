@@ -1008,6 +1008,7 @@ def test_frame_map_json_roundtrip(slp_real_data, tmp_path):
     # Verify the loaded FrameMap has correct attributes
     # Use Path objects for comparison to handle Windows path separators
     from pathlib import Path as PathLib
+
     assert PathLib(frame_map_loaded.frame_map_filename) == json_path
     assert PathLib(frame_map_loaded.nwb_filename) == export_dir / "test_training.nwb"
     assert PathLib(frame_map_loaded.mjpeg_filename) == export_dir / "test_video.avi"
