@@ -518,21 +518,32 @@ class MediaVideo(VideoBackend):
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
         """
-        failed = False
         if self.plugin == "opencv":
-            if self.reader.get(cv2.CAP_PROP_POS_FRAMES) != frame_idx:
-                self.reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            success, img = self.reader.read()
+            if self.keep_open:
+                if self._open_reader is None:
+                    self._open_reader = cv2.VideoCapture(self.filename)
+                reader = self._open_reader
+            else:
+                reader = cv2.VideoCapture(self.filename)
+
+            if reader.get(cv2.CAP_PROP_POS_FRAMES) != frame_idx:
+                reader.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            success, img = reader.read()
+
+            if success:
+                img = img[..., ::-1]  # BGR -> RGB
+
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
             if self.keep_open:
                 img = self.reader.read(index=frame_idx)
             else:
                 with iio.imopen(self.filename, "r", plugin=self.plugin) as reader:
                     img = reader.read(index=frame_idx)
+            success = img is not None
 
-        success = (not failed) and (img is not None)
         if not success:
             raise IndexError(f"Failed to read frame index {frame_idx}.")
+        
         return img
 
     def _read_frames(self, frame_inds: list) -> np.ndarray:
@@ -562,9 +573,10 @@ class MediaVideo(VideoBackend):
                 if reader.get(cv2.CAP_PROP_POS_FRAMES) != idx:
                     reader.set(cv2.CAP_PROP_POS_FRAMES, idx)
                 _, img = reader.read()
-                img = img[..., ::-1]  # BGR -> RGB
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)
+
+            imgs = imgs[..., ::-1]  # BGR -> RGB
 
         elif self.plugin == "pyav" or self.plugin == "FFMPEG":
             if self.keep_open:
