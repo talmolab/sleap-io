@@ -409,3 +409,156 @@ labels.save("predictions.filtered.slp")
     - [`Labels.update_from_numpy`](model.md#sleap_io.Labels.update_from_numpy): Updating labels from arrays
     - [`movement`](https://movement.neuroinformatics.dev/): Advanced pose processing library
 
+## NWB format operations
+
+### Working with NWB files
+
+[Neurodata Without Borders (NWB)](https://www.nwb.org/) provides a standardized format for neurophysiology data. sleap-io offers comprehensive NWB support with automatic format detection.
+
+```python title="nwb_basic.py" linenums="1"
+import sleap_io as sio
+
+# Load any NWB file - automatically detects if it contains
+# annotations (PoseTraining) or predictions (PoseEstimation)
+labels = sio.load_nwb("pose_data.nwb")
+
+# Save with automatic format detection
+# Uses "annotations" if data has user labels, "predictions" otherwise
+sio.save_nwb(labels, "output.nwb")
+
+# Force specific format
+sio.save_nwb(labels, "training.nwb", nwb_format="annotations")
+sio.save_nwb(labels, "inference.nwb", nwb_format="predictions")
+```
+
+!!! info "Format auto-detection"
+    The harmonization layer automatically determines the appropriate format:
+    
+    - **Annotations**: Used when data contains user-labeled instances (training data)
+    - **Predictions**: Used when data contains only predicted instances (inference results)
+
+### Save training data with rich metadata
+
+Include detailed experimental metadata when saving training annotations.
+
+```python title="nwb_metadata.py" linenums="1"
+from sleap_io.io.nwb_annotations import save_labels
+
+# Save with comprehensive metadata
+save_labels(
+    labels,
+    "training_data.nwb",
+    session_description="Mouse skilled reaching task - training dataset",
+    identifier="mouse_01_session_03_annotations",
+    session_start_time="2024-01-15T09:30:00",
+    annotator="John Doe",
+    nwb_kwargs={
+        # Session metadata
+        "session_id": "session_003",
+        "experimenter": ["John Doe", "Jane Smith"],
+        "lab": "Motor Control Lab",
+        "institution": "University of Example",
+        
+        # Experimental details
+        "experiment_description": "Skilled reaching task with food pellet reward",
+        "protocol": "Protocol 2024-001",
+        "surgery": "Cranial window implant over M1",
+        
+        # Subject information
+        "subject": {
+            "subject_id": "mouse_01",
+            "age": "P90",
+            "sex": "M",
+            "species": "Mus musculus",
+            "strain": "C57BL/6J",
+            "weight": "25g"
+        }
+    }
+)
+```
+
+!!! tip "Metadata best practices"
+    Include as much metadata as possible for reproducibility:
+    
+    - Experimental protocol details
+    - Subject information
+    - Recording conditions
+    - Annotator identity for tracking labeling provenance
+
+### Export dataset with embedded videos
+
+Create self-contained NWB files with video frames for sharing complete datasets.
+
+```python title="nwb_export.py" linenums="1"
+from sleap_io.io.nwb_annotations import export_labels, export_labeled_frames
+
+# Method 1: Export complete dataset with all videos
+export_labels(
+    labels,
+    output_dir="export/",
+    nwb_filename="complete_dataset.nwb",
+    as_training=True,      # Include manual annotations
+    include_videos=True,    # Embed all video frames
+    include_skeleton=True   # Include skeleton definition
+)
+
+# Method 2: Export only frames with labels as a new video
+export_labeled_frames(
+    labels,
+    output_path="labeled_frames.avi",         # MJPEG video output
+    labels_output_path="labeled_frames.nwb",  # Corresponding labels
+    fps=30.0,                                  # Output frame rate
+    scale=1.0                                  # Video scale factor
+)
+
+# The export includes a FrameMap JSON file tracking frame origins
+import json
+with open("labeled_frames.frame_map.json", "r") as f:
+    frame_map = json.load(f)
+    print(f"Exported {frame_map['total_frames']} frames from {len(frame_map['videos'])} videos")
+```
+
+!!! info "Export formats"
+    
+    - **Full export**: Includes all video frames, creating large but complete files
+    - **Labeled frames only**: Exports just frames with annotations, reducing file size
+    - **Frame provenance**: JSON metadata tracks which frames came from which source videos
+
+### Convert between NWB and other formats
+
+Use NWB as an interchange format between different pose tracking tools.
+
+```python title="nwb_conversion.py" linenums="1"
+import sleap_io as sio
+
+# Load from DeepLabCut
+dlc_data = sio.load_file("dlc_predictions.h5")
+
+# Save as NWB predictions
+sio.save_nwb(dlc_data, "dlc_in_nwb.nwb", nwb_format="predictions")
+
+# Load SLEAP training data
+sleap_labels = sio.load_file("training.slp")
+
+# Export as NWB with videos for sharing
+sio.save_nwb(sleap_labels, "training_export.nwb", nwb_format="annotations_export")
+
+# Convert NWB back to SLEAP format
+nwb_labels = sio.load_nwb("training_export.nwb")
+nwb_labels.save("converted.slp")
+```
+
+!!! tip "Format preservation"
+    NWB format preserves:
+    
+    - Complete skeleton structure with node names
+    - Track identities
+    - Confidence scores
+    - User vs predicted instance types
+    - Video metadata (when using `annotations_export`)
+
+!!! note "See also"
+    - [NWB Format Documentation](formats.md#nwb-format-nwb): Complete NWB format reference
+    - [`load_nwb`](formats.md#sleap_io.load_nwb): NWB loading function
+    - [`save_nwb`](formats.md#sleap_io.save_nwb): NWB saving function with format options
+
