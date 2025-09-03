@@ -429,6 +429,9 @@ sio.save_nwb(labels, "output.nwb")
 # Force specific format
 sio.save_nwb(labels, "training.nwb", nwb_format="annotations")
 sio.save_nwb(labels, "inference.nwb", nwb_format="predictions")
+
+# Export with embedded video frames for sharing complete datasets
+sio.save_nwb(labels, "dataset_export.nwb", nwb_format="annotations_export")
 ```
 
 !!! info "Format auto-detection"
@@ -436,6 +439,7 @@ sio.save_nwb(labels, "inference.nwb", nwb_format="predictions")
     
     - **Annotations**: Used when data contains user-labeled instances (training data)
     - **Predictions**: Used when data contains only predicted instances (inference results)
+    - **Annotations Export**: Use explicitly to create self-contained files with embedded video frames
 
 ### Save training data with rich metadata
 
