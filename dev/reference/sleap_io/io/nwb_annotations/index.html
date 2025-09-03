@@ -1201,7 +1201,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
 <a id="__codelineno-0-913" name="__codelineno-0-913"></a><a href="#__codelineno-0-913"><span class="linenos" data-linenos="913 "></span></a>            <span class="p">],</span>
 <a id="__codelineno-0-914" name="__codelineno-0-914"></a><a href="#__codelineno-0-914"><span class="linenos" data-linenos="914 "></span></a>        <span class="p">}</span>
 <a id="__codelineno-0-915" name="__codelineno-0-915"></a><a href="#__codelineno-0-915"><span class="linenos" data-linenos="915 "></span></a>
-<a id="__codelineno-0-916" name="__codelineno-0-916"></a><a href="#__codelineno-0-916"><span class="linenos" data-linenos="916 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frame_map_filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">):</span>
+<a id="__codelineno-0-916" name="__codelineno-0-916"></a><a href="#__codelineno-0-916"><span class="linenos" data-linenos="916 "></span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frame_map_filename</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]):</span>
 <a id="__codelineno-0-917" name="__codelineno-0-917"></a><a href="#__codelineno-0-917"><span class="linenos" data-linenos="917 "></span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Save the frame map to a JSON file.</span>
 <a id="__codelineno-0-918" name="__codelineno-0-918"></a><a href="#__codelineno-0-918"><span class="linenos" data-linenos="918 "></span></a>
 <a id="__codelineno-0-919" name="__codelineno-0-919"></a><a href="#__codelineno-0-919"><span class="linenos" data-linenos="919 "></span></a><span class="sd">        Args:</span>
@@ -1576,7 +1576,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
                 <code>frame_map_filename</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>
+                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib.Path">Path</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1593,7 +1593,7 @@ indicating which source video and frame index each MJPEG frame came from.</p>
 
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-916" name="__codelineno-0-916"></a><a href="#__codelineno-0-916"><span class="linenos" data-linenos="916 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frame_map_filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">):</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-916" name="__codelineno-0-916"></a><a href="#__codelineno-0-916"><span class="linenos" data-linenos="916 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frame_map_filename</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]):</span>
 <a id="__codelineno-0-917" name="__codelineno-0-917"></a><a href="#__codelineno-0-917"><span class="linenos" data-linenos="917 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the frame map to a JSON file.</span>
 <a id="__codelineno-0-918" name="__codelineno-0-918"></a><a href="#__codelineno-0-918"><span class="linenos" data-linenos="918 "></span></a>
 <a id="__codelineno-0-919" name="__codelineno-0-919"></a><a href="#__codelineno-0-919"><span class="linenos" data-linenos="919 "></span></a><span class="sd">    Args:</span>
@@ -2809,7 +2809,7 @@ output directory, which will be created if it doesn't exist.</p>
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="pathlib.Path">Path</span> | <span title="str">str</span></code>
+                  <code><span title="typing.Union">Union</span>[<span title="pathlib.Path">Path</span>, <span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2849,7 +2849,7 @@ output directory, which will be created if it doesn't exist.</p>
 
             <details class="quote">
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-798" name="__codelineno-0-798"></a><a href="#__codelineno-0-798"><span class="linenos" data-linenos="798 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_labels</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SleapLabels</span><span class="p">:</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-798" name="__codelineno-0-798"></a><a href="#__codelineno-0-798"><span class="linenos" data-linenos="798 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_labels</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">SleapLabels</span><span class="p">:</span>
 <a id="__codelineno-0-799" name="__codelineno-0-799"></a><a href="#__codelineno-0-799"><span class="linenos" data-linenos="799 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load sleap-io Labels from an NWB file.</span>
 <a id="__codelineno-0-800" name="__codelineno-0-800"></a><a href="#__codelineno-0-800"><span class="linenos" data-linenos="800 "></span></a>
 <a id="__codelineno-0-801" name="__codelineno-0-801"></a><a href="#__codelineno-0-801"><span class="linenos" data-linenos="801 "></span></a><span class="sd">    Args:</span>
@@ -3982,7 +3982,7 @@ Skeletons.</p>
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="pathlib.Path">Path</span> | <span title="str">str</span></code>
+                  <code><span title="typing.Union">Union</span>[<span title="pathlib.Path">Path</span>, <span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4014,7 +4014,7 @@ Skeletons.</p>
                 <code>identifier</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4030,7 +4030,7 @@ Skeletons.</p>
                 <code>session_start_time</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4047,7 +4047,7 @@ uses current time.</p>
                 <code>annotator</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4063,7 +4063,7 @@ uses current time.</p>
                 <code>nwb_kwargs</code>
             </td>
             <td>
-                  <code><span title="dict">dict</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="dict">dict</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4084,12 +4084,12 @@ experiment_description, etc.</p>
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-735" name="__codelineno-0-735"></a><a href="#__codelineno-0-735"><span class="linenos" data-linenos="735 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_labels</span><span class="p">(</span>
 <a id="__codelineno-0-736" name="__codelineno-0-736"></a><a href="#__codelineno-0-736"><span class="linenos" data-linenos="736 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">SleapLabels</span><span class="p">,</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a><a href="#__codelineno-0-737"><span class="linenos" data-linenos="737 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><a href="#__codelineno-0-737"><span class="linenos" data-linenos="737 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
 <a id="__codelineno-0-738" name="__codelineno-0-738"></a><a href="#__codelineno-0-738"><span class="linenos" data-linenos="738 "></span></a>    <span class="n">session_description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;SLEAP pose training data&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a><a href="#__codelineno-0-739"><span class="linenos" data-linenos="739 "></span></a>    <span class="n">identifier</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a><a href="#__codelineno-0-740"><span class="linenos" data-linenos="740 "></span></a>    <span class="n">session_start_time</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741"></a><a href="#__codelineno-0-741"><span class="linenos" data-linenos="741 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a><a href="#__codelineno-0-742"><span class="linenos" data-linenos="742 "></span></a>    <span class="n">nwb_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a><a href="#__codelineno-0-739"><span class="linenos" data-linenos="739 "></span></a>    <span class="n">identifier</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a><a href="#__codelineno-0-740"><span class="linenos" data-linenos="740 "></span></a>    <span class="n">session_start_time</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a><a href="#__codelineno-0-741"><span class="linenos" data-linenos="741 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a><a href="#__codelineno-0-742"><span class="linenos" data-linenos="742 "></span></a>    <span class="n">nwb_kwargs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-743" name="__codelineno-0-743"></a><a href="#__codelineno-0-743"><span class="linenos" data-linenos="743 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-744" name="__codelineno-0-744"></a><a href="#__codelineno-0-744"><span class="linenos" data-linenos="744 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save sleap-io Labels to an NWB file.</span>
 <a id="__codelineno-0-745" name="__codelineno-0-745"></a><a href="#__codelineno-0-745"><span class="linenos" data-linenos="745 "></span></a>
@@ -4227,7 +4227,7 @@ experiment_description, etc.</p>
                 <code>id</code>
             </td>
             <td>
-                  <code><span title="int">int</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4271,7 +4271,7 @@ experiment_description, etc.</p>
 <a id="__codelineno-0-98" name="__codelineno-0-98"></a><a href="#__codelineno-0-98"><span class="linenos" data-linenos=" 98 "></span></a>    <span class="n">sleap_instance</span><span class="p">:</span> <span class="n">SleapInstance</span><span class="p">,</span>
 <a id="__codelineno-0-99" name="__codelineno-0-99"></a><a href="#__codelineno-0-99"><span class="linenos" data-linenos=" 99 "></span></a>    <span class="n">nwb_skeleton</span><span class="p">:</span> <span class="n">NwbSkeleton</span><span class="p">,</span>
 <a id="__codelineno-0-100" name="__codelineno-0-100"></a><a href="#__codelineno-0-100"><span class="linenos" data-linenos="100 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;skeleton_instance&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-101" name="__codelineno-0-101"></a><a href="#__codelineno-0-101"><span class="linenos" data-linenos="101 "></span></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a><a href="#__codelineno-0-101"><span class="linenos" data-linenos="101 "></span></a>    <span class="nb">id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-102" name="__codelineno-0-102"></a><a href="#__codelineno-0-102"><span class="linenos" data-linenos="102 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NwbInstance</span><span class="p">:</span>
 <a id="__codelineno-0-103" name="__codelineno-0-103"></a><a href="#__codelineno-0-103"><span class="linenos" data-linenos="103 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a sleap-io Instance to ndx-pose SkeletonInstance.</span>
 <a id="__codelineno-0-104" name="__codelineno-0-104"></a><a href="#__codelineno-0-104"><span class="linenos" data-linenos="104 "></span></a>
@@ -4369,7 +4369,7 @@ experiment_description, etc.</p>
                 <code>source_video</code>
             </td>
             <td>
-                  <code><span title="pynwb.image.ImageSeries">ImageSeries</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pynwb.image.ImageSeries">ImageSeries</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4401,7 +4401,7 @@ experiment_description, etc.</p>
                 <code>annotator</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4444,9 +4444,9 @@ experiment_description, etc.</p>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-435" name="__codelineno-0-435"></a><a href="#__codelineno-0-435"><span class="linenos" data-linenos="435 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sleap_labeled_frame_to_nwb_training_frame</span><span class="p">(</span>
 <a id="__codelineno-0-436" name="__codelineno-0-436"></a><a href="#__codelineno-0-436"><span class="linenos" data-linenos="436 "></span></a>    <span class="n">sleap_labeled_frame</span><span class="p">:</span> <span class="n">SleapLabeledFrame</span><span class="p">,</span>
 <a id="__codelineno-0-437" name="__codelineno-0-437"></a><a href="#__codelineno-0-437"><span class="linenos" data-linenos="437 "></span></a>    <span class="n">slp_to_nwb_skeleton_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">,</span> <span class="n">NwbSkeleton</span><span class="p">],</span>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a><a href="#__codelineno-0-438"><span class="linenos" data-linenos="438 "></span></a>    <span class="n">source_video</span><span class="p">:</span> <span class="n">ImageSeries</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><a href="#__codelineno-0-438"><span class="linenos" data-linenos="438 "></span></a>    <span class="n">source_video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ImageSeries</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-439" name="__codelineno-0-439"></a><a href="#__codelineno-0-439"><span class="linenos" data-linenos="439 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;training_frame&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a><a href="#__codelineno-0-440"><span class="linenos" data-linenos="440 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><a href="#__codelineno-0-440"><span class="linenos" data-linenos="440 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-441" name="__codelineno-0-441"></a><a href="#__codelineno-0-441"><span class="linenos" data-linenos="441 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NwbTrainingFrame</span><span class="p">:</span>
 <a id="__codelineno-0-442" name="__codelineno-0-442"></a><a href="#__codelineno-0-442"><span class="linenos" data-linenos="442 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a sleap-io LabeledFrame to ndx-pose TrainingFrame.</span>
 <a id="__codelineno-0-443" name="__codelineno-0-443"></a><a href="#__codelineno-0-443"><span class="linenos" data-linenos="443 "></span></a>
@@ -4596,7 +4596,7 @@ Skeletons.</p>
                 <code>annotator</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4641,7 +4641,7 @@ Skeletons.</p>
 <a id="__codelineno-0-534" name="__codelineno-0-534"></a><a href="#__codelineno-0-534"><span class="linenos" data-linenos="534 "></span></a>    <span class="n">slp_to_nwb_skeleton_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SleapSkeleton</span><span class="p">,</span> <span class="n">NwbSkeleton</span><span class="p">],</span>
 <a id="__codelineno-0-535" name="__codelineno-0-535"></a><a href="#__codelineno-0-535"><span class="linenos" data-linenos="535 "></span></a>    <span class="n">slp_to_nwb_video_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SleapVideo</span><span class="p">,</span> <span class="n">ImageSeries</span><span class="p">],</span>
 <a id="__codelineno-0-536" name="__codelineno-0-536"></a><a href="#__codelineno-0-536"><span class="linenos" data-linenos="536 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;TrainingFrames&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-537" name="__codelineno-0-537"></a><a href="#__codelineno-0-537"><span class="linenos" data-linenos="537 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a><a href="#__codelineno-0-537"><span class="linenos" data-linenos="537 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-538" name="__codelineno-0-538"></a><a href="#__codelineno-0-538"><span class="linenos" data-linenos="538 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NwbTrainingFrames</span><span class="p">:</span>
 <a id="__codelineno-0-539" name="__codelineno-0-539"></a><a href="#__codelineno-0-539"><span class="linenos" data-linenos="539 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a list of sleap-io LabeledFrames to ndx-pose TrainingFrames container.</span>
 <a id="__codelineno-0-540" name="__codelineno-0-540"></a><a href="#__codelineno-0-540"><span class="linenos" data-linenos="540 "></span></a>
@@ -4742,7 +4742,7 @@ Skeletons.</p>
                 <code>annotator</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4810,7 +4810,7 @@ Skeletons.</p>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-612" name="__codelineno-0-612"></a><a href="#__codelineno-0-612"><span class="linenos" data-linenos="612 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sleap_labels_to_nwb_pose_training</span><span class="p">(</span>
 <a id="__codelineno-0-613" name="__codelineno-0-613"></a><a href="#__codelineno-0-613"><span class="linenos" data-linenos="613 "></span></a>    <span class="n">sleap_labels</span><span class="p">:</span> <span class="n">SleapLabels</span><span class="p">,</span>
 <a id="__codelineno-0-614" name="__codelineno-0-614"></a><a href="#__codelineno-0-614"><span class="linenos" data-linenos="614 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;PoseTraining&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>    <span class="n">annotator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-616" name="__codelineno-0-616"></a><a href="#__codelineno-0-616"><span class="linenos" data-linenos="616 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">NwbPoseTraining</span><span class="p">,</span> <span class="n">NwbSkeletons</span><span class="p">]:</span>
 <a id="__codelineno-0-617" name="__codelineno-0-617"></a><a href="#__codelineno-0-617"><span class="linenos" data-linenos="617 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert sleap-io Labels to ndx-pose PoseTraining container and Skeletons.</span>
 <a id="__codelineno-0-618" name="__codelineno-0-618"></a><a href="#__codelineno-0-618"><span class="linenos" data-linenos="618 "></span></a>
@@ -5028,7 +5028,7 @@ Skeletons.</p>
                 <code>name</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5109,7 +5109,7 @@ Skeletons.</p>
               <summary>Source code in <code>sleap_io/io/nwb_annotations.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-163" name="__codelineno-0-163"></a><a href="#__codelineno-0-163"><span class="linenos" data-linenos="163 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">sleap_video_to_nwb_image_series</span><span class="p">(</span>
 <a id="__codelineno-0-164" name="__codelineno-0-164"></a><a href="#__codelineno-0-164"><span class="linenos" data-linenos="164 "></span></a>    <span class="n">sleap_video</span><span class="p">:</span> <span class="n">SleapVideo</span><span class="p">,</span>
-<a id="__codelineno-0-165" name="__codelineno-0-165"></a><a href="#__codelineno-0-165"><span class="linenos" data-linenos="165 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a><a href="#__codelineno-0-165"><span class="linenos" data-linenos="165 "></span></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-166" name="__codelineno-0-166"></a><a href="#__codelineno-0-166"><span class="linenos" data-linenos="166 "></span></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;no description&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-167" name="__codelineno-0-167"></a><a href="#__codelineno-0-167"><span class="linenos" data-linenos="167 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ImageSeries</span><span class="p">:</span>
 <a id="__codelineno-0-168" name="__codelineno-0-168"></a><a href="#__codelineno-0-168"><span class="linenos" data-linenos="168 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a sleap-io Video to pynwb ImageSeries.</span>
