@@ -385,7 +385,7 @@ def test_load_mice_hc_skeleton_fixture(skeleton_json_mice_hc):
     assert len(skeleton.edges) == 4
     # Verify basic connectivity structure
     edge_pairs = [(e.source.name, e.destination.name) for e in skeleton.edges]
-    
+
     # Should have connections forming a simple mouse body structure
     assert ("nose1", "earL1") in edge_pairs
     assert ("nose1", "earR1") in edge_pairs

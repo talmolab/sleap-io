@@ -245,7 +245,7 @@ def skeleton_json_mice_hc():
     """Minimal mouse head-centered skeleton JSON file with 5 nodes and 4 edges.
 
     This skeleton:
-    - Has 5 nodes representing mouse head and body parts: nose, earL, earR, tailstart, tailend
+    - Has 5 nodes representing mouse head and body parts: nose, ears, tail
     - Has 4 edges connecting nose to ears and forming a body chain
     - Uses jsonpickle format with py/object and py/state tags
     - Represents a simplified mouse pose estimation model
