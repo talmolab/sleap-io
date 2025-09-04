@@ -109,6 +109,16 @@ class SkeletonDecoder:
                             next_edge_type_id += 1
                     # py/id references are handled in second pass
 
+        # Also process nodes that are directly defined in the nodes array
+        # This is crucial for single-node skeletons with no edges
+        for node_ref in data.get("nodes", []):
+            if isinstance(node_ref.get("id"), dict) and "py/object" in node_ref["id"]:
+                # New node object directly in nodes array
+                node = self._decode_node(node_ref["id"])
+                if node.name not in seen_nodes:
+                    self.decoded_objects.append(node)
+                    seen_nodes.add(node.name)
+
         # Store edge type mappings for second pass
         self._edge_type_ids = edge_type_ids
 
