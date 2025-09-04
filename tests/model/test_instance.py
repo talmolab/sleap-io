@@ -350,7 +350,7 @@ def test_instance_same_pose_as():
         np.array([[50.0, 50.0], [60.0, 60.0]]), skeleton=skeleton
     )
 
-    # Test with specified tolerance  
+    # Test with specified tolerance
     assert inst1.same_pose_as(inst2, tolerance=5.0)
     assert not inst1.same_pose_as(inst3, tolerance=5.0)
 
@@ -383,34 +383,41 @@ def test_instance_same_pose_as():
     )
     assert inst7.same_pose_as(inst8)  # Both have all NaN - should be equal
 
+
 def test_instance_same_pose_as_identical_with_nan():
     """Test Instance.same_pose_as() bug with identical instances containing NaN values.
-    
+
     This test demonstrates a bug where identical instances with some NaN coordinates
-    that are marked as visible are incorrectly identified as having different poses 
+    that are marked as visible are incorrectly identified as having different poses
     due to NaN distance calculations.
     """
     skeleton = Skeleton(["head", "thorax", "tail"])
-    
-    # Create two identical instances 
+
+    # Create two identical instances
     inst1 = Instance.from_numpy(
         np.array([[10.0, 10.0], [20.0, 20.0], [30.0, 30.0]]), skeleton=skeleton
     )
     inst2 = Instance.from_numpy(
         np.array([[10.0, 10.0], [20.0, 20.0], [30.0, 30.0]]), skeleton=skeleton
     )
-    
+
     # Manually set identical NaN coordinates but keep them marked as visible
-    # This simulates the scenario where tracking data has NaN coordinates but points are still considered "visible"
+    # This simulates the scenario where tracking data has NaN coordinates but
+    # points are still considered "visible"
     inst1.points["xy"][1] = [np.nan, np.nan]  # thorax has NaN coords
     inst2.points["xy"][1] = [np.nan, np.nan]  # thorax has NaN coords
     inst1.points["visible"][1] = True
     inst2.points["visible"][1] = True
-    
+
     # These instances are identical and should return True
     # Test both exact comparison and tolerance-based comparison
-    assert inst1.same_pose_as(inst2), "Identical instances with NaN values should be considered the same pose (exact)"
-    assert inst1.same_pose_as(inst2, tolerance=5.0), "Identical instances with NaN values should be considered the same pose (tolerance)"
+    assert inst1.same_pose_as(inst2), (
+        "Identical instances with NaN values should be considered the same pose (exact)"
+    )
+    assert inst1.same_pose_as(inst2, tolerance=5.0), (
+        "Identical instances with NaN values should be considered the same pose "
+        "(tolerance)"
+    )
 
 
 def test_instance_same_identity_as():

@@ -671,9 +671,9 @@ class Instance:
         Notes:
             Two instances are considered to have the same pose if:
             - They have the same skeleton structure
-            - When tolerance is None: All coordinates match exactly (including NaN values)
-            - When tolerance is specified: All visible points are within tolerance distance
-              and NaN patterns match exactly
+            - When tolerance is None: All coordinates match exactly (including NaN)
+            - When tolerance is specified: All visible points are within tolerance
+              distance and NaN patterns match exactly
         """
         # Check skeleton compatibility
         if not self.skeleton.matches(other.skeleton):
