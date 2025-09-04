@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List, Optional, Union
+
+import simplejson as json
 
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 
@@ -32,6 +33,81 @@ def encode_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
     """
     encoder = SkeletonEncoder()
     return encoder.encode(skeletons)
+
+
+def decode_yaml_skeleton(yaml_data: str) -> Union[Skeleton, List[Skeleton]]:
+    """Decode skeleton(s) from YAML data.
+
+    Args:
+        yaml_data: YAML string containing skeleton data.
+
+    Returns:
+        A single Skeleton or list of Skeletons depending on input format.
+    """
+    decoder = SkeletonYAMLDecoder()
+    return decoder.decode(yaml_data)
+
+
+def encode_yaml_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+    """Encode skeleton(s) to YAML string.
+
+    Args:
+        skeletons: A single Skeleton or list of Skeletons to encode.
+
+    Returns:
+        YAML string with skeleton names as top-level keys.
+    """
+    encoder = SkeletonYAMLEncoder()
+    return encoder.encode(skeletons)
+
+
+def decode_training_config(data: dict) -> Union[Skeleton, List[Skeleton]]:
+    """Decode skeleton(s) from training config data.
+
+    Args:
+        data: Dictionary containing training config with embedded skeletons.
+
+    Returns:
+        A single Skeleton or list of Skeletons from the training config.
+
+    Raises:
+        ValueError: If the data is not a valid training config format.
+    """
+    if isinstance(data, dict) and "data" in data:
+        if "labels" in data["data"] and "skeletons" in data["data"]["labels"]:
+            # This is a training config file with embedded skeletons
+            decoder = SkeletonDecoder()
+            return decoder.decode(data["data"]["labels"]["skeletons"])
+
+    # If not a valid training config, raise an exception
+    raise ValueError(
+        "Invalid training config format. Expected dictionary with "
+        "'data.labels.skeletons' structure."
+    )
+
+
+def load_skeleton_from_json(json_data: str) -> Union[Skeleton, List[Skeleton]]:
+    """Load skeleton(s) from JSON data, with automatic training config detection.
+
+    Args:
+        json_data: JSON string that could be standalone skeleton or training config.
+
+    Returns:
+        A single Skeleton or list of Skeletons.
+    """
+    # Try to detect if this is a training config file
+    try:
+        data = json.loads(json_data)
+        if isinstance(data, dict) and "data" in data:
+            if "labels" in data["data"] and "skeletons" in data["data"]["labels"]:
+                # This is a training config file with embedded skeletons
+                return decode_training_config(data)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        # Not a training config or invalid JSON structure
+        pass
+
+    # Fall back to regular skeleton JSON decoding
+    return decode_skeleton(json_data)
 
 
 class SkeletonDecoder:
@@ -108,6 +184,16 @@ class SkeletonDecoder:
                             edge_type_ids[edge_type_val] = next_edge_type_id
                             next_edge_type_id += 1
                     # py/id references are handled in second pass
+
+        # Also process nodes that are directly defined in the nodes array
+        # This is crucial for single-node skeletons with no edges
+        for node_ref in data.get("nodes", []):
+            if isinstance(node_ref.get("id"), dict) and "py/object" in node_ref["id"]:
+                # New node object directly in nodes array
+                node = self._decode_node(node_ref["id"])
+                if node.name not in seen_nodes:
+                    self.decoded_objects.append(node)
+                    seen_nodes.add(node.name)
 
         # Store edge type mappings for second pass
         self._edge_type_ids = edge_type_ids
