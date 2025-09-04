@@ -61,3 +61,31 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           uv run mike deploy --update-aliases --allow-empty --push dev
+
+      - name: Reorder versions.json on gh-pages
+        if: ${{ github.event_name == 'release' || github.event_name == 'push' }}
+        run: |
+          # Copy the reordering script to temp location before switching branches
+          cp scripts/reorder_versions.py /tmp/reorder_versions.py
+          
+          # Fetch and checkout gh-pages branch
+          git fetch origin gh-pages
+          git checkout gh-pages
+          
+          # Run the reordering script
+          uv run python /tmp/reorder_versions.py versions.json
+          
+          # Commit and push if there are changes
+          if git diff --quiet; then
+            echo "No changes to versions.json"
+          else
+            git add versions.json
+            git commit -m "Reorder versions.json for proper version dropdown sorting"
+            git push origin gh-pages
+          fi
+          
+          # Switch back to the original branch
+          git checkout -
+          
+          # Clean up temp file
+          rm /tmp/reorder_versions.py
