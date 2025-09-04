@@ -336,6 +336,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v053" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.3
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v052" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.2
@@ -591,15 +600,6 @@
   <a href="#v004" class="md-nav__link">
     <span class="md-ellipsis">
       v0.0.4
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v003" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.3
     </span>
   </a>
   
@@ -1665,6 +1665,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v053" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.3
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v052" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.2
@@ -1925,15 +1934,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v003" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.3
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1951,6 +1951,99 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v053"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.3">v0.5.3</a><a class="headerlink" href="#v053" title="Permanent link">&para;</a></h2>
+<h2>🎯 Summary</h2>
+<p>This release focuses on critical bug fixes and compatibility improvements that enhance the reliability and accuracy of sleap-io across different data formats and video backends. The v0.5.3 release addresses several important issues discovered by users, including coordinate system inconsistencies in legacy files, single-node skeleton loading problems, and video color channel bugs that affected data integrity.</p>
+<h2>🐛 Bug Fixes</h2>
+<h3>Fixed Legacy SLP Coordinate System (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3380627805" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/231" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/231/hovercard" href="https://github.com/talmolab/sleap-io/pull/231">#231</a>)</h3>
+<p>Resolved a critical coordinate system inconsistency in legacy SLP files (FORMAT_ID &lt; 1.1) that caused a 0.5 pixel offset.</p>
+<p><strong>Problem:</strong> Legacy SLP files used a coordinate system where the top-left corner of pixels was at (0, 0), while modern files (&gt;=1.1) place pixel centers at (0, 0). This difference caused coordinates from legacy files to be incorrectly positioned.</p>
+<p><strong>Solution:</strong> Added automatic coordinate adjustment during loading for legacy files:</p>
+<ul>
+<li>Detects files with FORMAT_ID &lt; 1.1</li>
+<li>Applies -0.5 pixel offset to convert from corner-based to center-based coordinates</li>
+<li>Ensures consistent coordinate interpretation across all SLP file versions</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Legacy files now load with corrected coordinates
+labels = sio.load_file(&quot;legacy_file.slp&quot;)
+# Point that was at pixel corner (0, 0) is now at pixel center (-0.5, -0.5)"><pre><span class="pl-c"># Legacy files now load with corrected coordinates</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"legacy_file.slp"</span>)
+<span class="pl-c"># Point that was at pixel corner (0, 0) is now at pixel center (-0.5, -0.5)</span></pre></div>
+<p><strong>Impact:</strong> Ensures accurate pose data analysis when working with datasets created in older versions of SLEAP.</p>
+<h3>Fixed Single Node Skeleton Decoding (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3381817243" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/233" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/233/hovercard" href="https://github.com/talmolab/sleap-io/pull/233">#233</a>)</h3>
+<p>Resolved a critical bug where single-node skeletons with no edges would fail to load from training configuration files.</p>
+<p><strong>Problem:</strong> The <code>SkeletonDecoder</code> only processed nodes that appeared in the <code>links</code> section, but single-node skeletons have no edges/links, causing empty skeletons to be returned instead of the expected single node.</p>
+<p><strong>Solution:</strong> Enhanced the skeleton decoder to also process nodes directly defined in the <code>nodes</code> array, ensuring single-node skeletons are properly loaded.</p>
+<p><strong>Use Cases:</strong> This fix enables several important workflows:</p>
+<ul>
+<li>Plant phenotyping with single-point tracking</li>
+<li>Minimal animal tracking for small organisms</li>
+<li>Custom pose models with single keypoints</li>
+<li>Loading skeleton definitions from existing training configs</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Single-node skeletons now load correctly
+skeleton = sio.load_skeleton(&quot;single_node_training_config.json&quot;)[0]
+print(len(skeleton.nodes))  # 1 ✅ (was 0 before)"><pre><span class="pl-c"># Single-node skeletons now load correctly</span>
+<span class="pl-s1">skeleton</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_skeleton</span>(<span class="pl-s">"single_node_training_config.json"</span>)[<span class="pl-c1">0</span>]
+<span class="pl-en">print</span>(<span class="pl-en">len</span>(<span class="pl-s1">skeleton</span>.<span class="pl-c1">nodes</span>))  <span class="pl-c"># 1 ✅ (was 0 before)</span></pre></div>
+<h3>Fixed OpenCV BGR to RGB Color Conversion (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3380541527" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/230" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/230/hovercard" href="https://github.com/talmolab/sleap-io/pull/230">#230</a>)</h3>
+<p>Addressed two critical issues in the OpenCV video backend that affected color accuracy and reader initialization.</p>
+<p><strong>Issues Fixed:</strong></p>
+<ol>
+<li><strong>Color Channel Bug:</strong> BGR to RGB conversion was happening in the wrong place, causing incorrect color representation</li>
+<li><strong>Reader Initialization:</strong> When <code>keep_open=True</code>, the OpenCV reader wasn't properly initialized, causing errors on first frame read</li>
+</ol>
+<p><strong>Impact:</strong> Ensures consistent and accurate color representation across all video backends (OpenCV, FFMPEG, PyAV), critical for computer vision applications that depend on correct color channels.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# OpenCV backend now returns correct RGB frames
+video = MediaVideo(&quot;video.mp4&quot;, plugin=&quot;opencv&quot;)
+frame = video.get_frame(0)  # Returns RGB frame, not BGR"><pre><span class="pl-c"># OpenCV backend now returns correct RGB frames</span>
+<span class="pl-s1">video</span> <span class="pl-c1">=</span> <span class="pl-en">MediaVideo</span>(<span class="pl-s">"video.mp4"</span>, <span class="pl-s1">plugin</span><span class="pl-c1">=</span><span class="pl-s">"opencv"</span>)
+<span class="pl-s1">frame</span> <span class="pl-c1">=</span> <span class="pl-s1">video</span>.<span class="pl-c1">get_frame</span>(<span class="pl-c1">0</span>)  <span class="pl-c"># Returns RGB frame, not BGR</span></pre></div>
+<h3>Fixed NWB Backwards Compatibility and Added Append Mode (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3381845601" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/234" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/234/hovercard" href="https://github.com/talmolab/sleap-io/pull/234">#234</a>)</h3>
+<p>Restored broken imports from the v0.5.2 NWB API reorganization and added append functionality.</p>
+<p><strong>Compatibility Fix:</strong> Restored these previously broken imports:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="from sleap_io.io.nwb import append_nwb_data  # ✅ Now works again
+sleap_io.io.nwb.append_nwb_data             # ✅ Now works again"><pre><span class="pl-k">from</span> <span class="pl-s1">sleap_io</span>.<span class="pl-s1">io</span>.<span class="pl-s1">nwb</span> <span class="pl-k">import</span> <span class="pl-s1">append_nwb_data</span>  <span class="pl-c"># ✅ Now works again</span>
+<span class="pl-s1">sleap_io</span>.<span class="pl-c1">io</span>.<span class="pl-c1">nwb</span>.<span class="pl-c1">append_nwb_data</span>             <span class="pl-c"># ✅ Now works again</span></pre></div>
+<p><strong>New Feature:</strong> Added <code>append</code> parameter to NWB saving functions:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Save predictions to new file
+sleap_io.save_nwb(labels, &quot;predictions.nwb&quot;)
+
+# Append more predictions to existing file  
+sleap_io.save_nwb(more_labels, &quot;predictions.nwb&quot;, append=True)"><pre><span class="pl-c"># Save predictions to new file</span>
+<span class="pl-s1">sleap_io</span>.<span class="pl-c1">save_nwb</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"predictions.nwb"</span>)
+
+<span class="pl-c"># Append more predictions to existing file  </span>
+<span class="pl-s1">sleap_io</span>.<span class="pl-c1">save_nwb</span>(<span class="pl-s1">more_labels</span>, <span class="pl-s">"predictions.nwb"</span>, <span class="pl-s1">append</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)</pre></div>
+<p><strong>Impact:</strong> Fixes user workflows broken in v0.5.2 and enables incremental prediction saving for large datasets.</p>
+<h2>🔧 Improvements</h2>
+<h3>Enhanced Documentation Navigation (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3378114154" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/229" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/229/hovercard" href="https://github.com/talmolab/sleap-io/pull/229">#229</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3381909297" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/235" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/235/hovercard" href="https://github.com/talmolab/sleap-io/pull/235">#235</a>)</h3>
+<ul>
+<li><strong>Added literate-nav plugin</strong> to mkdocs.yml for better API documentation navigation</li>
+<li><strong>Fixed version dropdown ordering</strong> in documentation to show versions in proper semantic order (dev → newest → oldest)</li>
+<li>Improved user experience when browsing different versions of the documentation</li>
+</ul>
+<h2>💡 Why These Changes Matter</h2>
+<p>The v0.5.3 release significantly improves the <strong>reliability and accuracy</strong> of sleap-io:</p>
+<ul>
+<li><strong>Data Integrity</strong>: Fixed coordinate system and color channel bugs ensure accurate pose data analysis</li>
+<li><strong>Format Compatibility</strong>: Legacy SLP support maintains seamless workflows with older datasets</li>
+<li><strong>Minimal Pose Support</strong>: Single-node skeleton fixes enable plant phenotyping and simple tracking applications</li>
+<li><strong>API Stability</strong>: NWB backwards compatibility fixes prevent user workflow disruptions</li>
+<li><strong>Developer Experience</strong>: Better documentation navigation improves usability</li>
+</ul>
+<p>This release demonstrates sleap-io's commitment to maintaining high data quality standards and supporting diverse research workflows across the pose tracking community.</p>
+<h2>📋 Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3378114154" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/229" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/229/hovercard" href="https://github.com/talmolab/sleap-io/pull/229">#229</a>: Add literate-nav plugin to mkdocs.yml for better API documentation navigation (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3380541527" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/230" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/230/hovercard" href="https://github.com/talmolab/sleap-io/pull/230">#230</a>: Fix OpenCV BGR to RGB conversion and reader initialization (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3380627805" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/231" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/231/hovercard" href="https://github.com/talmolab/sleap-io/pull/231">#231</a>: Fix coordinate system for legacy SLP files (FORMAT_ID &lt; 1.1) (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3381817243" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/233" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/233/hovercard" href="https://github.com/talmolab/sleap-io/pull/233">#233</a>: Fix single node skeleton decoding (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3381845601" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/234" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/234/hovercard" href="https://github.com/talmolab/sleap-io/pull/234">#234</a>: Fix NWB backwards compatibility and add append mode support (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3381909297" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/235" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/235/hovercard" href="https://github.com/talmolab/sleap-io/pull/235">#235</a>: Fix docs version dropdown ordering (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3381918512" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/236" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/236/hovercard" href="https://github.com/talmolab/sleap-io/pull/236">#236</a>: Bump version to 0.5.3 (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.5.2...v0.5.3"><tt>v0.5.2...v0.5.3</tt></a></p>
 <h2 id="v052"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.2">v0.5.2</a><a class="headerlink" href="#v052" title="Permanent link">&para;</a></h2>
 <h2>🎯 Summary</h2>
 <p>This release significantly expands sleap-io's format compatibility with three major new pose tracking format readers and important bug fixes. The v0.5.2 release adds support for LEAP MATLAB files, AlphaTracker JSON annotations, and introduces a comprehensive NWB training data I/O system with a simplified API. These additions further establish sleap-io as the universal utility for pose tracking data conversion and interoperability.</p>
@@ -3237,24 +3330,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Add Labels.find and Labels.video by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1772218313" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/35" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/35/hovercard" href="https://github.com/talmolab/sleap-io/pull/35">#35</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.3...v0.0.4"><tt>v0.0.3...v0.0.4</tt></a></p>
-<h2 id="v003"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.3">v0.0.3</a><a class="headerlink" href="#v003" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Update CI by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1771643702" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/32" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/32/hovercard" href="https://github.com/talmolab/sleap-io/pull/32">#32</a>
-<ul>
-<li>Switch to using <code>pyproject.toml</code> alone instead of <code>setup.cfg</code>.</li>
-<li>Remove <code>mypy</code> type enforcement -- this is too strict for a library intended to be this flexible.</li>
-<li>Use micromamba in GitHub Actions workflow instead of miniconda</li>
-</ul>
-</li>
-<li>Video backends by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1770891047" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/31" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/31/hovercard" href="https://github.com/talmolab/sleap-io/pull/31">#31</a>
-<ul>
-<li>This PR implements the core video backends for media files, HDF5 and embedded images.</li>
-</ul>
-</li>
-<li>Bump version by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1772008015" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/33" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/33/hovercard" href="https://github.com/talmolab/sleap-io/pull/33">#33</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.2...v0.0.3"><tt>v0.0.2...v0.0.3</tt></a></p>
 
 
 
