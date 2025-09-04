@@ -16,6 +16,25 @@ import h5py
 if TYPE_CHECKING:
     from sleap_io.model.labels import Labels
 
+# Backwards compatibility imports - expose functions that were previously in nwb.py
+from sleap_io.io.nwb_predictions import (
+    append_nwb,
+    append_nwb_data,
+    read_nwb,
+    write_nwb,
+)
+
+__all__ = [
+    "NwbFormat",
+    "load_nwb",
+    "save_nwb",
+    # Backwards compatibility exports
+    "append_nwb",
+    "append_nwb_data",
+    "read_nwb",
+    "write_nwb",
+]
+
 
 class NwbFormat(str, Enum):
     """NWB format types for SLEAP data."""
@@ -83,6 +102,7 @@ def save_nwb(
     labels: Labels,
     filename: Union[str, Path],
     nwb_format: Union[NwbFormat, str] = NwbFormat.AUTO,
+    append: bool = False,
 ) -> None:
     """Save a SLEAP dataset to NWB format.
 
@@ -94,6 +114,8 @@ def save_nwb(
             - "annotations": Save training annotations (PoseTraining)
             - "annotations_export": Export annotations with video frames
             - "predictions": Save predictions (PoseEstimation)
+        append: If True, append to existing NWB file. Only supported for
+            predictions format. Defaults to False.
 
     Raises:
         ValueError: If an invalid format is specified.
@@ -136,7 +158,9 @@ def save_nwb(
             clean=True,  # Clean up intermediate files
         )
     elif nwb_format == NwbFormat.PREDICTIONS:
-        # Always overwrite (no append)
-        nwb_predictions.write_nwb(labels, filename)
+        if append:
+            nwb_predictions.append_nwb(labels, str(filename))
+        else:
+            nwb_predictions.write_nwb(labels, filename)
     else:
         raise ValueError(f"Unexpected NWB format: {nwb_format}")

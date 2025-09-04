@@ -105,6 +105,7 @@ def save_nwb(
     labels: Labels,
     filename: Union[str, Path],
     nwb_format: Union[NwbFormat, str] = NwbFormat.AUTO,
+    append: bool = False,
 ) -> None:
     """Save a SLEAP dataset to NWB format.
 
@@ -116,11 +117,13 @@ def save_nwb(
             - "annotations": Save training annotations (PoseTraining)
             - "annotations_export": Export annotations with video frames
             - "predictions": Save predictions (PoseEstimation)
+        append: If True, append to existing NWB file. Only supported for
+            predictions format. Defaults to False.
 
     Raises:
         ValueError: If an invalid format is specified.
     """
-    nwb.save_nwb(labels, filename, nwb_format)
+    nwb.save_nwb(labels, filename, nwb_format, append=append)
 
 
 def load_labelstudio(
