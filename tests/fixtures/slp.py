@@ -241,6 +241,20 @@ def slp_legacy_grid_labels():
 
 
 @pytest.fixture
+def skeleton_json_mice_hc():
+    """Minimal mouse head-centered skeleton JSON file with 5 nodes and 4 edges.
+
+    This skeleton:
+    - Has 5 nodes representing mouse head and body parts: nose, earL, earR, tailstart, tailend
+    - Has 4 edges connecting nose to ears and forming a body chain
+    - Uses jsonpickle format with py/object and py/state tags
+    - Represents a simplified mouse pose estimation model
+    - Contains symmetry relationships between left/right ears
+    """
+    return "tests/data/slp/mice_hc.json"
+
+
+@pytest.fixture
 def single_node_training_config():
     """Training config JSON with single-node skeleton and no edges.
 
