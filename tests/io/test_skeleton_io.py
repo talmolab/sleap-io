@@ -1491,3 +1491,28 @@ def test_load_single_node_training_config(single_node_training_config):
 
     # Test that this previously would have failed (now passes with fix)
     # Single node with no edges should be properly loaded
+
+
+def test_decode_training_config_invalid_format():
+    """Test that decode_training_config raises ValueError for invalid input."""
+    from sleap_io.io.skeleton import decode_training_config
+
+    # Test with completely invalid data
+    with pytest.raises(ValueError, match="Invalid training config format"):
+        decode_training_config({"invalid": "data"})
+
+    # Test with missing 'data' key
+    with pytest.raises(ValueError, match="Invalid training config format"):
+        decode_training_config({"some_other_key": {}})
+
+    # Test with 'data' but missing 'labels'
+    with pytest.raises(ValueError, match="Invalid training config format"):
+        decode_training_config({"data": {"other": "stuff"}})
+
+    # Test with 'data.labels' but missing 'skeletons'
+    with pytest.raises(ValueError, match="Invalid training config format"):
+        decode_training_config({"data": {"labels": {"other": "stuff"}}})
+
+    # Test with non-dict input
+    with pytest.raises(ValueError, match="Invalid training config format"):
+        decode_training_config("not a dict")

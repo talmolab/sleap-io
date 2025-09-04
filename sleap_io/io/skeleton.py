@@ -69,6 +69,9 @@ def decode_training_config(data: dict) -> Union[Skeleton, List[Skeleton]]:
 
     Returns:
         A single Skeleton or list of Skeletons from the training config.
+
+    Raises:
+        ValueError: If the data is not a valid training config format.
     """
     if isinstance(data, dict) and "data" in data:
         if "labels" in data["data"] and "skeletons" in data["data"]["labels"]:
@@ -76,8 +79,11 @@ def decode_training_config(data: dict) -> Union[Skeleton, List[Skeleton]]:
             decoder = SkeletonDecoder()
             return decoder.decode(data["data"]["labels"]["skeletons"])
 
-    # If not a valid training config, return empty skeleton
-    return Skeleton(nodes=[], edges=[], symmetries=[], name="Skeleton")
+    # If not a valid training config, raise an exception
+    raise ValueError(
+        "Invalid training config format. Expected dictionary with "
+        "'data.labels.skeletons' structure."
+    )
 
 
 def load_skeleton_from_json(json_data: str) -> Union[Skeleton, List[Skeleton]]:
