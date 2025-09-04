@@ -1303,14 +1303,14 @@ def test_load_skeleton_training_config_parsing_error(tmp_path):
 def test_skeleton_decoder_invalid_input_types():
     """Test skeleton decoder with invalid input types."""
     decoder = SkeletonDecoder()
-    
+
     # Test with non-dict input (should raise TypeError)
     with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
         decoder._decode_skeleton("not a dict")
-    
+
     with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
         decoder._decode_skeleton(123)
-    
+
     with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
         decoder._decode_skeleton([1, 2, 3])
 
