@@ -238,3 +238,18 @@ def slp_legacy_grid_labels():
     relative to the image pixels.
     """
     return "tests/data/slp/test_grid_labels.legacy.slp"
+
+
+@pytest.fixture
+def single_node_training_config():
+    """Training config JSON with single-node skeleton and no edges.
+
+    This file:
+    - Contains a SLEAP training configuration with embedded skeleton
+    - Has a single node skeleton with only one node named "r0"
+    - Has no edges (empty links array), testing edge case for single-node skeletons
+    - Uses jsonpickle format with py/object and py/state tags
+    - Demonstrates skeleton loading for minimal pose configurations
+    - Previously failed to load due to decoder only processing nodes from links
+    """
+    return "tests/data/slp/single_node_training_config.json"
