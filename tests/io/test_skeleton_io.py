@@ -1296,7 +1296,7 @@ def test_load_skeleton_training_config_parsing_error(tmp_path):
 
     # The decoder will fail but it should be caught and fall back
     # Since None is not a valid skeleton format, the fallback will also fail
-    with pytest.raises(AttributeError):  # None has no 'get' attribute
+    with pytest.raises(ValueError):  # None is not valid skeleton data
         sio.load_skeleton(config_path)
 
 

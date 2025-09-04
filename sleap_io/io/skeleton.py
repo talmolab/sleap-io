@@ -154,6 +154,12 @@ class SkeletonDecoder:
         Returns:
             A Skeleton object.
         """
+        # Validate input data
+        if data is None:
+            raise ValueError("Skeleton data cannot be None")
+        if not isinstance(data, dict):
+            raise TypeError(f"Skeleton data must be a dictionary, got {type(data)}")
+
         # Reset decoded objects list for this skeleton
         self.decoded_objects = []
 
