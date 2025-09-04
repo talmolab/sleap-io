@@ -3782,9 +3782,9 @@ initialized from. This is used with human-in-the-loop workflows.</p>
 <a id="__codelineno-0-671" name="__codelineno-0-671"></a><a href="#__codelineno-0-671"><span class="linenos" data-linenos="671 "></span></a><span class="sd">        Notes:</span>
 <a id="__codelineno-0-672" name="__codelineno-0-672"></a><a href="#__codelineno-0-672"><span class="linenos" data-linenos="672 "></span></a><span class="sd">            Two instances are considered to have the same pose if:</span>
 <a id="__codelineno-0-673" name="__codelineno-0-673"></a><a href="#__codelineno-0-673"><span class="linenos" data-linenos="673 "></span></a><span class="sd">            - They have the same skeleton structure</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><a href="#__codelineno-0-674"><span class="linenos" data-linenos="674 "></span></a><span class="sd">            - When tolerance is None: All coordinates match exactly (including NaN values)</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><a href="#__codelineno-0-675"><span class="linenos" data-linenos="675 "></span></a><span class="sd">            - When tolerance is specified: All visible points are within tolerance distance</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><a href="#__codelineno-0-676"><span class="linenos" data-linenos="676 "></span></a><span class="sd">              and NaN patterns match exactly</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a><a href="#__codelineno-0-674"><span class="linenos" data-linenos="674 "></span></a><span class="sd">            - When tolerance is None: All coordinates match exactly (including NaN)</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><a href="#__codelineno-0-675"><span class="linenos" data-linenos="675 "></span></a><span class="sd">            - When tolerance is specified: All visible points are within tolerance</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><a href="#__codelineno-0-676"><span class="linenos" data-linenos="676 "></span></a><span class="sd">              distance and NaN patterns match exactly</span>
 <a id="__codelineno-0-677" name="__codelineno-0-677"></a><a href="#__codelineno-0-677"><span class="linenos" data-linenos="677 "></span></a><span class="sd">        &quot;&quot;&quot;</span>
 <a id="__codelineno-0-678" name="__codelineno-0-678"></a><a href="#__codelineno-0-678"><span class="linenos" data-linenos="678 "></span></a>        <span class="c1"># Check skeleton compatibility</span>
 <a id="__codelineno-0-679" name="__codelineno-0-679"></a><a href="#__codelineno-0-679"><span class="linenos" data-linenos="679 "></span></a>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">skeleton</span><span class="o">.</span><span class="n">matches</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">skeleton</span><span class="p">):</span>
@@ -5197,9 +5197,9 @@ comparison including proper NaN handling.</p>
   <summary>Notes</summary>
   <p>Two instances are considered to have the same pose if:
 - They have the same skeleton structure
-- When tolerance is None: All coordinates match exactly (including NaN values)
-- When tolerance is specified: All visible points are within tolerance distance
-  and NaN patterns match exactly</p>
+- When tolerance is None: All coordinates match exactly (including NaN)
+- When tolerance is specified: All visible points are within tolerance
+  distance and NaN patterns match exactly</p>
 </details>
 
             <details class="quote">
@@ -5219,9 +5219,9 @@ comparison including proper NaN handling.</p>
 <a id="__codelineno-0-671" name="__codelineno-0-671"></a><a href="#__codelineno-0-671"><span class="linenos" data-linenos="671 "></span></a><span class="sd">    Notes:</span>
 <a id="__codelineno-0-672" name="__codelineno-0-672"></a><a href="#__codelineno-0-672"><span class="linenos" data-linenos="672 "></span></a><span class="sd">        Two instances are considered to have the same pose if:</span>
 <a id="__codelineno-0-673" name="__codelineno-0-673"></a><a href="#__codelineno-0-673"><span class="linenos" data-linenos="673 "></span></a><span class="sd">        - They have the same skeleton structure</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><a href="#__codelineno-0-674"><span class="linenos" data-linenos="674 "></span></a><span class="sd">        - When tolerance is None: All coordinates match exactly (including NaN values)</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><a href="#__codelineno-0-675"><span class="linenos" data-linenos="675 "></span></a><span class="sd">        - When tolerance is specified: All visible points are within tolerance distance</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><a href="#__codelineno-0-676"><span class="linenos" data-linenos="676 "></span></a><span class="sd">          and NaN patterns match exactly</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a><a href="#__codelineno-0-674"><span class="linenos" data-linenos="674 "></span></a><span class="sd">        - When tolerance is None: All coordinates match exactly (including NaN)</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><a href="#__codelineno-0-675"><span class="linenos" data-linenos="675 "></span></a><span class="sd">        - When tolerance is specified: All visible points are within tolerance</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><a href="#__codelineno-0-676"><span class="linenos" data-linenos="676 "></span></a><span class="sd">          distance and NaN patterns match exactly</span>
 <a id="__codelineno-0-677" name="__codelineno-0-677"></a><a href="#__codelineno-0-677"><span class="linenos" data-linenos="677 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-678" name="__codelineno-0-678"></a><a href="#__codelineno-0-678"><span class="linenos" data-linenos="678 "></span></a>    <span class="c1"># Check skeleton compatibility</span>
 <a id="__codelineno-0-679" name="__codelineno-0-679"></a><a href="#__codelineno-0-679"><span class="linenos" data-linenos="679 "></span></a>    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">skeleton</span><span class="o">.</span><span class="n">matches</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">skeleton</span><span class="p">):</span>
