@@ -369,6 +369,33 @@ def test_load_flies_skeleton_fixture(skeleton_json_flies):
     assert ["hindlegL4", "hindlegR4"] in sym_pairs
 
 
+def test_load_mice_hc_skeleton_fixture(skeleton_json_mice_hc):
+    """Test loading the mice head-centered skeleton fixture."""
+    skeleton = sio.load_skeleton(skeleton_json_mice_hc)
+
+    assert skeleton.name == "Skeleton-0"
+    assert len(skeleton.nodes) == 5
+
+    # Check exact node names - mice head-centered configuration
+    expected_nodes = ["nose1", "earL1", "earR1", "tailstart1", "tailend1"]
+    node_names = [node.name for node in skeleton.nodes]
+    assert node_names == expected_nodes
+
+    # Check edges
+    assert len(skeleton.edges) == 4
+    # Verify basic connectivity structure
+    edge_pairs = [(e.source.name, e.destination.name) for e in skeleton.edges]
+
+    # Should have connections forming a simple mouse body structure
+    assert ("nose1", "earL1") in edge_pairs
+    assert ("nose1", "earR1") in edge_pairs
+    assert ("nose1", "tailstart1") in edge_pairs
+    assert ("tailstart1", "tailend1") in edge_pairs
+
+    # Check symmetries - this simple skeleton has no symmetries defined
+    assert len(skeleton.symmetries) == 0
+
+
 def test_round_trip_minimal_fixture(skeleton_json_minimal, tmp_path):
     """Test round-trip with minimal skeleton fixture."""
     original = sio.load_skeleton(skeleton_json_minimal)
@@ -1269,8 +1296,23 @@ def test_load_skeleton_training_config_parsing_error(tmp_path):
 
     # The decoder will fail but it should be caught and fall back
     # Since None is not a valid skeleton format, the fallback will also fail
-    with pytest.raises(AttributeError):  # None has no 'get' attribute
+    with pytest.raises(ValueError):  # None is not valid skeleton data
         sio.load_skeleton(config_path)
+
+
+def test_skeleton_decoder_invalid_input_types():
+    """Test skeleton decoder with invalid input types."""
+    decoder = SkeletonDecoder()
+
+    # Test with non-dict input (should raise TypeError)
+    with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
+        decoder._decode_skeleton("not a dict")
+
+    with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
+        decoder._decode_skeleton(123)
+
+    with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
+        decoder._decode_skeleton([1, 2, 3])
 
 
 def test_skeleton_node_order_from_training_config(

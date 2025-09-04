@@ -154,6 +154,12 @@ class SkeletonDecoder:
         Returns:
             A Skeleton object.
         """
+        # Validate input data
+        if data is None:
+            raise ValueError("Skeleton data cannot be None")
+        if not isinstance(data, dict):
+            raise TypeError(f"Skeleton data must be a dictionary, got {type(data)}")
+
         # Reset decoded objects list for this skeleton
         self.decoded_objects = []
 
@@ -164,7 +170,19 @@ class SkeletonDecoder:
         # First pass: decode all objects in order of appearance
         seen_nodes = set()  # Track node names we've already seen
 
-        for link in data.get("links", []):
+        # Handle both direct format and nx_graph format
+        if "nx_graph" in data:
+            # nx_graph format (standalone skeleton files)
+            links_data = data["nx_graph"].get("links", [])
+            nodes_data = data["nx_graph"].get("nodes", [])
+            graph_data = data["nx_graph"].get("graph", {})
+        else:
+            # Direct format (training config embedded skeletons)
+            links_data = data.get("links", [])
+            nodes_data = data.get("nodes", [])
+            graph_data = data.get("graph", {})
+
+        for link in links_data:
             # Check each component of the link for new objects
             for key in ["source", "target", "type"]:
                 value = link.get(key, {})
@@ -187,7 +205,7 @@ class SkeletonDecoder:
 
         # Also process nodes that are directly defined in the nodes array
         # This is crucial for single-node skeletons with no edges
-        for node_ref in data.get("nodes", []):
+        for node_ref in nodes_data:
             if isinstance(node_ref.get("id"), dict) and "py/object" in node_ref["id"]:
                 # New node object directly in nodes array
                 node = self._decode_node(node_ref["id"])
@@ -203,7 +221,7 @@ class SkeletonDecoder:
         symmetries = []
         seen_symmetries = set()
 
-        for link in data.get("links", []):
+        for link in links_data:
             # Resolve references to build the edge
             source_node = self._resolve_link_ref(link["source"])
             target_node = self._resolve_link_ref(link["target"])
@@ -223,7 +241,7 @@ class SkeletonDecoder:
         nodes_from_refs = []
 
         # First collect nodes based on the nodes array
-        for node_ref in data.get("nodes", []):
+        for node_ref in nodes_data:
             if isinstance(node_ref["id"], dict) and "py/id" in node_ref["id"]:
                 py_id = node_ref["id"]["py/id"]
                 # Get node from decoded objects (py/id is 1-indexed)
@@ -244,7 +262,7 @@ class SkeletonDecoder:
             nodes = nodes_from_refs
 
         # Get skeleton name
-        name = data.get("graph", {}).get("name", "Skeleton")
+        name = graph_data.get("name", "Skeleton")
 
         return Skeleton(nodes=nodes, edges=edges, symmetries=symmetries, name=name)
 

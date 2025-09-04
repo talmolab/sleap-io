@@ -1,0 +1,132 @@
+{
+    "description": "Template Skeleton for mice_hc reference dataset.",
+    "nx_graph": {
+        "directed": true,
+        "graph": {
+            "name": "Skeleton-0",
+            "num_edges_inserted": 4
+        },
+        "links": [
+            {
+                "edge_insert_idx": 0,
+                "key": 0,
+                "source": {
+                    "py/object": "sleap.skeleton.Node",
+                    "py/state": {
+                        "py/tuple": [
+                            "nose1",
+                            1.0
+                        ]
+                    }
+                },
+                "target": {
+                    "py/object": "sleap.skeleton.Node",
+                    "py/state": {
+                        "py/tuple": [
+                            "earL1",
+                            1.0
+                        ]
+                    }
+                },
+                "type": {
+                    "py/reduce": [
+                        {
+                            "py/type": "sleap.skeleton.EdgeType"
+                        },
+                        {
+                            "py/tuple": [
+                                1
+                            ]
+                        }
+                    ]
+                }
+            },
+            {
+                "edge_insert_idx": 1,
+                "key": 0,
+                "source": {
+                    "py/id": 1
+                },
+                "target": {
+                    "py/object": "sleap.skeleton.Node",
+                    "py/state": {
+                        "py/tuple": [
+                            "earR1",
+                            1.0
+                        ]
+                    }
+                },
+                "type": {
+                    "py/id": 3
+                }
+            },
+            {
+                "edge_insert_idx": 2,
+                "key": 0,
+                "source": {
+                    "py/id": 1
+                },
+                "target": {
+                    "py/object": "sleap.skeleton.Node",
+                    "py/state": {
+                        "py/tuple": [
+                            "tailstart1",
+                            1.0
+                        ]
+                    }
+                },
+                "type": {
+                    "py/id": 3
+                }
+            },
+            {
+                "edge_insert_idx": 3,
+                "key": 0,
+                "source": {
+                    "py/id": 5
+                },
+                "target": {
+                    "py/object": "sleap.skeleton.Node",
+                    "py/state": {
+                        "py/tuple": [
+                            "tailend1",
+                            1.0
+                        ]
+                    }
+                },
+                "type": {
+                    "py/id": 3
+                }
+            }
+        ],
+        "multigraph": true,
+        "nodes": [
+            {
+                "id": {
+                    "py/id": 1
+                }
+            },
+            {
+                "id": {
+                    "py/id": 2
+                }
+            },
+            {
+                "id": {
+                    "py/id": 4
+                }
+            },
+            {
+                "id": {
+                    "py/id": 5
+                }
+            },
+            {
+                "id": {
+                    "py/id": 6
+                }
+            }
+        ]
+    },
+    "preview_image": null
+}
