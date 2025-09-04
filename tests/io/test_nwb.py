@@ -165,14 +165,14 @@ def test_save_nwb_append_mode(slp_typical, tmp_path):
     """Test append mode functionality in save_nwb."""
     labels = load_slp(slp_typical)
 
-    # Remove user instances to ensure we have only predictions  
+    # Remove user instances to ensure we have only predictions
     for lf in labels.labeled_frames:
         lf.instances = lf.predicted_instances
 
     # First, save initial predictions
     nwb_file = tmp_path / "append_test.nwb"
     save_nwb(labels, nwb_file, nwb_format="predictions", append=False)
-    
+
     # Verify file was created and can be loaded
     loaded_initial = load_nwb(nwb_file)
     assert isinstance(loaded_initial, Labels)
@@ -182,7 +182,7 @@ def test_save_nwb_append_mode(slp_typical, tmp_path):
     try:
         save_nwb(labels, nwb_file, nwb_format="predictions", append=True)
     except ValueError as e:
-        # If it fails due to conflicting data, that's expected - we just want to test 
+        # If it fails due to conflicting data, that's expected - we just want to test
         # that the append code path is executed (line 162 in nwb.py)
         if "already exists" in str(e):
             pass  # This is expected for duplicate data
