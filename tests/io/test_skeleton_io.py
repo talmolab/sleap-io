@@ -1,8 +1,7 @@
 """Tests for standalone skeleton JSON I/O."""
 
-import json
-
 import pytest
+import simplejson as json
 
 import sleap_io as sio
 from sleap_io.io.skeleton import (

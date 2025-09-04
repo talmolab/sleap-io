@@ -21,10 +21,10 @@ from sleap_io.io import (
 )
 from sleap_io.io.nwb import NwbFormat
 from sleap_io.io.skeleton import (
-    SkeletonDecoder,
-    SkeletonEncoder,
-    SkeletonYAMLDecoder,
-    SkeletonYAMLEncoder,
+    decode_yaml_skeleton,
+    encode_skeleton,
+    encode_yaml_skeleton,
+    load_skeleton_from_json,
 )
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
@@ -685,30 +685,12 @@ def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
         # YAML format
         with open(filename, "r") as f:
             yaml_data = f.read()
-        decoder = SkeletonYAMLDecoder()
-        return decoder.decode(yaml_data)
+        return decode_yaml_skeleton(yaml_data)
     else:
         # JSON format (default) - could be standalone or training config
-        import json
-
         with open(filename, "r") as f:
             json_data = f.read()
-
-        # Try to detect if this is a training config file
-        try:
-            data = json.loads(json_data)
-            if isinstance(data, dict) and "data" in data:
-                if "labels" in data["data"] and "skeletons" in data["data"]["labels"]:
-                    # This is a training config file with embedded skeletons
-                    decoder = SkeletonDecoder()
-                    return decoder.decode(data["data"]["labels"]["skeletons"])
-        except (json.JSONDecodeError, KeyError, TypeError):
-            # Not a training config or invalid JSON structure
-            pass
-
-        # Fall back to regular skeleton JSON decoding
-        decoder = SkeletonDecoder()
-        return decoder.decode(json_data)
+        return load_skeleton_from_json(json_data)
 
 
 def load_labels_set(
@@ -814,13 +796,11 @@ def save_skeleton(skeleton: Union[Skeleton, List[Skeleton]], filename: str | Pat
     # Detect format based on extension
     if filename.lower().endswith((".yaml", ".yml")):
         # YAML format
-        encoder = SkeletonYAMLEncoder()
-        yaml_data = encoder.encode(skeleton)
+        yaml_data = encode_yaml_skeleton(skeleton)
         with open(filename, "w") as f:
             f.write(yaml_data)
     else:
         # JSON format (default)
-        encoder = SkeletonEncoder()
-        json_data = encoder.encode(skeleton)
+        json_data = encode_skeleton(skeleton)
         with open(filename, "w") as f:
             f.write(json_data)
