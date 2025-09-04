@@ -656,13 +656,14 @@ class Instance:
         self.points = new_points
         self.points["name"] = self.skeleton.node_names
 
-    def same_pose_as(self, other: "Instance", tolerance: float = 5.0) -> bool:
+    def same_pose_as(self, other: "Instance", tolerance: float = None) -> bool:
         """Check if this instance has the same pose as another instance.
 
         Args:
             other: Another instance to compare with.
             tolerance: Maximum distance (in pixels) between corresponding points
-                for them to be considered the same.
+                for them to be considered the same. If None (default), uses exact
+                comparison including proper NaN handling.
 
         Returns:
             True if the instances have the same pose within tolerance, False otherwise.
@@ -670,33 +671,46 @@ class Instance:
         Notes:
             Two instances are considered to have the same pose if:
             - They have the same skeleton structure
-            - All visible points are within the tolerance distance
-            - They have the same visibility pattern
+            - When tolerance is None: All coordinates match exactly (including NaN values)
+            - When tolerance is specified: All visible points are within tolerance distance
+              and NaN patterns match exactly
         """
         # Check skeleton compatibility
         if not self.skeleton.matches(other.skeleton):
             return False
 
-        # Get visible points for both instances
-        self_visible = self.points["visible"]
-        other_visible = other.points["visible"]
+        if tolerance is None:
+            # Exact comparison using numpy arrays with proper NaN handling
+            return np.array_equal(self.numpy(), other.numpy(), equal_nan=True)
+        else:
+            # Tolerance-based comparison with proper NaN handling
+            self_array = self.numpy()
+            other_array = other.numpy()
 
-        # Check if visibility patterns match
-        if not np.array_equal(self_visible, other_visible):
-            return False
+            # First, check if NaN patterns match exactly
+            self_nan_mask = np.isnan(self_array)
+            other_nan_mask = np.isnan(other_array)
+            if not np.array_equal(self_nan_mask, other_nan_mask):
+                return False
 
-        # Compare visible points
-        if not self_visible.any():
-            # Both instances have no visible points
-            return True
+            # Get mask for non-NaN values
+            non_nan_mask = ~self_nan_mask
 
-        # Calculate distances between corresponding visible points
-        self_pts = self.points["xy"][self_visible]
-        other_pts = other.points["xy"][other_visible]
+            # If all values are NaN, they're considered equal
+            if not non_nan_mask.any():
+                return True
 
-        distances = np.linalg.norm(self_pts - other_pts, axis=1)
+            # Calculate distances only for non-NaN points
+            self_pts = self_array[non_nan_mask]
+            other_pts = other_array[non_nan_mask]
 
-        return np.all(distances <= tolerance)
+            # Reshape to handle the coordinate pairs properly
+            self_pts = self_pts.reshape(-1, 2)
+            other_pts = other_pts.reshape(-1, 2)
+
+            distances = np.linalg.norm(self_pts - other_pts, axis=1)
+
+            return np.all(distances <= tolerance)
 
     def same_identity_as(self, other: "Instance") -> bool:
         """Check if this instance has the same identity (track) as another instance.
