@@ -1300,6 +1300,21 @@ def test_load_skeleton_training_config_parsing_error(tmp_path):
         sio.load_skeleton(config_path)
 
 
+def test_skeleton_decoder_invalid_input_types():
+    """Test skeleton decoder with invalid input types."""
+    decoder = SkeletonDecoder()
+    
+    # Test with non-dict input (should raise TypeError)
+    with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
+        decoder._decode_skeleton("not a dict")
+    
+    with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
+        decoder._decode_skeleton(123)
+    
+    with pytest.raises(TypeError, match="Skeleton data must be a dictionary"):
+        decoder._decode_skeleton([1, 2, 3])
+
+
 def test_skeleton_node_order_from_training_config(
     training_config_13pt_fly, slp_skeleton_13pt_fly
 ):
