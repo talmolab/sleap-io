@@ -1464,3 +1464,31 @@ def test_clip_2nodes_slp(clip_2nodes_slp):
     assert labels is not None
     assert len(labels.skeletons) == 1
     assert len(labels.skeletons[0].nodes) == 2
+
+
+def test_load_single_node_training_config(single_node_training_config):
+    """Test loading training config with single-node skeleton and no edges.
+
+    This tests the fix for the decoder bug where single-node skeletons
+    with no edges would fail to load because the decoder only processed
+    nodes that appeared in links, but single-node skeletons have empty links.
+    """
+    result = sio.load_skeleton(single_node_training_config)
+
+    # Should return a list with one skeleton (training configs return lists)
+    assert isinstance(result, list)
+    assert len(result) == 1
+
+    skeleton = result[0]
+
+    # Verify skeleton structure
+    assert skeleton.name == "Skeleton-1"
+    assert len(skeleton.nodes) == 1
+    assert len(skeleton.edges) == 0
+    assert len(skeleton.symmetries) == 0
+
+    # Verify the single node
+    assert skeleton.nodes[0].name == "r0"
+
+    # Test that this previously would have failed (now passes with fix)
+    # Single node with no edges should be properly loaded
