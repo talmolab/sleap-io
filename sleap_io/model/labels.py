@@ -1796,11 +1796,27 @@ class Labels:
                                     deduped_basenames = [
                                         Path(f).name for f in deduped_video.filename
                                     ]
+                                    self_basenames = [
+                                        Path(f).name for f in self_video.filename
+                                    ]
                                     for old_idx, basename in enumerate(other_basenames):
                                         if basename in deduped_basenames:
                                             new_idx = deduped_basenames.index(basename)
                                             frame_idx_map[(other_video, old_idx)] = (
                                                 deduped_video,
+                                                new_idx,
+                                            )
+                                        else:
+                                            # Cases where the image was a duplicate,
+                                            # present in both self and other labels
+                                            # See Issue #239.
+                                            assert basename in self_basenames, (
+                                                "Unexpected basename mismatch, \
+                                                    possible file corruption."
+                                            )
+                                            new_idx = self_basenames.index(basename)
+                                            frame_idx_map[(other_video, old_idx)] = (
+                                                self_video,
                                                 new_idx,
                                             )
                         elif video_matcher.method == VideoMatchMethod.SHAPE:
