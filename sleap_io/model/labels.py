@@ -1807,17 +1807,18 @@ class Labels:
                                                 new_idx,
                                             )
                                         else:
-                                            # Cases where the image was a duplicate, 
+                                            # Cases where the image was a duplicate,
                                             # present in both self and other labels
                                             # See Issue #239.
-                                            if basename in self_basenames:
-                                                new_idx = self_basenames.index(basename)
-                                                frame_idx_map[
-                                                    (other_video, old_idx)
-                                                ] = (
-                                                    self_video,
-                                                    new_idx,
-                                                )
+                                            assert basename in self_basenames, (
+                                                "Unexpected basename mismatch, \
+                                                    possible file corruption."
+                                            )
+                                            new_idx = self_basenames.index(basename)
+                                            frame_idx_map[(other_video, old_idx)] = (
+                                                self_video,
+                                                new_idx,
+                                            )
                         elif video_matcher.method == VideoMatchMethod.SHAPE:
                             # Merge videos with same shape
                             merged_video = self_video.merge_with(other_video)
