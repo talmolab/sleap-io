@@ -1806,12 +1806,15 @@ class Labels:
                                                 deduped_video,
                                                 new_idx,
                                             )
-                                        else: 
-                                            # Cases where the image was a duplicate, present in both self and other. 
-                                            # See Issue #239. 
+                                        else:
+                                            # Cases where the image was a duplicate, 
+                                            # present in both self and other labels
+                                            # See Issue #239.
                                             if basename in self_basenames:
                                                 new_idx = self_basenames.index(basename)
-                                                frame_idx_map[(other_video, old_idx)] = (
+                                                frame_idx_map[
+                                                    (other_video, old_idx)
+                                                ] = (
                                                     self_video,
                                                     new_idx,
                                                 )
