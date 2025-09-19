@@ -1165,7 +1165,8 @@ class Labels:
             This also copies the provenance and inserts an extra key: `"source_labels"`
             with the path to the current labels, if available.
 
-            It does NOT copy suggested frames.
+            This also copies any suggested frames associated with the videos of the
+            extracted labeled frames.
         """
         lfs = self[inds]
 
@@ -1179,6 +1180,17 @@ class Labels:
 
         skel_to_ind = {skel.name: ind for ind, skel in enumerate(self.skeletons)}
         labels.skeletons = sorted(labels.skeletons, key=lambda x: skel_to_ind[x.name])
+
+        # Also copy suggestion frames.
+        extracted_videos = labels.videos
+        suggestions = []
+        for sf in self.suggestions:
+            if sf.video in extracted_videos:
+                suggestions.append(sf)
+        if copy:
+            suggestions = deepcopy(suggestions)
+        labels.suggestions.extend(suggestions)
+        labels.update()
 
         labels.provenance = deepcopy(labels.provenance)
         labels.provenance["source_labels"] = self.provenance.get("filename", None)
