@@ -95,7 +95,13 @@ class Labels:
                 self.videos.append(sf.video)
 
     def __getitem__(
-        self, key: int | slice | list[int] | np.ndarray | tuple[Video, int] | list[tuple[Video, int]]
+        self,
+        key: int
+        | slice
+        | list[int]
+        | np.ndarray
+        | tuple[Video, int]
+        | list[tuple[Video, int]],
     ) -> list[LabeledFrame] | LabeledFrame:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) is int:
