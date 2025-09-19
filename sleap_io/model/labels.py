@@ -1188,7 +1188,7 @@ class Labels:
         labels.skeletons = sorted(labels.skeletons, key=lambda x: skel_to_ind[x.name])
 
         # Also copy suggestion frames.
-        extracted_videos = labels.videos
+        extracted_videos = list(set([lf.video for lf in self[inds]]))
         suggestions = []
         for sf in self.suggestions:
             if sf.video in extracted_videos:
