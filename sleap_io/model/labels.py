@@ -1195,6 +1195,14 @@ class Labels:
                 suggestions.append(sf)
         if copy:
             suggestions = deepcopy(suggestions)
+
+        # De-duplicate videos from suggestions
+        for sf in suggestions:
+            for vid in labels.videos:
+                if vid.matches_content(sf.video) and vid.matches_path(sf.video):
+                    sf.video = vid
+                    break
+
         labels.suggestions.extend(suggestions)
         labels.update()
 
