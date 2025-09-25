@@ -1663,6 +1663,8 @@ class Labels:
                 - "keep_original": Keep original frames
                 - "keep_new": Replace with new frames
                 - "keep_both": Keep all frames
+                - "update_tracks": Update track and score of the original instances
+                    from the new instances.
             validate: If True, validate for conflicts before merging.
             progress_callback: Optional callback for progress updates.
                 Should accept (current, total, message) arguments.

@@ -236,6 +236,8 @@ class LabeledFrame:
                 - "keep_original": Keep all original instances, ignore new ones
                 - "keep_new": Replace with new instances
                 - "keep_both": Keep all instances from both frames
+                - "update_tracks": Update track and score of the original instances
+                    from the new instances.
 
         Returns:
             A tuple of (merged_instances, conflicts) where:
@@ -261,6 +263,15 @@ class LabeledFrame:
             return other.instances.copy(), conflicts
         elif strategy == "keep_both":
             return self.instances + other.instances, conflicts
+        elif strategy == "update_tracks":
+            # match instances and update .track and tracking score of the old instances
+            matches = instance_matcher.find_matches(self.instances, other.instances)
+            for self_idx, other_idx, score in matches:
+                self.instances[self_idx].track = other.instances[other_idx].track
+                self.instances[self_idx].tracking_score = other.instances[
+                    other_idx
+                ].tracking_score
+            return self.instances, conflicts
 
         # Smart merging strategy
         merged_instances = []
@@ -307,15 +318,9 @@ class LabeledFrame:
                     conflicts.append((self_inst, other_inst, "kept_user"))
                     used_indices.add(self_idx)
                 else:
-                    # Both are predictions - keep the one with higher score
+                    # Both are predictions - keep the new one
                     if self_idx not in used_indices:
-                        if hasattr(other_inst, "score") and hasattr(self_inst, "score"):
-                            if other_inst.score > self_inst.score:
-                                merged_instances.append(other_inst)
-                            else:
-                                merged_instances.append(self_inst)
-                        else:
-                            merged_instances.append(other_inst)
+                        merged_instances.append(other_inst)
                         used_indices.add(self_idx)
             else:
                 # No match found, add new instance
