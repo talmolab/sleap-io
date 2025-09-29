@@ -288,6 +288,28 @@ def test_labels_getitem(slp_typical):
         labels[None]
 
 
+def test_labels_getitem_list_of_tuples(slp_typical):
+    labels = load_slp(slp_typical)
+    labels.labeled_frames.append(LabeledFrame(video=labels.video, frame_idx=1))
+    assert len(labels) == 2
+
+    keys = [(labels.video, 0), (labels.video, 1)]
+    lfs = labels[keys]
+    assert len(lfs) == 2
+    assert lfs[0].frame_idx == 0
+    assert lfs[1].frame_idx == 1
+
+    keys = [(labels.video, 1), (labels.video, 0)]
+    lfs = labels[keys]
+    assert len(lfs) == 2
+    assert lfs[0].frame_idx == 1
+    assert lfs[1].frame_idx == 0
+
+    keys = []
+    lfs = labels[keys]
+    assert len(lfs) == 0
+
+
 def test_labels_save(tmp_path, slp_typical):
     labels = load_slp(slp_typical)
     labels.save(tmp_path / "test.slp")
@@ -827,6 +849,58 @@ def test_split(slp_real_data, tmp_path):
         Path(split2_.video.original_video.filename).as_posix()
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
+
+
+def test_extract_with_suggestions():
+    video1 = Video(filename="v1.mp4")
+    video2 = Video(filename="v2.mp4")
+    skel = Skeleton(["a", "b"])
+    labels = Labels(
+        labeled_frames=[
+            LabeledFrame(video1, 0, [Instance.from_numpy(np.zeros((2, 2)), skel)]),
+            LabeledFrame(video1, 1, [Instance.from_numpy(np.zeros((2, 2)), skel)]),
+            LabeledFrame(video2, 0, [Instance.from_numpy(np.zeros((2, 2)), skel)]),
+        ],
+        suggestions=[
+            SuggestionFrame(video1, 2),
+            SuggestionFrame(video2, 1),
+        ],
+    )
+    assert len(labels.videos) == 2
+    assert len(labels.suggestions) == 2
+
+    # Extract LFs from video 1.
+    extracted = labels.extract([0, 1])
+    assert len(extracted) == 2
+    assert len(extracted.videos) == 1
+    assert extracted.videos[0].matches_content(video1)
+    assert extracted.videos[0].matches_path(video1)
+    assert len(extracted.suggestions) == 1
+    assert extracted.suggestions[0].video.matches_content(video1)
+    assert extracted.suggestions[0].video.matches_path(video1)
+    assert extracted.suggestions[0].frame_idx == 2
+    # Check that the suggestion video is the same object as the LF video.
+    assert extracted.suggestions[0].video is extracted.videos[0]
+
+    # Extract LFs from video 2.
+    extracted = labels.extract([2])
+    assert len(extracted) == 1
+    assert len(extracted.videos) == 1
+    assert extracted.videos[0].matches_content(video2)
+    assert extracted.videos[0].matches_path(video2)
+    assert len(extracted.suggestions) == 1
+    assert extracted.suggestions[0].video.matches_content(video2)
+    assert extracted.suggestions[0].video.matches_path(video2)
+    assert extracted.suggestions[0].frame_idx == 1
+    assert extracted.suggestions[0].video is extracted.videos[0]
+
+    # Extract LFs from both.
+    extracted = labels.extract([0, 2])
+    assert len(extracted) == 2
+    assert len(extracted.videos) == 2
+    assert len(extracted.suggestions) == 2
+    assert extracted.suggestions[0].video.matches_content(video1)
+    assert extracted.suggestions[1].video.matches_content(video2)
 
 
 def test_make_training_splits(slp_real_data):

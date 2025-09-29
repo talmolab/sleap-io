@@ -95,7 +95,13 @@ class Labels:
                 self.videos.append(sf.video)
 
     def __getitem__(
-        self, key: int | slice | list[int] | np.ndarray | tuple[Video, int]
+        self,
+        key: int
+        | slice
+        | list[int]
+        | np.ndarray
+        | tuple[Video, int]
+        | list[tuple[Video, int]],
     ) -> list[LabeledFrame] | LabeledFrame:
         """Return one or more labeled frames based on indexing criteria."""
         if type(key) is int:
@@ -103,7 +109,12 @@ class Labels:
         elif type(key) is slice:
             return [self.labeled_frames[i] for i in range(*key.indices(len(self)))]
         elif type(key) is list:
-            return [self.labeled_frames[i] for i in key]
+            if not key:
+                return []
+            if isinstance(key[0], tuple):
+                return [self[i] for i in key]
+            else:
+                return [self.labeled_frames[i] for i in key]
         elif isinstance(key, np.ndarray):
             return [self.labeled_frames[i] for i in key.tolist()]
         elif type(key) is tuple and len(key) == 2:
@@ -1160,7 +1171,8 @@ class Labels:
             This also copies the provenance and inserts an extra key: `"source_labels"`
             with the path to the current labels, if available.
 
-            It does NOT copy suggested frames.
+            This also copies any suggested frames associated with the videos of the
+            extracted labeled frames.
         """
         lfs = self[inds]
 
@@ -1174,6 +1186,25 @@ class Labels:
 
         skel_to_ind = {skel.name: ind for ind, skel in enumerate(self.skeletons)}
         labels.skeletons = sorted(labels.skeletons, key=lambda x: skel_to_ind[x.name])
+
+        # Also copy suggestion frames.
+        extracted_videos = list(set([lf.video for lf in self[inds]]))
+        suggestions = []
+        for sf in self.suggestions:
+            if sf.video in extracted_videos:
+                suggestions.append(sf)
+        if copy:
+            suggestions = deepcopy(suggestions)
+
+        # De-duplicate videos from suggestions
+        for sf in suggestions:
+            for vid in labels.videos:
+                if vid.matches_content(sf.video) and vid.matches_path(sf.video):
+                    sf.video = vid
+                    break
+
+        labels.suggestions.extend(suggestions)
+        labels.update()
 
         labels.provenance = deepcopy(labels.provenance)
         labels.provenance["source_labels"] = self.provenance.get("filename", None)
