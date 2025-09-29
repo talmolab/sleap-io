@@ -59,6 +59,32 @@ class TestLabeledFrameMerge:
         assert merged[0] is inst2
         assert len(conflicts) == 0
 
+    def test_merge_update_tracks(self):
+        """Test frame merge with update_tracks strategy."""
+        skeleton = Skeleton(["head", "tail"])
+        video = Video(filename="test.mp4", open_backend=False)
+
+        frame1 = LabeledFrame(video=video, frame_idx=0)
+        inst1 = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton)
+        frame1.instances = [inst1]
+
+        frame2 = LabeledFrame(video=video, frame_idx=0)
+        inst2 = PredictedInstance.from_numpy(
+            np.array([[10, 10], [20, 20]]), skeleton=skeleton
+        )
+        inst2.track = Track(name="track1")
+        frame2.instances = [inst2]
+
+        # Merge with keep_both strategy
+        merged, conflicts = frame1.merge(frame2, strategy="update_tracks")
+
+        assert len(merged) == 1
+        assert inst1 in merged
+        assert inst2 not in merged
+        assert inst1.track == inst2.track
+        assert inst1.tracking_score == inst2.tracking_score
+        assert len(conflicts) == 0
+
     def test_merge_keep_both(self):
         """Test frame merge with keep_both strategy."""
         skeleton = Skeleton(["head", "tail"])

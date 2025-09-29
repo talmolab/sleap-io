@@ -168,6 +168,21 @@ Retains all instances from both datasets without filtering duplicates.
 result = base_labels.merge(new_labels, frame_strategy="keep_both")
 ```
 
+### Update tracks strategy
+
+Updates the track assignments and tracking scores of existing instances based on spatial matches with new instances, while preserving the original pose annotations.
+
+This strategy preserves the original pose data and **does not** add new or remove existing instances!
+
+!!! example "When to use"
+    
+    - Updating track identities after running a tracking algorithm
+    - Merging tracking information from different tracking runs
+
+```python title="Using update tracks strategy"
+result = base_labels.merge(new_labels, frame_strategy="update_tracks")
+```
+
 ## Matching configuration
 
 Matching determines which objects correspond between datasets. Different matchers handle various scenarios and data inconsistencies.

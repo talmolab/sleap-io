@@ -385,9 +385,9 @@ def test_labeled_frame_merge_edge_cases():
         lf_complex2, instance_matcher=matcher, strategy="smart"
     )
 
-    # Should keep the one with higher score
+    # Should keep the latest one
     assert len(merged5) == 1
-    assert merged5[0].score == 0.7
+    assert merged5[0].score == 0.6
 
 
 def test_labeled_frame_merge_conflict_resolution_missing_score():
@@ -499,12 +499,12 @@ def test_labeled_frame_merge_keep_unmatched_predictions():
         frame4, instance_matcher=matcher, strategy="smart"
     )
 
-    # pred3 matches pred4, should keep pred3 (higher score)
+    # pred3 matches pred4, pred4 is kept
     # pred5 has no match, should be kept
     assert len(merged2) == 2
-    assert pred3 in merged2
+    assert pred3 not in merged2
     assert pred5 in merged2
-    assert pred4 not in merged2
+    assert pred4 in merged2
 
 
 def test_labeled_frame_merge_matched_prediction_removal():
@@ -696,8 +696,8 @@ def test_labeled_frame_merge_lines_329_330_coverage():
         np.array([[25, 25], [35, 35]]), skeleton=skeleton, score=0.5
     )
 
-    # Other frame: prediction that matches pred_self but with lower score
-    # This should create a match but pred_self should win and be kept
+    # Other frame: prediction that matches pred_self
+    # This should create a match but but new instance pred_other should be kept
     pred_other = PredictedInstance.from_numpy(
         np.array([[26, 26], [36, 36]]),
         skeleton=skeleton,
@@ -718,11 +718,11 @@ def test_labeled_frame_merge_lines_329_330_coverage():
         frame_other, instance_matcher=matcher, strategy="smart"
     )
 
-    # Expected: user_self + pred_self (higher score wins over pred_other)
+    # Expected: user_self + pred_other
     assert len(merged) == 2
     assert user_self in merged
-    assert pred_self in merged
-    assert pred_other not in merged
+    assert pred_self not in merged
+    assert pred_other in merged
 
     # Now let's test a different scenario that might trigger the lines
     # Create a case with multiple predictions where one might not get into used_indices
@@ -757,12 +757,11 @@ def test_labeled_frame_merge_lines_329_330_coverage():
         frame_other_2, instance_matcher=matcher, strategy="smart"
     )
 
-    # pred_self_1 should win over pred_other_1 (higher score: 0.6 > 0.5)
-    # pred_other_2 should win over pred_self_2 (higher score: 0.9 > 0.7)
+    # only pred_other instances would be kep if all are predictions
     assert len(merged2) == 2
-    assert pred_self_1 in merged2
+    assert pred_self_1 not in merged2
     assert pred_other_2 in merged2
-    assert pred_other_1 not in merged2
+    assert pred_other_1 in merged2
     assert pred_self_2 not in merged2
 
 
@@ -812,21 +811,11 @@ def test_labeled_frame_merge_multiple_matches_to_same_prediction():
         frame_other, instance_matcher=matcher, strategy="smart"
     )
 
-    # The result should depend on which instance wins the match
-    # If other_inst_2 wins (higher score), pred_self should not be in the result
-    # pred_self (score 0.5) between other instances (0.3, 0.8)
+    # Both are predictions, so we keep the new one
 
-    # With our fix, the behavior should be:
-    # - pred_self matches both other_inst_1 and other_inst_2
-    # - other_to_self will keep the best match (to other_inst_2)
-    # - other_inst_2 (0.8) wins over pred_self (0.5)
-    # - pred_self gets marked as used, so it won't appear in final loop
-
-    # With our fix, pred_self (0.5) wins over other_inst_1 (0.3) and other_inst_2 (0.8)
-    # Matching logic chooses best spatial match over highest score
     assert len(merged) == 1
-    assert pred_self in merged  # pred_self won the match
-    assert other_inst_1 not in merged
+    assert pred_self not in merged
+    assert other_inst_1 in merged
     assert other_inst_2 not in merged
 
 

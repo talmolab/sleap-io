@@ -112,6 +112,7 @@ class FrameStrategy(str, Enum):
     KEEP_ORIGINAL = "keep_original"
     KEEP_NEW = "keep_new"
     KEEP_BOTH = "keep_both"
+    UPDATE_TRACKS = "update_tracks"
 
 
 class ErrorMode(str, Enum):
