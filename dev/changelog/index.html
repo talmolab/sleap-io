@@ -336,6 +336,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v054" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.4
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v053" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.3
@@ -591,15 +600,6 @@
   <a href="#v005" class="md-nav__link">
     <span class="md-ellipsis">
       v0.0.5
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v004" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.4
     </span>
   </a>
   
@@ -1665,6 +1665,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v054" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.4
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v053" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.3
@@ -1925,15 +1934,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v004" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.4
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1951,6 +1951,136 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v054"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.4">v0.5.4</a><a class="headerlink" href="#v054" title="Permanent link">&para;</a></h2>
+<h2>🎯 Summary</h2>
+<p>This release focuses on improving data manipulation workflows with enhanced merging capabilities and critical bug fixes. The v0.5.4 release introduces refined merge strategies for handling predictions, improved skeleton loading for standalone files, and fixes for data extraction and coordinate comparison operations that enhance the reliability of sleap-io for annotation workflows.</p>
+<h2>✨ New Features</h2>
+<h3>Updated Smart Merge Strategy (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3454894672" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/244" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/244/hovercard" href="https://github.com/talmolab/sleap-io/pull/244">#244</a>)</h3>
+<p>Enhanced the <code>smart</code> merge strategy to better handle prediction conflicts by preferring newer predictions when both instances are predicted.</p>
+<p><strong>Previous Behavior:</strong> When merging two predicted instances, the instance with the higher score was selected.</p>
+<p><strong>New Behavior:</strong> When both instances are predictions, the newer prediction is always chosen, ensuring the most recent model outputs are preserved.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Smart merge now prefers newer predictions
+merged = labels1.merge(labels2, strategy=&quot;smart&quot;)
+# If both sources have predictions for the same frame,
+# the prediction from labels2 (newer) is kept"><pre><span class="pl-c"># Smart merge now prefers newer predictions</span>
+<span class="pl-s1">merged</span> <span class="pl-c1">=</span> <span class="pl-s1">labels1</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">labels2</span>, <span class="pl-s1">strategy</span><span class="pl-c1">=</span><span class="pl-s">"smart"</span>)
+<span class="pl-c"># If both sources have predictions for the same frame,</span>
+<span class="pl-c"># the prediction from labels2 (newer) is kept</span></pre></div>
+<p><strong>Impact:</strong> This change improves iterative prediction workflows where models are refined over time, ensuring the latest model outputs are retained during merging operations.</p>
+<h3>New Update Tracks Merge Strategy (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3454894672" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/244" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/244/hovercard" href="https://github.com/talmolab/sleap-io/pull/244">#244</a>)</h3>
+<p>Introduced a new <code>update_tracks</code> merge strategy for <code>LabeledFrame.merge()</code> that allows updating track assignments and tracking scores while preserving the original pose annotations.</p>
+<p><strong>Key capabilities:</strong></p>
+<ul>
+<li>Update track assignments without modifying pose coordinates</li>
+<li>Preserve original annotations while updating tracking metadata</li>
+<li>Useful for refining tracking results after manual review</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Update track assignments while keeping pose data
+frame_merged = frame1.merge(
+    frame2,
+    merge_strategy=&quot;update_tracks&quot;
+)
+# Pose coordinates from frame1 are preserved
+# Track IDs and scores are updated from frame2"><pre><span class="pl-c"># Update track assignments while keeping pose data</span>
+<span class="pl-s1">frame_merged</span> <span class="pl-c1">=</span> <span class="pl-s1">frame1</span>.<span class="pl-c1">merge</span>(
+    <span class="pl-s1">frame2</span>,
+    <span class="pl-s1">merge_strategy</span><span class="pl-c1">=</span><span class="pl-s">"update_tracks"</span>
+)
+<span class="pl-c"># Pose coordinates from frame1 are preserved</span>
+<span class="pl-c"># Track IDs and scores are updated from frame2</span></pre></div>
+<p><strong>Use Cases:</strong></p>
+<ul>
+<li>Correcting track identity switches without re-annotating poses</li>
+<li>Updating tracking confidence scores after manual verification</li>
+<li>Refining multi-animal tracking results iteratively</li>
+</ul>
+<h2>🐛 Bug Fixes</h2>
+<h3>Fixed Standalone Skeleton Loading (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3382335839" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/238" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/238/hovercard" href="https://github.com/talmolab/sleap-io/pull/238">#238</a>)</h3>
+<p>Resolved an issue where standalone skeleton JSON files using the <code>nx_graph</code> format would fail to load correctly.</p>
+<p><strong>Problem:</strong> Standalone skeleton files (like those in <code>tmp/skeletons/</code>) were loading with 0 nodes and 0 edges because the <code>SkeletonDecoder</code> only looked for <code>links</code> and <code>nodes</code> at the top level, missing the <code>nx_graph.links</code> and <code>nx_graph.nodes</code> structure.</p>
+<p><strong>Solution:</strong> Enhanced <code>SkeletonDecoder</code> to handle both formats:</p>
+<ul>
+<li><code>nx_graph</code> format (standalone skeleton files)</li>
+<li>Direct format (training config embedded skeletons)</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Standalone skeleton files now load correctly
+skeleton = sio.load_skeleton(&quot;mice_hc.json&quot;)[0]
+print(len(skeleton.nodes))  # 5 ✅ (was 0 before)
+print(len(skeleton.edges))  # 4 ✅ (was 0 before)"><pre><span class="pl-c"># Standalone skeleton files now load correctly</span>
+<span class="pl-s1">skeleton</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_skeleton</span>(<span class="pl-s">"mice_hc.json"</span>)[<span class="pl-c1">0</span>]
+<span class="pl-en">print</span>(<span class="pl-en">len</span>(<span class="pl-s1">skeleton</span>.<span class="pl-c1">nodes</span>))  <span class="pl-c"># 5 ✅ (was 0 before)</span>
+<span class="pl-en">print</span>(<span class="pl-en">len</span>(<span class="pl-s1">skeleton</span>.<span class="pl-c1">edges</span>))  <span class="pl-c"># 4 ✅ (was 0 before)</span></pre></div>
+<p><strong>Impact:</strong> All skeleton files in the SLEAP skeleton repository now load correctly, ensuring seamless skeleton sharing and reuse across projects.</p>
+<h3>Fixed Labels.extract() to Copy Suggestion Frames (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3435188915" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/243" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/243/hovercard" href="https://github.com/talmolab/sleap-io/pull/243">#243</a>)</h3>
+<p>Fixed a bug where <code>Labels.extract()</code> did not copy suggestion frames, leading to incomplete datasets when exporting subsets.</p>
+<p><strong>Problem:</strong> When extracting a subset of labels, suggestion frames (frames recommended for annotation) were not included in the new <code>Labels</code> object, causing unexpected behavior during export to SLEAP projects.</p>
+<p><strong>Solution:</strong> Updated <code>Labels.extract()</code> and <code>Labels.__getitem__()</code> to properly copy suggestion frames associated with extracted labeled frames.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Extract subset now includes suggestion frames
+subset = labels.extract([0, 10, 20])  
+# subset.suggestions now contains relevant suggestion frames"><pre><span class="pl-c"># Extract subset now includes suggestion frames</span>
+<span class="pl-s1">subset</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">extract</span>([<span class="pl-c1">0</span>, <span class="pl-c1">10</span>, <span class="pl-c1">20</span>])  
+<span class="pl-c"># subset.suggestions now contains relevant suggestion frames</span></pre></div>
+<p><strong>Impact:</strong> Ensures data integrity when creating training/validation splits or exporting subsets for annotation, fixing issue <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3432001721" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/242" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/242/hovercard" href="https://github.com/talmolab/sleap-io/issues/242">#242</a>.</p>
+<h3>Fixed Duplication Handling in Labels.merge() (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3389222699" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/240" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/240/hovercard" href="https://github.com/talmolab/sleap-io/pull/240">#240</a>)</h3>
+<p>Addressed an edge case where frame indices were incorrectly mapped when merging videos with duplicate images present in both datasets.</p>
+<p><strong>Problem:</strong> When merging <code>ImageVideo</code> objects with overlapping duplicate frames, the frame index mapping could be incorrect, leading to misaligned annotations.</p>
+<p><strong>Solution:</strong> Improved the deduplication logic to correctly handle frame indices even when an image appears as a duplicate in both source datasets.</p>
+<p><strong>Impact:</strong> Ensures accurate frame alignment when merging datasets with complex image sequences, particularly for CVAT-exported data with duplicate frames. Fixes issue <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3389182449" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/239" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/239/hovercard" href="https://github.com/talmolab/sleap-io/issues/239">#239</a>.</p>
+<h3>Fixed Instance.same_pose_as() with NaN Coordinates (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3382195201" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/237" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/237/hovercard" href="https://github.com/talmolab/sleap-io/pull/237">#237</a>)</h3>
+<p>Resolved a critical bug where identical instances containing NaN coordinates would incorrectly return <code>False</code> when compared.</p>
+<p><strong>Problem:</strong> The distance-based comparison failed for NaN values because <code>nan &lt;= tolerance</code> is always <code>False</code>, causing identical instances to be considered different.</p>
+<p><strong>Solution:</strong> Introduced a two-mode comparison system:</p>
+<ul>
+<li><strong>Exact comparison (new default)</strong>: <code>tolerance=None</code> uses <code>np.array_equal(equal_nan=True)</code></li>
+<li><strong>Tolerance-based comparison</strong>: When <code>tolerance</code> is specified, validates NaN patterns match before comparing non-NaN values</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="from sleap_io import Instance, Skeleton
+import numpy as np
+
+skeleton = Skeleton([&quot;head&quot;, &quot;thorax&quot;, &quot;tail&quot;])
+
+# Instances with NaN coordinates
+inst1 = Instance.from_numpy([[1, 2], [np.nan, np.nan], [5, 6]], skeleton=skeleton)
+inst2 = Instance.from_numpy([[1, 2], [np.nan, np.nan], [5, 6]], skeleton=skeleton)
+
+# Exact comparison (new default behavior)
+assert inst1.same_pose_as(inst2)  # ✅ True (was False before)
+
+# Tolerance-based comparison still works
+assert inst1.same_pose_as(inst2, tolerance=1.0)  # ✅ True"><pre><span class="pl-k">from</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">import</span> <span class="pl-v">Instance</span>, <span class="pl-v">Skeleton</span>
+<span class="pl-k">import</span> <span class="pl-s1">numpy</span> <span class="pl-k">as</span> <span class="pl-s1">np</span>
+
+<span class="pl-s1">skeleton</span> <span class="pl-c1">=</span> <span class="pl-en">Skeleton</span>([<span class="pl-s">"head"</span>, <span class="pl-s">"thorax"</span>, <span class="pl-s">"tail"</span>])
+
+<span class="pl-c"># Instances with NaN coordinates</span>
+<span class="pl-s1">inst1</span> <span class="pl-c1">=</span> <span class="pl-v">Instance</span>.<span class="pl-c1">from_numpy</span>([[<span class="pl-c1">1</span>, <span class="pl-c1">2</span>], [<span class="pl-s1">np</span>.<span class="pl-c1">nan</span>, <span class="pl-s1">np</span>.<span class="pl-c1">nan</span>], [<span class="pl-c1">5</span>, <span class="pl-c1">6</span>]], <span class="pl-s1">skeleton</span><span class="pl-c1">=</span><span class="pl-s1">skeleton</span>)
+<span class="pl-s1">inst2</span> <span class="pl-c1">=</span> <span class="pl-v">Instance</span>.<span class="pl-c1">from_numpy</span>([[<span class="pl-c1">1</span>, <span class="pl-c1">2</span>], [<span class="pl-s1">np</span>.<span class="pl-c1">nan</span>, <span class="pl-s1">np</span>.<span class="pl-c1">nan</span>], [<span class="pl-c1">5</span>, <span class="pl-c1">6</span>]], <span class="pl-s1">skeleton</span><span class="pl-c1">=</span><span class="pl-s1">skeleton</span>)
+
+<span class="pl-c"># Exact comparison (new default behavior)</span>
+<span class="pl-k">assert</span> <span class="pl-s1">inst1</span>.<span class="pl-c1">same_pose_as</span>(<span class="pl-s1">inst2</span>)  <span class="pl-c"># ✅ True (was False before)</span>
+
+<span class="pl-c"># Tolerance-based comparison still works</span>
+<span class="pl-k">assert</span> <span class="pl-s1">inst1</span>.<span class="pl-c1">same_pose_as</span>(<span class="pl-s1">inst2</span>, <span class="pl-s1">tolerance</span><span class="pl-c1">=</span><span class="pl-c1">1.0</span>)  <span class="pl-c"># ✅ True</span></pre></div>
+<p><strong>API Change:</strong> Default <code>tolerance</code> parameter changed from <code>5.0</code> to <code>None</code> for more intuitive exact comparison behavior. To maintain previous behavior, explicitly specify <code>tolerance=5.0</code>.</p>
+<p><strong>Impact:</strong> Ensures correct pose comparison when working with partial annotations or occluded keypoints, critical for deduplication and tracking workflows.</p>
+<h2>💡 Why These Changes Matter</h2>
+<p>The v0.5.4 release enhances sleap-io's robustness and usability for real-world annotation workflows:</p>
+<ul>
+<li><strong>Improved Merge Strategies</strong>: Better handling of predictions and tracking data enables more sophisticated human-in-the-loop workflows</li>
+<li><strong>Skeleton Compatibility</strong>: Fixed standalone skeleton loading ensures seamless skeleton sharing across the SLEAP ecosystem</li>
+<li><strong>Data Integrity</strong>: Fixed extraction and deduplication bugs prevent data loss during dataset manipulation</li>
+<li><strong>Reliable Comparisons</strong>: Proper NaN handling in pose comparisons ensures accurate deduplication and tracking operations</li>
+</ul>
+<p>This release demonstrates sleap-io's continued focus on reliability and usability for diverse pose tracking research workflows.</p>
+<h2>📋 Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3382195201" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/237" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/237/hovercard" href="https://github.com/talmolab/sleap-io/pull/237">#237</a>: Fix <code>Instance.same_pose_as()</code> bug with NaN coordinates (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3382335839" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/238" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/238/hovercard" href="https://github.com/talmolab/sleap-io/pull/238">#238</a>: Fix standalone skeleton loading and add mice_hc test (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3389222699" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/240" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/240/hovercard" href="https://github.com/talmolab/sleap-io/pull/240">#240</a>: Improve duplication handling in <code>Labels.merge()</code> (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3435188915" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/243" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/243/hovercard" href="https://github.com/talmolab/sleap-io/pull/243">#243</a>: Fix Extract Function in Labels Object to Copy Suggestion Frames (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3454894672" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/244" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/244/hovercard" href="https://github.com/talmolab/sleap-io/pull/244">#244</a>: Update merge strategy (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.5.3...v0.5.4"><tt>v0.5.3...v0.5.4</tt></a></p>
 <h2 id="v053"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.3">v0.5.3</a><a class="headerlink" href="#v053" title="Permanent link">&para;</a></h2>
 <h2>🎯 Summary</h2>
 <p>This release focuses on critical bug fixes and compatibility improvements that enhance the reliability and accuracy of sleap-io across different data formats and video backends. The v0.5.3 release addresses several important issues discovered by users, including coordinate system inconsistencies in legacy files, single-node skeleton loading problems, and video color channel bugs that affected data integrity.</p>
@@ -3323,13 +3453,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Basic path resolution by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1772252085" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/36" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/36/hovercard" href="https://github.com/talmolab/sleap-io/pull/36">#36</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.4...v0.0.5"><tt>v0.0.4...v0.0.5</tt></a></p>
-<h2 id="v004"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.4">v0.0.4</a><a class="headerlink" href="#v004" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Fix build by including readme correctly in pyproject.toml by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1772107585" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/34" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/34/hovercard" href="https://github.com/talmolab/sleap-io/pull/34">#34</a></li>
-<li>Add Labels.find and Labels.video by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1772218313" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/35" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/35/hovercard" href="https://github.com/talmolab/sleap-io/pull/35">#35</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.3...v0.0.4"><tt>v0.0.3...v0.0.4</tt></a></p>
 
 
 
