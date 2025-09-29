@@ -3,4 +3,4 @@
 # Define package version.
 # This is read dynamically by setuptools in pyproject.toml to determine the release
 # version.
-__version__ = "0.5.3"
+__version__ = "0.5.4"
