@@ -12,12 +12,6 @@ def centered_pair_low_quality_path():
 
 
 @pytest.fixture
-def centered_pair_path_MP4():
-    """Path to a video with two flies in the center."""
-    return "tests/data/videos/centered_pair.MP4"
-
-
-@pytest.fixture
 def centered_pair_low_quality_video(centered_pair_low_quality_path):
     """Video with two flies in the center."""
     return sleap_io.Video.from_filename(centered_pair_low_quality_path)

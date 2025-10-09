@@ -1,5 +1,6 @@
 """Tests for functions in the sleap_io.io.main file."""
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -84,11 +85,18 @@ def test_load_video(centered_pair_low_quality_path):
     assert load_file(centered_pair_low_quality_path).shape == (1100, 384, 384, 1)
 
 
-def test_load_video_MP4(centered_pair_path_MP4):
-    video = load_video(centered_pair_path_MP4)
+def test_load_video_MP4(centered_pair_low_quality_path, tmp_path):
+    """Test loading video with uppercase extension (.MP4)."""
+    # Copy the existing fixture to a temp file with uppercase extension
+    uppercase_video_path = tmp_path / "centered_pair.MP4"
+    shutil.copy(centered_pair_low_quality_path, uppercase_video_path)
+
+    # Test with string path
+    video = load_video(str(uppercase_video_path))
     assert video.shape == (1100, 384, 384, 1)
 
-    video = load_video(Path(centered_pair_path_MP4))
+    # Test with Path object
+    video = load_video(uppercase_video_path)
     assert video.shape == (1100, 384, 384, 1)
 
 

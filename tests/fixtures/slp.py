@@ -22,12 +22,6 @@ def slp_minimal():
 
 
 @pytest.fixture
-def slp_minimal_instance_copy():
-    """SLP file with only skeleton and no predictions."""
-    return "tests/data/slp/minimal_instance_copy.SLP"
-
-
-@pytest.fixture
 def slp_minimal_pkg():
     """SLP project with minimal real data and embedded images."""
     return "tests/data/slp/minimal_instance.pkg.slp"
