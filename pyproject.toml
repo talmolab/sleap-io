@@ -39,14 +39,14 @@ version = {attr = "sleap_io.version.__version__"}
 readme = {file = ["README.md"], content-type="text/markdown"}
 
 [project.optional-dependencies]
+# PEP 621: End-user installable extras
 opencv = ["opencv-python"]
 pyav = ["av<16.0.0"]
 mat = ["pymatreader"]
-# TODO: Use group references once PEP 735 is universally supported
-# all = ["sleap-io[opencv]", "sleap-io[pyav]", "sleap-io[mat]"]
 all = ["opencv-python", "av<16.0.0", "pymatreader"]
 
 [dependency-groups]
+# PEP 735: Dev-only dependencies (`dev` is installed automatically by `uv`)
 dev = [
     "pytest",
     "pytest-cov",
