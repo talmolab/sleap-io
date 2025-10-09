@@ -57,7 +57,9 @@ dev = [
 opencv = ["opencv-python"]
 pyav = ["av<16.0.0"]
 mat = ["pymatreader"]
-all = ["sleap-io[opencv]", "sleap-io[pyav]", "sleap-io[mat]"]
+# TODO: Use group references once PEP 735 is universally supported
+# all = ["sleap-io[opencv]", "sleap-io[pyav]", "sleap-io[mat]"]
+all = ["opencv-python", "av<16.0.0", "pymatreader"]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"
