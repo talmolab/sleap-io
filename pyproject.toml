@@ -55,9 +55,9 @@ dev = [
     "mkdocs-section-index",
     "mike"]
 opencv = ["opencv-python"]
-av = ["av"]
+pyav = ["av<16.0.0"]
 mat = ["pymatreader"]
-all = ["opencv-python", "av", "mat"]
+all = ["sleap-io[opencv]", "sleap-io[pyav]", "sleap-io[mat]"]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"
