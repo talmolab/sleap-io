@@ -1,7 +1,6 @@
 """Tests for functions in the sleap_io.io.main file."""
 
 import shutil
-from pathlib import Path
 
 import pytest
 
