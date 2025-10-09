@@ -266,6 +266,16 @@ def test_labels_skeleton():
         labels.skeleton
 
 
+def test_load_SLP(slp_minimal_instance_copy):
+    labels = load_slp(slp_minimal_instance_copy)
+    assert len(labels) == 1
+    assert len(labels[0]) == 2
+
+    labels = load_slp(Path(slp_minimal_instance_copy))
+    assert len(labels) == 1
+    assert len(labels[0]) == 2
+
+
 def test_labels_getitem(slp_typical):
     labels = load_slp(slp_typical)
     labels.labeled_frames.append(LabeledFrame(video=labels.video, frame_idx=1))

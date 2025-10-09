@@ -1,5 +1,7 @@
 """Tests for functions in the sleap_io.io.main file."""
 
+from pathlib import Path
+
 import pytest
 
 from sleap_io import Labels, LabelsSet
@@ -80,6 +82,14 @@ def test_jabs(tmp_path, jabs_real_data_v2, jabs_real_data_v5):
 def test_load_video(centered_pair_low_quality_path):
     assert load_video(centered_pair_low_quality_path).shape == (1100, 384, 384, 1)
     assert load_file(centered_pair_low_quality_path).shape == (1100, 384, 384, 1)
+
+
+def test_load_video_MP4(centered_pair_path_MP4):
+    video = load_video(centered_pair_path_MP4)
+    assert video.shape == (1100, 384, 384, 1)
+
+    video = load_video(Path(centered_pair_path_MP4))
+    assert video.shape == (1100, 384, 384, 1)
 
 
 @pytest.mark.parametrize("format", ["slp", "nwb", "labelstudio", "jabs"])
