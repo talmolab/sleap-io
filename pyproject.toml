@@ -55,7 +55,7 @@ dev = [
     "mkdocs-section-index",
     "mike"]
 opencv = ["opencv-python"]
-av = ["av<v16.0.0"]
+av = ["av"]
 mat = ["pymatreader"]
 all = ["opencv-python", "av", "mat"]
 
