@@ -12,6 +12,7 @@ on:
 jobs:
   # Check which files changed to determine if we need to run tests
   changes:
+    name: Check for changes
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
