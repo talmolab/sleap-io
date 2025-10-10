@@ -2,6 +2,7 @@
 
 import copy
 import os
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -264,6 +265,23 @@ def test_labels_skeleton():
     labels.skeletons.append(Skeleton(["B"]))
     with pytest.raises(ValueError):
         labels.skeleton
+
+
+def test_load_SLP(slp_minimal, tmp_path):
+    """Test loading SLP file with uppercase extension (.SLP)."""
+    # Copy the existing fixture to a temp file with uppercase extension
+    uppercase_slp_path = tmp_path / "minimal_instance.SLP"
+    shutil.copy(slp_minimal, uppercase_slp_path)
+
+    # Test with string path
+    labels = load_slp(str(uppercase_slp_path))
+    assert len(labels) == 1
+    assert len(labels[0]) == 2
+
+    # Test with Path object
+    labels = load_slp(uppercase_slp_path)
+    assert len(labels) == 1
+    assert len(labels[0]) == 2
 
 
 def test_labels_getitem(slp_typical):

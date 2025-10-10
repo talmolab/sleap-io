@@ -540,13 +540,13 @@ def load_file(
         filename = filename.as_posix()
 
     if format is None:
-        if filename.endswith(".slp"):
+        if filename.lower().endswith(".slp"):
             format = "slp"
-        elif filename.endswith(".nwb"):
+        elif filename.lower().endswith(".nwb"):
             format = "nwb"
-        elif filename.endswith(".mat"):
+        elif filename.lower().endswith(".mat"):
             format = "leap"
-        elif filename.endswith(".json"):
+        elif filename.lower().endswith(".json"):
             # Detect JSON format: AlphaTracker, COCO, or Label Studio
             if _detect_alphatracker_format(filename):
                 format = "alphatracker"
@@ -554,36 +554,36 @@ def load_file(
                 format = "coco"
             else:
                 format = "json"
-        elif filename.endswith(".h5"):
+        elif filename.lower().endswith(".h5"):
             format = "jabs"
         elif filename.endswith("data.yaml") or (
             Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
         ):
             format = "ultralytics"
-        elif filename.endswith(".csv") and dlc.is_dlc_file(filename):
+        elif filename.lower().endswith(".csv") and dlc.is_dlc_file(filename):
             format = "dlc"
         else:
             for vid_ext in Video.EXTS:
-                if filename.endswith(vid_ext):
+                if filename.lower().endswith(vid_ext.lower()):
                     format = "video"
                     break
         if format is None:
             raise ValueError(f"Could not infer format from filename: '{filename}'.")
 
-    if filename.endswith(".slp"):
+    if filename.lower().endswith(".slp"):
         return load_slp(filename, **kwargs)
-    elif filename.endswith(".nwb"):
+    elif filename.lower().endswith(".nwb"):
         return load_nwb(filename, **kwargs)
-    elif filename.endswith(".mat"):
+    elif filename.lower().endswith(".mat"):
         return load_leap(filename, **kwargs)
-    elif filename.endswith(".json"):
+    elif filename.lower().endswith(".json"):
         if format == "alphatracker":
             return load_alphatracker(filename, **kwargs)
         elif format == "coco":
             return load_coco(filename, **kwargs)
         else:
             return load_labelstudio(filename, **kwargs)
-    elif filename.endswith(".h5"):
+    elif filename.lower().endswith(".h5"):
         return load_jabs(filename, **kwargs)
     elif format == "dlc":
         return load_dlc(filename, **kwargs)
@@ -628,11 +628,11 @@ def save_file(
         filename = str(filename)
 
     if format is None:
-        if filename.endswith(".slp"):
+        if filename.lower().endswith(".slp"):
             format = "slp"
-        elif filename.endswith(".nwb"):
+        elif filename.lower().endswith(".nwb"):
             format = "nwb"
-        elif filename.endswith(".json"):
+        elif filename.lower().endswith(".json"):
             format = "labelstudio"
         elif "pose_version" in kwargs:
             format = "jabs"

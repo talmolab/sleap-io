@@ -180,7 +180,7 @@ class VideoBackend:
             return ImageVideo(
                 filename, grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
-        elif filename.endswith(("tif", "tiff")):
+        elif filename.lower().endswith(("tif", "tiff")):
             # Detect TIFF format
             format_type, metadata = TiffVideo.detect_format(filename)
 
@@ -203,18 +203,18 @@ class VideoBackend:
                     grayscale=grayscale,
                     **_get_valid_kwargs(ImageVideo, kwargs),
                 )
-        elif filename.endswith(ImageVideo.EXTS):
+        elif filename.lower().endswith(tuple(ext.lower() for ext in ImageVideo.EXTS)):
             return ImageVideo(
                 [filename], grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
-        elif filename.endswith(MediaVideo.EXTS):
+        elif filename.lower().endswith(tuple(ext.lower() for ext in MediaVideo.EXTS)):
             return MediaVideo(
                 filename,
                 grayscale=grayscale,
                 keep_open=keep_open,
                 **_get_valid_kwargs(MediaVideo, kwargs),
             )
-        elif filename.endswith(HDF5Video.EXTS):
+        elif filename.lower().endswith(tuple(ext.lower() for ext in HDF5Video.EXTS)):
             return HDF5Video(
                 filename,
                 dataset=dataset,
