@@ -55,6 +55,7 @@ def save_slp(
     embed: bool | str | list[tuple[Video, int]] | None = False,
     restore_original_videos: bool = True,
     verbose: bool = True,
+    plugin: Optional[str] = None,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -79,6 +80,10 @@ def save_slp(
             video files. If `False` and `embed=False`, keep references to source
             `.pkg.slp` files. Only applies when `embed=False`.
         verbose: If `True` (the default), display a progress bar when embedding frames.
+        plugin: Image plugin to use for encoding embedded frames. One of "opencv"
+            or "imageio". If None, uses the global default from
+            `get_default_image_plugin()`. If no global default is set, auto-detects
+            based on available packages (opencv preferred, then imageio).
     """
     return slp.write_labels(
         filename,
@@ -86,6 +91,7 @@ def save_slp(
         embed=embed,
         restore_original_videos=restore_original_videos,
         verbose=verbose,
+        plugin=plugin,
     )
 
 

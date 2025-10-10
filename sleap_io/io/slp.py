@@ -1,4 +1,12 @@
-"""This module handles direct I/O operations for working with .slp files."""
+"""This module handles direct I/O operations for working with .slp files.
+
+Format version history:
+    - 1.0: Initial format
+    - 1.1: Changed coordinate system from top-left pixel at (0, 0) to center at (0, 0)
+    - 1.2: Added tracking_score field to instances
+    - 1.3: Added explicit handling for tracking_score
+    - 1.4: Added channel_order attribute to embedded video datasets to track RGB vs BGR
+"""
 
 from __future__ import annotations
 
@@ -290,128 +298,6 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
     return result
 
 
-def embed_video(
-    labels_path: str,
-    video: Video,
-    group: str,
-    frame_inds: list[int],
-    image_format: str = "png",
-    fixed_length: bool = True,
-) -> Video:
-    """Embed frames of a video in a SLEAP labels file.
-
-    .. deprecated:: 1.0.0
-        This function is deprecated. Use `process_and_embed_frames` instead.
-
-    Args:
-        labels_path: A string path to the SLEAP labels file.
-        video: A `Video` object to embed in the labels file.
-        group: The name of the group to store the embedded video in. Image data will be
-            stored in a dataset named `{group}/video`. Frame indices will be stored
-            in a data set named `{group}/frame_numbers`.
-        frame_inds: A list of frame indices to embed.
-        image_format: The image format to use for embedding. Valid formats are "png"
-            (the default), "jpg" or "hdf5".
-        fixed_length: If `True` (the default), the embedded images will be padded to the
-            length of the largest image. If `False`, the images will be stored as
-            variable length, which is smaller but may not be supported by all readers.
-
-    Returns:
-        An embedded `Video` object.
-
-        If the video is already embedded, the original video will be returned. If not,
-        a new `Video` object will be created with the embedded data.
-    """
-    # Load the image data and optionally encode it.
-    imgs_data = []
-    for frame_idx in frame_inds:
-        frame = video[frame_idx]
-
-        if image_format == "hdf5":
-            img_data = frame
-        else:
-            if "cv2" in sys.modules:
-                img_data = np.squeeze(
-                    cv2.imencode("." + image_format, frame)[1]
-                ).astype("int8")
-            else:
-                if frame.shape[-1] == 1:
-                    frame = frame.squeeze(axis=-1)
-                img_data = np.frombuffer(
-                    iio.imwrite("<bytes>", frame, extension="." + image_format),
-                    dtype="int8",
-                )
-
-        imgs_data.append(img_data)
-
-    # Write the image data to the labels file.
-    with h5py.File(labels_path, "a") as f:
-        if image_format == "hdf5":
-            f.create_dataset(
-                f"{group}/video", data=imgs_data, compression="gzip", chunks=True
-            )
-        else:
-            if fixed_length:
-                img_bytes_len = 0
-                for img in imgs_data:
-                    img_bytes_len = max(img_bytes_len, len(img))
-                ds = f.create_dataset(
-                    f"{group}/video",
-                    shape=(len(imgs_data), img_bytes_len),
-                    dtype="int8",
-                    compression="gzip",
-                )
-                for i, img in enumerate(imgs_data):
-                    ds[i, : len(img)] = img
-            else:
-                ds = f.create_dataset(
-                    f"{group}/video",
-                    shape=(len(imgs_data),),
-                    dtype=h5py.special_dtype(vlen=np.dtype("int8")),
-                )
-                for i, img in enumerate(imgs_data):
-                    ds[i] = img
-
-        # Store metadata.
-        ds.attrs["format"] = image_format
-        video_shape = video.shape
-        (
-            ds.attrs["frames"],
-            ds.attrs["height"],
-            ds.attrs["width"],
-            ds.attrs["channels"],
-        ) = video_shape
-
-        # Store frame indices.
-        f.create_dataset(f"{group}/frame_numbers", data=frame_inds)
-
-        # Store source video.
-        if video.source_video is not None:
-            # If this is already an embedded dataset, retain the previous source video.
-            source_video = video.source_video
-        else:
-            source_video = video
-
-        # Create a new video object with the embedded data.
-        embedded_video = Video(
-            filename=labels_path,
-            backend=VideoBackend.from_filename(
-                labels_path,
-                dataset=f"{group}/video",
-                grayscale=video.grayscale,
-                keep_open=False,
-            ),
-            source_video=source_video,
-        )
-
-        grp = f.require_group(f"{group}/source_video")
-        grp.attrs["json"] = json.dumps(
-            video_to_dict(source_video, labels_path), separators=(",", ":")
-        )
-
-    return embedded_video
-
-
 def prepare_frames_to_embed(
     labels_path: str,
     labels: Labels,
@@ -467,6 +353,7 @@ def process_and_embed_frames(
     image_format: str = "png",
     fixed_length: bool = True,
     verbose: bool = True,
+    plugin: Optional[str] = None,
 ) -> dict[Video, Video]:
     """Process and embed frames into a SLEAP labels file.
 
@@ -484,10 +371,22 @@ def process_and_embed_frames(
             variable length, which is smaller but may not be supported by all readers.
         verbose: If `True` (the default), display a progress bar for the embedding
             process.
+        plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
+            If None, uses the global default from `get_default_image_plugin()`.
+            If no global default is set, auto-detects based on available packages.
 
     Returns:
         A dictionary mapping original Video objects to their embedded versions.
     """
+    # Determine which plugin to use for encoding
+    from sleap_io.io.video_reading import get_default_image_plugin
+
+    if plugin is None:
+        plugin = get_default_image_plugin()
+    if plugin is None:
+        # Auto-detect: prefer opencv, fallback to imageio
+        plugin = "opencv" if "cv2" in sys.modules else "imageio"
+
     # Initialize a dictionary to store data by group
     data_by_group = {}
 
@@ -508,6 +407,7 @@ def process_and_embed_frames(
                 "video": video,  # All frames in a group are from the same video
                 "frame_inds": [],
                 "imgs_data": [],
+                "channel_order": None,  # Track channel order: "RGB" or "BGR"
             }
 
         # Load the frame
@@ -516,18 +416,25 @@ def process_and_embed_frames(
         # Encode the frame
         if image_format == "hdf5":
             img_data = frame
+            channel_order = "RGB"  # HDF5 format stores as-is (RGB)
         else:
-            if "cv2" in sys.modules:
+            if plugin == "opencv":
                 img_data = np.squeeze(
                     cv2.imencode("." + image_format, frame)[1]
                 ).astype("int8")
-            else:
+                channel_order = "BGR"  # OpenCV encodes in BGR
+            else:  # imageio
                 if frame.shape[-1] == 1:
                     frame = frame.squeeze(axis=-1)
                 img_data = np.frombuffer(
                     iio.imwrite("<bytes>", frame, extension="." + image_format),
                     dtype="int8",
                 )
+                channel_order = "RGB"  # imageio encodes in RGB
+
+        # Store channel order (should be consistent for all frames in a group)
+        if data_by_group[group]["channel_order"] is None:
+            data_by_group[group]["channel_order"] = channel_order
 
         # Store frame data in the appropriate group
         data_by_group[group]["imgs_data"].append(img_data)
@@ -570,6 +477,7 @@ def process_and_embed_frames(
 
             # Store metadata
             ds.attrs["format"] = image_format
+            ds.attrs["channel_order"] = data["channel_order"]
             video_shape = video.shape
             (
                 ds.attrs["frames"],
@@ -617,6 +525,7 @@ def embed_frames(
     embed: list[tuple[Video, int]],
     image_format: str = "png",
     verbose: bool = True,
+    plugin: Optional[str] = None,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -628,6 +537,8 @@ def embed_frames(
             (the default), "jpg" or "hdf5".
         verbose: If `True` (the default), display a progress bar for the embedding
             process.
+        plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
+            If None, uses the global default from `get_default_image_plugin()`.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -635,7 +546,11 @@ def embed_frames(
     """
     frames_metadata = prepare_frames_to_embed(labels_path, labels, embed)
     replaced_videos = process_and_embed_frames(
-        labels_path, frames_metadata, image_format=image_format, verbose=verbose
+        labels_path,
+        frames_metadata,
+        image_format=image_format,
+        verbose=verbose,
+        plugin=plugin,
     )
 
     if len(replaced_videos) > 0:
@@ -647,6 +562,7 @@ def embed_videos(
     labels: Labels,
     embed: bool | str | list[tuple[Video, int]],
     verbose: bool = True,
+    plugin: Optional[str] = None,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -664,6 +580,8 @@ def embed_videos(
             embedded.
         verbose: If `True` (the default), display a progress bar for the embedding
             process.
+        plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
+            If None, uses the global default from `get_default_image_plugin()`.
 
             If `"source"` is specified, no images will be embedded and the source video
             will be restored if available.
@@ -689,7 +607,7 @@ def embed_videos(
     else:
         raise ValueError(f"Invalid value for embed: {embed}")
 
-    embed_frames(labels_path, labels, embed, verbose=verbose)
+    embed_frames(labels_path, labels, embed, verbose=verbose, plugin=plugin)
 
 
 def write_videos(
@@ -1054,7 +972,7 @@ def write_metadata(labels_path: str, labels: Labels):
 
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
-        grp.attrs["format_id"] = 1.3
+        grp.attrs["format_id"] = 1.4
         grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
 
 
@@ -2019,6 +1937,7 @@ def write_labels(
     embed: bool | str | list[tuple[Video, int]] | None = None,
     restore_original_videos: bool = True,
     verbose: bool = True,
+    plugin: Optional[str] = None,
 ):
     """Write a SLEAP labels file.
 
@@ -2043,6 +1962,10 @@ def write_labels(
             video files. If `False` and `embed=False`, keep references to source
             `.pkg.slp` files. Only applies when `embed=False`.
         verbose: If `True` (the default), display a progress bar when embedding frames.
+        plugin: Image plugin to use for encoding embedded frames. One of "opencv"
+            or "imageio". If None, uses the global default from
+            `get_default_image_plugin()`. If no global default is set, auto-detects
+            based on available packages.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
@@ -2052,7 +1975,7 @@ def write_labels(
     original_videos = [v for v in labels.videos] if embed else None
 
     if embed:
-        embed_videos(labels_path, labels, embed, verbose=verbose)
+        embed_videos(labels_path, labels, embed, verbose=verbose, plugin=plugin)
 
     # Determine reference mode based on parameters
     if embed == "source" or (embed is False and restore_original_videos):

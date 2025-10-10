@@ -815,3 +815,103 @@ def test_media_video_uses_global_default(centered_pair_low_quality_path):
 
     # Reset to avoid affecting other tests
     sio.set_default_video_plugin(None)
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_image_video_plugin_consistency(centered_pair_frame_paths, plugin):
+    """Test ImageVideo with different plugins produces consistent output."""
+    import sys
+
+    # Skip if opencv not available
+    if plugin == "opencv" and "cv2" not in sys.modules:
+        pytest.skip("OpenCV not available")
+
+    # Create backend with specified plugin
+    backend = ImageVideo(centered_pair_frame_paths, plugin=plugin)
+    assert backend.plugin == plugin
+
+    # Read a frame
+    frame = backend[0]
+    assert frame.ndim == 3  # Should always be 3D (H, W, C)
+
+    # Verify both plugins return the same frames
+    backend_opencv = ImageVideo(centered_pair_frame_paths, plugin="opencv")
+    backend_imageio = ImageVideo(centered_pair_frame_paths, plugin="imageio")
+
+    frame_opencv = backend_opencv[0]
+    frame_imageio = backend_imageio[0]
+
+    # Should be identical
+    np.testing.assert_array_equal(frame_opencv, frame_imageio)
+
+    # If image is color (3 channels), verify BGR->RGB conversion for OpenCV
+    if cv2 is not None and frame.shape[-1] == 3:
+        # Read with OpenCV directly (will be BGR for color images)
+        bgr_frame = cv2.imread(centered_pair_frame_paths[0])
+        if bgr_frame is not None and bgr_frame.ndim == 3:
+            bgr_to_rgb = bgr_frame[..., ::-1]
+            # Our plugin should match the converted version
+            np.testing.assert_array_equal(frame_opencv, bgr_to_rgb)
+
+
+def test_image_video_default_plugin(centered_pair_frame_paths):
+    """Test ImageVideo respects global default image plugin."""
+    import sleap_io as sio
+
+    original = sio.get_default_image_plugin()
+    try:
+        # Set global default to opencv
+        sio.set_default_image_plugin("opencv")
+        backend = ImageVideo(centered_pair_frame_paths)
+        assert backend.plugin == "opencv"
+
+        # Set global default to imageio
+        sio.set_default_image_plugin("imageio")
+        backend = ImageVideo(centered_pair_frame_paths)
+        assert backend.plugin == "imageio"
+    finally:
+        # Restore original default
+        sio.set_default_image_plugin(original)
+
+
+def test_image_video_explicit_plugin_overrides_default(centered_pair_frame_paths):
+    """Test that explicit plugin parameter overrides global default."""
+    import sleap_io as sio
+
+    original = sio.get_default_image_plugin()
+    try:
+        # Set global default to opencv
+        sio.set_default_image_plugin("opencv")
+
+        # But explicitly request imageio
+        backend = ImageVideo(centered_pair_frame_paths, plugin="imageio")
+        assert backend.plugin == "imageio"
+
+        # And vice versa
+        sio.set_default_image_plugin("imageio")
+        backend = ImageVideo(centered_pair_frame_paths, plugin="opencv")
+        assert backend.plugin == "opencv"
+    finally:
+        # Restore original default
+        sio.set_default_image_plugin(original)
+
+
+def test_image_video_plugin_with_grayscale(centered_pair_frame_paths):
+    """Test ImageVideo plugin works correctly with grayscale images."""
+    import sys
+
+    # Skip if opencv not available
+    if "cv2" not in sys.modules:
+        pytest.skip("OpenCV not available")
+
+    # Test that both plugins handle images correctly (grayscale or color)
+    backend_opencv = ImageVideo(centered_pair_frame_paths, plugin="opencv")
+    backend_imageio = ImageVideo(centered_pair_frame_paths, plugin="imageio")
+
+    frame_opencv = backend_opencv[0]
+    frame_imageio = backend_imageio[0]
+
+    # Both should return identical frames
+    np.testing.assert_array_equal(frame_opencv, frame_imageio)
+    assert frame_opencv.ndim == 3  # Always 3D (H, W, C)
+    assert frame_opencv.shape[-1] in (1, 3)  # Grayscale or RGB
