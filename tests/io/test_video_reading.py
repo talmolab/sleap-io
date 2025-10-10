@@ -942,17 +942,19 @@ def test_image_video_plugin_with_grayscale(centered_pair_frame_paths):
     assert frame_opencv.shape[-1] in (1, 3)  # Grayscale or RGB
 
 
-def test_image_video_default_plugin_without_opencv(centered_pair_frame_paths, monkeypatch):
+def test_image_video_default_plugin_without_opencv(
+    centered_pair_frame_paths, monkeypatch
+):
     """Test ImageVideo defaults to imageio when opencv not available."""
     import sys
 
     # Mock sys.modules to simulate opencv not being available
-    original_modules = sys.modules.copy()
     if "cv2" in sys.modules:
         monkeypatch.delitem(sys.modules, "cv2")
 
     # Clear any global default
     import sleap_io as sio
+
     original_default = sio.get_default_image_plugin()
     try:
         sio.set_default_image_plugin(None)
