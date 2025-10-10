@@ -68,3 +68,15 @@ def tiff_image_sequence_path():
     with the same moving square pattern as other TIFF fixtures.
     """
     return "tests/data/tiff/image_sequence"
+
+
+@pytest.fixture
+def small_robot_path():
+    """Path to a small 3-frame robot video for testing RGB/BGR consistency."""
+    return "tests/data/videos/small_robot_3_frame.mp4"
+
+
+@pytest.fixture
+def small_robot_video(small_robot_path):
+    """Small 3-frame robot video for testing RGB/BGR consistency."""
+    return sleap_io.Video.from_filename(small_robot_path)

@@ -28,10 +28,12 @@ from sleap_io import (
     SuggestionFrame,
     Track,
     Video,
+    get_default_image_plugin,
     load_file,
     load_slp,
     save_file,
     save_slp,
+    set_default_image_plugin,
 )
 from sleap_io.io.slp import (
     camera_group_to_dict,
@@ -1282,7 +1284,7 @@ def test_write_labels_verbose_propagation(slp_minimal, tmp_path):
 
 
 def test_format_id_1_3_tracking_score(tmp_path):
-    """Test that FORMAT_ID 1.3 properly handles tracking_score field."""
+    """Test that current FORMAT_ID properly handles tracking_score field."""
     # Create test data with tracking scores
     skeleton = Skeleton(["A", "B", "C"])
     track = Track("track1")
@@ -1306,13 +1308,13 @@ def test_format_id_1_3_tracking_score(tmp_path):
         videos=[video], skeletons=[skeleton], tracks=[track], labeled_frames=[lf]
     )
 
-    # Save with FORMAT_ID 1.3
-    test_path = tmp_path / "test_format_1_3.slp"
+    # Save with current FORMAT_ID
+    test_path = tmp_path / "test_format_tracking_score.slp"
     write_labels(test_path, labels)
 
-    # Verify FORMAT_ID is 1.3
+    # Verify FORMAT_ID is current (1.4)
     format_id = read_hdf5_attrs(test_path, "metadata", "format_id")
-    assert format_id == 1.3
+    assert format_id == 1.4
 
     # Load and verify tracking scores are preserved
     loaded_labels = read_labels(test_path)
@@ -2275,3 +2277,207 @@ def test_read_labels_set_string_paths(tmp_path, slp_minimal):
     labels_set = read_labels_set(str(test_dir))
     assert len(labels_set) == 1
     assert "data" in labels_set
+
+
+@pytest.mark.parametrize("encode_plugin", ["opencv", "imageio"])
+@pytest.mark.parametrize("decode_plugin", ["opencv", "imageio"])
+def test_embed_channel_order_consistency(
+    tmp_path, small_robot_video, encode_plugin, decode_plugin
+):
+    """Test frames match exactly regardless of encoding/decoding plugin.
+
+    This test verifies that the RGB/BGR channel order handling works correctly by:
+    1. Encoding frames with one plugin (opencv=BGR or imageio=RGB)
+    2. Decoding frames with a different plugin
+    3. Verifying frames match the original exactly (automatic conversion)
+
+    Args:
+        tmp_path: Pytest temporary directory fixture.
+        small_robot_video: Test video fixture (3-frame robot video).
+        encode_plugin: Plugin to use for encoding ("opencv" or "imageio").
+        decode_plugin: Plugin to use for decoding ("opencv" or "imageio").
+    """
+    # Step 1: Extract original frames from the video
+    original_frames = []
+    for i in range(len(small_robot_video)):
+        frame = small_robot_video[i]
+        original_frames.append(frame.copy())
+
+    # Step 2: Create Labels with labeled instances for all frames
+    skeleton = Skeleton(nodes=["node1", "node2"])
+    labeled_frames = []
+    for i in range(len(small_robot_video)):
+        instance = Instance(
+            points=np.array([[10.0 + i, 20.0 + i], [30.0 + i, 40.0 + i]]),
+            skeleton=skeleton,
+        )
+        labeled_frame = LabeledFrame(
+            video=small_robot_video, frame_idx=i, instances=[instance]
+        )
+        labeled_frames.append(labeled_frame)
+
+    labels = Labels(
+        videos=[small_robot_video], skeletons=[skeleton], labeled_frames=labeled_frames
+    )
+
+    # Step 3: Save to .pkg.slp with specified encoding plugin
+    pkg_path = tmp_path / f"test_{encode_plugin}.pkg.slp"
+
+    # Store original default and set encoding plugin
+    original_default = get_default_image_plugin()
+    try:
+        set_default_image_plugin(encode_plugin)
+        save_slp(labels, str(pkg_path), embed="all", plugin=encode_plugin)
+    finally:
+        # Restore original default
+        set_default_image_plugin(original_default)
+
+    # Step 4: Verify the channel_order attribute was stored correctly in HDF5
+    with h5py.File(pkg_path, "r") as f:
+        video_ds = f["video0/video"]
+        assert "channel_order" in video_ds.attrs
+        expected_channel_order = "BGR" if encode_plugin == "opencv" else "RGB"
+        assert video_ds.attrs["channel_order"] == expected_channel_order
+
+    # Step 5: Load with specified decoding plugin
+    # We control the decoder by mocking sys.modules and setting the plugin preference
+    try:
+        set_default_image_plugin(decode_plugin)
+
+        # Mock sys.modules to ensure the decode plugin is used
+        if decode_plugin == "opencv":
+            # Ensure cv2 is in sys.modules (it should be already)
+            import cv2  # noqa: F401
+
+        loaded_labels = load_slp(str(pkg_path))
+        loaded_video = loaded_labels.videos[0]
+
+        # Step 6: Extract embedded frames
+        embedded_frames = []
+        for i in range(len(loaded_video)):
+            frame = loaded_video[i]
+            embedded_frames.append(frame.copy())
+
+    finally:
+        # Restore original default
+        set_default_image_plugin(original_default)
+
+    # Step 7: Compare frames - should match exactly regardless of plugin
+    assert len(original_frames) == len(embedded_frames)
+    for i in range(len(original_frames)):
+        orig = original_frames[i]
+        embd = embedded_frames[i]
+
+        # Frames should match exactly (pixel-perfect)
+        assert np.array_equal(orig, embd), (
+            f"Frame {i} mismatch (encode={encode_plugin}, decode={decode_plugin})"
+        )
+
+        # Additional check: ensure no accidental channel swap
+        if orig.shape[-1] == 3:
+            # If channels were swapped, they should NOT match
+            orig_reversed = orig[..., ::-1]
+            if not np.array_equal(
+                orig, orig_reversed
+            ):  # Only if image is not symmetric
+                assert not np.array_equal(orig_reversed, embd), (
+                    f"Frame {i} has reversed channels!"
+                )
+
+
+@pytest.mark.parametrize("plugin", ["opencv", "imageio"])
+def test_embed_channel_order_metadata(tmp_path, small_robot_video, plugin):
+    """Test that channel_order metadata is correctly stored in HDF5 datasets.
+
+    Args:
+        tmp_path: Pytest temporary directory fixture.
+        small_robot_video: Test video fixture (3-frame robot video).
+        plugin: Plugin to use for encoding ("opencv" or "imageio").
+    """
+    # Create minimal Labels
+    skeleton = Skeleton(nodes=["node1"])
+    instance = Instance(points=np.array([[10.0, 20.0]]), skeleton=skeleton)
+    labeled_frame = LabeledFrame(
+        video=small_robot_video, frame_idx=0, instances=[instance]
+    )
+    labels = Labels(
+        videos=[small_robot_video], skeletons=[skeleton], labeled_frames=[labeled_frame]
+    )
+
+    # Save with specified plugin
+    pkg_path = tmp_path / f"test_{plugin}.pkg.slp"
+    original_default = get_default_image_plugin()
+    try:
+        set_default_image_plugin(plugin)
+        save_slp(labels, str(pkg_path), embed="all", plugin=plugin)
+    finally:
+        set_default_image_plugin(original_default)
+
+    # Verify HDF5 metadata
+    with h5py.File(pkg_path, "r") as f:
+        video_ds = f["video0/video"]
+
+        # Check that channel_order attribute exists
+        assert "channel_order" in video_ds.attrs, "channel_order attribute missing"
+
+        # Check that it has the correct value
+        expected_channel_order = "BGR" if plugin == "opencv" else "RGB"
+        actual_channel_order = video_ds.attrs["channel_order"]
+        assert actual_channel_order == expected_channel_order, (
+            f"Expected {expected_channel_order}, got {actual_channel_order}"
+        )
+
+        # Also verify format_id is 1.4+
+        assert "metadata" in f
+        assert "format_id" in f["metadata"].attrs
+        format_id = f["metadata"].attrs["format_id"]
+        assert format_id >= 1.4, f"Expected format_id >= 1.4, got {format_id}"
+
+
+def test_embed_backwards_compatibility_channel_order(tmp_path, small_robot_video):
+    """Test that legacy files (format < 1.4) without channel_order default to BGR.
+
+    This ensures backwards compatibility with files created before the channel_order
+    attribute was added.
+
+    Args:
+        tmp_path: Pytest temporary directory fixture.
+        small_robot_video: Test video fixture (3-frame robot video).
+    """
+    # Create and save a file with current format
+    skeleton = Skeleton(nodes=["node1"])
+    instance = Instance(points=np.array([[10.0, 20.0]]), skeleton=skeleton)
+    labeled_frame = LabeledFrame(
+        video=small_robot_video, frame_idx=0, instances=[instance]
+    )
+    labels = Labels(
+        videos=[small_robot_video], skeletons=[skeleton], labeled_frames=[labeled_frame]
+    )
+
+    pkg_path = tmp_path / "legacy.pkg.slp"
+    save_slp(labels, str(pkg_path), embed="all")
+
+    # Manually modify the HDF5 file to simulate a legacy file
+    with h5py.File(pkg_path, "r+") as f:
+        # Remove channel_order attribute
+        video_ds = f["video0/video"]
+        if "channel_order" in video_ds.attrs:
+            del video_ds.attrs["channel_order"]
+
+        # Set format_id to 1.3 (pre-channel_order)
+        f["metadata"].attrs["format_id"] = 1.3
+
+    # Load the file and verify it defaults to BGR
+    loaded_labels = load_slp(str(pkg_path))
+    loaded_video = loaded_labels.videos[0]
+
+    # The HDF5Video backend should have defaulted channel_order to BGR
+    assert hasattr(loaded_video.backend, "channel_order")
+    assert loaded_video.backend.channel_order == "BGR", (
+        "Legacy files should default to BGR"
+    )
+
+    # Verify we can still read frames without errors
+    frame = loaded_video[0]
+    assert frame is not None
+    assert frame.shape[-1] == 3  # RGB image
