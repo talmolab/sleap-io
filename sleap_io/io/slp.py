@@ -845,10 +845,8 @@ def read_suggestions(labels_path: str, videos: list[Video]) -> list[SuggestionFr
     suggestions = [json.loads(x) for x in suggestions]
     suggestions_objects = []
     for suggestion in suggestions:
-        # Extract metadata (e.g., "group") if available
-        metadata = {}
-        if "group" in suggestion:
-            metadata["group"] = suggestion["group"]
+        # Extract metadata (e.g., "group")
+        metadata = {"group": suggestion.get("group", 0)}
 
         suggestions_objects.append(
             SuggestionFrame(

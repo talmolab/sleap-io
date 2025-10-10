@@ -897,7 +897,7 @@ def test_suggestions_metadata(tmpdir):
     write_suggestions(tmpdir / "test2.slp", [suggestion_no_metadata], labels.videos)
     loaded_suggestions = read_suggestions(tmpdir / "test2.slp", labels.videos)
     assert len(loaded_suggestions) == 1
-    assert loaded_suggestions[0].metadata.get("group", 0) == 0
+    assert loaded_suggestions[0].metadata["group"] == 0
 
 
 def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
