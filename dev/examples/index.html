@@ -2036,6 +2036,100 @@
 <p class="admonition-title">See also</p>
 <p><a href="../formats/#sleap_io.save_video"><code>save_video</code></a>: Video saving options and codec settings</p>
 </div>
+<h3 id="switch-video-and-image-backends">Switch video and image backends<a class="headerlink" href="#switch-video-and-image-backends" title="Permanent link">&para;</a></h3>
+<p>Control which backend is used for video reading and embedded frame encoding.</p>
+<h4 id="video-reading-backends">Video reading backends<a class="headerlink" href="#video-reading-backends" title="Permanent link">&para;</a></h4>
+<p>Choose which backend to use when loading videos with <code>sio.load_video()</code>.</p>
+<div class="highlight"><span class="filename">video_backends.py</span><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1"></a><a href="#__codelineno-20-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2"></a><a href="#__codelineno-20-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-20-3" name="__codelineno-20-3"></a><a href="#__codelineno-20-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="c1"># Set default video backend for reading video files</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4"></a><a href="#__codelineno-20-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">set_default_video_plugin</span><span class="p">(</span><span class="s2">&quot;opencv&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5"></a><a href="#__codelineno-20-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6"></a><a href="#__codelineno-20-6"><span class="linenos" data-linenos=" 6 "></span></a>
+<a id="__codelineno-20-7" name="__codelineno-20-7"></a><a href="#__codelineno-20-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="c1"># Or use imageio-ffmpeg (default, always available)</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8"></a><a href="#__codelineno-20-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">set_default_video_plugin</span><span class="p">(</span><span class="s2">&quot;FFMPEG&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9"></a><a href="#__codelineno-20-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10"></a><a href="#__codelineno-20-10"><span class="linenos" data-linenos="10 "></span></a>
+<a id="__codelineno-20-11" name="__codelineno-20-11"></a><a href="#__codelineno-20-11"><span class="linenos" data-linenos="11 "></span></a><span class="c1"># Check current default</span>
+<a id="__codelineno-20-12" name="__codelineno-20-12"></a><a href="#__codelineno-20-12"><span class="linenos" data-linenos="12 "></span></a><span class="nb">print</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">get_default_video_plugin</span><span class="p">())</span>  <span class="c1"># &quot;FFMPEG&quot;</span>
+</code></pre></div>
+<div class="admonition info">
+<p class="admonition-title">Backend trade-offs</p>
+<p><strong>OpenCV</strong> (<code>opencv</code>):</p>
+<ul>
+<li>✅ Generally faster for frame reading</li>
+<li>❌ May have compatibility issues on some platforms</li>
+<li>❌ Frame seeking may be less accurate for some codecs</li>
+<li>📦 Requires: <code>pip install sleap-io[opencv]</code> or <code>sleap-io[all]</code></li>
+</ul>
+<p><strong>imageio-ffmpeg</strong> (<code>FFMPEG</code>):</p>
+<ul>
+<li>✅ More reliable and cross-platform</li>
+<li>✅ Better seeking accuracy</li>
+<li>✅ Always installed with sleap-io (default)</li>
+<li>❌ May be slower than OpenCV</li>
+</ul>
+<p><strong>PyAV</strong> (<code>pyav</code>):</p>
+<ul>
+<li>✅ Alternative FFMPEG wrapper with different performance characteristics</li>
+<li>📦 Requires: <code>pip install sleap-io[pyav]</code> or <code>sleap-io[all]</code></li>
+</ul>
+</div>
+<h4 id="image-encoding-backends-for-embedded-frames">Image encoding backends for embedded frames<a class="headerlink" href="#image-encoding-backends-for-embedded-frames" title="Permanent link">&para;</a></h4>
+<p>Choose which backend to use when encoding frames in <code>.pkg.slp</code> files with <code>sio.save_slp()</code>.</p>
+<div class="highlight"><span class="filename">image_backends.py</span><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1"></a><a href="#__codelineno-21-1"><span class="linenos" data-linenos=" 1 "></span></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2"></a><a href="#__codelineno-21-2"><span class="linenos" data-linenos=" 2 "></span></a>
+<a id="__codelineno-21-3" name="__codelineno-21-3"></a><a href="#__codelineno-21-3"><span class="linenos" data-linenos=" 3 "></span></a><span class="c1"># Load labels</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4"></a><a href="#__codelineno-21-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5"></a><a href="#__codelineno-21-5"><span class="linenos" data-linenos=" 5 "></span></a>
+<a id="__codelineno-21-6" name="__codelineno-21-6"></a><a href="#__codelineno-21-6"><span class="linenos" data-linenos=" 6 "></span></a><span class="c1"># Set default image encoding backend</span>
+<a id="__codelineno-21-7" name="__codelineno-21-7"></a><a href="#__codelineno-21-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">set_default_image_plugin</span><span class="p">(</span><span class="s2">&quot;opencv&quot;</span><span class="p">)</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8"></a><a href="#__codelineno-21-8"><span class="linenos" data-linenos=" 8 "></span></a>
+<a id="__codelineno-21-9" name="__codelineno-21-9"></a><a href="#__codelineno-21-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="c1"># Save with embedded frames using OpenCV encoding</span>
+<a id="__codelineno-21-10" name="__codelineno-21-10"></a><a href="#__codelineno-21-10"><span class="linenos" data-linenos="10 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.pkg.slp&quot;</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span>
+<a id="__codelineno-21-11" name="__codelineno-21-11"></a><a href="#__codelineno-21-11"><span class="linenos" data-linenos="11 "></span></a>
+<a id="__codelineno-21-12" name="__codelineno-21-12"></a><a href="#__codelineno-21-12"><span class="linenos" data-linenos="12 "></span></a><span class="c1"># Or specify plugin directly in save call</span>
+<a id="__codelineno-21-13" name="__codelineno-21-13"></a><a href="#__codelineno-21-13"><span class="linenos" data-linenos="13 "></span></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;labels.pkg.slp&quot;</span><span class="p">,</span> <span class="n">embed</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="n">plugin</span><span class="o">=</span><span class="s2">&quot;imageio&quot;</span><span class="p">)</span>
+<a id="__codelineno-21-14" name="__codelineno-21-14"></a><a href="#__codelineno-21-14"><span class="linenos" data-linenos="14 "></span></a>
+<a id="__codelineno-21-15" name="__codelineno-21-15"></a><a href="#__codelineno-21-15"><span class="linenos" data-linenos="15 "></span></a><span class="c1"># Check current default</span>
+<a id="__codelineno-21-16" name="__codelineno-21-16"></a><a href="#__codelineno-21-16"><span class="linenos" data-linenos="16 "></span></a><span class="nb">print</span><span class="p">(</span><span class="n">sio</span><span class="o">.</span><span class="n">get_default_image_plugin</span><span class="p">())</span>  <span class="c1"># &quot;opencv&quot;</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Automatic RGB/BGR conversion</p>
+<p>When loading <code>.pkg.slp</code> files, sleap-io automatically handles RGB/BGR channel order conversions between different encoding and decoding backends. Frames will always load in RGB order regardless of which plugin was used for encoding vs decoding.</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Image backend options</p>
+<p><strong>OpenCV</strong> (<code>opencv</code>):</p>
+<ul>
+<li>✅ Generally faster encoding</li>
+<li>Encodes in BGR channel order</li>
+<li>📦 Requires: <code>pip install sleap-io[opencv]</code> or <code>sleap-io[all]</code></li>
+</ul>
+<p><strong>imageio</strong> (<code>imageio</code>):</p>
+<ul>
+<li>✅ Always installed with sleap-io (default)</li>
+<li>✅ More reliable and cross-platform</li>
+<li>Encodes in RGB channel order</li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Plugin vs backend terminology</p>
+<ul>
+<li><strong>Video plugins</strong>: Used by <code>sio.load_video()</code> for reading video files (<code>opencv</code>, <code>FFMPEG</code>, <code>pyav</code>)</li>
+<li><strong>Image plugins</strong>: Used by <code>sio.save_slp()</code> for encoding embedded frames (<code>opencv</code>, <code>imageio</code>)</li>
+<li>Both can be set via <code>set_default_*_plugin()</code> functions</li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">See also</p>
+<ul>
+<li><a href="../formats/#sleap_io.set_default_video_plugin"><code>set_default_video_plugin</code></a>: Set video reading backend</li>
+<li><a href="../formats/#sleap_io.set_default_image_plugin"><code>set_default_image_plugin</code></a>: Set image encoding backend</li>
+<li><a href="../formats/#sleap_io.get_default_video_plugin"><code>get_default_video_plugin</code></a>: Get current video backend</li>
+<li><a href="../formats/#sleap_io.get_default_image_plugin"><code>get_default_image_plugin</code></a>: Get current image backend</li>
+</ul>
+</div>
 
 
 
