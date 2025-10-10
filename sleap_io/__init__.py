@@ -25,7 +25,9 @@ from sleap_io.io.main import (
 )
 from sleap_io.io.video_reading import (
     VideoBackend,
+    get_default_image_plugin,
     get_default_video_plugin,
+    set_default_image_plugin,
     set_default_video_plugin,
 )
 from sleap_io.io.video_writing import VideoWriter
@@ -72,7 +74,9 @@ __all__ = [
     "save_slp",
     "save_ultralytics",
     "save_video",
+    "get_default_image_plugin",
     "get_default_video_plugin",
+    "set_default_image_plugin",
     "set_default_video_plugin",
     "VideoBackend",
     "VideoWriter",
