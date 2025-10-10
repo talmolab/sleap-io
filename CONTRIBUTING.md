@@ -313,7 +313,7 @@ If you encounter cv2/OpenCV import errors when running individual tests:
 sleap-io has optional video backend dependencies:
 - Install all backends: `uv sync --all-extras` or `pip install -e .[all]`
 - Install OpenCV only: `pip install -e .[opencv]`
-- Install PyAV only: `pip install -e .[av]`
+- Install PyAV only: `pip install -e .[pyav]`
 
 #### Environment issues
 If you're having environment problems:
