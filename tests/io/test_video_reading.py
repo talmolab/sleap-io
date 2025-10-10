@@ -752,6 +752,31 @@ def test_plugin_name_normalization():
         normalize_plugin_name("invalid_plugin")
 
 
+def test_image_plugin_name_normalization():
+    """Test image plugin name normalization with various aliases."""
+    from sleap_io.io.video_reading import normalize_image_plugin_name
+
+    # Test opencv aliases
+    assert normalize_image_plugin_name("opencv") == "opencv"
+    assert normalize_image_plugin_name("OpenCV") == "opencv"
+    assert normalize_image_plugin_name("cv") == "opencv"
+    assert normalize_image_plugin_name("cv2") == "opencv"
+    assert normalize_image_plugin_name("CV2") == "opencv"
+    assert normalize_image_plugin_name("ocv") == "opencv"
+
+    # Test imageio aliases
+    assert normalize_image_plugin_name("imageio") == "imageio"
+    assert normalize_image_plugin_name("iio") == "imageio"
+
+    # Test invalid plugin
+    with pytest.raises(ValueError, match="Unknown image plugin"):
+        normalize_image_plugin_name("invalid_plugin")
+
+    # Test invalid plugin that's valid for video but not images
+    with pytest.raises(ValueError, match="Unknown image plugin"):
+        normalize_image_plugin_name("pyav")
+
+
 def test_global_default_plugin():
     """Test global default plugin functionality."""
     import sleap_io as sio
@@ -915,3 +940,30 @@ def test_image_video_plugin_with_grayscale(centered_pair_frame_paths):
     np.testing.assert_array_equal(frame_opencv, frame_imageio)
     assert frame_opencv.ndim == 3  # Always 3D (H, W, C)
     assert frame_opencv.shape[-1] in (1, 3)  # Grayscale or RGB
+
+
+def test_image_video_default_plugin_without_opencv(
+    centered_pair_frame_paths, monkeypatch
+):
+    """Test ImageVideo defaults to imageio when opencv not available."""
+    import sys
+
+    # Mock sys.modules to simulate opencv not being available
+    if "cv2" in sys.modules:
+        monkeypatch.delitem(sys.modules, "cv2")
+
+    # Clear any global default
+    import sleap_io as sio
+
+    original_default = sio.get_default_image_plugin()
+    try:
+        sio.set_default_image_plugin(None)
+
+        # Create ImageVideo without specifying plugin
+        backend = ImageVideo(centered_pair_frame_paths)
+
+        # Should default to imageio since opencv is not available
+        assert backend.plugin == "imageio"
+    finally:
+        # Restore
+        sio.set_default_image_plugin(original_default)
