@@ -554,3 +554,98 @@ sio.save_video(sio.load_video("input.mp4"), "output.mp4")
 
 !!! note "See also"
     [`save_video`](formats.md#sleap_io.save_video): Video saving options and codec settings
+
+### Switch video and image backends
+
+Control which backend is used for video reading and embedded frame encoding.
+
+#### Video reading backends
+
+Choose which backend to use when loading videos with `sio.load_video()`.
+
+```python title="video_backends.py" linenums="1"
+import sleap_io as sio
+
+# Set default video backend for reading video files
+sio.set_default_video_plugin("opencv")
+video = sio.load_video("test.mp4")
+
+# Or use imageio-ffmpeg (default, always available)
+sio.set_default_video_plugin("FFMPEG")
+video = sio.load_video("test.mp4")
+
+# Check current default
+print(sio.get_default_video_plugin())  # "FFMPEG"
+```
+
+!!! info "Backend trade-offs"
+
+    **OpenCV** (`opencv`):
+
+    - ✅ Generally faster for frame reading
+    - ❌ May have compatibility issues on some platforms
+    - ❌ Frame seeking may be less accurate for some codecs
+    - 📦 Requires: `pip install sleap-io[opencv]` or `sleap-io[all]`
+
+    **imageio-ffmpeg** (`FFMPEG`):
+
+    - ✅ More reliable and cross-platform
+    - ✅ Better seeking accuracy
+    - ✅ Always installed with sleap-io (default)
+    - ❌ May be slower than OpenCV
+
+    **PyAV** (`pyav`):
+
+    - ✅ Alternative FFMPEG wrapper with different performance characteristics
+    - 📦 Requires: `pip install sleap-io[pyav]` or `sleap-io[all]`
+
+#### Image encoding backends for embedded frames
+
+Choose which backend to use when encoding frames in `.pkg.slp` files with `sio.save_slp()`.
+
+```python title="image_backends.py" linenums="1"
+import sleap_io as sio
+
+# Load labels
+labels = sio.load_slp("labels.slp")
+
+# Set default image encoding backend
+sio.set_default_image_plugin("opencv")
+
+# Save with embedded frames using OpenCV encoding
+labels.save("labels.pkg.slp", embed="all")
+
+# Or specify plugin directly in save call
+labels.save("labels.pkg.slp", embed="all", plugin="imageio")
+
+# Check current default
+print(sio.get_default_image_plugin())  # "opencv"
+```
+
+!!! tip "Automatic RGB/BGR conversion"
+    When loading `.pkg.slp` files, sleap-io automatically handles RGB/BGR channel order conversions between different encoding and decoding backends. Frames will always load in RGB order regardless of which plugin was used for encoding vs decoding.
+
+!!! info "Image backend options"
+
+    **OpenCV** (`opencv`):
+
+    - ✅ Generally faster encoding
+    - Encodes in BGR channel order
+    - 📦 Requires: `pip install sleap-io[opencv]` or `sleap-io[all]`
+
+    **imageio** (`imageio`):
+
+    - ✅ Always installed with sleap-io (default)
+    - ✅ More reliable and cross-platform
+    - Encodes in RGB channel order
+
+!!! note "Plugin vs backend terminology"
+    - **Video plugins**: Used by `sio.load_video()` for reading video files (`opencv`, `FFMPEG`, `pyav`)
+    - **Image plugins**: Used by `sio.save_slp()` for encoding embedded frames (`opencv`, `imageio`)
+    - Both can be set via `set_default_*_plugin()` functions
+
+!!! note "See also"
+    - [`set_default_video_plugin`](formats.md#sleap_io.set_default_video_plugin): Set video reading backend
+    - [`set_default_image_plugin`](formats.md#sleap_io.set_default_image_plugin): Set image encoding backend
+    - [`get_default_video_plugin`](formats.md#sleap_io.get_default_video_plugin): Get current video backend
+    - [`get_default_image_plugin`](formats.md#sleap_io.get_default_image_plugin): Get current image backend

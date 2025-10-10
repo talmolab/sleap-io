@@ -6,13 +6,26 @@ on:
     types:
       - published
   push:
-    # branches:
-    #   - main
+    branches:
+      - main
     paths:
       - "sleap_io/**"
       - "docs/**"
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - "sleap_io/**"
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+
+# Prevent race conditions when PR is merged (last PR commit + push to main)
+# Only one docs deployment runs at a time; additional runs queue up
+concurrency:
+  group: docs-deployment
+  cancel-in-progress: false
 
 jobs:
   docs:
@@ -53,17 +66,61 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          uv run mike deploy --update-aliases --allow-empty --push "${{ github.event.release.tag_name }}" latest
+          # Fetch the latest gh-pages state to reduce conflicts
+          git fetch origin gh-pages --depth=1 || true
+
+          # Build and commit docs locally (without pushing)
+          uv run mike deploy --update-aliases --allow-empty "${{ github.event.release.tag_name }}" latest
+
+          # Push with retry logic to handle race conditions
+          for i in {1..3}; do
+            if git push origin gh-pages; then
+              echo "Successfully pushed documentation for ${{ github.event.release.tag_name }}"
+              break
+            else
+              echo "Push failed (attempt $i/3)"
+              if [ $i -eq 3 ]; then
+                echo "Failed to push documentation after 3 attempts"
+                exit 1
+              fi
+              echo "Fetching latest gh-pages and rebasing..."
+              git fetch origin gh-pages
+              git rebase origin/gh-pages
+              sleep 2
+            fi
+          done
 
       - name: Build and upload docs (dev)
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          uv run mike deploy --update-aliases --allow-empty --push dev
+          # Fetch the latest gh-pages state to reduce conflicts
+          git fetch origin gh-pages --depth=1 || true
+
+          # Build and commit docs locally (without pushing)
+          uv run mike deploy --update-aliases --allow-empty dev
+
+          # Push with retry logic to handle race conditions
+          for i in {1..3}; do
+            if git push origin gh-pages; then
+              echo "Successfully pushed dev documentation"
+              break
+            else
+              echo "Push failed (attempt $i/3)"
+              if [ $i -eq 3 ]; then
+                echo "Failed to push documentation after 3 attempts"
+                exit 1
+              fi
+              echo "Fetching latest gh-pages and rebasing..."
+              git fetch origin gh-pages
+              git rebase origin/gh-pages
+              sleep 2
+            fi
+          done
 
       - name: Reorder versions.json on gh-pages
-        if: ${{ github.event_name == 'release' || github.event_name == 'push' }}
+        if: ${{ github.event_name == 'release' || github.event_name == 'push' || github.event_name == 'pull_request' }}
         run: |
           # Copy the reordering script to temp location before switching branches
           cp scripts/reorder_versions.py /tmp/reorder_versions.py

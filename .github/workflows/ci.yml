@@ -4,23 +4,34 @@ name: CI
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-    paths:
-      - "sleap_io/**"
-      - "tests/**"
-      - ".github/workflows/ci.yml"
-      - "pyproject.toml"
   push:
     branches:
       - main
-    paths:
-      - "sleap_io/**"
-      - "tests/**"
-      - ".github/workflows/ci.yml"
-      - "pyproject.toml"
+  workflow_dispatch:  # Allow manual triggers
 
 jobs:
+  # Check which files changed to determine if we need to run tests
+  changes:
+    name: Check for changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'sleap_io/**'
+              - 'tests/**'
+              - '.github/workflows/ci.yml'
+              - 'pyproject.toml'
+
   # Lint with ruff
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     # This job runs:
     #
     # 1. Linting and formatting checks with ruff
@@ -53,6 +64,8 @@ jobs:
 
   # Tests with pytest
   tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 25
     strategy:
       fail-fast: false
