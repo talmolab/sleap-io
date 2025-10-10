@@ -106,6 +106,80 @@ def get_default_video_plugin() -> Optional[str]:
     return _default_video_plugin
 
 
+# Global default image plugin for encoding/decoding embedded images
+_default_image_plugin: Optional[str] = None
+
+
+def normalize_image_plugin_name(plugin: str) -> str:
+    """Normalize image plugin names to standard format.
+
+    Args:
+        plugin: Plugin name or alias (case-insensitive).
+
+    Returns:
+        Normalized plugin name ("opencv" or "imageio").
+
+    Raises:
+        ValueError: If plugin name is not recognized.
+    """
+    plugin_lower = plugin.lower()
+
+    # Map aliases to standard names (only opencv and imageio for images)
+    aliases = {
+        "cv": "opencv",
+        "cv2": "opencv",
+        "opencv": "opencv",
+        "ocv": "opencv",
+        "imageio": "imageio",
+        "iio": "imageio",
+    }
+
+    if plugin_lower not in aliases:
+        raise ValueError(
+            f"Unknown image plugin: {plugin}. Valid options: opencv, imageio"
+        )
+
+    return aliases[plugin_lower]
+
+
+def set_default_image_plugin(plugin: Optional[str]) -> None:
+    """Set the default image plugin for encoding/decoding embedded images.
+
+    Args:
+        plugin: Image plugin name. One of "opencv" or "imageio".
+            Also accepts aliases: "cv", "cv2", "ocv" for opencv;
+            "iio" for imageio. Case-insensitive.
+            If None, clears the default preference.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.set_default_image_plugin("opencv")
+        >>> sio.set_default_image_plugin("imageio")
+        >>> sio.set_default_image_plugin(None)  # Clear preference
+    """
+    global _default_image_plugin
+    if plugin is not None:
+        plugin = normalize_image_plugin_name(plugin)
+    _default_image_plugin = plugin
+
+
+def get_default_image_plugin() -> Optional[str]:
+    """Get the current default image plugin.
+
+    Returns:
+        The current default image plugin name ("opencv" or "imageio"), or None.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.get_default_image_plugin()
+        None
+        >>> sio.set_default_image_plugin("opencv")
+        >>> sio.get_default_image_plugin()
+        'opencv'
+    """
+    return _default_image_plugin
+
+
 def _get_valid_kwargs(cls, kwargs: dict) -> dict:
     """Filter a list of kwargs to the ones that are valid for a class."""
     valid_fields = [a.name for a in attrs.fields(cls)]
@@ -639,6 +713,14 @@ class HDF5Video(VideoBackend):
             and only used when reading embedded image datasets.
         image_format: Format of the images in the embedded dataset. This is metadata and
             only used when reading embedded image datasets.
+        channel_order: Channel order of embedded images, either "RGB" or "BGR". This is
+            used to ensure consistent color channel ordering when decoding embedded
+            images. If the encoding and decoding plugins have different channel orders,
+            the channels will be automatically flipped during decoding.
+        plugin: Plugin to use for decoding embedded images. One of "opencv" or
+            "FFMPEG". If None, uses the global default or auto-detects based on
+            available packages. Note that "pyav" is automatically mapped to "FFMPEG"
+            since PyAV doesn't support image decoding.
     """
 
     dataset: Optional[str] = None
@@ -650,6 +732,8 @@ class HDF5Video(VideoBackend):
     source_filename: Optional[str] = None
     source_inds: Optional[np.ndarray] = None
     image_format: str = "hdf5"
+    channel_order: str = "RGB"
+    plugin: Optional[str] = None
 
     EXTS = ("h5", "hdf5", "slp")
 
@@ -695,6 +779,20 @@ class HDF5Video(VideoBackend):
             if "format" in ds.attrs:
                 self.image_format = ds.attrs["format"]
 
+            # Read channel_order, with backwards compatibility
+            if "channel_order" in ds.attrs:
+                self.channel_order = ds.attrs["channel_order"]
+            else:
+                # Backwards compatibility: Check format_id for older files
+                # Prior to format 1.4, embedded images were primarily encoded with
+                # OpenCV which uses BGR, so default to BGR for older formats
+                if "metadata" in f and "format_id" in f["metadata"].attrs:
+                    format_id = f["metadata"].attrs["format_id"]
+                    if format_id < 1.4:
+                        self.channel_order = "BGR"  # Legacy default
+                # If no format_id found, assume BGR (safest legacy default)
+                # since most embedded images before this change used OpenCV
+
             if "frame_numbers" in ds.parent:
                 frame_numbers = ds.parent["frame_numbers"][:].astype(int)
                 self.frame_map = {frame: idx for idx, frame in enumerate(frame_numbers)}
@@ -706,6 +804,17 @@ class HDF5Video(VideoBackend):
                 )["backend"]["filename"]
 
         f.close()
+
+        # Set default plugin if not specified (use image plugin, not video plugin)
+        if self.plugin is None:
+            # Check image plugin default first (for embedded images)
+            if _default_image_plugin is not None:
+                self.plugin = _default_image_plugin
+            # Otherwise auto-detect (for embedded image decoding)
+            elif "cv2" in sys.modules:
+                self.plugin = "opencv"
+            else:
+                self.plugin = "imageio"  # imageio fallback
 
     @property
     def num_frames(self) -> int:
@@ -778,13 +887,23 @@ class HDF5Video(VideoBackend):
             attribute. Use the `get_frame` or `get_frames` methods of the `VideoBackend`
             to apply grayscale conversion rather than calling this function directly.
         """
-        if "cv2" in sys.modules:
+        # Decode based on plugin
+        if self.plugin == "opencv":
             img = cv2.imdecode(img_string, cv2.IMREAD_UNCHANGED)
+            decoder_order = "BGR"  # OpenCV decodes to BGR
         else:
+            # Use imageio for FFMPEG or any other plugin
             img = iio.imread(BytesIO(img_string), extension=f".{self.image_format}")
+            decoder_order = "RGB"  # imageio decodes to RGB
 
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
+
+        # Convert channel order if needed
+        # If the stored order doesn't match the decoder order, flip channels
+        if img.shape[-1] == 3 and self.channel_order != decoder_order:
+            img = img[..., ::-1]  # Flip RGB <-> BGR
+
         return img
 
     def has_frame(self, frame_idx: int) -> bool:
