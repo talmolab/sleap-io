@@ -231,7 +231,9 @@ class VideoBackend:
             **kwargs: Additional backend-specific arguments. These are filtered to only
                 include parameters that are valid for the specific backend being
                 created:
-                - For ImageVideo: No additional arguments.
+                - For ImageVideo: plugin (str): Image plugin to use. One of "opencv"
+                  or "imageio". Also accepts aliases (case-insensitive).
+                  If None, uses global default if set, otherwise auto-detects.
                 - For MediaVideo: plugin (str): Video plugin to use. One of "opencv",
                   "FFMPEG", or "pyav". Also accepts aliases (case-insensitive).
                   If None, uses global default if set, otherwise auto-detects.
@@ -1007,9 +1009,33 @@ class ImageVideo(VideoBackend):
     Attributes:
         filename: Path to image files.
         grayscale: Whether to force grayscale. If None, autodetect on first frame load.
+        plugin: Image plugin to use for reading. One of "opencv" or "imageio".
+            If None, uses global default from get_default_image_plugin(), or
+            auto-detects.
     """
 
     EXTS = ("png", "jpg", "jpeg", "tif", "tiff", "bmp")
+
+    plugin: str = attrs.field()
+
+    @plugin.validator
+    def _validate_plugin(self, attribute, value):
+        """Validate and normalize plugin name."""
+        normalized = normalize_image_plugin_name(value)
+        object.__setattr__(self, attribute.name, normalized)
+
+    @plugin.default
+    def _default_plugin(self) -> str:
+        """Get default plugin, checking global default first."""
+        # Check global default first
+        if _default_image_plugin is not None:
+            return _default_image_plugin
+
+        # Otherwise auto-detect
+        if "cv2" in sys.modules:
+            return "opencv"
+        else:
+            return "imageio"
 
     @staticmethod
     def find_images(folder: str) -> list[str]:
@@ -1031,15 +1057,31 @@ class ImageVideo(VideoBackend):
             frame_idx: Index of frame to read.
 
         Returns:
-            The frame as a numpy array of shape `(height, width, channels)`.
+            The frame as a numpy array of shape `(height, width, channels)` in RGB
+            order.
 
         Notes:
             This does not apply grayscale conversion. It is recommended to use the
             `get_frame` method of the `VideoBackend` class instead.
+
+            Images are always returned in RGB order regardless of plugin:
+            - imageio: Returns RGB natively
+            - opencv: Returns BGR, automatically flipped to RGB
         """
-        img = iio.imread(self.filename[frame_idx])
+        if self.plugin == "opencv":
+            # OpenCV reads as BGR, flip to RGB
+            img = cv2.imread(self.filename[frame_idx], cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise ValueError(f"Failed to read image: {self.filename[frame_idx]}")
+            if img.ndim == 3 and img.shape[-1] == 3:
+                img = img[..., ::-1]  # BGR -> RGB
+        else:  # imageio
+            # imageio reads as RGB natively
+            img = iio.imread(self.filename[frame_idx])
+
         if img.ndim == 2:
             img = np.expand_dims(img, axis=-1)
+
         return img
 
 
