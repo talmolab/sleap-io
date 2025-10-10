@@ -170,5 +170,5 @@ uv run pytest tests/path/to/test_module.py::TestClass::test_method -v
 - OpenCV and PyAV are now optional dependencies for video backends:
   - Install all: `uv sync --all-extras` or `pip install -e .[all]`
   - Install OpenCV only: `pip install -e .[opencv]`
-  - Install PyAV only: `pip install -e .[av]`
+  - Install PyAV only: `pip install -e .[pyav]`
 - If you get an opencv/cv2 issue when running tests, try running the entire module, or entire test suite instead (this is an opencv issue with importing submodules of the tests).
