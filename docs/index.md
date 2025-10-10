@@ -30,7 +30,7 @@ with pose data, including utilities for common tasks. Some of these include:
 - [Convert labels to numpy arrays for analysis](examples.md#convert-labels-to-raw-arrays)
 - [Fix video paths in the labels](examples.md#fix-video-paths)
 - [Make training/validation/test splits](examples.md#make-trainingvalidationtest-splits)
-- [Work with dataset splits using LabelsSet](examples.md#working-with-dataset-splits-labelsset)
+- [Convert to Ultralytics YOLO format](examples.md#convert-to-ultralytics-yolo-format)
 - [Replace a skeleton](examples.md#replace-skeleton)
 
 See [Examples](examples.md) for more usage examples and recipes.
