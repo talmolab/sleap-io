@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sleap-io"
 authors = [
+    {name = "Divya Murali", email = "divya@talmolab.org"},
     {name = "Liezl Maree", email = "lmaree@salk.edu"},
     {name = "David Samy", email = "davidasamy@gmail.com"},
     {name = "Talmo Pereira", email = "talmo@salk.edu"}]
