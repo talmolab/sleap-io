@@ -866,6 +866,40 @@ def test_suggestions(tmpdir):
     assert len(loaded_suggestions) == 0
 
 
+def test_suggestions_metadata(tmpdir):
+    """Test that suggestion metadata (e.g., group) is preserved during read/write."""
+    labels = Labels()
+    labels.videos.append(Video.from_filename("fake.mp4"))
+
+    # Create suggestions with different group values in metadata
+    labels.suggestions.append(
+        SuggestionFrame(video=labels.video, frame_idx=0, metadata={"group": 0})
+    )
+    labels.suggestions.append(
+        SuggestionFrame(video=labels.video, frame_idx=1, metadata={"group": 1})
+    )
+    labels.suggestions.append(
+        SuggestionFrame(video=labels.video, frame_idx=2, metadata={"group": 2})
+    )
+
+    # Write and read suggestions
+    write_suggestions(tmpdir / "test.slp", labels.suggestions, labels.videos)
+    loaded_suggestions = read_suggestions(tmpdir / "test.slp", labels.videos)
+
+    # Verify metadata is preserved
+    assert len(loaded_suggestions) == 3
+    assert loaded_suggestions[0].metadata["group"] == 0
+    assert loaded_suggestions[1].metadata["group"] == 1
+    assert loaded_suggestions[2].metadata["group"] == 2
+
+    # Test backward compatibility: suggestions without metadata default to group 0
+    suggestion_no_metadata = SuggestionFrame(video=labels.video, frame_idx=3)
+    write_suggestions(tmpdir / "test2.slp", [suggestion_no_metadata], labels.videos)
+    loaded_suggestions = read_suggestions(tmpdir / "test2.slp", labels.videos)
+    assert len(loaded_suggestions) == 1
+    assert loaded_suggestions[0].metadata.get("group", 0) == 0
+
+
 def test_pkg_roundtrip(tmpdir, slp_minimal_pkg):
     labels = read_labels(slp_minimal_pkg)
     assert type(labels.video.backend) is HDF5Video

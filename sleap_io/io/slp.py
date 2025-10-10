@@ -845,10 +845,16 @@ def read_suggestions(labels_path: str, videos: list[Video]) -> list[SuggestionFr
     suggestions = [json.loads(x) for x in suggestions]
     suggestions_objects = []
     for suggestion in suggestions:
+        # Extract metadata (e.g., "group") if available
+        metadata = {}
+        if "group" in suggestion:
+            metadata["group"] = suggestion["group"]
+
         suggestions_objects.append(
             SuggestionFrame(
                 video=videos[int(suggestion["video"])],
                 frame_idx=suggestion["frame_idx"],
+                metadata=metadata,
             )
         )
     return suggestions_objects
@@ -864,13 +870,15 @@ def write_suggestions(
         suggestions: A list of `SuggestionFrame` objects to store the metadata for.
         videos: A list of `Video` objects.
     """
-    GROUP = 0  # TODO: Handle storing extraneous metadata.
     suggestions_json = []
     for suggestion in suggestions:
+        # Get group from metadata if available, otherwise use default
+        group = suggestion.metadata.get("group", 0) if suggestion.metadata else 0
+
         suggestion_dict = {
             "video": str(videos.index(suggestion.video)),
             "frame_idx": suggestion.frame_idx,
-            "group": GROUP,
+            "group": group,
         }
         suggestion_json = np.bytes_(json.dumps(suggestion_dict, separators=(",", ":")))
         suggestions_json.append(suggestion_json)
