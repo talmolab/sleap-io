@@ -151,6 +151,11 @@ def convert_labels(labels: Labels) -> List[dict]:
             )
 
             for point in instance.points:
+                # Skip points with NaN coordinates as they are not JSON compliant
+                # and Label Studio doesn't support them
+                if math.isnan(point["xy"][0]) or math.isnan(point["xy"][1]):
+                    continue
+
                 point_id = str(uuid.uuid4())
 
                 # add this point
