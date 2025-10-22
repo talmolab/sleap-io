@@ -336,6 +336,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v056" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.6
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v055" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.5
@@ -591,15 +600,6 @@
   <a href="#v007" class="md-nav__link">
     <span class="md-ellipsis">
       v0.0.7
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v006" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.6
     </span>
   </a>
   
@@ -1688,6 +1688,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v056" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.6
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v055" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.5
@@ -1948,15 +1957,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v006" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.6
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1974,6 +1974,306 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v056"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.6">v0.5.6</a><a class="headerlink" href="#v056" title="Permanent link">&para;</a></h2>
+<h2>🎯 Summary</h2>
+<p>This release delivers significant performance improvements, new CLI capabilities, and critical bug fixes. The v0.5.6 release achieves <strong>52.3% faster SLP file loading</strong> through strategic optimization, introduces a command-line interface for quick dataset inspection, and fixes a critical skeleton decoding bug that could cause edge/symmetry mismatches in SLP files.</p>
+<h2>⚡ Performance Improvements</h2>
+<h3>Optimize SLP Loading Performance (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3538863555" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/259" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/259/hovercard" href="https://github.com/talmolab/sleap-io/pull/259">#259</a>)</h3>
+<p>Achieved <strong>52.3% faster SLP file loading</strong> through two complementary optimizations: dtype caching and HDF5 direct loading. These changes eliminate redundant array operations that were being repeated millions of times during file loading.</p>
+<p><strong>Performance Results on 4.2M Frame File:</strong></p>
+<ul>
+<li>Load time: 142.94s → 68.20s (<strong>52.3% faster</strong>, 74.75s saved)</li>
+<li>Per-frame: 0.034 ms → 0.016 ms (over <strong>2x faster</strong>)</li>
+</ul>
+<p><strong>Optimizations Implemented:</strong></p>
+<p><strong>1. Dtype Caching (56.61s saved, 39.6% improvement)</strong></p>
+<p><strong>Problem:</strong> <code>_get_dtype()</code> was creating numpy structured dtype objects from scratch for every single instance, called millions of times during file loading.</p>
+<p><strong>Solution:</strong> Cache the dtype at the class level using <code>cls.__dict__</code>, handling inheritance correctly for <code>PredictedPointsArray</code> subclasses.</p>
+<p><strong>Impact:</strong> <code>_get_dtype()</code> time reduced from 30.38s to 2.24s (92.6% reduction)</p>
+<p><strong>2. HDF5 Direct Loading (18.13s saved, 12.7% improvement)</strong></p>
+<p><strong>Problem:</strong> Redundant data transformations:</p>
+<ol>
+<li>Get HDF5 structured array (x, y, score, visible, complete)</li>
+<li>Extract x, y and <code>column_stack</code> into (N, 2) array ← 8.5s wasted</li>
+<li>Create instance via <code>from_array</code> conversion ← ~10s overhead</li>
+<li>Copy score, visible, complete fields back ← redundant</li>
+</ol>
+<p><strong>Solution:</strong> Build <code>PointsArray</code> structures directly from HDF5 data in one operation using a new <code>_points_from_hdf5_data()</code> helper function.</p>
+<p><strong>Impact:</strong> Eliminated column_stack overhead (8.5s) and bypassed from_array conversion (~10s)</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load large SLP file - now 52% faster!
+labels = sio.load_slp(&quot;large_file.slp&quot;)  # 142.94s → 68.20s"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load large SLP file - now 52% faster!</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"large_file.slp"</span>)  <span class="pl-c"># 142.94s → 68.20s</span></pre></div>
+<p><strong>Files Modified:</strong></p>
+<ul>
+<li><code>sleap_io/model/instance.py</code>: Added dtype caching to <code>PointsArray._get_dtype()</code> and <code>PredictedPointsArray._get_dtype()</code></li>
+<li><code>sleap_io/io/slp.py</code>: Added <code>_points_from_hdf5_data()</code> helper and updated <code>read_instances()</code></li>
+</ul>
+<p><strong>API Changes:</strong> None - These are internal optimizations with zero API impact and full backward compatibility.</p>
+<p><strong>Performance Breakdown:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Before</th>
+<th>After V1</th>
+<th>After V2</th>
+<th>Savings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Total Time</strong></td>
+<td>142.94s</td>
+<td>86.33s</td>
+<td>68.20s</td>
+<td>-74.75s</td>
+</tr>
+<tr>
+<td>_get_dtype</td>
+<td>30.38s</td>
+<td>2.24s</td>
+<td>2.24s</td>
+<td>-28.14s ✅</td>
+</tr>
+<tr>
+<td>column_stack</td>
+<td>8.50s</td>
+<td>8.50s</td>
+<td>0.00s</td>
+<td>-8.50s ✅</td>
+</tr>
+<tr>
+<td>from_array overhead</td>
+<td>~19.00s</td>
+<td>~19.00s</td>
+<td>~9.00s</td>
+<td>-10.00s ✅</td>
+</tr>
+<tr>
+<td>Field copying</td>
+<td>~2.00s</td>
+<td>~2.00s</td>
+<td>0.00s</td>
+<td>-2.00s ✅</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Optimization Methodology:</strong></p>
+<ol>
+<li><strong>Initial Profiling</strong> - Used pyinstrument to identify <code>_get_dtype()</code> consuming 30.38s (21.3% of total time)</li>
+<li><strong>Root Cause Analysis</strong> - Identified dtype recreation and redundant data copying</li>
+<li><strong>Phased Implementation</strong> - Applied dtype caching first (39.6% improvement), then direct loading (additional 21.0% improvement)</li>
+<li><strong>Validation</strong> - Verified correctness through successful 4.2M frame load with profiling at each stage</li>
+</ol>
+<p><strong>Design Decisions:</strong></p>
+<p><em>Why Class-Level Caching?</em></p>
+<ul>
+<li>Used <code>cls.__dict__</code> to ensure each class maintains its own cached dtype</li>
+<li><code>PredictedPointsArray</code> inherits from <code>PointsArray</code> but has different dtype fields</li>
+<li>Thread-safe: worst case is redundant creation of identical dtype objects</li>
+</ul>
+<p><em>Why Direct Loading?</em></p>
+<ul>
+<li>The <code>Instance.__attrs_post_init__()</code> method has an optimization check that skips conversion when passed a fully-formed <code>PointsArray</code></li>
+<li>By building <code>PointsArray</code> directly from HDF5, we leverage this existing fast path</li>
+<li>Eliminates intermediate array allocations and copying</li>
+</ul>
+<p><strong>Remaining Bottlenecks (68.20s):</strong></p>
+<ul>
+<li>Instance object creation (~30s) - attrs overhead, validation</li>
+<li>Array allocations (~20s) - memory operations</li>
+<li>LabeledFrame construction (~7s) - creating frame objects</li>
+<li>Miscellaneous (~11s)</li>
+</ul>
+<p>Further optimization would require architectural changes (HDF5 format redesign, lazy loading, alternative object models).</p>
+<p><strong>Impact:</strong> Dramatically improves user experience when working with large datasets, reducing wait times by over 50% for common loading operations. Essential for interactive workflows and large-scale analyses.</p>
+<h2>✨ New Features</h2>
+<h3>Initial Command-Line Interface for Dataset Inspection (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3526001373" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/256" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/256/hovercard" href="https://github.com/talmolab/sleap-io/pull/256">#256</a>)</h3>
+<p>Introduced a Click-based CLI command <code>sio cat</code> for quick read-only inspection of SLEAP labels and videos without opening Python. This is an <strong>initial implementation</strong> providing core inspection capabilities with room for future enhancements.</p>
+<p><strong>Key Capabilities:</strong></p>
+<ul>
+<li>Minimal text summary for <code>.slp</code> files (counts of videos, frames, instances, skeletons)</li>
+<li>Detailed labeled frame inspection with <code>--lf N</code> option</li>
+<li>Skeleton structure visualization with <code>--skeleton</code> option</li>
+<li>Video metadata inspection support</li>
+<li>Rich-click integration for improved help output</li>
+</ul>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Summary of labels
+sio cat tests/data/slp/typical.slp
+
+# Detailed info for labeled frame 0
+sio cat --lf 0 tests/data/slp/typical.slp
+
+# Skeleton nodes and edges
+sio cat --skeleton tests/data/slp/typical.slp
+
+# From development environment using uv
+uv run -m sleap_io.io.cli cat --skeleton tests/data/slp/typical.slp
+uvx --from . sio cat --lf 0 tests/data/slp/typical.slp"><pre><span class="pl-c"><span class="pl-c">#</span> Summary of labels</span>
+sio cat tests/data/slp/typical.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Detailed info for labeled frame 0</span>
+sio cat --lf 0 tests/data/slp/typical.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Skeleton nodes and edges</span>
+sio cat --skeleton tests/data/slp/typical.slp
+
+<span class="pl-c"><span class="pl-c">#</span> From development environment using uv</span>
+uv run -m sleap_io.io.cli cat --skeleton tests/data/slp/typical.slp
+uvx --from <span class="pl-c1">.</span> sio cat --lf 0 tests/data/slp/typical.slp</pre></div>
+<p><strong>CLI Options:</strong></p>
+<ul>
+<li><code>--lf N</code>: Show details for labeled frame N (0-based index)</li>
+<li><code>--skeleton</code>: Show skeleton node names and edges</li>
+<li><code>--open-videos</code> / <code>--no-open-videos</code>: Control whether to open video backends (default: no)</li>
+</ul>
+<p><strong>Example Output:</strong></p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="$ sio cat data.slp
+File: data.slp
+Type: labels
+Videos: 1
+Labeled frames: 150
+Instances: 300
+Skeletons: 1
+
+$ sio cat --skeleton data.slp
+Skeleton: mouse
+Nodes: 5
+  - head
+  - thorax
+  - abdomen
+  - left_ear
+  - right_ear
+Edges: 4
+  head → thorax
+  thorax → abdomen
+  head → left_ear
+  head → right_ear"><pre>$ sio cat data.slp
+File: data.slp
+Type: labels
+Videos: 1
+Labeled frames: 150
+Instances: 300
+Skeletons: 1
+
+$ sio cat --skeleton data.slp
+Skeleton: mouse
+Nodes: 5
+  - head
+  - thorax
+  - abdomen
+  - left_ear
+  - right_ear
+Edges: 4
+  head → thorax
+  thorax → abdomen
+  head → left_ear
+  head → right_ear</pre></div>
+<p><strong>Design Decisions:</strong></p>
+<p><em>Read-Only, Minimal CLI</em></p>
+<ul>
+<li>Focused on discoverability and quick inspection</li>
+<li>Supports uv/uvx workflows without heavy dependencies</li>
+<li>No modification operations (write operations remain in Python API)</li>
+</ul>
+<p><em>Default No-Open-Videos</em></p>
+<ul>
+<li>Avoids opening video backends by default for portability and CI stability</li>
+<li>Users can opt in with <code>--open-videos</code> when video metadata is needed</li>
+</ul>
+<p><em>Rich-Click Integration</em></p>
+<ul>
+<li>Improves help UX with minimal overhead</li>
+<li>Consistent styling and markdown support in help text</li>
+</ul>
+<p><strong>Testing:</strong> Comprehensive test suite in <code>tests/io/test_cli.py</code> using <code>click.testing.CliRunner</code> covers:</p>
+<ul>
+<li>Summary output verification</li>
+<li>Labeled frame details</li>
+<li>Out-of-range handling</li>
+<li>Non-label input (video files)</li>
+<li>Skeleton printing</li>
+</ul>
+<p><strong>Impact:</strong> Enables quick dataset inspection from command line, supporting rapid prototyping and debugging workflows. Particularly useful with uv/uvx for inspecting files without setting up a full Python environment. Future enhancements will expand CLI capabilities based on community feedback.</p>
+<h2>🐛 Bug Fixes</h2>
+<h3>Fix py/id Resolution Bug in SLP Skeleton Decoder (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3538649001" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/257" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/257/hovercard" href="https://github.com/talmolab/sleap-io/pull/257">#257</a>)</h3>
+<p>Resolved a critical bug where <code>py/id</code> references in edge types were treated as direct edge type values instead of references to previously defined edge types.</p>
+<p><strong>Problem:</strong> When a symmetry edge (EdgeType=2) was defined before a regular edge (EdgeType=1) in the metadata, edges and symmetries were swapped:</p>
+<ul>
+<li>First <code>py/reduce</code> creates <code>EdgeType(2)</code> and assigns it <code>py/id=1</code></li>
+<li>Second <code>py/reduce</code> creates <code>EdgeType(1)</code> and assigns it <code>py/id=2</code></li>
+<li><strong>Buggy behavior:</strong> <code>py/id=1</code> was treated as <code>EdgeType(1)</code> ❌</li>
+<li><strong>Correct behavior:</strong> <code>py/id=1</code> should resolve to <code>EdgeType(2)</code> ✅</li>
+</ul>
+<p>This affected real .slp files where edge types were defined in non-standard order, causing incorrect skeleton structure.</p>
+<p><strong>Solution:</strong> Implemented single-pass processing in <code>SkeletonSLPDecoder.decode()</code> that:</p>
+<ol>
+<li>Builds a <code>py/id</code> → <code>edge_type_value</code> mapping as <code>py/reduce</code> objects are encountered</li>
+<li>Resolves <code>py/id</code> references by looking up the mapping</li>
+<li>Falls back to treating <code>py/id</code> as direct edge type value for backward compatibility with files that don't use <code>py/reduce</code></li>
+</ol>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load .slp file with non-standard edge type ordering
+labels = sio.load_slp(&quot;data.slp&quot;)
+
+# Skeleton edges and symmetries now correctly decoded ✅
+skeleton = labels.skeletons[0]
+print(f&quot;Edges: {len(skeleton.edges)}&quot;)       # Correct count
+print(f&quot;Symmetries: {len(skeleton.symmetries)}&quot;)  # Correct count"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load .slp file with non-standard edge type ordering</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"data.slp"</span>)
+
+<span class="pl-c"># Skeleton edges and symmetries now correctly decoded ✅</span>
+<span class="pl-s1">skeleton</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">skeletons</span>[<span class="pl-c1">0</span>]
+<span class="pl-en">print</span>(<span class="pl-s">f"Edges: <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-en">len</span>(<span class="pl-s1">skeleton</span>.<span class="pl-c1">edges</span>)<span class="pl-kos">}</span></span>"</span>)       <span class="pl-c"># Correct count</span>
+<span class="pl-en">print</span>(<span class="pl-s">f"Symmetries: <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-en">len</span>(<span class="pl-s1">skeleton</span>.<span class="pl-c1">symmetries</span>)<span class="pl-kos">}</span></span>"</span>)  <span class="pl-c"># Correct count</span></pre></div>
+<p><strong>Files Modified:</strong></p>
+<ul>
+<li><code>sleap_io/io/skeleton.py</code>: Fixed py/id resolution logic (+18, -1)</li>
+<li><code>tests/io/test_skeleton_io.py</code>: Added test for bug (+109)</li>
+</ul>
+<p><strong>Example Impact on Real File:</strong></p>
+<p><strong>Before Fix:</strong></p>
+<ul>
+<li>2 edges (wrong)</li>
+<li>3 symmetries (wrong)</li>
+</ul>
+<p><strong>After Fix:</strong></p>
+<ul>
+<li>3 edges: <code>nose→left</code>, <code>nose→right</code>, <code>nose→tailstart</code> ✓</li>
+<li>1 symmetry: <code>left↔right</code> ✓</li>
+</ul>
+<p><strong>Testing:</strong></p>
+<ul>
+<li>✅ New test: <code>test_slp_decoder_edge_type_pyid_resolution</code> passes</li>
+<li>✅ All 56 skeleton I/O tests pass</li>
+<li>✅ All 83 SLP tests pass</li>
+<li>✅ Real .slp file verified to load correctly with fix</li>
+</ul>
+<p><strong>Impact:</strong> Critical fix ensuring edge types are correctly decoded regardless of definition order in the metadata. Prevents skeleton structure corruption in files with non-standard edge type ordering, which could silently break downstream analysis.</p>
+<h2>💡 Why These Changes Matter</h2>
+<p>The v0.5.6 release significantly enhances sleap-io's <strong>performance, usability, and data integrity</strong>:</p>
+<ul>
+<li><strong>Dramatic Performance Gains</strong>: 52.3% faster SLP loading makes working with large datasets substantially more efficient, reducing wait times from minutes to seconds for multi-million frame files</li>
+<li><strong>Improved Developer Experience</strong>: New CLI enables quick dataset inspection without Python scripting, supporting rapid prototyping and debugging workflows</li>
+<li><strong>Data Integrity</strong>: Skeleton decoder fix prevents silent corruption of edge/symmetry definitions, ensuring accurate skeletal structure for downstream analysis</li>
+<li><strong>Zero Breaking Changes</strong>: All improvements maintain full backward compatibility with existing code and file formats</li>
+</ul>
+<p>This release demonstrates sleap-io's continued commitment to <strong>performance optimization, developer ergonomics, and data reliability</strong> for pose tracking research workflows.</p>
+<h2>📋 Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3526001373" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/256" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/256/hovercard" href="https://github.com/talmolab/sleap-io/pull/256">#256</a>: A commandline interface for sleap-io (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/mshooter/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/mshooter">@mshooter</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3538649001" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/257" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/257/hovercard" href="https://github.com/talmolab/sleap-io/pull/257">#257</a>: Fix py/id resolution bug in SLP skeleton decoder (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3538758038" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/258" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/258/hovercard" href="https://github.com/talmolab/sleap-io/pull/258">#258</a>: Bump version to 0.5.6 (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3538863555" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/259" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/259/hovercard" href="https://github.com/talmolab/sleap-io/pull/259">#259</a>: Optimize SLP loading performance (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.5.5...v0.5.6"><tt>v0.5.5...v0.5.6</tt></a></p>
 <h2 id="v055"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.5">v0.5.5</a><a class="headerlink" href="#v055" title="Permanent link">&para;</a></h2>
 <h2>🎯 Summary</h2>
 <p>This release focuses on critical data integrity improvements, format compatibility enhancements, and infrastructure robustness. The v0.5.5 release fixes critical bugs in NaN coordinate handling and color channel ordering, improves cross-platform compatibility with case-insensitive file extensions, adds metadata preservation for suggestion frames, and stabilizes the dependency ecosystem with PyAV version pinning.</p>
@@ -3792,12 +4092,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Fix detection of embedded images when loading SLP files by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1781568895" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/40" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/40/hovercard" href="https://github.com/talmolab/sleap-io/pull/40">#40</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.6...v0.0.7"><tt>v0.0.6...v0.0.7</tt></a></p>
-<h2 id="v006"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.6">v0.0.6</a><a class="headerlink" href="#v006" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Add from predicted parsing by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1772325448" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/37" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/37/hovercard" href="https://github.com/talmolab/sleap-io/pull/37">#37</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.5...v0.0.6"><tt>v0.0.5...v0.0.6</tt></a></p>
 
 
 
