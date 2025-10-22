@@ -242,7 +242,7 @@ def collect_pr_new_lines(pr: Optional[str] = None) -> Dict[str, List[int]]:
 
     cmd = ["gh", "pr", "diff", "--patch"]
     if pr:
-        cmd.insert(2, str(pr))
+        cmd.insert(3, str(pr))
 
     try:
         patch = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
