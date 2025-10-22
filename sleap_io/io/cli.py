@@ -146,11 +146,8 @@ def cat(
         if isinstance(obj, Video):
             click.echo(f"file: {_safe_path_str(path)}")
             click.echo("type: video")
-            click.echo(
-                f"backend: {
-                    obj.backend.__class__.__name__ if obj.backend else 'unknown'
-                }"
-            )
+            backend_name = obj.backend.__class__.__name__ if obj.backend else "unknown"
+            click.echo(f"backend: {backend_name}")
         else:
             click.echo(f"file: {_safe_path_str(path)}")
             click.echo(f"type: {type(obj).__name__.lower()}")
