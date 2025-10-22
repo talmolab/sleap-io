@@ -1558,3 +1558,112 @@ def test_decode_training_config_invalid_format():
     # Test with non-dict input
     with pytest.raises(ValueError, match="Invalid training config format"):
         decode_training_config("not a dict")
+
+
+def test_slp_decoder_edge_type_pyid_resolution():
+    """Test that SLP decoder correctly resolves py/id references in edge types.
+
+    This test catches a bug where py/id values were treated as direct edge type
+    values instead of references to previously defined edge types.
+
+    When a symmetry edge (EdgeType=2) is defined before a regular edge (EdgeType=1):
+    - The first py/reduce creates EdgeType(2) and assigns it py/id=1
+    - The second py/reduce creates EdgeType(1) and assigns it py/id=2
+    - References to py/id=1 should resolve to EdgeType(2), not EdgeType(1)
+    - References to py/id=2 should resolve to EdgeType(1), not EdgeType(2)
+
+    The buggy code treats py/id values as direct edge type values, causing
+    edges and symmetries to be swapped.
+    """
+    # Create metadata where symmetry (EdgeType=2) is defined before edge (EdgeType=1)
+    skeleton_metadata = {
+        "directed": True,
+        "graph": {"name": "Skeleton-12", "num_edges_inserted": 5},
+        "links": [
+            # Link 0: Creates EdgeType(2)=SYMMETRY, gets py/id=1
+            {
+                "key": 0,
+                "source": 6,
+                "target": 1,
+                "type": {
+                    "py/reduce": [
+                        {"py/type": "sleap.skeleton.EdgeType"},
+                        {"py/tuple": [2]},
+                    ]
+                },
+            },
+            # Link 1: References py/id=1 -> should be EdgeType(2)=SYMMETRY
+            {"key": 0, "source": 1, "target": 6, "type": {"py/id": 1}},
+            # Link 2: Creates EdgeType(1)=EDGE, gets py/id=2
+            {
+                "edge_insert_idx": 0,
+                "key": 0,
+                "source": 3,
+                "target": 6,
+                "type": {
+                    "py/reduce": [
+                        {"py/type": "sleap.skeleton.EdgeType"},
+                        {"py/tuple": [1]},
+                    ]
+                },
+            },
+            # Link 3: References py/id=2 -> should be EdgeType(1)=EDGE
+            {
+                "edge_insert_idx": 1,
+                "key": 0,
+                "source": 3,
+                "target": 1,
+                "type": {"py/id": 2},
+            },
+            # Link 4: References py/id=2 -> should be EdgeType(1)=EDGE
+            {
+                "edge_insert_idx": 2,
+                "key": 0,
+                "source": 3,
+                "target": 4,
+                "type": {"py/id": 2},
+            },
+        ],
+        "multigraph": True,
+        "nodes": [{"id": 6}, {"id": 1}, {"id": 3}, {"id": 4}, {"id": 0}],
+    }
+
+    # Create metadata structure as it appears in .slp files
+    # The "nodes" list is a global list of all nodes across all skeletons
+    metadata = {
+        "skeletons": [skeleton_metadata],
+        "nodes": [
+            {"name": "tailend", "weight": 1.0},  # index 0
+            {"name": "right", "weight": 1.0},  # index 1
+            {"name": "tailend", "weight": 1.0},  # index 2 (duplicate, not used)
+            {"name": "nose", "weight": 1.0},  # index 3
+            {"name": "tailstart", "weight": 1.0},  # index 4
+            {"name": "tailend", "weight": 1.0},  # index 5 (duplicate, not used)
+            {"name": "left", "weight": 1.0},  # index 6
+        ],
+    }
+
+    # Extract node names the same way as sleap_io.io.slp.read_skeletons()
+    node_names = [x["name"] for x in metadata["nodes"]]
+
+    # Decode using SLP decoder
+    decoder = SkeletonSLPDecoder()
+    skeletons = decoder.decode(metadata, node_names)
+    skeleton = skeletons[0]
+
+    # Verify skeleton structure
+    assert skeleton.name == "Skeleton-12"
+    assert len(skeleton.nodes) == 5
+
+    # Verify edges - should have 3 edges from nose to left/right/tailstart
+    assert len(skeleton.edges) == 3
+    edge_pairs = [(e.source.name, e.destination.name) for e in skeleton.edges]
+    assert ("nose", "left") in edge_pairs
+    assert ("nose", "right") in edge_pairs
+    assert ("nose", "tailstart") in edge_pairs
+
+    # Verify symmetries - should have only 1 symmetry between left and right
+    # (deduplicated from the two directional links)
+    assert len(skeleton.symmetries) == 1
+    sym_nodes = {n.name for n in skeleton.symmetries[0].nodes}
+    assert sym_nodes == {"left", "right"}
