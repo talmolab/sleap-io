@@ -130,10 +130,7 @@ def cat(
     skeleton: bool,
 ):
     """Print a summary and optional details."""
-    try:
-        obj = io_main.load_file(str(path), open_videos=open_videos)
-    except Exception as e:
-        raise click.ClickException(f"Failed to read file: {e}")
+    obj = io_main.load_file(str(path), open_videos=open_videos)
 
     # If not Labels, show basic info then exit
     if not isinstance(obj, Labels):

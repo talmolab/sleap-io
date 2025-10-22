@@ -71,3 +71,11 @@ def test_cat_skeleton_flag_text():
     assert result.exit_code == 0, result.output
     out = result.output
     assert "skeleton[" in out or "skeletons:" in out
+
+
+def test_cat_file_not_found():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cat", "/nonexistent/path/to/file.slp"])
+    assert result.exit_code != 0
+    # Click validates file existence before our code runs
+    assert "Invalid value for 'PATH'" in result.output
