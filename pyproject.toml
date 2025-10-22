@@ -32,7 +32,8 @@ dependencies = [
     "imageio-ffmpeg>=0.5.0",
     "tifffile",
     "tqdm",
-    "pyyaml"]
+    "pyyaml",
+    "rich_click"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
@@ -67,6 +68,10 @@ dev = [
 [project.urls]
 Homepage = "https://io.sleap.ai"
 Repository = "https://github.com/talmolab/sleap-io"
+
+[project.scripts]
+sio = "sleap_io.io.cli:cli"
+sleap-io = "sleap_io.io.cli:cli"
 
 [tool.setuptools.packages.find]
 exclude = ["site"]

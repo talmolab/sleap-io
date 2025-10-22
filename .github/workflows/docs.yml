@@ -90,7 +90,7 @@ jobs:
             fi
           done
 
-      - name: Build and upload docs (dev)
+      - name: Build docs (dev)
         if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,6 +101,9 @@ jobs:
           # Build and commit docs locally (without pushing)
           uv run mike deploy --update-aliases --allow-empty dev
 
+      - name: Push docs (dev)
+        if: ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        run: |
           # Push with retry logic to handle race conditions
           for i in {1..3}; do
             if git push origin gh-pages; then
@@ -120,7 +123,7 @@ jobs:
           done
 
       - name: Reorder versions.json on gh-pages
-        if: ${{ github.event_name == 'release' || github.event_name == 'push' || github.event_name == 'pull_request' }}
+        if: ${{ (github.event_name == 'release' || github.event_name == 'push' || github.event_name == 'pull_request') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         run: |
           # Copy the reordering script to temp location before switching branches
           cp scripts/reorder_versions.py /tmp/reorder_versions.py
