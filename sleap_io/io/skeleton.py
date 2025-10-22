@@ -600,12 +600,29 @@ class SkeletonSLPDecoder:
                 # New format introduced in SLEAP v1.3.2
                 # TODO: Do something with the "description" and "preview_image" keys?
                 skel = skel["nx_graph"]
+            # Process links with proper py/id resolution.
+            # In jsonpickle format, py/reduce creates a new object and assigns it
+            # an implicit py/id (1, 2, 3...). We track which py/id maps to which
+            # edge type value as we encounter them.
+            edge_type_map = {}  # py/id -> edge_type_value
+            next_py_id = 1
             edge_inds, symmetry_inds = [], []
+
             for link in skel["links"]:
                 if "py/reduce" in link["type"]:
+                    # New edge type definition - extract value and assign py/id
                     edge_type = link["type"]["py/reduce"][1]["py/tuple"][0]
+                    edge_type_map[next_py_id] = edge_type
+                    next_py_id += 1
+                elif "py/id" in link["type"]:
+                    # Reference to previously defined edge type - look up the value
+                    py_id = link["type"]["py/id"]
+                    # Fallback to py_id value if not in map (for files where edge types
+                    # are defined in a separate scope or use implicit numbering)
+                    edge_type = edge_type_map.get(py_id, py_id)
                 else:
-                    edge_type = link["type"]["py/id"]
+                    # Fallback for malformed data (shouldn't happen in practice)
+                    edge_type = 1
 
                 if edge_type == 1:  # 1 -> real edge, 2 -> symmetry edge
                     edge_inds.append((link["source"], link["target"]))
