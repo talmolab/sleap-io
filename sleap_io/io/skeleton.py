@@ -620,9 +620,6 @@ class SkeletonSLPDecoder:
                     # Fallback to py_id value if not in map (for files where edge types
                     # are defined in a separate scope or use implicit numbering)
                     edge_type = edge_type_map.get(py_id, py_id)
-                else:
-                    # Fallback for malformed data (shouldn't happen in practice)
-                    edge_type = 1
 
                 if edge_type == 1:  # 1 -> real edge, 2 -> symmetry edge
                     edge_inds.append((link["source"], link["target"]))
