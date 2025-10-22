@@ -50,6 +50,7 @@ from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.model.instance import PointsArray, PredictedPointsArray
     from sleap_io.model.labels_set import LabelsSet
 
 try:
@@ -1108,7 +1109,9 @@ def read_instances(
         if instance_type == InstanceType.USER:
             pts_data = points[point_id_start:point_id_end]
             # Fast path: Build PointsArray directly from HDF5 data
-            points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=False)
+            points_array = _points_from_hdf5_data(
+                pts_data, skeleton, is_predicted=False
+            )
             if format_id < 1.1:
                 # Legacy coordinate system: top-left of pixel is (0, 0)
                 # Adjust to new system: center of pixel is (0, 0)

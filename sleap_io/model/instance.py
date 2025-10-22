@@ -39,8 +39,8 @@ class PointsArray(np.ndarray):
                 visible flag, complete flag, and node names.
         """
         # Cache the dtype at the class level for performance
-        # Use cls.__dict__ to check if it's defined on this specific class (not inherited)
-        if '_cached_dtype' not in cls.__dict__:
+        # Use cls.__dict__ to check if defined on this class (not inherited)
+        if "_cached_dtype" not in cls.__dict__:
             cls._cached_dtype = np.dtype(
                 [
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
@@ -191,8 +191,8 @@ class PredictedPointsArray(PointsArray):
                 score, visible flag, complete flag, and node names.
         """
         # Cache the dtype at the class level for performance
-        # Use cls.__dict__ to check if it's defined on this specific class (not inherited)
-        if '_cached_dtype' not in cls.__dict__:
+        # Use cls.__dict__ to check if defined on this class (not inherited)
+        if "_cached_dtype" not in cls.__dict__:
             cls._cached_dtype = np.dtype(
                 [
                     ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
