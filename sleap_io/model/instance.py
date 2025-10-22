@@ -38,17 +38,21 @@ class PointsArray(np.ndarray):
             np.dtype: A structured numpy dtype with fields for xy coordinates,
                 visible flag, complete flag, and node names.
         """
-        return np.dtype(
-            [
-                ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
-                ("visible", "bool"),
-                ("complete", "bool"),
-                (
-                    "name",
-                    "O",
-                ),  # object dtype to store pointers to python string objects
-            ]
-        )
+        # Cache the dtype at the class level for performance
+        # Use cls.__dict__ to check if defined on this class (not inherited)
+        if "_cached_dtype" not in cls.__dict__:
+            cls._cached_dtype = np.dtype(
+                [
+                    ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
+                    ("visible", "bool"),
+                    ("complete", "bool"),
+                    (
+                        "name",
+                        "O",
+                    ),  # object dtype to store pointers to python string objects
+                ]
+            )
+        return cls._cached_dtype
 
     @classmethod
     def empty(cls, length: int) -> "PointsArray":
@@ -186,18 +190,22 @@ class PredictedPointsArray(PointsArray):
             np.dtype: A structured numpy dtype with fields for xy coordinates,
                 score, visible flag, complete flag, and node names.
         """
-        return np.dtype(
-            [
-                ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
-                ("score", "<f8"),  # 64-bit (8-byte) little-endian double
-                ("visible", "bool"),
-                ("complete", "bool"),
-                (
-                    "name",
-                    "O",
-                ),  # object dtype to store pointers to python string objects
-            ]
-        )
+        # Cache the dtype at the class level for performance
+        # Use cls.__dict__ to check if defined on this class (not inherited)
+        if "_cached_dtype" not in cls.__dict__:
+            cls._cached_dtype = np.dtype(
+                [
+                    ("xy", "<f8", (2,)),  # 64-bit (8-byte) little-endian double, ndim=2
+                    ("score", "<f8"),  # 64-bit (8-byte) little-endian double
+                    ("visible", "bool"),
+                    ("complete", "bool"),
+                    (
+                        "name",
+                        "O",
+                    ),  # object dtype to store pointers to python string objects
+                ]
+            )
+        return cls._cached_dtype
 
     @classmethod
     def from_array(cls, array: np.ndarray) -> "PredictedPointsArray":

@@ -50,6 +50,7 @@ from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.model.instance import PointsArray, PredictedPointsArray
     from sleap_io.model.labels_set import LabelsSet
 
 try:
@@ -1008,6 +1009,45 @@ def read_pred_points(labels_path: str) -> np.ndarray:
     return pred_pts
 
 
+def _points_from_hdf5_data(
+    pts_data: np.ndarray,
+    skeleton: Skeleton,
+    is_predicted: bool = False,
+) -> Union["PointsArray", "PredictedPointsArray"]:
+    """Build PointsArray directly from HDF5 structured array data.
+
+    This is a fast path that avoids column_stack and intermediate array creation
+    by directly constructing the target PointsArray structure from HDF5 data.
+
+    Args:
+        pts_data: Structured array from HDF5 with fields x, y, visible, complete,
+            and optionally score.
+        skeleton: The skeleton defining the node structure.
+        is_predicted: If True, create a PredictedPointsArray with scores.
+
+    Returns:
+        A fully populated PointsArray or PredictedPointsArray.
+    """
+    from sleap_io.model.instance import PointsArray, PredictedPointsArray
+
+    n = len(pts_data)
+
+    if is_predicted:
+        points = PredictedPointsArray.empty(n)
+        points["score"] = pts_data["score"]
+    else:
+        points = PointsArray.empty(n)
+
+    # Direct field assignment (faster than column_stack)
+    points["xy"][:, 0] = pts_data["x"]
+    points["xy"][:, 1] = pts_data["y"]
+    points["visible"] = pts_data["visible"]
+    points["complete"] = pts_data["complete"]
+    points["name"] = skeleton.node_names
+
+    return points
+
+
 def read_instances(
     labels_path: str,
     skeletons: list[Skeleton],
@@ -1068,38 +1108,37 @@ def read_instances(
 
         if instance_type == InstanceType.USER:
             pts_data = points[point_id_start:point_id_end]
-            coords = np.column_stack([pts_data["x"], pts_data["y"]])
+            # Fast path: Build PointsArray directly from HDF5 data
+            points_array = _points_from_hdf5_data(
+                pts_data, skeleton, is_predicted=False
+            )
             if format_id < 1.1:
                 # Legacy coordinate system: top-left of pixel is (0, 0)
                 # Adjust to new system: center of pixel is (0, 0)
-                coords = coords - 0.5
+                points_array["xy"] -= 0.5
             inst = Instance(
-                coords,
+                points_array,
                 skeleton=skeleton,
                 track=track,
                 tracking_score=tracking_score,
             )
-            inst.points["visible"] = pts_data["visible"]
-            inst.points["complete"] = pts_data["complete"]
             instances[instance_id] = inst
 
         elif instance_type == InstanceType.PREDICTED:
             pts_data = pred_points[point_id_start:point_id_end]
-            coords = np.column_stack([pts_data["x"], pts_data["y"]])
+            # Fast path: Build PredictedPointsArray directly from HDF5 data
+            points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=True)
             if format_id < 1.1:
                 # Legacy coordinate system: top-left of pixel is (0, 0)
                 # Adjust to new system: center of pixel is (0, 0)
-                coords = coords - 0.5
+                points_array["xy"] -= 0.5
             inst = PredictedInstance(
-                coords,
+                points_array,
                 skeleton=skeleton,
                 track=track,
                 score=instance_score,
                 tracking_score=tracking_score,
             )
-            inst.points["score"] = pts_data["score"]
-            inst.points["visible"] = pts_data["visible"]
-            inst.points["complete"] = pts_data["complete"]
             instances[instance_id] = inst
 
         if from_predicted >= 0:
