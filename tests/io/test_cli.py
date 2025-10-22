@@ -96,7 +96,9 @@ def test_cat_skeleton_no_edges(tmp_path):
     slp_path = tmp_path / "no_edges.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--skeleton", "--no-open-videos"])
+    result = runner.invoke(
+        cli, ["cat", str(slp_path), "--skeleton", "--no-open-videos"]
+    )
     assert result.exit_code == 0, result.output
     assert "edges: none" in result.output
 
