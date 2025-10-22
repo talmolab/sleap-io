@@ -14,6 +14,7 @@ from typing import Optional
 import rich_click as click
 
 from sleap_io.io import main as io_main
+from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -29,13 +30,6 @@ def cli():
     pass
 
 
-def _safe_path_str(path: str | Path) -> str:
-    try:
-        return str(Path(path).resolve())
-    except Exception:
-        return str(path)
-
-
 def _print_labels_summary(labels: Labels, src_path: str) -> str:
     num_videos = len(labels.videos)
     num_frames = len(labels.labeled_frames)
@@ -43,7 +37,7 @@ def _print_labels_summary(labels: Labels, src_path: str) -> str:
     num_skeletons = len(labels.skeletons)
 
     lines = [
-        f"file: {_safe_path_str(src_path)}",
+        f"file: {sanitize_filename(src_path)}",
         "type: labels",
         f"videos: {num_videos}",
         f"labeled_frames: {num_frames}",
@@ -144,12 +138,12 @@ def cat(
     # If not Labels, show basic info then exit
     if not isinstance(obj, Labels):
         if isinstance(obj, Video):
-            click.echo(f"file: {_safe_path_str(path)}")
+            click.echo(f"file: {sanitize_filename(path)}")
             click.echo("type: video")
             backend_name = obj.backend.__class__.__name__ if obj.backend else "unknown"
             click.echo(f"backend: {backend_name}")
         else:
-            click.echo(f"file: {_safe_path_str(path)}")
+            click.echo(f"file: {sanitize_filename(path)}")
             click.echo(f"type: {type(obj).__name__.lower()}")
         return
 
