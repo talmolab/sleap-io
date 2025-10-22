@@ -19,7 +19,6 @@ from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
-from sleap_io.model.video import Video
 
 click.rich_click.USE_MARKDOWN = True
 
@@ -132,35 +131,27 @@ def cat(
     """Print a summary and optional details."""
     obj = io_main.load_file(str(path), open_videos=open_videos)
 
-    # If not Labels, show basic info then exit
-    if not isinstance(obj, Labels):
-        if isinstance(obj, Video):
-            click.echo(f"file: {sanitize_filename(path)}")
-            click.echo("type: video")
-            backend_name = obj.backend.__class__.__name__ if obj.backend else "unknown"
-            click.echo(f"backend: {backend_name}")
-        else:
-            click.echo(f"file: {sanitize_filename(path)}")
-            click.echo(f"type: {type(obj).__name__.lower()}")
-        return
+    if isinstance(obj, Labels):
+        # Text output
+        click.echo(_print_labels_summary(obj, str(path)))
 
-    # Text output
-    click.echo(_print_labels_summary(obj, str(path)))
+        # Skeleton details (text)
+        if skeleton and len(obj.skeletons):
+            for i, sk in enumerate(obj.skeletons):
+                click.echo("")
+                click.echo(f"skeleton[{i}]")
+                click.echo(_print_skeleton_edges(sk))
 
-    # Skeleton details (text)
-    if skeleton and len(obj.skeletons):
-        for i, sk in enumerate(obj.skeletons):
+        # Labeled frame details
+        if lf_index is not None:
+            n = len(obj.labeled_frames)
+            if n == 0:
+                raise click.ClickException("No labeled frames present in file.")
+            if lf_index < 0 or lf_index >= n:
+                raise click.ClickException(f"--lf out of range (0..{n - 1})")
+            lf = obj.labeled_frames[lf_index]
             click.echo("")
-            click.echo(f"skeleton[{i}]")
-            click.echo(_print_skeleton_edges(sk))
-
-    # Labeled frame details
-    if lf_index is not None:
-        n = len(obj.labeled_frames)
-        if n == 0:
-            raise click.ClickException("No labeled frames present in file.")
-        if lf_index < 0 or lf_index >= n:
-            raise click.ClickException(f"--lf out of range (0..{n - 1})")
-        lf = obj.labeled_frames[lf_index]
-        click.echo("")
-        click.echo(_print_lf_details(lf))
+            click.echo(_print_lf_details(lf))
+    else:
+        # For non-Labels objects, print repr
+        click.echo(repr(obj))
