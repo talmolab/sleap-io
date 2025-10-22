@@ -71,6 +71,7 @@ Repository = "https://github.com/talmolab/sleap-io"
 
 [project.scripts]
 sio = "sleap_io.io.cli:cli"
+sleap-io = "sleap_io.io.cli:cli"
 
 [tool.setuptools.packages.find]
 exclude = ["site"]
