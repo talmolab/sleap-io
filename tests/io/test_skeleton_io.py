@@ -1633,13 +1633,13 @@ def test_slp_decoder_edge_type_pyid_resolution():
     metadata = {
         "skeletons": [skeleton_metadata],
         "nodes": [
-            {"name": "tailend", "weight": 1.0},   # index 0
-            {"name": "right", "weight": 1.0},     # index 1
-            {"name": "tailend", "weight": 1.0},   # index 2 (duplicate, not used)
-            {"name": "nose", "weight": 1.0},      # index 3
-            {"name": "tailstart", "weight": 1.0}, # index 4
-            {"name": "tailend", "weight": 1.0},   # index 5 (duplicate, not used)
-            {"name": "left", "weight": 1.0},      # index 6
+            {"name": "tailend", "weight": 1.0},  # index 0
+            {"name": "right", "weight": 1.0},  # index 1
+            {"name": "tailend", "weight": 1.0},  # index 2 (duplicate, not used)
+            {"name": "nose", "weight": 1.0},  # index 3
+            {"name": "tailstart", "weight": 1.0},  # index 4
+            {"name": "tailend", "weight": 1.0},  # index 5 (duplicate, not used)
+            {"name": "left", "weight": 1.0},  # index 6
         ],
     }
 
