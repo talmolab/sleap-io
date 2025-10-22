@@ -387,3 +387,232 @@ def read_labels_set(
         labels_dict[split_name] = labels
 
     return labels_dict
+
+
+def encode_keypoints(
+    points_array: np.ndarray, visibility_encoding: str = "ternary"
+) -> List[float]:
+    """Encode numpy array of points into COCO keypoint format.
+
+    Args:
+        points_array: Numpy array of shape (num_keypoints, 2) or (num_keypoints, 3)
+                     with [x, y] or [x, y, visibility] values.
+        visibility_encoding: Visibility encoding to use. Either "binary" (0/1) or
+                           "ternary" (0/1/2). Default is "ternary".
+
+    Returns:
+        Flat list of [x1, y1, v1, x2, y2, v2, ...] values.
+    """
+    keypoints = []
+    for i in range(len(points_array)):
+        if points_array.shape[1] == 2:
+            x, y = points_array[i]
+            visible = not (np.isnan(x) or np.isnan(y))
+        else:
+            x, y = points_array[i, :2]
+            visible = points_array[i, 2] if points_array.shape[1] > 2 else True
+
+        # Handle NaN coordinates
+        if np.isnan(x) or np.isnan(y):
+            keypoints.extend([0.0, 0.0, 0])  # Not labeled
+        else:
+            # Encode visibility
+            if visibility_encoding == "binary":
+                # Binary: 0 = not visible, 1 = visible
+                visibility_value = 1 if visible else 0
+            else:
+                # Ternary: 0 = not labeled, 1 = labeled but occluded,
+                # 2 = labeled and visible
+                visibility_value = 2 if visible else 1
+            keypoints.extend([float(x), float(y), visibility_value])
+
+    return keypoints
+
+
+def convert_labels(
+    labels: Labels,
+    image_filenames: Optional[Union[str, List[str]]] = None,
+    visibility_encoding: str = "ternary",
+) -> Dict:
+    """Convert a Labels object into COCO-formatted annotations.
+
+    Args:
+        labels: SLEAP `Labels` object to be converted to COCO format.
+        image_filenames: Optional image filenames to use. If provided, must be a single
+                        string (for single-frame videos) or a list of strings matching
+                        the number of labeled frames. If None, generates filenames from
+                        video filenames and frame indices.
+        visibility_encoding: Visibility encoding to use. Either "binary" (0/1) or
+                           "ternary" (0/1/2). Default is "ternary".
+
+    Returns:
+        COCO annotation dictionary with "images", "annotations", and "categories"
+        fields.
+    """
+    coco_data = {
+        "images": [],
+        "annotations": [],
+        "categories": [],
+    }
+
+    # Build skeleton/category mapping
+    skeleton_to_category = {}
+    category_id_counter = 1
+    for skeleton in labels.skeletons:
+        if skeleton not in skeleton_to_category:
+            category = {
+                "id": category_id_counter,
+                "name": skeleton.name
+                if skeleton.name
+                else f"skeleton_{category_id_counter}",
+                "keypoints": [node.name for node in skeleton.nodes],
+                "skeleton": [
+                    [i + 1, j + 1]
+                    for i, j in [
+                        (
+                            skeleton.nodes.index(edge.source),
+                            skeleton.nodes.index(edge.destination),
+                        )
+                        for edge in skeleton.edges
+                    ]
+                ],  # Convert to 1-based indexing
+            }
+            coco_data["categories"].append(category)
+            skeleton_to_category[skeleton] = category_id_counter
+            category_id_counter += 1
+
+    # Build track mapping
+    track_to_id = {}
+    track_id_counter = 1
+    for track in labels.tracks:
+        if track not in track_to_id:
+            track_to_id[track] = track_id_counter
+            track_id_counter += 1
+
+    # Process image filenames
+    if image_filenames is not None:
+        if isinstance(image_filenames, str):
+            image_filenames = [image_filenames]
+        if len(image_filenames) != len(labels.labeled_frames):
+            raise ValueError(
+                f"Number of image filenames ({len(image_filenames)}) must match "
+                f"number of labeled frames ({len(labels.labeled_frames)})"
+            )
+
+    # Process labeled frames
+    image_id_counter = 1
+    annotation_id_counter = 1
+
+    for frame_idx, labeled_frame in enumerate(labels.labeled_frames):
+        # Determine image filename
+        if image_filenames is not None:
+            image_filename = image_filenames[frame_idx]
+        else:
+            # Generate from video filename and frame index
+            video = labeled_frame.video
+            if isinstance(video.filename, list):
+                # Image sequence - use the specific frame
+                if labeled_frame.frame_idx < len(video.filename):
+                    image_filename = Path(video.filename[labeled_frame.frame_idx]).name
+                else:
+                    image_filename = f"frame_{labeled_frame.frame_idx:06d}.png"
+            else:
+                # Video file - generate image name
+                video_name = Path(video.filename).stem
+                image_filename = f"{video_name}_frame_{labeled_frame.frame_idx:06d}.png"
+
+        # Get image dimensions
+        if labeled_frame.video.shape is not None:
+            height = labeled_frame.video.shape[1]
+            width = labeled_frame.video.shape[2]
+        else:
+            # Try to get from backend metadata
+            if (
+                hasattr(labeled_frame.video, "backend_metadata")
+                and "shape" in labeled_frame.video.backend_metadata
+            ):
+                shape = labeled_frame.video.backend_metadata["shape"]
+                height = shape[1]
+                width = shape[2]
+            else:
+                # Default dimensions
+                height = 0
+                width = 0
+
+        # Add image entry
+        image_info = {
+            "id": image_id_counter,
+            "file_name": image_filename,
+            "width": width,
+            "height": height,
+        }
+        coco_data["images"].append(image_info)
+
+        # Process instances
+        for instance in labeled_frame.instances:
+            # Get category ID
+            category_id = skeleton_to_category[instance.skeleton]
+
+            # Encode keypoints
+            points_array = instance.numpy()
+            keypoints = encode_keypoints(points_array, visibility_encoding)
+
+            # Count visible keypoints
+            num_keypoints = sum(
+                1 for i in range(0, len(keypoints), 3) if keypoints[i + 2] > 0
+            )
+
+            # Create annotation
+            annotation = {
+                "id": annotation_id_counter,
+                "image_id": image_id_counter,
+                "category_id": category_id,
+                "keypoints": keypoints,
+                "num_keypoints": num_keypoints,
+            }
+
+            # Add track ID if present
+            if instance.track is not None:
+                annotation["attributes"] = {"object_id": track_to_id[instance.track]}
+
+            coco_data["annotations"].append(annotation)
+            annotation_id_counter += 1
+
+        image_id_counter += 1
+
+    return coco_data
+
+
+def write_labels(
+    labels: Labels,
+    json_path: Union[str, Path],
+    image_filenames: Optional[Union[str, List[str]]] = None,
+    visibility_encoding: str = "ternary",
+) -> None:
+    """Write Labels to COCO-style JSON annotation file.
+
+    Args:
+        labels: SLEAP `Labels` object to save.
+        json_path: Path to save the COCO annotation JSON file.
+        image_filenames: Optional image filenames to use in the COCO JSON. If
+                        provided, must be a single string (for single-frame videos) or
+                        a list of strings matching the number of labeled frames. If
+                        None, generates filenames from video filenames and frame
+                        indices.
+        visibility_encoding: Visibility encoding to use. Either "binary" (0/1) or
+                           "ternary" (0/1/2). Default is "ternary".
+
+    Notes:
+        - This function only writes the JSON annotation file. It does not save images.
+        - The generated JSON can be used with mmpose and other COCO-compatible tools.
+        - For complete datasets with images, consider using save_dataset() instead.
+    """
+    json_path = Path(json_path)
+
+    # Convert labels to COCO format
+    coco_data = convert_labels(labels, image_filenames, visibility_encoding)
+
+    # Write to JSON file
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f, indent=2)

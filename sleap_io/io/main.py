@@ -396,6 +396,34 @@ def load_coco(
     return coco.read_labels(json_path, dataset_root=dataset_root, grayscale=grayscale)
 
 
+def save_coco(
+    labels: Labels,
+    json_path: str,
+    image_filenames: Optional[Union[str, List[str]]] = None,
+    visibility_encoding: str = "ternary",
+):
+    """Save a SLEAP dataset to COCO-style JSON annotation format.
+
+    Args:
+        labels: A SLEAP `Labels` object.
+        json_path: Path to save the COCO annotation JSON file.
+        image_filenames: Optional image filenames to use in the COCO JSON. If
+                        provided, must be a single string (for single-frame videos) or
+                        a list of strings matching the number of labeled frames. If
+                        None, generates filenames from video filenames and frame
+                        indices.
+        visibility_encoding: Visibility encoding to use. Either "binary" (0/1) or
+                           "ternary" (0/1/2). Default is "ternary".
+
+    Notes:
+        - This function only writes the JSON annotation file. It does not save images.
+        - The generated JSON can be used with mmpose and other COCO-compatible tools.
+        - For saving images along with annotations, you would need to extract and save
+          frames separately.
+    """
+    coco.write_labels(labels, json_path, image_filenames, visibility_encoding)
+
+
 def load_video(filename: str, **kwargs) -> Video:
     """Load a video file.
 
@@ -612,8 +640,8 @@ def save_file(
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to save labels to.
         format: Optional format to save as. If not provided, will be inferred from the
-            file extension. Available formats are: "slp", "nwb", "labelstudio", "jabs",
-            and "ultralytics".
+            file extension. Available formats are: "slp", "nwb", "labelstudio", "coco",
+            "jabs", and "ultralytics".
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
         **kwargs: Additional arguments passed to the format-specific saving function:
@@ -626,6 +654,9 @@ def save_file(
               in the
               NWB file. append (bool): If True, append to existing NWB file.
             - For "labelstudio" format: No additional arguments.
+            - For "coco" format: image_filenames (Optional[Union[str, List[str]]]):
+              Image filenames to use. visibility_encoding (str): Either "binary" or
+              "ternary" (default).
             - For "jabs" format: pose_version (int): JABS pose format version (1-6).
               root_folder (Optional[str]): Root folder for JABS project structure.
             - For "ultralytics" format: See `save_ultralytics` for supported arguments.
@@ -639,7 +670,11 @@ def save_file(
         elif filename.lower().endswith(".nwb"):
             format = "nwb"
         elif filename.lower().endswith(".json"):
-            format = "labelstudio"
+            # Check if this should be COCO format based on kwargs
+            if "visibility_encoding" in kwargs or "image_filenames" in kwargs:
+                format = "coco"
+            else:
+                format = "labelstudio"
         elif "pose_version" in kwargs:
             format = "jabs"
         elif "split_ratios" in kwargs or Path(filename).is_dir():
@@ -651,6 +686,8 @@ def save_file(
         save_nwb(labels, filename, **kwargs)
     elif format == "labelstudio":
         save_labelstudio(labels, filename, **kwargs)
+    elif format == "coco":
+        save_coco(labels, filename, **kwargs)
     elif format == "jabs":
         pose_version = kwargs.pop("pose_version", 5)
         root_folder = kwargs.pop("root_folder", filename)
