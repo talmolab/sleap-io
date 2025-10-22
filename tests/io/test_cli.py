@@ -10,6 +10,8 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from sleap_io.io.cli import cli
+from sleap_io.model.labels import Labels
+from sleap_io.model.skeleton import Skeleton
 
 
 def _data_path(rel: str) -> Path:
@@ -79,3 +81,53 @@ def test_cat_file_not_found():
     assert result.exit_code != 0
     # Click validates file existence before our code runs
     assert "Invalid value for 'PATH'" in result.output
+
+
+def test_cat_skeleton_no_edges(tmp_path):
+    """Test skeleton display when skeleton has no edges."""
+    from sleap_io import save_file
+
+    runner = CliRunner()
+    # Create a skeleton with no edges
+    skeleton = Skeleton(nodes=["node1", "node2"])
+    labels = Labels(skeletons=[skeleton])
+
+    # Save to temporary file
+    slp_path = tmp_path / "no_edges.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["cat", str(slp_path), "--skeleton", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    assert "edges: none" in result.output
+
+
+def test_cat_empty_labels_with_lf(tmp_path):
+    """Test --lf flag on file with no labeled frames."""
+    from sleap_io import save_file
+
+    runner = CliRunner()
+    # Create empty labels
+    labels = Labels()
+
+    # Save to temporary file
+    slp_path = tmp_path / "empty.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["cat", str(slp_path), "--lf", "0", "--no-open-videos"])
+    assert result.exit_code != 0
+    assert "No labeled frames present in file" in result.output
+
+
+def test_cat_video_file():
+    """Test cat on a video file (non-Labels object)."""
+    runner = CliRunner()
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+
+    if not path.exists():
+        # Skip if video file doesn't exist in test environment
+        return
+
+    result = runner.invoke(cli, ["cat", str(path), "--open-videos"])
+    assert result.exit_code == 0, result.output
+    # Should print repr of Video object
+    assert "Video" in result.output
