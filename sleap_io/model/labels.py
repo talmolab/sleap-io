@@ -1789,101 +1789,148 @@ class Labels:
 
             for other_video in other.videos:
                 matched = False
-                for self_video in self.videos:
-                    if video_matcher.match(self_video, other_video):
-                        # Special handling for different match methods
-                        if video_matcher.method == VideoMatchMethod.IMAGE_DEDUP:
-                            # Deduplicate images from other_video
-                            deduped_video = other_video.deduplicate_with(self_video)
-                            if deduped_video is None:
-                                # All images were duplicates, map to existing video
-                                video_map[other_video] = self_video
-                                # Build frame index mapping for deduplicated frames
+                matched_video = None
+
+                # Special handling for AUTO to prefer basename over content
+                if video_matcher.method == VideoMatchMethod.AUTO:
+                    # Collect all matches and categorize by match quality
+                    basename_matches = []
+                    content_only_matches = []
+
+                    for self_video in self.videos:
+                        # Check strict path match
+                        if self_video.matches_path(other_video, strict=True):
+                            # Exact path match - use immediately
+                            matched_video = self_video
+                            break
+                        # Check basename match
+                        if self_video.matches_path(other_video, strict=False):
+                            basename_matches.append(self_video)
+                        # Check content-only match (no path match)
+                        elif self_video.matches_content(other_video):
+                            content_only_matches.append(self_video)
+
+                    # Pick best match: prefer basename over content-only
+                    if matched_video is None:
+                        if basename_matches:
+                            matched_video = basename_matches[0]
+                        elif content_only_matches:
+                            matched_video = content_only_matches[0]
+
+                    if matched_video is not None:
+                        video_map[other_video] = matched_video
+                        matched = True
+
+                # For non-AUTO methods, use original first-match logic
+                if not matched:
+                    for self_video in self.videos:
+                        if video_matcher.match(self_video, other_video):
+                            matched_video = self_video
+                            # Special handling for different match methods
+                            if video_matcher.method == VideoMatchMethod.IMAGE_DEDUP:
+                                # Deduplicate images from other_video
+                                deduped_video = other_video.deduplicate_with(self_video)
+                                if deduped_video is None:
+                                    # All images were duplicates, map to existing video
+                                    video_map[other_video] = self_video
+                                    # Build frame index mapping for deduplicated frames
+                                    if isinstance(
+                                        other_video.filename, list
+                                    ) and isinstance(self_video.filename, list):
+                                        other_basenames = [
+                                            Path(f).name for f in other_video.filename
+                                        ]
+                                        self_basenames = [
+                                            Path(f).name for f in self_video.filename
+                                        ]
+                                        for old_idx, basename in enumerate(
+                                            other_basenames
+                                        ):
+                                            if basename in self_basenames:
+                                                new_idx = self_basenames.index(basename)
+                                                frame_idx_map[
+                                                    (other_video, old_idx)
+                                                ] = (
+                                                    self_video,
+                                                    new_idx,
+                                                )
+                                else:
+                                    # Add deduplicated video as new
+                                    self.videos.append(deduped_video)
+                                    video_map[other_video] = deduped_video
+                                    # Build frame index mapping for remaining frames
+                                    if isinstance(
+                                        other_video.filename, list
+                                    ) and isinstance(deduped_video.filename, list):
+                                        other_basenames = [
+                                            Path(f).name for f in other_video.filename
+                                        ]
+                                        deduped_basenames = [
+                                            Path(f).name for f in deduped_video.filename
+                                        ]
+                                        self_basenames = [
+                                            Path(f).name for f in self_video.filename
+                                        ]
+                                        for old_idx, basename in enumerate(
+                                            other_basenames
+                                        ):
+                                            if basename in deduped_basenames:
+                                                new_idx = deduped_basenames.index(
+                                                    basename
+                                                )
+                                                frame_idx_map[
+                                                    (other_video, old_idx)
+                                                ] = (
+                                                    deduped_video,
+                                                    new_idx,
+                                                )
+                                            else:
+                                                # Cases where the image was a duplicate,
+                                                # present in both self and other labels
+                                                # See Issue #239.
+                                                assert basename in self_basenames, (
+                                                    "Unexpected basename mismatch, \
+                                                        possible file corruption."
+                                                )
+                                                new_idx = self_basenames.index(basename)
+                                                frame_idx_map[
+                                                    (other_video, old_idx)
+                                                ] = (
+                                                    self_video,
+                                                    new_idx,
+                                                )
+                            elif video_matcher.method == VideoMatchMethod.SHAPE:
+                                # Merge videos with same shape
+                                merged_video = self_video.merge_with(other_video)
+                                # Replace self_video with merged version
+                                self_video_idx = self.videos.index(self_video)
+                                self.videos[self_video_idx] = merged_video
+                                video_map[other_video] = merged_video
+                                video_map[self_video] = (
+                                    merged_video  # Update mapping for self too
+                                )
+                                # Build frame index mapping
                                 if isinstance(
                                     other_video.filename, list
-                                ) and isinstance(self_video.filename, list):
+                                ) and isinstance(merged_video.filename, list):
                                     other_basenames = [
                                         Path(f).name for f in other_video.filename
                                     ]
-                                    self_basenames = [
-                                        Path(f).name for f in self_video.filename
+                                    merged_basenames = [
+                                        Path(f).name for f in merged_video.filename
                                     ]
                                     for old_idx, basename in enumerate(other_basenames):
-                                        if basename in self_basenames:
-                                            new_idx = self_basenames.index(basename)
+                                        if basename in merged_basenames:
+                                            new_idx = merged_basenames.index(basename)
                                             frame_idx_map[(other_video, old_idx)] = (
-                                                self_video,
+                                                merged_video,
                                                 new_idx,
                                             )
                             else:
-                                # Add deduplicated video as new
-                                self.videos.append(deduped_video)
-                                video_map[other_video] = deduped_video
-                                # Build frame index mapping for remaining frames
-                                if isinstance(
-                                    other_video.filename, list
-                                ) and isinstance(deduped_video.filename, list):
-                                    other_basenames = [
-                                        Path(f).name for f in other_video.filename
-                                    ]
-                                    deduped_basenames = [
-                                        Path(f).name for f in deduped_video.filename
-                                    ]
-                                    self_basenames = [
-                                        Path(f).name for f in self_video.filename
-                                    ]
-                                    for old_idx, basename in enumerate(other_basenames):
-                                        if basename in deduped_basenames:
-                                            new_idx = deduped_basenames.index(basename)
-                                            frame_idx_map[(other_video, old_idx)] = (
-                                                deduped_video,
-                                                new_idx,
-                                            )
-                                        else:
-                                            # Cases where the image was a duplicate,
-                                            # present in both self and other labels
-                                            # See Issue #239.
-                                            assert basename in self_basenames, (
-                                                "Unexpected basename mismatch, \
-                                                    possible file corruption."
-                                            )
-                                            new_idx = self_basenames.index(basename)
-                                            frame_idx_map[(other_video, old_idx)] = (
-                                                self_video,
-                                                new_idx,
-                                            )
-                        elif video_matcher.method == VideoMatchMethod.SHAPE:
-                            # Merge videos with same shape
-                            merged_video = self_video.merge_with(other_video)
-                            # Replace self_video with merged version
-                            self_video_idx = self.videos.index(self_video)
-                            self.videos[self_video_idx] = merged_video
-                            video_map[other_video] = merged_video
-                            video_map[self_video] = (
-                                merged_video  # Update mapping for self too
-                            )
-                            # Build frame index mapping
-                            if isinstance(other_video.filename, list) and isinstance(
-                                merged_video.filename, list
-                            ):
-                                other_basenames = [
-                                    Path(f).name for f in other_video.filename
-                                ]
-                                merged_basenames = [
-                                    Path(f).name for f in merged_video.filename
-                                ]
-                                for old_idx, basename in enumerate(other_basenames):
-                                    if basename in merged_basenames:
-                                        new_idx = merged_basenames.index(basename)
-                                        frame_idx_map[(other_video, old_idx)] = (
-                                            merged_video,
-                                            new_idx,
-                                        )
-                        else:
-                            # Regular matching, no special handling
-                            video_map[other_video] = self_video
-                        matched = True
-                        break
+                                # Regular matching, no special handling
+                                video_map[other_video] = self_video
+                            matched = True
+                            break
 
                 if not matched:
                     # Add new video if no match
