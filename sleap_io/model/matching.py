@@ -297,7 +297,11 @@ class VideoMatcher:
     def match(self, video1: Video, video2: Video) -> bool:
         """Check if two videos match according to the configured method."""
         if self.method == VideoMatchMethod.AUTO:
-            # Try different methods in order (identity check is redundant)
+            # Try different methods in order of specificity (most to least specific).
+            # This prioritizes exact path matches, then basename matches, and only
+            # falls back to content matching (shape + backend) as a last resort.
+            if video1.matches_path(video2, strict=True):
+                return True
             if video1.matches_path(video2, strict=False):
                 return True
             if video1.matches_content(video2):
