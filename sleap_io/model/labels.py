@@ -1791,7 +1791,7 @@ class Labels:
                 matched = False
                 matched_video = None
 
-                # Special handling for AUTO method to prefer basename over content matches
+                # Special handling for AUTO to prefer basename over content
                 if video_matcher.method == VideoMatchMethod.AUTO:
                     # Collect all matches and categorize by match quality
                     basename_matches = []
@@ -1843,10 +1843,14 @@ class Labels:
                                         self_basenames = [
                                             Path(f).name for f in self_video.filename
                                         ]
-                                        for old_idx, basename in enumerate(other_basenames):
+                                        for old_idx, basename in enumerate(
+                                            other_basenames
+                                        ):
                                             if basename in self_basenames:
                                                 new_idx = self_basenames.index(basename)
-                                                frame_idx_map[(other_video, old_idx)] = (
+                                                frame_idx_map[
+                                                    (other_video, old_idx)
+                                                ] = (
                                                     self_video,
                                                     new_idx,
                                                 )
@@ -1867,10 +1871,16 @@ class Labels:
                                         self_basenames = [
                                             Path(f).name for f in self_video.filename
                                         ]
-                                        for old_idx, basename in enumerate(other_basenames):
+                                        for old_idx, basename in enumerate(
+                                            other_basenames
+                                        ):
                                             if basename in deduped_basenames:
-                                                new_idx = deduped_basenames.index(basename)
-                                                frame_idx_map[(other_video, old_idx)] = (
+                                                new_idx = deduped_basenames.index(
+                                                    basename
+                                                )
+                                                frame_idx_map[
+                                                    (other_video, old_idx)
+                                                ] = (
                                                     deduped_video,
                                                     new_idx,
                                                 )
@@ -1883,7 +1893,9 @@ class Labels:
                                                         possible file corruption."
                                                 )
                                                 new_idx = self_basenames.index(basename)
-                                                frame_idx_map[(other_video, old_idx)] = (
+                                                frame_idx_map[
+                                                    (other_video, old_idx)
+                                                ] = (
                                                     self_video,
                                                     new_idx,
                                                 )
@@ -1898,9 +1910,9 @@ class Labels:
                                     merged_video  # Update mapping for self too
                                 )
                                 # Build frame index mapping
-                                if isinstance(other_video.filename, list) and isinstance(
-                                    merged_video.filename, list
-                                ):
+                                if isinstance(
+                                    other_video.filename, list
+                                ) and isinstance(merged_video.filename, list):
                                     other_basenames = [
                                         Path(f).name for f in other_video.filename
                                     ]

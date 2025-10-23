@@ -9,8 +9,6 @@ from sleap_io.model.matching import (
     InstanceMatcher,
     InstanceMatchMethod,
     MergeResult,
-    VideoMatcher,
-    VideoMatchMethod,
 )
 from sleap_io.model.video import Video
 
