@@ -2633,4 +2633,8 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
         # Verify frame instances are correct
         for lf in frames_for_video:
             assert len(lf.instances) == 1, "Each frame should have 1 instance"
-            assert lf.instances[0].skeleton == skeleton
+            # Check skeleton has same structure (node names)
+            assert len(lf.instances[0].skeleton.nodes) == len(skeleton.nodes)
+            assert [n.name for n in lf.instances[0].skeleton.nodes] == [
+                n.name for n in skeleton.nodes
+            ]

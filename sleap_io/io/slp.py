@@ -1887,12 +1887,42 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     metadata = read_metadata(labels_path)
     provenance = metadata.get("provenance", dict())
 
+    # Build mapping from sparse video IDs to list indices
+    # This handles files from old SLEAP where video IDs can be sparse
+    # (e.g., 0, 15, 29, 47, ...) rather than sequential (0, 1, 2, 3, ...)
+    video_id_to_index = {}
+    for i, video in enumerate(videos):
+        # For embedded videos, extract the video ID from backend.dataset
+        if (
+            hasattr(video, "backend")
+            and video.backend is not None
+            and hasattr(video.backend, "dataset")
+            and video.backend.dataset is not None
+        ):
+            dataset = video.backend.dataset
+            # Extract video ID from dataset name (e.g., "video15/video" → 15)
+            if "/" in dataset:
+                video_group = dataset.split("/")[0]
+                if video_group.startswith("video"):
+                    video_id_str = video_group[5:]  # Remove "video" prefix
+                    if video_id_str.isdigit():
+                        video_id = int(video_id_str)
+                        video_id_to_index[video_id] = i
+                        continue
+
+        # For non-embedded videos or videos without extractable IDs,
+        # assume sequential indexing (backwards compatible behavior)
+        video_id_to_index[i] = i
+
     frames = read_hdf5_dataset(labels_path, "frames")
     labeled_frames = []
     for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
+        # Map sparse video_id to sequential list index
+        video_index = video_id_to_index.get(video_id, video_id)
+
         labeled_frames.append(
             LabeledFrame(
-                video=videos[video_id],
+                video=videos[video_index],
                 frame_idx=int(frame_idx),
                 instances=instances[instance_id_start:instance_id_end],
             )
