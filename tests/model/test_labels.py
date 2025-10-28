@@ -1146,7 +1146,9 @@ def test_labels_trim(centered_pair, tmpdir):
     new_path = tmpdir / "trimmed.slp"
     trimmed_labels = labels.trim(new_path, np.arange(100, 200))
     assert len(trimmed_labels) == 100
-    assert trimmed_labels.video.filename == Path(new_path).with_suffix(".mp4")
+    # make sure both paths are pathlib.Path before assertion. This make the comparison
+    # robust against different path format, etc on different systems
+    assert Path(trimmed_labels.video.filename) == Path(new_path).with_suffix(".mp4")
     assert trimmed_labels.video.shape == (100, 384, 384, 1)
     assert trimmed_labels[0].frame_idx == 0
     assert_equal(trimmed_labels[0].numpy(), labels[(labels.video, 100)].numpy())
