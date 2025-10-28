@@ -152,15 +152,19 @@ class Video:
         Returns:
             Video instance with the appropriate backend instantiated.
         """
+        backend = VideoBackend.from_filename(
+            filename,
+            dataset=dataset,
+            grayscale=grayscale,
+            keep_open=keep_open,
+            **kwargs,
+        )
+        # If filename is a directory, VideoBackend.from_filename will expand it
+        # to a list of paths to images contained within the directory. In this
+        # case we want to use the expanded list as filename
         return cls(
-            filename=filename,
-            backend=VideoBackend.from_filename(
-                filename,
-                dataset=dataset,
-                grayscale=grayscale,
-                keep_open=keep_open,
-                **kwargs,
-            ),
+            filename=backend.filename,
+            backend=backend,
             source_video=source_video,
         )
 
