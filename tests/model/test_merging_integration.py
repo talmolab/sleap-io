@@ -444,3 +444,116 @@ class TestLabelsMerge:
             f"This indicates AUTO matching incorrectly used content matching "
             f"instead of basename matching."
         )
+
+    def test_merge_auto_content_only_match(self):
+        """Test AUTO matching falls back to content when basenames differ.
+
+        This tests the content-only matching branch (line 1810 in labels.py)
+        where videos have different basenames but identical shapes.
+        """
+        skeleton = Skeleton(["node1", "node2"])
+
+        # Create two videos with different basenames but same shape
+        video_a = Video(filename="/data/experiment_a.mp4", open_backend=False)
+        video_a.backend_metadata["shape"] = (50, 512, 512, 3)
+
+        video_b = Video(filename="/data/experiment_b.mp4", open_backend=False)
+        video_b.backend_metadata["shape"] = (50, 512, 512, 3)
+
+        labels = Labels(skeletons=[skeleton])
+        labels.videos = [video_a, video_b]
+
+        # Create predictions with completely different basename
+        predictions = Labels(skeletons=[skeleton])
+        pred_video = Video(filename="/predictions/output.mp4", open_backend=False)
+        pred_video.backend_metadata["shape"] = (
+            50,
+            512,
+            512,
+            3,
+        )  # Same shape as video_a
+        predictions.videos = [pred_video]
+
+        frame = LabeledFrame(video=pred_video, frame_idx=0)
+        inst = PredictedInstance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]), skeleton=skeleton, score=0.9
+        )
+        frame.instances = [inst]
+        predictions.labeled_frames = [frame]
+
+        # Should match video_a by content (first match with same shape)
+        result = labels.merge(predictions)
+        assert result.successful
+        assert len(labels.labeled_frames) == 1
+        assert labels.labeled_frames[0].video == video_a
+
+    def test_merge_auto_strict_path_match(self):
+        """Test AUTO matching with exact same path (strict match).
+
+        This tests the strict path matching branch (line 1802 in labels.py)
+        which takes priority over basename and content matching.
+        """
+        skeleton = Skeleton(["node1", "node2"])
+
+        # Create video with specific path
+        video = Video(filename="/data/video.mp4", open_backend=False)
+        video.backend_metadata["shape"] = (100, 640, 480, 3)
+
+        labels = Labels(skeletons=[skeleton])
+        labels.videos = [video]
+
+        # Create predictions with EXACT same path
+        predictions = Labels(skeletons=[skeleton])
+        pred_video = Video(filename="/data/video.mp4", open_backend=False)
+        pred_video.backend_metadata["shape"] = (100, 640, 480, 3)
+        predictions.videos = [pred_video]
+
+        frame = LabeledFrame(video=pred_video, frame_idx=5)
+        inst = PredictedInstance.from_numpy(
+            np.array([[50.0, 60.0], [70.0, 80.0]]), skeleton=skeleton, score=0.85
+        )
+        frame.instances = [inst]
+        predictions.labeled_frames = [frame]
+
+        # Should match by strict path
+        result = labels.merge(predictions)
+        assert result.successful
+        assert len(labels.labeled_frames) == 1
+        assert labels.labeled_frames[0].video == video
+
+    def test_merge_auto_no_match_adds_new_video(self):
+        """Test AUTO matching when no match exists (different shape and basename).
+
+        This tests the no-match scenario where a new video is added
+        because neither path nor content matches.
+        """
+        skeleton = Skeleton(["node1", "node2"])
+
+        # Create video with specific shape
+        video_a = Video(filename="/data/video_a.mp4", open_backend=False)
+        video_a.backend_metadata["shape"] = (100, 640, 480, 3)
+
+        labels = Labels(skeletons=[skeleton])
+        labels.videos = [video_a]
+
+        # Create predictions with different basename AND different shape
+        predictions = Labels(skeletons=[skeleton])
+        pred_video = Video(filename="/predictions/video_b.mp4", open_backend=False)
+        pred_video.backend_metadata["shape"] = (200, 1920, 1080, 3)  # Different!
+        predictions.videos = [pred_video]
+
+        frame = LabeledFrame(video=pred_video, frame_idx=10)
+        inst = PredictedInstance.from_numpy(
+            np.array([[100.0, 200.0], [300.0, 400.0]]), skeleton=skeleton, score=0.95
+        )
+        frame.instances = [inst]
+        predictions.labeled_frames = [frame]
+
+        # Should NOT match, new video should be added
+        original_video_count = len(labels.videos)
+        result = labels.merge(predictions)
+        assert result.successful
+        assert len(labels.videos) == original_video_count + 1
+        assert len(labels.labeled_frames) == 1
+        # The merged frame should reference the newly added video
+        assert labels.labeled_frames[0].video != video_a
