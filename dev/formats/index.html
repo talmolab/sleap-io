@@ -715,6 +715,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sleap_io.save_coco" class="md-nav__link">
+    <span class="md-ellipsis">
+      save_coco
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sleap_io.load_ultralytics" class="md-nav__link">
     <span class="md-ellipsis">
       load_ultralytics
@@ -1855,6 +1864,15 @@
   <a href="#sleap_io.load_coco" class="md-nav__link">
     <span class="md-ellipsis">
       load_coco
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sleap_io.save_coco" class="md-nav__link">
+    <span class="md-ellipsis">
+      save_coco
     </span>
   </a>
   
@@ -4218,7 +4236,7 @@ from the data in the file.</p>
     </div>
 
 </div><h3 id="coco-format-json">COCO Format (.json)<a class="headerlink" href="#coco-format-json" title="Permanent link">&para;</a></h3>
-<p>Load annotations in <a href="https://cocodataset.org/">COCO</a> (Common Objects in Context) format, widely used in computer vision.</p>
+<p><a href="https://cocodataset.org/">COCO</a> (Common Objects in Context) format is widely used in computer vision and pose estimation. sleap-io provides full read and write support, making it compatible with tools like <a href="https://github.com/open-mmlab/mmpose">mmpose</a>, <a href="https://www.cvat.ai/">CVAT</a>, and other COCO-compatible frameworks.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -4360,6 +4378,148 @@ from the data in the file.</p>
 <a id="__codelineno-0-394" name="__codelineno-0-394"></a><a href="#__codelineno-0-394"><span class="linenos" data-linenos="394 "></span></a><span class="sd">        The dataset as a `Labels` object.</span>
 <a id="__codelineno-0-395" name="__codelineno-0-395"></a><a href="#__codelineno-0-395"><span class="linenos" data-linenos="395 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-396" name="__codelineno-0-396"></a><a href="#__codelineno-0-396"><span class="linenos" data-linenos="396 "></span></a>    <span class="k">return</span> <span class="n">coco</span><span class="o">.</span><span class="n">read_labels</span><span class="p">(</span><span class="n">json_path</span><span class="p">,</span> <span class="n">dataset_root</span><span class="o">=</span><span class="n">dataset_root</span><span class="p">,</span> <span class="n">grayscale</span><span class="o">=</span><span class="n">grayscale</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="sleap_io.save_coco" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">save_coco</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">json_path</span><span class="p">,</span> <span class="n">image_filenames</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="o">=</span><span class="s1">&#39;ternary&#39;</span><span class="p">)</span></code>
+
+<a href="#sleap_io.save_coco" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Save a SLEAP dataset to COCO-style JSON annotation format.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>labels</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../reference/sleap_io/model/labels/#sleap_io.model.labels.Labels">Labels</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A SLEAP <code>Labels</code> object.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>json_path</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to save the COCO annotation JSON file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>image_filenames</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.List">List</span>[<span title="str">str</span>]]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional image filenames to use in the COCO JSON. If
+            provided, must be a single string (for single-frame videos) or
+            a list of strings matching the number of labeled frames. If
+            None, generates filenames from video filenames and frame
+            indices.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>visibility_encoding</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Visibility encoding to use. Either "binary" (0/1) or
+               "ternary" (0/&frac12;). Default is "ternary".</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;ternary&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <ul>
+<li>This function only writes the JSON annotation file. It does not save images.</li>
+<li>The generated JSON can be used with mmpose and other COCO-compatible tools.</li>
+<li>For saving images along with annotations, you would need to extract and save
+  frames separately.</li>
+</ul>
+</details>
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/main.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-399" name="__codelineno-0-399"></a><a href="#__codelineno-0-399"><span class="linenos" data-linenos="399 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_coco</span><span class="p">(</span>
+<a id="__codelineno-0-400" name="__codelineno-0-400"></a><a href="#__codelineno-0-400"><span class="linenos" data-linenos="400 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
+<a id="__codelineno-0-401" name="__codelineno-0-401"></a><a href="#__codelineno-0-401"><span class="linenos" data-linenos="401 "></span></a>    <span class="n">json_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-402" name="__codelineno-0-402"></a><a href="#__codelineno-0-402"><span class="linenos" data-linenos="402 "></span></a>    <span class="n">image_filenames</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-403" name="__codelineno-0-403"></a><a href="#__codelineno-0-403"><span class="linenos" data-linenos="403 "></span></a>    <span class="n">visibility_encoding</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ternary&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a><a href="#__codelineno-0-404"><span class="linenos" data-linenos="404 "></span></a><span class="p">):</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a><a href="#__codelineno-0-405"><span class="linenos" data-linenos="405 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save a SLEAP dataset to COCO-style JSON annotation format.</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a><a href="#__codelineno-0-406"><span class="linenos" data-linenos="406 "></span></a>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a><a href="#__codelineno-0-407"><span class="linenos" data-linenos="407 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-408" name="__codelineno-0-408"></a><a href="#__codelineno-0-408"><span class="linenos" data-linenos="408 "></span></a><span class="sd">        labels: A SLEAP `Labels` object.</span>
+<a id="__codelineno-0-409" name="__codelineno-0-409"></a><a href="#__codelineno-0-409"><span class="linenos" data-linenos="409 "></span></a><span class="sd">        json_path: Path to save the COCO annotation JSON file.</span>
+<a id="__codelineno-0-410" name="__codelineno-0-410"></a><a href="#__codelineno-0-410"><span class="linenos" data-linenos="410 "></span></a><span class="sd">        image_filenames: Optional image filenames to use in the COCO JSON. If</span>
+<a id="__codelineno-0-411" name="__codelineno-0-411"></a><a href="#__codelineno-0-411"><span class="linenos" data-linenos="411 "></span></a><span class="sd">                        provided, must be a single string (for single-frame videos) or</span>
+<a id="__codelineno-0-412" name="__codelineno-0-412"></a><a href="#__codelineno-0-412"><span class="linenos" data-linenos="412 "></span></a><span class="sd">                        a list of strings matching the number of labeled frames. If</span>
+<a id="__codelineno-0-413" name="__codelineno-0-413"></a><a href="#__codelineno-0-413"><span class="linenos" data-linenos="413 "></span></a><span class="sd">                        None, generates filenames from video filenames and frame</span>
+<a id="__codelineno-0-414" name="__codelineno-0-414"></a><a href="#__codelineno-0-414"><span class="linenos" data-linenos="414 "></span></a><span class="sd">                        indices.</span>
+<a id="__codelineno-0-415" name="__codelineno-0-415"></a><a href="#__codelineno-0-415"><span class="linenos" data-linenos="415 "></span></a><span class="sd">        visibility_encoding: Visibility encoding to use. Either &quot;binary&quot; (0/1) or</span>
+<a id="__codelineno-0-416" name="__codelineno-0-416"></a><a href="#__codelineno-0-416"><span class="linenos" data-linenos="416 "></span></a><span class="sd">                           &quot;ternary&quot; (0/1/2). Default is &quot;ternary&quot;.</span>
+<a id="__codelineno-0-417" name="__codelineno-0-417"></a><a href="#__codelineno-0-417"><span class="linenos" data-linenos="417 "></span></a>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><a href="#__codelineno-0-418"><span class="linenos" data-linenos="418 "></span></a><span class="sd">    Notes:</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><a href="#__codelineno-0-419"><span class="linenos" data-linenos="419 "></span></a><span class="sd">        - This function only writes the JSON annotation file. It does not save images.</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><a href="#__codelineno-0-420"><span class="linenos" data-linenos="420 "></span></a><span class="sd">        - The generated JSON can be used with mmpose and other COCO-compatible tools.</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><a href="#__codelineno-0-421"><span class="linenos" data-linenos="421 "></span></a><span class="sd">        - For saving images along with annotations, you would need to extract and save</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><a href="#__codelineno-0-422"><span class="linenos" data-linenos="422 "></span></a><span class="sd">          frames separately.</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><a href="#__codelineno-0-423"><span class="linenos" data-linenos="423 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a><a href="#__codelineno-0-424"><span class="linenos" data-linenos="424 "></span></a>    <span class="n">coco</span><span class="o">.</span><span class="n">write_labels</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">json_path</span><span class="p">,</span> <span class="n">image_filenames</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
@@ -5252,12 +5412,12 @@ while YAML files use a simplified human-readable format.</p>
 <td>❌</td>
 </tr>
 <tr>
-<td>COCO</td>
+<td>COCO (.json)</td>
+<td>✅</td>
 <td>✅</td>
 <td>❌</td>
-<td>❌</td>
 <td>✅</td>
-<td>❌</td>
+<td>✅**</td>
 <td>❌</td>
 <td>✅</td>
 </tr>
@@ -5273,7 +5433,8 @@ while YAML files use a simplified human-readable format.</p>
 </tr>
 </tbody>
 </table>
-<p>*NWB can embed videos with <code>annotations_export</code> format</p>
+<p>*NWB can embed videos with <code>annotations_export</code> format
+**COCO tracks are stored via <code>attributes.object_id</code> (CVAT-compatible)</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../model/">Data Model</a>: Understanding the core data structures</li>
