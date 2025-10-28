@@ -1378,3 +1378,110 @@ class TestCOCOExport:
             output_path, format="coco", dataset_root=coco_flat_images
         )
         assert len(reloaded.labeled_frames) == len(labels.labeled_frames)
+
+    def test_export_includes_bbox_field(self, tmp_path):
+        """Test that exported COCO annotations include required bbox field."""
+        # Create simple labels with two visible keypoints
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0], [50.0, 60.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        # Export to COCO
+        coco_data = coco.convert_labels(labels)
+
+        # Verify bbox is present
+        assert "bbox" in coco_data["annotations"][0]
+
+        # Verify bbox is correct (should encompass keypoints)
+        bbox = coco_data["annotations"][0]["bbox"]
+        assert len(bbox) == 4
+        assert bbox[0] == 10.0  # x_min
+        assert bbox[1] == 20.0  # y_min
+        assert bbox[2] == 40.0  # width (50 - 10)
+        assert bbox[3] == 40.0  # height (60 - 20)
+
+    def test_export_includes_area_field(self, tmp_path):
+        """Test that exported COCO annotations include area field."""
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0], [50.0, 60.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Verify area is present and correct
+        assert "area" in coco_data["annotations"][0]
+        assert coco_data["annotations"][0]["area"] == 1600.0  # 40 * 40
+
+    def test_export_includes_iscrowd_field(self, tmp_path):
+        """Test that exported COCO annotations include iscrowd field."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Verify iscrowd is present and set to 0
+        assert "iscrowd" in coco_data["annotations"][0]
+        assert coco_data["annotations"][0]["iscrowd"] == 0
+
+    def test_export_bbox_with_nan_points(self, tmp_path):
+        """Test bbox computation excludes NaN keypoints."""
+        skeleton = sio.Skeleton(nodes=["a", "b", "c"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array(
+                [
+                    [10.0, 20.0],  # visible
+                    [np.nan, np.nan],  # not labeled
+                    [50.0, 60.0],  # visible
+                ]
+            ),
+            skeleton=skeleton,
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Bbox should only include visible points
+        bbox = coco_data["annotations"][0]["bbox"]
+        assert bbox[0] == 10.0  # x_min (from first point)
+        assert bbox[1] == 20.0  # y_min (from first point)
+        assert bbox[2] == 40.0  # width (50 - 10)
+        assert bbox[3] == 40.0  # height (60 - 20)
+
+    def test_export_bbox_all_nan_points(self, tmp_path):
+        """Test bbox computation with all NaN keypoints (edge case)."""
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array(
+                [
+                    [np.nan, np.nan],
+                    [np.nan, np.nan],
+                ]
+            ),
+            skeleton=skeleton,
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Should have zero bbox when all keypoints are NaN
+        bbox = coco_data["annotations"][0]["bbox"]
+        assert bbox == [0.0, 0.0, 0.0, 0.0]
+        assert coco_data["annotations"][0]["area"] == 0.0
+        assert coco_data["annotations"][0]["num_keypoints"] == 0

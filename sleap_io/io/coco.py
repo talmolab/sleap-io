@@ -562,6 +562,28 @@ def convert_labels(
                 1 for i in range(0, len(keypoints), 3) if keypoints[i + 2] > 0
             )
 
+            # Compute bounding box from visible keypoints
+            # mmpose requires bbox field for all annotations
+            visible_points = []
+            for i in range(0, len(keypoints), 3):
+                if keypoints[i + 2] > 0:  # visible
+                    visible_points.append([keypoints[i], keypoints[i + 1]])
+
+            if visible_points:
+                visible_points_array = np.array(visible_points)
+                x_min = float(np.min(visible_points_array[:, 0]))
+                y_min = float(np.min(visible_points_array[:, 1]))
+                x_max = float(np.max(visible_points_array[:, 0]))
+                y_max = float(np.max(visible_points_array[:, 1]))
+
+                # Bbox in COCO format: [x, y, width, height]
+                bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
+                area = (x_max - x_min) * (y_max - y_min)
+            else:
+                # No visible keypoints - use zero bbox
+                bbox = [0.0, 0.0, 0.0, 0.0]
+                area = 0.0
+
             # Create annotation
             annotation = {
                 "id": annotation_id_counter,
@@ -569,6 +591,9 @@ def convert_labels(
                 "category_id": category_id,
                 "keypoints": keypoints,
                 "num_keypoints": num_keypoints,
+                "bbox": bbox,
+                "area": area,
+                "iscrowd": 0,
             }
 
             # Add track ID if present
