@@ -46,7 +46,7 @@ import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 # ------------------------------- CLI -----------------------------------------
 
@@ -122,14 +122,14 @@ class FileCoverage:
     missed: set[int] = field(default_factory=set)
     partial: set[int] = field(default_factory=set)
     # Optional: for JSON/XML -> explain which arcs are missing per line
-    missing_branches: dict[int, list[tuple[int, int]]] = field(default_factory=dict)
+    missing_branches: Dict[int, List[Tuple[int, int]]] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Return True if there are no misses or partials."""
         return not self.missed and not self.partial
 
 
-CoverageByFile = dict[str, FileCoverage]
+CoverageByFile = Dict[str, FileCoverage]
 
 
 # ----------------------------- Utilities -------------------------------------
@@ -293,7 +293,7 @@ def parse_condition_coverage(s: Optional[str]) -> tuple[int, int]:
         s: Condition coverage attribute from XML line node.
 
     Returns:
-        Tuple (covered, total). If missing/unparseable, returns (0, 0).
+        Tuple (covered, total). If missing/unparsable, returns (0, 0).
     """
     if not s:
         return (0, 0)
@@ -552,7 +552,7 @@ def _collapse(s: set[int]) -> list[tuple[int, int]]:
 def print_text(files: CoverageByFile) -> None:
     """Print human-readable summary grouped by file."""
     if not files:
-        print("✅ No uncovered lines found.")
+        print("No uncovered lines found.")
         return
 
     for file in sorted(files.keys()):
@@ -568,7 +568,7 @@ def print_text(files: CoverageByFile) -> None:
 def print_md(files: CoverageByFile) -> None:
     """Print GitHub-flavored markdown table."""
     if not files:
-        print("✅ No uncovered lines found.")
+        print("No uncovered lines found.")
         return
 
     print("| File | Missed | Partial |")

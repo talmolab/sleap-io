@@ -115,10 +115,3 @@ jobs:
           fail_ci_if_error: true
           verbose: false
           token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Agentic coverage summary (PRs only)
-        if: github.event_name == 'pull_request'
-        run: |
-          uv run python scripts/cov_summary.py --source coverage.xml --only-pr-diff-lines --format md > coverage_summary.md
-          echo "### Coverage summary (misses & partials)" >> $GITHUB_STEP_SUMMARY
-          cat coverage_summary.md >> $GITHUB_STEP_SUMMARY
