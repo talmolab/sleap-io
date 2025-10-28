@@ -1485,3 +1485,92 @@ class TestCOCOExport:
         assert bbox == [0.0, 0.0, 0.0, 0.0]
         assert coco_data["annotations"][0]["area"] == 0.0
         assert coco_data["annotations"][0]["num_keypoints"] == 0
+
+    def test_export_single_string_filename(self, tmp_path):
+        """Test that single string image_filenames is converted to list."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        # Pass single string instead of list
+        coco_data = coco.convert_labels(labels, image_filenames="single_image.jpg")
+
+        # Should work and use the provided filename
+        assert len(coco_data["images"]) == 1
+        assert coco_data["images"][0]["file_name"] == "single_image.jpg"
+
+    def test_export_filename_count_mismatch(self, tmp_path):
+        """Test error when image_filenames count doesn't match frames."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img1.png", "img2.png"])
+
+        instance1 = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        instance2 = sio.Instance.from_numpy(
+            points_data=np.array([[30.0, 40.0]]), skeleton=skeleton
+        )
+
+        frame1 = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance1])
+        frame2 = sio.LabeledFrame(video=video, frame_idx=1, instances=[instance2])
+        labels = sio.Labels(labeled_frames=[frame1, frame2])
+
+        # Provide wrong number of filenames (1 instead of 2)
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Number of image filenames \\(1\\) must match "
+                "number of labeled frames \\(2\\)"
+            ),
+        ):
+            coco.convert_labels(labels, image_filenames=["only_one.jpg"])
+
+    def test_export_video_file_filename_generation(self, tmp_path):
+        """Test filename generation for video files (not image sequences)."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        # Use a video file path (string) instead of image sequence (list)
+        video = sio.Video.from_filename("test_video.mp4")
+
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=5, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Should generate filename from video name + frame index
+        assert len(coco_data["images"]) == 1
+        assert coco_data["images"][0]["file_name"] == "test_video_frame_000005.png"
+
+    def test_save_file_coco_autodetect_from_kwargs(self, tmp_path):
+        """Test that save_file auto-detects COCO format from kwargs."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        output_path = tmp_path / "output.json"
+
+        # Save without explicit format, but with COCO-specific kwarg
+        # This should auto-detect COCO format from visibility_encoding parameter
+        sio.save_file(labels, output_path, visibility_encoding="binary")
+
+        # Verify it saved as COCO format
+        assert output_path.exists()
+        with open(output_path, "r") as f:
+            data = json.load(f)
+
+        assert "images" in data
+        assert "annotations" in data
+        assert "categories" in data
+
+        # Verify binary visibility encoding was used (1 instead of 2)
+        assert data["annotations"][0]["keypoints"][2] == 1  # Binary visible

@@ -526,18 +526,9 @@ def convert_labels(
             height = labeled_frame.video.shape[1]
             width = labeled_frame.video.shape[2]
         else:
-            # Try to get from backend metadata
-            if (
-                hasattr(labeled_frame.video, "backend_metadata")
-                and "shape" in labeled_frame.video.backend_metadata
-            ):
-                shape = labeled_frame.video.backend_metadata["shape"]
-                height = shape[1]
-                width = shape[2]
-            else:
-                # Default dimensions
-                height = 0
-                width = 0
+            # Default dimensions if shape unavailable
+            height = 0
+            width = 0
 
         # Add image entry
         image_info = {
