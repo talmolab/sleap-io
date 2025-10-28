@@ -26,6 +26,8 @@ sleap-io is a standalone utility library for working with animal pose tracking d
 5. After making your changes, be sure to lint and maximize coverage.
 6. If there are enhancements or API changes, be sure to update the `docs/` appropriately.
 7. Create a PR using the `gh` CLI when the changes are close to ready.
+8. When finishing up, use `gh` to check the CI every 30 seconds until it finishes running and check the logs if CI failed.
+9. When the user says to go ahead and merge, then squash merge with `gh pr merge --delete-branch`.
 
 ### PR Descriptions
 
