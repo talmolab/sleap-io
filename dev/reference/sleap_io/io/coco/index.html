@@ -1499,6 +1499,14 @@
       </thead>
       <tbody>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;convert_labels&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;labels&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;image_filenames&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;visibility_encoding&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;ternary&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.coco.convert_labels&lt;/code&gt;)" href="#sleap_io.io.coco.convert_labels">convert_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Convert a Labels object into COCO-formatted annotations.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;create_skeleton_from_category&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;category&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.coco.create_skeleton_from_category&lt;/code&gt;)" href="#sleap_io.io.coco.create_skeleton_from_category">create_skeleton_from_category</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -1511,6 +1519,14 @@
               <td>
                 <div class="doc-md-description">
                   <p>Decode COCO keypoint format to numpy array for Instance creation.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;encode_keypoints&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;points_array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;visibility_encoding&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;ternary&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.coco.encode_keypoints&lt;/code&gt;)" href="#sleap_io.io.coco.encode_keypoints">encode_keypoints</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Encode numpy array of points into COCO keypoint format.</p>
                 </div>
               </td>
             </tr>
@@ -1546,6 +1562,14 @@
                 </div>
               </td>
             </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;write_labels&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;labels&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;json_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;image_filenames&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;visibility_encoding&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;ternary&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.coco.write_labels&lt;/code&gt;)" href="#sleap_io.io.coco.write_labels">write_labels</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Write Labels to COCO-style JSON annotation file.</p>
+                </div>
+              </td>
+            </tr>
       </tbody>
     </table>
 
@@ -1563,6 +1587,296 @@
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="sleap_io.io.coco.convert_labels" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">convert_labels</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">image_filenames</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="o">=</span><span class="s1">&#39;ternary&#39;</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.coco.convert_labels" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Convert a Labels object into COCO-formatted annotations.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>labels</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../../model/labels/#sleap_io.model.labels.Labels">Labels</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>SLEAP <code>Labels</code> object to be converted to COCO format.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>image_filenames</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.List">List</span>[<span title="str">str</span>]]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional image filenames to use. If provided, must be a single
+            string (for single-frame videos) or a list of strings matching
+            the number of labeled frames. If None, generates filenames from
+            video filenames and frame indices.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>visibility_encoding</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Visibility encoding to use. Either "binary" (0/1) or
+               "ternary" (0/&frac12;). Default is "ternary".</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;ternary&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Dict">Dict</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>COCO annotation dictionary with "images", "annotations", and "categories"
+fields.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/coco.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-432" name="__codelineno-0-432"></a><a href="#__codelineno-0-432"><span class="linenos" data-linenos="432 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">convert_labels</span><span class="p">(</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><a href="#__codelineno-0-433"><span class="linenos" data-linenos="433 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><a href="#__codelineno-0-434"><span class="linenos" data-linenos="434 "></span></a>    <span class="n">image_filenames</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><a href="#__codelineno-0-435"><span class="linenos" data-linenos="435 "></span></a>    <span class="n">visibility_encoding</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ternary&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a><a href="#__codelineno-0-436"><span class="linenos" data-linenos="436 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><a href="#__codelineno-0-437"><span class="linenos" data-linenos="437 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a Labels object into COCO-formatted annotations.</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><a href="#__codelineno-0-438"><span class="linenos" data-linenos="438 "></span></a>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a><a href="#__codelineno-0-439"><span class="linenos" data-linenos="439 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><a href="#__codelineno-0-440"><span class="linenos" data-linenos="440 "></span></a><span class="sd">        labels: SLEAP `Labels` object to be converted to COCO format.</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><a href="#__codelineno-0-441"><span class="linenos" data-linenos="441 "></span></a><span class="sd">        image_filenames: Optional image filenames to use. If provided, must be a single</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a><a href="#__codelineno-0-442"><span class="linenos" data-linenos="442 "></span></a><span class="sd">                        string (for single-frame videos) or a list of strings matching</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a><a href="#__codelineno-0-443"><span class="linenos" data-linenos="443 "></span></a><span class="sd">                        the number of labeled frames. If None, generates filenames from</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a><a href="#__codelineno-0-444"><span class="linenos" data-linenos="444 "></span></a><span class="sd">                        video filenames and frame indices.</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a><a href="#__codelineno-0-445"><span class="linenos" data-linenos="445 "></span></a><span class="sd">        visibility_encoding: Visibility encoding to use. Either &quot;binary&quot; (0/1) or</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a><a href="#__codelineno-0-446"><span class="linenos" data-linenos="446 "></span></a><span class="sd">                           &quot;ternary&quot; (0/1/2). Default is &quot;ternary&quot;.</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a><a href="#__codelineno-0-447"><span class="linenos" data-linenos="447 "></span></a>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a><a href="#__codelineno-0-448"><span class="linenos" data-linenos="448 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a><a href="#__codelineno-0-449"><span class="linenos" data-linenos="449 "></span></a><span class="sd">        COCO annotation dictionary with &quot;images&quot;, &quot;annotations&quot;, and &quot;categories&quot;</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a><a href="#__codelineno-0-450"><span class="linenos" data-linenos="450 "></span></a><span class="sd">        fields.</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a><a href="#__codelineno-0-451"><span class="linenos" data-linenos="451 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a><a href="#__codelineno-0-452"><span class="linenos" data-linenos="452 "></span></a>    <span class="n">coco_data</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a><a href="#__codelineno-0-453"><span class="linenos" data-linenos="453 "></span></a>        <span class="s2">&quot;images&quot;</span><span class="p">:</span> <span class="p">[],</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a><a href="#__codelineno-0-454"><span class="linenos" data-linenos="454 "></span></a>        <span class="s2">&quot;annotations&quot;</span><span class="p">:</span> <span class="p">[],</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a><a href="#__codelineno-0-455"><span class="linenos" data-linenos="455 "></span></a>        <span class="s2">&quot;categories&quot;</span><span class="p">:</span> <span class="p">[],</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a><a href="#__codelineno-0-456"><span class="linenos" data-linenos="456 "></span></a>    <span class="p">}</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a><a href="#__codelineno-0-457"><span class="linenos" data-linenos="457 "></span></a>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a><a href="#__codelineno-0-458"><span class="linenos" data-linenos="458 "></span></a>    <span class="c1"># Build skeleton/category mapping</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a><a href="#__codelineno-0-459"><span class="linenos" data-linenos="459 "></span></a>    <span class="n">skeleton_to_category</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a><a href="#__codelineno-0-460"><span class="linenos" data-linenos="460 "></span></a>    <span class="n">category_id_counter</span> <span class="o">=</span> <span class="mi">1</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a><a href="#__codelineno-0-461"><span class="linenos" data-linenos="461 "></span></a>    <span class="k">for</span> <span class="n">skeleton</span> <span class="ow">in</span> <span class="n">labels</span><span class="o">.</span><span class="n">skeletons</span><span class="p">:</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a><a href="#__codelineno-0-462"><span class="linenos" data-linenos="462 "></span></a>        <span class="k">if</span> <span class="n">skeleton</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">skeleton_to_category</span><span class="p">:</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a><a href="#__codelineno-0-463"><span class="linenos" data-linenos="463 "></span></a>            <span class="n">category</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a><a href="#__codelineno-0-464"><span class="linenos" data-linenos="464 "></span></a>                <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">category_id_counter</span><span class="p">,</span>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a><a href="#__codelineno-0-465"><span class="linenos" data-linenos="465 "></span></a>                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">name</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a><a href="#__codelineno-0-466"><span class="linenos" data-linenos="466 "></span></a>                <span class="k">if</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">name</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a><a href="#__codelineno-0-467"><span class="linenos" data-linenos="467 "></span></a>                <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;skeleton_</span><span class="si">{</span><span class="n">category_id_counter</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a><a href="#__codelineno-0-468"><span class="linenos" data-linenos="468 "></span></a>                <span class="s2">&quot;keypoints&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">nodes</span><span class="p">],</span>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a><a href="#__codelineno-0-469"><span class="linenos" data-linenos="469 "></span></a>                <span class="s2">&quot;skeleton&quot;</span><span class="p">:</span> <span class="p">[</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a><a href="#__codelineno-0-470"><span class="linenos" data-linenos="470 "></span></a>                    <span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><a href="#__codelineno-0-471"><span class="linenos" data-linenos="471 "></span></a>                    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="p">[</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a><a href="#__codelineno-0-472"><span class="linenos" data-linenos="472 "></span></a>                        <span class="p">(</span>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><a href="#__codelineno-0-473"><span class="linenos" data-linenos="473 "></span></a>                            <span class="n">skeleton</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">edge</span><span class="o">.</span><span class="n">source</span><span class="p">),</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a><a href="#__codelineno-0-474"><span class="linenos" data-linenos="474 "></span></a>                            <span class="n">skeleton</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">edge</span><span class="o">.</span><span class="n">destination</span><span class="p">),</span>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a><a href="#__codelineno-0-475"><span class="linenos" data-linenos="475 "></span></a>                        <span class="p">)</span>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a><a href="#__codelineno-0-476"><span class="linenos" data-linenos="476 "></span></a>                        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">skeleton</span><span class="o">.</span><span class="n">edges</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a><a href="#__codelineno-0-477"><span class="linenos" data-linenos="477 "></span></a>                    <span class="p">]</span>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a><a href="#__codelineno-0-478"><span class="linenos" data-linenos="478 "></span></a>                <span class="p">],</span>  <span class="c1"># Convert to 1-based indexing</span>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><a href="#__codelineno-0-479"><span class="linenos" data-linenos="479 "></span></a>            <span class="p">}</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a><a href="#__codelineno-0-480"><span class="linenos" data-linenos="480 "></span></a>            <span class="n">coco_data</span><span class="p">[</span><span class="s2">&quot;categories&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">category</span><span class="p">)</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><a href="#__codelineno-0-481"><span class="linenos" data-linenos="481 "></span></a>            <span class="n">skeleton_to_category</span><span class="p">[</span><span class="n">skeleton</span><span class="p">]</span> <span class="o">=</span> <span class="n">category_id_counter</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><a href="#__codelineno-0-482"><span class="linenos" data-linenos="482 "></span></a>            <span class="n">category_id_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><a href="#__codelineno-0-483"><span class="linenos" data-linenos="483 "></span></a>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a><a href="#__codelineno-0-484"><span class="linenos" data-linenos="484 "></span></a>    <span class="c1"># Build track mapping</span>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a><a href="#__codelineno-0-485"><span class="linenos" data-linenos="485 "></span></a>    <span class="n">track_to_id</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-486" name="__codelineno-0-486"></a><a href="#__codelineno-0-486"><span class="linenos" data-linenos="486 "></span></a>    <span class="n">track_id_counter</span> <span class="o">=</span> <span class="mi">1</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a><a href="#__codelineno-0-487"><span class="linenos" data-linenos="487 "></span></a>    <span class="k">for</span> <span class="n">track</span> <span class="ow">in</span> <span class="n">labels</span><span class="o">.</span><span class="n">tracks</span><span class="p">:</span>
+<a id="__codelineno-0-488" name="__codelineno-0-488"></a><a href="#__codelineno-0-488"><span class="linenos" data-linenos="488 "></span></a>        <span class="k">if</span> <span class="n">track</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">track_to_id</span><span class="p">:</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a><a href="#__codelineno-0-489"><span class="linenos" data-linenos="489 "></span></a>            <span class="n">track_to_id</span><span class="p">[</span><span class="n">track</span><span class="p">]</span> <span class="o">=</span> <span class="n">track_id_counter</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a><a href="#__codelineno-0-490"><span class="linenos" data-linenos="490 "></span></a>            <span class="n">track_id_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a><a href="#__codelineno-0-491"><span class="linenos" data-linenos="491 "></span></a>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a><a href="#__codelineno-0-492"><span class="linenos" data-linenos="492 "></span></a>    <span class="c1"># Process image filenames</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a><a href="#__codelineno-0-493"><span class="linenos" data-linenos="493 "></span></a>    <span class="k">if</span> <span class="n">image_filenames</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a><a href="#__codelineno-0-494"><span class="linenos" data-linenos="494 "></span></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image_filenames</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a><a href="#__codelineno-0-495"><span class="linenos" data-linenos="495 "></span></a>            <span class="n">image_filenames</span> <span class="o">=</span> <span class="p">[</span><span class="n">image_filenames</span><span class="p">]</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a><a href="#__codelineno-0-496"><span class="linenos" data-linenos="496 "></span></a>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">image_filenames</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">):</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a><a href="#__codelineno-0-497"><span class="linenos" data-linenos="497 "></span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a><a href="#__codelineno-0-498"><span class="linenos" data-linenos="498 "></span></a>                <span class="sa">f</span><span class="s2">&quot;Number of image filenames (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">image_filenames</span><span class="p">)</span><span class="si">}</span><span class="s2">) must match &quot;</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a><a href="#__codelineno-0-499"><span class="linenos" data-linenos="499 "></span></a>                <span class="sa">f</span><span class="s2">&quot;number of labeled frames (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a><a href="#__codelineno-0-500"><span class="linenos" data-linenos="500 "></span></a>            <span class="p">)</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a><a href="#__codelineno-0-501"><span class="linenos" data-linenos="501 "></span></a>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a><a href="#__codelineno-0-502"><span class="linenos" data-linenos="502 "></span></a>    <span class="c1"># Process labeled frames</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a><a href="#__codelineno-0-503"><span class="linenos" data-linenos="503 "></span></a>    <span class="n">image_id_counter</span> <span class="o">=</span> <span class="mi">1</span>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a><a href="#__codelineno-0-504"><span class="linenos" data-linenos="504 "></span></a>    <span class="n">annotation_id_counter</span> <span class="o">=</span> <span class="mi">1</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a><a href="#__codelineno-0-505"><span class="linenos" data-linenos="505 "></span></a>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a><a href="#__codelineno-0-506"><span class="linenos" data-linenos="506 "></span></a>    <span class="k">for</span> <span class="n">frame_idx</span><span class="p">,</span> <span class="n">labeled_frame</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">):</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a><a href="#__codelineno-0-507"><span class="linenos" data-linenos="507 "></span></a>        <span class="c1"># Determine image filename</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a><a href="#__codelineno-0-508"><span class="linenos" data-linenos="508 "></span></a>        <span class="k">if</span> <span class="n">image_filenames</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><a href="#__codelineno-0-509"><span class="linenos" data-linenos="509 "></span></a>            <span class="n">image_filename</span> <span class="o">=</span> <span class="n">image_filenames</span><span class="p">[</span><span class="n">frame_idx</span><span class="p">]</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a><a href="#__codelineno-0-510"><span class="linenos" data-linenos="510 "></span></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a><a href="#__codelineno-0-511"><span class="linenos" data-linenos="511 "></span></a>            <span class="c1"># Generate from video filename and frame index</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a><a href="#__codelineno-0-512"><span class="linenos" data-linenos="512 "></span></a>            <span class="n">video</span> <span class="o">=</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">video</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a><a href="#__codelineno-0-513"><span class="linenos" data-linenos="513 "></span></a>            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a><a href="#__codelineno-0-514"><span class="linenos" data-linenos="514 "></span></a>                <span class="c1"># Image sequence - use the specific frame</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a><a href="#__codelineno-0-515"><span class="linenos" data-linenos="515 "></span></a>                <span class="k">if</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">frame_idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">filename</span><span class="p">):</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a><a href="#__codelineno-0-516"><span class="linenos" data-linenos="516 "></span></a>                    <span class="n">image_filename</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">filename</span><span class="p">[</span><span class="n">labeled_frame</span><span class="o">.</span><span class="n">frame_idx</span><span class="p">])</span><span class="o">.</span><span class="n">name</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a><a href="#__codelineno-0-517"><span class="linenos" data-linenos="517 "></span></a>                <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a><a href="#__codelineno-0-518"><span class="linenos" data-linenos="518 "></span></a>                    <span class="n">image_filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;frame_</span><span class="si">{</span><span class="n">labeled_frame</span><span class="o">.</span><span class="n">frame_idx</span><span class="si">:</span><span class="s2">06d</span><span class="si">}</span><span class="s2">.png&quot;</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a><a href="#__codelineno-0-519"><span class="linenos" data-linenos="519 "></span></a>            <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a><a href="#__codelineno-0-520"><span class="linenos" data-linenos="520 "></span></a>                <span class="c1"># Video file - generate image name</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><a href="#__codelineno-0-521"><span class="linenos" data-linenos="521 "></span></a>                <span class="n">video_name</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">stem</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a><a href="#__codelineno-0-522"><span class="linenos" data-linenos="522 "></span></a>                <span class="n">image_filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">video_name</span><span class="si">}</span><span class="s2">_frame_</span><span class="si">{</span><span class="n">labeled_frame</span><span class="o">.</span><span class="n">frame_idx</span><span class="si">:</span><span class="s2">06d</span><span class="si">}</span><span class="s2">.png&quot;</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><a href="#__codelineno-0-523"><span class="linenos" data-linenos="523 "></span></a>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a><a href="#__codelineno-0-524"><span class="linenos" data-linenos="524 "></span></a>        <span class="c1"># Get image dimensions</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a><a href="#__codelineno-0-525"><span class="linenos" data-linenos="525 "></span></a>        <span class="k">if</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">video</span><span class="o">.</span><span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a><a href="#__codelineno-0-526"><span class="linenos" data-linenos="526 "></span></a>            <span class="n">height</span> <span class="o">=</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">video</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a><a href="#__codelineno-0-527"><span class="linenos" data-linenos="527 "></span></a>            <span class="n">width</span> <span class="o">=</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">video</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a><a href="#__codelineno-0-528"><span class="linenos" data-linenos="528 "></span></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a><a href="#__codelineno-0-529"><span class="linenos" data-linenos="529 "></span></a>            <span class="c1"># Try to get from backend metadata</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a><a href="#__codelineno-0-530"><span class="linenos" data-linenos="530 "></span></a>            <span class="k">if</span> <span class="p">(</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a><a href="#__codelineno-0-531"><span class="linenos" data-linenos="531 "></span></a>                <span class="nb">hasattr</span><span class="p">(</span><span class="n">labeled_frame</span><span class="o">.</span><span class="n">video</span><span class="p">,</span> <span class="s2">&quot;backend_metadata&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a><a href="#__codelineno-0-532"><span class="linenos" data-linenos="532 "></span></a>                <span class="ow">and</span> <span class="s2">&quot;shape&quot;</span> <span class="ow">in</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">video</span><span class="o">.</span><span class="n">backend_metadata</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><a href="#__codelineno-0-533"><span class="linenos" data-linenos="533 "></span></a>            <span class="p">):</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a><a href="#__codelineno-0-534"><span class="linenos" data-linenos="534 "></span></a>                <span class="n">shape</span> <span class="o">=</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">video</span><span class="o">.</span><span class="n">backend_metadata</span><span class="p">[</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a><a href="#__codelineno-0-535"><span class="linenos" data-linenos="535 "></span></a>                <span class="n">height</span> <span class="o">=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a><a href="#__codelineno-0-536"><span class="linenos" data-linenos="536 "></span></a>                <span class="n">width</span> <span class="o">=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a><a href="#__codelineno-0-537"><span class="linenos" data-linenos="537 "></span></a>            <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a><a href="#__codelineno-0-538"><span class="linenos" data-linenos="538 "></span></a>                <span class="c1"># Default dimensions</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a><a href="#__codelineno-0-539"><span class="linenos" data-linenos="539 "></span></a>                <span class="n">height</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a><a href="#__codelineno-0-540"><span class="linenos" data-linenos="540 "></span></a>                <span class="n">width</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a><a href="#__codelineno-0-541"><span class="linenos" data-linenos="541 "></span></a>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a><a href="#__codelineno-0-542"><span class="linenos" data-linenos="542 "></span></a>        <span class="c1"># Add image entry</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a><a href="#__codelineno-0-543"><span class="linenos" data-linenos="543 "></span></a>        <span class="n">image_info</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a><a href="#__codelineno-0-544"><span class="linenos" data-linenos="544 "></span></a>            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">image_id_counter</span><span class="p">,</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a><a href="#__codelineno-0-545"><span class="linenos" data-linenos="545 "></span></a>            <span class="s2">&quot;file_name&quot;</span><span class="p">:</span> <span class="n">image_filename</span><span class="p">,</span>
+<a id="__codelineno-0-546" name="__codelineno-0-546"></a><a href="#__codelineno-0-546"><span class="linenos" data-linenos="546 "></span></a>            <span class="s2">&quot;width&quot;</span><span class="p">:</span> <span class="n">width</span><span class="p">,</span>
+<a id="__codelineno-0-547" name="__codelineno-0-547"></a><a href="#__codelineno-0-547"><span class="linenos" data-linenos="547 "></span></a>            <span class="s2">&quot;height&quot;</span><span class="p">:</span> <span class="n">height</span><span class="p">,</span>
+<a id="__codelineno-0-548" name="__codelineno-0-548"></a><a href="#__codelineno-0-548"><span class="linenos" data-linenos="548 "></span></a>        <span class="p">}</span>
+<a id="__codelineno-0-549" name="__codelineno-0-549"></a><a href="#__codelineno-0-549"><span class="linenos" data-linenos="549 "></span></a>        <span class="n">coco_data</span><span class="p">[</span><span class="s2">&quot;images&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image_info</span><span class="p">)</span>
+<a id="__codelineno-0-550" name="__codelineno-0-550"></a><a href="#__codelineno-0-550"><span class="linenos" data-linenos="550 "></span></a>
+<a id="__codelineno-0-551" name="__codelineno-0-551"></a><a href="#__codelineno-0-551"><span class="linenos" data-linenos="551 "></span></a>        <span class="c1"># Process instances</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552"></a><a href="#__codelineno-0-552"><span class="linenos" data-linenos="552 "></span></a>        <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">labeled_frame</span><span class="o">.</span><span class="n">instances</span><span class="p">:</span>
+<a id="__codelineno-0-553" name="__codelineno-0-553"></a><a href="#__codelineno-0-553"><span class="linenos" data-linenos="553 "></span></a>            <span class="c1"># Get category ID</span>
+<a id="__codelineno-0-554" name="__codelineno-0-554"></a><a href="#__codelineno-0-554"><span class="linenos" data-linenos="554 "></span></a>            <span class="n">category_id</span> <span class="o">=</span> <span class="n">skeleton_to_category</span><span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">skeleton</span><span class="p">]</span>
+<a id="__codelineno-0-555" name="__codelineno-0-555"></a><a href="#__codelineno-0-555"><span class="linenos" data-linenos="555 "></span></a>
+<a id="__codelineno-0-556" name="__codelineno-0-556"></a><a href="#__codelineno-0-556"><span class="linenos" data-linenos="556 "></span></a>            <span class="c1"># Encode keypoints</span>
+<a id="__codelineno-0-557" name="__codelineno-0-557"></a><a href="#__codelineno-0-557"><span class="linenos" data-linenos="557 "></span></a>            <span class="n">points_array</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+<a id="__codelineno-0-558" name="__codelineno-0-558"></a><a href="#__codelineno-0-558"><span class="linenos" data-linenos="558 "></span></a>            <span class="n">keypoints</span> <span class="o">=</span> <span class="n">encode_keypoints</span><span class="p">(</span><span class="n">points_array</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="p">)</span>
+<a id="__codelineno-0-559" name="__codelineno-0-559"></a><a href="#__codelineno-0-559"><span class="linenos" data-linenos="559 "></span></a>
+<a id="__codelineno-0-560" name="__codelineno-0-560"></a><a href="#__codelineno-0-560"><span class="linenos" data-linenos="560 "></span></a>            <span class="c1"># Count visible keypoints</span>
+<a id="__codelineno-0-561" name="__codelineno-0-561"></a><a href="#__codelineno-0-561"><span class="linenos" data-linenos="561 "></span></a>            <span class="n">num_keypoints</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+<a id="__codelineno-0-562" name="__codelineno-0-562"></a><a href="#__codelineno-0-562"><span class="linenos" data-linenos="562 "></span></a>                <span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">keypoints</span><span class="p">),</span> <span class="mi">3</span><span class="p">)</span> <span class="k">if</span> <span class="n">keypoints</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span>
+<a id="__codelineno-0-563" name="__codelineno-0-563"></a><a href="#__codelineno-0-563"><span class="linenos" data-linenos="563 "></span></a>            <span class="p">)</span>
+<a id="__codelineno-0-564" name="__codelineno-0-564"></a><a href="#__codelineno-0-564"><span class="linenos" data-linenos="564 "></span></a>
+<a id="__codelineno-0-565" name="__codelineno-0-565"></a><a href="#__codelineno-0-565"><span class="linenos" data-linenos="565 "></span></a>            <span class="c1"># Compute bounding box from visible keypoints</span>
+<a id="__codelineno-0-566" name="__codelineno-0-566"></a><a href="#__codelineno-0-566"><span class="linenos" data-linenos="566 "></span></a>            <span class="c1"># mmpose requires bbox field for all annotations</span>
+<a id="__codelineno-0-567" name="__codelineno-0-567"></a><a href="#__codelineno-0-567"><span class="linenos" data-linenos="567 "></span></a>            <span class="n">visible_points</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-568" name="__codelineno-0-568"></a><a href="#__codelineno-0-568"><span class="linenos" data-linenos="568 "></span></a>            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">keypoints</span><span class="p">),</span> <span class="mi">3</span><span class="p">):</span>
+<a id="__codelineno-0-569" name="__codelineno-0-569"></a><a href="#__codelineno-0-569"><span class="linenos" data-linenos="569 "></span></a>                <span class="k">if</span> <span class="n">keypoints</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>  <span class="c1"># visible</span>
+<a id="__codelineno-0-570" name="__codelineno-0-570"></a><a href="#__codelineno-0-570"><span class="linenos" data-linenos="570 "></span></a>                    <span class="n">visible_points</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">keypoints</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">keypoints</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]])</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a><a href="#__codelineno-0-571"><span class="linenos" data-linenos="571 "></span></a>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a><a href="#__codelineno-0-572"><span class="linenos" data-linenos="572 "></span></a>            <span class="k">if</span> <span class="n">visible_points</span><span class="p">:</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a><a href="#__codelineno-0-573"><span class="linenos" data-linenos="573 "></span></a>                <span class="n">visible_points_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">visible_points</span><span class="p">)</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a><a href="#__codelineno-0-574"><span class="linenos" data-linenos="574 "></span></a>                <span class="n">x_min</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">visible_points_array</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]))</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a><a href="#__codelineno-0-575"><span class="linenos" data-linenos="575 "></span></a>                <span class="n">y_min</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">visible_points_array</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]))</span>
+<a id="__codelineno-0-576" name="__codelineno-0-576"></a><a href="#__codelineno-0-576"><span class="linenos" data-linenos="576 "></span></a>                <span class="n">x_max</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">visible_points_array</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]))</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a>                <span class="n">y_max</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">visible_points_array</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]))</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a>                <span class="c1"># Bbox in COCO format: [x, y, width, height]</span>
+<a id="__codelineno-0-580" name="__codelineno-0-580"></a><a href="#__codelineno-0-580"><span class="linenos" data-linenos="580 "></span></a>                <span class="n">bbox</span> <span class="o">=</span> <span class="p">[</span><span class="n">x_min</span><span class="p">,</span> <span class="n">y_min</span><span class="p">,</span> <span class="n">x_max</span> <span class="o">-</span> <span class="n">x_min</span><span class="p">,</span> <span class="n">y_max</span> <span class="o">-</span> <span class="n">y_min</span><span class="p">]</span>
+<a id="__codelineno-0-581" name="__codelineno-0-581"></a><a href="#__codelineno-0-581"><span class="linenos" data-linenos="581 "></span></a>                <span class="n">area</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_max</span> <span class="o">-</span> <span class="n">x_min</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_max</span> <span class="o">-</span> <span class="n">y_min</span><span class="p">)</span>
+<a id="__codelineno-0-582" name="__codelineno-0-582"></a><a href="#__codelineno-0-582"><span class="linenos" data-linenos="582 "></span></a>            <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a><a href="#__codelineno-0-583"><span class="linenos" data-linenos="583 "></span></a>                <span class="c1"># No visible keypoints - use zero bbox</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a><a href="#__codelineno-0-584"><span class="linenos" data-linenos="584 "></span></a>                <span class="n">bbox</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a><a href="#__codelineno-0-585"><span class="linenos" data-linenos="585 "></span></a>                <span class="n">area</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586"></a><a href="#__codelineno-0-586"><span class="linenos" data-linenos="586 "></span></a>
+<a id="__codelineno-0-587" name="__codelineno-0-587"></a><a href="#__codelineno-0-587"><span class="linenos" data-linenos="587 "></span></a>            <span class="c1"># Create annotation</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a><a href="#__codelineno-0-588"><span class="linenos" data-linenos="588 "></span></a>            <span class="n">annotation</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-589" name="__codelineno-0-589"></a><a href="#__codelineno-0-589"><span class="linenos" data-linenos="589 "></span></a>                <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">annotation_id_counter</span><span class="p">,</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a><a href="#__codelineno-0-590"><span class="linenos" data-linenos="590 "></span></a>                <span class="s2">&quot;image_id&quot;</span><span class="p">:</span> <span class="n">image_id_counter</span><span class="p">,</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591"></a><a href="#__codelineno-0-591"><span class="linenos" data-linenos="591 "></span></a>                <span class="s2">&quot;category_id&quot;</span><span class="p">:</span> <span class="n">category_id</span><span class="p">,</span>
+<a id="__codelineno-0-592" name="__codelineno-0-592"></a><a href="#__codelineno-0-592"><span class="linenos" data-linenos="592 "></span></a>                <span class="s2">&quot;keypoints&quot;</span><span class="p">:</span> <span class="n">keypoints</span><span class="p">,</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a><a href="#__codelineno-0-593"><span class="linenos" data-linenos="593 "></span></a>                <span class="s2">&quot;num_keypoints&quot;</span><span class="p">:</span> <span class="n">num_keypoints</span><span class="p">,</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a><a href="#__codelineno-0-594"><span class="linenos" data-linenos="594 "></span></a>                <span class="s2">&quot;bbox&quot;</span><span class="p">:</span> <span class="n">bbox</span><span class="p">,</span>
+<a id="__codelineno-0-595" name="__codelineno-0-595"></a><a href="#__codelineno-0-595"><span class="linenos" data-linenos="595 "></span></a>                <span class="s2">&quot;area&quot;</span><span class="p">:</span> <span class="n">area</span><span class="p">,</span>
+<a id="__codelineno-0-596" name="__codelineno-0-596"></a><a href="#__codelineno-0-596"><span class="linenos" data-linenos="596 "></span></a>                <span class="s2">&quot;iscrowd&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597"></a><a href="#__codelineno-0-597"><span class="linenos" data-linenos="597 "></span></a>            <span class="p">}</span>
+<a id="__codelineno-0-598" name="__codelineno-0-598"></a><a href="#__codelineno-0-598"><span class="linenos" data-linenos="598 "></span></a>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a><a href="#__codelineno-0-599"><span class="linenos" data-linenos="599 "></span></a>            <span class="c1"># Add track ID if present</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a>            <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">track</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a>                <span class="n">annotation</span><span class="p">[</span><span class="s2">&quot;attributes&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;object_id&quot;</span><span class="p">:</span> <span class="n">track_to_id</span><span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">track</span><span class="p">]}</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a>            <span class="n">coco_data</span><span class="p">[</span><span class="s2">&quot;annotations&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">annotation</span><span class="p">)</span>
+<a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a>            <span class="n">annotation_id_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a>
+<a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a>        <span class="n">image_id_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a><a href="#__codelineno-0-607"><span class="linenos" data-linenos="607 "></span></a>
+<a id="__codelineno-0-608" name="__codelineno-0-608"></a><a href="#__codelineno-0-608"><span class="linenos" data-linenos="608 "></span></a>    <span class="k">return</span> <span class="n">coco_data</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -1820,6 +2134,138 @@
 <a id="__codelineno-0-181" name="__codelineno-0-181"></a><a href="#__codelineno-0-181"><span class="linenos" data-linenos="181 "></span></a>            <span class="n">points</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="kc">True</span><span class="p">])</span>
 <a id="__codelineno-0-182" name="__codelineno-0-182"></a><a href="#__codelineno-0-182"><span class="linenos" data-linenos="182 "></span></a>
 <a id="__codelineno-0-183" name="__codelineno-0-183"></a><a href="#__codelineno-0-183"><span class="linenos" data-linenos="183 "></span></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="sleap_io.io.coco.encode_keypoints" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">encode_keypoints</span><span class="p">(</span><span class="n">points_array</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="o">=</span><span class="s1">&#39;ternary&#39;</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.coco.encode_keypoints" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Encode numpy array of points into COCO keypoint format.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>points_array</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Numpy array of shape (num_keypoints, 2) or (num_keypoints, 3)
+         with [x, y] or [x, y, visibility] values.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>visibility_encoding</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Visibility encoding to use. Either "binary" (0/1) or
+               "ternary" (0/&frac12;). Default is "ternary".</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;ternary&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.List">List</span>[<span title="float">float</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Flat list of [x1, y1, v1, x2, y2, v2, ...] values.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/coco.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-392" name="__codelineno-0-392"></a><a href="#__codelineno-0-392"><span class="linenos" data-linenos="392 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">encode_keypoints</span><span class="p">(</span>
+<a id="__codelineno-0-393" name="__codelineno-0-393"></a><a href="#__codelineno-0-393"><span class="linenos" data-linenos="393 "></span></a>    <span class="n">points_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ternary&quot;</span>
+<a id="__codelineno-0-394" name="__codelineno-0-394"></a><a href="#__codelineno-0-394"><span class="linenos" data-linenos="394 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]:</span>
+<a id="__codelineno-0-395" name="__codelineno-0-395"></a><a href="#__codelineno-0-395"><span class="linenos" data-linenos="395 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode numpy array of points into COCO keypoint format.</span>
+<a id="__codelineno-0-396" name="__codelineno-0-396"></a><a href="#__codelineno-0-396"><span class="linenos" data-linenos="396 "></span></a>
+<a id="__codelineno-0-397" name="__codelineno-0-397"></a><a href="#__codelineno-0-397"><span class="linenos" data-linenos="397 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-398" name="__codelineno-0-398"></a><a href="#__codelineno-0-398"><span class="linenos" data-linenos="398 "></span></a><span class="sd">        points_array: Numpy array of shape (num_keypoints, 2) or (num_keypoints, 3)</span>
+<a id="__codelineno-0-399" name="__codelineno-0-399"></a><a href="#__codelineno-0-399"><span class="linenos" data-linenos="399 "></span></a><span class="sd">                     with [x, y] or [x, y, visibility] values.</span>
+<a id="__codelineno-0-400" name="__codelineno-0-400"></a><a href="#__codelineno-0-400"><span class="linenos" data-linenos="400 "></span></a><span class="sd">        visibility_encoding: Visibility encoding to use. Either &quot;binary&quot; (0/1) or</span>
+<a id="__codelineno-0-401" name="__codelineno-0-401"></a><a href="#__codelineno-0-401"><span class="linenos" data-linenos="401 "></span></a><span class="sd">                           &quot;ternary&quot; (0/1/2). Default is &quot;ternary&quot;.</span>
+<a id="__codelineno-0-402" name="__codelineno-0-402"></a><a href="#__codelineno-0-402"><span class="linenos" data-linenos="402 "></span></a>
+<a id="__codelineno-0-403" name="__codelineno-0-403"></a><a href="#__codelineno-0-403"><span class="linenos" data-linenos="403 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a><a href="#__codelineno-0-404"><span class="linenos" data-linenos="404 "></span></a><span class="sd">        Flat list of [x1, y1, v1, x2, y2, v2, ...] values.</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a><a href="#__codelineno-0-405"><span class="linenos" data-linenos="405 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a><a href="#__codelineno-0-406"><span class="linenos" data-linenos="406 "></span></a>    <span class="n">keypoints</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a><a href="#__codelineno-0-407"><span class="linenos" data-linenos="407 "></span></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">points_array</span><span class="p">)):</span>
+<a id="__codelineno-0-408" name="__codelineno-0-408"></a><a href="#__codelineno-0-408"><span class="linenos" data-linenos="408 "></span></a>        <span class="k">if</span> <span class="n">points_array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+<a id="__codelineno-0-409" name="__codelineno-0-409"></a><a href="#__codelineno-0-409"><span class="linenos" data-linenos="409 "></span></a>            <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">points_array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-0-410" name="__codelineno-0-410"></a><a href="#__codelineno-0-410"><span class="linenos" data-linenos="410 "></span></a>            <span class="n">visible</span> <span class="o">=</span> <span class="ow">not</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="ow">or</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+<a id="__codelineno-0-411" name="__codelineno-0-411"></a><a href="#__codelineno-0-411"><span class="linenos" data-linenos="411 "></span></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-412" name="__codelineno-0-412"></a><a href="#__codelineno-0-412"><span class="linenos" data-linenos="412 "></span></a>            <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">points_array</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-413" name="__codelineno-0-413"></a><a href="#__codelineno-0-413"><span class="linenos" data-linenos="413 "></span></a>            <span class="n">visible</span> <span class="o">=</span> <span class="n">points_array</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="n">points_array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="k">else</span> <span class="kc">True</span>
+<a id="__codelineno-0-414" name="__codelineno-0-414"></a><a href="#__codelineno-0-414"><span class="linenos" data-linenos="414 "></span></a>
+<a id="__codelineno-0-415" name="__codelineno-0-415"></a><a href="#__codelineno-0-415"><span class="linenos" data-linenos="415 "></span></a>        <span class="c1"># Handle NaN coordinates</span>
+<a id="__codelineno-0-416" name="__codelineno-0-416"></a><a href="#__codelineno-0-416"><span class="linenos" data-linenos="416 "></span></a>        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="ow">or</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-0-417" name="__codelineno-0-417"></a><a href="#__codelineno-0-417"><span class="linenos" data-linenos="417 "></span></a>            <span class="n">keypoints</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>  <span class="c1"># Not labeled</span>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><a href="#__codelineno-0-418"><span class="linenos" data-linenos="418 "></span></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><a href="#__codelineno-0-419"><span class="linenos" data-linenos="419 "></span></a>            <span class="c1"># Encode visibility</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><a href="#__codelineno-0-420"><span class="linenos" data-linenos="420 "></span></a>            <span class="k">if</span> <span class="n">visibility_encoding</span> <span class="o">==</span> <span class="s2">&quot;binary&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><a href="#__codelineno-0-421"><span class="linenos" data-linenos="421 "></span></a>                <span class="c1"># Binary: 0 = not visible, 1 = visible</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><a href="#__codelineno-0-422"><span class="linenos" data-linenos="422 "></span></a>                <span class="n">visibility_value</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">visible</span> <span class="k">else</span> <span class="mi">0</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><a href="#__codelineno-0-423"><span class="linenos" data-linenos="423 "></span></a>            <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a><a href="#__codelineno-0-424"><span class="linenos" data-linenos="424 "></span></a>                <span class="c1"># Ternary: 0 = not labeled, 1 = labeled but occluded,</span>
+<a id="__codelineno-0-425" name="__codelineno-0-425"></a><a href="#__codelineno-0-425"><span class="linenos" data-linenos="425 "></span></a>                <span class="c1"># 2 = labeled and visible</span>
+<a id="__codelineno-0-426" name="__codelineno-0-426"></a><a href="#__codelineno-0-426"><span class="linenos" data-linenos="426 "></span></a>                <span class="n">visibility_value</span> <span class="o">=</span> <span class="mi">2</span> <span class="k">if</span> <span class="n">visible</span> <span class="k">else</span> <span class="mi">1</span>
+<a id="__codelineno-0-427" name="__codelineno-0-427"></a><a href="#__codelineno-0-427"><span class="linenos" data-linenos="427 "></span></a>            <span class="n">keypoints</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">y</span><span class="p">),</span> <span class="n">visibility_value</span><span class="p">])</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><a href="#__codelineno-0-428"><span class="linenos" data-linenos="428 "></span></a>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a><a href="#__codelineno-0-429"><span class="linenos" data-linenos="429 "></span></a>    <span class="k">return</span> <span class="n">keypoints</span>
 </code></pre></div>
             </details>
     </div>
@@ -2542,6 +2988,154 @@ or multiple annotation files.</p>
 <a id="__codelineno-0-129" name="__codelineno-0-129"></a><a href="#__codelineno-0-129"><span class="linenos" data-linenos="129 "></span></a>    <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span>
 <a id="__codelineno-0-130" name="__codelineno-0-130"></a><a href="#__codelineno-0-130"><span class="linenos" data-linenos="130 "></span></a>        <span class="sa">f</span><span class="s2">&quot;Image file not found: </span><span class="si">{</span><span class="n">image_filename</span><span class="si">}</span><span class="s2"> (searched in </span><span class="si">{</span><span class="n">dataset_root</span><span class="si">}</span><span class="s2">)&quot;</span>
 <a id="__codelineno-0-131" name="__codelineno-0-131"></a><a href="#__codelineno-0-131"><span class="linenos" data-linenos="131 "></span></a>    <span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="sleap_io.io.coco.write_labels" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">write_labels</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">json_path</span><span class="p">,</span> <span class="n">image_filenames</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="o">=</span><span class="s1">&#39;ternary&#39;</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.coco.write_labels" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Write Labels to COCO-style JSON annotation file.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>labels</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../../model/labels/#sleap_io.model.labels.Labels">Labels</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>SLEAP <code>Labels</code> object to save.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>json_path</code>
+            </td>
+            <td>
+                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib.Path">Path</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to save the COCO annotation JSON file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>image_filenames</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.List">List</span>[<span title="str">str</span>]]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional image filenames to use in the COCO JSON. If
+            provided, must be a single string (for single-frame videos) or
+            a list of strings matching the number of labeled frames. If
+            None, generates filenames from video filenames and frame
+            indices.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>visibility_encoding</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Visibility encoding to use. Either "binary" (0/1) or
+               "ternary" (0/&frac12;). Default is "ternary".</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;ternary&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <ul>
+<li>This function only writes the JSON annotation file. It does not save images.</li>
+<li>The generated JSON can be used with mmpose and other COCO-compatible tools.</li>
+<li>For complete datasets with images, consider using save_dataset() instead.</li>
+</ul>
+</details>
+
+            <details class="quote">
+              <summary>Source code in <code>sleap_io/io/coco.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-611" name="__codelineno-0-611"></a><a href="#__codelineno-0-611"><span class="linenos" data-linenos="611 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">write_labels</span><span class="p">(</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a><a href="#__codelineno-0-612"><span class="linenos" data-linenos="612 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a><a href="#__codelineno-0-613"><span class="linenos" data-linenos="613 "></span></a>    <span class="n">json_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a><a href="#__codelineno-0-614"><span class="linenos" data-linenos="614 "></span></a>    <span class="n">image_filenames</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a><a href="#__codelineno-0-615"><span class="linenos" data-linenos="615 "></span></a>    <span class="n">visibility_encoding</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ternary&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a><a href="#__codelineno-0-616"><span class="linenos" data-linenos="616 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a><a href="#__codelineno-0-617"><span class="linenos" data-linenos="617 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Write Labels to COCO-style JSON annotation file.</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a><a href="#__codelineno-0-618"><span class="linenos" data-linenos="618 "></span></a>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a><a href="#__codelineno-0-619"><span class="linenos" data-linenos="619 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620"></a><a href="#__codelineno-0-620"><span class="linenos" data-linenos="620 "></span></a><span class="sd">        labels: SLEAP `Labels` object to save.</span>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a><a href="#__codelineno-0-621"><span class="linenos" data-linenos="621 "></span></a><span class="sd">        json_path: Path to save the COCO annotation JSON file.</span>
+<a id="__codelineno-0-622" name="__codelineno-0-622"></a><a href="#__codelineno-0-622"><span class="linenos" data-linenos="622 "></span></a><span class="sd">        image_filenames: Optional image filenames to use in the COCO JSON. If</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a><a href="#__codelineno-0-623"><span class="linenos" data-linenos="623 "></span></a><span class="sd">                        provided, must be a single string (for single-frame videos) or</span>
+<a id="__codelineno-0-624" name="__codelineno-0-624"></a><a href="#__codelineno-0-624"><span class="linenos" data-linenos="624 "></span></a><span class="sd">                        a list of strings matching the number of labeled frames. If</span>
+<a id="__codelineno-0-625" name="__codelineno-0-625"></a><a href="#__codelineno-0-625"><span class="linenos" data-linenos="625 "></span></a><span class="sd">                        None, generates filenames from video filenames and frame</span>
+<a id="__codelineno-0-626" name="__codelineno-0-626"></a><a href="#__codelineno-0-626"><span class="linenos" data-linenos="626 "></span></a><span class="sd">                        indices.</span>
+<a id="__codelineno-0-627" name="__codelineno-0-627"></a><a href="#__codelineno-0-627"><span class="linenos" data-linenos="627 "></span></a><span class="sd">        visibility_encoding: Visibility encoding to use. Either &quot;binary&quot; (0/1) or</span>
+<a id="__codelineno-0-628" name="__codelineno-0-628"></a><a href="#__codelineno-0-628"><span class="linenos" data-linenos="628 "></span></a><span class="sd">                           &quot;ternary&quot; (0/1/2). Default is &quot;ternary&quot;.</span>
+<a id="__codelineno-0-629" name="__codelineno-0-629"></a><a href="#__codelineno-0-629"><span class="linenos" data-linenos="629 "></span></a>
+<a id="__codelineno-0-630" name="__codelineno-0-630"></a><a href="#__codelineno-0-630"><span class="linenos" data-linenos="630 "></span></a><span class="sd">    Notes:</span>
+<a id="__codelineno-0-631" name="__codelineno-0-631"></a><a href="#__codelineno-0-631"><span class="linenos" data-linenos="631 "></span></a><span class="sd">        - This function only writes the JSON annotation file. It does not save images.</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a><a href="#__codelineno-0-632"><span class="linenos" data-linenos="632 "></span></a><span class="sd">        - The generated JSON can be used with mmpose and other COCO-compatible tools.</span>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><a href="#__codelineno-0-633"><span class="linenos" data-linenos="633 "></span></a><span class="sd">        - For complete datasets with images, consider using save_dataset() instead.</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a><a href="#__codelineno-0-634"><span class="linenos" data-linenos="634 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><a href="#__codelineno-0-635"><span class="linenos" data-linenos="635 "></span></a>    <span class="n">json_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">json_path</span><span class="p">)</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><a href="#__codelineno-0-636"><span class="linenos" data-linenos="636 "></span></a>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a><a href="#__codelineno-0-637"><span class="linenos" data-linenos="637 "></span></a>    <span class="c1"># Convert labels to COCO format</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a><a href="#__codelineno-0-638"><span class="linenos" data-linenos="638 "></span></a>    <span class="n">coco_data</span> <span class="o">=</span> <span class="n">convert_labels</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">image_filenames</span><span class="p">,</span> <span class="n">visibility_encoding</span><span class="p">)</span>
+<a id="__codelineno-0-639" name="__codelineno-0-639"></a><a href="#__codelineno-0-639"><span class="linenos" data-linenos="639 "></span></a>
+<a id="__codelineno-0-640" name="__codelineno-0-640"></a><a href="#__codelineno-0-640"><span class="linenos" data-linenos="640 "></span></a>    <span class="c1"># Write to JSON file</span>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><a href="#__codelineno-0-641"><span class="linenos" data-linenos="641 "></span></a>    <span class="n">json_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a><a href="#__codelineno-0-642"><span class="linenos" data-linenos="642 "></span></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">json_path</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-0-643" name="__codelineno-0-643"></a><a href="#__codelineno-0-643"><span class="linenos" data-linenos="643 "></span></a>        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">coco_data</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
