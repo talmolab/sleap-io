@@ -180,9 +180,11 @@ Load predictions from [LEAP](https://github.com/talmo/leap), a SLEAP predecessor
 
 ### COCO Format (.json)
 
-Load annotations in [COCO](https://cocodataset.org/) (Common Objects in Context) format, widely used in computer vision.
+[COCO](https://cocodataset.org/) (Common Objects in Context) format is widely used in computer vision and pose estimation. sleap-io provides full read and write support, making it compatible with tools like [mmpose](https://github.com/open-mmlab/mmpose), [CVAT](https://www.cvat.ai/), and other COCO-compatible frameworks.
 
 ::: sleap_io.load_coco
+
+::: sleap_io.save_coco
 
 ### Ultralytics YOLO Format
 
@@ -277,10 +279,11 @@ Different formats have varying capabilities:
 | DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
 | AlphaTracker | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
 | LEAP (.mat) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| COCO | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ |
+| COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅** | ❌ | ✅ |
 | Ultralytics | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
 
 *NWB can embed videos with `annotations_export` format
+**COCO tracks are stored via `attributes.object_id` (CVAT-compatible)
 
 ## See Also
 
