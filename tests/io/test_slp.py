@@ -2562,23 +2562,30 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
     sparse_path = tmp_path / "sparse.slp"
     sparse_indices = [0, 15, 29, 47, 67]  # Sparse IDs mimicking old SLEAP
 
-    with h5py.File(embedded_path, 'r') as src:
-        with h5py.File(sparse_path, 'w') as dst:
+    with h5py.File(embedded_path, "r") as src:
+        with h5py.File(sparse_path, "w") as dst:
             # Copy non-video groups/datasets
-            for key in ['metadata', 'points', 'pred_points', 'instances',
-                       'tracks_json', 'suggestions_json', 'sessions_json']:
+            for key in [
+                "metadata",
+                "points",
+                "pred_points",
+                "instances",
+                "tracks_json",
+                "suggestions_json",
+                "sessions_json",
+            ]:
                 if key in src:
                     src.copy(key, dst)
 
             # Copy and rename video groups with sparse indices
             for i in range(5):
-                old_name = f'video{i}'
-                new_name = f'video{sparse_indices[i]}'
+                old_name = f"video{i}"
+                new_name = f"video{sparse_indices[i]}"
                 if old_name in src:
                     src.copy(old_name, dst, name=new_name)
 
             # Update frames dataset to use sparse video IDs
-            frames = src['frames'][:]
+            frames = src["frames"][:]
             new_frames = []
             for frame in frames:
                 frame_id, video_id, frame_idx, inst_start, inst_end = frame
@@ -2587,35 +2594,33 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
                     (frame_id, new_video_id, frame_idx, inst_start, inst_end)
                 )
 
-            dst.create_dataset('frames', data=np.array(new_frames, dtype=frames.dtype))
+            dst.create_dataset("frames", data=np.array(new_frames, dtype=frames.dtype))
 
             # Update videos_json to reference sparse dataset names
-            videos_json = src['videos_json'][:]
+            videos_json = src["videos_json"][:]
             new_videos_json = []
             for i, vj_bytes in enumerate(videos_json):
-                vj = json.loads(vj_bytes.decode('utf-8'))
+                vj = json.loads(vj_bytes.decode("utf-8"))
                 # Update dataset reference to sparse index
-                if 'backend' in vj and 'dataset' in vj['backend']:
-                    vj['backend']['dataset'] = f'video{sparse_indices[i]}/video'
-                new_videos_json.append(
-                    np.bytes_(json.dumps(vj, separators=(',', ':')))
-                )
+                if "backend" in vj and "dataset" in vj["backend"]:
+                    vj["backend"]["dataset"] = f"video{sparse_indices[i]}/video"
+                new_videos_json.append(np.bytes_(json.dumps(vj, separators=(",", ":"))))
 
-            dst.create_dataset('videos_json', data=new_videos_json, maxshape=(None,))
+            dst.create_dataset("videos_json", data=new_videos_json, maxshape=(None,))
 
     # Step 4: Verify the sparse structure was created correctly
-    with h5py.File(sparse_path, 'r') as f:
+    with h5py.File(sparse_path, "r") as f:
         video_groups = [
-            k for k in f.keys() if k.startswith('video') and k[5:].isdigit()
+            k for k in f.keys() if k.startswith("video") and k[5:].isdigit()
         ]
-        video_ids = sorted([int(vg.replace('video', '')) for vg in video_groups])
+        video_ids = sorted([int(vg.replace("video", "")) for vg in video_groups])
         assert video_ids == sparse_indices, "Video groups should have sparse indices"
 
-        frames_data = f['frames'][:]
-        unique_video_ids = sorted(np.unique(frames_data['video']))
-        assert (
-            unique_video_ids == sparse_indices
-        ), "Frames should reference sparse video IDs"
+        frames_data = f["frames"][:]
+        unique_video_ids = sorted(np.unique(frames_data["video"]))
+        assert unique_video_ids == sparse_indices, (
+            "Frames should reference sparse video IDs"
+        )
 
     # Step 5: Attempt to load - will fail with IndexError before fix
     # After fix, this should work correctly
