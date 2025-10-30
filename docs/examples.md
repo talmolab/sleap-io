@@ -120,7 +120,7 @@ labels.save("predictions.nwb")
 ```
 
 !!! tip
-    sleap-io automatically detects the format from the file extension. Supported formats include `.slp`, `.nwb`, `.labelstudio.json`, `.h5` (JABS), and `.mat` (LEAP).
+    sleap-io automatically detects the format from the file extension. Supported formats include `.slp`, `.nwb`, `.json` (COCO/Label Studio), `.labelstudio.json`, `.h5` (JABS), and `.mat` (LEAP). Use `format="coco"` to explicitly save as COCO format.
 
 !!! note "See also"
     - [`Labels.save`](model.md#sleap_io.Labels.save): Save method with format options
@@ -310,6 +310,54 @@ labels_set.save("yolo_dataset/", format="ultralytics")
 !!! note "See also"
     - [`LabelsSet`](model.md#sleap_io.LabelsSet): LabelsSet class documentation
     - [`load_labels_set`](formats.md#sleap_io.load_labels_set): Loading function for label sets
+
+### Export to COCO format
+
+Export your dataset for use with mmpose, CVAT, and other COCO-compatible tools.
+
+```python title="coco_export.py" linenums="1"
+import sleap_io as sio
+
+# Load source labels
+labels = sio.load_file("labels.slp")
+
+# Export to COCO format
+sio.save_coco(labels, "annotations.json")
+
+# Or use save_file with auto-detection from .json extension
+labels.save("annotations.json", format="coco")
+
+# Customize export with options
+sio.save_coco(
+    labels,
+    "annotations_binary.json",
+    visibility_encoding="binary",  # Use binary (0/1) instead of ternary (0/1/2)
+    image_filenames=["frame_001.jpg", "frame_002.jpg", ...]  # Custom filenames
+)
+```
+
+!!! info "mmpose compatibility"
+    The COCO export is fully compatible with [mmpose](https://github.com/open-mmlab/mmpose) and includes:
+
+    - Required `bbox` field computed from visible keypoints
+    - `area` field for bounding box area
+    - `iscrowd` field for standard compliance
+    - Track IDs via `attributes.object_id` (CVAT-compatible)
+    - 1-based skeleton edge indexing
+    - Support for both binary (0/1) and ternary (0/1/2) visibility encodings
+
+!!! tip "Use cases"
+    COCO export is ideal for:
+
+    - Training pose estimation models with mmpose
+    - Annotating data in CVAT and importing to SLEAP
+    - Sharing datasets with the broader computer vision community
+    - Integration with COCO-compatible evaluation tools
+
+!!! note "See also"
+    - [`save_coco`](formats.md#sleap_io.save_coco): Full COCO export documentation
+    - [`load_coco`](formats.md#sleap_io.load_coco): COCO import documentation
+    - [COCO Format](formats.md#coco-format-json): COCO format details
 
 ## Editing labels data
 

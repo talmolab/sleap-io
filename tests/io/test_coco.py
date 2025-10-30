@@ -1107,3 +1107,470 @@ class TestShapeBasedMerging:
         result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
         assert result.successful
         assert len(labels1.videos) == 2  # Videos kept separate
+
+
+class TestCOCOExport:
+    """Test COCO export functionality."""
+
+    def test_encode_keypoints_ternary(self):
+        """Test encoding keypoints with ternary visibility."""
+        # Create test data with visible and NaN points
+        points_array = np.array(
+            [
+                [100.0, 200.0, True],
+                [150.0, 250.0, True],
+                [np.nan, np.nan, False],
+                [300.0, 400.0, False],
+            ],
+            dtype=np.float32,
+        )
+
+        keypoints = coco.encode_keypoints(points_array, visibility_encoding="ternary")
+
+        # Should have 12 values (4 keypoints * 3 values each)
+        assert len(keypoints) == 12
+
+        # Check first keypoint (visible)
+        assert keypoints[0] == 100.0
+        assert keypoints[1] == 200.0
+        assert keypoints[2] == 2  # Visible in ternary
+
+        # Check third keypoint (NaN - not labeled)
+        assert keypoints[6] == 0.0
+        assert keypoints[7] == 0.0
+        assert keypoints[8] == 0  # Not labeled
+
+        # Check fourth keypoint (not visible)
+        assert keypoints[9] == 300.0
+        assert keypoints[10] == 400.0
+        assert keypoints[11] == 1  # Labeled but occluded in ternary
+
+    def test_encode_keypoints_binary(self):
+        """Test encoding keypoints with binary visibility."""
+        points_array = np.array(
+            [
+                [100.0, 200.0, True],
+                [np.nan, np.nan, False],
+            ],
+            dtype=np.float32,
+        )
+
+        keypoints = coco.encode_keypoints(points_array, visibility_encoding="binary")
+
+        assert len(keypoints) == 6
+
+        # Check first keypoint (visible)
+        assert keypoints[2] == 1  # Visible in binary
+
+        # Check second keypoint (NaN)
+        assert keypoints[5] == 0  # Not visible in binary
+
+    def test_convert_labels_basic(self, coco_flat_images):
+        """Test basic conversion of Labels to COCO format."""
+        # Load existing COCO dataset
+        labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+
+        # Convert back to COCO format
+        coco_data = coco.convert_labels(labels)
+
+        # Check structure
+        assert "images" in coco_data
+        assert "annotations" in coco_data
+        assert "categories" in coco_data
+
+        # Check counts
+        assert len(coco_data["images"]) == len(labels.labeled_frames)
+        total_instances = sum(len(frame.instances) for frame in labels.labeled_frames)
+        assert len(coco_data["annotations"]) == total_instances
+        assert len(coco_data["categories"]) == len(labels.skeletons)
+
+    def test_convert_labels_with_tracks(self, tmp_path):
+        """Test conversion of Labels with tracking information."""
+        # Create simple labels with tracks
+        skeleton = sio.Skeleton(
+            nodes=["node1", "node2"], edges=[("node1", "node2")], name="test_skeleton"
+        )
+
+        video = sio.Video.from_filename(["img1.png", "img2.png"])
+        track1 = sio.Track(name="track_1")
+        track2 = sio.Track(name="track_2")
+
+        # Create instances with tracks
+        instance1 = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0], [30.0, 40.0]]),
+            skeleton=skeleton,
+            track=track1,
+        )
+        instance2 = sio.Instance.from_numpy(
+            points_data=np.array([[50.0, 60.0], [70.0, 80.0]]),
+            skeleton=skeleton,
+            track=track2,
+        )
+
+        frame1 = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance1])
+        frame2 = sio.LabeledFrame(video=video, frame_idx=1, instances=[instance2])
+
+        labels = sio.Labels(labeled_frames=[frame1, frame2])
+
+        # Convert to COCO
+        coco_data = coco.convert_labels(labels)
+
+        # Check track IDs are present
+        assert len(coco_data["annotations"]) == 2
+        assert "attributes" in coco_data["annotations"][0]
+        assert "object_id" in coco_data["annotations"][0]["attributes"]
+        assert "attributes" in coco_data["annotations"][1]
+        assert "object_id" in coco_data["annotations"][1]["attributes"]
+
+        # Track IDs should be different
+        track_id1 = coco_data["annotations"][0]["attributes"]["object_id"]
+        track_id2 = coco_data["annotations"][1]["attributes"]["object_id"]
+        assert track_id1 != track_id2
+
+    def test_convert_labels_skeleton_edges(self, tmp_path):
+        """Test that skeleton edges are correctly converted to 1-based indexing."""
+        skeleton = sio.Skeleton(
+            nodes=["a", "b", "c"], edges=[("a", "b"), ("b", "c")], name="test"
+        )
+
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+            skeleton=skeleton,
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Check skeleton edges are 1-based
+        category = coco_data["categories"][0]
+        assert category["skeleton"] == [[1, 2], [2, 3]]  # 1-based indexing
+
+    def test_write_labels_basic(self, coco_flat_images, tmp_path):
+        """Test writing Labels to COCO JSON file."""
+        # Load existing COCO dataset
+        labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+
+        # Write to new file
+        output_path = tmp_path / "output_annotations.json"
+        coco.write_labels(labels, output_path)
+
+        # Check file was created
+        assert output_path.exists()
+
+        # Load and validate
+        with open(output_path, "r") as f:
+            data = json.load(f)
+
+        assert "images" in data
+        assert "annotations" in data
+        assert "categories" in data
+        assert len(data["images"]) > 0
+        assert len(data["annotations"]) > 0
+        assert len(data["categories"]) > 0
+
+    def test_write_labels_custom_filenames(self, tmp_path):
+        """Test writing with custom image filenames."""
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img1.png", "img2.png"])
+
+        instance1 = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0], [30.0, 40.0]]), skeleton=skeleton
+        )
+        instance2 = sio.Instance.from_numpy(
+            points_data=np.array([[50.0, 60.0], [70.0, 80.0]]), skeleton=skeleton
+        )
+
+        frame1 = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance1])
+        frame2 = sio.LabeledFrame(video=video, frame_idx=1, instances=[instance2])
+
+        labels = sio.Labels(labeled_frames=[frame1, frame2])
+
+        # Write with custom filenames
+        output_path = tmp_path / "custom_annotations.json"
+        custom_filenames = ["custom_img1.jpg", "custom_img2.jpg"]
+        coco.write_labels(labels, output_path, image_filenames=custom_filenames)
+
+        # Load and verify filenames
+        with open(output_path, "r") as f:
+            data = json.load(f)
+
+        assert data["images"][0]["file_name"] == "custom_img1.jpg"
+        assert data["images"][1]["file_name"] == "custom_img2.jpg"
+
+    def test_write_labels_binary_visibility(self, tmp_path):
+        """Test writing with binary visibility encoding."""
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0], [np.nan, np.nan]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        # Write with binary visibility
+        output_path = tmp_path / "binary_annotations.json"
+        coco.write_labels(labels, output_path, visibility_encoding="binary")
+
+        # Load and check visibility values
+        with open(output_path, "r") as f:
+            data = json.load(f)
+
+        keypoints = data["annotations"][0]["keypoints"]
+        # First point visible: should be 1 in binary
+        assert keypoints[2] == 1
+        # Second point not visible: should be 0 in binary
+        assert keypoints[5] == 0
+
+    def test_roundtrip_conversion(self, coco_flat_images, tmp_path):
+        """Test that data survives a roundtrip conversion."""
+        # Load original
+        original_labels = coco.read_labels(Path(coco_flat_images) / "annotations.json")
+
+        # Write to new file
+        output_path = tmp_path / "roundtrip_annotations.json"
+        coco.write_labels(original_labels, output_path)
+
+        # Load again
+        reloaded_labels = coco.read_labels(output_path, dataset_root=coco_flat_images)
+
+        # Check basic structure is preserved
+        assert len(reloaded_labels.labeled_frames) == len(
+            original_labels.labeled_frames
+        )
+        assert len(reloaded_labels.skeletons) == len(original_labels.skeletons)
+
+        # Check skeleton nodes match
+        assert len(reloaded_labels.skeletons[0].nodes) == len(
+            original_labels.skeletons[0].nodes
+        )
+
+    def test_save_coco_via_main_api(self, coco_flat_images, tmp_path):
+        """Test saving via the main sio.save_coco API."""
+        labels = sio.load_coco(Path(coco_flat_images) / "annotations.json")
+
+        output_path = tmp_path / "api_output.json"
+        sio.save_coco(labels, str(output_path))
+
+        assert output_path.exists()
+
+        # Verify it's valid COCO format
+        with open(output_path, "r") as f:
+            data = json.load(f)
+
+        assert "images" in data
+        assert "annotations" in data
+        assert "categories" in data
+
+    def test_save_file_coco_format(self, coco_flat_images, tmp_path):
+        """Test saving via sio.save_file with format='coco'."""
+        labels = sio.load_coco(Path(coco_flat_images) / "annotations.json")
+
+        output_path = tmp_path / "save_file_output.json"
+        sio.save_file(labels, output_path, format="coco")
+
+        assert output_path.exists()
+
+        # Verify it's valid COCO format
+        reloaded = sio.load_file(
+            output_path, format="coco", dataset_root=coco_flat_images
+        )
+        assert len(reloaded.labeled_frames) == len(labels.labeled_frames)
+
+    def test_export_includes_bbox_field(self, tmp_path):
+        """Test that exported COCO annotations include required bbox field."""
+        # Create simple labels with two visible keypoints
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0], [50.0, 60.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        # Export to COCO
+        coco_data = coco.convert_labels(labels)
+
+        # Verify bbox is present
+        assert "bbox" in coco_data["annotations"][0]
+
+        # Verify bbox is correct (should encompass keypoints)
+        bbox = coco_data["annotations"][0]["bbox"]
+        assert len(bbox) == 4
+        assert bbox[0] == 10.0  # x_min
+        assert bbox[1] == 20.0  # y_min
+        assert bbox[2] == 40.0  # width (50 - 10)
+        assert bbox[3] == 40.0  # height (60 - 20)
+
+    def test_export_includes_area_field(self, tmp_path):
+        """Test that exported COCO annotations include area field."""
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0], [50.0, 60.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Verify area is present and correct
+        assert "area" in coco_data["annotations"][0]
+        assert coco_data["annotations"][0]["area"] == 1600.0  # 40 * 40
+
+    def test_export_includes_iscrowd_field(self, tmp_path):
+        """Test that exported COCO annotations include iscrowd field."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Verify iscrowd is present and set to 0
+        assert "iscrowd" in coco_data["annotations"][0]
+        assert coco_data["annotations"][0]["iscrowd"] == 0
+
+    def test_export_bbox_with_nan_points(self, tmp_path):
+        """Test bbox computation excludes NaN keypoints."""
+        skeleton = sio.Skeleton(nodes=["a", "b", "c"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array(
+                [
+                    [10.0, 20.0],  # visible
+                    [np.nan, np.nan],  # not labeled
+                    [50.0, 60.0],  # visible
+                ]
+            ),
+            skeleton=skeleton,
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Bbox should only include visible points
+        bbox = coco_data["annotations"][0]["bbox"]
+        assert bbox[0] == 10.0  # x_min (from first point)
+        assert bbox[1] == 20.0  # y_min (from first point)
+        assert bbox[2] == 40.0  # width (50 - 10)
+        assert bbox[3] == 40.0  # height (60 - 20)
+
+    def test_export_bbox_all_nan_points(self, tmp_path):
+        """Test bbox computation with all NaN keypoints (edge case)."""
+        skeleton = sio.Skeleton(nodes=["a", "b"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array(
+                [
+                    [np.nan, np.nan],
+                    [np.nan, np.nan],
+                ]
+            ),
+            skeleton=skeleton,
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Should have zero bbox when all keypoints are NaN
+        bbox = coco_data["annotations"][0]["bbox"]
+        assert bbox == [0.0, 0.0, 0.0, 0.0]
+        assert coco_data["annotations"][0]["area"] == 0.0
+        assert coco_data["annotations"][0]["num_keypoints"] == 0
+
+    def test_export_single_string_filename(self, tmp_path):
+        """Test that single string image_filenames is converted to list."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        # Pass single string instead of list
+        coco_data = coco.convert_labels(labels, image_filenames="single_image.jpg")
+
+        # Should work and use the provided filename
+        assert len(coco_data["images"]) == 1
+        assert coco_data["images"][0]["file_name"] == "single_image.jpg"
+
+    def test_export_filename_count_mismatch(self, tmp_path):
+        """Test error when image_filenames count doesn't match frames."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img1.png", "img2.png"])
+
+        instance1 = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        instance2 = sio.Instance.from_numpy(
+            points_data=np.array([[30.0, 40.0]]), skeleton=skeleton
+        )
+
+        frame1 = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance1])
+        frame2 = sio.LabeledFrame(video=video, frame_idx=1, instances=[instance2])
+        labels = sio.Labels(labeled_frames=[frame1, frame2])
+
+        # Provide wrong number of filenames (1 instead of 2)
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Number of image filenames \\(1\\) must match "
+                "number of labeled frames \\(2\\)"
+            ),
+        ):
+            coco.convert_labels(labels, image_filenames=["only_one.jpg"])
+
+    def test_export_video_file_filename_generation(self, tmp_path):
+        """Test filename generation for video files (not image sequences)."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        # Use a video file path (string) instead of image sequence (list)
+        video = sio.Video.from_filename("test_video.mp4")
+
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=5, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        coco_data = coco.convert_labels(labels)
+
+        # Should generate filename from video name + frame index
+        assert len(coco_data["images"]) == 1
+        assert coco_data["images"][0]["file_name"] == "test_video_frame_000005.png"
+
+    def test_save_file_coco_autodetect_from_kwargs(self, tmp_path):
+        """Test that save_file auto-detects COCO format from kwargs."""
+        skeleton = sio.Skeleton(nodes=["a"], name="test")
+        video = sio.Video.from_filename(["img.png"])
+        instance = sio.Instance.from_numpy(
+            points_data=np.array([[10.0, 20.0]]), skeleton=skeleton
+        )
+        frame = sio.LabeledFrame(video=video, frame_idx=0, instances=[instance])
+        labels = sio.Labels(labeled_frames=[frame])
+
+        output_path = tmp_path / "output.json"
+
+        # Save without explicit format, but with COCO-specific kwarg
+        # This should auto-detect COCO format from visibility_encoding parameter
+        sio.save_file(labels, output_path, visibility_encoding="binary")
+
+        # Verify it saved as COCO format
+        assert output_path.exists()
+        with open(output_path, "r") as f:
+            data = json.load(f)
+
+        assert "images" in data
+        assert "annotations" in data
+        assert "categories" in data
+
+        # Verify binary visibility encoding was used (1 instead of 2)
+        assert data["annotations"][0]["keypoints"][2] == 1  # Binary visible

@@ -104,6 +104,7 @@ ignore-words-list = 'THW,HWT,THWC,CHWT'
 
 [tool.coverage.run]
 branch = true
+relative_files = true
 parallel = true
 concurrency = ["multiprocessing", "thread"]
 source = ["sleap_io"]
