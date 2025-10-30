@@ -2515,3 +2515,131 @@ def test_embed_backwards_compatibility_channel_order(tmp_path, small_robot_video
     frame = loaded_video[0]
     assert frame is not None
     assert frame.shape[-1] == 3  # RGB image
+
+
+def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
+    """Test loading .slp files with sparse video indices from old SLEAP.
+
+    Old SLEAP versions (format_id < 2.0) could create files where video IDs
+    in the frames dataset were sparse (e.g., 0, 15, 29, 47, ...) rather than
+    sequential (0, 1, 2, 3, ...). This occurred when videos were deleted or
+    when subsets were exported while preserving original video IDs.
+
+    This test creates a synthetic file with sparse video indices and verifies
+    that sleap-io can load it correctly by building a video_id → list_index
+    mapping from backend.dataset metadata.
+
+    Args:
+        tmp_path: Pytest temporary directory fixture.
+        small_robot_video: Small 3-frame video fixture.
+    """
+    # Step 1: Create Labels with 5 videos (reusing same video file for simplicity)
+    skeleton = Skeleton(nodes=["node1", "node2"])
+    videos = []
+    labeled_frames = []
+
+    for i in range(5):
+        # Create separate Video objects (same file, different objects)
+        video = Video.from_filename(small_robot_video.filename)
+        videos.append(video)
+
+        # Add 2 labeled frames per video (frame 0 and frame 1)
+        for frame_idx in [0, 1]:
+            instance = Instance(
+                points=np.array([[10.0 + i, 20.0], [30.0, 40.0 + i]]),
+                skeleton=skeleton,
+            )
+            lf = LabeledFrame(video=video, frame_idx=frame_idx, instances=[instance])
+            labeled_frames.append(lf)
+
+    labels = Labels(videos=videos, skeletons=[skeleton], labeled_frames=labeled_frames)
+
+    # Step 2: Save with embedded frames (creates video0, video1, ..., video4 groups)
+    embedded_path = tmp_path / "embedded.slp"
+    save_slp(labels, str(embedded_path), embed="all")
+
+    # Step 3: Create sparse version with renamed video groups
+    sparse_path = tmp_path / "sparse.slp"
+    sparse_indices = [0, 15, 29, 47, 67]  # Sparse IDs mimicking old SLEAP
+
+    with h5py.File(embedded_path, "r") as src:
+        with h5py.File(sparse_path, "w") as dst:
+            # Copy non-video groups/datasets
+            for key in [
+                "metadata",
+                "points",
+                "pred_points",
+                "instances",
+                "tracks_json",
+                "suggestions_json",
+                "sessions_json",
+            ]:
+                if key in src:
+                    src.copy(key, dst)
+
+            # Copy and rename video groups with sparse indices
+            for i in range(5):
+                old_name = f"video{i}"
+                new_name = f"video{sparse_indices[i]}"
+                if old_name in src:
+                    src.copy(old_name, dst, name=new_name)
+
+            # Update frames dataset to use sparse video IDs
+            frames = src["frames"][:]
+            new_frames = []
+            for frame in frames:
+                frame_id, video_id, frame_idx, inst_start, inst_end = frame
+                new_video_id = sparse_indices[video_id]
+                new_frames.append(
+                    (frame_id, new_video_id, frame_idx, inst_start, inst_end)
+                )
+
+            dst.create_dataset("frames", data=np.array(new_frames, dtype=frames.dtype))
+
+            # Update videos_json to reference sparse dataset names
+            videos_json = src["videos_json"][:]
+            new_videos_json = []
+            for i, vj_bytes in enumerate(videos_json):
+                vj = json.loads(vj_bytes.decode("utf-8"))
+                # Update dataset reference to sparse index
+                if "backend" in vj and "dataset" in vj["backend"]:
+                    vj["backend"]["dataset"] = f"video{sparse_indices[i]}/video"
+                new_videos_json.append(np.bytes_(json.dumps(vj, separators=(",", ":"))))
+
+            dst.create_dataset("videos_json", data=new_videos_json, maxshape=(None,))
+
+    # Step 4: Verify the sparse structure was created correctly
+    with h5py.File(sparse_path, "r") as f:
+        video_groups = [
+            k for k in f.keys() if k.startswith("video") and k[5:].isdigit()
+        ]
+        video_ids = sorted([int(vg.replace("video", "")) for vg in video_groups])
+        assert video_ids == sparse_indices, "Video groups should have sparse indices"
+
+        frames_data = f["frames"][:]
+        unique_video_ids = sorted(np.unique(frames_data["video"]))
+        assert unique_video_ids == sparse_indices, (
+            "Frames should reference sparse video IDs"
+        )
+
+    # Step 5: Attempt to load - will fail with IndexError before fix
+    # After fix, this should work correctly
+    loaded_labels = load_slp(str(sparse_path))
+
+    # Step 6: Verify correct loading
+    assert len(loaded_labels.videos) == 5, "Should load 5 videos"
+    assert len(loaded_labels) == 10, "Should load 10 frames (5 videos × 2 frames)"
+
+    # Verify each video has exactly 2 frames
+    for i, video in enumerate(loaded_labels.videos):
+        frames_for_video = [lf for lf in loaded_labels if lf.video == video]
+        assert len(frames_for_video) == 2, f"Video {i} should have 2 frames"
+
+        # Verify frame instances are correct
+        for lf in frames_for_video:
+            assert len(lf.instances) == 1, "Each frame should have 1 instance"
+            # Check skeleton has same structure (node names)
+            assert len(lf.instances[0].skeleton.nodes) == len(skeleton.nodes)
+            assert [n.name for n in lf.instances[0].skeleton.nodes] == [
+                n.name for n in skeleton.nodes
+            ]
