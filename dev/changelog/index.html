@@ -336,6 +336,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v057" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.7
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v056" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.6
@@ -591,15 +600,6 @@
   <a href="#v008" class="md-nav__link">
     <span class="md-ellipsis">
       v0.0.8
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v007" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.7
     </span>
   </a>
   
@@ -1688,6 +1688,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v057" class="md-nav__link">
+    <span class="md-ellipsis">
+      v0.5.7
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v056" class="md-nav__link">
     <span class="md-ellipsis">
       v0.5.6
@@ -1948,15 +1957,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v007" class="md-nav__link">
-    <span class="md-ellipsis">
-      v0.0.7
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1974,6 +1974,268 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v057"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.7">v0.5.7</a><a class="headerlink" href="#v057" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.5.7</h1>
+<h2>🎯 Summary</h2>
+<p>This release delivers major format compatibility improvements, critical video matching fixes, and enhanced developer tooling. The v0.5.7 release adds <strong>COCO format export</strong> for seamless integration with mmpose and other COCO-compatible tools, fixes critical video matching bugs that affected multi-video projects, resolves path expansion issues in video existence checking, and modernizes coverage testing to match Codecov's branch detection capabilities.</p>
+<h2>✨ New Features</h2>
+<h3>Add COCO Format Export Functionality (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3541874448" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/260" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/260/hovercard" href="https://github.com/talmolab/sleap-io/pull/260">#260</a>)</h3>
+<p>Implemented comprehensive COCO format export capabilities, enabling seamless integration with mmpose, CVAT, and other COCO-compatible pose estimation tools.</p>
+<p><strong>Key Features:</strong></p>
+<p><strong>Export Functions:</strong></p>
+<ul>
+<li><code>encode_keypoints()</code>: Convert numpy points to COCO keypoint format</li>
+<li><code>convert_labels()</code>: Transform Labels to COCO JSON structure</li>
+<li><code>write_labels()</code>: Save COCO JSON annotation files</li>
+<li><code>save_coco()</code>: Main API function for easy access</li>
+<li><code>save_file()</code>: Updated to auto-detect and handle COCO format</li>
+</ul>
+<p><strong>COCO Standard Compliance:</strong></p>
+<ul>
+<li><strong>Bounding boxes</strong>: Automatically computed from visible keypoints in <code>[x, y, width, height]</code> format</li>
+<li><strong>Area field</strong>: Computed from bounding box dimensions</li>
+<li><strong>iscrowd field</strong>: Set to 0 for all annotations (standard requirement)</li>
+<li><strong>Keypoints</strong>: Flat list format <code>[x1, y1, v1, x2, y2, v2, ...]</code></li>
+<li><strong>Skeleton edges</strong>: 1-based indexing as per COCO spec</li>
+<li><strong>Visibility encoding</strong>: Support for both binary (0/1) and ternary (0/1/2)</li>
+</ul>
+<p><strong>Advanced Features:</strong></p>
+<ul>
+<li>Multiple skeletons/categories support</li>
+<li>Tracking via <code>attributes.object_id</code> (CVAT-compatible)</li>
+<li>Custom image filename generation</li>
+<li>NaN coordinate handling for unlabeled keypoints</li>
+<li>Roundtrip conversion (read → write → read)</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Load SLEAP labels
+labels = sio.load_slp(&quot;annotations.slp&quot;)
+
+# Export to COCO format
+sio.save_coco(labels, &quot;annotations.json&quot;)
+
+# Or use save_file with auto-detection
+sio.save_file(labels, &quot;annotations.json&quot;)  # Auto-detects COCO from .json extension
+
+# COCO files are now compatible with mmpose, CVAT, and other tools"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Load SLEAP labels</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"annotations.slp"</span>)
+
+<span class="pl-c"># Export to COCO format</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_coco</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"annotations.json"</span>)
+
+<span class="pl-c"># Or use save_file with auto-detection</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_file</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"annotations.json"</span>)  <span class="pl-c"># Auto-detects COCO from .json extension</span>
+
+<span class="pl-c"># COCO files are now compatible with mmpose, CVAT, and other tools</span></pre></div>
+<p><strong>mmpose Compatibility:</strong></p>
+<p>This implementation was validated against mmpose's <code>BaseCocoStyleDataset</code> and <code>AP10KDataset</code> to ensure full compatibility:</p>
+<p>✅ <strong>Required fields</strong>: All mmpose-required fields present (<code>bbox</code>, <code>keypoints</code>, <code>area</code>, <code>iscrowd</code>)<br>
+✅ <strong>Bbox format</strong>: Correct COCO format <code>[x, y, width, height]</code> computed from visible keypoints<br>
+✅ <strong>Skeleton indexing</strong>: 1-based edge indices as expected<br>
+✅ <strong>Validation</strong>: Handles edge cases (zero keypoints, all NaN points)<br>
+✅ <strong>Tested</strong>: Comprehensive test suite with 55 tests including mmpose-specific scenarios</p>
+<p><strong>Testing:</strong></p>
+<ul>
+<li>55 total tests in <code>tests/io/test_coco.py</code></li>
+<li>New tests for bbox, area, and iscrowd fields</li>
+<li>Edge case testing (NaN points, zero keypoints)</li>
+<li>Roundtrip conversion verification</li>
+<li>Integration tests via main API</li>
+<li>All tests pass with no regressions in the full test suite (415 I/O tests)</li>
+</ul>
+<p><strong>Files Modified:</strong></p>
+<ul>
+<li><code>sleap_io/io/coco.py</code>: Complete COCO export implementation (+808 lines)</li>
+<li><code>sleap_io/io/main.py</code>: Integrate COCO export into save_file()</li>
+<li><code>sleap_io/__init__.py</code>: Export save_coco function</li>
+<li><code>tests/io/test_coco.py</code>: Comprehensive test suite with 55 tests</li>
+</ul>
+<p><strong>Impact:</strong> Enables seamless integration with the broader pose estimation ecosystem, allowing researchers to export SLEAP annotations to mmpose, CVAT, and other COCO-compatible tools. This significantly expands sleap-io's interoperability and supports diverse research workflows.</p>
+<h2>🐛 Bug Fixes</h2>
+<h3>Fix AUTO Video Matching to Prefer Basename Over Content Matches (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3546315136" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/261" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/261/hovercard" href="https://github.com/talmolab/sleap-io/pull/261">#261</a>)</h3>
+<p>Resolved a critical bug where multiple videos with identical shapes would incorrectly match by content instead of basename during merge operations.</p>
+<p><strong>Problem:</strong> When merging predictions back into a project with multiple videos that have identical shapes (common in experimental setups), the AUTO video matcher would incorrectly match videos:</p>
+<ul>
+<li><strong>Before</strong>: Predictions for <code>video_b.mp4</code> would match to <code>video_a.mp4</code> (first video with same shape)</li>
+<li><strong>After</strong>: Predictions correctly match to <code>video_b.mp4</code> (same basename)</li>
+</ul>
+<p><strong>Root Cause:</strong> The merge loop's "first match wins" behavior combined with AUTO's content fallback would break on the first content match, even when a better basename match existed later in the list.</p>
+<p><strong>Solution:</strong> Two-part fix:</p>
+<ol>
+<li>
+<p><strong>Updated AUTO method</strong> (<code>matching.py</code>) to try matching in order of specificity:</p>
+<ul>
+<li>Strict path match (exact resolved paths)</li>
+<li>Lenient path match (basenames)</li>
+<li>Content match (shape + backend) - <strong>only as last resort</strong></li>
+</ul>
+</li>
+<li>
+<p><strong>Added smart matching logic</strong> (<code>labels.py</code>) for AUTO method in merge loop:</p>
+<ul>
+<li>Collects all potential matches across all videos</li>
+<li>Categorizes by quality (strict path &gt; basename &gt; content-only)</li>
+<li>Picks best match instead of "first match wins"</li>
+</ul>
+</li>
+</ol>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="from sleap_io import Labels
+
+# Project with multiple videos of same shape
+labels = Labels.load(&quot;project.slp&quot;)
+predictions = Labels.load(&quot;predictions.slp&quot;)
+
+# Merge now correctly matches by basename, not just content
+labels.merge(predictions)  # ✅ Correctly matches video_b.mp4 → video_b.mp4"><pre><span class="pl-k">from</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">import</span> <span class="pl-v">Labels</span>
+
+<span class="pl-c"># Project with multiple videos of same shape</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-v">Labels</span>.<span class="pl-c1">load</span>(<span class="pl-s">"project.slp"</span>)
+<span class="pl-s1">predictions</span> <span class="pl-c1">=</span> <span class="pl-v">Labels</span>.<span class="pl-c1">load</span>(<span class="pl-s">"predictions.slp"</span>)
+
+<span class="pl-c"># Merge now correctly matches by basename, not just content</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">predictions</span>)  <span class="pl-c"># ✅ Correctly matches video_b.mp4 → video_b.mp4</span></pre></div>
+<p><strong>Testing:</strong></p>
+<ul>
+<li>✅ New regression test added: <code>test_merge_auto_video_matching_with_identical_shapes</code></li>
+<li>✅ All 54 matching tests pass (no regressions)</li>
+<li>✅ All 14 merging integration tests pass (no regressions)</li>
+</ul>
+<p><strong>Files Modified:</strong></p>
+<ul>
+<li><code>sleap_io/io/matching.py</code>: Updated AUTO matching priority</li>
+<li><code>sleap_io/model/labels.py</code>: Added smart matching logic for merge loop</li>
+<li><code>tests/model/test_labels.py</code>: Added regression test</li>
+</ul>
+<p><strong>Impact:</strong> Critical fix for multi-video projects with identical video dimensions, ensuring predictions are merged with the correct video files. This is essential for experimental setups where multiple videos have the same resolution and frame rate. Fixes issue <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3523290875" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/255" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/255/hovercard" href="https://github.com/talmolab/sleap-io/issues/255">#255</a>.</p>
+<h3>Update Video.filename When VideoBackend.filename Is Expanded (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3554565838" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/263" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/263/hovercard" href="https://github.com/talmolab/sleap-io/pull/263">#263</a>)</h3>
+<p>Fixed a bug where <code>Video.exists()</code> would incorrectly return <code>False</code> even when the backend successfully opened a video file with an expanded path.</p>
+<p><strong>Problem:</strong> When opening a video with a relative path or user path (e.g., <code>~/video.mp4</code>), the backend would expand it to an absolute path, but <code>Video.filename</code> would retain the original unexpanded path. This caused <code>Video.exists()</code> to check the wrong path and return <code>False</code> even though the video was successfully loaded.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="from sleap_io import Video
+
+# Before fix
+video = Video.from_filename(&quot;~/data/video.mp4&quot;)
+# Backend opens: /Users/name/data/video.mp4
+# Video.filename remains: ~/data/video.mp4
+video.exists()  # ❌ False (checking wrong path)
+
+# After fix
+video = Video.from_filename(&quot;~/data/video.mp4&quot;)
+# Backend opens: /Users/name/data/video.mp4
+# Video.filename updated to: /Users/name/data/video.mp4
+video.exists()  # ✅ True (checking correct path)"><pre><span class="pl-k">from</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">import</span> <span class="pl-v">Video</span>
+
+<span class="pl-c"># Before fix</span>
+<span class="pl-s1">video</span> <span class="pl-c1">=</span> <span class="pl-v">Video</span>.<span class="pl-c1">from_filename</span>(<span class="pl-s">"~/data/video.mp4"</span>)
+<span class="pl-c"># Backend opens: /Users/name/data/video.mp4</span>
+<span class="pl-c"># Video.filename remains: ~/data/video.mp4</span>
+<span class="pl-s1">video</span>.<span class="pl-c1">exists</span>()  <span class="pl-c"># ❌ False (checking wrong path)</span>
+
+<span class="pl-c"># After fix</span>
+<span class="pl-s1">video</span> <span class="pl-c1">=</span> <span class="pl-v">Video</span>.<span class="pl-c1">from_filename</span>(<span class="pl-s">"~/data/video.mp4"</span>)
+<span class="pl-c"># Backend opens: /Users/name/data/video.mp4</span>
+<span class="pl-c"># Video.filename updated to: /Users/name/data/video.mp4</span>
+<span class="pl-s1">video</span>.<span class="pl-c1">exists</span>()  <span class="pl-c"># ✅ True (checking correct path)</span></pre></div>
+<p><strong>Solution:</strong> Updated <code>Video.from_filename()</code> to synchronize <code>Video.filename</code> with the backend's expanded filename after opening, ensuring consistency between the video object and its backend.</p>
+<p><strong>Files Modified:</strong></p>
+<ul>
+<li><code>sleap_io/model/video.py</code>: Update <code>Video.filename</code> after backend initialization</li>
+<li><code>tests/model/test_video.py</code>: Added test for path expansion consistency</li>
+</ul>
+<p><strong>Impact:</strong> Ensures <code>Video.exists()</code> and other path-dependent operations work correctly when using relative paths, user paths, or symlinks. Fixes issue <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3554535656" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/262" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/262/hovercard" href="https://github.com/talmolab/sleap-io/issues/262">#262</a>.</p>
+<h2>🔧 Improvements</h2>
+<h3>Improve Coverage Testing to Detect Partial Lines Matching Codecov (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3559907508" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/264" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/264/hovercard" href="https://github.com/talmolab/sleap-io/pull/264">#264</a>)</h3>
+<p>Modernized coverage testing workflow to detect both <strong>missed</strong> and <strong>partial</strong> lines, matching what Codecov shows in PR reviews.</p>
+<p><strong>Problem:</strong> The old <code>coverage annotate</code> approach could only detect missed lines, but not partially covered lines (executed code with missing branch coverage). This meant development tools couldn't see the same gaps that Codecov highlights in yellow during PR reviews.</p>
+<p><strong>Solution:</strong> Switched from <code>coverage annotate</code> parsing to <code>coverage.xml</code> parsing with branch data, enabling detection of both missed and partial coverage.</p>
+<p><strong>Key Changes:</strong></p>
+<p><strong>1. Updated Coverage Script (<code>scripts/cov_summary.py</code>)</strong></p>
+<ul>
+<li><strong>Before</strong>: Parsed <code>.py,cover</code> files from <code>coverage annotate</code> (missed lines only)</li>
+<li><strong>After</strong>: Parses <code>coverage.xml</code> with branch data (missed + partial lines)</li>
+<li>Detects partial lines from XML <code>condition-coverage</code> attribute</li>
+<li>Supports multiple output formats: text, markdown, json, gh-annotations</li>
+<li>Can filter to PR-changed lines using <code>gh pr diff</code></li>
+</ul>
+<p><strong>2. Created Coverage Skill (<code>.claude/skills/coverage/</code>)</strong></p>
+<ul>
+<li>Comprehensive 200+ line guide for coverage analysis and improvement</li>
+<li>Includes bundled copy of <code>cov_summary.py</code> script</li>
+<li>Step-by-step workflow with real examples</li>
+<li>Auto-discovered by Claude Code when working on coverage tasks</li>
+<li>Replaces old <code>.claude/commands/coverage.md</code> command</li>
+</ul>
+<p><strong>3. Configuration Updates</strong></p>
+<ul>
+<li><strong>pyproject.toml</strong>: Added <code>relative_files = true</code> for cross-OS path stability</li>
+<li><strong>CI workflow</strong>: Added PR summary step showing coverage table for changed files</li>
+</ul>
+<p><strong>Example Output:</strong></p>
+<p><strong>Before (text only, missed lines):</strong></p>
+<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sleap_io/io/leap.py: 105,109,148"><pre class="notranslate"><code>sleap_io/io/leap.py: 105,109,148
+</code></pre></div>
+<p><strong>After (markdown table, missed + partial):</strong></p>
+<div class="highlight highlight-text-md notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="| File | Missed | Partial |
+| --- | --- | --- |
+| io/leap.py | — | 105,109,148 |
+| io/coco.py | 122-124,518 | 82,84,87,121,279 |"><pre><span class="pl-ml">|</span> File <span class="pl-ml">|</span> Missed <span class="pl-ml">|</span> Partial <span class="pl-ml">|</span>
+<span class="pl-ml">|</span> --- <span class="pl-ml">|</span> --- <span class="pl-ml">|</span> --- <span class="pl-ml">|</span>
+<span class="pl-ml">|</span> io/leap.py <span class="pl-ml">|</span> — <span class="pl-ml">|</span> 105,109,148 <span class="pl-ml">|</span>
+<span class="pl-ml">|</span> io/coco.py <span class="pl-ml">|</span> 122-124,518 <span class="pl-ml">|</span> 82,84,87,121,279 <span class="pl-ml">|</span></pre></div>
+<p>This shows <code>io/leap.py</code> has full line coverage but incomplete branch coverage, while <code>io/coco.py</code> has both gaps.</p>
+<p><strong>Why This Matters:</strong></p>
+<p>Coverage XML includes branch information (<code>condition-coverage="50% (1/2)"</code>), allowing detection of:</p>
+<ul>
+<li><strong>Missed</strong>: Lines with 0 hits</li>
+<li><strong>Partial</strong>: Lines with hits &gt; 0 but incomplete branch coverage</li>
+</ul>
+<p>Now development tools see exactly what Codecov shows, making targeted test improvement possible.</p>
+<p><strong>Design Decisions:</strong></p>
+<p><em>Why XML instead of JSON?</em></p>
+<ul>
+<li>Codecov definitely supports XML (Cobertura format)</li>
+<li>XML is proven to work with existing CI setup</li>
+<li>Both formats contain the same branch information</li>
+</ul>
+<p><em>Why include script in skill?</em></p>
+<ul>
+<li>Makes skill self-contained</li>
+<li>Follows Claude Skills pattern for bundling resources</li>
+<li>Agent can reference it without context pollution</li>
+</ul>
+<p><strong>Files Modified:</strong></p>
+<ul>
+<li><code>scripts/cov_summary.py</code>: Rewritten to parse XML instead of annotate files (+669, -361)</li>
+<li><code>.claude/skills/coverage/</code>: New coverage analysis skill</li>
+<li><code>pyproject.toml</code>: Added <code>relative_files = true</code></li>
+<li><code>.github/workflows/test.yml</code>: Added PR coverage summary step</li>
+</ul>
+<p><strong>Impact:</strong> Enables more precise test coverage improvement by showing exactly which branches aren't covered, matching Codecov's analysis. This improves development workflow and helps maintain high code quality.</p>
+<h2>💡 Why These Changes Matter</h2>
+<p>The v0.5.7 release significantly enhances sleap-io's <strong>ecosystem integration, reliability, and developer experience</strong>:</p>
+<ul>
+<li><strong>Ecosystem Expansion</strong>: COCO format export enables seamless integration with mmpose, CVAT, and the broader pose estimation ecosystem, expanding research workflows and tool compatibility</li>
+<li><strong>Data Integrity</strong>: Fixed video matching ensures predictions merge with correct videos in multi-video projects, preventing silent data corruption in experimental pipelines</li>
+<li><strong>Path Reliability</strong>: Video filename synchronization fixes path-dependent operations when using relative paths or symlinks</li>
+<li><strong>Developer Tooling</strong>: Improved coverage testing matches Codecov's branch detection, enabling more precise test improvement and maintaining code quality</li>
+</ul>
+<p>This release demonstrates sleap-io's continued commitment to <strong>interoperability, reliability, and developer productivity</strong> for pose tracking research workflows.</p>
+<h2>📋 Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3541874448" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/260" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/260/hovercard" href="https://github.com/talmolab/sleap-io/pull/260">#260</a>: Add COCO format export functionality (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3546315136" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/261" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/261/hovercard" href="https://github.com/talmolab/sleap-io/pull/261">#261</a>: Fix AUTO video matching to prefer basename over content matches (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3554565838" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/263" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/263/hovercard" href="https://github.com/talmolab/sleap-io/pull/263">#263</a>: Update <code>Video.filename</code> accordingly if the underlying <code>VideoBackend</code> has its <code>.filename</code> expanded (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/sibocw/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/sibocw">@sibocw</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3559907508" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/264" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/264/hovercard" href="https://github.com/talmolab/sleap-io/pull/264">#264</a>: Improve coverage testing to detect partial lines matching Codecov (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3563966927" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/265" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/265/hovercard" href="https://github.com/talmolab/sleap-io/pull/265">#265</a>: Bump version from 0.5.6 to 0.5.7 (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Closed Issues:</strong></p>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3523290875" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/255" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/255/hovercard" href="https://github.com/talmolab/sleap-io/issues/255">#255</a>: Video matching in AUTO mode matches by content when basename matches exist</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3554535656" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/262" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap-io/issues/262/hovercard" href="https://github.com/talmolab/sleap-io/issues/262">#262</a>: <code>Video.exists()</code> returns False even when backend opens video with expanded path</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.5.6...v0.5.7"><tt>v0.5.6...v0.5.7</tt></a></p>
 <h2 id="v056"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.6">v0.5.6</a><a class="headerlink" href="#v056" title="Permanent link">&para;</a></h2>
 <h2>🎯 Summary</h2>
 <p>This release delivers significant performance improvements, new CLI capabilities, and critical bug fixes. The v0.5.6 release achieves <strong>52.3% faster SLP file loading</strong> through strategic optimization, introduces a command-line interface for quick dataset inspection, and fixes a critical skeleton decoding bug that could cause edge/symmetry mismatches in SLP files.</p>
@@ -4085,13 +4347,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Create video backend automatically if filename exists. by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1819850772" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/56" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/56/hovercard" href="https://github.com/talmolab/sleap-io/pull/56">#56</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.7...v0.0.8"><tt>v0.0.7...v0.0.8</tt></a></p>
-<h2 id="v007"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.7">v0.0.7</a><a class="headerlink" href="#v007" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Pin imageio version by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1779512808" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/39" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/39/hovercard" href="https://github.com/talmolab/sleap-io/pull/39">#39</a></li>
-<li>Fix detection of embedded images when loading SLP files by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1781568895" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/40" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/40/hovercard" href="https://github.com/talmolab/sleap-io/pull/40">#40</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.6...v0.0.7"><tt>v0.0.6...v0.0.7</tt></a></p>
 
 
 
