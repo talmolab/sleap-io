@@ -2079,6 +2079,96 @@ def test_make_video_fallback_to_toplevel_filename():
     assert video.backend is None  # Backend not opened
 
 
+def test_make_video_missing_filename_raises_error():
+    """Test that make_video() raises ValueError when filename is missing everywhere.
+
+    This tests the error handling path when neither backend_metadata nor video_json
+    contains a "filename" key.
+    """
+    import tempfile
+
+    from sleap_io.io.slp import make_video
+
+    # Create a video_json with NO filename in backend OR top-level
+    video_json = {
+        "backend": {
+            "dataset": "",
+            "grayscale": False,
+            "shape": [100, 480, 640, 3],
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(suffix=".slp", delete=False) as f:
+        labels_path = f.name
+
+    # This should raise ValueError since there's no filename anywhere
+    with pytest.raises(ValueError, match="Video JSON does not contain a filename"):
+        make_video(labels_path, video_json, open_backend=False)
+
+
+def test_make_video_with_backend_filename_only():
+    """Test that make_video() uses backend filename when available.
+
+    This ensures the primary path (backend_metadata has filename) is tested.
+    """
+    import tempfile
+
+    from sleap_io.io.slp import make_video
+
+    # backend has filename, top-level also has filename (backend should take priority)
+    video_json = {
+        "filename": "top_level.mp4",  # This should be ignored
+        "backend": {
+            "filename": "backend_level.mp4",  # This should be used
+            "type": "MediaVideo",
+            "shape": [100, 480, 640, 3],
+            "grayscale": False,
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(suffix=".slp", delete=False) as f:
+        labels_path = f.name
+
+    video = make_video(labels_path, video_json, open_backend=False)
+
+    # Should use the backend filename, not the top-level one
+    assert video.filename == "backend_level.mp4"
+    assert isinstance(video.filename, str)
+
+
+def test_video_to_dict_mutates_original():
+    """Test that video_to_dict() doesn't mutate the original backend_metadata.
+
+    The fix uses .copy() to avoid mutating the original backend_metadata dict.
+    This test ensures that behavior is correct.
+    """
+    # Create a Video with backend=None and backend_metadata WITHOUT filename
+    original_metadata = {
+        "type": "MediaVideo",
+        "shape": [100, 480, 640, 3],
+        "grayscale": False,
+    }
+
+    video = Video(
+        filename="test_video.mp4",
+        backend=None,
+        backend_metadata=original_metadata,
+    )
+
+    # Store original keys for comparison
+    original_keys = set(original_metadata.keys())
+
+    # Convert to dict
+    video_dict = video_to_dict(video, labels_path="test.slp")
+
+    # Verify the dict has filename in backend
+    assert "filename" in video_dict["backend"]
+
+    # Verify the original metadata was NOT mutated
+    assert set(original_metadata.keys()) == original_keys
+    assert "filename" not in original_metadata
+
+
 def test_tiffvideo_roundtrip(tmp_path, multipage_tiff_path):
     """Test saving and loading Labels with TiffVideo backend."""
     from sleap_io.io.video_reading import TiffVideo
