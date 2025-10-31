@@ -193,6 +193,12 @@ def make_video(
         except Exception:
             backend = None
 
+    # Ensure video_path is a string (not Path) when creating the Video object
+    # If open_backend was True, it's already been converted at line 172
+    # If open_backend was False, it's still a Path object, so convert it
+    if isinstance(video_path, Path):
+        video_path = video_path.as_posix()
+
     return Video(
         filename=video_path,
         backend=backend,
