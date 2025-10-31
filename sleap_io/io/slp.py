@@ -90,12 +90,12 @@ def make_video(
     """
     backend_metadata = video_json["backend"]
 
-    # Get video path from backend metadata (fall back to top-level filename if not found)
+    # Get video path from backend metadata (fall back to top-level filename if needed).
     if "filename" in backend_metadata:
         video_path = backend_metadata["filename"]
     elif "filename" in video_json:
         video_path = video_json["filename"]
-    else: 
+    else:
         raise ValueError("Video JSON does not contain a filename.")
 
     # Marker for embedded videos.
