@@ -1980,6 +1980,102 @@ def test_video_to_dict_tiffvideo(tmp_path, multipage_tiff_path):
     assert video_dict["backend"]["format"] == "multi_page"
 
 
+def test_video_to_dict_none_backend_without_filename():
+    """Test that video_to_dict handles backend=None without filename in metadata.
+
+    This reproduces the bug from https://github.com/talmolab/sleap/discussions/2417
+    where backend_metadata doesn't contain a "filename" key, causing a KeyError
+    when trying to reconstruct the video with make_video().
+    """
+    from sleap_io.io.slp import make_video
+    import tempfile
+
+    # Create a Video with backend=None and backend_metadata WITHOUT filename key
+    # This simulates old SLP files or edge cases where backend_metadata is incomplete
+    video = Video(
+        filename="test_video.mp4",
+        backend=None,
+        backend_metadata={
+            "type": "MediaVideo",
+            "shape": [100, 480, 640, 3],
+            "grayscale": False,
+        },
+    )
+
+    # Convert to dict - this should work
+    with tempfile.NamedTemporaryFile(suffix=".slp", delete=False) as f:
+        labels_path = f.name
+
+    video_dict = video_to_dict(video, labels_path=labels_path)
+
+    # Verify filename was added to backend
+    assert "filename" in video_dict["backend"]
+    assert video_dict["backend"]["filename"] == "test_video.mp4"
+
+    # The bug: backend_metadata doesn't have "filename", so make_video will fail
+    # After the fix, this should work because video_to_dict ensures filename is present
+    video_json = {"backend": video_dict["backend"]}
+    reconstructed_video = make_video(labels_path, video_json, open_backend=False)
+
+    # Verify the reconstructed video has the correct filename
+    assert reconstructed_video.filename == "test_video.mp4"
+
+
+def test_video_to_dict_none_backend_preserves_existing_filename():
+    """Test that video_to_dict preserves existing filename in backend_metadata."""
+    # Create a Video where backend_metadata already has a different filename
+    # This could happen if backend_metadata was copied from another source
+    video = Video(
+        filename="video_a.mp4",
+        backend=None,
+        backend_metadata={
+            "type": "MediaVideo",
+            "filename": "original_video.mp4",  # Different from video.filename
+            "shape": [100, 480, 640, 3],
+            "grayscale": False,
+        },
+    )
+
+    video_dict = video_to_dict(video, labels_path="test.slp")
+
+    # Should preserve the existing filename in backend_metadata
+    assert video_dict["backend"]["filename"] == "original_video.mp4"
+    # Top-level filename should still be from video.filename
+    assert video_dict["filename"] == "video_a.mp4"
+
+
+def test_make_video_fallback_to_toplevel_filename():
+    """Test that make_video() falls back to top-level filename when backend lacks it.
+
+    This reproduces the exact scenario from the user's file where Video 32 had
+    backend_metadata without a "filename" key, requiring fallback to video_json["filename"].
+    """
+    from sleap_io.io.slp import make_video
+    import tempfile
+
+    # Create a video_json structure like the problematic Video 32 from the user's file
+    # backend_metadata has dataset, grayscale, shape but NO filename
+    video_json = {
+        "filename": "D:/SLEAP_training/20240404_Choice233_01.MP4",
+        "backend": {
+            "dataset": "",
+            "grayscale": False,
+            "shape": [100, 480, 640, 3],
+            # NOTE: No "filename" key here - this was the bug!
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(suffix=".slp", delete=False) as f:
+        labels_path = f.name
+
+    # This should not raise KeyError - it should fall back to video_json["filename"]
+    video = make_video(labels_path, video_json, open_backend=False)
+
+    # Verify the video was created with the correct filename
+    assert video.filename == "D:/SLEAP_training/20240404_Choice233_01.MP4"
+    assert video.backend is None  # Backend not opened
+
+
 def test_tiffvideo_roundtrip(tmp_path, multipage_tiff_path):
     """Test saving and loading Labels with TiffVideo backend."""
     from sleap_io.io.video_reading import TiffVideo
