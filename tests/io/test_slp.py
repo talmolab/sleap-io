@@ -1987,8 +1987,9 @@ def test_video_to_dict_none_backend_without_filename():
     where backend_metadata doesn't contain a "filename" key, causing a KeyError
     when trying to reconstruct the video with make_video().
     """
-    from sleap_io.io.slp import make_video
     import tempfile
+
+    from sleap_io.io.slp import make_video
 
     # Create a Video with backend=None and backend_metadata WITHOUT filename key
     # This simulates old SLP files or edge cases where backend_metadata is incomplete
@@ -2045,13 +2046,15 @@ def test_video_to_dict_none_backend_preserves_existing_filename():
 
 
 def test_make_video_fallback_to_toplevel_filename():
-    """Test that make_video() falls back to top-level filename when backend lacks it.
+    """Test that make_video() falls back to top-level filename.
 
     This reproduces the exact scenario from the user's file where Video 32 had
-    backend_metadata without a "filename" key, requiring fallback to video_json["filename"].
+    backend_metadata without a "filename" key, requiring fallback to the
+    top-level video_json["filename"].
     """
-    from sleap_io.io.slp import make_video
     import tempfile
+
+    from sleap_io.io.slp import make_video
 
     # Create a video_json structure like the problematic Video 32 from the user's file
     # backend_metadata has dataset, grayscale, shape but NO filename
