@@ -89,7 +89,14 @@ def make_video(
             when the video files are not available).
     """
     backend_metadata = video_json["backend"]
-    video_path = backend_metadata["filename"]
+
+    # Get video path from backend metadata (fall back to top-level filename if needed).
+    if "filename" in backend_metadata:
+        video_path = backend_metadata["filename"]
+    elif "filename" in video_json:
+        video_path = video_json["filename"]
+    else:
+        raise ValueError("Video JSON does not contain a filename.")
 
     # Marker for embedded videos.
     source_video = None
@@ -186,6 +193,12 @@ def make_video(
         except Exception:
             backend = None
 
+    # Ensure video_path is a string (not Path) when creating the Video object
+    # If open_backend was True, it's already been converted at line 172
+    # If open_backend was False, it's still a Path object, so convert it
+    if isinstance(video_path, Path):
+        video_path = sanitize_filename(video_path)
+
     return Video(
         filename=video_path,
         backend=backend,
@@ -233,7 +246,12 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
 
     # Add backend metadata
     if video.backend is None:
-        result["backend"] = video.backend_metadata
+        # Copy backend_metadata to avoid mutating the original
+        result["backend"] = video.backend_metadata.copy()
+        # Ensure filename is always present in backend metadata for compatibility
+        # with make_video() which expects backend["filename"] to exist
+        if "filename" not in result["backend"]:
+            result["backend"]["filename"] = video_filename
     elif type(video.backend) is MediaVideo:
         result["backend"] = {
             "type": "MediaVideo",
