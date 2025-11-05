@@ -2834,9 +2834,11 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
             ]
 
     # test writing slp file with sparse video indices (hdf5 backend) and loading it back
-    sparse_path = tmp_path / "sparse.slp"
-    save_slp(load_slp(str(embedded_path)), str(sparse_path), restore_original_videos=False)
-    new_labels = load_slp(str(sparse_path))
+    resaved_path = tmp_path / "resaved_sparse.slp"
+    save_slp(
+        load_slp(str(embedded_path)), str(resaved_path), restore_original_videos=False
+    )
+    new_labels = load_slp(str(resaved_path))
     assert len(new_labels.videos) == 5, "Should load 5 videos"
     assert len(new_labels) == 10, "Should load 10 frames (5 videos × 2 frames)"
     for i, video in enumerate(new_labels.videos):
@@ -2844,3 +2846,16 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
         assert len(frames_for_video) == 2, f"Video {i} should have 2 frames"
     for lf in new_labels:
         assert lf.image.shape[-3:] == small_robot_video[0].shape
+
+
+def test_save_slp_non_sparse_videos(tmp_path, slp_minimal):
+    """Test saving labels with non-embedded videos (fallback to sequential indexing)."""
+    # Save with original videos (non-embedded)
+    output_path = tmp_path / "non_sparse.slp"
+    labels = load_slp(slp_minimal)
+    save_slp(labels, str(output_path), restore_original_videos=True)
+
+    # Load and verify
+    loaded_labels = load_slp(str(output_path))
+    assert len(loaded_labels.videos) == len(labels.videos)
+    assert len(loaded_labels) == len(labels)
