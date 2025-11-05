@@ -2832,3 +2832,15 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
             assert [n.name for n in lf.instances[0].skeleton.nodes] == [
                 n.name for n in skeleton.nodes
             ]
+
+    # test writing slp file with sparse video indices (hdf5 backend) and loading it back
+    sparse_path = tmp_path / "sparse.slp"
+    save_slp(load_slp(str(embedded_path)), str(sparse_path), restore_original_videos=False)
+    new_labels = load_slp(str(sparse_path))
+    assert len(new_labels.videos) == 5, "Should load 5 videos"
+    assert len(new_labels) == 10, "Should load 10 frames (5 videos × 2 frames)"
+    for i, video in enumerate(new_labels.videos):
+        frames_for_video = new_labels.find(video=video)
+        assert len(frames_for_video) == 2, f"Video {i} should have 2 frames"
+    for lf in new_labels:
+        assert lf.image.shape[-3:] == small_robot_video[0].shape
