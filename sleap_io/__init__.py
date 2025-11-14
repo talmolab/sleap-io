@@ -69,3 +69,25 @@ __getattr__, __dir__, __all__ = lazy.attach(
 
 # Add __version__ to __all__ (it's not in lazy_loader's __all__)
 __all__ = ["__version__"] + __all__
+
+# Force eager imports when EAGER_IMPORT=1 (used for testing and docs)
+# The EAGER_IMPORT environment variable is set by:
+# - tests/conftest.py (for pytest)
+# - .github/workflows/docs.yml (for docs build)
+# This ensures griffe/mkdocstrings can find all documented symbols
+import os
+import sys
+
+if os.getenv("EAGER_IMPORT"):
+    # Trigger all lazy imports and add them to __dict__ for griffe/mkdocstrings
+    _current_module = sys.modules[__name__]
+    for _attr in list(__all__):
+        if _attr != "__version__":
+            try:
+                # Get the attribute (triggers lazy import)
+                _obj = __getattr__(_attr)
+                # Add to module __dict__ so griffe can find it
+                setattr(_current_module, _attr, _obj)
+            except Exception:
+                pass  # Ignore any import errors
+    del _attr, _obj, _current_module
