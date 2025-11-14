@@ -1229,12 +1229,14 @@ def write_lfs(labels_path: str, labels: Labels):
         ):
             dataset = video.backend.dataset
             # Extract video ID from dataset name (e.g., "video15/video" → 15)
-            if "/" in dataset:
+            try:
                 video_group = dataset.split("/")[0]
                 if video_group.startswith("video"):
-                    video_id_str = video_group[5:]  # Remove "video" prefix
-                    if video_id_str.isdigit():
-                        video_idx_id_map[video_idx] = int(video_id_str)
+                    video_id = int(video_group[5:])  # Remove "video" prefix and convert
+                    video_idx_id_map[video_idx] = video_id
+            except (ValueError, IndexError):
+                # If parsing fails, keep the default sequential index
+                pass
     for lf in labels:
         frame_id = len(frames)
         instance_id_start = len(instances)
