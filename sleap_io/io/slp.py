@@ -1214,6 +1214,29 @@ def write_lfs(labels_path: str, labels: Labels):
     # Next, we extract the data from the labels object into lists with the same fields.
     frames, instances, points, predicted_points, to_link = [], [], [], [], []
     inst_to_id = {}
+    # get sparse ids instead of list indices
+    video_idx_id_map = {}
+    for video_idx, video in enumerate(labels.videos):
+        # Default to sequential index
+        video_idx_id_map[video_idx] = video_idx
+
+        # Check if this is an embedded video with a sparse video ID
+        if (
+            hasattr(video, "backend")
+            and video.backend is not None
+            and hasattr(video.backend, "dataset")
+            and video.backend.dataset is not None
+        ):
+            dataset = video.backend.dataset
+            # Extract video ID from dataset name (e.g., "video15/video" → 15)
+            try:
+                video_group = dataset.split("/")[0]
+                if video_group.startswith("video"):
+                    video_id = int(video_group[5:])  # Remove "video" prefix and convert
+                    video_idx_id_map[video_idx] = video_id
+            except (ValueError, IndexError):
+                # If parsing fails, keep the default sequential index
+                pass
     for lf in labels:
         frame_id = len(frames)
         instance_id_start = len(instances)
@@ -1281,7 +1304,7 @@ def write_lfs(labels_path: str, labels: Labels):
         frames.append(
             [
                 frame_id,
-                labels.videos.index(lf.video),
+                video_idx_id_map[labels.videos.index(lf.video)],
                 lf.frame_idx,
                 instance_id_start,
                 instance_id_end,

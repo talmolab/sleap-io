@@ -2832,3 +2832,116 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
             assert [n.name for n in lf.instances[0].skeleton.nodes] == [
                 n.name for n in skeleton.nodes
             ]
+
+    # test writing slp file with sparse video indices (hdf5 backend) and loading it back
+    resaved_path = tmp_path / "resaved_sparse.slp"
+    save_slp(
+        load_slp(str(embedded_path)), str(resaved_path), restore_original_videos=False
+    )
+    new_labels = load_slp(str(resaved_path))
+    assert len(new_labels.videos) == 5, "Should load 5 videos"
+    assert len(new_labels) == 10, "Should load 10 frames (5 videos × 2 frames)"
+    for i, video in enumerate(new_labels.videos):
+        frames_for_video = new_labels.find(video=video)
+        assert len(frames_for_video) == 2, f"Video {i} should have 2 frames"
+    for lf in new_labels:
+        assert lf.image.shape[-3:] == small_robot_video[0].shape
+
+
+def test_save_slp_non_sparse_videos(tmp_path, slp_minimal):
+    """Test saving labels with non-embedded videos (fallback to sequential indexing)."""
+    # Save with original videos (non-embedded)
+    output_path = tmp_path / "non_sparse.slp"
+    labels = load_slp(slp_minimal)
+    save_slp(labels, str(output_path), restore_original_videos=True)
+
+    # Load and verify
+    loaded_labels = load_slp(str(output_path))
+    assert len(loaded_labels.videos) == len(labels.videos)
+    assert len(loaded_labels) == len(labels)
+
+
+def test_save_slp_video_dataset_edge_cases(
+    tmp_path, slp_minimal_pkg, small_robot_video
+):
+    """Test video ID extraction with edge case dataset names.
+
+    Covers lines 1232, 1234, 1236: Tests negative branches where dataset
+    parsing falls back to sequential indexing.
+    """
+    # Load a skeleton and create labels with multiple videos for edge cases
+    skeleton = read_skeletons(slp_minimal_pkg)[0]
+
+    # Create 3 videos (using the same video file for all 3)
+    videos = [Video(small_robot_video.filename) for _ in range(3)]
+
+    # Create minimal labels with the 3 videos
+    # Create points matching the skeleton's nodes
+    num_nodes = len(skeleton.nodes)
+    labels = Labels(
+        videos=videos,
+        skeletons=[skeleton],
+        labeled_frames=[
+            LabeledFrame(
+                video=videos[i],
+                frame_idx=0,
+                instances=[
+                    Instance.from_numpy(
+                        points_data=np.array(
+                            [[10.0 + i + j, 20.0 + i + j] for j in range(num_nodes)]
+                        ),
+                        skeleton=skeleton,
+                    )
+                ],
+            )
+            for i in range(3)
+        ],
+    )
+
+    # Save with embedded videos
+    embedded_path = tmp_path / "embedded.slp"
+    save_slp(labels, str(embedded_path), restore_original_videos=False)
+
+    # Modify the HDF5 file to create edge cases
+    with h5py.File(embedded_path, "r+") as f:
+        videos_json = [json.loads(vj.decode("utf-8")) for vj in f["videos_json"][:]]
+
+        # Edge case 1: dataset without "/" (line 1232 negative branch)
+        if "video0" in f:
+            f.move("video0", "video_noSlash")
+            videos_json[0]["backend"]["dataset"] = "video_noSlash"
+
+        # Edge case 2: dataset with "/" but doesn't start with "video" (line 1234)
+        if "video1" in f:
+            f.move("video1", "other1")
+            videos_json[1]["backend"]["dataset"] = "other1/video"
+
+        # Edge case 3: dataset like "videoABC/video" - non-numeric (line 1236)
+        if "video2" in f:
+            f.move("video2", "videoABC")
+            videos_json[2]["backend"]["dataset"] = "videoABC/video"
+
+        # Write back modified videos_json
+        del f["videos_json"]
+        f.create_dataset(
+            "videos_json",
+            data=[
+                np.bytes_(json.dumps(vj, separators=(",", ":"))) for vj in videos_json
+            ],
+            maxshape=(None,),
+        )
+
+    # Load the modified file - should handle edge cases with fallback
+    loaded_labels = load_slp(str(embedded_path))
+    assert len(loaded_labels.videos) == 3
+    assert len(loaded_labels) == 3
+
+    # Resave to exercise write path with edge case dataset names
+    # This is the key part that exercises lines 1232, 1234, 1236
+    resaved_path = tmp_path / "resaved.slp"
+    save_slp(loaded_labels, str(resaved_path), restore_original_videos=False)
+
+    # Verify round-trip works
+    final_labels = load_slp(str(resaved_path))
+    assert len(final_labels.videos) == 3
+    assert len(final_labels) == 3
