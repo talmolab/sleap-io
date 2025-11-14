@@ -1,5 +1,8 @@
 """This module exposes all high level APIs for sleap-io."""
 
+import os
+import sys
+
 import lazy_loader as lazy
 
 # Version is lightweight, keep it eager
@@ -75,9 +78,6 @@ __all__ = ["__version__"] + __all__
 # - tests/conftest.py (for pytest)
 # - .github/workflows/docs.yml (for docs build)
 # This ensures griffe/mkdocstrings can find all documented symbols
-import os
-import sys
-
 if os.getenv("EAGER_IMPORT"):
     # Trigger all lazy imports and add them to __dict__ for griffe/mkdocstrings
     _current_module = sys.modules[__name__]
