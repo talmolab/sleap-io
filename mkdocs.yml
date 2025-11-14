@@ -70,6 +70,7 @@ plugins:
             docstring_options:
               returns_multiple_items: false
             docstring_section_style: table  # table, list, spacy
+            force_inspection: true  # Use dynamic imports for lazy-loaded modules
   
 
 
