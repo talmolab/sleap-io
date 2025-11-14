@@ -63,7 +63,9 @@ dev = [
     "mkdocs-gen-files",
     "mkdocs-literate-nav",
     "mkdocs-section-index",
-    "mike"]
+    "mike",
+    "py-spy>=0.4.1",
+]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"
