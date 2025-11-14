@@ -7,19 +7,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 
 import numpy as np
 
-from sleap_io.io import (
-    alphatracker,
-    coco,
-    dlc,
-    jabs,
-    labelstudio,
-    leap,
-    nwb,
-    slp,
-    ultralytics,
-    video_writing,
-)
-from sleap_io.io.nwb import NwbFormat
+# Format modules are now imported inside functions for lazy loading
 from sleap_io.io.skeleton import (
     decode_yaml_skeleton,
     encode_skeleton,
@@ -46,6 +34,8 @@ def load_slp(filename: str, open_videos: bool = True) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
+    from sleap_io.io import slp
+
     return slp.read_labels(filename, open_videos=open_videos)
 
 
@@ -85,6 +75,8 @@ def save_slp(
             `get_default_image_plugin()`. If no global default is set, auto-detects
             based on available packages (opencv preferred, then imageio).
     """
+    from sleap_io.io import slp
+
     return slp.write_labels(
         filename,
         labels,
@@ -104,13 +96,15 @@ def load_nwb(filename: str) -> Labels:
     Returns:
         The dataset as a `Labels` object.
     """
+    from sleap_io.io import nwb
+
     return nwb.load_nwb(filename)
 
 
 def save_nwb(
     labels: Labels,
     filename: Union[str, Path],
-    nwb_format: Union[NwbFormat, str] = NwbFormat.AUTO,
+    nwb_format: str = "auto",
     append: bool = False,
 ) -> None:
     """Save a SLEAP dataset to NWB format.
@@ -129,6 +123,13 @@ def save_nwb(
     Raises:
         ValueError: If an invalid format is specified.
     """
+    from sleap_io.io import nwb
+    from sleap_io.io.nwb import NwbFormat
+
+    # Convert string to NwbFormat if needed
+    if isinstance(nwb_format, str):
+        nwb_format = NwbFormat(nwb_format)
+
     nwb.save_nwb(labels, filename, nwb_format, append=append)
 
 
@@ -147,6 +148,8 @@ def load_labelstudio(
     Returns:
         Parsed labels as a `Labels` instance.
     """
+    from sleap_io.io import labelstudio
+
     return labelstudio.read_labels(filename, skeleton=skeleton)
 
 
@@ -157,6 +160,8 @@ def save_labelstudio(labels: Labels, filename: str):
         labels: A SLEAP `Labels` object (see `load_slp`).
         filename: Path to save labels to ending with `.json`.
     """
+    from sleap_io.io import labelstudio
+
     labelstudio.write_labels(labels, filename)
 
 
@@ -169,6 +174,8 @@ def load_alphatracker(filename: str) -> Labels:
     Returns:
         Parsed labels as a `Labels` instance.
     """
+    from sleap_io.io import alphatracker
+
     return alphatracker.read_labels(filename)
 
 
@@ -182,6 +189,8 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
     Returns:
         Parsed labels as a `Labels` instance.
     """
+    from sleap_io.io import jabs
+
     return jabs.read_labels(filename, skeleton=skeleton)
 
 
@@ -196,6 +205,8 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = No
     Note:
         Filenames for JABS poses are based on video filenames.
     """
+    from sleap_io.io import jabs
+
     jabs.write_labels(labels, pose_version, root_folder)
 
 
@@ -212,6 +223,8 @@ def load_dlc(
     Returns:
         Parsed labels as a `Labels` instance.
     """
+    from sleap_io.io import dlc
+
     return dlc.load_dlc(filename, video_search_paths=video_search_paths, **kwargs)
 
 
@@ -238,6 +251,8 @@ def load_ultralytics(
     Returns:
         The dataset as a `Labels` object.
     """
+    from sleap_io.io import ultralytics
+
     return ultralytics.read_labels(
         dataset_path, split=split, skeleton=skeleton, **kwargs
     )
@@ -271,6 +286,8 @@ def save_ultralytics(
               Only used if
               use_multiprocessing=True.
     """
+    from sleap_io.io import ultralytics
+
     ultralytics.write_labels(labels, dataset_path, split_ratios=split_ratios, **kwargs)
 
 
@@ -371,6 +388,8 @@ def load_leap(
     Returns:
         The dataset as a `Labels` object.
     """
+    from sleap_io.io import leap
+
     return leap.read_labels(filename, skeleton=skeleton)
 
 
@@ -393,6 +412,8 @@ def load_coco(
     Returns:
         The dataset as a `Labels` object.
     """
+    from sleap_io.io import coco
+
     return coco.read_labels(json_path, dataset_root=dataset_root, grayscale=grayscale)
 
 
@@ -421,6 +442,8 @@ def save_coco(
         - For saving images along with annotations, you would need to extract and save
           frames separately.
     """
+    from sleap_io.io import coco
+
     coco.write_labels(labels, json_path, image_filenames, visibility_encoding)
 
 
@@ -522,6 +545,8 @@ def save_video(
 
     See also: `sio.VideoWriter`
     """
+    from sleap_io.io import video_writing
+
     if output_params is None:
         output_params = []
 
@@ -594,8 +619,11 @@ def load_file(
             Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
         ):
             format = "ultralytics"
-        elif filename.lower().endswith(".csv") and dlc.is_dlc_file(filename):
-            format = "dlc"
+        elif filename.lower().endswith(".csv"):
+            from sleap_io.io import dlc
+
+            if dlc.is_dlc_file(filename):
+                format = "dlc"
         else:
             for vid_ext in Video.EXTS:
                 if filename.lower().endswith(vid_ext.lower()):
@@ -797,6 +825,8 @@ def load_labels_set(
             format = "slp"
 
     if format == "slp":
+        from sleap_io.io import slp
+
         return slp.read_labels_set(path, open_videos=open_videos)
     elif format == "ultralytics":
         # Extract ultralytics-specific kwargs
@@ -811,6 +841,8 @@ def load_labels_set(
                 "Ultralytics format requires a directory path, "
                 f"got {type(path).__name__}"
             )
+
+        from sleap_io.io import ultralytics
 
         return ultralytics.read_labels_set(
             str(path),

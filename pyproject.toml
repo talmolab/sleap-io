@@ -33,7 +33,8 @@ dependencies = [
     "tifffile",
     "tqdm",
     "pyyaml",
-    "rich_click"]
+    "rich_click",
+    "lazy-loader>=0.4"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
