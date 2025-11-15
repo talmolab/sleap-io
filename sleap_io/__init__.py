@@ -45,6 +45,9 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "get_default_video_plugin",
             "set_default_image_plugin",
             "set_default_video_plugin",
+            "get_available_video_backends",
+            "get_available_image_backends",
+            "get_installation_instructions",
         ],
         # Video writing from sleap_io.io.video_writing
         "io.video_writing": ["VideoWriter"],

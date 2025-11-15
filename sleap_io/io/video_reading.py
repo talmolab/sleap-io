@@ -29,6 +29,19 @@ except ImportError:
     pass
 
 
+# Track available backends (populated on module import)
+_AVAILABLE_VIDEO_BACKENDS = {
+    "opencv": "cv2" in sys.modules,
+    "FFMPEG": "imageio_ffmpeg" in sys.modules,
+    "pyav": "av" in sys.modules,
+}
+
+_AVAILABLE_IMAGE_BACKENDS = {
+    "opencv": "cv2" in sys.modules,
+    "imageio": True,  # Always available (core dependency)
+}
+
+
 # Global default video plugin
 _default_video_plugin: Optional[str] = None
 
@@ -178,6 +191,101 @@ def get_default_image_plugin() -> Optional[str]:
         'opencv'
     """
     return _default_image_plugin
+
+
+def get_available_video_backends() -> list[str]:
+    """Get list of available video backend plugins.
+
+    Returns:
+        List of plugin names that are currently available. Possible values include
+        "opencv", "FFMPEG", and "pyav".
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.get_available_video_backends()
+        ['FFMPEG', 'pyav']
+        >>> 'opencv' in sio.get_available_video_backends()
+        False
+    """
+    return [k for k, v in _AVAILABLE_VIDEO_BACKENDS.items() if v]
+
+
+def get_available_image_backends() -> list[str]:
+    """Get list of available image backend plugins.
+
+    Returns:
+        List of plugin names that are currently available. Will always include
+        "imageio" (core dependency), and may include "opencv" if installed.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> sio.get_available_image_backends()
+        ['imageio']
+        >>> 'opencv' in sio.get_available_image_backends()
+        False
+    """
+    return [k for k, v in _AVAILABLE_IMAGE_BACKENDS.items() if v]
+
+
+def get_installation_instructions(
+    plugin: Optional[str] = None, backend_type: str = "video"
+) -> str:
+    """Get installation instructions for backend plugins.
+
+    Args:
+        plugin: Specific plugin name (e.g., "opencv", "FFMPEG", "pyav"), or None to
+            get instructions for all plugins. Case-insensitive, accepts aliases.
+        backend_type: Either "video" or "image". Determines which backend type to
+            provide instructions for.
+
+    Returns:
+        Installation instructions as a formatted string.
+
+    Examples:
+        >>> import sleap_io as sio
+        >>> print(sio.get_installation_instructions("opencv"))
+        pip install sleap-io[opencv]
+
+        >>> print(sio.get_installation_instructions())
+        Video backend installation options:
+          opencv (fastest):        pip install sleap-io[opencv]
+          FFMPEG (most reliable):  pip install sleap-io[ffmpeg]
+          pyav (balanced):         pip install sleap-io[pyav]
+          all backends:            pip install sleap-io[all]
+    """
+    if backend_type == "video":
+        instructions = {
+            "opencv": "pip install sleap-io[opencv]",
+            "FFMPEG": "pip install sleap-io[ffmpeg]",
+            "pyav": "pip install sleap-io[pyav]",
+        }
+
+        if plugin is not None:
+            plugin = normalize_plugin_name(plugin)
+            return instructions.get(plugin, "pip install sleap-io[all]")
+        else:
+            return (
+                "Video backend installation options:\n"
+                "  opencv (fastest):        pip install sleap-io[opencv]\n"
+                "  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]\n"
+                "  pyav (balanced):         pip install sleap-io[pyav]\n"
+                "  all backends:            pip install sleap-io[all]"
+            )
+    else:
+        instructions = {
+            "opencv": "pip install sleap-io[opencv]",
+            "imageio": "Already installed (core dependency)",
+        }
+
+        if plugin is not None:
+            plugin = normalize_image_plugin_name(plugin)
+            return instructions.get(plugin, "pip install sleap-io[all]")
+        else:
+            return (
+                "Image backend installation options:\n"
+                "  opencv: pip install sleap-io[opencv]\n"
+                "  imageio: Already installed (core dependency)"
+            )
 
 
 def _get_valid_kwargs(cls, kwargs: dict) -> dict:
@@ -534,9 +642,22 @@ class MediaVideo(VideoBackend):
     def _default_plugin(self) -> str:
         # Check global default first
         if _default_video_plugin is not None:
-            return _default_video_plugin
+            # Warn if preferred plugin not available
+            if not _AVAILABLE_VIDEO_BACKENDS.get(_default_video_plugin, False):
+                import warnings
 
-        # Otherwise auto-detect
+                available = get_available_video_backends()
+                install_cmd = get_installation_instructions(_default_video_plugin)
+                warnings.warn(
+                    f"Preferred video plugin '{_default_video_plugin}' is not "
+                    f"available. Available plugins: {available}\n"
+                    f"Install with: {install_cmd}"
+                )
+                # Fall through to auto-detection
+            else:
+                return _default_video_plugin
+
+        # Auto-detect based on what's available
         if "cv2" in sys.modules:
             return "opencv"
         elif "imageio_ffmpeg" in sys.modules:
@@ -544,8 +665,15 @@ class MediaVideo(VideoBackend):
         elif "av" in sys.modules:
             return "pyav"
         else:
+            # Enhanced error message with installation instructions
             raise ImportError(
-                "No video plugins found. Install opencv-python, imageio-ffmpeg, or av."
+                "No video backend plugins are installed.\n\n"
+                "Available options:\n"
+                "  opencv (fastest):        pip install sleap-io[opencv]\n"
+                "  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]\n"
+                "  pyav (balanced):         pip install sleap-io[pyav]\n"
+                "  all backends:            pip install sleap-io[all]\n\n"
+                "For more information, see: https://io.sleap.ai"
             )
 
     @property
@@ -1029,7 +1157,22 @@ class ImageVideo(VideoBackend):
         """Get default plugin, checking global default first."""
         # Check global default first
         if _default_image_plugin is not None:
-            return _default_image_plugin
+            # Warn if preferred plugin not available
+            if not _AVAILABLE_IMAGE_BACKENDS.get(_default_image_plugin, False):
+                import warnings
+
+                available = get_available_image_backends()
+                install_cmd = get_installation_instructions(
+                    _default_image_plugin, "image"
+                )
+                warnings.warn(
+                    f"Preferred image plugin '{_default_image_plugin}' is not "
+                    f"available. Available plugins: {available}\n"
+                    f"Install with: {install_cmd}"
+                )
+                # Fall through to auto-detection
+            else:
+                return _default_image_plugin
 
         # Otherwise auto-detect
         if "cv2" in sys.modules:

@@ -58,8 +58,9 @@ pip install git+https://github.com/talmolab/sleap-io.git@main
 
 For video backend support, install with extras:
 ```
-pip install sleap-io[opencv]  # For OpenCV backend
-pip install sleap-io[pyav]     # For PyAV backend
+pip install sleap-io[opencv]  # For OpenCV backend (fastest)
+pip install sleap-io[ffmpeg]   # For FFMPEG backend (most reliable)
+pip install sleap-io[pyav]     # For PyAV backend (balanced)
 pip install sleap-io[mat]      # For LEAP .mat file support
 pip install sleap-io[all]      # For all backends and formats
 ```

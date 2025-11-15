@@ -575,12 +575,21 @@ last_frame = video[-1]
 ```
 
 !!! info
-    Video loading uses `imageio-ffmpeg` by default. For alternative backends, install optional dependencies:
+    Video backends are optional. Install the backend you need:
 
     ```bash
-    pip install sleap-io[opencv]  # OpenCV backend
-    pip install sleap-io[pyav]    # PyAV backend
-    pip install sleap-io[all]     # All backends
+    pip install sleap-io[opencv]  # OpenCV backend (fastest)
+    pip install sleap-io[ffmpeg]   # FFMPEG backend (most reliable, auto-selected)
+    pip install sleap-io[pyav]     # PyAV backend (balanced)
+    pip install sleap-io[all]      # All backends
+    ```
+
+    To check which backends are available or get installation help:
+
+    ```python
+    import sleap_io as sio
+    print(sio.get_available_video_backends())
+    print(sio.get_installation_instructions())
     ```
 
 !!! note "See also"

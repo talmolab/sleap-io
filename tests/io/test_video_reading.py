@@ -967,3 +967,103 @@ def test_image_video_default_plugin_without_opencv(
     finally:
         # Restore
         sio.set_default_image_plugin(original_default)
+
+
+def test_get_available_backends():
+    """Test backend availability detection."""
+    import sleap_io as sio
+
+    # Get available backends
+    video_backends = sio.get_available_video_backends()
+    assert isinstance(video_backends, list)
+    # At minimum, we should have some backends if imageio modules are loaded
+    # But we can't guarantee which ones without knowing the environment
+
+    image_backends = sio.get_available_image_backends()
+    assert isinstance(image_backends, list)
+    # imageio should always be available (core dependency)
+    assert "imageio" in image_backends
+
+
+def test_installation_instructions():
+    """Test installation instruction helper."""
+    import sleap_io as sio
+
+    # Test specific plugin instructions for video
+    opencv_instructions = sio.get_installation_instructions("opencv")
+    assert "pip install sleap-io[opencv]" in opencv_instructions
+
+    ffmpeg_instructions = sio.get_installation_instructions("FFMPEG")
+    assert "pip install sleap-io[ffmpeg]" in ffmpeg_instructions
+
+    pyav_instructions = sio.get_installation_instructions("pyav")
+    assert "pip install sleap-io[pyav]" in pyav_instructions
+
+    # Test with alias
+    cv2_instructions = sio.get_installation_instructions("cv2")
+    assert "pip install sleap-io[opencv]" in cv2_instructions
+
+    # Test all plugins (default)
+    all_instructions = sio.get_installation_instructions()
+    assert "opencv" in all_instructions
+    assert "FFMPEG" in all_instructions
+    assert "pyav" in all_instructions
+    assert "pip install sleap-io" in all_instructions
+
+    # Test image backend instructions
+    opencv_img_instructions = sio.get_installation_instructions("opencv", "image")
+    assert "pip install sleap-io[opencv]" in opencv_img_instructions
+
+    imageio_instructions = sio.get_installation_instructions("imageio", "image")
+    assert "Already installed" in imageio_instructions
+
+    # Test all image plugins
+    all_img_instructions = sio.get_installation_instructions(None, "image")
+    assert "opencv" in all_img_instructions
+    assert "imageio" in all_img_instructions
+
+
+def test_preferred_backend_warning(centered_pair_low_quality_path, monkeypatch):
+    """Test warning when preferred backend not available."""
+    import sys
+    import warnings
+
+    import sleap_io as sio
+
+    # Save original state
+    original = sio.get_default_video_plugin()
+
+    try:
+        # Mock sys.modules to simulate opencv not being available
+        if "cv2" in sys.modules:
+            monkeypatch.delitem(sys.modules, "cv2")
+
+        # Refresh backend availability tracking
+        from sleap_io.io import video_reading
+
+        video_reading._AVAILABLE_VIDEO_BACKENDS["opencv"] = False
+
+        # Set preferred backend to opencv (which we mocked as unavailable)
+        sio.set_default_video_plugin("opencv")
+
+        # Try to create a video backend
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            # This should trigger a warning and fall back to auto-detection
+            backend = VideoBackend.from_filename(centered_pair_low_quality_path)
+
+            # Check that a warning was raised
+            assert len(w) > 0
+            warning_message = str(w[0].message)
+            assert "not available" in warning_message
+            assert "opencv" in warning_message
+
+            # Should have fallen back to another backend
+            assert isinstance(backend, MediaVideo)
+            # Should NOT be opencv since it's unavailable
+            assert backend.plugin != "opencv"
+
+    finally:
+        # Restore original state
+        sio.set_default_video_plugin(original)
