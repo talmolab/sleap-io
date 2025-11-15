@@ -1797,10 +1797,11 @@ with pose data, including utilities for common tasks. Some of these include:</p>
 </code></pre></div>
 <h3 id="optional-dependencies">Optional Dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">&para;</a></h3>
 <p>For video backend support, install with extras:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip install sleap-io[opencv]  # For OpenCV backend
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pip install sleap-io[pyav]     # For PyAV backend
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip install sleap-io[mat]      # For LEAP .mat file support
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>pip install sleap-io[all]      # For all backends and formats
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip install sleap-io[opencv]  # For OpenCV backend (fastest)
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pip install sleap-io[ffmpeg]   # For FFMPEG backend (most reliable)
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip install sleap-io[pyav]     # For PyAV backend (balanced)
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>pip install sleap-io[mat]      # For LEAP .mat file support
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>pip install sleap-io[all]      # For all backends and formats
 </code></pre></div></p>
 <h3 id="development-installation">Development Installation<a class="headerlink" href="#development-installation" title="Permanent link">&para;</a></h3>
 <p>For development, use one of the following:
