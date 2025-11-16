@@ -1067,3 +1067,92 @@ def test_preferred_backend_warning(centered_pair_low_quality_path, monkeypatch):
     finally:
         # Restore original state
         sio.set_default_video_plugin(original)
+
+
+def test_no_video_backends_error(monkeypatch):
+    """Test error message when no video backends are available."""
+    import sys
+
+    from sleap_io.io import video_reading
+
+    # Save original backend availability state
+    original_backends = video_reading._AVAILABLE_VIDEO_BACKENDS.copy()
+
+    try:
+        # Remove all video backend modules from sys.modules
+        for module in ["cv2", "imageio_ffmpeg", "av"]:
+            if module in sys.modules:
+                monkeypatch.delitem(sys.modules, module)
+
+        # Update availability tracking to reflect no backends
+        video_reading._AVAILABLE_VIDEO_BACKENDS = {
+            "opencv": False,
+            "FFMPEG": False,
+            "pyav": False,
+        }
+
+        # Try to create a MediaVideo which should fail with helpful error
+        with pytest.raises(ImportError) as exc_info:
+            MediaVideo(filename="test.mp4")
+
+        # Check error message contains helpful installation instructions
+        error_msg = str(exc_info.value)
+        assert "No video backend plugins are installed" in error_msg
+        assert "pip install sleap-io[opencv]" in error_msg
+        assert "pip install sleap-io[ffmpeg]" in error_msg
+        assert "pip install sleap-io[pyav]" in error_msg
+        assert "pip install sleap-io[all]" in error_msg
+        assert "io.sleap.ai" in error_msg
+
+    finally:
+        # Restore original state
+        video_reading._AVAILABLE_VIDEO_BACKENDS = original_backends
+
+
+def test_no_image_backends_warning(centered_pair_frame_paths, monkeypatch):
+    """Test warning when preferred image backend is not available."""
+    import sys
+    import warnings
+
+    import sleap_io as sio
+
+    from sleap_io.io import video_reading
+
+    # Save original state
+    original = sio.get_default_image_plugin()
+    original_backends = video_reading._AVAILABLE_IMAGE_BACKENDS.copy()
+
+    try:
+        # Remove opencv from sys.modules
+        if "cv2" in sys.modules:
+            monkeypatch.delitem(sys.modules, "cv2")
+
+        # Update availability tracking
+        video_reading._AVAILABLE_IMAGE_BACKENDS = {
+            "opencv": False,
+            "imageio": True,
+        }
+
+        # Set preferred backend to opencv (which we mocked as unavailable)
+        sio.set_default_image_plugin("opencv")
+
+        # Try to create an ImageVideo
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            # This should trigger a warning and fall back to imageio
+            backend = ImageVideo(centered_pair_frame_paths)
+
+            # Check that a warning was raised
+            assert len(w) > 0
+            warning_message = str(w[0].message)
+            assert "not available" in warning_message
+            assert "opencv" in warning_message
+
+            # Should have fallen back to imageio
+            assert backend.plugin == "imageio"
+
+    finally:
+        # Restore original state
+        sio.set_default_image_plugin(original)
+        video_reading._AVAILABLE_IMAGE_BACKENDS = original_backends
