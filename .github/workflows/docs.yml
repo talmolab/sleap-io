@@ -65,6 +65,7 @@ jobs:
         if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EAGER_IMPORT: "1"  # Force eager imports for docs introspection
         run: |
           # Fetch the latest gh-pages state to reduce conflicts
           git fetch origin gh-pages --depth=1 || true
@@ -94,6 +95,7 @@ jobs:
         if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EAGER_IMPORT: "1"  # Force eager imports for docs introspection
         run: |
           # Fetch the latest gh-pages state to reduce conflicts
           git fetch origin gh-pages --depth=1 || true

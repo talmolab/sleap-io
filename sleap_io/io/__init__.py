@@ -1,6 +1,4 @@
 """This sub-package contains I/O-related modules such as specific format backends."""
 
-from . import leap
-from . import video_reading as video
-
-__all__ = ["leap", "video"]
+# All I/O modules are lazy-loaded - they're imported when accessed
+# This avoids circular import issues and improves performance

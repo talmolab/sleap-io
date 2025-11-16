@@ -29,11 +29,11 @@ dependencies = [
     "pandas",
     "simplejson",
     "imageio",
-    "imageio-ffmpeg>=0.5.0",
     "tifffile",
     "tqdm",
     "pyyaml",
-    "rich_click"]
+    "rich_click",
+    "lazy-loader>=0.4"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
@@ -45,7 +45,8 @@ readme = {file = ["README.md"], content-type="text/markdown"}
 opencv = ["opencv-python"]
 pyav = ["av<16.0.0"]
 mat = ["pymatreader"]
-all = ["opencv-python", "av<16.0.0", "pymatreader"]
+ffmpeg = ["imageio-ffmpeg>=0.5.0"]
+all = ["opencv-python", "av<16.0.0", "pymatreader", "imageio-ffmpeg>=0.5.0"]
 
 [dependency-groups]
 # PEP 735: Dev-only dependencies (`dev` is installed automatically by `uv`)
@@ -63,7 +64,9 @@ dev = [
     "mkdocs-gen-files",
     "mkdocs-literate-nav",
     "mkdocs-section-index",
-    "mike"]
+    "mike",
+    "py-spy>=0.4.1",
+]
 
 [project.urls]
 Homepage = "https://io.sleap.ai"
