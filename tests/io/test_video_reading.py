@@ -1115,7 +1115,6 @@ def test_no_image_backends_warning(centered_pair_frame_paths, monkeypatch):
     import warnings
 
     import sleap_io as sio
-
     from sleap_io.io import video_reading
 
     # Save original state
