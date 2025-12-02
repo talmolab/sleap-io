@@ -8,10 +8,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import attrs
 import numpy as np
 import simplejson as json
-from hdmf.common import DynamicTableRegion
 from ndx_multisubjects import (
     NdxMultiSubjectsNWBFile,
-    SelectSubjectsContainer,
     SubjectsTable,
 )
 from ndx_pose import PoseTraining as NwbPoseTraining
@@ -78,7 +76,9 @@ def extract_unique_subjects(
         for instance in labeled_frame.instances:
             if instance.track is not None:
                 if instance.track not in unique_tracks:
-                    track_name = instance.track.name if instance.track.name else "unknown"
+                    track_name = (
+                        instance.track.name if instance.track.name else "unknown"
+                    )
                     idx = len(unique_tracks)
                     unique_tracks[instance.track] = {
                         "subject_id": track_name,
@@ -100,8 +100,11 @@ def create_subjects_table(
         subjects_data: List of dictionaries with subject_id keys extracted from tracks.
         description: Description for the SubjectsTable.
         subjects_metadata: Optional list of dictionaries containing additional metadata
-            for each subject. Each dict can include fields like 'species', 'sex', 'age',
-            'weight', 'genotype', 'strain', 'subject_description', 'individual_subj_link'.
+            for each subject.
+
+            Each dict can include fields like 'species', 'sex', 'age',
+            'weight', 'genotype', 'strain', 'subject_description',
+            'individual_subj_link'
             Order must match subjects_data.
 
     Returns:
@@ -114,7 +117,8 @@ def create_subjects_table(
             {"species": "Mus musculus", "sex": "M", "age": "P90D"},
             {"species": "Mus musculus", "sex": "F", "age": "P85D"}
         ]
-        subjects_table = create_subjects_table(subjects_data, subjects_metadata=metadata)
+        subjects_table = create_subjects_table(
+                            subjects_data, subjects_metadata=metadata)
         ```
     """
     subjects_table = SubjectsTable(description=description)
@@ -885,8 +889,8 @@ def save_labels(
 
         if len(subjects_data) == 0:
             raise ValueError(
-                "No tracked instances found in labels. Cannot create multi-subject "
-                "NWB file. Either add tracks to instances or use use_multisubjects=False."
+                "No tracked instances found in labels. Cannot create multi-subject"
+                "Either add tracks to instances or use use_multisubjects=False."
             )
 
         subjects_table = create_subjects_table(
