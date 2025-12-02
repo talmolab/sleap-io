@@ -8,6 +8,12 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import attrs
 import numpy as np
 import simplejson as json
+from hdmf.common import DynamicTableRegion
+from ndx_multisubjects import (
+    NdxMultiSubjectsNWBFile,
+    SelectSubjectsContainer,
+    SubjectsTable,
+)
 from ndx_pose import PoseTraining as NwbPoseTraining
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
@@ -46,6 +52,97 @@ def sanitize_nwb_name(name: str) -> str:
     # Replace forward slashes and colons with underscores
     sanitized = name.replace("/", "_").replace(":", "_")
     return sanitized
+
+
+def extract_unique_subjects(
+    labels: SleapLabels,
+) -> Tuple[List[Dict[str, Any]], Dict[Any, int]]:
+    """Extract unique subjects from SLEAP Labels based on instance tracks.
+
+    Args:
+        labels: The sleap-io Labels object to extract subjects from.
+
+    Returns:
+        A tuple containing:
+        - List of dictionaries with subject metadata (subject_id, track)
+        - Dict mapping Track objects to their index in the subjects list
+
+    Notes:
+        Subjects are identified by their Track objects. Instances without tracks
+        are ignored in multi-subject exports.
+    """
+    unique_tracks = {}
+    track_to_index = {}
+
+    for labeled_frame in labels.labeled_frames:
+        for instance in labeled_frame.instances:
+            if instance.track is not None:
+                if instance.track not in unique_tracks:
+                    track_name = instance.track.name if instance.track.name else "unknown"
+                    idx = len(unique_tracks)
+                    unique_tracks[instance.track] = {
+                        "subject_id": track_name,
+                        "track": instance.track,
+                    }
+                    track_to_index[instance.track] = idx
+
+    return list(unique_tracks.values()), track_to_index
+
+
+def create_subjects_table(
+    subjects_data: List[Dict[str, Any]],
+    description: str = "Subjects in this session",
+    subjects_metadata: Optional[List[Dict[str, Any]]] = None,
+) -> SubjectsTable:
+    """Create an ndx-multisubjects SubjectsTable from subject data.
+
+    Args:
+        subjects_data: List of dictionaries with subject_id keys extracted from tracks.
+        description: Description for the SubjectsTable.
+        subjects_metadata: Optional list of dictionaries containing additional metadata
+            for each subject. Each dict can include fields like 'species', 'sex', 'age',
+            'weight', 'genotype', 'strain', 'subject_description', 'individual_subj_link'.
+            Order must match subjects_data.
+
+    Returns:
+        A SubjectsTable containing all subjects with their metadata.
+
+    Example:
+        ```python
+        subjects_data = [{"subject_id": "mouse1"}, {"subject_id": "mouse2"}]
+        metadata = [
+            {"species": "Mus musculus", "sex": "M", "age": "P90D"},
+            {"species": "Mus musculus", "sex": "F", "age": "P85D"}
+        ]
+        subjects_table = create_subjects_table(subjects_data, subjects_metadata=metadata)
+        ```
+    """
+    subjects_table = SubjectsTable(description=description)
+
+    for i, subject in enumerate(subjects_data):
+        # Start with required subject_id
+        row_data = {"subject_id": subject["subject_id"]}
+
+        # Add optional metadata if provided
+        if subjects_metadata and i < len(subjects_metadata):
+            metadata = subjects_metadata[i]
+            # Add standard NWB subject fields if present
+            for field in [
+                "age",
+                "subject_description",
+                "genotype",
+                "sex",
+                "species",
+                "strain",
+                "weight",
+                "individual_subj_link",
+            ]:
+                if field in metadata:
+                    row_data[field] = metadata[field]
+
+        subjects_table.add_row(**row_data)
+
+    return subjects_table
 
 
 def sleap_skeleton_to_nwb_skeleton(
@@ -734,6 +831,8 @@ def save_labels(
     session_start_time: Optional[str] = None,
     annotator: Optional[str] = None,
     nwb_kwargs: Optional[dict] = None,
+    use_multisubjects: bool = False,
+    subjects_metadata: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """Save sleap-io Labels to an NWB file.
 
@@ -748,6 +847,14 @@ def save_labels(
         nwb_kwargs: Additional keyword arguments to pass to NWBFile constructor.
             Can include: session_id, experimenter, lab, institution,
             experiment_description, etc.
+        use_multisubjects: If True, use NdxMultiSubjectsNWBFile and create a
+            SubjectsTable based on instance tracks. Defaults to False for backward
+            compatibility.
+        subjects_metadata: Optional list of dictionaries containing additional metadata
+            for each subject. Only used when use_multisubjects=True. Each dict can
+            include fields like 'species', 'sex', 'age', 'weight', 'genotype', 'strain',
+            'subject_description'. Order should match the order of unique tracks
+            found in the labels.
     """
     # Set defaults for required fields
     if session_start_time is None:
@@ -769,7 +876,27 @@ def save_labels(
     if nwb_kwargs is not None:
         nwbfile_kwargs.update(nwb_kwargs)
 
-    nwbfile = NWBFile(**nwbfile_kwargs)
+    # Create appropriate NWB file type
+    if use_multisubjects:
+        nwbfile = NdxMultiSubjectsNWBFile(**nwbfile_kwargs)
+
+        # Extract subjects from tracks and create SubjectsTable
+        subjects_data, _ = extract_unique_subjects(labels)
+
+        if len(subjects_data) == 0:
+            raise ValueError(
+                "No tracked instances found in labels. Cannot create multi-subject "
+                "NWB file. Either add tracks to instances or use use_multisubjects=False."
+            )
+
+        subjects_table = create_subjects_table(
+            subjects_data,
+            description="Subjects tracked in this session",
+            subjects_metadata=subjects_metadata,
+        )
+        nwbfile.subjects_table = subjects_table
+    else:
+        nwbfile = NWBFile(**nwbfile_kwargs)
 
     # Convert SLEAP labels to NWB format
     pose_training, skeletons = sleap_labels_to_nwb_pose_training(
@@ -797,6 +924,12 @@ def load_labels(path: Union[Path, str]) -> SleapLabels:
 
     Returns:
         A sleap-io Labels object with data from the NWB file.
+
+    Notes:
+        This function supports loading both regular NWB files and NWB files
+        created with ndx-multisubjects. Multi-subject information (SubjectsTable)
+        is not currently preserved when loading back to SLEAP format, but the
+        pose data will be loaded correctly.
     """
     with NWBHDF5IO(path, mode="r") as io:
         nwbfile = io.read()
@@ -809,6 +942,8 @@ def load_labels(path: Union[Path, str]) -> SleapLabels:
         skeletons = behavior_pm["Skeletons"]
 
         # Convert back to SLEAP format
+        # Note: This works for both regular and multi-subject NWB files
+        # Multi-subject metadata from SubjectsTable is not currently preserved
         labels = nwb_pose_training_to_sleap_labels(pose_training, skeletons)
 
         return labels
@@ -1037,6 +1172,8 @@ def export_labels(
     frame_map_filename: str = "frame_map.json",
     nwb_filename: str = "pose_training.nwb",
     clean: bool = True,
+    use_multisubjects: bool = False,
+    subjects_metadata: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """Export Labels to NWB format with MJPEG video and frame map.
 
@@ -1056,6 +1193,10 @@ def export_labels(
             Defaults to "pose_training.nwb".
         clean: If True, remove empty frames and predictions before export using
             `Labels.remove_predictions(clean=True)`. Defaults to True.
+        use_multisubjects: If True, use NdxMultiSubjectsNWBFile and create a
+            SubjectsTable based on instance tracks. Defaults to False.
+        subjects_metadata: Optional list of dictionaries containing additional metadata
+            for each subject. Only used when use_multisubjects=True.
 
     Raises:
         ValueError: If labels contain no labeled frames after cleaning.
@@ -1120,4 +1261,9 @@ def export_labels(
     labels.videos = [mjpeg_video]
 
     # Now save the NWB file as normal
-    save_labels(labels, nwb_path)
+    save_labels(
+        labels,
+        nwb_path,
+        use_multisubjects=use_multisubjects,
+        subjects_metadata=subjects_metadata,
+    )
