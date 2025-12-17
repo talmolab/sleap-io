@@ -1938,8 +1938,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     # If max video ID == len(videos) - 1 and IDs are contiguous, they're list indices
     # In this case, use identity mapping (backwards compatible behavior)
     frames_use_list_indices = (
-        len(frame_video_ids) == len(videos)
-        and max_frame_video_id == len(videos) - 1
+        len(frame_video_ids) == len(videos) and max_frame_video_id == len(videos) - 1
     )
 
     if frames_use_list_indices:

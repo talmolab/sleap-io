@@ -2935,7 +2935,9 @@ def test_load_slp_with_sequential_ids_sparse_datasets(tmp_path, small_robot_vide
         video_groups = [
             k for k in f.keys() if k.startswith("video") and k[5:].isdigit()
         ]
-        video_ids_in_groups = sorted([int(vg.replace("video", "")) for vg in video_groups])
+        video_ids_in_groups = sorted(
+            [int(vg.replace("video", "")) for vg in video_groups]
+        )
         assert video_ids_in_groups == sorted(sparse_dataset_indices), (
             "Video groups should have sparse indices"
         )
