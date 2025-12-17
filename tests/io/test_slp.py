@@ -2848,6 +2848,131 @@ def test_load_slp_with_sparse_video_indices(tmp_path, small_robot_video):
         assert lf.image.shape[-3:] == small_robot_video[0].shape
 
 
+def test_load_slp_with_sequential_ids_sparse_datasets(tmp_path, small_robot_video):
+    """Test loading .slp files with sequential video IDs but sparse dataset names.
+
+    This occurs when files are exported/split from larger .pkg.slp files:
+    - Videos retain their original sparse dataset names (video51, video49, etc.)
+    - But frames are re-indexed sequentially (video_id = 0, 1, 2, 3)
+
+    In this case, frame video IDs are list indices and should NOT be remapped
+    based on dataset names.
+
+    Args:
+        tmp_path: Pytest temporary directory fixture.
+        small_robot_video: Small 3-frame video fixture.
+    """
+    # Step 1: Create Labels with 4 videos
+    skeleton = Skeleton(nodes=["node1", "node2"])
+    videos = []
+    labeled_frames = []
+
+    for i in range(4):
+        video = Video.from_filename(small_robot_video.filename)
+        videos.append(video)
+
+        # Add 2 labeled frames per video
+        for frame_idx in [0, 1]:
+            instance = Instance(
+                points=np.array([[10.0 + i, 20.0], [30.0, 40.0 + i]]),
+                skeleton=skeleton,
+            )
+            lf = LabeledFrame(video=video, frame_idx=frame_idx, instances=[instance])
+            labeled_frames.append(lf)
+
+    labels = Labels(videos=videos, skeletons=[skeleton], labeled_frames=labeled_frames)
+
+    # Step 2: Save with embedded frames
+    embedded_path = tmp_path / "embedded.slp"
+    save_slp(labels, str(embedded_path), embed="all")
+
+    # Step 3: Create version with sparse dataset names but sequential frame IDs
+    # This mimics files exported from larger .pkg.slp files
+    sparse_dataset_path = tmp_path / "sparse_datasets_sequential_ids.slp"
+    sparse_dataset_indices = [51, 49, 97, 23]  # Sparse dataset names
+
+    with h5py.File(embedded_path, "r") as src:
+        with h5py.File(sparse_dataset_path, "w") as dst:
+            # Copy non-video groups/datasets
+            for key in [
+                "metadata",
+                "points",
+                "pred_points",
+                "instances",
+                "tracks_json",
+                "suggestions_json",
+                "sessions_json",
+            ]:
+                if key in src:
+                    src.copy(key, dst)
+
+            # Copy and rename video groups with sparse indices
+            for i in range(4):
+                old_name = f"video{i}"
+                new_name = f"video{sparse_dataset_indices[i]}"
+                if old_name in src:
+                    src.copy(old_name, dst, name=new_name)
+
+            # Keep frames dataset with SEQUENTIAL video IDs (0, 1, 2, 3)
+            # This is the key difference from test_load_slp_with_sparse_video_indices
+            frames = src["frames"][:]
+            dst.create_dataset("frames", data=frames)
+
+            # Update videos_json to reference sparse dataset names
+            videos_json = src["videos_json"][:]
+            new_videos_json = []
+            for i, vj_bytes in enumerate(videos_json):
+                vj = json.loads(vj_bytes.decode("utf-8"))
+                if "backend" in vj and "dataset" in vj["backend"]:
+                    vj["backend"]["dataset"] = f"video{sparse_dataset_indices[i]}/video"
+                new_videos_json.append(np.bytes_(json.dumps(vj, separators=(",", ":"))))
+
+            dst.create_dataset("videos_json", data=new_videos_json, maxshape=(None,))
+
+    # Step 4: Verify the structure was created correctly
+    with h5py.File(sparse_dataset_path, "r") as f:
+        # Dataset names should be sparse
+        video_groups = [
+            k for k in f.keys() if k.startswith("video") and k[5:].isdigit()
+        ]
+        video_ids_in_groups = sorted([int(vg.replace("video", "")) for vg in video_groups])
+        assert video_ids_in_groups == sorted(sparse_dataset_indices), (
+            "Video groups should have sparse indices"
+        )
+
+        # Frame video IDs should be sequential (0, 1, 2, 3)
+        frames_data = f["frames"][:]
+        unique_video_ids = sorted(np.unique(frames_data["video"]))
+        assert unique_video_ids == [0, 1, 2, 3], (
+            "Frame video IDs should be sequential list indices"
+        )
+
+    # Step 5: Load the file - before fix, this would incorrectly map video IDs
+    # based on dataset names, causing wrong video associations
+    loaded_labels = load_slp(str(sparse_dataset_path))
+
+    # Step 6: Verify correct loading
+    assert len(loaded_labels.videos) == 4, "Should load 4 videos"
+    assert len(loaded_labels) == 8, "Should load 8 frames (4 videos × 2 frames)"
+
+    # Verify each video has exactly 2 frames
+    for i, video in enumerate(loaded_labels.videos):
+        frames_for_video = [lf for lf in loaded_labels if lf.video == video]
+        assert len(frames_for_video) == 2, f"Video {i} should have 2 frames"
+
+        # Verify frame instances have correct point values
+        # Points should be (10+i, 20) and (30, 40+i) based on how we created them
+        for lf in frames_for_video:
+            assert len(lf.instances) == 1, "Each frame should have 1 instance"
+            pts = lf.instances[0].numpy()
+            # The first point's x coordinate should be 10 + video_index
+            expected_x = 10.0 + i
+            assert abs(pts[0, 0] - expected_x) < 0.01, (
+                f"Video {i}: Expected point x={expected_x}, got {pts[0, 0]}. "
+                "Video ID mapping may be incorrect."
+            )
+
+
 def test_save_slp_non_sparse_videos(tmp_path, slp_minimal):
     """Test saving labels with non-embedded videos (fallback to sequential indexing)."""
     # Save with original videos (non-embedded)
