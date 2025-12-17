@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from sleap_io import Video
-from sleap_io.io.video_reading import ImageVideo, MediaVideo
+from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 
 
 def test_video_class():
@@ -464,11 +464,111 @@ def test_video_matches_path_image_sequences_strict_false():
     assert not video_seq1.matches_path(video_seq4, strict=False)
 
 
+def test_video_matches_path_hdf5_source_filename():
+    """Test Video.matches_path() prioritizes source_filename for HDF5 backends."""
+    # Create two HDF5 videos with the same filename but different source_filenames
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = "/original/path/video_a.mp4"
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = "/original/path/video_a.mp4"
+    video2.backend.dataset = "video1/video"
+
+    video3 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video3.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video3.backend.source_filename = "/original/path/video_b.mp4"
+    video3.backend.dataset = "video2/video"
+
+    # Same source_filename should match (even with different datasets)
+    assert video1.matches_path(video2, strict=False)
+    assert video1.matches_path(video2, strict=True)
+
+    # Different source_filenames should NOT match (even with same HDF5 file)
+    assert not video1.matches_path(video3, strict=False)
+    assert not video1.matches_path(video3, strict=True)
+
+
+def test_video_matches_path_hdf5_source_filename_basename():
+    """Test basename matching for HDF5 source_filename when strict=False."""
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = "/original/path/video.mp4"
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = "/different/path/video.mp4"
+    video2.backend.dataset = "video1/video"
+
+    # Same source_filename basename should match when strict=False
+    assert video1.matches_path(video2, strict=False)
+
+    # Different paths should NOT match when strict=True
+    assert not video1.matches_path(video2, strict=True)
+
+
+def test_video_matches_path_hdf5_fallback_to_dataset():
+    """Test fallback to dataset matching when source_filename is None."""
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = None
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = None
+    video2.backend.dataset = "video0/video"
+
+    video3 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video3.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video3.backend.source_filename = None
+    video3.backend.dataset = "video1/video"
+
+    # Same dataset should match when source_filename is None
+    assert video1.matches_path(video2, strict=False)
+    assert video1.matches_path(video2, strict=True)
+
+    # Different datasets should NOT match
+    assert not video1.matches_path(video3, strict=False)
+    assert not video1.matches_path(video3, strict=True)
+
+
+def test_video_matches_path_hdf5_no_source_or_dataset():
+    """Test returns False when neither source_filename nor dataset is available."""
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = None
+    video1.backend.dataset = None
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = None
+    video2.backend.dataset = None
+
+    # Should return False when neither source_filename nor dataset is available
+    assert not video1.matches_path(video2, strict=False)
+    assert not video1.matches_path(video2, strict=True)
+
+
+def test_video_matches_path_hdf5_mixed_with_non_hdf5():
+    """Test Video.matches_path() with one HDF5 and one non-HDF5 video."""
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = "/original/path/video.mp4"
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/video.mp4", open_backend=False)
+    # No backend (or non-HDF5 backend), so it uses default filename matching
+
+    # Should use default filename matching (basenames don't match)
+    assert not video1.matches_path(video2, strict=False)
+
+
 def test_video_matches_content_backend_edge_cases():
     """Test Video.matches_content() backend comparison edge cases."""
-    # Test backend comparison edge cases (lines 491-494 in video.py)
-    from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
-
     video1 = Video(filename="test1.mp4", open_backend=False)
     video2 = Video(filename="test2.mp4", open_backend=False)
 
