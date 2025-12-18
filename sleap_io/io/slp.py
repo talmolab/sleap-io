@@ -1928,34 +1928,50 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     metadata = read_metadata(labels_path)
     provenance = metadata.get("provenance", dict())
 
-    # Build mapping from sparse video IDs to list indices
-    # This handles files from old SLEAP where video IDs can be sparse
-    # (e.g., 0, 15, 29, 47, ...) rather than sequential (0, 1, 2, 3, ...)
-    video_id_to_index = {}
-    for i, video in enumerate(videos):
-        # For embedded videos, extract the video ID from backend.dataset
-        if (
-            hasattr(video, "backend")
-            and video.backend is not None
-            and hasattr(video.backend, "dataset")
-            and video.backend.dataset is not None
-        ):
-            dataset = video.backend.dataset
-            # Extract video ID from dataset name (e.g., "video15/video" → 15)
-            if "/" in dataset:
-                video_group = dataset.split("/")[0]
-                if video_group.startswith("video"):
-                    video_id_str = video_group[5:]  # Remove "video" prefix
-                    if video_id_str.isdigit():
-                        video_id = int(video_id_str)
-                        video_id_to_index[video_id] = i
-                        continue
-
-        # For non-embedded videos or videos without extractable IDs,
-        # assume sequential indexing (backwards compatible behavior)
-        video_id_to_index[i] = i
-
     frames = read_hdf5_dataset(labels_path, "frames")
+
+    # Check if video IDs in frames are sequential list indices (0, 1, 2, ..., n-1)
+    # or sparse embedded IDs (e.g., 0, 15, 29, 47, ...) that need remapping
+    frame_video_ids = set(int(frame[1]) for frame in frames)
+    max_frame_video_id = max(frame_video_ids) if frame_video_ids else 0
+
+    # If max video ID == len(videos) - 1 and IDs are contiguous, they're list indices
+    # In this case, use identity mapping (backwards compatible behavior)
+    frames_use_list_indices = (
+        len(frame_video_ids) == len(videos) and max_frame_video_id == len(videos) - 1
+    )
+
+    if frames_use_list_indices:
+        # Video IDs are sequential list indices - use identity mapping
+        video_id_to_index = {i: i for i in range(len(videos))}
+    else:
+        # Build mapping from sparse video IDs to list indices
+        # This handles files from old SLEAP where video IDs can be sparse
+        # (e.g., 0, 15, 29, 47, ...) rather than sequential (0, 1, 2, 3, ...)
+        video_id_to_index = {}
+        for i, video in enumerate(videos):
+            # For embedded videos, extract the video ID from backend.dataset
+            if (
+                hasattr(video, "backend")
+                and video.backend is not None
+                and hasattr(video.backend, "dataset")
+                and video.backend.dataset is not None
+            ):
+                dataset = video.backend.dataset
+                # Extract video ID from dataset name (e.g., "video15/video" → 15)
+                if "/" in dataset:
+                    video_group = dataset.split("/")[0]
+                    if video_group.startswith("video"):
+                        video_id_str = video_group[5:]  # Remove "video" prefix
+                        if video_id_str.isdigit():
+                            video_id = int(video_id_str)
+                            video_id_to_index[video_id] = i
+                            continue
+
+            # For non-embedded videos or videos without extractable IDs,
+            # assume sequential indexing (backwards compatible behavior)
+            video_id_to_index[i] = i
+
     labeled_frames = []
     for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
         # Map sparse video_id to sequential list index
