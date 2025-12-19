@@ -450,7 +450,39 @@ class Video:
 
         Returns:
             True if the videos have matching paths, False otherwise.
+
+        Notes:
+            For HDF5 video backends (e.g., embedded videos in .pkg.slp files),
+            matching prioritizes the source_filename attribute since multiple
+            videos can share the same HDF5 file path but reference different
+            source videos. Falls back to dataset name matching if source_filename
+            is not available.
         """
+        # Handle HDF5 backends specially - prioritize source_filename matching
+        self_is_hdf5 = isinstance(self.backend, HDF5Video)
+        other_is_hdf5 = isinstance(other.backend, HDF5Video)
+
+        if self_is_hdf5 and other_is_hdf5:
+            # Both are HDF5 videos - match by source_filename first
+            self_source = self.backend.source_filename
+            other_source = other.backend.source_filename
+
+            if self_source is not None and other_source is not None:
+                if strict:
+                    return Path(self_source).resolve() == Path(other_source).resolve()
+                else:
+                    return Path(self_source).name == Path(other_source).name
+
+            # Fall back to dataset name matching if source_filename is not available
+            self_dataset = self.backend.dataset
+            other_dataset = other.backend.dataset
+
+            if self_dataset is not None and other_dataset is not None:
+                return self_dataset == other_dataset
+
+            # If neither source_filename nor dataset available, cannot match
+            return False
+
         if isinstance(self.filename, list) and isinstance(other.filename, list):
             # Both are image sequences
             if strict:
