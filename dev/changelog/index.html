@@ -353,6 +353,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v058" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.5.8
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v057" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -665,17 +676,6 @@
     <span class="md-ellipsis">
       
         v0.0.9
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v008" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.8
       
     </span>
   </a>
@@ -1979,6 +1979,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v058" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.5.8
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v057" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2297,17 +2308,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v008" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.8
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -2326,6 +2326,215 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v058"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.8">v0.5.8</a><a class="headerlink" href="#v058" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.5.8</h1>
+<h2>🎯 Summary</h2>
+<p>This release delivers a <strong>dramatic performance improvement</strong> with 2000x faster imports through lazy loading, makes <code>imageio-ffmpeg</code> optional to reduce installation size, and includes multiple critical bug fixes for video indexing and matching in SLP files. The v0.5.8 release focuses on reducing friction for users while improving reliability for complex video handling scenarios.</p>
+<h2>⚡ Performance Improvements</h2>
+<h3>Implement Lazy Loading for 2000x Faster Imports (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3626697825" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/270" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/270/hovercard" href="https://github.com/talmolab/sleap-io/pull/270">#270</a>)</h3>
+<p>Dramatically reduced import time using the <code>lazy-loader</code> library (SPEC 1 standard used by NumPy, SciPy, scikit-image).</p>
+<p><strong>Performance Results:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Before</th>
+<th>After</th>
+<th>Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Import time</td>
+<td>4.38s</td>
+<td><strong>0.0022s</strong></td>
+<td><strong>1991x faster</strong></td>
+</tr>
+<tr>
+<td>Target</td>
+<td>&lt;500ms</td>
+<td>2.2ms</td>
+<td><strong>227x better than target</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What's deferred:</strong></p>
+<ul>
+<li>pandas (2.24s) - loads only when <code>load_dlc()</code> is called</li>
+<li>PyAV (0.67s) - loads only when video is opened</li>
+<li>NWB tools (0.53s) - loads only when <code>load_nwb()</code> is called</li>
+<li>All format modules - load on first use</li>
+</ul>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Before: 4.38s to import
+# After: 0.0022s to import
+import sleap_io
+
+# Functions available immediately (lazy loading is transparent)
+labels = sleap_io.load_slp(&quot;file.slp&quot;)
+
+# First call to load_dlc() imports pandas (one-time ~2s cost)
+labels = sleap_io.load_dlc(&quot;file.csv&quot;)
+
+# Subsequent calls are instant (pandas already cached)
+labels = sleap_io.load_dlc(&quot;file2.csv&quot;)"><pre><span class="pl-c"># Before: 4.38s to import</span>
+<span class="pl-c"># After: 0.0022s to import</span>
+<span class="pl-k">import</span> <span class="pl-s1">sleap_io</span>
+
+<span class="pl-c"># Functions available immediately (lazy loading is transparent)</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sleap_io</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"file.slp"</span>)
+
+<span class="pl-c"># First call to load_dlc() imports pandas (one-time ~2s cost)</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sleap_io</span>.<span class="pl-c1">load_dlc</span>(<span class="pl-s">"file.csv"</span>)
+
+<span class="pl-c"># Subsequent calls are instant (pandas already cached)</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sleap_io</span>.<span class="pl-c1">load_dlc</span>(<span class="pl-s">"file2.csv"</span>)</pre></div>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li>✅ <strong>Zero API changes</strong> - Users import and use sleap-io exactly as before</li>
+<li>✅ <strong>Battle-tested</strong> - Uses <code>lazy-loader</code> library from SPEC 1</li>
+<li>✅ <strong>Type-safe</strong> - Works with mypy/pyright</li>
+<li>✅ <strong>Test coverage</strong> - <code>EAGER_IMPORT=1</code> fixture ensures tests catch missing imports</li>
+<li>✅ <strong>Lower memory footprint</strong> - ~30-40% reduction</li>
+</ul>
+<p><strong>Impact:</strong> Instant CLI startup and dramatically improved user experience, especially for quick scripts and interactive workflows.</p>
+<h2>✨ New Features</h2>
+<h3>Make imageio-ffmpeg Optional and Enhance Backend Plugin System (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3627696861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/272" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/272/hovercard" href="https://github.com/talmolab/sleap-io/pull/272">#272</a>)</h3>
+<p>Made <code>imageio-ffmpeg</code> an optional dependency and added new introspection APIs for better discoverability.</p>
+<p><strong>New Optional Dependency Groups:</strong></p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="pip install sleap-io[ffmpeg]  # Recommended for video support
+pip install sleap-io[all]     # All backends
+pip install sleap-io          # Minimal (no video backends)"><pre>pip install sleap-io[ffmpeg]  <span class="pl-c"><span class="pl-c">#</span> Recommended for video support</span>
+pip install sleap-io[all]     <span class="pl-c"><span class="pl-c">#</span> All backends</span>
+pip install sleap-io          <span class="pl-c"><span class="pl-c">#</span> Minimal (no video backends)</span></pre></div>
+<p><strong>New Public API Functions:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Check what's available
+print(sio.get_available_video_backends())
+# Output: ['FFMPEG', 'pyav']
+
+print(sio.get_available_image_backends())
+# Output: ['opencv', 'imageio']
+
+# Get installation help
+print(sio.get_installation_instructions(&quot;opencv&quot;))
+# Output: pip install sleap-io[opencv]"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Check what's available</span>
+<span class="pl-en">print</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">get_available_video_backends</span>())
+<span class="pl-c"># Output: ['FFMPEG', 'pyav']</span>
+
+<span class="pl-en">print</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">get_available_image_backends</span>())
+<span class="pl-c"># Output: ['opencv', 'imageio']</span>
+
+<span class="pl-c"># Get installation help</span>
+<span class="pl-en">print</span>(<span class="pl-s1">sio</span>.<span class="pl-c1">get_installation_instructions</span>(<span class="pl-s">"opencv"</span>))
+<span class="pl-c"># Output: pip install sleap-io[opencv]</span></pre></div>
+<p><strong>Enhanced Error Messages:</strong></p>
+<p><strong>Before:</strong></p>
+<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="ImportError: No video plugins found. Install opencv-python, imageio-ffmpeg, or av."><pre class="notranslate"><code>ImportError: No video plugins found. Install opencv-python, imageio-ffmpeg, or av.
+</code></pre></div>
+<p><strong>After:</strong></p>
+<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="ImportError: No video backend plugins are installed.
+
+Available options:
+  opencv (fastest):        pip install sleap-io[opencv]
+  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]
+  pyav (balanced):         pip install sleap-io[pyav]
+  all backends:            pip install sleap-io[all]
+
+For more information, see: https://io.sleap.ai"><pre class="notranslate"><code>ImportError: No video backend plugins are installed.
+
+Available options:
+  opencv (fastest):        pip install sleap-io[opencv]
+  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]
+  pyav (balanced):         pip install sleap-io[pyav]
+  all backends:            pip install sleap-io[all]
+
+For more information, see: https://io.sleap.ai
+</code></pre></div>
+<p><strong>Additional Features:</strong></p>
+<ul>
+<li>Smart warnings when preferred backend is not available</li>
+<li>Automatic fallback to auto-detection</li>
+<li>Updated documentation with new installation options</li>
+</ul>
+<p><strong>Impact:</strong> Reduces installation footprint and provides better guidance for users setting up video backends.</p>
+<h2>🐛 Bug Fixes</h2>
+<h3>Fix Video Matching to Prioritize source_filename for HDF5 Backends (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3740524835" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/275" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/275/hovercard" href="https://github.com/talmolab/sleap-io/pull/275">#275</a>)</h3>
+<p>Fixed video matching for <code>.pkg.slp</code> files where multiple videos share the same HDF5 file path but reference different source videos.</p>
+<p><strong>Problem:</strong> When merging Labels with HDF5 video backends (embedded videos), <code>Video.matches_path()</code> would incorrectly match different videos just because they came from the same HDF5 file.</p>
+<p><strong>Solution:</strong> For HDF5 backends, matching now prioritizes:</p>
+<ol>
+<li><code>source_filename</code> (the original video path before embedding)</li>
+<li>Falls back to <code>dataset</code> name if <code>source_filename</code> is <code>None</code></li>
+<li>Returns <code>False</code> if neither is available (avoids false positives)</li>
+</ol>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# After fix: Correct matching for embedded videos
+labels1 = sio.load_slp(&quot;project1.pkg.slp&quot;)
+labels2 = sio.load_slp(&quot;project2.pkg.slp&quot;)
+
+# Videos now match by original source filename, not HDF5 path
+labels1.merge(labels2)  # ✅ Correct video matching"><pre><span class="pl-c"># After fix: Correct matching for embedded videos</span>
+<span class="pl-s1">labels1</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"project1.pkg.slp"</span>)
+<span class="pl-s1">labels2</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"project2.pkg.slp"</span>)
+
+<span class="pl-c"># Videos now match by original source filename, not HDF5 path</span>
+<span class="pl-s1">labels1</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">labels2</span>)  <span class="pl-c"># ✅ Correct video matching</span></pre></div>
+<p><strong>Impact:</strong> Critical fix for workflows involving merged predictions with embedded videos.</p>
+<h3>Fix Video ID Mapping for Sequential IDs with Sparse Dataset Names (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3736944402" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/274" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/274/hovercard" href="https://github.com/talmolab/sleap-io/pull/274">#274</a>)</h3>
+<p>Fixed loading of SLP files exported from larger <code>.pkg.slp</code> files where embedded video datasets have sparse names but sequential frame video IDs.</p>
+<p><strong>Problem:</strong> When SLP files are exported (e.g., via "Export Labeled Clip..."), the embedded video datasets retain sparse naming (e.g., <code>video51/video</code>, <code>video49/video</code>) but frame video IDs may be sequential (0, 1, 2, 3). This caused incorrect video-frame associations.</p>
+<p><strong>Solution:</strong> Added detection logic to determine if frame video IDs are sequential list indices or sparse embedded IDs, and apply the appropriate mapping.</p>
+<p><strong>Impact:</strong> Fixes data integrity issues when working with exported clips from larger projects.</p>
+<h3>Fix Sparse Video Indexing While Writing SLP Files (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3592414223" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/268" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/268/hovercard" href="https://github.com/talmolab/sleap-io/pull/268">#268</a>)</h3>
+<p>Fixed preservation of sparse video indexing when writing and re-reading SLP files with embedded videos.</p>
+<p><strong>Problem:</strong> When saving labels with sparse video indices (e.g., videos indexed as 0, 5, 10, 15, 20), the video IDs were incorrectly mapped to sequential indices, causing data loss or misalignment on reload.</p>
+<p><strong>Solution:</strong> Extract original video IDs from HDF5 dataset names and use them when writing frame data.</p>
+<p><strong>Impact:</strong> Ensures data integrity for round-trip operations with sparse video indices.</p>
+<h3>Fix Sparse Video Indexing Bug in read_labels() (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3572671809" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/266" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/266/hovercard" href="https://github.com/talmolab/sleap-io/pull/266">#266</a>)</h3>
+<p>Fixed loading of <code>.slp</code> files with sparse video indices from old SLEAP versions.</p>
+<p><strong>Problem:</strong> Old SLEAP versions (format_id &lt; 2.0) could create files where video IDs in the frames dataset were sparse (e.g., <code>0, 15, 29, 47, ...</code>), causing <code>IndexError</code> when loading.</p>
+<p><strong>Solution:</strong> Build a <code>video_id_to_index</code> mapping from sparse video IDs to sequential list indices when loading.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Now works correctly
+labels = sio.load_slp(&quot;legacy_file.slp&quot;)  # ✅ No more IndexError
+assert len(labels.videos) == 5
+assert len(labels) == 10"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Now works correctly</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"legacy_file.slp"</span>)  <span class="pl-c"># ✅ No more IndexError</span>
+<span class="pl-k">assert</span> <span class="pl-en">len</span>(<span class="pl-s1">labels</span>.<span class="pl-c1">videos</span>) <span class="pl-c1">==</span> <span class="pl-c1">5</span>
+<span class="pl-k">assert</span> <span class="pl-en">len</span>(<span class="pl-s1">labels</span>) <span class="pl-c1">==</span> <span class="pl-c1">10</span></pre></div>
+<p><strong>Impact:</strong> Restores compatibility with legacy SLEAP files that have non-sequential video IDs.</p>
+<h3>Fix KeyError When backend_metadata Lacks Filename Key (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3572973997" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/267" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/267/hovercard" href="https://github.com/talmolab/sleap-io/pull/267">#267</a>)</h3>
+<p>Fixed loading of SLP files where <code>backend_metadata</code> is missing the "filename" key, particularly when upgrading from SLEAP v1.4 to v1.5+.</p>
+<p><strong>Solution:</strong> Added fallback chain to handle legacy files and ensure "filename" is always present when writing.</p>
+<p><strong>Impact:</strong> Improves compatibility with older SLEAP project files.</p>
+<h2>💡 Why These Changes Matter</h2>
+<p>The v0.5.8 release significantly enhances sleap-io's <strong>performance, reliability, and ease of use</strong>:</p>
+<ul>
+<li><strong>Instant Imports</strong>: 2000x faster import times make sleap-io feel snappy for scripts, notebooks, and CLI tools</li>
+<li><strong>Flexible Installation</strong>: Optional video backends let users install only what they need, reducing dependencies and installation size</li>
+<li><strong>Better Discoverability</strong>: New introspection APIs and improved error messages help users configure their environment</li>
+<li><strong>Data Integrity</strong>: Five bug fixes for video indexing and matching ensure reliable handling of complex video scenarios</li>
+<li><strong>Legacy Compatibility</strong>: Improved support for older SLEAP file formats and upgrade paths</li>
+</ul>
+<p>This release demonstrates sleap-io's commitment to <strong>developer experience, reliability, and backwards compatibility</strong> for pose tracking research workflows.</p>
+<h2>📋 Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3572671809" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/266" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/266/hovercard" href="https://github.com/talmolab/sleap-io/pull/266">#266</a>: Fix sparse video indexing bug in read_labels() (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3572973997" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/267" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/267/hovercard" href="https://github.com/talmolab/sleap-io/pull/267">#267</a>: Fix KeyError When backend_metadata Lacks Filename Key (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/alicup29/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/alicup29">@alicup29</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3592414223" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/268" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/268/hovercard" href="https://github.com/talmolab/sleap-io/pull/268">#268</a>: Fix sparse video indexing while writing slp files (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3623818694" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/269" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/269/hovercard" href="https://github.com/talmolab/sleap-io/pull/269">#269</a>: Bump version from 0.5.7 to 0.5.8 (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3626697825" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/270" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/270/hovercard" href="https://github.com/talmolab/sleap-io/pull/270">#270</a>: Implement lazy loading to improve import performance (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3627394247" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/271" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/271/hovercard" href="https://github.com/talmolab/sleap-io/pull/271">#271</a>: Add investigation skill for empirical experimentation (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3627696861" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/272" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/272/hovercard" href="https://github.com/talmolab/sleap-io/pull/272">#272</a>: Make imageio-ffmpeg optional and enhance backend plugin system (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3736944402" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/274" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/274/hovercard" href="https://github.com/talmolab/sleap-io/pull/274">#274</a>: Fix video ID mapping for sequential IDs with sparse dataset names (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3740524835" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/275" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/275/hovercard" href="https://github.com/talmolab/sleap-io/pull/275">#275</a>: Fix video matching to prioritize source_filename for HDF5 backends (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/gitttt-1234/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/gitttt-1234">@gitttt-1234</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.5.7...v0.5.8"><tt>v0.5.7...v0.5.8</tt></a></p>
 <h2 id="v057"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.5.7">v0.5.7</a><a class="headerlink" href="#v057" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.5.7</h1>
 <h2>🎯 Summary</h2>
@@ -4689,16 +4898,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Bump to v0.0.9 and update usage docs by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1830149954" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/61" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/61/hovercard" href="https://github.com/talmolab/sleap-io/pull/61">#61</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.8...v0.0.9"><tt>v0.0.8...v0.0.9</tt></a></p>
-<h2 id="v008"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.8">v0.0.8</a><a class="headerlink" href="#v008" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Fix docstring for LabeledFrame.predicted_instances by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1786622358" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/43" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/43/hovercard" href="https://github.com/talmolab/sleap-io/pull/43">#43</a></li>
-<li>Parse skeleton symmetries from SLP files by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1813414337" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/53" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/53/hovercard" href="https://github.com/talmolab/sleap-io/pull/53">#53</a></li>
-<li>Add Labels.skeleton convenience attribute by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1813415401" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/54" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/54/hovercard" href="https://github.com/talmolab/sleap-io/pull/54">#54</a></li>
-<li>Write SLP files by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1815056258" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/55" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/55/hovercard" href="https://github.com/talmolab/sleap-io/pull/55">#55</a></li>
-<li>Create video backend automatically if filename exists. by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1819850772" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/56" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/56/hovercard" href="https://github.com/talmolab/sleap-io/pull/56">#56</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.7...v0.0.8"><tt>v0.0.7...v0.0.8</tt></a></p>
 
 
 
