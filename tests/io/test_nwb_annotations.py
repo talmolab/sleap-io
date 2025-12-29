@@ -15,13 +15,13 @@ from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.nwb_annotations import (
+    MULTISUBJECTS_AVAILABLE,
     FrameInfo,
     FrameMap,
     create_nwb_to_slp_skeleton_map,
     create_nwb_to_slp_video_map,
     create_slp_to_nwb_skeleton_map,
     create_slp_to_nwb_video_map,
-    create_subjects_table,
     export_labeled_frames,
     export_labels,
     extract_unique_subjects,
@@ -42,9 +42,20 @@ from sleap_io.io.nwb_annotations import (
     sleap_video_to_nwb_image_series,
     sleap_videos_to_nwb_source_videos,
 )
+
+# Conditionally import multisubjects functions (requires Python 3.9+)
+if MULTISUBJECTS_AVAILABLE:
+    from sleap_io.io.nwb_annotations import create_subjects_table
+
 from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.instance import Track
 from sleap_io.model.labeled_frame import LabeledFrame
+
+# Skip marker for tests requiring multisubjects (Python 3.9+)
+requires_multisubjects = pytest.mark.skipif(
+    not MULTISUBJECTS_AVAILABLE,
+    reason="ndx-multisubjects requires Python 3.9+",
+)
 
 
 def test_sleap_skeleton_to_nwb_skeleton_basic():
@@ -1207,6 +1218,7 @@ def test_non_external_image_series_format():
 # ==================== Multi-Subject Tests ====================
 
 
+@requires_multisubjects
 def test_extract_unique_subjects_basic():
     """Test extracting subjects from labels with tracks."""
     skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
@@ -1240,6 +1252,7 @@ def test_extract_unique_subjects_basic():
     assert track_to_index[track2] == 1
 
 
+@requires_multisubjects
 def test_extract_unique_subjects_no_tracks():
     """Test with labels that have no tracks - should return empty."""
     skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
@@ -1260,6 +1273,7 @@ def test_extract_unique_subjects_no_tracks():
     assert len(track_to_index) == 0
 
 
+@requires_multisubjects
 def test_extract_unique_subjects_unnamed_tracks():
     """Test tracks with no name get 'unknown' as subject_id."""
     skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
@@ -1282,6 +1296,7 @@ def test_extract_unique_subjects_unnamed_tracks():
     assert subjects_data[0]["subject_id"] == "unknown"
 
 
+@requires_multisubjects
 def test_extract_unique_subjects_same_track_multiple_frames():
     """Test that same Track object maps to same subject across frames."""
     skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
@@ -1310,6 +1325,7 @@ def test_extract_unique_subjects_same_track_multiple_frames():
     assert subjects_data[0]["subject_id"] == "mouse1"
 
 
+@requires_multisubjects
 def test_create_subjects_table_basic():
     """Test creating SubjectsTable with minimal data and default values."""
     subjects_data = [{"subject_id": "mouse1"}, {"subject_id": "mouse2"}]
@@ -1324,6 +1340,7 @@ def test_create_subjects_table_basic():
     assert table["species"][0] == "unknown"
 
 
+@requires_multisubjects
 def test_create_subjects_table_with_metadata():
     """Test creating SubjectsTable with full metadata."""
     subjects_data = [{"subject_id": "mouse1"}, {"subject_id": "mouse2"}]
@@ -1341,6 +1358,7 @@ def test_create_subjects_table_with_metadata():
     assert table["age"][0] == "P30D"
 
 
+@requires_multisubjects
 def test_save_labels_multisubjects_no_tracks(tmp_path):
     """Test error when use_multisubjects=True but no tracks exist."""
     skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")], name="skeleton")
@@ -1365,6 +1383,7 @@ def test_save_labels_multisubjects_no_tracks(tmp_path):
         save_labels(labels, str(nwb_path), use_multisubjects=True)
 
 
+@requires_multisubjects
 def test_save_labels_multisubjects_partial_tracks_warning(slp_real_data, tmp_path):
     """Test warning when some instances have tracks and some don't."""
     import warnings
@@ -1408,6 +1427,7 @@ def test_save_labels_multisubjects_partial_tracks_warning(slp_real_data, tmp_pat
         assert len(untracked_warning) == 1
 
 
+@requires_multisubjects
 def test_multisubjects_save_load_roundtrip(slp_real_data, tmp_path):
     """Test that pose data survives multi-subject roundtrip with correct linkage."""
     from pynwb import NWBHDF5IO
@@ -1472,6 +1492,7 @@ def test_multisubjects_save_load_roundtrip(slp_real_data, tmp_path):
     assert len(loaded_labels.skeletons) == len(labels.skeletons)
 
 
+@requires_multisubjects
 def test_multisubjects_skeleton_instance_id_linkage(slp_real_data, tmp_path):
     """Test that SkeletonInstance.id correctly links to SubjectsTable row."""
     from pynwb import NWBHDF5IO

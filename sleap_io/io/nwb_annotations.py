@@ -8,10 +8,20 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import attrs
 import numpy as np
 import simplejson as json
-from ndx_multisubjects import (
-    NdxMultiSubjectsNWBFile,
-    SubjectsTable,
-)
+
+# ndx-multisubjects requires Python 3.9+ (uses importlib.resources.files)
+try:
+    from ndx_multisubjects import (
+        NdxMultiSubjectsNWBFile,
+        SubjectsTable,
+    )
+
+    MULTISUBJECTS_AVAILABLE = True
+except ImportError:
+    NdxMultiSubjectsNWBFile = None  # type: ignore[misc, assignment]
+    SubjectsTable = None  # type: ignore[misc, assignment]
+    MULTISUBJECTS_AVAILABLE = False
+
 from ndx_pose import PoseTraining as NwbPoseTraining
 from ndx_pose import Skeleton as NwbSkeleton
 from ndx_pose import SkeletonInstance as NwbInstance
@@ -908,6 +918,12 @@ def save_labels(
     # Create appropriate NWB file type
     track_to_index = None
     if use_multisubjects:
+        if not MULTISUBJECTS_AVAILABLE:
+            raise ImportError(
+                "Multi-subject NWB support requires Python 3.9+. "
+                "The ndx-multisubjects package uses importlib.resources.files "
+                "which is not available in Python 3.8."
+            )
         nwbfile = NdxMultiSubjectsNWBFile(**nwbfile_kwargs)
 
         # Extract subjects from tracks and create SubjectsTable
