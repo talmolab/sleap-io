@@ -26,6 +26,7 @@ dependencies = [
     "h5py>=3.8.0",
     "pynwb",
     "ndx-pose>=0.2.1",
+    "ndx-multisubjects>=0.1.1",
     "pandas",
     "simplejson",
     "imageio",
