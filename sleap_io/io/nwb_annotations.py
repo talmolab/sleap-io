@@ -124,8 +124,12 @@ def create_subjects_table(
     subjects_table = SubjectsTable(description=description)
 
     for i, subject in enumerate(subjects_data):
-        # Start with required subject_id
-        row_data = {"subject_id": subject["subject_id"]}
+        # Start with required fields - sex and species have defaults per NWB spec
+        row_data = {
+            "subject_id": subject["subject_id"],
+            "sex": "U",  # U = unknown (required by NWB spec)
+            "species": "unknown",  # Required by NWB spec
+        }
 
         # Add optional metadata if provided
         if subjects_metadata and i < len(subjects_metadata):
@@ -533,6 +537,7 @@ def sleap_labeled_frame_to_nwb_training_frame(
     source_video: Optional[ImageSeries] = None,
     name: str = "training_frame",
     annotator: Optional[str] = None,
+    track_to_index: Optional[Dict[Any, int]] = None,
 ) -> NwbTrainingFrame:
     """Convert a sleap-io LabeledFrame to ndx-pose TrainingFrame.
 
@@ -542,6 +547,9 @@ def sleap_labeled_frame_to_nwb_training_frame(
         source_video: Optional ImageSeries representing the source video.
         name: String identifier for the TrainingFrame.
         annotator: Optional name of annotator who labeled the frame.
+        track_to_index: Optional mapping from Track objects to SubjectsTable row
+            indices. When provided, SkeletonInstance.id will be set to the subject
+            index for tracked instances, enabling linkage to the SubjectsTable.
 
     Returns:
         An ndx-pose TrainingFrame object with equivalent data.
@@ -554,8 +562,14 @@ def sleap_labeled_frame_to_nwb_training_frame(
         # Get the appropriate NWB skeleton for this instance
         nwb_skeleton = slp_to_nwb_skeleton_map[sleap_instance.skeleton]
 
+        # Determine instance ID: use subject index if tracked, otherwise frame-local
+        if track_to_index is not None and sleap_instance.track in track_to_index:
+            instance_id = track_to_index[sleap_instance.track]
+        else:
+            instance_id = i
+
         nwb_instance = sleap_instance_to_nwb_skeleton_instance(
-            sleap_instance, nwb_skeleton, name=instance_name, id=i
+            sleap_instance, nwb_skeleton, name=instance_name, id=instance_id
         )
         nwb_instances.append(nwb_instance)
 
@@ -630,6 +644,7 @@ def sleap_labeled_frames_to_nwb_training_frames(
     slp_to_nwb_video_map: Dict[SleapVideo, ImageSeries],
     name: str = "TrainingFrames",
     annotator: Optional[str] = None,
+    track_to_index: Optional[Dict[Any, int]] = None,
 ) -> NwbTrainingFrames:
     """Convert a list of sleap-io LabeledFrames to ndx-pose TrainingFrames container.
 
@@ -640,6 +655,9 @@ def sleap_labeled_frames_to_nwb_training_frames(
         slp_to_nwb_video_map: Required mapping from sleap-io Videos to ImageSeries.
         name: String identifier for the TrainingFrames container.
         annotator: Optional name of annotator who labeled the frames.
+        track_to_index: Optional mapping from Track objects to SubjectsTable row
+            indices. When provided, SkeletonInstance.id will be set to the subject
+            index for tracked instances.
 
     Returns:
         An ndx-pose TrainingFrames container with TrainingFrame objects.
@@ -658,6 +676,7 @@ def sleap_labeled_frames_to_nwb_training_frames(
             source_video=source_video,
             name=frame_name,
             annotator=annotator,
+            track_to_index=track_to_index,
         )
         nwb_training_frames.append(nwb_training_frame)
 
@@ -708,6 +727,7 @@ def sleap_labels_to_nwb_pose_training(
     sleap_labels: SleapLabels,
     name: str = "PoseTraining",
     annotator: Optional[str] = None,
+    track_to_index: Optional[Dict[Any, int]] = None,
 ) -> Tuple[NwbPoseTraining, NwbSkeletons]:
     """Convert sleap-io Labels to ndx-pose PoseTraining container and Skeletons.
 
@@ -715,6 +735,10 @@ def sleap_labels_to_nwb_pose_training(
         sleap_labels: The sleap-io Labels object to convert.
         name: String identifier for the PoseTraining container.
         annotator: Optional name of annotator who labeled the data.
+        track_to_index: Optional mapping from Track objects to SubjectsTable row
+            indices. When provided and use_multisubjects is True, SkeletonInstance.id
+            will be set to the subject index for tracked instances, enabling linkage
+            to the SubjectsTable.
 
     Returns:
         A tuple containing:
@@ -765,6 +789,7 @@ def sleap_labels_to_nwb_pose_training(
         slp_to_nwb_video_map=slp_to_nwb_video_map,
         name="training_frames",  # Must be named this for PoseTraining
         annotator=annotator,
+        track_to_index=track_to_index,
     )
 
     pose_training = NwbPoseTraining(
@@ -881,16 +906,37 @@ def save_labels(
         nwbfile_kwargs.update(nwb_kwargs)
 
     # Create appropriate NWB file type
+    track_to_index = None
     if use_multisubjects:
         nwbfile = NdxMultiSubjectsNWBFile(**nwbfile_kwargs)
 
         # Extract subjects from tracks and create SubjectsTable
-        subjects_data, _ = extract_unique_subjects(labels)
+        subjects_data, track_to_index = extract_unique_subjects(labels)
 
         if len(subjects_data) == 0:
             raise ValueError(
-                "No tracked instances found in labels. Cannot create multi-subject"
-                "Either add tracks to instances or use use_multisubjects=False."
+                "No tracked instances found in labels. Cannot create multi-subject "
+                "NWB file. Either add tracks to instances or set "
+                "use_multisubjects=False."
+            )
+
+        # Check for untracked instances and warn
+        total_instances = sum(len(lf.instances) for lf in labels.labeled_frames)
+        tracked_instances = sum(
+            1
+            for lf in labels.labeled_frames
+            for inst in lf.instances
+            if inst.track is not None
+        )
+        if tracked_instances < total_instances:
+            import warnings
+
+            warnings.warn(
+                f"{total_instances - tracked_instances} of {total_instances} instances "
+                f"do not have tracks assigned and will not be linked to subjects in "
+                f"the SubjectsTable. Use use_multisubjects=False to save all "
+                f"instances without subject metadata.",
+                stacklevel=2,
             )
 
         subjects_table = create_subjects_table(
@@ -904,7 +950,7 @@ def save_labels(
 
     # Convert SLEAP labels to NWB format
     pose_training, skeletons = sleap_labels_to_nwb_pose_training(
-        labels, annotator=annotator
+        labels, annotator=annotator, track_to_index=track_to_index
     )
 
     # Create behavior processing module
