@@ -238,6 +238,9 @@ class LabeledFrame:
                 - "keep_both": Keep all instances from both frames
                 - "update_tracks": Update track and score of the original instances
                     from the new instances.
+                - "replace_predictions": Keep all user instances from original frame,
+                    remove all predictions from original frame, add only predictions
+                    from the incoming frame. No spatial matching is performed.
 
         Returns:
             A tuple of (merged_instances, conflicts) where:
@@ -272,6 +275,15 @@ class LabeledFrame:
                     other_idx
                 ].tracking_score
             return self.instances, conflicts
+        elif strategy == "replace_predictions":
+            # Keep all user instances from original frame
+            merged = [inst for inst in self.instances if type(inst) is Instance]
+            # Add only predictions from incoming frame (not user instances)
+            merged.extend(
+                inst for inst in other.instances if type(inst) is PredictedInstance
+            )
+            # No conflicts to report - this is a clean replacement
+            return merged, []
 
         # Smart merging strategy
         merged_instances = []

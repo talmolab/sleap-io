@@ -175,13 +175,110 @@ Updates the track assignments and tracking scores of existing instances based on
 This strategy preserves the original pose data and **does not** add new or remove existing instances!
 
 !!! example "When to use"
-    
+
     - Updating track identities after running a tracking algorithm
     - Merging tracking information from different tracking runs
 
 ```python title="Using update tracks strategy"
 result = base_labels.merge(new_labels, frame_strategy="update_tracks")
 ```
+
+### Replace predictions strategy
+
+Performs a clean swap of predictions: removes all predictions from the base frame and adds only predictions from the incoming frame. User instances (manual annotations) from the base frame are preserved, while user instances from the incoming frame are ignored.
+
+!!! info "No spatial matching"
+
+    Unlike the `smart` strategy, `replace_predictions` does **not** perform spatial matching between instances. It simply:
+
+    1. Keeps all user instances from the base frame
+    2. Discards all predictions from the base frame
+    3. Adds all predictions from the incoming frame
+    4. Ignores user instances from the incoming frame
+
+!!! note "Track assignments"
+
+    Incoming predictions retain their original track assignments. If you need to preserve existing track assignments while updating poses, use the `update_tracks` strategy instead.
+
+!!! example "When to use"
+
+    - Re-running inference and replacing all old predictions with new ones
+    - Updating predictions without worrying about spatial matching artifacts
+    - Situations where the `smart` strategy discards predictions near user instances
+
+```python title="Using replace predictions strategy"
+# Re-run inference and replace all predictions
+result = base_labels.merge(predictions, frame_strategy="replace_predictions")
+```
+
+**Behavior:**
+
+| Base frame    | Incoming frame | Result          | Reasoning                              |
+| ------------- | -------------- | --------------- | -------------------------------------- |
+| User label    | Any            | User label      | User labels from base are preserved    |
+| Prediction    | Prediction     | New prediction  | Old predictions replaced with new ones |
+| Prediction    | User label     | (removed)       | Old predictions removed, user ignored  |
+| Empty         | Prediction     | New prediction  | Predictions from incoming are added    |
+| Empty         | User label     | Empty           | User instances from incoming ignored   |
+
+## Strategy behavior reference
+
+Merge operations happen at two distinct levels:
+
+1. **Frame-level:** When a frame exists in both datasets, what's the coarse action?
+2. **Instance-level:** Within a frame, how do we match and resolve individual instances?
+
+Some strategies resolve everything at the frame level (no instance matching). Others proceed to instance-level matching for fine-grained control.
+
+### Frame-level behavior
+
+"When a frame exists in both datasets, what happens?"
+
+| Strategy | Overlapping frames | Frame only in base | Frame only in other |
+|----------|-------------------|-------------------|---------------------|
+| `smart` | → Instance-level matching | Keep | Add |
+| `replace_predictions` | Keep users, replace preds | Keep | Add (preds only) |
+| `keep_original` | Keep all from base | Keep | Discard |
+| `keep_new` | Use all from other | Discard | Add |
+| `keep_both` | Concatenate all | Keep | Add |
+| `update_tracks` | → Instance-level matching | Keep | Keep |
+
+!!! note
+
+    - "→ Instance-level matching" means the strategy proceeds to the instance-level resolution table below
+    - `replace_predictions` does NOT do instance matching; it simply swaps out all predictions
+    - `keep_both` does NOT do instance matching; it concatenates (may create duplicates)
+
+### Instance-level resolution
+
+"When spatial matching finds a pair, what happens?"
+
+*Only applies to strategies marked "→ Instance-level matching" above.*
+
+| Strategy | Old Pred ↔ New Pred | Old User ↔ New Pred | Old Pred ↔ New User | Old User ↔ New User | Unmatched New | Unmatched Old |
+|----------|---------------------|---------------------|---------------------|---------------------|---------------|---------------|
+| `smart` | Replace with new | Keep old | Replace with new | Keep old | Add | Keep |
+| `update_tracks` | Update tracks | Keep old | Update tracks | Keep old | Keep | Keep |
+
+**Legend:**
+
+- **Old Pred ↔ New Pred:** Existing prediction matches incoming prediction
+- **Old User ↔ New Pred:** Existing user instance matches incoming prediction
+- **Old Pred ↔ New User:** Existing prediction matches incoming user instance
+- **Old User ↔ New User:** Existing user instance matches incoming user instance
+- **Unmatched New:** Instance from incoming frame with no spatial match in base
+- **Unmatched Old:** Instance from base frame with no spatial match in incoming
+
+### Strategy selection guide
+
+| Use case | Best strategy | Why |
+|----------|---------------|-----|
+| HITL: merge predictions, preserve labels | `smart` | User labels protected, predictions deduplicated |
+| Re-run inference, replace all predictions | `replace_predictions` | Old predictions cleared, new ones added, no matching |
+| Combine multiple annotators | `keep_both` | All instances preserved for review |
+| Protect existing annotations | `keep_original` | Nothing from incoming is used |
+| Completely replace with new data | `keep_new` | Full replacement |
+| Update tracking on existing poses | `update_tracks` | Only track assignments change, poses preserved |
 
 ## Matching configuration
 

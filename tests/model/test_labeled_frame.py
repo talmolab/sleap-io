@@ -864,3 +864,243 @@ def test_labeled_frame_merge_fixed_logic():
     assert len(merged2) == 1
     assert user_self_2 in merged2
     assert len(conflicts2) == 1
+
+
+def test_replace_predictions_keeps_user_instances():
+    """Test that user instances from original frame are preserved."""
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    user_inst_1 = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton)
+    user_inst_2 = Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skeleton)
+    pred_self = PredictedInstance.from_numpy(
+        np.array([[50, 50], [60, 60]]), skeleton=skeleton, score=0.8
+    )
+
+    frame_self = LabeledFrame(
+        video=video, frame_idx=0, instances=[user_inst_1, user_inst_2, pred_self]
+    )
+    frame_other = LabeledFrame(video=video, frame_idx=0, instances=[])
+
+    merged, conflicts = frame_self.merge(frame_other, strategy="replace_predictions")
+
+    # Both user instances should be preserved
+    assert len(merged) == 2
+    assert user_inst_1 in merged
+    assert user_inst_2 in merged
+    # Prediction from self should be removed
+    assert pred_self not in merged
+    # No conflicts for this strategy
+    assert len(conflicts) == 0
+
+
+def test_replace_predictions_removes_existing_predictions():
+    """Test that predicted instances in original frame are removed."""
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    pred_self_1 = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, score=0.8
+    )
+    pred_self_2 = PredictedInstance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skeleton, score=0.9
+    )
+
+    frame_self = LabeledFrame(
+        video=video, frame_idx=0, instances=[pred_self_1, pred_self_2]
+    )
+    frame_other = LabeledFrame(video=video, frame_idx=0, instances=[])
+
+    merged, conflicts = frame_self.merge(frame_other, strategy="replace_predictions")
+
+    # All predictions from self should be removed
+    assert len(merged) == 0
+    assert pred_self_1 not in merged
+    assert pred_self_2 not in merged
+    assert len(conflicts) == 0
+
+
+def test_replace_predictions_adds_incoming_predictions():
+    """Test that predictions from incoming frame are added."""
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    pred_other_1 = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, score=0.7
+    )
+    pred_other_2 = PredictedInstance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skeleton, score=0.8
+    )
+
+    frame_self = LabeledFrame(video=video, frame_idx=0, instances=[])
+    frame_other = LabeledFrame(
+        video=video, frame_idx=0, instances=[pred_other_1, pred_other_2]
+    )
+
+    merged, conflicts = frame_self.merge(frame_other, strategy="replace_predictions")
+
+    # All predictions from other should be added
+    assert len(merged) == 2
+    assert pred_other_1 in merged
+    assert pred_other_2 in merged
+    assert len(conflicts) == 0
+
+
+def test_replace_predictions_ignores_incoming_user_instances():
+    """Test that user instances from incoming frame are ignored."""
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    user_self = Instance.from_numpy(np.array([[5, 5], [15, 15]]), skeleton=skeleton)
+    user_other = Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skeleton)
+    pred_other = PredictedInstance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skeleton, score=0.9
+    )
+
+    frame_self = LabeledFrame(video=video, frame_idx=0, instances=[user_self])
+    frame_other = LabeledFrame(
+        video=video, frame_idx=0, instances=[user_other, pred_other]
+    )
+
+    merged, conflicts = frame_self.merge(frame_other, strategy="replace_predictions")
+
+    # User instance from self should be kept
+    assert user_self in merged
+    # User instance from other should be ignored
+    assert user_other not in merged
+    # Prediction from other should be added
+    assert pred_other in merged
+    assert len(merged) == 2
+    assert len(conflicts) == 0
+
+
+def test_replace_predictions_empty_frames():
+    """Test replace_predictions with empty frames."""
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Both frames empty
+    frame_self = LabeledFrame(video=video, frame_idx=0, instances=[])
+    frame_other = LabeledFrame(video=video, frame_idx=0, instances=[])
+
+    merged, conflicts = frame_self.merge(frame_other, strategy="replace_predictions")
+
+    assert len(merged) == 0
+    assert len(conflicts) == 0
+
+    # Self empty, other has predictions
+    pred_other = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, score=0.8
+    )
+    frame_other_2 = LabeledFrame(video=video, frame_idx=0, instances=[pred_other])
+
+    merged2, conflicts2 = frame_self.merge(
+        frame_other_2, strategy="replace_predictions"
+    )
+
+    assert len(merged2) == 1
+    assert pred_other in merged2
+    assert len(conflicts2) == 0
+
+
+def test_replace_predictions_preserves_incoming_tracks():
+    """Test that incoming predictions retain their track assignments."""
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    track1 = Track(name="animal_1")
+    track2 = Track(name="animal_2")
+
+    # Self has old predictions with different tracks
+    old_pred_1 = PredictedInstance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, score=0.5, track=track1
+    )
+    old_pred_2 = PredictedInstance.from_numpy(
+        np.array([[30, 30], [40, 40]]), skeleton=skeleton, score=0.6, track=track2
+    )
+
+    # Other has new predictions with their own track assignments
+    new_track = Track(name="new_animal")
+    new_pred = PredictedInstance.from_numpy(
+        np.array([[50, 50], [60, 60]]), skeleton=skeleton, score=0.9, track=new_track
+    )
+
+    frame_self = LabeledFrame(
+        video=video, frame_idx=0, instances=[old_pred_1, old_pred_2]
+    )
+    frame_other = LabeledFrame(video=video, frame_idx=0, instances=[new_pred])
+
+    merged, conflicts = frame_self.merge(frame_other, strategy="replace_predictions")
+
+    # Old predictions should be removed
+    assert old_pred_1 not in merged
+    assert old_pred_2 not in merged
+    # New prediction should be added with its original track
+    assert len(merged) == 1
+    assert new_pred in merged
+    assert merged[0].track is new_track
+    assert len(conflicts) == 0
+
+
+def test_replace_predictions_mixed_scenario():
+    """Test replace_predictions with a mix of user and predicted instances."""
+    skeleton = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    track1 = Track(name="track_1")
+    track2 = Track(name="track_2")
+
+    # Self: 2 user instances + 2 predictions
+    user_self_1 = Instance.from_numpy(
+        np.array([[10, 10], [20, 20]]), skeleton=skeleton, track=track1
+    )
+    user_self_2 = Instance.from_numpy(np.array([[30, 30], [40, 40]]), skeleton=skeleton)
+    pred_self_1 = PredictedInstance.from_numpy(
+        np.array([[50, 50], [60, 60]]), skeleton=skeleton, score=0.7, track=track2
+    )
+    pred_self_2 = PredictedInstance.from_numpy(
+        np.array([[70, 70], [80, 80]]), skeleton=skeleton, score=0.8
+    )
+
+    # Other: 1 user instance + 3 predictions (user should be ignored)
+    user_other = Instance.from_numpy(
+        np.array([[90, 90], [100, 100]]), skeleton=skeleton
+    )
+    pred_other_1 = PredictedInstance.from_numpy(
+        np.array([[110, 110], [120, 120]]), skeleton=skeleton, score=0.9
+    )
+    pred_other_2 = PredictedInstance.from_numpy(
+        np.array([[130, 130], [140, 140]]), skeleton=skeleton, score=0.85
+    )
+    pred_other_3 = PredictedInstance.from_numpy(
+        np.array([[150, 150], [160, 160]]), skeleton=skeleton, score=0.95
+    )
+
+    frame_self = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[user_self_1, user_self_2, pred_self_1, pred_self_2],
+    )
+    frame_other = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[user_other, pred_other_1, pred_other_2, pred_other_3],
+    )
+
+    merged, conflicts = frame_self.merge(frame_other, strategy="replace_predictions")
+
+    # User instances from self: kept
+    assert user_self_1 in merged
+    assert user_self_2 in merged
+    # Predictions from self: removed
+    assert pred_self_1 not in merged
+    assert pred_self_2 not in merged
+    # User instance from other: ignored
+    assert user_other not in merged
+    # Predictions from other: added
+    assert pred_other_1 in merged
+    assert pred_other_2 in merged
+    assert pred_other_3 in merged
+
+    assert len(merged) == 5  # 2 users from self + 3 predictions from other
+    assert len(conflicts) == 0
