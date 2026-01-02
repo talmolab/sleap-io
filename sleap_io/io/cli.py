@@ -32,6 +32,46 @@ click.rich_click.ERRORS_EPILOGUE = (
     "See [link=https://io.sleap.ai]io.sleap.ai[/] for documentation."
 )
 
+# Command panels for organized help display
+click.rich_click.COMMAND_GROUPS = {
+    "sio": [
+        {"name": "Inspection", "commands": ["cat"]},
+        {"name": "Transformation", "commands": ["convert"]},
+    ]
+}
+
+# Supported formats for conversion
+INPUT_FORMATS = [
+    "slp",
+    "nwb",
+    "coco",
+    "labelstudio",
+    "alphatracker",
+    "jabs",
+    "dlc",
+    "ultralytics",
+    "leap",
+]
+OUTPUT_FORMATS = ["slp", "nwb", "coco", "labelstudio", "jabs", "ultralytics"]
+
+# Extensions that require explicit --from format
+AMBIGUOUS_EXTENSIONS = {".json", ".h5"}
+
+# Extension to format mapping for unambiguous detection
+EXTENSION_TO_FORMAT = {
+    ".slp": "slp",
+    ".nwb": "nwb",
+    ".mat": "leap",
+    ".csv": "dlc",
+}
+
+# Output extension to format mapping
+OUTPUT_EXTENSION_TO_FORMAT = {
+    ".slp": "slp",
+    ".nwb": "nwb",
+    ".json": "labelstudio",  # Default JSON output to labelstudio
+}
+
 
 def _get_package_version(package: str) -> str:
     """Get version of a package, or 'not installed' if not available."""
@@ -221,3 +261,189 @@ def cat(
     else:
         # For non-Labels objects, print repr
         click.echo(repr(obj))
+
+
+def _infer_input_format(path: Path) -> Optional[str]:
+    """Infer input format from file path.
+
+    Args:
+        path: Path to the input file.
+
+    Returns:
+        Format string if unambiguous, None if ambiguous or unknown.
+    """
+    suffix = path.suffix.lower()
+
+    # Check for ultralytics (directory with data.yaml)
+    if path.is_dir():
+        if (path / "data.yaml").exists():
+            return "ultralytics"
+        return None
+
+    # Check unambiguous extensions
+    if suffix in EXTENSION_TO_FORMAT:
+        return EXTENSION_TO_FORMAT[suffix]
+
+    # Ambiguous extensions require explicit --from
+    if suffix in AMBIGUOUS_EXTENSIONS:
+        return None
+
+    return None
+
+
+def _infer_output_format(path: Path) -> Optional[str]:
+    """Infer output format from file path.
+
+    Args:
+        path: Path to the output file.
+
+    Returns:
+        Format string if determinable, None otherwise.
+    """
+    suffix = path.suffix.lower()
+
+    # Check if it's a directory (likely ultralytics)
+    if path.is_dir() or suffix == "":
+        return "ultralytics"
+
+    # Check known extensions
+    if suffix in OUTPUT_EXTENSION_TO_FORMAT:
+        return OUTPUT_EXTENSION_TO_FORMAT[suffix]
+
+    return None
+
+
+@cli.command()
+@click.option(
+    "-i",
+    "--input",
+    "input_path",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input file path.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output file path.",
+)
+@click.option(
+    "--from",
+    "input_format",
+    type=click.Choice(INPUT_FORMATS),
+    help="Input format (required for .json and .h5 files).",
+)
+@click.option(
+    "--to",
+    "output_format",
+    type=click.Choice(OUTPUT_FORMATS),
+    help="Output format (inferred from extension if not specified).",
+)
+@click.option(
+    "--embed",
+    type=click.Choice(["user", "all", "suggestions", "source"]),
+    help="Embed frames in output (SLP format only).",
+)
+def convert(
+    input_path: Path,
+    output_path: Path,
+    input_format: Optional[str],
+    output_format: Optional[str],
+    embed: Optional[str],
+):
+    """Convert between pose data formats.
+
+    Reads a labels file in one format and writes it to another format.
+    Input and output formats are inferred from file extensions when possible,
+    but can be explicitly specified using --from and --to.
+
+    [bold]Supported input formats:[/]
+    slp, nwb, coco, labelstudio, alphatracker, jabs, dlc, ultralytics, leap
+
+    [bold]Supported output formats:[/]
+    slp, nwb, coco, labelstudio, jabs, ultralytics
+
+    [dim]Examples:[/]
+
+        $ sio convert -i labels.slp -o labels.nwb
+        $ sio convert -i annotations.json -o labels.slp --from coco
+        $ sio convert -i labels.slp -o labels.pkg.slp --embed user
+        $ sio convert -i labels.slp -o dataset/ --to ultralytics
+    """
+    # Resolve input format
+    resolved_input_format = input_format
+    if resolved_input_format is None:
+        resolved_input_format = _infer_input_format(input_path)
+        if resolved_input_format is None:
+            suffix = input_path.suffix.lower()
+            if suffix in AMBIGUOUS_EXTENSIONS:
+                raise click.ClickException(
+                    f"Cannot infer format from '{suffix}' extension. "
+                    f"Please specify --from with one of: {', '.join(INPUT_FORMATS)}"
+                )
+            else:
+                raise click.ClickException(
+                    f"Cannot infer input format from '{input_path.name}'. "
+                    f"Please specify --from with one of: {', '.join(INPUT_FORMATS)}"
+                )
+
+    # Resolve output format
+    resolved_output_format = output_format
+    if resolved_output_format is None:
+        resolved_output_format = _infer_output_format(output_path)
+        if resolved_output_format is None:
+            raise click.ClickException(
+                f"Cannot infer output format from '{output_path.name}'. "
+                f"Please specify --to with one of: {', '.join(OUTPUT_FORMATS)}"
+            )
+
+    # Validate embed option
+    if embed is not None and resolved_output_format != "slp":
+        raise click.ClickException("--embed is only valid for SLP output format.")
+
+    # Determine if we need video access:
+    # - Embedding frames requires video access
+    # - Ultralytics output exports images, requires video access
+    # - NWB output needs video metadata
+    needs_video = (
+        embed is not None
+        or resolved_output_format == "ultralytics"
+        or resolved_output_format == "nwb"
+    )
+
+    # Load the input file
+    # Note: open_videos is only valid for SLP format
+    try:
+        load_kwargs = {"format": resolved_input_format}
+        if resolved_input_format == "slp":
+            load_kwargs["open_videos"] = needs_video
+        labels = io_main.load_file(str(input_path), **load_kwargs)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input file: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input file is not a labels file (got {type(labels).__name__})."
+        )
+
+    # Prepare output directory for ultralytics
+    if resolved_output_format == "ultralytics":
+        output_path.mkdir(parents=True, exist_ok=True)
+
+    # Save the output file
+    try:
+        save_kwargs = {"format": resolved_output_format}
+        if embed is not None:
+            save_kwargs["embed"] = embed
+        io_main.save_file(labels, str(output_path), **save_kwargs)
+    except Exception as e:
+        raise click.ClickException(f"Failed to save output file: {e}")
+
+    # Success message
+    click.echo(f"Converted: {input_path} -> {output_path}")
+    click.echo(f"Format: {resolved_input_format} -> {resolved_output_format}")
+    if embed:
+        click.echo(f"Embedded frames: {embed}")
