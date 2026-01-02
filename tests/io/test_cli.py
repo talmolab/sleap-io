@@ -303,7 +303,9 @@ def test_convert_embed_requires_slp_output(tmp_path, slp_typical):
     output_path = tmp_path / "output.nwb"
 
     result = runner.invoke(
-        cli, ["convert", "-i", slp_typical, "-o", str(output_path), "--embed", "user"]
+        cli,
+        ["convert", "-i", slp_typical, "-o", str(output_path), "--embed", "user"],
+        color=False,
     )
     assert result.exit_code != 0
     assert "--embed is only valid for SLP output" in result.output
@@ -314,7 +316,9 @@ def test_convert_input_not_found():
     runner = CliRunner()
 
     result = runner.invoke(
-        cli, ["convert", "-i", "/nonexistent/file.slp", "-o", "output.nwb"]
+        cli,
+        ["convert", "-i", "/nonexistent/file.slp", "-o", "output.nwb"],
+        color=False,
     )
     assert result.exit_code != 0
     assert (
