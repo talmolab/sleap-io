@@ -5,6 +5,7 @@ Covers summary output, labeled frame details, skeleton printing, and format conv
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -14,6 +15,12 @@ from sleap_io.io.cli import cli
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.version import __version__
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 def _data_path(rel: str) -> Path:
@@ -305,10 +312,10 @@ def test_convert_embed_requires_slp_output(tmp_path, slp_typical):
     result = runner.invoke(
         cli,
         ["convert", "-i", slp_typical, "-o", str(output_path), "--embed", "user"],
-        color=False,
     )
     assert result.exit_code != 0
-    assert "--embed is only valid for SLP output" in result.output
+    output = _strip_ansi(result.output)
+    assert "--embed is only valid for SLP output" in output
 
 
 def test_convert_input_not_found():
@@ -318,12 +325,10 @@ def test_convert_input_not_found():
     result = runner.invoke(
         cli,
         ["convert", "-i", "/nonexistent/file.slp", "-o", "output.nwb"],
-        color=False,
     )
     assert result.exit_code != 0
-    assert (
-        "Invalid value for '-i'" in result.output or "does not exist" in result.output
-    )
+    output = _strip_ansi(result.output)
+    assert "Invalid value for '-i'" in output or "does not exist" in output
 
 
 def test_convert_coco_with_explicit_from(tmp_path, coco_annotations_flat):
