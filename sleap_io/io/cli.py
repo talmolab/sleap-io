@@ -8,6 +8,8 @@ in minimal environments and CI.
 
 from __future__ import annotations
 
+import sys
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Optional
 
@@ -19,13 +21,77 @@ from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
+from sleap_io.version import __version__
 
-click.rich_click.USE_MARKDOWN = True
+# Rich-click theme configuration
+click.rich_click.THEME = "solarized-slim"
+click.rich_click.TEXT_MARKUP = "rich"
+click.rich_click.SHOW_ARGUMENTS = True
+click.rich_click.MAX_WIDTH = 100
+click.rich_click.ERRORS_EPILOGUE = (
+    "See [link=https://io.sleap.ai]io.sleap.ai[/] for documentation."
+)
 
 
-@click.group(help="sleap-io command line interface")
+def _get_package_version(package: str) -> str:
+    """Get version of a package, or 'not installed' if not available."""
+    try:
+        return pkg_version(package)
+    except Exception:
+        return "not installed"
+
+
+def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    """Print version info with plugin status and exit."""
+    if not value or ctx.resilient_parsing:
+        return
+
+    lines = [f"sleap-io {__version__}"]
+    lines.append(f"python {sys.version.split()[0]}")
+    lines.append("")
+
+    # Core dependencies
+    lines.append("Core:")
+    lines.append(f"  numpy: {_get_package_version('numpy')}")
+    lines.append(f"  h5py: {_get_package_version('h5py')}")
+    lines.append(f"  imageio: {_get_package_version('imageio')}")
+    lines.append("")
+
+    # Video plugins
+    lines.append("Video plugins:")
+    lines.append(f"  opencv: {_get_package_version('opencv-python')}")
+    lines.append(f"  pyav: {_get_package_version('av')}")
+    lines.append(f"  imageio-ffmpeg: {_get_package_version('imageio-ffmpeg')}")
+    lines.append("")
+
+    # Optional dependencies
+    lines.append("Optional:")
+    lines.append(f"  pymatreader: {_get_package_version('pymatreader')}")
+
+    click.echo("\n".join(lines))
+    ctx.exit()
+
+
+@click.group()
+@click.option(
+    "--version",
+    is_flag=True,
+    callback=_print_version,
+    expose_value=False,
+    is_eager=True,
+    help="Show version and plugin info, then exit.",
+)
 def cli():
-    """Top-level command group for the sleap-io CLI."""
+    """[bold cyan]sleap-io[/] - Standalone utilities for pose tracking data.
+
+    Read, write, and manipulate pose data from [bold]SLEAP[/], [bold]NWB[/],
+    [bold]COCO[/], [bold]DeepLabCut[/], and other formats.
+
+    [dim]Examples:[/]
+
+        $ sio cat labels.slp
+        $ sio cat labels.slp --skeleton
+    """
     pass
 
 

@@ -12,11 +12,33 @@ from click.testing import CliRunner
 from sleap_io.io.cli import cli
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
+from sleap_io.version import __version__
 
 
 def _data_path(rel: str) -> Path:
     root = Path(__file__).resolve().parents[2] / "tests" / "data"
     return root / rel
+
+
+def test_version_shows_plugin_info():
+    """Test that --version shows sleap-io version and plugin status."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--version"])
+    assert result.exit_code == 0, result.output
+    out = result.output
+
+    # Check main version line
+    assert f"sleap-io {__version__}" in out
+
+    # Check sections are present
+    assert "Core:" in out
+    assert "Video plugins:" in out
+    assert "Optional:" in out
+
+    # Check specific packages are listed
+    assert "numpy:" in out
+    assert "opencv:" in out
+    assert "pyav:" in out
 
 
 def test_cat_summary_typical_slp():
