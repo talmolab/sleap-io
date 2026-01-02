@@ -4,15 +4,15 @@ sleap-io provides a unified interface for reading and writing pose tracking data
 
 ## Universal I/O Functions
 
-::: sleap_io.load_file
+::: sleap_io.io.main.load_file
 
-::: sleap_io.save_file
+::: sleap_io.io.main.save_file
 
 ## Video I/O
 
-::: sleap_io.load_video
+::: sleap_io.io.main.load_video
 
-::: sleap_io.save_video
+::: sleap_io.io.main.save_video
 
 ## Format-Specific Functions
 
@@ -20,9 +20,9 @@ sleap-io provides a unified interface for reading and writing pose tracking data
 
 The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations.
 
-::: sleap_io.load_slp
+::: sleap_io.io.main.load_slp
 
-::: sleap_io.save_slp
+::: sleap_io.io.main.save_slp
 
 ### NWB Format (.nwb)
 
@@ -32,9 +32,9 @@ The native SLEAP format stores complete pose tracking projects including videos,
 
 The harmonized API automatically detects and routes to the appropriate NWB backend:
 
-::: sleap_io.load_nwb
+::: sleap_io.io.main.load_nwb
 
-::: sleap_io.save_nwb
+::: sleap_io.io.main.save_nwb
 
 #### NWB Format Types
 
@@ -148,51 +148,51 @@ The NWB format requires certain metadata fields. sleap-io provides sensible defa
 
 [JABS](https://github.com/KumarLabJax/JABS-behavior-classifier) (Janelia Automatic Behavior System) format for behavior classification.
 
-::: sleap_io.load_jabs
+::: sleap_io.io.main.load_jabs
 
-::: sleap_io.save_jabs
+::: sleap_io.io.main.save_jabs
 
 ### Label Studio Format (.json)
 
 [Label Studio](https://labelstud.io/) is a multi-modal annotation platform. Export annotations from Label Studio and load them into SLEAP.
 
-::: sleap_io.load_labelstudio
+::: sleap_io.io.main.load_labelstudio
 
-::: sleap_io.save_labelstudio
+::: sleap_io.io.main.save_labelstudio
 
 ### DeepLabCut Format (.h5, .csv)
 
 Load predictions from [DeepLabCut](http://www.mackenziemathislab.org/deeplabcut), a popular markerless pose estimation tool.
 
-::: sleap_io.load_dlc
+::: sleap_io.io.main.load_dlc
 
 ### AlphaTracker Format
 
 Load predictions from [AlphaTracker](https://github.com/yinaanyachukwu/AlphaTracker), a tracking system for socially-housed animals.
 
-::: sleap_io.load_alphatracker
+::: sleap_io.io.main.load_alphatracker
 
 ### LEAP Format (.mat)
 
 Load predictions from [LEAP](https://github.com/talmo/leap), a SLEAP predecessor. Requires `scipy` for .mat file support.
 
-::: sleap_io.load_leap
+::: sleap_io.io.main.load_leap
 
 ### COCO Format (.json)
 
 [COCO](https://cocodataset.org/) (Common Objects in Context) format is widely used in computer vision and pose estimation. sleap-io provides full read and write support, making it compatible with tools like [mmpose](https://github.com/open-mmlab/mmpose), [CVAT](https://www.cvat.ai/), and other COCO-compatible frameworks.
 
-::: sleap_io.load_coco
+::: sleap_io.io.main.load_coco
 
-::: sleap_io.save_coco
+::: sleap_io.io.main.save_coco
 
 ### Ultralytics YOLO Format
 
 Support for [Ultralytics YOLO](https://docs.ultralytics.com/) pose format.
 
-::: sleap_io.load_ultralytics
+::: sleap_io.io.main.load_ultralytics
 
-::: sleap_io.save_ultralytics
+::: sleap_io.io.main.save_ultralytics
 
 ## Working with Multiple Datasets
 
@@ -200,15 +200,15 @@ Support for [Ultralytics YOLO](https://docs.ultralytics.com/) pose format.
 
 Load and combine multiple pose tracking files:
 
-::: sleap_io.load_labels_set
+::: sleap_io.io.main.load_labels_set
 
 ## Skeleton Files
 
 Load and save skeleton definitions separately:
 
-::: sleap_io.load_skeleton
+::: sleap_io.io.main.load_skeleton
 
-::: sleap_io.save_skeleton
+::: sleap_io.io.main.save_skeleton
 
 ## Format Detection
 

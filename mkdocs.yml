@@ -1,6 +1,7 @@
 site_name: sleap-io documentation
 site_url: https://io.sleap.ai/
 repo_url: https://github.com/talmolab/sleap-io
+strict: false
 
 theme:
   name: material
@@ -71,6 +72,7 @@ plugins:
               returns_multiple_items: false
             docstring_section_style: table  # table, list, spacy
             force_inspection: true  # Use dynamic imports for lazy-loaded modules
+            allow_inspection: true
   
 
 
