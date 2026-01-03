@@ -1737,3 +1737,439 @@ def test_split_with_embed(tmp_path, slp_real_data):
     # Verify the package files are valid and have embedded images
     train_labels = load_slp(str(output_dir / "train.pkg.slp"))
     assert len(train_labels) > 0
+
+
+# ============================================================================
+# filenames command tests
+# ============================================================================
+
+
+def test_filenames_inspection_mode(slp_typical):
+    """Test filenames command in inspection mode (no update flags)."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["filenames", "-i", slp_typical])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should show header and video list
+    assert "Video filenames in" in output
+    assert "[0]" in output
+
+
+def test_filenames_inspection_mode_multi_video():
+    """Test inspection mode with multiple videos."""
+    runner = CliRunner()
+    input_path = _data_path("slp/multiview.slp")
+
+    result = runner.invoke(cli, ["filenames", "-i", str(input_path)])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should show multiple videos
+    assert "Video filenames in" in output
+    assert "[0]" in output
+    assert "[1]" in output
+
+
+def test_filenames_list_mode(tmp_path, slp_typical):
+    """Test filenames with --filename (list mode)."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    # Load original to get video count
+    original = load_slp(slp_typical)
+    assert len(original.videos) == 1
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--filename",
+            "/new/path/video.mp4",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Replaced filenames in 1 video(s) using list mode" in output
+    assert "Saved:" in output
+
+    # Verify the output file has the new filename
+    labels = load_slp(str(output_path), open_videos=False)
+    assert labels.videos[0].filename == "/new/path/video.mp4"
+
+
+def test_filenames_list_mode_multiple(tmp_path):
+    """Test filenames with multiple --filename options."""
+    runner = CliRunner()
+    # Use multiview.slp which has multiple videos
+    input_path = _data_path("slp/multiview.slp")
+    output_path = tmp_path / "output.slp"
+
+    original = load_slp(str(input_path), open_videos=False)
+    n_videos = len(original.videos)
+    assert n_videos > 1
+
+    # Build command with one --filename per video
+    cmd = ["filenames", "-i", str(input_path), "-o", str(output_path)]
+    for i in range(n_videos):
+        cmd.extend(["--filename", f"/new/path/video{i}.mp4"])
+
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert f"Replaced filenames in {n_videos} video(s) using list mode" in output
+
+    # Verify filenames were replaced
+    labels = load_slp(str(output_path), open_videos=False)
+    for i, vid in enumerate(labels.videos):
+        assert vid.filename == f"/new/path/video{i}.mp4"
+
+
+def test_filenames_map_mode(tmp_path, slp_typical):
+    """Test filenames with --map OLD NEW."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    # Get original filename
+    original = load_slp(slp_typical, open_videos=False)
+    old_filename = original.videos[0].filename
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--map",
+            old_filename,
+            "/mapped/video.mp4",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "using map mode" in output
+
+    # Verify the filename was mapped
+    labels = load_slp(str(output_path), open_videos=False)
+    assert labels.videos[0].filename == "/mapped/video.mp4"
+
+
+def test_filenames_map_mode_multiple(tmp_path):
+    """Test filenames with multiple --map options."""
+    runner = CliRunner()
+    input_path = _data_path("slp/multiview.slp")
+    output_path = tmp_path / "output.slp"
+
+    original = load_slp(str(input_path), open_videos=False)
+    # Map just the first two videos
+    old_fn0 = original.videos[0].filename
+    old_fn1 = original.videos[1].filename
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--map",
+            old_fn0,
+            "/new/video0.mp4",
+            "--map",
+            old_fn1,
+            "/new/video1.mp4",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify mapped filenames
+    labels = load_slp(str(output_path), open_videos=False)
+    assert labels.videos[0].filename == "/new/video0.mp4"
+    assert labels.videos[1].filename == "/new/video1.mp4"
+
+
+def test_filenames_prefix_mode(tmp_path, slp_typical):
+    """Test filenames with --prefix OLD NEW."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    # Get original filename and determine a prefix to replace
+    original = load_slp(slp_typical, open_videos=False)
+    old_filename = original.videos[0].filename
+    # The filename likely has a path prefix we can replace
+    old_prefix = str(Path(old_filename).parent)
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--prefix",
+            old_prefix,
+            "/new/prefix",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "using prefix mode" in output
+
+    # Verify prefix was replaced
+    labels = load_slp(str(output_path), open_videos=False)
+    assert labels.videos[0].filename.startswith("/new/prefix")
+
+
+def test_filenames_prefix_mode_cross_platform(tmp_path):
+    """Test prefix mode handles Windows to Linux path conversion."""
+    from sleap_io.model.video import Video
+
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    # Create a labels file with Windows-style paths
+    labels = Labels(
+        videos=[
+            Video.from_filename(r"C:\data\videos\test.mp4"),
+        ]
+    )
+    input_path = tmp_path / "windows_paths.slp"
+    labels.save(str(input_path))
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--prefix",
+            r"C:\data\videos",
+            "/mnt/data/videos",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify path was converted
+    labels = load_slp(str(output_path), open_videos=False)
+    assert labels.videos[0].filename == "/mnt/data/videos/test.mp4"
+
+
+def test_filenames_update_without_output_error(slp_typical):
+    """Test error when update flags are used without -o."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            slp_typical,
+            "--filename",
+            "/new/video.mp4",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Output path (-o) required" in output
+
+
+def test_filenames_multiple_modes_error(slp_typical):
+    """Test error when multiple modes are specified."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            slp_typical,
+            "-o",
+            "out.slp",
+            "--filename",
+            "/new/video.mp4",
+            "--map",
+            "old.mp4",
+            "new.mp4",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Only one mode allowed" in result.output
+
+
+def test_filenames_list_count_mismatch(tmp_path, slp_typical):
+    """Test error when filename count doesn't match video count."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    # Provide too many filenames (typical.slp has 1 video)
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--filename",
+            "/new/video1.mp4",
+            "--filename",
+            "/new/video2.mp4",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "does not match" in result.output
+
+
+def test_filenames_paths_with_equals(tmp_path):
+    """Test that paths containing '=' work correctly with nargs=2."""
+    from sleap_io.model.video import Video
+
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    # Create a labels file with a path containing '='
+    labels = Labels(
+        videos=[
+            Video.from_filename("/data/exp=1/video.mp4"),
+        ]
+    )
+    input_path = tmp_path / "equals_path.slp"
+    labels.save(str(input_path))
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--map",
+            "/data/exp=1/video.mp4",
+            "/new/exp=2/video.mp4",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify path with '=' was handled correctly
+    labels = load_slp(str(output_path), open_videos=False)
+    assert labels.videos[0].filename == "/new/exp=2/video.mp4"
+
+
+def test_filenames_input_not_found():
+    """Test error when input file doesn't exist."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            "nonexistent.slp",
+            "--filename",
+            "/new/video.mp4",
+        ],
+    )
+    assert result.exit_code != 0
+
+
+def test_filenames_help():
+    """Test that help text displays correctly."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["filenames", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check key elements are present
+    assert "List or update video filenames" in output
+    assert "--filename" in output
+    assert "--map" in output
+    assert "--prefix" in output
+    assert "Inspection mode" in output
+    assert "List mode" in output
+    assert "Map mode" in output
+    assert "Prefix mode" in output
+
+
+def test_filenames_in_command_list():
+    """Test that filenames appears in the main help."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check command is listed under Inspection
+    assert "filenames" in output
+    # Check it shows description
+    assert "List or update video filenames" in output
+
+
+def test_filenames_load_failure(tmp_path):
+    """Test error when input file cannot be loaded (corrupt file)."""
+    runner = CliRunner()
+
+    # Create a corrupt file
+    corrupt_file = tmp_path / "corrupt.slp"
+    corrupt_file.write_text("not a valid slp file")
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            str(corrupt_file),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Failed to load input file" in result.output
+
+
+def test_filenames_non_labels_input(centered_pair_low_quality_path):
+    """Test error when input file is not a labels file."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            centered_pair_low_quality_path,
+        ],
+    )
+    assert result.exit_code != 0
+    assert "not a labels file" in result.output
+
+
+def test_filenames_save_failure(tmp_path, slp_typical):
+    """Test error when output file cannot be saved."""
+    runner = CliRunner()
+    # Use an invalid path that can't be written to
+    invalid_output = tmp_path / "nonexistent_dir" / "deep" / "path" / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "filenames",
+            "-i",
+            slp_typical,
+            "-o",
+            str(invalid_output),
+            "--filename",
+            "/new/video.mp4",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Failed to save output file" in result.output

@@ -42,7 +42,7 @@ click.rich_click.ERRORS_EPILOGUE = (
 # Command panels for organized help display
 click.rich_click.COMMAND_GROUPS = {
     "sio": [
-        {"name": "Inspection", "commands": ["show"]},
+        {"name": "Inspection", "commands": ["show", "filenames"]},
         {"name": "Transformation", "commands": ["convert", "split"]},
     ]
 }
@@ -1344,3 +1344,154 @@ def split(
         click.echo("Predictions removed: yes")
     if embed:
         click.echo(f"Embedded frames: {embed}")
+
+
+@cli.command("filenames")
+@click.option(
+    "-i",
+    "--input",
+    "input_path",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input labels file.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Output labels file (required for update mode).",
+)
+@click.option(
+    "--filename",
+    "new_filenames",
+    multiple=True,
+    help="New filename for each video (list mode, repeat for each video).",
+)
+@click.option(
+    "--map",
+    "filename_map",
+    nargs=2,
+    multiple=True,
+    metavar="OLD NEW",
+    help="Replace OLD filename with NEW (map mode).",
+)
+@click.option(
+    "--prefix",
+    "prefix_map",
+    nargs=2,
+    multiple=True,
+    metavar="OLD NEW",
+    help="Replace OLD path prefix with NEW (prefix mode).",
+)
+def filenames(
+    input_path: Path,
+    output_path: Optional[Path],
+    new_filenames: tuple[str, ...],
+    filename_map: tuple[tuple[str, str], ...],
+    prefix_map: tuple[tuple[str, str], ...],
+):
+    r"""List or update video filenames in a labels file.
+
+    By default, lists all video filenames for quick inspection.
+    With -o and update flags, replaces video paths and saves to output.
+
+    [bold]Inspection mode[/] (default):
+
+        $ sio filenames -i labels.slp
+
+    [bold]Update modes[/] (require -o):
+
+    [bold]List mode[/] (--filename): Replace all video filenames in order.
+    Provide one --filename for each video in the labels file.
+
+    [bold]Map mode[/] (--map OLD NEW): Replace specific filenames.
+    Use exact path matching to replace OLD with NEW.
+
+    [bold]Prefix mode[/] (--prefix OLD NEW): Replace path prefixes.
+    Cross-platform aware (handles Windows/Linux path differences).
+
+    [dim]Examples:[/]
+
+        $ sio filenames -i labels.slp
+        $ sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
+        $ sio filenames -i labels.slp -o out.slp --prefix "C:\\data" /mnt/data
+    """
+    # Determine if any update flags are provided
+    has_update_flags = (
+        len(new_filenames) > 0 or len(filename_map) > 0 or len(prefix_map) > 0
+    )
+
+    # Load the input file (no video access needed)
+    try:
+        labels = io_main.load_file(str(input_path), open_videos=False)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input file: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input file is not a labels file (got {type(labels).__name__})."
+        )
+
+    # Inspection mode: just list filenames
+    if not has_update_flags:
+        click.echo(f"Video filenames in {input_path.name}:")
+        for i, vid in enumerate(labels.videos):
+            fn = vid.filename
+            if isinstance(fn, list):
+                click.echo(f"  [{i}] {fn[0]} ... ({len(fn)} images)")
+            else:
+                click.echo(f"  [{i}] {fn}")
+        return
+
+    # Update mode: require -o
+    if output_path is None:
+        raise click.ClickException(
+            "Output path (-o) required when using --filename, --map, or --prefix"
+        )
+
+    # Validate only one update mode
+    modes = sum(
+        [
+            len(new_filenames) > 0,
+            len(filename_map) > 0,
+            len(prefix_map) > 0,
+        ]
+    )
+    if modes > 1:
+        raise click.ClickException(
+            "Only one mode allowed: --filename, --map, or --prefix (not multiple)"
+        )
+
+    # Apply replacement (no video access needed)
+    try:
+        if new_filenames:
+            labels.replace_filenames(
+                new_filenames=list(new_filenames),
+                open_videos=False,
+            )
+        elif filename_map:
+            labels.replace_filenames(
+                filename_map=dict(filename_map),
+                open_videos=False,
+            )
+        elif prefix_map:
+            labels.replace_filenames(
+                prefix_map=dict(prefix_map),
+                open_videos=False,
+            )
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+    # Save the output file
+    try:
+        io_main.save_file(labels, str(output_path))
+    except Exception as e:
+        raise click.ClickException(f"Failed to save output file: {e}")
+
+    # Success message
+    n_videos = len(labels.videos)
+    mode_name = "list" if new_filenames else "map" if filename_map else "prefix"
+    click.echo(f"Replaced filenames in {n_videos} video(s) using {mode_name} mode")
+    click.echo(f"Saved: {output_path}")
