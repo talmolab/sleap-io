@@ -42,7 +42,7 @@ click.rich_click.ERRORS_EPILOGUE = (
 # Command panels for organized help display
 click.rich_click.COMMAND_GROUPS = {
     "sio": [
-        {"name": "Inspection", "commands": ["cat"]},
+        {"name": "Inspection", "commands": ["show"]},
         {"name": "Transformation", "commands": ["convert"]},
     ]
 }
@@ -136,8 +136,8 @@ def cli():
 
     [dim]Examples:[/]
 
-        $ sio cat labels.slp
-        $ sio cat labels.slp --skeleton
+        $ sio show labels.slp
+        $ sio show labels.slp --skeleton
     """
     pass
 
@@ -836,7 +836,7 @@ def _print_provenance(labels: Labels) -> None:
     is_flag=True,
     help="Print all available details.",
 )
-def cat(
+def show(
     path: Path,
     open_videos: bool,
     lf_index: Optional[int],
@@ -855,10 +855,10 @@ def cat(
 
     [dim]Examples:[/]
 
-        $ sio cat labels.slp
-        $ sio cat labels.slp --skeleton
-        $ sio cat labels.slp --lf 0
-        $ sio cat labels.slp --all
+        $ sio show labels.slp
+        $ sio show labels.slp --skeleton
+        $ sio show labels.slp --lf 0
+        $ sio show labels.slp --all
     """
     # Expand --all flag
     if show_all:

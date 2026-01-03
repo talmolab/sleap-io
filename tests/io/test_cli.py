@@ -49,10 +49,10 @@ def test_version_shows_plugin_info():
     assert "pyav:" in out
 
 
-def test_cat_summary_typical_slp():
+def test_show_summary_typical_slp():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Header panel with file info
@@ -66,10 +66,10 @@ def test_cat_summary_typical_slp():
     assert "Skeletons" in out
 
 
-def test_cat_lf_zero_details():
+def test_show_lf_zero_details():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--lf", "0", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--lf", "0", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Expect labeled frame details
@@ -81,20 +81,20 @@ def test_cat_lf_zero_details():
     assert "points = [" in out
 
 
-def test_cat_lf_out_of_range():
+def test_show_lf_out_of_range():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--lf", "9999", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--lf", "9999", "--no-open-videos"])
     assert result.exit_code != 0
     assert "out of range" in result.output
 
 
-def test_cat_on_video_basic_info():
+def test_show_on_video_basic_info():
     runner = CliRunner()
     # Use a small bundled mp4 in tests/data/videos
     # If CI lacks codecs, this should still work as we don't open videos by default
     path = _data_path("videos/video_1.mp4")
-    result = runner.invoke(cli, ["cat", str(path)])
+    result = runner.invoke(cli, ["show", str(path)])
     # If the file is missing in some environments, allow graceful skip assertion
     if path.exists():
         assert result.exit_code == 0, result.output
@@ -103,10 +103,10 @@ def test_cat_on_video_basic_info():
         assert "Video" in out
 
 
-def test_cat_skeleton_flag_text():
+def test_show_skeleton_flag_text():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--skeleton", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--skeleton", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Detailed skeleton view shows Python code and tables
@@ -117,15 +117,15 @@ def test_cat_skeleton_flag_text():
     assert "Edges:" in out
 
 
-def test_cat_file_not_found():
+def test_show_file_not_found():
     runner = CliRunner()
-    result = runner.invoke(cli, ["cat", "/nonexistent/path/to/file.slp"])
+    result = runner.invoke(cli, ["show", "/nonexistent/path/to/file.slp"])
     assert result.exit_code != 0
     # Click validates file existence before our code runs
     assert "Invalid value for 'PATH'" in result.output
 
 
-def test_cat_skeleton_no_edges(tmp_path):
+def test_show_skeleton_no_edges(tmp_path):
     """Test skeleton display when skeleton has no edges."""
     from sleap_io import save_file
 
@@ -139,7 +139,7 @@ def test_cat_skeleton_no_edges(tmp_path):
     save_file(labels, slp_path)
 
     result = runner.invoke(
-        cli, ["cat", str(slp_path), "--skeleton", "--no-open-videos"]
+        cli, ["show", str(slp_path), "--skeleton", "--no-open-videos"]
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
@@ -151,7 +151,7 @@ def test_cat_skeleton_no_edges(tmp_path):
     assert "edge_inds" not in out
 
 
-def test_cat_empty_labels_with_lf(tmp_path):
+def test_show_empty_labels_with_lf(tmp_path):
     """Test --lf flag on file with no labeled frames."""
     from sleap_io import save_file
 
@@ -163,13 +163,15 @@ def test_cat_empty_labels_with_lf(tmp_path):
     slp_path = tmp_path / "empty.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--lf", "0", "--no-open-videos"])
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--lf", "0", "--no-open-videos"]
+    )
     assert result.exit_code != 0
     assert "No labeled frames present in file" in result.output
 
 
-def test_cat_video_file():
-    """Test cat on a video file (non-Labels object)."""
+def test_show_video_file():
+    """Test show on a video file (non-Labels object)."""
     runner = CliRunner()
     path = _data_path("videos/centered_pair_low_quality.mp4")
 
@@ -177,17 +179,17 @@ def test_cat_video_file():
         # Skip if video file doesn't exist in test environment
         return
 
-    result = runner.invoke(cli, ["cat", str(path), "--open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--open-videos"])
     assert result.exit_code == 0, result.output
     # Should print repr of Video object
     assert "Video" in result.output
 
 
-def test_cat_video_flag():
+def test_show_video_flag():
     """Test --video flag shows detailed video info."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--video", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--video", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "Video Details" in out
@@ -198,11 +200,11 @@ def test_cat_video_flag():
     assert "Labeled" in out
 
 
-def test_cat_tracks_flag():
+def test_show_tracks_flag():
     """Test --tracks flag shows detailed track info."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--tracks", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--tracks", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "Tracks" in out
@@ -211,22 +213,22 @@ def test_cat_tracks_flag():
     assert "Instances" in out
 
 
-def test_cat_provenance_flag():
+def test_show_provenance_flag():
     """Test --provenance flag shows provenance info."""
     runner = CliRunner()
     path = _data_path("slp/predictions_1.2.7_provenance_and_tracking.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--provenance", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--provenance", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "Provenance" in out
     assert "sleap_version" in out
 
 
-def test_cat_all_flag():
+def test_show_all_flag():
     """Test --all flag shows all details."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--all", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--all", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show all detail sections
@@ -235,32 +237,32 @@ def test_cat_all_flag():
     assert "Tracks" in out
 
 
-def test_cat_short_flags():
+def test_show_short_flags():
     """Test short flag aliases work (-s, -v, -t, -p, -a)."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
 
     # Test -s for --skeleton
-    result = runner.invoke(cli, ["cat", str(path), "-s", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "-s", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     assert "Skeleton Details" in _strip_ansi(result.output)
 
     # Test -v for --video
-    result = runner.invoke(cli, ["cat", str(path), "-v", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "-v", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     assert "Video Details" in _strip_ansi(result.output)
 
     # Test -t for --tracks
-    result = runner.invoke(cli, ["cat", str(path), "-t", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "-t", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     assert "Tracks" in _strip_ansi(result.output)
 
 
-def test_cat_skeleton_with_symmetries():
+def test_show_skeleton_with_symmetries():
     """Test skeleton display shows symmetries when present."""
     runner = CliRunner()
     path = _data_path("slp/centered_pair_predictions.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--skeleton", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--skeleton", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # This file has symmetries
@@ -268,11 +270,11 @@ def test_cat_skeleton_with_symmetries():
     assert "<->" in out
 
 
-def test_cat_multiview_videos():
-    """Test cat handles multiple videos correctly."""
+def test_show_multiview_videos():
+    """Test show handles multiple videos correctly."""
     runner = CliRunner()
     path = _data_path("slp/multiview.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--video", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--video", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Multiview has 8 videos
@@ -280,22 +282,22 @@ def test_cat_multiview_videos():
     assert "Video 7" in out
 
 
-def test_cat_header_shows_file_size():
+def test_show_header_shows_file_size():
     """Test that header panel shows file size."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "Size:" in out
     assert "KB" in out or "MB" in out or "B" in out
 
 
-def test_cat_header_shows_instance_counts():
+def test_show_header_shows_instance_counts():
     """Test that header shows labeled/predicted instance counts."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # typical.slp has both user and predicted instances
@@ -303,18 +305,18 @@ def test_cat_header_shows_instance_counts():
     assert "predicted" in out
 
 
-def test_cat_pkg_file_type():
+def test_show_pkg_file_type():
     """Test that .pkg.slp files show Package type."""
     runner = CliRunner()
     path = _data_path("slp/minimal_instance.pkg.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "Package" in out
 
 
-def test_cat_no_skeletons(tmp_path):
-    """Test cat on file with no skeletons."""
+def test_show_no_skeletons(tmp_path):
+    """Test show on file with no skeletons."""
     from sleap_io import save_file
 
     runner = CliRunner()
@@ -324,15 +326,15 @@ def test_cat_no_skeletons(tmp_path):
     save_file(labels, slp_path)
 
     result = runner.invoke(
-        cli, ["cat", str(slp_path), "--skeleton", "--no-open-videos"]
+        cli, ["show", str(slp_path), "--skeleton", "--no-open-videos"]
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "No skeletons" in out
 
 
-def test_cat_no_videos(tmp_path):
-    """Test cat on file with no videos."""
+def test_show_no_videos(tmp_path):
+    """Test show on file with no videos."""
     from sleap_io import save_file
 
     runner = CliRunner()
@@ -341,14 +343,14 @@ def test_cat_no_videos(tmp_path):
     slp_path = tmp_path / "no_videos.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--video", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "No videos" in out
 
 
-def test_cat_no_tracks(tmp_path):
-    """Test cat on file with no tracks."""
+def test_show_no_tracks(tmp_path):
+    """Test show on file with no tracks."""
     from sleap_io import save_file
 
     runner = CliRunner()
@@ -357,13 +359,13 @@ def test_cat_no_tracks(tmp_path):
     slp_path = tmp_path / "no_tracks.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--tracks", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(slp_path), "--tracks", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "No tracks" in out
 
 
-def test_cat_provenance_shows_filename(tmp_path):
+def test_show_provenance_shows_filename(tmp_path):
     """Test that provenance shows filename after saving."""
     from sleap_io import save_file
 
@@ -374,7 +376,7 @@ def test_cat_provenance_shows_filename(tmp_path):
     save_file(labels, slp_path)
 
     result = runner.invoke(
-        cli, ["cat", str(slp_path), "--provenance", "--no-open-videos"]
+        cli, ["show", str(slp_path), "--provenance", "--no-open-videos"]
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
@@ -383,7 +385,7 @@ def test_cat_provenance_shows_filename(tmp_path):
     assert "filename:" in out
 
 
-def test_cat_format_file_size_units():
+def test_show_format_file_size_units():
     """Test file size formatting for different units."""
     from sleap_io.io.cli import _format_file_size
 
@@ -394,11 +396,11 @@ def test_cat_format_file_size_units():
     assert "TB" in _format_file_size(2 * 1024 * 1024 * 1024 * 1024)
 
 
-def test_cat_provenance_with_list_and_dict():
+def test_show_provenance_with_list_and_dict():
     """Test provenance display with list and dict values."""
     runner = CliRunner()
     path = _data_path("slp/predictions_1.2.7_provenance_and_tracking.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--provenance", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--provenance", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # This file has 'args' which is a dict
@@ -411,12 +413,12 @@ def test_cat_provenance_with_list_and_dict():
 # =============================================================================
 
 
-def test_cat_video_with_open_backend():
+def test_show_video_with_open_backend():
     """Test video display with open backend shows plugin info."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
     # Use --open-videos to actually open the backend
-    result = runner.invoke(cli, ["cat", str(path), "--video", "--open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--video", "--open-videos"])
     # If video exists, should show backend info in status
     if result.exit_code == 0:
         out = _strip_ansi(result.output)
@@ -425,10 +427,10 @@ def test_cat_video_with_open_backend():
         assert "Status" in out
 
 
-def test_cat_video_embedded_pkg(slp_minimal_pkg):
+def test_show_video_embedded_pkg(slp_minimal_pkg):
     """Test video display for package files with embedded images."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["cat", slp_minimal_pkg, "--video", "--open-videos"])
+    result = runner.invoke(cli, ["show", slp_minimal_pkg, "--video", "--open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show embedded indicator
@@ -439,7 +441,7 @@ def test_cat_video_embedded_pkg(slp_minimal_pkg):
     assert "Format" in out
 
 
-def test_cat_video_not_found_status(tmp_path):
+def test_show_video_not_found_status(tmp_path):
     """Test video display when video file doesn't exist."""
     from sleap_io import Labels, Video, save_file
 
@@ -456,14 +458,14 @@ def test_cat_video_not_found_status(tmp_path):
     slp_path = tmp_path / "missing_video.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--video", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Status line should show file not found
     assert "File not found" in out
 
 
-def test_cat_video_cached_shape(tmp_path):
+def test_show_video_cached_shape(tmp_path):
     """Test video display shows dimensions from backend_metadata when file not found."""
     from sleap_io import Labels, Video, save_file
 
@@ -480,7 +482,7 @@ def test_cat_video_cached_shape(tmp_path):
     slp_path = tmp_path / "cached_shape.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--video", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show dimensions from cached metadata even when file not found
@@ -490,7 +492,7 @@ def test_cat_video_cached_shape(tmp_path):
     assert "File not found" in out  # Status indicates file issue
 
 
-def test_cat_video_unknown_shape(tmp_path):
+def test_show_video_unknown_shape(tmp_path):
     """Test video display when shape is unavailable."""
     from sleap_io import Labels, Video, save_file
 
@@ -507,14 +509,14 @@ def test_cat_video_unknown_shape(tmp_path):
     slp_path = tmp_path / "no_shape.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--video", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show unknown for size
     assert "unknown" in out.lower()
 
 
-def test_cat_video_image_sequence():
+def test_show_video_image_sequence():
     """Test video display functions for image sequence."""
     from io import StringIO
 
@@ -561,7 +563,7 @@ def test_cat_video_image_sequence():
         cli_module.console = original_console
 
 
-def test_cat_many_tracks(tmp_path):
+def test_show_many_tracks(tmp_path):
     """Test track display truncates when >5 tracks."""
     from sleap_io import Labels, Track, save_file
 
@@ -574,14 +576,14 @@ def test_cat_many_tracks(tmp_path):
     slp_path = tmp_path / "many_tracks.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show truncation message
     assert "+5 more" in out
 
 
-def test_cat_video_helper_functions():
+def test_show_video_helper_functions():
     """Test video helper functions directly."""
     from sleap_io import Video
     from sleap_io.io.cli import (
@@ -669,7 +671,7 @@ def test_cat_video_helper_functions():
     assert _is_embedded(video3) is True
 
 
-def test_cat_video_exists_status():
+def test_show_video_exists_status():
     """Test video exists() when file exists."""
     # Use an actual video file that exists
     path = _data_path("videos/centered_pair_low_quality.mp4")
@@ -690,10 +692,10 @@ def test_cat_video_exists_status():
     assert video.exists() is True
 
 
-def test_cat_embedded_video_details(slp_minimal_pkg):
+def test_show_embedded_video_details(slp_minimal_pkg):
     """Test detailed embedded video display with source info."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["cat", slp_minimal_pkg, "--video", "--open-videos"])
+    result = runner.invoke(cli, ["show", slp_minimal_pkg, "--video", "--open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
 
@@ -706,11 +708,11 @@ def test_cat_embedded_video_details(slp_minimal_pkg):
     assert "indices" in out.lower() or "0" in out
 
 
-def test_cat_embedded_video_summary(slp_minimal_pkg):
+def test_show_embedded_video_summary(slp_minimal_pkg):
     """Test video summary with embedded video shows indicators."""
     runner = CliRunner()
     # No --video flag, so we get the summary view, and --open-videos to load backend
-    result = runner.invoke(cli, ["cat", slp_minimal_pkg, "--open-videos"])
+    result = runner.invoke(cli, ["show", slp_minimal_pkg, "--open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
 
@@ -720,7 +722,7 @@ def test_cat_embedded_video_summary(slp_minimal_pkg):
     assert "video" in out.lower()
 
 
-def test_cat_provenance_empty():
+def test_show_provenance_empty():
     """Test provenance display with no provenance."""
     from io import StringIO
 
@@ -748,7 +750,7 @@ def test_cat_provenance_empty():
         cli_module.console = original_console
 
 
-def test_cat_provenance_list_truncation(tmp_path):
+def test_show_provenance_list_truncation(tmp_path):
     """Test provenance with long list values gets truncated."""
     from sleap_io import Labels, save_file
 
@@ -762,7 +764,7 @@ def test_cat_provenance_list_truncation(tmp_path):
     save_file(labels, slp_path)
 
     result = runner.invoke(
-        cli, ["cat", str(slp_path), "--provenance", "--no-open-videos"]
+        cli, ["show", str(slp_path), "--provenance", "--no-open-videos"]
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
@@ -770,7 +772,7 @@ def test_cat_provenance_list_truncation(tmp_path):
     assert "10 total" in out
 
 
-def test_cat_lf_with_nan_points(tmp_path):
+def test_show_lf_with_nan_points(tmp_path):
     """Test labeled frame display with NaN (invisible) points."""
     import numpy as np
 
@@ -802,14 +804,16 @@ def test_cat_lf_with_nan_points(tmp_path):
     slp_path = tmp_path / "nan_points.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--lf", "0", "--no-open-videos"])
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--lf", "0", "--no-open-videos"]
+    )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show None for NaN point
     assert "(None, None)" in out
 
 
-def test_cat_skeleton_summary_with_symmetries():
+def test_show_skeleton_summary_with_symmetries():
     """Test skeleton summary shows symmetry count."""
     from io import StringIO
 
@@ -838,7 +842,7 @@ def test_cat_skeleton_summary_with_symmetries():
         cli_module.console = original_console
 
 
-def test_cat_lf_image_sequence_video(tmp_path):
+def test_show_lf_image_sequence_video(tmp_path):
     """Test labeled frame display with image sequence video."""
     import numpy as np
 
@@ -1113,7 +1117,7 @@ def test_cli_help_shows_command_panels():
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
     # Command panels should organize commands
-    assert "cat" in result.output
+    assert "show" in result.output
     assert "convert" in result.output
 
 
