@@ -1268,3 +1268,472 @@ def test_convert_save_failure_invalid_path(tmp_path, slp_typical):
     assert result.exit_code != 0
     output = _strip_ansi(result.output)
     assert "Failed to save" in output
+
+
+# ======================= Split command tests =======================
+
+
+def test_split_basic_two_way(tmp_path, clip_2nodes_slp):
+    """Test basic 2-way split (train/val) with default 80/20 proportions."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli, ["split", "-i", clip_2nodes_slp, "-o", str(output_dir), "--seed", "42"]
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check success message
+    assert "Split 1500 frames from:" in output
+    assert "train.slp:" in output
+    assert "val.slp:" in output
+    assert "Random seed: 42" in output
+
+    # Check output files exist
+    assert (output_dir / "train.slp").exists()
+    assert (output_dir / "val.slp").exists()
+    assert not (output_dir / "test.slp").exists()  # No test split by default
+
+    # Verify split sizes (80/20)
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    val_labels = load_slp(str(output_dir / "val.slp"))
+    assert len(train_labels) == 1200  # 80% of 1500
+    assert len(val_labels) == 300  # Remainder
+
+
+def test_split_three_way(tmp_path, clip_2nodes_slp):
+    """Test 3-way split (train/val/test)."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            clip_2nodes_slp,
+            "-o",
+            str(output_dir),
+            "--train",
+            "0.7",
+            "--test",
+            "0.15",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check success message
+    assert "train.slp:" in output
+    assert "val.slp:" in output
+    assert "test.slp:" in output
+
+    # Check all output files exist
+    assert (output_dir / "train.slp").exists()
+    assert (output_dir / "val.slp").exists()
+    assert (output_dir / "test.slp").exists()
+
+    # Verify split sizes
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    val_labels = load_slp(str(output_dir / "val.slp"))
+    test_labels = load_slp(str(output_dir / "test.slp"))
+    assert len(train_labels) == 1050  # 70% of 1500
+    assert len(test_labels) == 225  # 15% of 1500
+    assert len(val_labels) == 225  # Remainder (15%)
+
+
+def test_split_reproducibility_with_seed(tmp_path, clip_2nodes_slp):
+    """Test that same seed produces identical splits."""
+    runner = CliRunner()
+
+    # First split
+    output_dir1 = tmp_path / "splits1"
+    result1 = runner.invoke(
+        cli, ["split", "-i", clip_2nodes_slp, "-o", str(output_dir1), "--seed", "123"]
+    )
+    assert result1.exit_code == 0
+
+    # Second split with same seed
+    output_dir2 = tmp_path / "splits2"
+    result2 = runner.invoke(
+        cli, ["split", "-i", clip_2nodes_slp, "-o", str(output_dir2), "--seed", "123"]
+    )
+    assert result2.exit_code == 0
+
+    # Load and compare frame indices
+    train1 = load_slp(str(output_dir1 / "train.slp"))
+    train2 = load_slp(str(output_dir2 / "train.slp"))
+
+    # Get frame indices from both splits
+    indices1 = sorted([lf.frame_idx for lf in train1.labeled_frames])
+    indices2 = sorted([lf.frame_idx for lf in train2.labeled_frames])
+
+    assert indices1 == indices2
+
+
+def test_split_remove_predictions(tmp_path, slp_real_data):
+    """Test --remove-predictions flag removes predicted instances."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            slp_real_data,
+            "-o",
+            str(output_dir),
+            "--remove-predictions",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Predictions removed: yes" in output
+
+    # Verify predictions were removed
+    from sleap_io.model.instance import PredictedInstance
+
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    for lf in train_labels.labeled_frames:
+        for inst in lf.instances:
+            assert not isinstance(inst, PredictedInstance)
+
+
+def test_split_single_frame_warning(tmp_path, slp_typical):
+    """Test warning when splitting single frame."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli, ["split", "-i", slp_typical, "-o", str(output_dir), "--seed", "42"]
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should warn about single frame
+    assert "Only 1 labeled frame found" in output
+    assert "All splits will contain the same frame" in output
+
+    # Both splits should have the same frame
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    val_labels = load_slp(str(output_dir / "val.slp"))
+    assert len(train_labels) == 1
+    assert len(val_labels) == 1
+
+
+def test_split_provenance_tracking(tmp_path, clip_2nodes_slp):
+    """Test that provenance is updated with split info and seed."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            clip_2nodes_slp,
+            "-o",
+            str(output_dir),
+            "--test",
+            "0.1",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Check provenance in each split
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    val_labels = load_slp(str(output_dir / "val.slp"))
+    test_labels = load_slp(str(output_dir / "test.slp"))
+
+    assert train_labels.provenance.get("split") == "train"
+    assert val_labels.provenance.get("split") == "val"
+    assert test_labels.provenance.get("split") == "test"
+
+    assert train_labels.provenance.get("split_seed") == 42
+    assert val_labels.provenance.get("split_seed") == 42
+    assert test_labels.provenance.get("split_seed") == 42
+
+
+def test_split_train_fraction_out_of_range():
+    """Test error when train fraction is out of valid range."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+
+    # Test train = 0
+    result = runner.invoke(cli, ["split", "-i", str(path), "-o", "out", "--train", "0"])
+    assert result.exit_code != 0
+    assert "--train must be between 0 and 1" in _strip_ansi(result.output)
+
+    # Test train = 1
+    result = runner.invoke(cli, ["split", "-i", str(path), "-o", "out", "--train", "1"])
+    assert result.exit_code != 0
+    assert "--train must be between 0 and 1" in _strip_ansi(result.output)
+
+    # Test train > 1
+    result = runner.invoke(
+        cli, ["split", "-i", str(path), "-o", "out", "--train", "1.5"]
+    )
+    assert result.exit_code != 0
+    assert "--train must be between 0 and 1" in _strip_ansi(result.output)
+
+
+def test_split_val_fraction_out_of_range():
+    """Test error when val fraction is out of valid range."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+
+    result = runner.invoke(cli, ["split", "-i", str(path), "-o", "out", "--val", "0"])
+    assert result.exit_code != 0
+    assert "--val must be between 0 and 1" in _strip_ansi(result.output)
+
+
+def test_split_test_fraction_out_of_range():
+    """Test error when test fraction is out of valid range."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+
+    result = runner.invoke(
+        cli, ["split", "-i", str(path), "-o", "out", "--test", "1.1"]
+    )
+    assert result.exit_code != 0
+    assert "--test must be between 0 and 1" in _strip_ansi(result.output)
+
+
+def test_split_fractions_exceed_one():
+    """Test error when sum of fractions exceeds 1.0."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            str(path),
+            "-o",
+            "out",
+            "--train",
+            "0.6",
+            "--val",
+            "0.3",
+            "--test",
+            "0.3",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Sum of fractions" in output
+    assert "exceeds 1.0" in output
+
+
+def test_split_no_frames_after_remove_predictions(tmp_path, centered_pair):
+    """Test error when no frames remain after removing predictions."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        ["split", "-i", centered_pair, "-o", str(output_dir), "--remove-predictions"],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "No labeled frames found" in output
+
+
+def test_split_input_not_found():
+    """Test error when input file doesn't exist."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["split", "-i", "nonexistent.slp", "-o", "out"])
+    assert result.exit_code != 0
+
+
+def test_split_help_shows_options():
+    """Test that split --help shows all expected options."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["split", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    assert "--train" in output
+    assert "--val" in output
+    assert "--test" in output
+    assert "--remove-predictions" in output
+    assert "--seed" in output
+    assert "--embed" in output
+    assert "-i" in output or "--input" in output
+    assert "-o" in output or "--output" in output
+
+
+def test_split_explicit_val_fraction(tmp_path, clip_2nodes_slp):
+    """Test split with explicit val fraction (not just remainder)."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            clip_2nodes_slp,
+            "-o",
+            str(output_dir),
+            "--train",
+            "0.6",
+            "--val",
+            "0.2",
+            "--test",
+            "0.2",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify split sizes
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    val_labels = load_slp(str(output_dir / "val.slp"))
+    test_labels = load_slp(str(output_dir / "test.slp"))
+
+    assert len(train_labels) == 900  # 60% of 1500
+    assert len(val_labels) == 300  # 20% of 1500
+    assert len(test_labels) == 300  # 20% of 1500
+
+
+def test_split_non_labels_input(tmp_path, centered_pair_low_quality_path):
+    """Test error when input is not a labels file."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        ["split", "-i", centered_pair_low_quality_path, "-o", str(output_dir)],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "not a labels file" in output
+
+
+def test_split_single_frame_with_test(tmp_path, slp_typical):
+    """Test single frame split with test set (all splits get same frame)."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_dir),
+            "--test",
+            "0.1",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # All three splits should exist and have 1 frame each
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    val_labels = load_slp(str(output_dir / "val.slp"))
+    test_labels = load_slp(str(output_dir / "test.slp"))
+
+    assert len(train_labels) == 1
+    assert len(val_labels) == 1
+    assert len(test_labels) == 1
+
+
+def test_split_load_failure_corrupt_file(tmp_path):
+    """Test error when input file is corrupt."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    # Create a corrupt file
+    corrupt_file = tmp_path / "corrupt.slp"
+    corrupt_file.write_text("this is not a valid slp file")
+
+    result = runner.invoke(
+        cli, ["split", "-i", str(corrupt_file), "-o", str(output_dir)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to load" in output
+
+
+def test_split_save_failure_invalid_path(tmp_path, slp_typical):
+    """Test error when save fails due to permission issues."""
+    runner = CliRunner()
+    # Use an invalid path with null byte that can't be created
+    output_dir = tmp_path / "splits"
+
+    # Create the output directory but make a file where we expect to write
+    output_dir.mkdir(parents=True, exist_ok=True)
+    # Create a directory where we expect a file, causing save to fail
+    (output_dir / "train.slp").mkdir()
+
+    result = runner.invoke(cli, ["split", "-i", slp_typical, "-o", str(output_dir)])
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to save" in output
+
+
+def test_split_without_seed(tmp_path, clip_2nodes_slp):
+    """Test split without seed (no seed in output)."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(cli, ["split", "-i", clip_2nodes_slp, "-o", str(output_dir)])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should not mention seed
+    assert "Random seed:" not in output
+
+    # Check provenance doesn't have seed
+    train_labels = load_slp(str(output_dir / "train.slp"))
+    assert "split_seed" not in train_labels.provenance
+
+
+def test_split_with_embed(tmp_path, slp_real_data):
+    """Test split with --embed option creates package files."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            slp_real_data,
+            "-o",
+            str(output_dir),
+            "--embed",
+            "user",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check output mentions embed
+    assert "Embedded frames: user" in output
+
+    # Check package files were created
+    assert (output_dir / "train.pkg.slp").exists()
+    assert (output_dir / "val.pkg.slp").exists()
+    # No test split by default
+    assert not (output_dir / "test.pkg.slp").exists()
+
+    # Verify the package files are valid and have embedded images
+    train_labels = load_slp(str(output_dir / "train.pkg.slp"))
+    assert len(train_labels) > 0

@@ -43,7 +43,7 @@ click.rich_click.ERRORS_EPILOGUE = (
 click.rich_click.COMMAND_GROUPS = {
     "sio": [
         {"name": "Inspection", "commands": ["show"]},
-        {"name": "Transformation", "commands": ["convert"]},
+        {"name": "Transformation", "commands": ["convert", "split"]},
     ]
 }
 
@@ -1092,5 +1092,255 @@ def convert(
     # Success message
     click.echo(f"Converted: {input_path} -> {output_path}")
     click.echo(f"Format: {resolved_input_format} -> {resolved_output_format}")
+    if embed:
+        click.echo(f"Embedded frames: {embed}")
+
+
+@cli.command()
+@click.option(
+    "-i",
+    "--input",
+    "input_path",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input labels file path.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_dir",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory for split files.",
+)
+@click.option(
+    "--train",
+    "train_fraction",
+    type=float,
+    default=0.8,
+    show_default=True,
+    help="Training set fraction (0.0-1.0).",
+)
+@click.option(
+    "--val",
+    "val_fraction",
+    type=float,
+    default=None,
+    help="Validation set fraction. Defaults to remainder after train and test.",
+)
+@click.option(
+    "--test",
+    "test_fraction",
+    type=float,
+    default=None,
+    help="Test set fraction. If not specified, no test split is created.",
+)
+@click.option(
+    "--remove-predictions",
+    is_flag=True,
+    default=False,
+    help="Remove predicted instances before splitting (keep only user labels).",
+)
+@click.option(
+    "--seed",
+    type=int,
+    default=None,
+    help="Random seed for reproducible splits.",
+)
+@click.option(
+    "--embed",
+    type=click.Choice(["user", "all", "suggestions", "source"]),
+    help="Embed frames in output files.",
+)
+def split(
+    input_path: Path,
+    output_dir: Path,
+    train_fraction: float,
+    val_fraction: Optional[float],
+    test_fraction: Optional[float],
+    remove_predictions: bool,
+    seed: Optional[int],
+    embed: Optional[str],
+):
+    """Split labels into train/val/test sets.
+
+    Creates random train/validation/test splits from a labels file,
+    saving each split to the output directory.
+
+    [bold]Proportions:[/]
+    By default, 80% of frames go to training and 20% to validation.
+    Use --test to create a three-way split.
+
+    [dim]Examples:[/]
+
+        $ sio split -i labels.slp -o splits/
+        $ sio split -i labels.slp -o splits/ --train 0.7 --val 0.15 --test 0.15
+        $ sio split -i labels.slp -o splits/ --remove-predictions --seed 42
+        $ sio split -i labels.slp -o splits/ --embed user
+    """
+    from copy import deepcopy
+
+    import numpy as np
+
+    # Validate fractions
+    if not 0 < train_fraction < 1:
+        raise click.ClickException("--train must be between 0 and 1 (exclusive).")
+
+    if val_fraction is not None and not 0 < val_fraction < 1:
+        raise click.ClickException("--val must be between 0 and 1 (exclusive).")
+
+    if test_fraction is not None and not 0 < test_fraction < 1:
+        raise click.ClickException("--test must be between 0 and 1 (exclusive).")
+
+    # Check that fractions don't exceed 1.0
+    total = train_fraction
+    if val_fraction is not None:
+        total += val_fraction
+    if test_fraction is not None:
+        total += test_fraction
+
+    if total > 1.0:
+        raise click.ClickException(
+            f"Sum of fractions ({total:.2f}) exceeds 1.0. "
+            "Reduce --train, --val, or --test."
+        )
+
+    # Load the input file (don't need video access unless embedding)
+    needs_video = embed is not None
+    try:
+        suffix = input_path.suffix.lower()
+        load_kwargs: dict = {}
+        if suffix == ".slp":
+            load_kwargs["open_videos"] = needs_video
+        labels = io_main.load_file(str(input_path), **load_kwargs)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input file: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input file is not a labels file (got {type(labels).__name__})."
+        )
+
+    # Optionally remove predictions
+    if remove_predictions:
+        labels = deepcopy(labels)
+        labels.remove_predictions()
+        labels.suggestions = []
+        labels.clean()
+
+    # Check we have enough frames
+    n_frames = len(labels)
+    if n_frames == 0:
+        raise click.ClickException("No labeled frames found in input file.")
+
+    if n_frames == 1:
+        click.echo(
+            "Warning: Only 1 labeled frame found. "
+            "All splits will contain the same frame."
+        )
+
+    # Compute split sizes
+    n_train = max(int(n_frames * train_fraction), 1)
+
+    if test_fraction is not None:
+        n_test = max(int(n_frames * test_fraction), 1)
+    else:
+        n_test = 0
+
+    if val_fraction is not None:
+        n_val = max(int(n_frames * val_fraction), 1)
+    else:
+        # Validation gets remainder
+        n_val = max(n_frames - n_train - n_test, 1)
+
+    # Ensure we don't exceed total frames
+    if n_train + n_val + n_test > n_frames and n_frames > 1:
+        # Adjust val to fit
+        n_val = max(n_frames - n_train - n_test, 1)
+
+    # Random sampling
+    rng = np.random.default_rng(seed=seed)
+    all_inds = np.arange(n_frames)
+    rng.shuffle(all_inds)
+
+    train_inds = all_inds[:n_train]
+    remaining_inds = all_inds[n_train:]
+
+    if n_test > 0:
+        test_inds = remaining_inds[:n_test]
+        val_inds = remaining_inds[n_test : n_test + n_val]
+    else:
+        test_inds = np.array([], dtype=int)
+        val_inds = remaining_inds[:n_val]
+
+    # Handle edge case: single frame goes to all splits
+    if n_frames == 1:
+        train_inds = np.array([0])
+        val_inds = np.array([0])
+        if n_test > 0:
+            test_inds = np.array([0])
+
+    # Extract splits
+    labels_train = labels.extract(train_inds, copy=True)
+    labels_val = labels.extract(val_inds, copy=True)
+    if n_test > 0:
+        labels_test = labels.extract(test_inds, copy=True)
+
+    # Update provenance
+    source_labels = labels.provenance.get("filename", str(input_path))
+    labels_train.provenance["source_labels"] = source_labels
+    labels_train.provenance["split"] = "train"
+    labels_val.provenance["source_labels"] = source_labels
+    labels_val.provenance["split"] = "val"
+    if n_test > 0:
+        labels_test.provenance["source_labels"] = source_labels
+        labels_test.provenance["split"] = "test"
+
+    # Add seed to provenance if specified
+    if seed is not None:
+        labels_train.provenance["split_seed"] = seed
+        labels_val.provenance["split_seed"] = seed
+        if n_test > 0:
+            labels_test.provenance["split_seed"] = seed
+
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine file extension
+    if embed is not None:
+        ext = ".pkg.slp"
+    else:
+        ext = ".slp"
+
+    # Save splits
+    try:
+        save_kwargs: dict = {}
+        if embed is not None:
+            save_kwargs["embed"] = embed
+
+        train_path = output_dir / f"train{ext}"
+        io_main.save_file(labels_train, str(train_path), **save_kwargs)
+
+        val_path = output_dir / f"val{ext}"
+        io_main.save_file(labels_val, str(val_path), **save_kwargs)
+
+        if n_test > 0:
+            test_path = output_dir / f"test{ext}"
+            io_main.save_file(labels_test, str(test_path), **save_kwargs)
+    except Exception as e:
+        raise click.ClickException(f"Failed to save split files: {e}")
+
+    # Success message
+    click.echo(f"Split {n_frames} frames from: {input_path}")
+    click.echo(f"Output directory: {output_dir}")
+    click.echo("")
+    click.echo(f"  train{ext}: {len(labels_train)} frames")
+    click.echo(f"  val{ext}: {len(labels_val)} frames")
+    if n_test > 0:
+        click.echo(f"  test{ext}: {len(labels_test)} frames")
+    if seed is not None:
+        click.echo(f"\nRandom seed: {seed}")
+    if remove_predictions:
+        click.echo("Predictions removed: yes")
     if embed:
         click.echo(f"Embedded frames: {embed}")
