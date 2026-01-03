@@ -1470,19 +1470,19 @@ def test_split_train_fraction_out_of_range():
     # Test train = 0
     result = runner.invoke(cli, ["split", "-i", str(path), "-o", "out", "--train", "0"])
     assert result.exit_code != 0
-    assert "--train must be between 0 and 1" in result.output
+    assert "--train must be between 0 and 1" in _strip_ansi(result.output)
 
     # Test train = 1
     result = runner.invoke(cli, ["split", "-i", str(path), "-o", "out", "--train", "1"])
     assert result.exit_code != 0
-    assert "--train must be between 0 and 1" in result.output
+    assert "--train must be between 0 and 1" in _strip_ansi(result.output)
 
     # Test train > 1
     result = runner.invoke(
         cli, ["split", "-i", str(path), "-o", "out", "--train", "1.5"]
     )
     assert result.exit_code != 0
-    assert "--train must be between 0 and 1" in result.output
+    assert "--train must be between 0 and 1" in _strip_ansi(result.output)
 
 
 def test_split_val_fraction_out_of_range():
@@ -1492,7 +1492,7 @@ def test_split_val_fraction_out_of_range():
 
     result = runner.invoke(cli, ["split", "-i", str(path), "-o", "out", "--val", "0"])
     assert result.exit_code != 0
-    assert "--val must be between 0 and 1" in result.output
+    assert "--val must be between 0 and 1" in _strip_ansi(result.output)
 
 
 def test_split_test_fraction_out_of_range():
@@ -1504,7 +1504,7 @@ def test_split_test_fraction_out_of_range():
         cli, ["split", "-i", str(path), "-o", "out", "--test", "1.1"]
     )
     assert result.exit_code != 0
-    assert "--test must be between 0 and 1" in result.output
+    assert "--test must be between 0 and 1" in _strip_ansi(result.output)
 
 
 def test_split_fractions_exceed_one():
