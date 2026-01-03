@@ -849,10 +849,7 @@ def test_cat_lf_image_sequence_video(tmp_path):
         Node,
         Skeleton,
         Video,
-        save_file,
     )
-
-    runner = CliRunner()
 
     # Create skeleton and instance
     nodes = [Node("head")]
@@ -873,9 +870,8 @@ def test_cat_lf_image_sequence_video(tmp_path):
 
     from rich.console import Console
 
-    from sleap_io.io.cli import _print_labeled_frame
-
     import sleap_io.io.cli as cli_module
+    from sleap_io.io.cli import _print_labeled_frame
 
     original_console = cli_module.console
     string_io = StringIO()
