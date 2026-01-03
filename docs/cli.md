@@ -4,31 +4,37 @@ sleap-io provides a command-line interface (CLI) for inspecting and converting p
 
 ## Installation
 
-The CLI is included with sleap-io but requires video backends for full functionality.
-
 ### Quick Usage with `uvx` (No Installation)
 
-Run any CLI command instantly using [`uvx`](https://docs.astral.sh/uv/) without installing:
+Run CLI commands instantly using [`uvx`](https://docs.astral.sh/uv/) without installing:
 
 ```bash
-# Inspect a labels file
-uvx --from "sleap-io[all]" sleap-io show labels.slp
+# Inspect a labels file (no video access needed)
+uvx sleap-io show labels.slp
 
-# Convert between formats
-uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o labels.nwb
+# Convert between formats (no video access needed)
+uvx sleap-io convert -i labels.slp -o labels.nwb
 
-# Check version and available plugins
-uvx --from "sleap-io[all]" sleap-io --version
+# Check version
+uvx sleap-io --version
 ```
 
-This downloads sleap-io temporarily and runs the command. Great for one-off tasks or trying out the CLI.
+For operations that require video access (embedding frames, exporting images), use the `[all]` extra:
+
+```bash
+# Embed frames in output (requires video backends)
+uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o labels.pkg.slp --embed user
+
+# Export to Ultralytics format (requires reading video frames)
+uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o dataset/ --to ultralytics
+```
 
 ### Permanent Installation with `uv tool`
 
 For regular use, install sleap-io as a global tool:
 
 ```bash
-# Install with all video backends (recommended)
+# Install with all video backends (recommended for full functionality)
 uv tool install "sleap-io[all]"
 
 # Now use the short command
@@ -39,24 +45,14 @@ sio convert -i labels.slp -o labels.nwb
 !!! tip "The `sio` command"
     After installation with `uv tool install`, you can use either `sio` or `sleap-io` as the command name. The short `sio` form is recommended for convenience.
 
-### Alternative: pip Installation
-
-```bash
-# Install with all backends
-pip install "sleap-io[all]"
-
-# Or minimal install (limited video support)
-pip install sleap-io
-```
-
-!!! info "Why `[all]`?"
+!!! info "When do you need video backends?"
     The `[all]` extra installs video backends (OpenCV, PyAV, imageio-ffmpeg) needed for:
 
-    - Reading video files when using `--open-videos`
     - Embedding frames with `sio convert --embed`
-    - Converting to formats that require video access (Ultralytics, NWB)
+    - Converting to Ultralytics format (exports images)
+    - Using `--open-videos` to load video metadata from files
 
-    Without video backends, the CLI works for inspecting files and basic conversions but cannot access video data.
+    Basic inspection (`sio show`) and format conversion work without video backends.
 
 ## Quick Reference
 
@@ -107,15 +103,15 @@ sio show labels.slp
 **Example output:**
 
 ```
-╭─ sleap-io ──────────────────────────────────────────────────────────╮
-│ labels.slp                                                          │
-│ /home/user/projects/mouse-tracking                                  │
-│                                                                     │
-│ Type:     Labels                                                    │
-│ Size:     2.4 MB                                                    │
-│                                                                     │
-│ 1 video | 100 frames | 200 labeled | 2 tracks                      │
-╰─────────────────────────────────────────────────────────────────────╯
+╭─ sleap-io ─────────────────────────────────────────────╮
+│ labels.slp                                             │
+│ /home/user/projects/mouse-tracking                     │
+│                                                        │
+│ Type:     Labels                                       │
+│ Size:     2.4 MB                                       │
+│                                                        │
+│ 1 video | 100 frames | 200 labeled | 2 tracks          │
+╰────────────────────────────────────────────────────────╯
 
 Skeletons
   mouse (7 nodes, 6 edges)
@@ -468,17 +464,17 @@ Convert multiple files using shell loops:
 
 ### Importing from Other Tools
 
-Convert predictions from other pose estimation tools:
+Import pose data from other annotation and analysis tools:
 
 ```bash
-# From DeepLabCut
-sio convert -i dlc_predictions.h5 -o labels.slp --from dlc
-
-# From COCO format (e.g., mmpose output)
-sio convert -i predictions.json -o labels.slp --from coco
+# From COCO format (e.g., mmpose, CVAT exports)
+sio convert -i annotations.json -o labels.slp --from coco
 
 # From Label Studio export
 sio convert -i annotations.json -o labels.slp --from labelstudio
+
+# From DeepLabCut analysis (CSV format)
+sio convert -i video_DLC_results.csv -o labels.slp --from dlc
 ```
 
 ### Exporting for Training
@@ -492,9 +488,20 @@ sio convert -i labels.slp -o yolo_data/ --to ultralytics
 # For tools expecting COCO format
 sio convert -i labels.slp -o annotations.json --to coco
 
-# For NWB-based pipelines
+# For NWB-based pipelines (auto-detects annotations vs predictions)
 sio convert -i labels.slp -o data.nwb --to nwb
 ```
+
+!!! tip "NWB training annotations"
+    The CLI uses auto-detection for NWB format. For explicit control over NWB format (e.g., `annotations` vs `predictions` vs `annotations_export` with embedded video), use the Python API:
+
+    ```python
+    import sleap_io as sio
+    labels = sio.load_slp("labels.slp")
+    sio.save_nwb(labels, "training.nwb", nwb_format="annotations")
+    ```
+
+    See [NWB Format](formats.md#nwb-format-nwb) for details.
 
 ### CI/CD Integration
 
@@ -503,10 +510,13 @@ Use `uvx` in CI pipelines without installation overhead:
 ```yaml
 # GitHub Actions example
 - name: Validate labels file
-  run: uvx --from "sleap-io[all]" sleap-io show labels.slp
+  run: uvx sleap-io show labels.slp
 
 - name: Convert to NWB
-  run: uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o labels.nwb
+  run: uvx sleap-io convert -i labels.slp -o labels.nwb
+
+- name: Create package with embedded frames
+  run: uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o labels.pkg.slp --embed user
 ```
 
 ---
