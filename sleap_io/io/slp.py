@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from enum import Enum, IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import h5py
 import imageio.v3 as iio
@@ -72,6 +72,12 @@ class InstanceType(IntEnum):
 
     USER = 0
     PREDICTED = 1
+
+
+class ExportCancelled(Exception):
+    """Raised when an export operation is cancelled by the user."""
+
+    pass
 
 
 def make_video(
@@ -373,6 +379,7 @@ def process_and_embed_frames(
     fixed_length: bool = True,
     verbose: bool = True,
     plugin: Optional[str] = None,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ) -> dict[Video, Video]:
     """Process and embed frames into a SLEAP labels file.
 
@@ -393,9 +400,17 @@ def process_and_embed_frames(
         plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
             If None, uses the global default from `get_default_image_plugin()`.
             If no global default is set, auto-detects based on available packages.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments (1-based current frame index and total
+            frame count). If it returns `False`, the operation is cancelled and
+            `ExportCancelled` is raised. When provided, tqdm progress bar is disabled
+            in favor of the callback.
 
     Returns:
         A dictionary mapping original Video objects to their embedded versions.
+
+    Raises:
+        ExportCancelled: If the progress_callback returns `False`.
     """
     # Determine which plugin to use for encoding
     from sleap_io.io.video_reading import get_default_image_plugin
@@ -408,14 +423,17 @@ def process_and_embed_frames(
 
     # Initialize a dictionary to store data by group
     data_by_group = {}
+    total_frames = len(frames_metadata)
 
-    # Process all frames in a single flat loop with progress bar if verbose
+    # Use tqdm only if verbose AND no callback (CLI mode)
+    use_tqdm = verbose and progress_callback is None
     frame_iter = (
-        tqdm(frames_metadata, desc="Embedding frames", disable=not verbose)
-        if verbose
+        tqdm(frames_metadata, desc="Embedding frames", disable=not use_tqdm)
+        if use_tqdm
         else frames_metadata
     )
-    for frame_meta in frame_iter:
+
+    for i, frame_meta in enumerate(frame_iter):
         video = frame_meta["video"]
         frame_idx = frame_meta["frame_idx"]
         group = frame_meta["group"]
@@ -458,6 +476,11 @@ def process_and_embed_frames(
         # Store frame data in the appropriate group
         data_by_group[group]["imgs_data"].append(img_data)
         data_by_group[group]["frame_inds"].append(frame_idx)
+
+        # Report progress via callback
+        if progress_callback is not None:
+            if not progress_callback(i + 1, total_frames):
+                raise ExportCancelled("Export cancelled by user")
 
     # Write all frame data to the HDF5 file
     replaced_videos = {}
@@ -612,6 +635,7 @@ def embed_frames(
     verbose: bool = True,
     plugin: Optional[str] = None,
     embed_all_videos: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -629,6 +653,9 @@ def embed_frames(
             converted to embedded references, even if they have no frames to embed.
             This ensures package files are portable. If `False`, only videos with
             frames to embed are converted.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -641,6 +668,7 @@ def embed_frames(
         image_format=image_format,
         verbose=verbose,
         plugin=plugin,
+        progress_callback=progress_callback,
     )
 
     # Handle videos without any frames to embed.
@@ -664,6 +692,7 @@ def embed_videos(
     verbose: bool = True,
     plugin: Optional[str] = None,
     embed_all_videos: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -692,6 +721,9 @@ def embed_videos(
             converted to embedded references, even if they have no frames to embed.
             This ensures package files are portable. If `False`, only videos with
             frames to embed are converted.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised.
     """
     if embed is True:
         embed = "all"
@@ -719,6 +751,7 @@ def embed_videos(
         verbose=verbose,
         plugin=plugin,
         embed_all_videos=embed_all_videos,
+        progress_callback=progress_callback,
     )
 
 
@@ -2164,6 +2197,7 @@ def write_labels(
     verbose: bool = True,
     plugin: Optional[str] = None,
     embed_all_videos: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Write a SLEAP labels file.
 
@@ -2196,6 +2230,9 @@ def write_labels(
             converted to embedded references, even if they have no frames to embed.
             This ensures package files are portable. If `False`, only videos with
             frames to embed are converted.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
@@ -2212,6 +2249,7 @@ def write_labels(
             verbose=verbose,
             plugin=plugin,
             embed_all_videos=embed_all_videos,
+            progress_callback=progress_callback,
         )
 
     # Determine reference mode based on parameters

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Callable, List, Optional, Union
 
 import numpy as np
 
@@ -46,6 +46,7 @@ def save_slp(
     restore_original_videos: bool = True,
     verbose: bool = True,
     plugin: Optional[str] = None,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -74,6 +75,10 @@ def save_slp(
             or "imageio". If None, uses the global default from
             `get_default_image_plugin()`. If no global default is set, auto-detects
             based on available packages (opencv preferred, then imageio).
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised. When provided, tqdm
+            progress bar is disabled in favor of the callback.
     """
     from sleap_io.io import slp
 
@@ -84,6 +89,7 @@ def save_slp(
         restore_original_videos=restore_original_videos,
         verbose=verbose,
         plugin=plugin,
+        progress_callback=progress_callback,
     )
 
 
@@ -660,6 +666,7 @@ def save_file(
     filename: str | Path,
     format: Optional[str] = None,
     verbose: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
     **kwargs,
 ):
     """Save a file based on the extension.
@@ -672,6 +679,9 @@ def save_file(
             "jabs", and "ultralytics".
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
+        progress_callback: Optional callback function called during frame embedding
+            (SLP format only) with `(current, total)` arguments. If it returns `False`,
+            the operation is cancelled and `ExportCancelled` is raised.
         **kwargs: Additional arguments passed to the format-specific saving function:
             - For "slp" format: embed (bool | str | list[tuple[Video, int]] |
               None): Frames
@@ -709,7 +719,13 @@ def save_file(
             format = "ultralytics"
 
     if format == "slp":
-        save_slp(labels, filename, verbose=verbose, **kwargs)
+        save_slp(
+            labels,
+            filename,
+            verbose=verbose,
+            progress_callback=progress_callback,
+            **kwargs,
+        )
     elif format == "nwb":
         save_nwb(labels, filename, **kwargs)
     elif format == "labelstudio":
