@@ -61,6 +61,7 @@ sio convert -i labels.slp -o labels.nwb
 sio --help
 sio show --help
 sio convert --help
+sio split --help
 
 # Check version and installed plugins
 sio --version
@@ -79,6 +80,12 @@ sio convert -i labels.slp -o labels.nwb
 sio convert -i labels.slp -o labels.pkg.slp --embed user
 sio convert -i data.json -o labels.slp --from coco
 sio convert -i labels.slp -o dataset/ --to ultralytics
+
+# Split into train/val/test sets
+sio split -i labels.slp -o splits/                          # 80/20 train/val
+sio split -i labels.slp -o splits/ --train 0.7 --test 0.15  # 70/15/15 split
+sio split -i labels.slp -o splits/ --remove-predictions     # User labels only
+sio split -i labels.slp -o splits/ --seed 42                # Reproducible split
 ```
 
 ---
@@ -399,6 +406,143 @@ yolo_dataset/
 
 ---
 
+### `sio split` - Create Train/Val/Test Splits
+
+Split a labels file into train/validation/test sets for machine learning workflows.
+
+```bash
+sio split -i <input> -o <output_dir> [options]
+```
+
+#### Basic Usage
+
+```bash
+# Default 80/20 train/val split
+sio split -i labels.slp -o splits/
+
+# Three-way 70/15/15 split
+sio split -i labels.slp -o splits/ --train 0.7 --test 0.15
+
+# Reproducible split with seed
+sio split -i labels.slp -o splits/ --seed 42
+```
+
+**Example output:**
+
+```
+Split 1000 frames from: labels.slp
+Output directory: splits/
+
+  train.slp: 800 frames
+  val.slp: 200 frames
+
+Random seed: 42
+```
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `-i, --input` | Input labels file path (required) |
+| `-o, --output` | Output directory for split files (required) |
+| `--train` | Training set fraction, 0.0-1.0 (default: 0.8) |
+| `--val` | Validation set fraction (default: remainder after train and test) |
+| `--test` | Test set fraction (if not specified, no test split is created) |
+| `--remove-predictions` | Remove predicted instances, keep only user labels |
+| `--seed` | Random seed for reproducible splits |
+| `--embed` | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
+
+#### Output Files
+
+The command creates split files in the output directory:
+
+```
+splits/
+├── train.slp      # Training set (or train.pkg.slp if --embed)
+├── val.slp        # Validation set
+└── test.slp       # Test set (only if --test specified)
+```
+
+Each output file includes provenance metadata:
+
+- `source_labels`: Path to the original input file
+- `split`: Split name (`train`, `val`, or `test`)
+- `split_seed`: Random seed used (if specified)
+
+#### Removing Predictions
+
+For training, you typically want only user-labeled (ground truth) data:
+
+```bash
+# Keep only user-labeled instances, remove predictions
+sio split -i labels.slp -o splits/ --remove-predictions --seed 42
+```
+
+This:
+
+1. Removes all `PredictedInstance` objects
+2. Clears suggestions
+3. Removes empty frames and unused tracks/skeletons
+
+!!! warning "Predictions-only files"
+    If your file contains only predictions (no user labels), `--remove-predictions` will result in an empty dataset and the command will fail with an error.
+
+#### Creating Embedded Packages
+
+For portable training datasets with embedded frames:
+
+```bash
+# Create package files with embedded user-labeled frames
+sio split -i labels.slp -o splits/ --embed user --seed 42
+```
+
+This creates `train.pkg.slp`, `val.pkg.slp`, and optionally `test.pkg.slp` with frames embedded directly in the files.
+
+!!! info "Video access required"
+    Embedding frames requires video backends. Use `uvx --from "sleap-io[all]" sleap-io split ...` or install with `uv tool install "sleap-io[all]"`.
+
+#### Reproducibility
+
+Always use `--seed` for reproducible experiments:
+
+```bash
+# Same seed = same split every time
+sio split -i labels.slp -o run1/ --train 0.8 --test 0.1 --seed 42
+sio split -i labels.slp -o run2/ --train 0.8 --test 0.1 --seed 42
+# run1/ and run2/ will have identical splits
+```
+
+The seed is stored in each output file's provenance for traceability.
+
+!!! warning "Seed sensitivity to preprocessing"
+    The `--seed` guarantees reproducibility only when all other options are identical. In particular, `--remove-predictions` changes which frames are available for splitting (frames with only predictions are removed), which changes the frame count and indexing. This means:
+
+    ```bash
+    # These will produce DIFFERENT splits even with the same seed:
+    sio split -i labels.slp -o run1/ --seed 42
+    sio split -i labels.slp -o run2/ --seed 42 --remove-predictions
+    ```
+
+    To ensure reproducibility, always use the same combination of options (especially `--remove-predictions`) with your seed.
+
+#### Fraction Behavior
+
+- **Default (no `--val` or `--test`)**: 80% train, 20% validation
+- **With `--test` only**: Train gets `--train`, test gets `--test`, val gets remainder
+- **With explicit `--val` and `--test`**: Each split gets its specified fraction
+
+Fractions must be between 0 and 1, and their sum cannot exceed 1.0:
+
+```bash
+# Valid: 0.7 + 0.15 + 0.15 = 1.0
+sio split -i labels.slp -o splits/ --train 0.7 --val 0.15 --test 0.15
+
+# Error: 0.8 + 0.15 + 0.15 = 1.1 > 1.0
+sio split -i labels.slp -o splits/ --train 0.8 --val 0.15 --test 0.15
+```
+
+---
+
 ## Use Cases
 
 ### Inspecting an Unknown Labels File
@@ -491,6 +635,20 @@ sio convert -i labels.slp -o annotations.json --to coco
 # For NWB-based pipelines (auto-detects annotations vs predictions)
 sio convert -i labels.slp -o data.nwb --to nwb
 ```
+
+### Creating Training Splits
+
+Prepare datasets for machine learning with reproducible splits:
+
+```bash
+# Standard 80/10/10 split for training
+sio split -i labels.slp -o experiment1/ --train 0.8 --test 0.1 --seed 42
+
+# Remove predictions and embed frames for portable training data
+sio split -i labels.slp -o training_data/ --remove-predictions --embed user --seed 42
+```
+
+The `--seed` option ensures you can recreate the exact same split later, which is essential for reproducible experiments. Note that the seed is sensitive to `--remove-predictions` since it changes the frame count—use the same options consistently.
 
 !!! tip "NWB training annotations"
     The CLI uses auto-detection for NWB format. For explicit control over NWB format (e.g., `annotations` vs `predictions` vs `annotations_export` with embedded video), use the Python API:
