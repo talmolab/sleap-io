@@ -538,6 +538,72 @@ def process_and_embed_frames(
     return replaced_videos
 
 
+def _create_empty_embedded_video(
+    labels_path: str,
+    video: Video,
+    video_ind: int,
+) -> Video:
+    """Create an empty embedded video reference for a video without frames.
+
+    This is used when exporting package files to ensure all videos point to
+    the package file rather than external paths, even if they have no frames.
+
+    Args:
+        labels_path: Path to the labels file being written.
+        video: The original Video object.
+        video_ind: The index of this video in labels.videos.
+
+    Returns:
+        A new Video object with an empty HDF5Video backend pointing to the
+        labels file, with source_video set to the original video.
+    """
+    group = f"video{video_ind}"
+
+    # Determine source video (preserve chain if already embedded)
+    source_video = video.source_video if video.source_video is not None else video
+
+    # Write empty video group with source_video metadata to HDF5
+    with h5py.File(labels_path, "a") as f:
+        grp = f.require_group(group)
+
+        # Store empty frame_numbers dataset
+        if "frame_numbers" not in grp:
+            f.create_dataset(f"{group}/frame_numbers", data=[])
+
+        # Create empty video dataset with metadata so HDF5Video recognizes it
+        if "video" not in grp:
+            ds = f.create_dataset(f"{group}/video", shape=(0,), dtype="int8")
+            ds.attrs["format"] = "png"
+            ds.attrs["channel_order"] = "RGB"
+            # Store video shape metadata from the source video
+            video_shape = video.shape
+            ds.attrs["frames"] = video_shape[0]
+            ds.attrs["height"] = video_shape[1]
+            ds.attrs["width"] = video_shape[2]
+            ds.attrs["channels"] = video_shape[3]
+
+        # Store source video metadata for restoration
+        source_grp = f.require_group(f"{group}/source_video")
+        source_grp.attrs["json"] = json.dumps(
+            video_to_dict(source_video, labels_path), separators=(",", ":")
+        )
+
+    # Create the embedded video object using VideoBackend.from_filename
+    # This ensures the HDF5Video is properly initialized with the dataset metadata
+    embedded_video = Video(
+        filename=labels_path,
+        backend=VideoBackend.from_filename(
+            labels_path,
+            dataset=f"{group}/video",
+            grayscale=video.grayscale if video.grayscale is not None else False,
+            keep_open=False,
+        ),
+        source_video=source_video,
+    )
+
+    return embedded_video
+
+
 def embed_frames(
     labels_path: str,
     labels: Labels,
@@ -545,6 +611,7 @@ def embed_frames(
     image_format: str = "png",
     verbose: bool = True,
     plugin: Optional[str] = None,
+    embed_all_videos: bool = True,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -558,6 +625,10 @@ def embed_frames(
             process.
         plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
             If None, uses the global default from `get_default_image_plugin()`.
+        embed_all_videos: If `True` (the default), all videos in the labels will be
+            converted to embedded references, even if they have no frames to embed.
+            This ensures package files are portable. If `False`, only videos with
+            frames to embed are converted.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -572,6 +643,16 @@ def embed_frames(
         plugin=plugin,
     )
 
+    # Handle videos without any frames to embed.
+    # These still need embedded references so the package is portable.
+    if embed_all_videos:
+        videos_with_frames = {fm["video"] for fm in frames_metadata}
+        for video_ind, video in enumerate(labels.videos):
+            if video not in videos_with_frames and video not in replaced_videos:
+                replaced_videos[video] = _create_empty_embedded_video(
+                    labels_path, video, video_ind
+                )
+
     if len(replaced_videos) > 0:
         labels.replace_videos(video_map=replaced_videos)
 
@@ -582,6 +663,7 @@ def embed_videos(
     embed: bool | str | list[tuple[Video, int]],
     verbose: bool = True,
     plugin: Optional[str] = None,
+    embed_all_videos: bool = True,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -606,6 +688,10 @@ def embed_videos(
             will be restored if available.
 
             This argument is only valid for the SLP backend.
+        embed_all_videos: If `True` (the default), all videos in the labels will be
+            converted to embedded references, even if they have no frames to embed.
+            This ensures package files are portable. If `False`, only videos with
+            frames to embed are converted.
     """
     if embed is True:
         embed = "all"
@@ -626,7 +712,14 @@ def embed_videos(
     else:
         raise ValueError(f"Invalid value for embed: {embed}")
 
-    embed_frames(labels_path, labels, embed, verbose=verbose, plugin=plugin)
+    embed_frames(
+        labels_path,
+        labels,
+        embed,
+        verbose=verbose,
+        plugin=plugin,
+        embed_all_videos=embed_all_videos,
+    )
 
 
 def write_videos(
@@ -2070,6 +2163,7 @@ def write_labels(
     restore_original_videos: bool = True,
     verbose: bool = True,
     plugin: Optional[str] = None,
+    embed_all_videos: bool = True,
 ):
     """Write a SLEAP labels file.
 
@@ -2098,6 +2192,10 @@ def write_labels(
             or "imageio". If None, uses the global default from
             `get_default_image_plugin()`. If no global default is set, auto-detects
             based on available packages.
+        embed_all_videos: If `True` (the default), all videos in the labels will be
+            converted to embedded references, even if they have no frames to embed.
+            This ensures package files are portable. If `False`, only videos with
+            frames to embed are converted.
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
@@ -2107,7 +2205,14 @@ def write_labels(
     original_videos = [v for v in labels.videos] if embed else None
 
     if embed:
-        embed_videos(labels_path, labels, embed, verbose=verbose, plugin=plugin)
+        embed_videos(
+            labels_path,
+            labels,
+            embed,
+            verbose=verbose,
+            plugin=plugin,
+            embed_all_videos=embed_all_videos,
+        )
 
     # Determine reference mode based on parameters
     if embed == "source" or (embed is False and restore_original_videos):

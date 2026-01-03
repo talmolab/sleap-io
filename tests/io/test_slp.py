@@ -1086,14 +1086,38 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
 
 
 def test_embed_empty_video(tmpdir, slp_real_data, centered_pair_frame_paths):
+    """Test that videos without labeled frames are still embedded in package files.
+
+    This verifies that when saving a package file (.pkg.slp), ALL videos get converted
+    to embedded references, including those without any labeled frames. This ensures
+    package files are portable across machines.
+    """
     base_labels = read_labels(slp_real_data)
     base_labels.videos.append(Video.from_filename(centered_pair_frame_paths))
     labels_path = str(tmpdir / "labels.pkg.slp")
     write_labels(labels_path, base_labels, embed="user")
     labels = read_labels(labels_path)
 
-    assert labels.videos[0].backend.embedded_frame_inds == [0, 220, 440, 770, 990]
     assert len(labels.videos) == 2
+
+    # First video should have embedded frames
+    assert labels.videos[0].backend.embedded_frame_inds == [0, 220, 440, 770, 990]
+    assert type(labels.videos[0].backend) is HDF5Video
+    assert labels.videos[0].backend.has_embedded_images
+
+    # Second video (no labeled frames) should still be an embedded reference
+    # This ensures the package file is portable
+    assert type(labels.videos[1].backend) is HDF5Video
+    assert labels.videos[1].backend.has_embedded_images
+    assert labels.videos[1].backend.embedded_frame_inds == []
+    # The source_video should point to the original video for restoration
+    assert labels.videos[1].source_video is not None
+    # ImageVideo stores filenames as a list
+    source_filename = labels.videos[1].source_video.filename
+    if isinstance(source_filename, list):
+        assert any("img" in str(f) for f in source_filename)
+    else:
+        assert "img" in str(source_filename)
 
 
 def test_embed_rgb(tmpdir, slp_real_data):
@@ -1560,10 +1584,10 @@ def test_mixed_video_scenarios(tmp_path, centered_pair_low_quality_video):
         videos=[video1, video2], skeletons=[skeleton], labeled_frames=[lf1, lf2]
     )
 
-    # Save with only video2 embedded
+    # Save with only video2 embedded (embed_all_videos=False keeps video1 external)
     pkg_path = tmp_path / "mixed.pkg.slp"
     frames_to_embed = [(video2, 0)]
-    write_labels(str(pkg_path), labels, embed=frames_to_embed)
+    write_labels(str(pkg_path), labels, embed=frames_to_embed, embed_all_videos=False)
 
     # Load and verify
     loaded = read_labels(str(pkg_path))
