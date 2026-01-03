@@ -20,9 +20,11 @@ from rich.panel import Panel
 from rich.table import Table
 
 from sleap_io.io import main as io_main
+from sleap_io.io.video_reading import HDF5Video
 from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
+from sleap_io.model.video import Video
 from sleap_io.version import __version__
 
 # Rich console for formatted output
@@ -342,67 +344,324 @@ def _print_skeleton_details(labels: Labels) -> None:
             console.print(sym_table)
 
 
+def _get_video_type(vid: Video) -> str:
+    """Get video type from backend or backend_metadata.
+
+    Uses defensive fallback: live backend -> metadata -> filename inference.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        Video type string (e.g., "MediaVideo", "HDF5Video", "ImageVideo").
+    """
+    # Priority 1: Live backend type
+    if vid.backend is not None:
+        return type(vid.backend).__name__
+
+    # Priority 2: backend_metadata["type"] from SLP file
+    if "type" in vid.backend_metadata:
+        return vid.backend_metadata["type"]
+
+    # Priority 3: Infer from filename
+    if isinstance(vid.filename, list):
+        return "ImageVideo"
+
+    filename = vid.filename.lower()
+    if filename.endswith((".mp4", ".avi", ".mov", ".mkv", ".mj2")):
+        return "MediaVideo"
+    elif filename.endswith((".h5", ".hdf5", ".slp")):
+        return "HDF5Video"
+    elif filename.endswith((".png", ".jpg", ".jpeg", ".bmp")):
+        return "ImageVideo"
+    elif filename.endswith((".tif", ".tiff")):
+        return "TiffVideo"
+
+    return "Unknown"
+
+
+def _is_embedded(vid: Video) -> bool:
+    """Check if video has embedded images.
+
+    Uses defensive fallback: live backend -> metadata -> False.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        True if video has embedded images.
+    """
+    # Priority 1: Live backend attribute
+    if isinstance(vid.backend, HDF5Video):
+        return vid.backend.has_embedded_images
+
+    # Priority 2: backend_metadata from SLP file
+    return vid.backend_metadata.get("has_embedded_images", False)
+
+
+def _get_dataset(vid: Video) -> str | None:
+    """Get HDF5 dataset path.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        Dataset path string or None.
+    """
+    # Priority 1: Live backend attribute
+    if isinstance(vid.backend, HDF5Video):
+        return vid.backend.dataset
+
+    # Priority 2: backend_metadata from SLP file
+    return vid.backend_metadata.get("dataset")
+
+
+def _get_image_filenames(vid: Video) -> list[str] | None:
+    """Get image sequence filenames.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        List of image paths or None.
+    """
+    # Priority 1: vid.filename if it's a list
+    if isinstance(vid.filename, list):
+        return vid.filename
+
+    # Priority 2: backend_metadata from SLP file
+    return vid.backend_metadata.get("filenames")
+
+
+def _get_plugin(vid: Video) -> str | None:
+    """Get video/image plugin. Only available when backend is loaded.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        Plugin name string or None.
+    """
+    if vid.backend is not None and hasattr(vid.backend, "plugin"):
+        return vid.backend.plugin
+    return None
+
+
+def _get_shape_source(vid: Video) -> str:
+    """Determine if shape comes from live backend or metadata.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        "live" if from backend, "metadata" if cached, "unknown" otherwise.
+    """
+    if vid.backend is not None:
+        try:
+            _ = vid.backend.shape
+            return "live"
+        except Exception:
+            pass
+
+    if "shape" in vid.backend_metadata:
+        return "metadata"
+
+    return "unknown"
+
+
+def _format_video_filename(vid: Video) -> str:
+    """Format video filename for display.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        Formatted filename string.
+    """
+    filenames = _get_image_filenames(vid)
+    if filenames is not None:
+        return f"{len(filenames)} images"
+    return Path(vid.filename).name
+
+
+def _build_status_line(vid: Video) -> str:
+    """Build a status line describing video accessibility.
+
+    Args:
+        vid: Video object to inspect.
+
+    Returns:
+        Status description string.
+    """
+    is_embedded = _is_embedded(vid)
+    plugin = _get_plugin(vid)
+
+    # Embedded videos are always accessible
+    if is_embedded:
+        if vid.backend is not None:
+            return "Embedded, backend loaded"
+        return "Embedded"
+
+    # Check file existence
+    file_exists = vid.exists()
+
+    # Build status based on file existence and backend state
+    if vid.backend is not None:
+        status = "Backend loaded"
+        if plugin:
+            status += f" ({plugin})"
+        return status
+    elif file_exists:
+        return "File exists, backend not loaded"
+    else:
+        return "File not found"
+
+
 def _print_video_summary(labels: Labels) -> None:
-    """Print video summary (inline)."""
+    """Print video summary with clean table-like layout."""
     if not labels.videos:
         return
 
     console.print()
-    console.print("[bold]Videos[/]")
-    for i, vid in enumerate(labels.videos):
-        prefix = f"[dim]video[{i}][/] " if len(labels.videos) > 1 else "  "
+    n_videos = len(labels.videos)
+    console.print(f"[bold]Videos[/] ({n_videos})")
+    console.print()
 
-        # Get filename
-        if isinstance(vid.filename, list):
-            fname = f"{len(vid.filename)} images"
-        else:
-            fname = Path(vid.filename).name
+    for i, vid in enumerate(labels.videos):
+        # Get video info using defensive helpers
+        fname = _format_video_filename(vid)
+        is_embedded = _is_embedded(vid)
 
         # Shape info
         if vid.shape:
             n_frames, h, w, c = vid.shape
-            shape_str = f"{w}x{h}, {n_frames} frames"
+            shape_str = f"{w}×{h}"
+            frames_str = f"{n_frames} frames"
         else:
-            shape_str = "[dim]shape unknown[/]"
+            shape_str = "[dim]?×?[/]"
+            frames_str = "[dim]? frames[/]"
 
-        console.print(f"  {prefix}[cyan]{fname}[/]: {shape_str}")
+        # Build status tag
+        tag = ""
+        if is_embedded:
+            tag = " [cyan][embedded][/]"
+        elif not vid.exists() and not isinstance(vid.filename, list):
+            tag = " [yellow][not found][/]"
+
+        # Format: [idx] filename          WxH    N frames  [tag]
+        idx_str = f"[dim][{i}][/]"
+        console.print(f"  {idx_str} [cyan]{fname}[/]  {shape_str}  {frames_str}{tag}")
 
 
 def _print_video_details(labels: Labels) -> None:
-    """Print detailed video information."""
+    """Print detailed video information with consistent field ordering."""
     if not labels.videos:
         console.print("[dim]No videos[/]")
         return
 
     for i, vid in enumerate(labels.videos):
         console.print()
-        console.print(f"[bold cyan]Video {i}[/]")
 
-        # Filename
-        if isinstance(vid.filename, list):
-            console.print(
-                f"  [dim]Type:[/]     Image sequence ({len(vid.filename)} images)"
-            )
-            console.print(f"  [dim]First:[/]    {vid.filename[0]}")
-            console.print(f"  [dim]Last:[/]     {vid.filename[-1]}")
+        # Get video info using defensive helpers
+        video_type = _get_video_type(vid)
+        is_embedded = _is_embedded(vid)
+        shape_source = _get_shape_source(vid)
+        status = _build_status_line(vid)
+        dataset = _get_dataset(vid)
+        filenames = _get_image_filenames(vid)
+
+        # Header with filename and embedded indicator
+        fname = _format_video_filename(vid)
+        header = f"[bold cyan]Video {i}:[/] {fname}"
+        if is_embedded:
+            header += " [cyan][embedded][/]"
+        console.print(header)
+        console.print()
+
+        # Type line - with embedded qualifier for HDF5
+        type_str = video_type
+        if is_embedded and video_type == "HDF5Video":
+            type_str = "HDF5Video (embedded)"
+        console.print(f"  [dim]Type[/]      {type_str}")
+
+        # Path/Source info based on video type
+        if filenames is not None:
+            # Image sequence - show first/last
+            console.print(f"  [dim]First[/]     {filenames[0]}")
+            if len(filenames) > 1:
+                console.print(f"  [dim]Last[/]      {filenames[-1]}")
+        elif is_embedded:
+            # Embedded video - show source if available
+            source_filename = None
+            if isinstance(vid.backend, HDF5Video) and vid.backend.source_filename:
+                source_filename = vid.backend.source_filename
+            if source_filename:
+                console.print(f"  [dim]Source[/]    {source_filename}")
+            if dataset:
+                console.print(f"  [dim]Dataset[/]   {dataset}")
+            # Show format info if backend is loaded
+            if isinstance(vid.backend, HDF5Video):
+                fmt = vid.backend.image_format.upper()
+                order = vid.backend.channel_order
+                console.print(f"  [dim]Format[/]    {fmt} ({order})")
         else:
-            console.print(f"  [dim]Path:[/]     {vid.filename}")
+            # Regular file - show path
+            console.print(f"  [dim]Path[/]      {vid.filename}")
 
-        # Shape
+        # Status line
+        console.print(f"  [dim]Status[/]    {status}")
+        console.print()
+
+        # Dimension info - indicate source if from metadata
         if vid.shape:
             n_frames, h, w, c = vid.shape
-            console.print(f"  [dim]Size:[/]     {w} x {h}")
-            console.print(f"  [dim]Frames:[/]   {n_frames}")
             channels = "grayscale" if c == 1 else "RGB" if c == 3 else "RGBA"
-            console.print(f"  [dim]Channels:[/] {c} ({channels})")
+            meta_tag = " [dim][from metadata][/]" if shape_source == "metadata" else ""
 
-        # Backend
-        backend_name = type(vid.backend).__name__ if vid.backend else "not loaded"
-        console.print(f"  [dim]Backend:[/]  {backend_name}")
+            # Show frame indices for embedded videos
+            if is_embedded and isinstance(vid.backend, HDF5Video):
+                inds = vid.backend.source_inds
+                if inds is not None and len(inds):
+                    if len(inds) <= 5:
+                        inds_str = ", ".join(str(x) for x in inds)
+                    else:
+                        inds_str = f"{inds[0]}–{inds[-1]}"
+                    frames_str = f"{n_frames} (indices: {inds_str})"
+                    console.print(f"  [dim]Frames[/]    {frames_str}")
+                else:
+                    console.print(f"  [dim]Frames[/]    {n_frames}")
+            else:
+                console.print(f"  [dim]Frames[/]    {n_frames}{meta_tag}")
+
+            console.print(f"  [dim]Size[/]      {w} × {h} ({channels}){meta_tag}")
+        else:
+            console.print("  [dim]Frames[/]    [yellow]unknown[/]")
+            console.print("  [dim]Size[/]      [yellow]unknown[/]")
 
         # Labeled frames in this video
         n_frames_labeled = sum(1 for lf in labels.labeled_frames if lf.video == vid)
-        console.print(f"  [dim]Labeled:[/]  {n_frames_labeled} frames")
+        console.print(f"  [dim]Labeled[/]   {n_frames_labeled} frames")
+
+        # Show source video metadata for embedded videos
+        if is_embedded and vid.source_video is not None:
+            src = vid.source_video
+            src_type = _get_video_type(src)
+            console.print()
+            console.print("  [dim]Source Video[/]")
+
+            # Source video type and filename
+            src_fname = Path(src.filename).name if isinstance(src.filename, str) else ""
+            if src_fname:
+                console.print(f"  [dim]  File[/]    {src_fname}")
+            console.print(f"  [dim]  Type[/]    {src_type}")
+
+            # Source video dimensions (if available in metadata)
+            src_shape = src.backend_metadata.get("shape")
+            if src_shape and len(src_shape) == 4:
+                src_frames, src_h, src_w, src_c = src_shape
+                src_ch = "grayscale" if src_c == 1 else "RGB" if src_c == 3 else "RGBA"
+                console.print(f"  [dim]  Frames[/]  {src_frames}")
+                console.print(f"  [dim]  Size[/]    {src_w} x {src_h} ({src_ch})")
 
 
 def _print_tracks_summary(labels: Labels) -> None:
