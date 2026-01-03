@@ -62,6 +62,7 @@ sio --help
 sio show --help
 sio convert --help
 sio split --help
+sio filenames --help
 
 # Check version and installed plugins
 sio --version
@@ -86,6 +87,12 @@ sio split -i labels.slp -o splits/                          # 80/20 train/val
 sio split -i labels.slp -o splits/ --train 0.7 --test 0.15  # 70/15/15 split
 sio split -i labels.slp -o splits/ --remove-predictions     # User labels only
 sio split -i labels.slp -o splits/ --seed 42                # Reproducible split
+
+# Inspect and update video filenames
+sio filenames -i labels.slp                                   # List video paths
+sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
+sio filenames -i labels.slp -o out.slp --map old.mp4 /new/video.mp4
+sio filenames -i labels.slp -o out.slp --prefix /old/path /new/path
 ```
 
 ---
@@ -543,6 +550,179 @@ sio split -i labels.slp -o splits/ --train 0.8 --val 0.15 --test 0.15
 
 ---
 
+### `sio filenames` - Inspect and Update Video Paths
+
+List or update video file paths in a labels file. By default, lists all video filenames for quick inspection. With update options, replaces paths and saves to a new file.
+
+Useful for:
+
+- Quickly checking what video paths are in a labels file
+- Moving labels to a new machine with different paths
+- Fixing broken video references after reorganizing files
+- Cross-platform path conversion (Windows ↔ Linux/macOS)
+
+```bash
+# Inspection mode (default)
+sio filenames -i <input>
+
+# Update mode
+sio filenames -i <input> -o <output> [update options]
+```
+
+#### Inspection Mode
+
+By default, without any update flags, the command lists all video filenames:
+
+```bash
+sio filenames -i labels.slp
+```
+
+**Example output:**
+
+```
+Video filenames in labels.slp:
+  [0] /home/user/data/video.mp4
+  [1] /home/user/data/video2.mp4
+```
+
+For image sequences:
+
+```
+Video filenames in labels.slp:
+  [0] /data/frames/frame_0001.png ... (150 images)
+```
+
+This is a quick way to check video paths before deciding how to update them.
+
+#### Update Modes
+
+When you provide `-o` and one of the update flags, the command updates paths and saves:
+
+| Mode | Option | Description |
+|------|--------|-------------|
+| **List** | `--filename` | Replace all video filenames in order |
+| **Map** | `--map OLD NEW` | Replace specific filenames by exact match |
+| **Prefix** | `--prefix OLD NEW` | Replace path prefixes (cross-platform aware) |
+
+You must specify exactly one update mode when updating.
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `-i, --input` | Input labels file path (required) |
+| `-o, --output` | Output labels file path (required for update mode) |
+| `--filename` | New filename (repeat for each video in list mode) |
+| `--map OLD NEW` | Replace OLD filename with NEW (repeat for multiple mappings) |
+| `--prefix OLD NEW` | Replace OLD prefix with NEW (repeat for multiple prefixes) |
+
+#### List Mode
+
+Replace all video filenames in order. You must provide exactly one `--filename` for each video in the labels file:
+
+```bash
+# Single video file
+sio filenames -i labels.slp -o fixed.slp \
+    --filename /new/path/video.mp4
+
+# Multiple videos (must match video count in file)
+sio filenames -i multiview.slp -o fixed.slp \
+    --filename /data/cam1.mp4 \
+    --filename /data/cam2.mp4 \
+    --filename /data/cam3.mp4
+```
+
+!!! warning "Video count must match"
+    The number of `--filename` options must exactly match the number of videos in the labels file. Use `sio filenames -i labels.slp` to check the video count first.
+
+#### Map Mode
+
+Replace specific filenames using exact matching. Only videos whose paths match will be updated:
+
+```bash
+# Replace a single video path
+sio filenames -i labels.slp -o fixed.slp \
+    --map video.mp4 /data/videos/video.mp4
+
+# Replace multiple specific paths
+sio filenames -i labels.slp -o fixed.slp \
+    --map recording1.mp4 /nas/project/recording1.mp4 \
+    --map recording2.mp4 /nas/project/recording2.mp4
+```
+
+Map mode is useful when you only need to update some videos or when you have the exact old and new paths.
+
+#### Prefix Mode
+
+Replace path prefixes. This is the most flexible mode for relocating files:
+
+```bash
+# Move from absolute to relative paths
+sio filenames -i labels.slp -o fixed.slp \
+    --prefix /home/user/data ./data
+
+# Cross-platform: Windows to Linux
+sio filenames -i labels.slp -o fixed.slp \
+    --prefix "C:\Users\lab\data" /mnt/data
+
+# Cross-platform: Linux to Windows
+sio filenames -i labels.slp -o fixed.slp \
+    --prefix /mnt/data "D:\project\data"
+
+# Multiple prefix replacements
+sio filenames -i labels.slp -o fixed.slp \
+    --prefix /old/videos /new/videos \
+    --prefix /old/images /new/images
+```
+
+!!! tip "Cross-platform path handling"
+    Prefix mode automatically normalizes path separators. You can match Windows paths (`C:\data`) with Linux-style prefixes (`C:/data`) and vice versa.
+
+#### Examples
+
+**Scenario: Moving to a new machine**
+
+Your labels file references `/home/alice/project/videos/mouse.mp4`, but on the new machine the path is `/data/experiments/videos/mouse.mp4`:
+
+```bash
+# First, check current paths
+sio filenames -i labels.slp
+
+# Update with new prefix
+sio filenames -i labels.slp -o labels_new.slp \
+    --prefix /home/alice/project /data/experiments
+```
+
+**Scenario: Sharing with a collaborator**
+
+Make paths relative so the labels work from any base directory:
+
+```bash
+sio filenames -i labels.slp -o labels_portable.slp \
+    --prefix /absolute/path/to/project .
+```
+
+**Scenario: Windows to Linux server**
+
+Labels created on Windows need to work on a Linux cluster:
+
+```bash
+sio filenames -i labels.slp -o labels_linux.slp \
+    --prefix "C:\Users\lab\experiment" /home/lab/experiment
+```
+
+**Scenario: Image sequences**
+
+The command also works with image sequence videos (where `filename` is a list of image paths):
+
+```bash
+# Update prefix for all images in the sequence
+sio filenames -i labels.slp -o fixed.slp \
+    --prefix /old/frames /new/frames
+```
+
+---
+
 ## Use Cases
 
 ### Inspecting an Unknown Labels File
@@ -566,6 +746,22 @@ sio show labels.slp --video
 ```
 
 Look for `[not found]` tags indicating missing videos.
+
+### Fixing Broken Video Paths
+
+If videos show `[not found]`, update the paths:
+
+```bash
+# Check current video paths
+sio filenames -i labels.slp
+
+# Update with new location
+sio filenames -i labels.slp -o labels_fixed.slp \
+    --prefix /old/location /new/location
+
+# Verify fix
+sio filenames -i labels_fixed.slp
+```
 
 ### Extracting Skeleton Definition
 
