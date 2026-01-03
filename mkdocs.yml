@@ -144,4 +144,5 @@ nav:
   - Reference:
     - Model: model.md
     - Formats: formats.md
+    - CLI: cli.md
     - Full API: reference/
