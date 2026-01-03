@@ -1833,48 +1833,46 @@
 <h1 id="command-line-interface">Command-Line Interface<a class="headerlink" href="#command-line-interface" title="Permanent link">&para;</a></h1>
 <p>sleap-io provides a command-line interface (CLI) for inspecting and converting pose tracking data without writing Python code. The CLI is designed for quick exploration, scripting, and integration into data pipelines.</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
-<p>The CLI is included with sleap-io but requires video backends for full functionality.</p>
 <h3 id="quick-usage-with-uvx-no-installation">Quick Usage with <code>uvx</code> (No Installation)<a class="headerlink" href="#quick-usage-with-uvx-no-installation" title="Permanent link">&para;</a></h3>
-<p>Run any CLI command instantly using <a href="https://docs.astral.sh/uv/"><code>uvx</code></a> without installing:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Inspect a labels file</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>sleap-io<span class="w"> </span>show<span class="w"> </span>labels.slp
+<p>Run CLI commands instantly using <a href="https://docs.astral.sh/uv/"><code>uvx</code></a> without installing:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Inspect a labels file (no video access needed)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uvx<span class="w"> </span>sleap-io<span class="w"> </span>show<span class="w"> </span>labels.slp
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Convert between formats</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>sleap-io<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.nwb
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Convert between formats (no video access needed)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>uvx<span class="w"> </span>sleap-io<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.nwb
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Check version and available plugins</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>sleap-io<span class="w"> </span>--version
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Check version</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>uvx<span class="w"> </span>sleap-io<span class="w"> </span>--version
 </code></pre></div>
-<p>This downloads sleap-io temporarily and runs the command. Great for one-off tasks or trying out the CLI.</p>
+<p>For operations that require video access (embedding frames, exporting images), use the <code>[all]</code> extra:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Embed frames in output (requires video backends)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>sleap-io<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.pkg.slp<span class="w"> </span>--embed<span class="w"> </span>user
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Export to Ultralytics format (requires reading video frames)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span><span class="w"> </span>sleap-io<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>dataset/<span class="w"> </span>--to<span class="w"> </span>ultralytics
+</code></pre></div>
 <h3 id="permanent-installation-with-uv-tool">Permanent Installation with <code>uv tool</code><a class="headerlink" href="#permanent-installation-with-uv-tool" title="Permanent link">&para;</a></h3>
 <p>For regular use, install sleap-io as a global tool:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Install with all video backends (recommended)</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Now use the short command</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.nwb
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Install with all video backends (recommended for full functionality)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Now use the short command</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels.nwb
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">The <code>sio</code> command</p>
 <p>After installation with <code>uv tool install</code>, you can use either <code>sio</code> or <code>sleap-io</code> as the command name. The short <code>sio</code> form is recommended for convenience.</p>
 </div>
-<h3 id="alternative-pip-installation">Alternative: pip Installation<a class="headerlink" href="#alternative-pip-installation" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Install with all backends</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;sleap-io[all]&quot;</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Or minimal install (limited video support)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pip<span class="w"> </span>install<span class="w"> </span>sleap-io
-</code></pre></div>
 <div class="admonition info">
-<p class="admonition-title">Why <code>[all]</code>?</p>
+<p class="admonition-title">When do you need video backends?</p>
 <p>The <code>[all]</code> extra installs video backends (OpenCV, PyAV, imageio-ffmpeg) needed for:</p>
 <ul>
-<li>Reading video files when using <code>--open-videos</code></li>
 <li>Embedding frames with <code>sio convert --embed</code></li>
-<li>Converting to formats that require video access (Ultralytics, NWB)</li>
+<li>Converting to Ultralytics format (exports images)</li>
+<li>Using <code>--open-videos</code> to load video metadata from files</li>
 </ul>
-<p>Without video backends, the CLI works for inspecting files and basic conversions but cannot access video data.</p>
+<p>Basic inspection (<code>sio show</code>) and format conversion work without video backends.</p>
 </div>
 <h2 id="quick-reference">Quick Reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Get help</span>
@@ -1911,15 +1909,15 @@
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp
 </code></pre></div>
 <p><strong>Example output:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>╭─ sleap-io ──────────────────────────────────────────────────────────╮
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>│ labels.slp                                                          │
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>│ /home/user/projects/mouse-tracking                                  │
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>│                                                                     │
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>│ Type:     Labels                                                    │
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>│ Size:     2.4 MB                                                    │
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>│                                                                     │
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>│ 1 video | 100 frames | 200 labeled | 2 tracks                      │
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>╰─────────────────────────────────────────────────────────────────────╯
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>╭─ sleap-io ─────────────────────────────────────────────╮
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>│ labels.slp                                             │
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>│ /home/user/projects/mouse-tracking                     │
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>│                                                        │
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>│ Type:     Labels                                       │
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>│ Size:     2.4 MB                                       │
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>│                                                        │
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>│ 1 video | 100 frames | 200 labeled | 2 tracks          │
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>╰────────────────────────────────────────────────────────╯
 <a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
 <a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>Skeletons
 <a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>  mouse (7 nodes, 6 edges)
@@ -2266,15 +2264,15 @@
 </div>
 </div>
 <h3 id="importing-from-other-tools">Importing from Other Tools<a class="headerlink" href="#importing-from-other-tools" title="Permanent link">&para;</a></h3>
-<p>Convert predictions from other pose estimation tools:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># From DeepLabCut</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>dlc_predictions.h5<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>dlc
+<p>Import pose data from other annotation and analysis tools:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># From COCO format (e.g., mmpose, CVAT exports)</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>coco
 <a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>
-<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># From COCO format (e.g., mmpose output)</span>
-<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>predictions.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>coco
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># From Label Studio export</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>labelstudio
 <a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>
-<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="c1"># From Label Studio export</span>
-<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>labelstudio
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="c1"># From DeepLabCut analysis (CSV format)</span>
+<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>video_DLC_results.csv<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>dlc
 </code></pre></div>
 <h3 id="exporting-for-training">Exporting for Training<a class="headerlink" href="#exporting-for-training" title="Permanent link">&para;</a></h3>
 <p>Export to formats used by other frameworks:</p>
@@ -2284,39 +2282,51 @@
 <a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="c1"># For tools expecting COCO format</span>
 <a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>annotations.json<span class="w"> </span>--to<span class="w"> </span>coco
 <a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>
-<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="c1"># For NWB-based pipelines</span>
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="c1"># For NWB-based pipelines (auto-detects annotations vs predictions)</span>
 <a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>data.nwb<span class="w"> </span>--to<span class="w"> </span>nwb
 </code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">NWB training annotations</p>
+<p>The CLI uses auto-detection for NWB format. For explicit control over NWB format (e.g., <code>annotations</code> vs <code>predictions</code> vs <code>annotations_export</code> with embedded video), use the Python API:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;training.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;annotations&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>See <a href="../formats/#nwb-format-nwb">NWB Format</a> for details.</p>
+</div>
 <h3 id="cicd-integration">CI/CD Integration<a class="headerlink" href="#cicd-integration" title="Permanent link">&para;</a></h3>
 <p>Use <code>uvx</code> in CI pipelines without installation overhead:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># GitHub Actions example</span>
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Validate labels file</span>
-<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx --from &quot;sleap-io[all]&quot; sleap-io show labels.slp</span>
-<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>
-<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Convert to NWB</span>
-<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx --from &quot;sleap-io[all]&quot; sleap-io convert -i labels.slp -o labels.nwb</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># GitHub Actions example</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Validate labels file</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io show labels.slp</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Convert to NWB</span>
+<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io convert -i labels.slp -o labels.nwb</span>
+<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a>
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Create package with embedded frames</span>
+<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx --from &quot;sleap-io[all]&quot; sleap-io convert -i labels.slp -o labels.pkg.slp --embed user</span>
 </code></pre></div>
 <hr />
 <h2 id="version-and-plugin-info">Version and Plugin Info<a class="headerlink" href="#version-and-plugin-info" title="Permanent link">&para;</a></h2>
 <p>Check installed version and available backends:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>sio<span class="w"> </span>--version
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>sio<span class="w"> </span>--version
 </code></pre></div>
 <p><strong>Example output:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>sleap-io 0.2.0
-<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>python 3.11.5
-<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>
-<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>Core:
-<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>  numpy: 1.26.0
-<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>  h5py: 3.10.0
-<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>  imageio: 2.33.0
-<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a>
-<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a>Video plugins:
-<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a>  opencv: 4.8.1
-<a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a>  pyav: 12.0.0
-<a id="__codelineno-35-12" name="__codelineno-35-12" href="#__codelineno-35-12"></a>  imageio-ffmpeg: 0.4.9
-<a id="__codelineno-35-13" name="__codelineno-35-13" href="#__codelineno-35-13"></a>
-<a id="__codelineno-35-14" name="__codelineno-35-14" href="#__codelineno-35-14"></a>Optional:
-<a id="__codelineno-35-15" name="__codelineno-35-15" href="#__codelineno-35-15"></a>  pymatreader: 0.0.32
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>sleap-io 0.2.0
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>python 3.11.5
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>Core:
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>  numpy: 1.26.0
+<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a>  h5py: 3.10.0
+<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a>  imageio: 2.33.0
+<a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a>
+<a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a>Video plugins:
+<a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a>  opencv: 4.8.1
+<a id="__codelineno-36-11" name="__codelineno-36-11" href="#__codelineno-36-11"></a>  pyav: 12.0.0
+<a id="__codelineno-36-12" name="__codelineno-36-12" href="#__codelineno-36-12"></a>  imageio-ffmpeg: 0.4.9
+<a id="__codelineno-36-13" name="__codelineno-36-13" href="#__codelineno-36-13"></a>
+<a id="__codelineno-36-14" name="__codelineno-36-14" href="#__codelineno-36-14"></a>Optional:
+<a id="__codelineno-36-15" name="__codelineno-36-15" href="#__codelineno-36-15"></a>  pymatreader: 0.0.32
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Troubleshooting video issues</p>
