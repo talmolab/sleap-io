@@ -36,6 +36,7 @@ from sleap_io import (
     set_default_image_plugin,
 )
 from sleap_io.io.slp import (
+    ExportCancelled,
     camera_group_to_dict,
     camera_to_dict,
     embed_frames,
@@ -3200,3 +3201,111 @@ def test_load_slp_sparse_video_ids_with_fallback(tmp_path, small_robot_video):
 
     assert len(loaded_labels.videos) == 3, "Should load 3 videos"
     assert len(loaded_labels) == 3, "Should load 3 frames"
+
+
+def test_progress_callback_receives_correct_values(tmp_path, slp_real_data):
+    """Test that progress_callback receives correct (current, total) values."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    # Track all progress updates
+    progress_updates = []
+
+    def track_progress(current, total):
+        progress_updates.append((current, total))
+        return True  # Continue
+
+    write_labels(
+        labels_path, base_labels, embed="user", progress_callback=track_progress
+    )
+
+    # Should have received updates for each frame
+    assert len(progress_updates) == 5  # user_labeled_frames count
+
+    # Check that current values are 1-indexed and sequential
+    for i, (current, total) in enumerate(progress_updates):
+        assert current == i + 1, f"Current should be {i + 1}, got {current}"
+        assert total == 5, f"Total should be 5, got {total}"
+
+
+def test_progress_callback_cancellation(tmp_path, slp_real_data):
+    """Test that returning False from callback cancels the operation."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    # Cancel after the second frame
+    def cancel_after_two(current, total):
+        return current < 2  # Return False after 2nd frame
+
+    with pytest.raises(ExportCancelled, match="Export cancelled by user"):
+        write_labels(
+            labels_path, base_labels, embed="user", progress_callback=cancel_after_two
+        )
+
+
+def test_progress_callback_disables_tqdm(tmp_path, slp_real_data, capsys):
+    """Test that tqdm is disabled when progress_callback is provided."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    def noop_callback(current, total):
+        return True
+
+    # With callback, even with verbose=True, no tqdm output should appear
+    write_labels(
+        labels_path,
+        base_labels,
+        embed="user",
+        verbose=True,
+        progress_callback=noop_callback,
+    )
+
+    # tqdm outputs to stderr by default
+    captured = capsys.readouterr()
+    assert "Embedding frames" not in captured.err
+
+
+def test_progress_callback_with_save_slp(tmp_path, slp_real_data):
+    """Test progress_callback works through save_slp API."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    progress_updates = []
+
+    def track_progress(current, total):
+        progress_updates.append((current, total))
+        return True
+
+    save_slp(base_labels, labels_path, embed="user", progress_callback=track_progress)
+
+    assert len(progress_updates) == 5
+    assert progress_updates[-1] == (5, 5)
+
+
+def test_progress_callback_with_save_file(tmp_path, slp_real_data):
+    """Test progress_callback works through save_file API."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    progress_updates = []
+
+    def track_progress(current, total):
+        progress_updates.append((current, total))
+        return True
+
+    save_file(base_labels, labels_path, embed="user", progress_callback=track_progress)
+
+    assert len(progress_updates) == 5
+    assert progress_updates[-1] == (5, 5)
+
+
+def test_progress_callback_none_uses_tqdm(tmp_path, slp_real_data, capsys):
+    """Test that tqdm is used when progress_callback is None and verbose=True."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    write_labels(labels_path, base_labels, embed="user", verbose=True)
+
+    # tqdm outputs to stderr
+    captured = capsys.readouterr()
+    assert "Embedding frames" in captured.err
