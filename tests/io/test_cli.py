@@ -395,3 +395,152 @@ def test_cli_help_shows_command_panels():
     # Command panels should organize commands
     assert "cat" in result.output
     assert "convert" in result.output
+
+
+# =============================================================================
+# Coverage improvement tests
+# =============================================================================
+
+
+def test_get_package_version_not_installed():
+    """Test _get_package_version returns 'not installed' for missing packages."""
+    from sleap_io.io.cli import _get_package_version
+
+    result = _get_package_version("nonexistent_package_xyz_12345")
+    assert result == "not installed"
+
+
+def test_infer_input_format_ultralytics_directory(tmp_path):
+    """Test _infer_input_format detects ultralytics directory with data.yaml."""
+    from sleap_io.io.cli import _infer_input_format
+
+    # Create ultralytics directory structure
+    (tmp_path / "data.yaml").write_text("names: [mouse]\n")
+
+    result = _infer_input_format(tmp_path)
+    assert result == "ultralytics"
+
+
+def test_infer_input_format_directory_without_data_yaml(tmp_path):
+    """Test _infer_input_format returns None for directory without data.yaml."""
+    from sleap_io.io.cli import _infer_input_format
+
+    # Empty directory - no data.yaml
+    result = _infer_input_format(tmp_path)
+    assert result is None
+
+
+def test_infer_input_format_unknown_extension(tmp_path):
+    """Test _infer_input_format returns None for unknown extensions."""
+    from sleap_io.io.cli import _infer_input_format
+
+    unknown_file = tmp_path / "file.xyz"
+    unknown_file.write_text("dummy")
+
+    result = _infer_input_format(unknown_file)
+    assert result is None
+
+
+def test_infer_output_format_directory(tmp_path):
+    """Test _infer_output_format returns ultralytics for directories."""
+    from sleap_io.io.cli import _infer_output_format
+
+    result = _infer_output_format(tmp_path)
+    assert result == "ultralytics"
+
+
+def test_infer_output_format_no_extension(tmp_path):
+    """Test _infer_output_format returns ultralytics for paths without extension."""
+    from sleap_io.io.cli import _infer_output_format
+
+    result = _infer_output_format(tmp_path / "output_dir")
+    assert result == "ultralytics"
+
+
+def test_convert_unknown_input_extension_error(tmp_path):
+    """Test convert error for unknown non-ambiguous input extension."""
+    runner = CliRunner()
+
+    # Create a file with unknown extension
+    unknown_file = tmp_path / "file.xyz"
+    unknown_file.write_text("dummy")
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", str(unknown_file), "-o", str(output_path)],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Cannot infer input format" in output
+
+
+def test_convert_video_input_error(tmp_path, centered_pair_low_quality_path):
+    """Test convert error when input is a video file (not Labels)."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            "-i",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--from",
+            "slp",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    # Either load fails or it's not a Labels object
+    assert "Failed to load" in output or "not a labels file" in output
+
+
+def test_convert_load_failure_corrupt_file(tmp_path):
+    """Test convert error when load_file raises an exception."""
+    runner = CliRunner()
+
+    # Create a corrupt SLP file (invalid HDF5)
+    corrupt_slp = tmp_path / "corrupt.slp"
+    corrupt_slp.write_text("this is not a valid HDF5 file")
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", str(corrupt_slp), "-o", str(output_path)],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to load" in output
+
+
+def test_convert_with_embed_success(tmp_path, slp_real_data):
+    """Test successful conversion with --embed option."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.pkg.slp"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(output_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+    assert "Embedded frames: user" in output
+    assert output_path.exists()
+
+
+def test_convert_save_failure_invalid_path(tmp_path, slp_typical):
+    """Test convert error when save fails due to invalid output path."""
+    runner = CliRunner()
+    # Try to save to a path inside a non-existent directory (for non-ultralytics)
+    output_path = tmp_path / "nonexistent_dir" / "subdir" / "output.nwb"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_typical, "-o", str(output_path)],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to save" in output
