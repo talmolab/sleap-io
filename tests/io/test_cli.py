@@ -49,71 +49,83 @@ def test_version_shows_plugin_info():
     assert "pyav:" in out
 
 
-def test_cat_summary_typical_slp():
+def test_show_summary_typical_slp():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
-    out = result.output
-    assert "type: labels" in out
-    assert "labeled_frames:" in out
-    assert "videos:" in out
-    assert "skeletons:" in out
+    out = _strip_ansi(result.output)
+    # Header panel with file info
+    assert "typical.slp" in out
+    assert "sleap-io" in out
+    # Stats in header
+    assert "video" in out.lower()
+    assert "frame" in out.lower()
+    # Skeleton summary with Python code
+    assert "nodes = " in out
+    assert "Skeletons" in out
 
 
-def test_cat_lf_zero_details():
+def test_show_lf_zero_details():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--lf", "0", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--lf", "0", "--no-open-videos"])
     assert result.exit_code == 0, result.output
-    out = result.output
-    # Expect a details block with frame_idx and instances listing
-    assert "frame_idx: 0" in out or "frame_idx:" in out
-    assert "instances:" in out
-    # Should list at least one instance line when present
-    assert "- 0:" in out or "instances: 0" in out
+    out = _strip_ansi(result.output)
+    # Expect labeled frame details
+    assert "Labeled Frame 0" in out
+    assert "Frame:" in out
+    assert "Instances:" in out
+    # Should list instances with points as Python code
+    assert "Instance 0:" in out
+    assert "points = [" in out
 
 
-def test_cat_lf_out_of_range():
+def test_show_lf_out_of_range():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--lf", "9999", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--lf", "9999", "--no-open-videos"])
     assert result.exit_code != 0
     assert "out of range" in result.output
 
 
-def test_cat_on_video_basic_info():
+def test_show_on_video_basic_info():
     runner = CliRunner()
     # Use a small bundled mp4 in tests/data/videos
     # If CI lacks codecs, this should still work as we don't open videos by default
     path = _data_path("videos/video_1.mp4")
-    result = runner.invoke(cli, ["cat", str(path)])
+    result = runner.invoke(cli, ["show", str(path)])
     # If the file is missing in some environments, allow graceful skip assertion
     if path.exists():
         assert result.exit_code == 0, result.output
-        out = result.output
-        assert "file:" in out
-        assert "type:" in out
+        out = _strip_ansi(result.output)
+        # Non-Labels objects print repr
+        assert "Video" in out
 
 
-def test_cat_skeleton_flag_text():
+def test_show_skeleton_flag_text():
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
-    result = runner.invoke(cli, ["cat", str(path), "--skeleton", "--no-open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--skeleton", "--no-open-videos"])
     assert result.exit_code == 0, result.output
-    out = result.output
-    assert "skeleton[" in out or "skeletons:" in out
+    out = _strip_ansi(result.output)
+    # Detailed skeleton view shows Python code and tables
+    assert "Skeleton Details" in out
+    assert "Python code:" in out
+    assert "nodes = " in out
+    assert "Nodes:" in out
+    assert "Edges:" in out
 
 
-def test_cat_file_not_found():
+def test_show_file_not_found():
     runner = CliRunner()
-    result = runner.invoke(cli, ["cat", "/nonexistent/path/to/file.slp"])
+    result = runner.invoke(cli, ["show", "/nonexistent/path/to/file.slp"])
     assert result.exit_code != 0
     # Click validates file existence before our code runs
     assert "Invalid value for 'PATH'" in result.output
 
 
-def test_cat_skeleton_no_edges(tmp_path):
+def test_show_skeleton_no_edges(tmp_path):
     """Test skeleton display when skeleton has no edges."""
     from sleap_io import save_file
 
@@ -127,13 +139,19 @@ def test_cat_skeleton_no_edges(tmp_path):
     save_file(labels, slp_path)
 
     result = runner.invoke(
-        cli, ["cat", str(slp_path), "--skeleton", "--no-open-videos"]
+        cli, ["show", str(slp_path), "--skeleton", "--no-open-videos"]
     )
     assert result.exit_code == 0, result.output
-    assert "edges: none" in result.output
+    out = _strip_ansi(result.output)
+    # Should show nodes but no Edges section (or empty edges)
+    assert "Nodes:" in out
+    assert "node1" in out
+    assert "node2" in out
+    # No edge_inds in Python code since there are no edges
+    assert "edge_inds" not in out
 
 
-def test_cat_empty_labels_with_lf(tmp_path):
+def test_show_empty_labels_with_lf(tmp_path):
     """Test --lf flag on file with no labeled frames."""
     from sleap_io import save_file
 
@@ -145,13 +163,15 @@ def test_cat_empty_labels_with_lf(tmp_path):
     slp_path = tmp_path / "empty.slp"
     save_file(labels, slp_path)
 
-    result = runner.invoke(cli, ["cat", str(slp_path), "--lf", "0", "--no-open-videos"])
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--lf", "0", "--no-open-videos"]
+    )
     assert result.exit_code != 0
     assert "No labeled frames present in file" in result.output
 
 
-def test_cat_video_file():
-    """Test cat on a video file (non-Labels object)."""
+def test_show_video_file():
+    """Test show on a video file (non-Labels object)."""
     runner = CliRunner()
     path = _data_path("videos/centered_pair_low_quality.mp4")
 
@@ -159,10 +179,714 @@ def test_cat_video_file():
         # Skip if video file doesn't exist in test environment
         return
 
-    result = runner.invoke(cli, ["cat", str(path), "--open-videos"])
+    result = runner.invoke(cli, ["show", str(path), "--open-videos"])
     assert result.exit_code == 0, result.output
     # Should print repr of Video object
     assert "Video" in result.output
+
+
+def test_show_video_flag():
+    """Test --video flag shows detailed video info."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--video", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Video Details" in out
+    assert "Video 0:" in out
+    assert "Type" in out
+    assert "Path" in out
+    assert "Status" in out
+    assert "Labeled" in out
+
+
+def test_show_tracks_flag():
+    """Test --tracks flag shows detailed track info."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--tracks", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Tracks" in out
+    # Should show track table with instance counts
+    assert "Track" in out
+    assert "Instances" in out
+
+
+def test_show_provenance_flag():
+    """Test --provenance flag shows provenance info."""
+    runner = CliRunner()
+    path = _data_path("slp/predictions_1.2.7_provenance_and_tracking.slp")
+    result = runner.invoke(cli, ["show", str(path), "--provenance", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Provenance" in out
+    assert "sleap_version" in out
+
+
+def test_show_all_flag():
+    """Test --all flag shows all details."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--all", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show all detail sections
+    assert "Skeleton Details" in out
+    assert "Video Details" in out
+    assert "Tracks" in out
+
+
+def test_show_short_flags():
+    """Test short flag aliases work (-s, -v, -t, -p, -a)."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+
+    # Test -s for --skeleton
+    result = runner.invoke(cli, ["show", str(path), "-s", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    assert "Skeleton Details" in _strip_ansi(result.output)
+
+    # Test -v for --video
+    result = runner.invoke(cli, ["show", str(path), "-v", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    assert "Video Details" in _strip_ansi(result.output)
+
+    # Test -t for --tracks
+    result = runner.invoke(cli, ["show", str(path), "-t", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    assert "Tracks" in _strip_ansi(result.output)
+
+
+def test_show_skeleton_with_symmetries():
+    """Test skeleton display shows symmetries when present."""
+    runner = CliRunner()
+    path = _data_path("slp/centered_pair_predictions.slp")
+    result = runner.invoke(cli, ["show", str(path), "--skeleton", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # This file has symmetries
+    assert "Symmetries:" in out
+    assert "<->" in out
+
+
+def test_show_multiview_videos():
+    """Test show handles multiple videos correctly."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    result = runner.invoke(cli, ["show", str(path), "--video", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Multiview has 8 videos
+    assert "Video 0" in out
+    assert "Video 7" in out
+
+
+def test_show_header_shows_file_size():
+    """Test that header panel shows file size."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Size:" in out
+    assert "KB" in out or "MB" in out or "B" in out
+
+
+def test_show_header_shows_instance_counts():
+    """Test that header shows labeled/predicted instance counts."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # typical.slp has both user and predicted instances
+    assert "labeled" in out
+    assert "predicted" in out
+
+
+def test_show_pkg_file_type():
+    """Test that .pkg.slp files show Package type."""
+    runner = CliRunner()
+    path = _data_path("slp/minimal_instance.pkg.slp")
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Package" in out
+
+
+def test_show_no_skeletons(tmp_path):
+    """Test show on file with no skeletons."""
+    from sleap_io import save_file
+
+    runner = CliRunner()
+    labels = Labels()
+
+    slp_path = tmp_path / "no_skeletons.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--skeleton", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "No skeletons" in out
+
+
+def test_show_no_videos(tmp_path):
+    """Test show on file with no videos."""
+    from sleap_io import save_file
+
+    runner = CliRunner()
+    labels = Labels()
+
+    slp_path = tmp_path / "no_videos.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "No videos" in out
+
+
+def test_show_no_tracks(tmp_path):
+    """Test show on file with no tracks."""
+    from sleap_io import save_file
+
+    runner = CliRunner()
+    labels = Labels()
+
+    slp_path = tmp_path / "no_tracks.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--tracks", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "No tracks" in out
+
+
+def test_show_provenance_shows_filename(tmp_path):
+    """Test that provenance shows filename after saving."""
+    from sleap_io import save_file
+
+    runner = CliRunner()
+    labels = Labels()
+
+    slp_path = tmp_path / "with_provenance.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--provenance", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Saving adds filename to provenance
+    assert "Provenance" in out
+    assert "filename:" in out
+
+
+def test_show_format_file_size_units():
+    """Test file size formatting for different units."""
+    from sleap_io.io.cli import _format_file_size
+
+    assert "B" in _format_file_size(100)
+    assert "KB" in _format_file_size(2048)
+    assert "MB" in _format_file_size(2 * 1024 * 1024)
+    assert "GB" in _format_file_size(2 * 1024 * 1024 * 1024)
+    assert "TB" in _format_file_size(2 * 1024 * 1024 * 1024 * 1024)
+
+
+def test_show_provenance_with_list_and_dict():
+    """Test provenance display with list and dict values."""
+    runner = CliRunner()
+    path = _data_path("slp/predictions_1.2.7_provenance_and_tracking.slp")
+    result = runner.invoke(cli, ["show", str(path), "--provenance", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # This file has 'args' which is a dict
+    assert "args:" in out
+    assert "keys" in out  # Shows "{...} (N keys)"
+
+
+# =============================================================================
+# Video display tests
+# =============================================================================
+
+
+def test_show_video_with_open_backend():
+    """Test video display with open backend shows plugin info."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    # Use --open-videos to actually open the backend
+    result = runner.invoke(cli, ["show", str(path), "--video", "--open-videos"])
+    # If video exists, should show backend info in status
+    if result.exit_code == 0:
+        out = _strip_ansi(result.output)
+        assert "Video Details" in out
+        # Status line shows backend loaded with plugin when video is opened
+        assert "Status" in out
+
+
+def test_show_video_embedded_pkg(slp_minimal_pkg):
+    """Test video display for package files with embedded images."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", slp_minimal_pkg, "--video", "--open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show embedded indicator
+    assert "embedded" in out.lower()
+    # Should show dataset info (new format without colon)
+    assert "Dataset" in out
+    # Should show format info
+    assert "Format" in out
+
+
+def test_show_video_not_found_status(tmp_path):
+    """Test video display when video file doesn't exist."""
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Create labels with a non-existent video
+    video = Video(
+        filename="/nonexistent/path/to/video.mp4",
+        open_backend=False,
+        backend_metadata={"shape": (100, 480, 640, 3)},
+    )
+    labels = Labels(videos=[video])
+
+    slp_path = tmp_path / "missing_video.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Status line should show file not found
+    assert "File not found" in out
+
+
+def test_show_video_cached_shape(tmp_path):
+    """Test video display shows dimensions from backend_metadata when file not found."""
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Create labels with a video that has cached shape but no backend
+    video = Video(
+        filename="/nonexistent/path/to/video.mp4",
+        open_backend=False,
+        backend_metadata={"shape": (100, 480, 640, 3)},
+    )
+    labels = Labels(videos=[video])
+
+    slp_path = tmp_path / "cached_shape.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show dimensions from cached metadata even when file not found
+    assert "640" in out  # Width from metadata
+    assert "480" in out  # Height from metadata
+    assert "100" in out  # Frame count from metadata
+    assert "File not found" in out  # Status indicates file issue
+
+
+def test_show_video_unknown_shape(tmp_path):
+    """Test video display when shape is unavailable."""
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Create labels with a video that has no shape info
+    video = Video(
+        filename="/nonexistent/path/to/video.mp4",
+        open_backend=False,
+        backend_metadata={},  # No shape cached
+    )
+    labels = Labels(videos=[video])
+
+    slp_path = tmp_path / "no_shape.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--video", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show unknown for size
+    assert "unknown" in out.lower()
+
+
+def test_show_video_image_sequence():
+    """Test video display functions for image sequence."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from sleap_io import Labels, Video
+    from sleap_io.io.cli import _print_video_details, _print_video_summary
+
+    # Create labels with image sequence video (without save/load)
+    video = Video(
+        filename=[
+            "/path/to/frame_0000.png",
+            "/path/to/frame_0001.png",
+            "/path/to/frame_0002.png",
+        ],
+        open_backend=False,
+    )
+    labels = Labels(videos=[video])
+
+    # Test summary - capture output
+    import sleap_io.io.cli as cli_module
+
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_video_summary(labels)
+        out = _strip_ansi(string_io.getvalue())
+        assert "3 images" in out
+
+        # Test details
+        string_io.truncate(0)
+        string_io.seek(0)
+        _print_video_details(labels)
+        out = _strip_ansi(string_io.getvalue())
+        # Should show image sequence type
+        assert "ImageVideo" in out
+        assert "3 images" in out
+        # Should show first and last (new format without colons)
+        assert "First" in out
+        assert "Last" in out
+    finally:
+        cli_module.console = original_console
+
+
+def test_show_many_tracks(tmp_path):
+    """Test track display truncates when >5 tracks."""
+    from sleap_io import Labels, Track, save_file
+
+    runner = CliRunner()
+
+    # Create labels with many tracks
+    tracks = [Track(name=f"track_{i}") for i in range(10)]
+    labels = Labels(tracks=tracks)
+
+    slp_path = tmp_path / "many_tracks.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show truncation message
+    assert "+5 more" in out
+
+
+def test_show_video_helper_functions():
+    """Test video helper functions directly."""
+    from sleap_io import Video
+    from sleap_io.io.cli import (
+        _build_status_line,
+        _format_video_filename,
+        _get_dataset,
+        _get_image_filenames,
+        _get_plugin,
+        _get_shape_source,
+        _get_video_type,
+        _is_embedded,
+    )
+
+    # Test with no backend and empty metadata
+    video = Video(
+        filename="/path/to/video.mp4",
+        open_backend=False,
+        backend_metadata={},
+    )
+
+    # Type should be inferred from filename extension
+    video_type = _get_video_type(video)
+    assert video_type == "MediaVideo"
+
+    plugin = _get_plugin(video)
+    assert plugin is None
+
+    is_embedded = _is_embedded(video)
+    assert is_embedded is False
+
+    shape_source = _get_shape_source(video)
+    assert shape_source == "unknown"
+
+    # Test with cached shape
+    video.backend_metadata["shape"] = (100, 480, 640, 3)
+    shape_source = _get_shape_source(video)
+    assert shape_source == "metadata"
+
+    # Test filename formatting
+    fname = _format_video_filename(video)
+    assert fname == "video.mp4"
+
+    # Test with image list
+    video_img = Video(
+        filename=["/path/frame1.png", "/path/frame2.png"],
+        open_backend=False,
+    )
+    fname = _format_video_filename(video_img)
+    assert fname == "2 images"
+
+    # Test _get_video_type inference
+    assert _get_video_type(video_img) == "ImageVideo"
+
+    # Test _get_image_filenames
+    filenames = _get_image_filenames(video_img)
+    assert filenames == ["/path/frame1.png", "/path/frame2.png"]
+    assert _get_image_filenames(video) is None
+
+    # Test _get_dataset
+    assert _get_dataset(video) is None
+    video.backend_metadata["dataset"] = "video0/video"
+    assert _get_dataset(video) == "video0/video"
+
+    # Test _build_status_line
+    status = _build_status_line(video)
+    assert status == "File not found"
+
+    # Test video.exists() for file status
+    assert video.exists() is False  # Non-existent file
+
+    # Test type inference from backend_metadata
+    video2 = Video(
+        filename="/path/to/file.unknown",
+        open_backend=False,
+        backend_metadata={"type": "TiffVideo"},
+    )
+    assert _get_video_type(video2) == "TiffVideo"
+
+    # Test embedded detection from metadata
+    video3 = Video(
+        filename="/path/to/file.slp",
+        open_backend=False,
+        backend_metadata={"has_embedded_images": True},
+    )
+    assert _is_embedded(video3) is True
+
+
+def test_show_video_exists_status():
+    """Test video exists() when file exists."""
+    # Use an actual video file that exists
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+    if not path.exists():
+        return  # Skip if video doesn't exist
+
+    from sleap_io import Video
+
+    video = Video(
+        filename=str(path),
+        open_backend=False,  # Don't open the backend
+    )
+    # Close the backend if it auto-opened
+    if video.backend is not None:
+        video.close()
+
+    # Video should report that file exists
+    assert video.exists() is True
+
+
+def test_show_embedded_video_details(slp_minimal_pkg):
+    """Test detailed embedded video display with source info."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", slp_minimal_pkg, "--video", "--open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+
+    # Check embedded-specific fields (new format without colons)
+    assert "embedded" in out.lower()
+    assert "Dataset" in out
+    assert "Format" in out
+    assert "Source" in out
+    # The pkg.slp has only 1 frame, so indices should be shown in Frames line
+    assert "indices" in out.lower() or "0" in out
+
+
+def test_show_embedded_video_summary(slp_minimal_pkg):
+    """Test video summary with embedded video shows indicators."""
+    runner = CliRunner()
+    # No --video flag, so we get the summary view, and --open-videos to load backend
+    result = runner.invoke(cli, ["show", slp_minimal_pkg, "--open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+
+    # Summary should show embedded indicator for package file
+    assert "embedded" in out.lower()
+    # Should show some video info
+    assert "video" in out.lower()
+
+
+def test_show_provenance_empty():
+    """Test provenance display with no provenance."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from sleap_io import Labels
+    from sleap_io.io.cli import _print_provenance
+
+    # Create labels with truly empty provenance (not saved, which adds filename)
+    labels = Labels()
+    labels.provenance = {}  # Empty provenance
+
+    # Test the function directly
+    import sleap_io.io.cli as cli_module
+
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_provenance(labels)
+        out = _strip_ansi(string_io.getvalue())
+        assert "No provenance" in out
+    finally:
+        cli_module.console = original_console
+
+
+def test_show_provenance_list_truncation(tmp_path):
+    """Test provenance with long list values gets truncated."""
+    from sleap_io import Labels, save_file
+
+    runner = CliRunner()
+
+    # Create labels with long list provenance
+    labels = Labels()
+    labels.provenance = {"model_paths": [f"/path/to/model_{i}.h5" for i in range(10)]}
+
+    slp_path = tmp_path / "long_list_provenance.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--provenance", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show truncation
+    assert "10 total" in out
+
+
+def test_show_lf_with_nan_points(tmp_path):
+    """Test labeled frame display with NaN (invisible) points."""
+    import numpy as np
+
+    from sleap_io import (
+        Instance,
+        LabeledFrame,
+        Labels,
+        Node,
+        Skeleton,
+        Video,
+        save_file,
+    )
+
+    runner = CliRunner()
+
+    # Create a skeleton
+    nodes = [Node("head"), Node("tail")]
+    skeleton = Skeleton(nodes=nodes)
+
+    # Create instance with a NaN point
+    pts = np.array([[100.0, 200.0], [np.nan, np.nan]])
+    inst = Instance(skeleton=skeleton, points=pts)
+
+    # Create video and labeled frame
+    video = Video(filename="/fake/video.mp4", open_backend=False)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+    slp_path = tmp_path / "nan_points.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(
+        cli, ["show", str(slp_path), "--lf", "0", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show None for NaN point
+    assert "(None, None)" in out
+
+
+def test_show_skeleton_summary_with_symmetries():
+    """Test skeleton summary shows symmetry count."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from sleap_io import Labels, Node, Skeleton
+    from sleap_io.io.cli import _print_skeleton_summary
+
+    # Create skeleton with symmetries
+    nodes = [Node("left"), Node("right"), Node("center")]
+    skeleton = Skeleton(nodes=nodes, symmetries=[{nodes[0], nodes[1]}])
+    labels = Labels(skeletons=[skeleton])
+
+    # Capture output
+    import sleap_io.io.cli as cli_module
+
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_skeleton_summary(labels)
+        out = _strip_ansi(string_io.getvalue())
+        assert "1 symmetries" in out or "symmetries" in out
+    finally:
+        cli_module.console = original_console
+
+
+def test_show_lf_image_sequence_video(tmp_path):
+    """Test labeled frame display with image sequence video."""
+    import numpy as np
+
+    from sleap_io import (
+        Instance,
+        LabeledFrame,
+        Labels,
+        Node,
+        Skeleton,
+        Video,
+    )
+
+    # Create skeleton and instance
+    nodes = [Node("head")]
+    skeleton = Skeleton(nodes=nodes)
+    pts = np.array([[100.0, 200.0]])
+    inst = Instance(skeleton=skeleton, points=pts)
+
+    # Create video with image list
+    video = Video(
+        filename=["/path/frame1.png", "/path/frame2.png"],
+        open_backend=False,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+    # We can't save/load image sequences properly, so test the function directly
+    from io import StringIO
+
+    from rich.console import Console
+
+    import sleap_io.io.cli as cli_module
+    from sleap_io.io.cli import _print_labeled_frame
+
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_labeled_frame(labels, 0)
+        out = _strip_ansi(string_io.getvalue())
+        assert "2 images" in out
+    finally:
+        cli_module.console = original_console
 
 
 # =============================================================================
@@ -393,7 +1117,7 @@ def test_cli_help_shows_command_panels():
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
     # Command panels should organize commands
-    assert "cat" in result.output
+    assert "show" in result.output
     assert "convert" in result.output
 
 
