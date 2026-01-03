@@ -1980,7 +1980,8 @@ def test_filenames_update_without_output_error(slp_typical):
         ],
     )
     assert result.exit_code != 0
-    assert "Output path (-o) required" in result.output
+    output = _strip_ansi(result.output)
+    assert "Output path (-o) required" in output
 
 
 def test_filenames_multiple_modes_error(slp_typical):
