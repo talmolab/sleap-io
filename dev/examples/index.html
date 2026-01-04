@@ -2364,10 +2364,10 @@
 <div class="admonition info">
 <p class="admonition-title">Info</p>
 <p>Video backends are optional. Install the backend you need:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pip<span class="w"> </span>install<span class="w"> </span>sleap-io<span class="o">[</span>opencv<span class="o">]</span><span class="w">  </span><span class="c1"># OpenCV backend (fastest)</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pip<span class="w"> </span>install<span class="w"> </span>sleap-io<span class="o">[</span>ffmpeg<span class="o">]</span><span class="w">   </span><span class="c1"># FFMPEG backend (most reliable, auto-selected)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># imageio-ffmpeg is included by default</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pip<span class="w"> </span>install<span class="w"> </span>sleap-io<span class="o">[</span>opencv<span class="o">]</span><span class="w">  </span><span class="c1"># OpenCV backend (fastest)</span>
 <a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pip<span class="w"> </span>install<span class="w"> </span>sleap-io<span class="o">[</span>pyav<span class="o">]</span><span class="w">     </span><span class="c1"># PyAV backend (balanced)</span>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>pip<span class="w"> </span>install<span class="w"> </span>sleap-io<span class="o">[</span>all<span class="o">]</span><span class="w">      </span><span class="c1"># All backends</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>pip<span class="w"> </span>install<span class="w"> </span>sleap-io<span class="o">[</span>all<span class="o">]</span><span class="w">      </span><span class="c1"># All optional backends</span>
 </code></pre></div>
 <p>To check which backends are available or get installation help:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
@@ -2406,7 +2406,7 @@
 <a id="__codelineno-22-4" name="__codelineno-22-4"></a><a href="#__codelineno-22-4"><span class="linenos" data-linenos=" 4 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">set_default_video_plugin</span><span class="p">(</span><span class="s2">&quot;opencv&quot;</span><span class="p">)</span>
 <a id="__codelineno-22-5" name="__codelineno-22-5"></a><a href="#__codelineno-22-5"><span class="linenos" data-linenos=" 5 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
 <a id="__codelineno-22-6" name="__codelineno-22-6"></a><a href="#__codelineno-22-6"><span class="linenos" data-linenos=" 6 "></span></a>
-<a id="__codelineno-22-7" name="__codelineno-22-7"></a><a href="#__codelineno-22-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="c1"># Or use imageio-ffmpeg (default, always available)</span>
+<a id="__codelineno-22-7" name="__codelineno-22-7"></a><a href="#__codelineno-22-7"><span class="linenos" data-linenos=" 7 "></span></a><span class="c1"># Or use imageio-ffmpeg (bundled, always available)</span>
 <a id="__codelineno-22-8" name="__codelineno-22-8"></a><a href="#__codelineno-22-8"><span class="linenos" data-linenos=" 8 "></span></a><span class="n">sio</span><span class="o">.</span><span class="n">set_default_video_plugin</span><span class="p">(</span><span class="s2">&quot;FFMPEG&quot;</span><span class="p">)</span>
 <a id="__codelineno-22-9" name="__codelineno-22-9"></a><a href="#__codelineno-22-9"><span class="linenos" data-linenos=" 9 "></span></a><span class="n">video</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_video</span><span class="p">(</span><span class="s2">&quot;test.mp4&quot;</span><span class="p">)</span>
 <a id="__codelineno-22-10" name="__codelineno-22-10"></a><a href="#__codelineno-22-10"><span class="linenos" data-linenos="10 "></span></a>
@@ -2422,8 +2422,9 @@
 <li>❌ Frame seeking may be less accurate for some codecs</li>
 <li>📦 Requires: <code>pip install sleap-io[opencv]</code> or <code>sleap-io[all]</code></li>
 </ul>
-<p><strong>imageio-ffmpeg</strong> (<code>FFMPEG</code>):</p>
+<p><strong>imageio-ffmpeg</strong> (<code>FFMPEG</code>) - <em>bundled by default</em>:</p>
 <ul>
+<li>✅ Works out of the box (bundled with sleap-io)</li>
 <li>✅ More reliable and cross-platform</li>
 <li>✅ Better seeking accuracy</li>
 <li>✅ Always installed with sleap-io (default)</li>
