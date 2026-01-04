@@ -62,6 +62,7 @@ sio show --help
 sio convert --help
 sio split --help
 sio filenames --help
+sio render --help
 
 # Check version and installed plugins
 sio --version
@@ -92,6 +93,12 @@ sio filenames -i labels.slp                                   # List video paths
 sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
 sio filenames -i labels.slp -o out.slp --map old.mp4 /new/video.mp4
 sio filenames -i labels.slp -o out.slp --prefix /old/path /new/path
+
+# Render video with pose overlays (requires: pip install sleap-io[render])
+sio render -i predictions.slp -o output.mp4                   # Full quality
+sio render -i predictions.slp -o preview.mp4 --preset preview # Fast preview
+sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
+sio render -i predictions.slp -o output.mp4 --color-by track --marker-shape diamond
 ```
 
 ---
@@ -723,6 +730,187 @@ sio filenames -i labels.slp -o fixed.slp \
 
 ---
 
+### `sio render` - Render Pose Videos
+
+Create video files with pose annotations overlaid on video frames for visualization and publication.
+
+```bash
+sio render -i <input> -o <output> [options]
+```
+
+!!! info "Required dependencies"
+    Rendering requires optional dependencies. Install with:
+    ```bash
+    pip install sleap-io[render]
+    ```
+
+    Or with `uvx`:
+    ```bash
+    uvx --with "sleap-io[render]" sleap-io render -i predictions.slp -o output.mp4
+    ```
+
+#### Basic Usage
+
+```bash
+# Render full quality video
+sio render -i predictions.slp -o output.mp4
+
+# Fast preview (0.25x resolution)
+sio render -i predictions.slp -o preview.mp4 --preset preview
+
+# Render a specific clip
+sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
+```
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `-i, --input` | Input labels file path (required) |
+| `-o, --output` | Output video file path (required) |
+| `--preset` | Quality preset: `preview` (0.25x), `draft` (0.5x), `final` (1.0x) |
+| `--scale` | Custom scale factor (overrides preset) |
+| `--fps` | Output frame rate (default: source video FPS) |
+| `--color-by` | Color scheme: `auto`, `track`, `instance`, `node` (default: `auto`) |
+| `--palette` | Color palette name (default: `glasbey`) |
+| `--marker-shape` | Node marker: `circle`, `square`, `diamond`, `triangle`, `cross` |
+| `--marker-size` | Node marker radius in pixels (default: 4.0) |
+| `--line-width` | Edge line width in pixels (default: 2.0) |
+| `--alpha` | Transparency 0.0-1.0 (default: 1.0) |
+| `--no-nodes` | Hide node markers |
+| `--no-edges` | Hide skeleton edges |
+| `--start` | Start frame index |
+| `--end` | End frame index |
+| `--video-index` | Video index for multi-video labels (default: 0) |
+
+#### Quality Presets
+
+Use presets for quick quality/speed trade-offs:
+
+```bash
+# Fast preview for checking results (0.25x resolution)
+sio render -i predictions.slp -o preview.mp4 --preset preview
+
+# Draft quality for review (0.5x resolution)
+sio render -i predictions.slp -o draft.mp4 --preset draft
+
+# Full quality for publication (1.0x resolution)
+sio render -i predictions.slp -o final.mp4 --preset final
+
+# Or specify exact scale
+sio render -i predictions.slp -o output.mp4 --scale 0.75
+```
+
+#### Color Schemes
+
+Control how poses are colored:
+
+```bash
+# Auto-select based on data (default)
+sio render -i predictions.slp -o output.mp4 --color-by auto
+
+# Color by track identity (consistent across frames)
+sio render -i predictions.slp -o output.mp4 --color-by track
+
+# Color by instance (each animal in frame gets different color)
+sio render -i predictions.slp -o output.mp4 --color-by instance
+
+# Color by node type (each body part gets different color)
+sio render -i predictions.slp -o output.mp4 --color-by node
+```
+
+The `auto` mode uses smart defaults:
+
+- If tracks available → color by track
+- If single frame → color by instance
+- If video (multiple frames) → color by node
+
+#### Color Palettes
+
+Choose from built-in or colorcet palettes:
+
+```bash
+# Built-in palettes
+sio render -i predictions.slp -o output.mp4 --palette distinct
+sio render -i predictions.slp -o output.mp4 --palette rainbow
+sio render -i predictions.slp -o output.mp4 --palette tableau10
+
+# Colorcet palettes (included with [render])
+sio render -i predictions.slp -o output.mp4 --palette glasbey  # 256 distinct colors
+sio render -i predictions.slp -o output.mp4 --palette glasbey_warm
+```
+
+Available built-in palettes: `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `seaborn`, `tableau10`, `viridis`
+
+#### Marker Shapes and Styles
+
+Customize the appearance of pose overlays:
+
+```bash
+# Different marker shapes
+sio render -i predictions.slp -o output.mp4 --marker-shape circle
+sio render -i predictions.slp -o output.mp4 --marker-shape square
+sio render -i predictions.slp -o output.mp4 --marker-shape diamond
+sio render -i predictions.slp -o output.mp4 --marker-shape triangle
+sio render -i predictions.slp -o output.mp4 --marker-shape cross
+
+# Adjust sizes
+sio render -i predictions.slp -o output.mp4 --marker-size 6 --line-width 3
+
+# Semi-transparent overlays
+sio render -i predictions.slp -o output.mp4 --alpha 0.7
+
+# Show only edges (no node markers)
+sio render -i predictions.slp -o output.mp4 --no-nodes
+
+# Show only nodes (no skeleton edges)
+sio render -i predictions.slp -o output.mp4 --no-edges
+```
+
+#### Rendering Clips
+
+Extract specific frame ranges:
+
+```bash
+# Frames 100 to 200
+sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
+
+# From frame 500 to end
+sio render -i predictions.slp -o clip.mp4 --start 500
+
+# First 100 frames
+sio render -i predictions.slp -o clip.mp4 --end 100
+```
+
+#### Multi-Video Labels
+
+For labels with multiple videos, select which video to render:
+
+```bash
+# Render the second video (0-indexed)
+sio render -i multiview.slp -o cam2.mp4 --video-index 1
+```
+
+#### Example Workflow
+
+```bash
+# 1. Quick preview to check predictions
+sio render -i predictions.slp -o preview.mp4 --preset preview
+
+# 2. Check a specific section
+sio render -i predictions.slp -o section.mp4 --start 500 --end 600 --preset draft
+
+# 3. Final render with custom styling
+sio render -i predictions.slp -o final.mp4 \
+    --color-by track \
+    --palette tableau10 \
+    --marker-shape diamond \
+    --marker-size 5 \
+    --line-width 2.5
+```
+
+---
+
 ## Use Cases
 
 ### Inspecting an Unknown Labels File
@@ -832,6 +1020,26 @@ sio convert -i labels.slp -o annotations.json --to coco
 sio convert -i labels.slp -o data.nwb --to nwb
 ```
 
+### Rendering Pose Videos
+
+Create video visualizations of your pose predictions:
+
+```bash
+# Quick preview to check predictions
+sio render -i predictions.slp -o preview.mp4 --preset preview
+
+# Final render with custom styling for publication
+sio render -i predictions.slp -o final.mp4 \
+    --color-by track \
+    --palette tableau10 \
+    --marker-shape diamond
+```
+
+!!! info "Installing render dependencies"
+    ```bash
+    pip install sleap-io[render]
+    ```
+
 ### Creating Training Splits
 
 Prepare datasets for machine learning with reproducible splits:
@@ -886,21 +1094,25 @@ sio --version
 **Example output:**
 
 ```
-sleap-io 0.2.0
-python 3.11.5
+sleap-io 0.5.8
+python 3.12.11
 
 Core:
-  numpy: 1.26.0
-  h5py: 3.10.0
-  imageio: 2.33.0
+  numpy: 2.4.0
+  h5py: 3.15.1
+  imageio: 2.37.2
 
 Video plugins:
   opencv: 4.8.1
   pyav: 12.0.0
-  imageio-ffmpeg: 0.4.9
+  imageio-ffmpeg: 0.6.0
 
 Optional:
   pymatreader: 0.0.32
+
+Rendering:
+  skia-python: 138.0
+  colorcet: 3.1.0
 ```
 
 !!! tip "Troubleshooting video issues"
