@@ -1564,11 +1564,11 @@ def filenames(
     help="Video index for multi-video labels.",
 )
 @click.option(
-    "--all-frames",
+    "--all-frames/--labeled-only",
     "all_frames",
-    is_flag=True,
-    default=False,
-    help="Render all video frames, not just those with annotations.",
+    default=None,
+    help="Render all frames (--all-frames) or only labeled (--labeled-only). "
+    "Default: --all-frames for single-video files.",
 )
 # Quality options
 @click.option(
@@ -1669,7 +1669,7 @@ def render(
     start_frame_idx: Optional[int],
     end_frame_idx: Optional[int],
     video_ind: int,
-    all_frames: bool,
+    all_frames: Optional[bool],
     preset: Optional[str],
     scale: Optional[float],
     fps: Optional[float],
@@ -1727,6 +1727,26 @@ def render(
 
     # Determine render mode: single image vs video
     single_image_mode = lf_ind is not None or frame_idx is not None
+
+    # Detect single-video prediction file and auto-enable --all-frames
+    # This is the common "pure prediction" case where every frame has predictions
+    effective_all_frames = all_frames  # May be None, True, or False
+    if not single_image_mode and all_frames is None:
+        is_single_video = len(labels.videos) == 1
+        if is_single_video:
+            # Check if all labeled frames are from this video
+            target_video = (
+                labels.videos[video_ind] if video_ind < len(labels.videos) else None
+            )
+            all_from_same_video = all(
+                lf.video == target_video for lf in labels.labeled_frames
+            )
+            if all_from_same_video:
+                # Auto-enable all_frames for single-video prediction files
+                effective_all_frames = True
+    # Default to False if not auto-detected
+    if effective_all_frames is None:
+        effective_all_frames = False
 
     # Validate conflicting options
     if single_image_mode and (start_frame_idx is not None or end_frame_idx is not None):
@@ -1834,7 +1854,7 @@ def render(
                 show_edges=not no_edges,
                 start=start_frame_idx,
                 end=end_frame_idx,
-                include_unlabeled=all_frames,
+                include_unlabeled=effective_all_frames,
                 show_progress=True,
             )
     except ImportError:
