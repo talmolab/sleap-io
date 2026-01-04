@@ -1645,9 +1645,6 @@ def render(
         $ sio render -i predictions.slp -o output.mp4 --color-by track
 
         $ sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
-
-    [bold]Note:[/] Requires optional dependencies. Install with:
-        pip install sleap-io[render]
     """
     # Load labels
     try:
@@ -1694,7 +1691,7 @@ def render(
     except ImportError:
         raise click.ClickException(
             "Rendering requires optional dependencies. "
-            "Install with: pip install sleap-io[render]"
+            "Install with: pip install sleap-io[all]"
         )
     except Exception as e:
         raise click.ClickException(f"Failed to render: {e}")

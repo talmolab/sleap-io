@@ -730,7 +730,7 @@ labels.render("output.mp4")
 !!! info "Required dependencies"
     Rendering requires optional dependencies. Install with:
     ```bash
-    pip install sleap-io[render]
+    pip install sleap-io[all]
     ```
 
 ??? example "Rendering options"

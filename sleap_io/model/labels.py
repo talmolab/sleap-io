@@ -706,7 +706,7 @@ class Labels:
             >>> frames = labels.render()  # Returns arrays
 
         Note:
-            Requires optional dependencies. Install with: pip install sleap-io[render]
+            Requires optional dependencies. Install with: pip install sleap-io[all]
         """
         from sleap_io.rendering import render_video
 

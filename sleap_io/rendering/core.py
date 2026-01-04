@@ -406,7 +406,7 @@ def render_image(
         import skia  # noqa: F401
     except ImportError as e:
         raise ImportError(
-            "Rendering requires skia-python. Install with: pip install sleap-io[render]"
+            "Rendering requires skia-python. Install with: pip install sleap-io[all]"
         ) from e
 
     from sleap_io.model.instance import Instance, PredictedInstance
@@ -669,7 +669,7 @@ def render_video(
         import skia  # noqa: F401
     except ImportError as e:
         raise ImportError(
-            "Rendering requires skia-python. Install with: pip install sleap-io[render]"
+            "Rendering requires skia-python. Install with: pip install sleap-io[all]"
         ) from e
 
     from sleap_io.model.labeled_frame import LabeledFrame

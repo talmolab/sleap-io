@@ -14,7 +14,7 @@ Example:
     >>> sio.render_image(labels.labeled_frames[0], "frame.png")
 
 Note:
-    Requires optional dependencies. Install with: pip install sleap-io[render]
+    Requires optional dependencies. Install with: pip install sleap-io[all]
 """
 
 from sleap_io.rendering.callbacks import InstanceContext, RenderContext
