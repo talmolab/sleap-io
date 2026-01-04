@@ -48,7 +48,8 @@ opencv = ["opencv-python"]
 pyav = ["av<16.0.0"]
 mat = ["pymatreader"]
 polars = ["polars", "pyarrow"]
-all = ["opencv-python", "av<16.0.0", "pymatreader", "polars", "pyarrow"]
+render = ["skia-python>=87.0", "colorcet>=3.0"]
+all = ["opencv-python", "av<16.0.0", "pymatreader", "polars", "pyarrow", "skia-python>=87.0", "colorcet>=3.0"]
 
 [dependency-groups]
 # PEP 735: Dev-only dependencies (`dev` is installed automatically by `uv`)

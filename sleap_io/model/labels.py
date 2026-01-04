@@ -679,6 +679,39 @@ class Labels:
             **kwargs,
         )
 
+    def render(
+        self,
+        output: Optional[Union[str, Path]] = None,
+        **kwargs,
+    ) -> Union["Video", list]:
+        """Render video with pose overlays.
+
+        Convenience method that delegates to `sleap_io.render_video()`.
+        See that function for full parameter documentation.
+
+        Args:
+            output: Output video path. If None, returns list of rendered arrays.
+            **kwargs: Additional arguments passed to `render_video()`.
+
+        Returns:
+            If output provided: Video object pointing to output file.
+            If output is None: List of rendered numpy arrays (H, W, 3) uint8.
+
+        Raises:
+            ImportError: If rendering dependencies are not installed.
+
+        Example:
+            >>> labels.render("output.mp4")
+            >>> labels.render("preview.mp4", preset="preview")
+            >>> frames = labels.render()  # Returns arrays
+
+        Note:
+            Requires optional dependencies. Install with: pip install sleap-io[render]
+        """
+        from sleap_io.rendering import render_video
+
+        return render_video(self, output, **kwargs)
+
     def clean(
         self,
         frames: bool = True,

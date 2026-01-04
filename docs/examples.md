@@ -707,3 +707,198 @@ print(sio.get_default_image_plugin())  # "opencv"
     - [`set_default_image_plugin`](formats.md#sleap_io.set_default_image_plugin): Set image encoding backend
     - [`get_default_video_plugin`](formats.md#sleap_io.get_default_video_plugin): Get current video backend
     - [`get_default_image_plugin`](formats.md#sleap_io.get_default_image_plugin): Get current image backend
+
+## Rendering
+
+### Render poses to video
+
+Create video files with pose overlays for visualization and publication.
+
+```python title="render_video.py" linenums="1"
+import sleap_io as sio
+
+# Load predictions
+labels = sio.load_slp("predictions.slp")
+
+# Render to video file
+sio.render_video(labels, "output.mp4")
+
+# Or use the convenience method
+labels.render("output.mp4")
+```
+
+!!! info "Required dependencies"
+    Rendering requires optional dependencies. Install with:
+    ```bash
+    pip install sleap-io[render]
+    ```
+
+??? example "Rendering options"
+    ```python
+    # Quality presets for speed vs quality
+    sio.render_video(labels, "preview.mp4", preset="preview")  # 0.25x (fast)
+    sio.render_video(labels, "draft.mp4", preset="draft")      # 0.5x
+    sio.render_video(labels, "final.mp4", preset="final")      # 1.0x (full quality)
+
+    # Or specify scale directly
+    sio.render_video(labels, "output.mp4", scale=0.5)
+
+    # Render specific frames
+    sio.render_video(labels, "clip.mp4", start=100, end=200)
+    sio.render_video(labels, "frames.mp4", frame_inds=[0, 10, 20, 30])
+    ```
+
+### Color schemes and palettes
+
+Customize how poses are colored.
+
+```python title="render_colors.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# Color by track identity (consistent across frames)
+sio.render_video(labels, "by_track.mp4", color_by="track")
+
+# Color by instance (each animal in frame gets different color)
+sio.render_video(labels, "by_instance.mp4", color_by="instance")
+
+# Color by node type (each body part gets different color)
+sio.render_video(labels, "by_node.mp4", color_by="node")
+
+# Use different color palettes
+sio.render_video(labels, "output.mp4", palette="tableau10")
+sio.render_video(labels, "output.mp4", palette="rainbow")
+```
+
+??? tip "Available palettes"
+    Built-in palettes: `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `seaborn`, `tableau10`, `viridis`
+
+    With colorcet installed (included in `[render]`): `glasbey` (256 maximally distinct colors), `glasbey_hv`, `glasbey_cool`, `glasbey_warm`
+
+### Marker shapes and styles
+
+Customize the appearance of pose overlays.
+
+```python title="render_styles.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# Different marker shapes
+sio.render_video(labels, "circles.mp4", marker_shape="circle")
+sio.render_video(labels, "squares.mp4", marker_shape="square")
+sio.render_video(labels, "diamonds.mp4", marker_shape="diamond")
+sio.render_video(labels, "triangles.mp4", marker_shape="triangle")
+sio.render_video(labels, "crosses.mp4", marker_shape="cross")
+
+# Adjust sizes
+sio.render_video(
+    labels,
+    "styled.mp4",
+    marker_size=6.0,    # Node radius in pixels
+    line_width=3.0,     # Edge line width in pixels
+    alpha=0.8,          # Transparency (0.0-1.0)
+)
+
+# Toggle elements
+sio.render_video(labels, "edges_only.mp4", show_nodes=False)
+sio.render_video(labels, "nodes_only.mp4", show_edges=False)
+```
+
+### Render single frames
+
+Render individual frames for figures or thumbnails.
+
+```python title="render_image.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# Render a specific frame
+lf = labels.labeled_frames[0]
+img = sio.render_image(lf)
+
+# Save to file
+sio.render_image(lf, "frame.png")
+
+# Render from Labels with frame index
+sio.render_image(labels, frame_idx=0, output="frame.png")
+
+# Get array without saving
+rendered_array = sio.render_image(labels, frame_idx=0)
+print(rendered_array.shape)  # (H, W, 3)
+```
+
+### Custom overlays with callbacks
+
+Add custom graphics using callback functions.
+
+```python title="render_callbacks.py" linenums="1"
+import sleap_io as sio
+from sleap_io import InstanceContext, RenderContext
+import skia
+
+def draw_instance_labels(ctx: InstanceContext):
+    """Draw track name above each instance."""
+    centroid = ctx.get_centroid()
+    if centroid is None:
+        return
+
+    cx, cy = ctx.world_to_canvas(centroid[0], centroid[1])
+
+    # Draw text using Skia
+    font = skia.Font(skia.Typeface("Arial"), 14 * ctx.scale)
+    label = ctx.track_name or f"Instance {ctx.instance_idx}"
+    text_blob = skia.TextBlob(label, font)
+    paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
+    ctx.canvas.drawTextBlob(text_blob, cx, cy - 20 * ctx.scale, paint)
+
+def draw_frame_info(ctx: RenderContext):
+    """Draw frame number in corner."""
+    font = skia.Font(skia.Typeface("Arial"), 16)
+    text = f"Frame: {ctx.frame_idx}"
+    text_blob = skia.TextBlob(text, font)
+    paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
+    ctx.canvas.drawTextBlob(text_blob, 10, 25, paint)
+
+# Use callbacks during rendering
+labels = sio.load_slp("predictions.slp")
+sio.render_video(
+    labels,
+    "annotated.mp4",
+    per_instance_callback=draw_instance_labels,
+    post_render_callback=draw_frame_info,
+)
+```
+
+??? tip "Available callbacks"
+    - `pre_render_callback(ctx: RenderContext)`: Before poses drawn (background layers)
+    - `post_render_callback(ctx: RenderContext)`: After poses drawn (overlay layers)
+    - `per_instance_callback(ctx: InstanceContext)`: After each instance (labels, bboxes)
+
+### CLI rendering
+
+Render from the command line.
+
+```bash title="CLI examples"
+# Basic rendering
+sio render -i predictions.slp -o output.mp4
+
+# Fast preview
+sio render -i predictions.slp -o preview.mp4 --preset preview
+
+# Custom styling
+sio render -i predictions.slp -o styled.mp4 --color-by track --palette tableau10
+
+# Render a clip
+sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
+
+# Different marker shapes
+sio render -i predictions.slp -o output.mp4 --marker-shape diamond --marker-size 6
+```
+
+!!! note "See also"
+    - [`render_video`](formats.md#sleap_io.render_video): Render video with pose overlays
+    - [`render_image`](formats.md#sleap_io.render_image): Render single frame
+    - [`get_palette`](formats.md#sleap_io.get_palette): Get color palette colors

@@ -44,6 +44,7 @@ click.rich_click.COMMAND_GROUPS = {
     "sio": [
         {"name": "Inspection", "commands": ["show", "filenames"]},
         {"name": "Transformation", "commands": ["convert", "split"]},
+        {"name": "Rendering", "commands": ["render"]},
     ]
 }
 
@@ -114,6 +115,12 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     # Optional dependencies
     lines.append("Optional:")
     lines.append(f"  pymatreader: {_get_package_version('pymatreader')}")
+    lines.append("")
+
+    # Rendering
+    lines.append("Rendering:")
+    lines.append(f"  skia-python: {_get_package_version('skia-python')}")
+    lines.append(f"  colorcet: {_get_package_version('colorcet')}")
 
     click.echo("\n".join(lines))
     ctx.exit()
@@ -1500,3 +1507,196 @@ def filenames(
     mode_name = "list" if new_filenames else "map" if filename_map else "prefix"
     click.echo(f"Replaced filenames in {n_videos} video(s) using {mode_name} mode")
     click.echo(f"Saved: {output_path}")
+
+
+@cli.command()
+@click.option(
+    "-i",
+    "--input",
+    "input_path",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input labels file (.slp, .nwb, etc.).",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output video file (.mp4, .avi).",
+)
+@click.option(
+    "--preset",
+    type=click.Choice(["preview", "draft", "final"]),
+    default=None,
+    help="Quality preset (preview=0.25x, draft=0.5x, final=1.0x).",
+)
+@click.option(
+    "--scale",
+    type=float,
+    default=None,
+    help="Scale factor (overrides preset).",
+)
+@click.option(
+    "--fps",
+    type=float,
+    default=None,
+    help="Output FPS (default: source video FPS).",
+)
+@click.option(
+    "--color-by",
+    type=click.Choice(["auto", "track", "instance", "node"]),
+    default="auto",
+    show_default=True,
+    help="Color scheme for poses.",
+)
+@click.option(
+    "--palette",
+    type=str,
+    default="glasbey",
+    show_default=True,
+    help="Color palette name.",
+)
+@click.option(
+    "--marker-shape",
+    type=click.Choice(["circle", "square", "diamond", "triangle", "cross"]),
+    default="circle",
+    show_default=True,
+    help="Node marker shape.",
+)
+@click.option(
+    "--marker-size",
+    type=float,
+    default=4.0,
+    show_default=True,
+    help="Node marker radius in pixels.",
+)
+@click.option(
+    "--line-width",
+    type=float,
+    default=2.0,
+    show_default=True,
+    help="Edge line width in pixels.",
+)
+@click.option(
+    "--alpha",
+    type=float,
+    default=1.0,
+    show_default=True,
+    help="Transparency (0.0-1.0).",
+)
+@click.option(
+    "--no-nodes",
+    is_flag=True,
+    help="Hide node markers.",
+)
+@click.option(
+    "--no-edges",
+    is_flag=True,
+    help="Hide skeleton edges.",
+)
+@click.option(
+    "--start",
+    type=int,
+    default=None,
+    help="Start frame index.",
+)
+@click.option(
+    "--end",
+    type=int,
+    default=None,
+    help="End frame index.",
+)
+@click.option(
+    "--video-index",
+    type=int,
+    default=0,
+    help="Video index for multi-video labels.",
+)
+def render(
+    input_path: Path,
+    output_path: Path,
+    preset: Optional[str],
+    scale: Optional[float],
+    fps: Optional[float],
+    color_by: str,
+    palette: str,
+    marker_shape: str,
+    marker_size: float,
+    line_width: float,
+    alpha: float,
+    no_nodes: bool,
+    no_edges: bool,
+    start: Optional[int],
+    end: Optional[int],
+    video_index: int,
+) -> None:
+    """Render pose predictions as video.
+
+    Creates video files with pose annotations overlaid on video frames.
+
+    [dim]Examples:[/]
+
+        $ sio render -i predictions.slp -o output.mp4
+
+        $ sio render -i predictions.slp -o preview.mp4 --preset preview
+
+        $ sio render -i predictions.slp -o output.mp4 --color-by track
+
+        $ sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
+
+    [bold]Note:[/] Requires optional dependencies. Install with:
+        pip install sleap-io[render]
+    """
+    # Load labels
+    try:
+        labels = io_main.load_file(str(input_path), open_videos=True)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input is not a labels file (got {type(labels).__name__})"
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Handle scale/preset
+    effective_scale = 1.0
+    if scale is not None:
+        effective_scale = scale
+    elif preset is not None:
+        preset_scales = {"preview": 0.25, "draft": 0.5, "final": 1.0}
+        effective_scale = preset_scales.get(preset, 1.0)
+
+    try:
+        from sleap_io.rendering import render_video
+
+        render_video(
+            labels,
+            output_path,
+            video=video_index,
+            scale=effective_scale,
+            fps=fps,
+            color_by=color_by,
+            palette=palette,
+            marker_shape=marker_shape,
+            marker_size=marker_size,
+            line_width=line_width,
+            alpha=alpha,
+            show_nodes=not no_nodes,
+            show_edges=not no_edges,
+            start=start,
+            end=end,
+            show_progress=True,
+        )
+    except ImportError:
+        raise click.ClickException(
+            "Rendering requires optional dependencies. "
+            "Install with: pip install sleap-io[render]"
+        )
+    except Exception as e:
+        raise click.ClickException(f"Failed to render: {e}")
+
+    click.echo(f"Rendered: {input_path} -> {output_path}")

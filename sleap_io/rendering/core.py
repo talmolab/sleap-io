@@ -1,0 +1,900 @@
+"""Core rendering functions for pose visualization.
+
+This module provides the main API for rendering pose data with skia-python.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Union
+
+import numpy as np
+
+from sleap_io.rendering.callbacks import InstanceContext, RenderContext
+from sleap_io.rendering.colors import (
+    ColorScheme,
+    PaletteName,
+    build_color_map,
+    determine_color_scheme,
+    get_palette,
+    rgb_to_skia_color,
+)
+from sleap_io.rendering.shapes import MarkerShape, get_marker_func
+
+if TYPE_CHECKING:
+
+    from sleap_io.model.instance import Instance, PredictedInstance
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.labels import Labels
+    from sleap_io.model.video import Video
+
+# Preset configurations
+PRESETS: dict[str, dict] = {
+    "preview": {"scale": 0.25},
+    "draft": {"scale": 0.5},
+    "final": {"scale": 1.0},
+}
+
+
+def _prepare_frame_rgba(frame: np.ndarray) -> np.ndarray:
+    """Convert frame to RGBA format for Skia.
+
+    Args:
+        frame: Input frame array. Can be:
+            - Grayscale (H, W)
+            - Grayscale with channel (H, W, 1)
+            - RGB (H, W, 3)
+            - RGBA (H, W, 4)
+
+    Returns:
+        RGBA uint8 array (H, W, 4).
+    """
+    if frame.ndim == 2:
+        # Grayscale (H, W) -> RGB
+        frame_rgb = np.stack([frame] * 3, axis=-1)
+    elif frame.shape[2] == 1:
+        # Grayscale with channel (H, W, 1) -> RGB
+        frame_rgb = np.concatenate([frame] * 3, axis=-1)
+    elif frame.shape[2] == 3:
+        frame_rgb = frame
+    elif frame.shape[2] == 4:
+        # Already RGBA
+        return frame.astype(np.uint8)
+    else:
+        raise ValueError(f"Unsupported frame shape: {frame.shape}")
+
+    # Add alpha channel
+    h, w = frame_rgb.shape[:2]
+    frame_rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    frame_rgba[:, :, :3] = frame_rgb.astype(np.uint8)
+    frame_rgba[:, :, 3] = 255
+    return frame_rgba
+
+
+def _create_blank_frame(
+    height: int, width: int, color: tuple[int, int, int]
+) -> np.ndarray:
+    """Create a blank RGBA frame with the specified color.
+
+    Args:
+        height: Frame height in pixels.
+        width: Frame width in pixels.
+        color: RGB color tuple.
+
+    Returns:
+        RGBA uint8 array (H, W, 4).
+    """
+    frame = np.zeros((height, width, 4), dtype=np.uint8)
+    frame[:, :, 0] = color[0]
+    frame[:, :, 1] = color[1]
+    frame[:, :, 2] = color[2]
+    frame[:, :, 3] = 255
+    return frame
+
+
+def _scale_frame(frame_rgba: np.ndarray, scale: float) -> np.ndarray:
+    """Scale frame using PIL (faster than Skia for image operations).
+
+    Args:
+        frame_rgba: RGBA frame array.
+        scale: Scale factor.
+
+    Returns:
+        Scaled RGBA array.
+    """
+    if scale == 1.0:
+        return frame_rgba
+
+    from PIL import Image
+
+    h, w = frame_rgba.shape[:2]
+    new_h = int(h * scale)
+    new_w = int(w * scale)
+
+    pil_img = Image.fromarray(frame_rgba)
+    pil_img = pil_img.resize((new_w, new_h), Image.BILINEAR)
+    return np.array(pil_img)
+
+
+def render_frame(
+    frame: np.ndarray,
+    instances_points: list[np.ndarray],
+    edge_inds: list[tuple[int, int]],
+    node_names: list[str],
+    *,
+    # Appearance
+    color_by: ColorScheme = "instance",
+    palette: Union[PaletteName, str] = "glasbey",
+    marker_shape: MarkerShape = "circle",
+    marker_size: float = 4.0,
+    line_width: float = 2.0,
+    alpha: float = 1.0,
+    show_nodes: bool = True,
+    show_edges: bool = True,
+    scale: float = 1.0,
+    # Track info for track coloring
+    track_indices: Optional[list[int]] = None,
+    n_tracks: int = 0,
+    # Callbacks
+    pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
+    post_render_callback: Optional[Callable[[RenderContext], None]] = None,
+    per_instance_callback: Optional[Callable[[InstanceContext], None]] = None,
+    # Callback context info
+    frame_idx: int = 0,
+    instance_metadata: Optional[list[dict]] = None,
+) -> np.ndarray:
+    """Render poses on a single frame.
+
+    This is the core low-level rendering function. For most use cases, prefer
+    `render_image()` which provides a higher-level interface.
+
+    Args:
+        frame: Background image as numpy array (H, W), (H, W, 1), (H, W, 3) or
+            (H, W, 4).
+        instances_points: List of (n_nodes, 2) arrays of keypoint coordinates.
+        edge_inds: List of (src_idx, dst_idx) tuples for skeleton edges.
+        node_names: List of node name strings.
+        color_by: Color scheme - 'track', 'instance', or 'node'.
+        palette: Color palette name.
+        marker_shape: Node marker shape.
+        marker_size: Node marker radius in pixels.
+        line_width: Edge line width in pixels.
+        alpha: Global transparency (0.0-1.0).
+        show_nodes: Whether to draw node markers.
+        show_edges: Whether to draw skeleton edges.
+        scale: Scale factor for output.
+        track_indices: Track index for each instance (for track coloring).
+        n_tracks: Total number of tracks (for track coloring).
+        pre_render_callback: Called before poses are drawn.
+        post_render_callback: Called after poses are drawn.
+        per_instance_callback: Called after each instance is drawn.
+        frame_idx: Current frame index (for callbacks).
+        instance_metadata: List of dicts with 'track_id', 'track_name', 'confidence'
+            for each instance (for callbacks).
+
+    Returns:
+        Rendered RGBA array (H*scale, W*scale, 4) as uint8.
+    """
+    import skia
+
+    # Prepare frame
+    frame_rgba = _prepare_frame_rgba(frame)
+    h, w = frame_rgba.shape[:2]
+
+    # Scale frame
+    frame_rgba = _scale_frame(frame_rgba, scale)
+    out_h, out_w = frame_rgba.shape[:2]
+
+    # Create Skia surface
+    surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
+    canvas = surface.getCanvas()
+
+    alpha_int = int(alpha * 255)
+    n_instances = len(instances_points)
+    n_nodes = (
+        len(node_names)
+        if node_names
+        else (len(instances_points[0]) if instances_points else 0)
+    )
+
+    # Build color mapping
+    color_map = build_color_map(
+        scheme=color_by,
+        n_instances=n_instances,
+        n_nodes=n_nodes,
+        n_tracks=n_tracks,
+        track_indices=track_indices,
+        palette=palette,
+    )
+
+    # Get drawing function for marker shape
+    draw_marker = get_marker_func(marker_shape)
+
+    # Pre-render callback
+    if pre_render_callback:
+        ctx = RenderContext(
+            canvas=canvas,
+            frame_idx=frame_idx,
+            frame_size=(w, h),
+            instances=instances_points,
+            skeleton_edges=edge_inds,
+            node_names=node_names,
+            scale=scale,
+            offset=(0.0, 0.0),
+        )
+        pre_render_callback(ctx)
+
+    # Draw instances
+    for inst_idx, points in enumerate(instances_points):
+        # Determine colors for this instance
+        if color_by == "node" and "node_colors" in color_map:
+            # Node coloring: each node has its own color
+            node_colors = color_map["node_colors"]
+        else:
+            # Instance/track coloring: all nodes share instance color
+            if "instance_colors" in color_map:
+                inst_color = color_map["instance_colors"][
+                    inst_idx % len(color_map["instance_colors"])
+                ]
+            else:
+                inst_color = get_palette(palette, 1)[0]
+            node_colors = [inst_color] * n_nodes
+
+        # Draw edges
+        if show_edges:
+            for src_idx, dst_idx in edge_inds:
+                if src_idx >= len(points) or dst_idx >= len(points):
+                    continue
+
+                x1, y1 = points[src_idx]
+                x2, y2 = points[dst_idx]
+
+                if not (
+                    np.isfinite(x1)
+                    and np.isfinite(y1)
+                    and np.isfinite(x2)
+                    and np.isfinite(y2)
+                ):
+                    continue
+
+                # Edge color: use destination node color for node coloring,
+                # instance color otherwise
+                edge_color = node_colors[dst_idx % len(node_colors)]
+                edge_paint = skia.Paint(
+                    Color=rgb_to_skia_color(edge_color, alpha_int),
+                    AntiAlias=True,
+                    Style=skia.Paint.kStroke_Style,
+                    StrokeWidth=line_width * scale,
+                    StrokeCap=skia.Paint.kRound_Cap,
+                )
+                canvas.drawLine(
+                    float(x1) * scale,
+                    float(y1) * scale,
+                    float(x2) * scale,
+                    float(y2) * scale,
+                    edge_paint,
+                )
+
+        # Draw nodes
+        if show_nodes:
+            for node_idx, (x, y) in enumerate(points):
+                if not (np.isfinite(x) and np.isfinite(y)):
+                    continue
+
+                node_color = node_colors[node_idx % len(node_colors)]
+                fill_paint = skia.Paint(
+                    Color=rgb_to_skia_color(node_color, alpha_int),
+                    AntiAlias=True,
+                    Style=skia.Paint.kFill_Style,
+                )
+                draw_marker(
+                    canvas,
+                    float(x) * scale,
+                    float(y) * scale,
+                    marker_size * scale,
+                    fill_paint,
+                )
+
+        # Per-instance callback
+        if per_instance_callback:
+            meta = (
+                instance_metadata[inst_idx]
+                if instance_metadata and inst_idx < len(instance_metadata)
+                else {}
+            )
+            inst_ctx = InstanceContext(
+                canvas=canvas,
+                instance_idx=inst_idx,
+                points=points,
+                skeleton_edges=edge_inds,
+                node_names=node_names,
+                track_id=meta.get("track_id"),
+                track_name=meta.get("track_name"),
+                confidence=meta.get("confidence"),
+                scale=scale,
+                offset=(0.0, 0.0),
+            )
+            per_instance_callback(inst_ctx)
+
+    # Post-render callback
+    if post_render_callback:
+        ctx = RenderContext(
+            canvas=canvas,
+            frame_idx=frame_idx,
+            frame_size=(w, h),
+            instances=instances_points,
+            skeleton_edges=edge_inds,
+            node_names=node_names,
+            scale=scale,
+            offset=(0.0, 0.0),
+        )
+        post_render_callback(ctx)
+
+    surface.flushAndSubmit()
+
+    # Convert to RGB (drop alpha) for video compatibility
+    return frame_rgba[:, :, :3]
+
+
+def render_image(
+    source: Union[
+        "Labels",
+        "LabeledFrame",
+        list[Union["Instance", "PredictedInstance"]],
+    ],
+    output: Optional[Union[str, Path]] = None,
+    *,
+    # Frame specification (for Labels input)
+    frame_idx: Optional[int] = None,
+    video_frame: Optional[tuple["Video", int]] = None,
+    # Image override
+    image: Optional[np.ndarray] = None,
+    # Appearance
+    color_by: ColorScheme = "auto",
+    palette: Union[PaletteName, str] = "glasbey",
+    marker_shape: MarkerShape = "circle",
+    marker_size: float = 4.0,
+    line_width: float = 2.0,
+    alpha: float = 1.0,
+    show_nodes: bool = True,
+    show_edges: bool = True,
+    scale: float = 1.0,
+    # Error handling
+    require_video: bool = True,
+    fallback_color: Optional[tuple[int, int, int]] = None,
+    # Callbacks
+    pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
+    post_render_callback: Optional[Callable[[RenderContext], None]] = None,
+    per_instance_callback: Optional[Callable[[InstanceContext], None]] = None,
+) -> np.ndarray:
+    """Render single frame with pose overlays.
+
+    Args:
+        source: LabeledFrame, Labels (with frame specifier), or list of instances.
+        output: Output image path (PNG/JPEG). If None, only returns array.
+        frame_idx: Frame index when source is Labels.
+        video_frame: (video, frame_idx) tuple when source is Labels.
+        image: Override image array (H, W) or (H, W, C) uint8. Fetched from
+            LabeledFrame if not provided.
+        color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
+        palette: Color palette name.
+        marker_shape: Node marker shape.
+        marker_size: Node marker radius in pixels.
+        line_width: Edge line width in pixels.
+        alpha: Global transparency (0.0-1.0).
+        show_nodes: Whether to draw node markers.
+        show_edges: Whether to draw skeleton edges.
+        scale: Output scale factor.
+        require_video: If True, raise error if video unavailable.
+        fallback_color: RGB background color if video unavailable.
+        pre_render_callback: Called before poses are drawn.
+        post_render_callback: Called after poses are drawn.
+        per_instance_callback: Called after each instance is drawn.
+
+    Returns:
+        Rendered numpy array (H, W, 3) uint8.
+
+    Raises:
+        ValueError: If video unavailable and require_video=True.
+        ImportError: If skia-python is not installed.
+
+    Example:
+        >>> lf = labels.labeled_frames[0]
+        >>> img = sio.render_image(lf)
+        >>> sio.render_image(labels, frame_idx=0, output="frame.png")
+    """
+    try:
+        import skia  # noqa: F401
+    except ImportError as e:
+        raise ImportError(
+            "Rendering requires skia-python. Install with: pip install sleap-io[render]"
+        ) from e
+
+    from sleap_io.model.instance import Instance, PredictedInstance
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.labels import Labels
+
+    # Resolve source to LabeledFrame or instances
+    if isinstance(source, Labels):
+        if video_frame is not None:
+            video, fidx = video_frame
+            lf_list = source.find(video, fidx)
+            if not lf_list:
+                raise ValueError(
+                    f"No labeled frame found for video {video} at frame {fidx}"
+                )
+            lf = lf_list[0]
+        elif frame_idx is not None:
+            lf = source.labeled_frames[frame_idx]
+        else:
+            lf = source.labeled_frames[0]
+
+        instances = list(lf.instances)
+        skeleton = instances[0].skeleton if instances else source.skeletons[0]
+        edge_inds = skeleton.edge_inds
+        node_names = [n.name for n in skeleton.nodes]
+        fidx_for_callback = lf.frame_idx
+
+        # Get track info
+        track_indices = []
+        n_tracks = len(source.tracks)
+        for inst in instances:
+            if inst.track is not None and inst.track in source.tracks:
+                track_indices.append(source.tracks.index(inst.track))
+            else:
+                track_indices.append(0)
+
+        has_tracks = n_tracks > 0
+
+        # Get image if not provided
+        if image is None:
+            try:
+                image = lf.image
+                if image is None:
+                    raise ValueError("No image available")
+            except Exception:
+                if require_video and fallback_color is None:
+                    raise ValueError(
+                        "Video unavailable and require_video=True. "
+                        "Set require_video=False or provide fallback_color."
+                    )
+                # Use fallback
+                if fallback_color is not None:
+                    # Need frame dimensions - try to get from video metadata
+                    video = lf.video
+                    if hasattr(video, "shape") and video.shape is not None:
+                        h, w = video.shape[1:3]
+                    else:
+                        h, w = 384, 384  # Default size
+                    image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+                else:
+                    raise
+
+    elif isinstance(source, LabeledFrame):
+        lf = source
+        instances = list(lf.instances)
+        skeleton = instances[0].skeleton if instances else None
+        if skeleton is None:
+            raise ValueError("LabeledFrame has no instances with skeleton")
+        edge_inds = skeleton.edge_inds
+        node_names = [n.name for n in skeleton.nodes]
+        fidx_for_callback = lf.frame_idx
+        track_indices = None
+        n_tracks = 0
+        has_tracks = False
+
+        # Get image if not provided
+        if image is None:
+            try:
+                image = lf.image
+                if image is None:
+                    raise ValueError("No image available")
+            except Exception:
+                if require_video and fallback_color is None:
+                    raise ValueError(
+                        "Video unavailable and require_video=True. "
+                        "Set require_video=False or provide fallback_color."
+                    )
+                if fallback_color is not None:
+                    video = lf.video
+                    if hasattr(video, "shape") and video.shape is not None:
+                        h, w = video.shape[1:3]
+                    else:
+                        h, w = 384, 384
+                    image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+                else:
+                    raise
+
+    elif isinstance(source, list) and all(
+        isinstance(x, (Instance, PredictedInstance)) for x in source
+    ):
+        instances = source
+        if not instances:
+            raise ValueError("Empty instances list")
+        skeleton = instances[0].skeleton
+        edge_inds = skeleton.edge_inds
+        node_names = [n.name for n in skeleton.nodes]
+        fidx_for_callback = 0
+        track_indices = None
+        n_tracks = 0
+        has_tracks = False
+
+        if image is None:
+            raise ValueError(
+                "image parameter required when source is list of instances"
+            )
+
+    else:
+        raise TypeError(
+            f"source must be Labels, LabeledFrame, or list of instances, "
+            f"got {type(source)}"
+        )
+
+    # Convert instances to point arrays
+    instances_points = [inst.numpy() for inst in instances]
+
+    # Build instance metadata for callbacks
+    instance_metadata = []
+    for inst in instances:
+        meta = {}
+        if hasattr(inst, "track") and inst.track is not None:
+            meta["track_name"] = inst.track.name
+        if hasattr(inst, "score"):
+            meta["confidence"] = inst.score
+        instance_metadata.append(meta)
+
+    # Determine color scheme
+    resolved_scheme = determine_color_scheme(
+        has_tracks=has_tracks,
+        is_single_image=True,
+        scheme=color_by,
+    )
+
+    # Render
+    rendered = render_frame(
+        frame=image,
+        instances_points=instances_points,
+        edge_inds=edge_inds,
+        node_names=node_names,
+        color_by=resolved_scheme,
+        palette=palette,
+        marker_shape=marker_shape,
+        marker_size=marker_size,
+        line_width=line_width,
+        alpha=alpha,
+        show_nodes=show_nodes,
+        show_edges=show_edges,
+        scale=scale,
+        track_indices=track_indices,
+        n_tracks=n_tracks,
+        pre_render_callback=pre_render_callback,
+        post_render_callback=post_render_callback,
+        per_instance_callback=per_instance_callback,
+        frame_idx=fidx_for_callback,
+        instance_metadata=instance_metadata,
+    )
+
+    # Save if output path provided
+    if output is not None:
+        from PIL import Image
+
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(rendered).save(output_path)
+
+    return rendered
+
+
+def render_video(
+    source: Union["Labels", list["LabeledFrame"]],
+    output: Optional[Union[str, Path]] = None,
+    *,
+    # Video selection
+    video: Optional[Union["Video", int]] = None,
+    # Frame selection
+    frame_inds: Optional[list[int]] = None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
+    # Quality/scale
+    preset: Optional[Literal["preview", "draft", "final"]] = None,
+    scale: float = 1.0,
+    # Appearance
+    color_by: ColorScheme = "auto",
+    palette: Union[PaletteName, str] = "glasbey",
+    marker_shape: MarkerShape = "circle",
+    marker_size: float = 4.0,
+    line_width: float = 2.0,
+    alpha: float = 1.0,
+    show_nodes: bool = True,
+    show_edges: bool = True,
+    # Video encoding
+    fps: Optional[float] = None,
+    codec: str = "libx264",
+    crf: int = 23,
+    # Error handling
+    require_video: bool = True,
+    fallback_color: Optional[tuple[int, int, int]] = None,
+    # Callbacks
+    pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
+    post_render_callback: Optional[Callable[[RenderContext], None]] = None,
+    per_instance_callback: Optional[Callable[[InstanceContext], None]] = None,
+    # Progress
+    progress_callback: Optional[Callable[[int, int], bool]] = None,
+    show_progress: bool = True,
+) -> Union["Video", list[np.ndarray]]:
+    """Render video with pose overlays.
+
+    Args:
+        source: Labels object or list of LabeledFrames to render.
+        output: Output video path. If None, returns list of rendered arrays.
+        video: Video to render from (default: first video in Labels).
+        frame_inds: Specific frame indices to render.
+        start: Start frame index (inclusive).
+        end: End frame index (exclusive).
+        preset: Quality preset ('preview'=0.25x, 'draft'=0.5x, 'final'=1.0x).
+        scale: Scale factor (overrides preset if both provided).
+        color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
+        palette: Color palette name.
+        marker_shape: Node marker shape.
+        marker_size: Node marker radius in pixels.
+        line_width: Edge line width in pixels.
+        alpha: Global transparency (0.0-1.0).
+        show_nodes: Whether to draw node markers.
+        show_edges: Whether to draw skeleton edges.
+        fps: Output frame rate (default: source video fps).
+        codec: Video codec for encoding.
+        crf: Constant rate factor (quality, lower=better).
+        require_video: If True, raise error if video unavailable.
+        fallback_color: RGB background color if video unavailable.
+        pre_render_callback: Called before each frame's poses are drawn.
+        post_render_callback: Called after each frame's poses are drawn.
+        per_instance_callback: Called after each instance is drawn.
+        progress_callback: Called with (current, total), return False to cancel.
+        show_progress: Show tqdm progress bar.
+
+    Returns:
+        If output provided: Video object pointing to output file.
+        If output is None: List of rendered numpy arrays (H, W, 3) uint8.
+
+    Raises:
+        ValueError: If video unavailable and require_video=True.
+        ImportError: If skia-python is not installed.
+
+    Example:
+        >>> labels = sio.load_slp("predictions.slp")
+        >>> sio.render_video(labels, "output.mp4")
+        >>> sio.render_video(labels, "preview.mp4", preset="preview")
+        >>> frames = sio.render_video(labels)  # Returns arrays
+    """
+    try:
+        import skia  # noqa: F401
+    except ImportError as e:
+        raise ImportError(
+            "Rendering requires skia-python. Install with: pip install sleap-io[render]"
+        ) from e
+
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.labels import Labels
+    from sleap_io.model.video import Video as VideoModel
+
+    # Handle preset
+    if preset is not None and preset in PRESETS:
+        scale = PRESETS[preset]["scale"]
+
+    # Resolve source
+    if isinstance(source, Labels):
+        labels = source
+
+        # Resolve video
+        if video is None:
+            if not labels.videos:
+                raise ValueError("Labels has no videos")
+            target_video = labels.videos[0]
+        elif isinstance(video, int):
+            target_video = labels.videos[video]
+        else:
+            target_video = video
+
+        # Get labeled frames for this video
+        labeled_frames = labels.find(target_video)
+        if not labeled_frames:
+            raise ValueError(f"No labeled frames found for video {target_video}")
+
+        # Sort by frame index
+        labeled_frames = sorted(labeled_frames, key=lambda lf: lf.frame_idx)
+
+        # Get skeleton info
+        skeleton = labels.skeletons[0] if labels.skeletons else None
+        if skeleton is None and labeled_frames:
+            for lf in labeled_frames:
+                for inst in lf.instances:
+                    skeleton = inst.skeleton
+                    break
+                if skeleton:
+                    break
+
+        if skeleton is None:
+            raise ValueError("No skeleton found in labels")
+
+        edge_inds = skeleton.edge_inds
+        node_names = [n.name for n in skeleton.nodes]
+        n_tracks = len(labels.tracks)
+        has_tracks = n_tracks > 0
+
+    elif isinstance(source, list) and all(isinstance(x, LabeledFrame) for x in source):
+        labeled_frames = source
+        if not labeled_frames:
+            raise ValueError("Empty labeled frames list")
+
+        target_video = labeled_frames[0].video
+        skeleton = None
+        for lf in labeled_frames:
+            for inst in lf.instances:
+                skeleton = inst.skeleton
+                break
+            if skeleton:
+                break
+
+        if skeleton is None:
+            raise ValueError("No skeleton found in labeled frames")
+
+        edge_inds = skeleton.edge_inds
+        node_names = [n.name for n in skeleton.nodes]
+        n_tracks = 0
+        has_tracks = False
+        labels = None
+
+    else:
+        raise TypeError(
+            f"source must be Labels or list of LabeledFrame, got {type(source)}"
+        )
+
+    # Create frame index mapping
+    frame_idx_to_lf = {lf.frame_idx: lf for lf in labeled_frames}
+
+    # Determine frame indices to render
+    if frame_inds is not None:
+        render_indices = frame_inds
+    elif start is not None or end is not None:
+        all_indices = sorted(frame_idx_to_lf.keys())
+        start_idx = start if start is not None else min(all_indices)
+        end_idx = end if end is not None else max(all_indices) + 1
+        render_indices = [i for i in all_indices if start_idx <= i < end_idx]
+    else:
+        render_indices = sorted(frame_idx_to_lf.keys())
+
+    if not render_indices:
+        raise ValueError("No frames to render")
+
+    # Determine FPS
+    if fps is None:
+        # Try to get from video
+        if hasattr(target_video, "backend") and target_video.backend is not None:
+            try:
+                fps = target_video.backend.fps
+            except Exception:
+                fps = 30.0
+        else:
+            fps = 30.0
+
+    # Determine color scheme
+    resolved_scheme = determine_color_scheme(
+        has_tracks=has_tracks,
+        is_single_image=False,
+        scheme=color_by,
+    )
+
+    # Setup progress
+    if show_progress:
+        try:
+            from tqdm import tqdm
+
+            iterator = tqdm(render_indices, desc="Rendering", unit="frame")
+        except ImportError:
+            iterator = render_indices
+    else:
+        iterator = render_indices
+
+    # Render frames
+    rendered_frames = []
+    total_frames = len(render_indices)
+
+    for i, fidx in enumerate(iterator):
+        # Check for cancellation
+        if progress_callback is not None:
+            if progress_callback(i, total_frames) is False:
+                break
+
+        lf = frame_idx_to_lf.get(fidx)
+        if lf is None:
+            continue
+
+        instances = list(lf.instances)
+        instances_points = [inst.numpy() for inst in instances]
+
+        # Get track indices
+        track_indices = None
+        if labels is not None and has_tracks:
+            track_indices = []
+            for inst in instances:
+                if inst.track is not None and inst.track in labels.tracks:
+                    track_indices.append(labels.tracks.index(inst.track))
+                else:
+                    track_indices.append(0)
+
+        # Build instance metadata
+        instance_metadata = []
+        for inst in instances:
+            meta = {}
+            if hasattr(inst, "track") and inst.track is not None:
+                meta["track_name"] = inst.track.name
+            if hasattr(inst, "score"):
+                meta["confidence"] = inst.score
+            instance_metadata.append(meta)
+
+        # Get image
+        try:
+            image = lf.image
+            if image is None:
+                raise ValueError("No image")
+        except Exception:
+            if require_video and fallback_color is None:
+                raise ValueError(
+                    f"Video unavailable at frame {fidx} and require_video=True. "
+                    "Set require_video=False or provide fallback_color."
+                )
+            if fallback_color is not None:
+                if hasattr(target_video, "shape") and target_video.shape is not None:
+                    h, w = target_video.shape[1:3]
+                else:
+                    h, w = 384, 384
+                image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+            else:
+                continue
+
+        # Render frame
+        rendered = render_frame(
+            frame=image,
+            instances_points=instances_points,
+            edge_inds=edge_inds,
+            node_names=node_names,
+            color_by=resolved_scheme,
+            palette=palette,
+            marker_shape=marker_shape,
+            marker_size=marker_size,
+            line_width=line_width,
+            alpha=alpha,
+            show_nodes=show_nodes,
+            show_edges=show_edges,
+            scale=scale,
+            track_indices=track_indices,
+            n_tracks=n_tracks,
+            pre_render_callback=pre_render_callback,
+            post_render_callback=post_render_callback,
+            per_instance_callback=per_instance_callback,
+            frame_idx=fidx,
+            instance_metadata=instance_metadata,
+        )
+
+        rendered_frames.append(rendered)
+
+    # Write video or return frames
+    if output is not None:
+        from sleap_io.io.video_writing import VideoWriter
+
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with VideoWriter(
+            filename=output_path,
+            fps=fps,
+            codec=codec,
+            crf=crf,
+        ) as writer:
+            for frame in rendered_frames:
+                writer(frame)
+
+        # Return Video object pointing to output
+        return VideoModel.from_filename(str(output_path))
+
+    return rendered_frames
