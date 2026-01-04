@@ -241,146 +241,19 @@ class Labels:
         Notes:
             This method assumes that instances have tracks assigned and is intended to
             function primarily for single-video prediction results.
+
+            This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
+            See that function for implementation details.
         """
-        # Get labeled frames for specified video.
-        if video is None:
-            video = 0
-        if type(video) is int:
-            video = self.videos[video]
-        lfs = [lf for lf in self.labeled_frames if lf.video == video]
+        from sleap_io.codecs.numpy import to_numpy
 
-        # Figure out frame index range.
-        first_frame, last_frame = 0, 0
-        for lf in lfs:
-            first_frame = min(first_frame, lf.frame_idx)
-            last_frame = max(last_frame, lf.frame_idx)
-
-        # Figure out the number of tracks based on number of instances in each frame.
-        # Check the max number of instances (predicted or user, depending on settings)
-        n_instances = 0
-        for lf in lfs:
-            if user_instances:
-                # Count max of either user or predicted instances per frame (not sum)
-                n_frame_instances = max(
-                    len(lf.user_instances), len(lf.predicted_instances)
-                )
-            else:
-                n_frame_instances = len(lf.predicted_instances)
-            n_instances = max(n_instances, n_frame_instances)
-
-        # Case 1: We don't care about order because there's only 1 instance per frame,
-        # or we're considering untracked instances.
-        is_single_instance = n_instances == 1
-        untracked = untracked or is_single_instance
-        if untracked:
-            n_tracks = n_instances
-        else:
-            # Case 2: We're considering only tracked instances.
-            n_tracks = len(self.tracks)
-
-        n_frames = int(last_frame - first_frame + 1)
-        skeleton = self.skeletons[-1]  # Assume project only uses last skeleton
-        n_nodes = len(skeleton.nodes)
-
-        if return_confidence:
-            tracks = np.full((n_frames, n_tracks, n_nodes, 3), np.nan, dtype="float32")
-        else:
-            tracks = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, dtype="float32")
-
-        for lf in lfs:
-            i = int(lf.frame_idx - first_frame)
-
-            if untracked:
-                # For untracked instances, fill them in arbitrary order
-                j = 0
-                instances_to_include = []
-
-                # If user instances are preferred, add them first
-                if user_instances and lf.has_user_instances:
-                    # First collect all user instances
-                    for inst in lf.user_instances:
-                        instances_to_include.append(inst)
-
-                    # For the trivial case (single instance per frame), if we found
-                    # user instances, we shouldn't include any predicted instances
-                    if is_single_instance and len(instances_to_include) > 0:
-                        pass  # Skip adding predicted instances
-                    else:
-                        # Add predicted instances that don't have a corresponding
-                        # user instance
-                        for inst in lf.predicted_instances:
-                            skip = False
-                            for user_inst in lf.user_instances:
-                                # Skip if this predicted instance is linked to a user
-                                # instance via from_predicted
-                                if (
-                                    hasattr(user_inst, "from_predicted")
-                                    and user_inst.from_predicted == inst
-                                ):
-                                    skip = True
-                                    break
-                                # Skip if user and predicted instances share same track
-                                if (
-                                    user_inst.track is not None
-                                    and inst.track is not None
-                                    and user_inst.track == inst.track
-                                ):
-                                    skip = True
-                                    break
-                            if not skip:
-                                instances_to_include.append(inst)
-                else:
-                    # If user_instances=False, only include predicted instances
-                    instances_to_include = lf.predicted_instances
-
-                # Now process all the instances we want to include
-                for inst in instances_to_include:
-                    if j < n_tracks:
-                        if return_confidence:
-                            if isinstance(inst, PredictedInstance):
-                                tracks[i, j] = inst.numpy(scores=True)
-                            else:
-                                # For user instances, set confidence to 1.0
-                                points_data = inst.numpy()
-                                confidence = np.ones(
-                                    (points_data.shape[0], 1), dtype="float32"
-                                )
-                                tracks[i, j] = np.hstack((points_data, confidence))
-                        else:
-                            tracks[i, j] = inst.numpy()
-                        j += 1
-            else:  # untracked is False
-                # For tracked instances, organize by track ID
-
-                # Create mapping from track to best instance for this frame
-                track_to_instance = {}
-
-                # First, add predicted instances to the mapping
-                for inst in lf.predicted_instances:
-                    if inst.track is not None:
-                        track_to_instance[inst.track] = inst
-
-                # Then, add user instances to the mapping (if user_instances=True)
-                if user_instances:
-                    for inst in lf.user_instances:
-                        if inst.track is not None:
-                            track_to_instance[inst.track] = inst
-
-                # Process the preferred instances for each track
-                for track in track_to_instance:
-                    inst = track_to_instance[track]
-                    j = self.tracks.index(track)
-
-                    if type(inst) is PredictedInstance:
-                        tracks[i, j] = inst.numpy(scores=return_confidence)
-                    elif type(inst) is Instance:
-                        tracks[i, j, :, :2] = inst.numpy()
-
-                        # If return_confidence is True, add dummy confidence scores
-                        if return_confidence:
-                            tracks[i, j, :, 2] = 1.0
-
-        return tracks
+        return to_numpy(
+            self,
+            video=video,
+            untracked=untracked,
+            return_confidence=return_confidence,
+            user_instances=user_instances,
+        )
 
     @classmethod
     def from_numpy(
@@ -433,127 +306,21 @@ class Labels:
             >>> skeleton = Skeleton(["head", "tail"])
             >>> # Create labels from the array
             >>> labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+
+        Notes:
+            This method now delegates to `sleap_io.codecs.numpy.from_numpy()`.
+            See that function for implementation details.
         """
-        # Check dimensions
-        if len(tracks_arr.shape) != 4:
-            raise ValueError(
-                f"Array must have 4 dimensions (n_frames, n_tracks, n_nodes, 2 or 3), "
-                f"but got {tracks_arr.shape}"
-            )
+        from sleap_io.codecs.numpy import from_numpy
 
-        # Validate videos
-        if not videos:
-            raise ValueError("At least one video must be provided")
-        video = videos[0]  # Use the first video for creating labeled frames
-
-        # Process skeletons input
-        if skeletons is None:
-            raise ValueError("At least one skeleton must be provided")
-        elif isinstance(skeletons, Skeleton):
-            skeletons = [skeletons]
-        elif not skeletons:  # Check for empty list
-            raise ValueError("At least one skeleton must be provided")
-
-        skeleton = skeletons[0]  # Use the first skeleton for creating instances
-        n_nodes = len(skeleton.nodes)
-
-        # Check if tracks_arr contains confidence scores
-        has_confidence = tracks_arr.shape[-1] == 3 or return_confidence
-
-        # Get dimensions
-        n_frames, n_tracks_arr, _ = tracks_arr.shape[:3]
-
-        # Create or validate tracks
-        if tracks is None:
-            # Auto-create tracks if not provided
-            tracks = [Track(f"track_{i}") for i in range(n_tracks_arr)]
-        elif len(tracks) < n_tracks_arr:
-            # Add missing tracks if needed
-            original_len = len(tracks)
-            for i in range(n_tracks_arr - original_len):
-                tracks.append(Track(f"track_{i}"))
-
-        # Create a new empty Labels object
-        labels = cls()
-        labels.videos = list(videos)
-        labels.skeletons = list(skeletons)
-        labels.tracks = list(tracks)
-
-        # Create labeled frames and instances from the array data
-        for i in range(n_frames):
-            frame_idx = i + first_frame
-
-            # Check if this frame has any valid data across all tracks
-            frame_has_valid_data = False
-            for j in range(n_tracks_arr):
-                track_data = tracks_arr[i, j]
-                # Check if at least one node in this track has valid xy coordinates
-                if np.any(~np.isnan(track_data[:, 0])):
-                    frame_has_valid_data = True
-                    break
-
-            # Skip creating a frame if there's no valid data
-            if not frame_has_valid_data:
-                continue
-
-            # Create a new labeled frame
-            labeled_frame = LabeledFrame(video=video, frame_idx=frame_idx)
-            frame_has_valid_instances = False
-
-            # Process each track in this frame
-            for j in range(n_tracks_arr):
-                track = tracks[j]
-                track_data = tracks_arr[i, j]
-
-                # Check if there's any valid data for this track at this frame
-                valid_points = ~np.isnan(track_data[:, 0])
-                if not np.any(valid_points):
-                    continue
-
-                # Create points from numpy data
-                points = track_data[:, :2].copy()
-
-                # Create new instance
-                if has_confidence:
-                    # Get confidence scores
-                    if tracks_arr.shape[-1] == 3:
-                        scores = track_data[:, 2].copy()
-                    else:
-                        scores = np.ones(n_nodes)
-
-                    # Fix NaN scores
-                    scores = np.where(np.isnan(scores), 1.0, scores)
-
-                    # Create instance with confidence scores
-                    new_instance = PredictedInstance.from_numpy(
-                        points_data=points,
-                        skeleton=skeleton,
-                        point_scores=scores,
-                        score=1.0,
-                        track=track,
-                    )
-                else:
-                    # Create instance with default scores
-                    new_instance = PredictedInstance.from_numpy(
-                        points_data=points,
-                        skeleton=skeleton,
-                        point_scores=np.ones(n_nodes),
-                        score=1.0,
-                        track=track,
-                    )
-
-                # Add to frame
-                labeled_frame.instances.append(new_instance)
-                frame_has_valid_instances = True
-
-            # Only add frames that have instances
-            if frame_has_valid_instances:
-                labels.append(labeled_frame, update=False)
-
-        # Update internal references
-        labels.update()
-
-        return labels
+        return from_numpy(
+            tracks_array=tracks_arr,
+            videos=videos,
+            skeletons=skeletons,
+            tracks=tracks,
+            first_frame=first_frame,
+            return_confidence=return_confidence,
+        )
 
     @property
     def video(self) -> Video:
