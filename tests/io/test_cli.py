@@ -200,6 +200,19 @@ def test_show_video_flag():
     assert "Labeled" in out
 
 
+def test_show_video_flag_auto_opens_backend():
+    """Test --video flag auto-opens backends when no explicit flag is given."""
+    runner = CliRunner()
+    path = _data_path("slp/centered_pair_predictions.slp")
+    # Use -v without --open-videos or --no-open-videos to test auto-open behavior
+    result = runner.invoke(cli, ["show", str(path), "-v"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Video Details" in out
+    # Should show backend loaded since -v auto-opens
+    assert "Backend loaded" in out
+
+
 def test_show_tracks_flag():
     """Test --tracks flag shows detailed track info."""
     runner = CliRunner()
