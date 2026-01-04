@@ -2,7 +2,7 @@
 
 Provides a `sio` command with subcommands for inspecting and manipulating
 SLEAP labels and related formats. This module intentionally keeps the
-default behavior light-weight (no video backends by default) to work well
+default behavior light-weight (video support via bundled imageio-ffmpeg) to work well
 in minimal environments and CI.
 """
 

@@ -248,15 +248,14 @@ def get_installation_instructions(
 
         >>> print(sio.get_installation_instructions())
         Video backend installation options:
+          FFMPEG (bundled):        Included by default
           opencv (fastest):        pip install sleap-io[opencv]
-          FFMPEG (most reliable):  pip install sleap-io[ffmpeg]
           pyav (balanced):         pip install sleap-io[pyav]
-          all backends:            pip install sleap-io[all]
     """
     if backend_type == "video":
         instructions = {
             "opencv": "pip install sleap-io[opencv]",
-            "FFMPEG": "pip install sleap-io[ffmpeg]",
+            "FFMPEG": "Included by default (imageio-ffmpeg)",
             "pyav": "pip install sleap-io[pyav]",
         }
 
@@ -266,10 +265,9 @@ def get_installation_instructions(
         else:
             return (
                 "Video backend installation options:\n"
+                "  FFMPEG (bundled):        Included by default\n"
                 "  opencv (fastest):        pip install sleap-io[opencv]\n"
-                "  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]\n"
-                "  pyav (balanced):         pip install sleap-io[pyav]\n"
-                "  all backends:            pip install sleap-io[all]"
+                "  pyav (balanced):         pip install sleap-io[pyav]"
             )
     else:
         instructions = {
@@ -667,12 +665,13 @@ class MediaVideo(VideoBackend):
         else:
             # Enhanced error message with installation instructions
             raise ImportError(
-                "No video backend plugins are installed.\n\n"
-                "Available options:\n"
-                "  opencv (fastest):        pip install sleap-io[opencv]\n"
-                "  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]\n"
-                "  pyav (balanced):         pip install sleap-io[pyav]\n"
-                "  all backends:            pip install sleap-io[all]\n\n"
+                "No video backend plugins are available.\n\n"
+                "The bundled imageio-ffmpeg should be available by default.\n"
+                "If you see this error, try reinstalling sleap-io:\n"
+                "  pip install --force-reinstall sleap-io\n\n"
+                "Alternative backends:\n"
+                "  opencv (fastest):  pip install sleap-io[opencv]\n"
+                "  pyav (balanced):   pip install sleap-io[pyav]\n\n"
                 "For more information, see: https://io.sleap.ai"
             )
 
