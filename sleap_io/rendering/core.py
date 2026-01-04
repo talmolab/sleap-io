@@ -609,7 +609,8 @@ def render_video(
     # Video encoding
     fps: Optional[float] = None,
     codec: str = "libx264",
-    crf: int = 23,
+    crf: int = 25,
+    x264_preset: str = "superfast",
     # Error handling
     require_video: bool = True,
     fallback_color: Optional[tuple[int, int, int]] = None,
@@ -642,7 +643,8 @@ def render_video(
         show_edges: Whether to draw skeleton edges.
         fps: Output frame rate (default: source video fps).
         codec: Video codec for encoding.
-        crf: Constant rate factor (quality, lower=better).
+        crf: Constant rate factor for quality (2-32, lower=better). Default 25.
+        x264_preset: H.264 encoding preset (ultrafast, superfast, fast, medium, slow).
         require_video: If True, raise error if video unavailable.
         fallback_color: RGB background color if video unavailable.
         pre_render_callback: Called before each frame's poses are drawn.
@@ -889,6 +891,7 @@ def render_video(
             fps=fps,
             codec=codec,
             crf=crf,
+            preset=x264_preset,
         ) as writer:
             for frame in rendered_frames:
                 writer(frame)

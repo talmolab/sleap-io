@@ -1522,41 +1522,94 @@ def filenames(
     "-o",
     "--output",
     "output_path",
-    required=True,
+    default=None,
     type=click.Path(path_type=Path),
-    help="Output video file (.mp4, .avi).",
+    help="Output path. Default: {input}.viz.mp4 (video), {input}.lf={N}.png (image).",
 )
+# Frame selection options
+@click.option(
+    "--lf",
+    "lf_index",
+    type=int,
+    default=None,
+    help="Render single labeled frame by index. Outputs PNG image.",
+)
+@click.option(
+    "--frame-idx",
+    "frame_idx",
+    type=int,
+    default=None,
+    help="Render frame by video frame index (with --video-index). Outputs PNG.",
+)
+@click.option(
+    "--start-frame",
+    type=int,
+    default=None,
+    help="Start frame index for video (0-based, inclusive).",
+)
+@click.option(
+    "--end-frame",
+    type=int,
+    default=None,
+    help="End frame index for video (0-based, exclusive). Default: last labeled frame.",
+)
+@click.option(
+    "--video-index",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Video index for multi-video labels.",
+)
+# Quality options
 @click.option(
     "--preset",
     type=click.Choice(["preview", "draft", "final"]),
     default=None,
-    help="Quality preset (preview=0.25x, draft=0.5x, final=1.0x).",
+    help="Quality preset: preview=0.25x, draft=0.5x, final=1.0x scale. Default: 1.0x.",
 )
 @click.option(
     "--scale",
     type=float,
     default=None,
-    help="Scale factor (overrides preset).",
+    help="Scale factor (overrides --preset). Default: 1.0.",
 )
 @click.option(
     "--fps",
     type=float,
     default=None,
-    help="Output FPS (default: source video FPS).",
+    help="Output video FPS. Default: source video FPS.",
 )
+@click.option(
+    "--crf",
+    type=int,
+    default=25,
+    show_default=True,
+    help="Video quality (2-32, lower=better quality, larger file).",
+)
+@click.option(
+    "--x264-preset",
+    "x264_preset",
+    type=click.Choice(
+        ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"]
+    ),
+    default="superfast",
+    show_default=True,
+    help="H.264 encoding speed/compression trade-off.",
+)
+# Appearance options
 @click.option(
     "--color-by",
     type=click.Choice(["auto", "track", "instance", "node"]),
     default="auto",
     show_default=True,
-    help="Color scheme for poses.",
+    help="Color scheme: auto (smart default), track, instance, or node.",
 )
 @click.option(
     "--palette",
     type=str,
     default="glasbey",
     show_default=True,
-    help="Color palette name.",
+    help="Color palette (glasbey, tableau10, distinct, rainbow, etc.).",
 )
 @click.option(
     "--marker-shape",
@@ -1584,42 +1637,33 @@ def filenames(
     type=float,
     default=1.0,
     show_default=True,
-    help="Transparency (0.0-1.0).",
+    help="Pose overlay transparency (0.0-1.0).",
 )
 @click.option(
     "--no-nodes",
     is_flag=True,
-    help="Hide node markers.",
+    default=False,
+    help="Hide node markers. Default: show nodes.",
 )
 @click.option(
     "--no-edges",
     is_flag=True,
-    help="Hide skeleton edges.",
-)
-@click.option(
-    "--start",
-    type=int,
-    default=None,
-    help="Start frame index.",
-)
-@click.option(
-    "--end",
-    type=int,
-    default=None,
-    help="End frame index.",
-)
-@click.option(
-    "--video-index",
-    type=int,
-    default=0,
-    help="Video index for multi-video labels.",
+    default=False,
+    help="Hide skeleton edges. Default: show edges.",
 )
 def render(
     input_path: Path,
-    output_path: Path,
+    output_path: Optional[Path],
+    lf_index: Optional[int],
+    frame_idx: Optional[int],
+    start_frame: Optional[int],
+    end_frame: Optional[int],
+    video_index: int,
     preset: Optional[str],
     scale: Optional[float],
     fps: Optional[float],
+    crf: int,
+    x264_preset: str,
     color_by: str,
     palette: str,
     marker_shape: str,
@@ -1628,23 +1672,34 @@ def render(
     alpha: float,
     no_nodes: bool,
     no_edges: bool,
-    start: Optional[int],
-    end: Optional[int],
-    video_index: int,
 ) -> None:
-    """Render pose predictions as video.
+    """Render pose predictions as video or single image.
 
-    Creates video files with pose annotations overlaid on video frames.
+    [bold]Video mode[/] (default): Renders all labeled frames to a video file.
+
+    [bold]Image mode[/]: Renders a single frame to PNG using --lf or --frame-idx.
 
     [dim]Examples:[/]
 
-        $ sio render -i predictions.slp -o output.mp4
+        [bold]Video rendering:[/]
 
-        $ sio render -i predictions.slp -o preview.mp4 --preset preview
+        $ sio render -i predictions.slp                      # -> predictions.viz.mp4
 
-        $ sio render -i predictions.slp -o output.mp4 --color-by track
+        $ sio render -i predictions.slp -o output.mp4        # Explicit output
 
-        $ sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
+        $ sio render -i predictions.slp --preset preview     # Fast 0.25x preview
+
+        $ sio render -i predictions.slp --start-frame 100 --end-frame 200
+
+        $ sio render -i predictions.slp --fps 15             # Slow motion
+
+        [bold]Single image rendering:[/]
+
+        $ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
+
+        $ sio render -i predictions.slp --frame-idx 42       # -> *.frame_idx=42.png
+
+        $ sio render -i labels.slp --lf 5 -o frame.png       # Explicit output
     """
     # Load labels
     try:
@@ -1657,6 +1712,32 @@ def render(
             f"Input is not a labels file (got {type(labels).__name__})"
         )
 
+    # Determine render mode: single image vs video
+    single_image_mode = lf_index is not None or frame_idx is not None
+
+    # Validate conflicting options
+    if single_image_mode and (start_frame is not None or end_frame is not None):
+        raise click.ClickException(
+            "Cannot use --start-frame/--end-frame with --lf or --frame-idx. "
+            "Use --lf for single image or omit it for video."
+        )
+
+    if lf_index is not None and frame_idx is not None:
+        raise click.ClickException("Cannot use both --lf and --frame-idx. Choose one.")
+
+    # Determine output path
+    if output_path is None:
+        input_stem = input_path.stem
+        if single_image_mode:
+            if lf_index is not None:
+                output_path = input_path.with_name(f"{input_stem}.lf={lf_index}.png")
+            else:
+                output_path = input_path.with_name(
+                    f"{input_stem}.video={video_index}.frame_idx={frame_idx}.png"
+                )
+        else:
+            output_path = input_path.with_suffix(".viz.mp4")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Handle scale/preset
@@ -1668,26 +1749,79 @@ def render(
         effective_scale = preset_scales.get(preset, 1.0)
 
     try:
-        from sleap_io.rendering import render_video
+        if single_image_mode:
+            # Single image rendering
+            from sleap_io.rendering import render_image
 
-        render_video(
-            labels,
-            output_path,
-            video=video_index,
-            scale=effective_scale,
-            fps=fps,
-            color_by=color_by,
-            palette=palette,
-            marker_shape=marker_shape,
-            marker_size=marker_size,
-            line_width=line_width,
-            alpha=alpha,
-            show_nodes=not no_nodes,
-            show_edges=not no_edges,
-            start=start,
-            end=end,
-            show_progress=True,
-        )
+            if lf_index is not None:
+                # Render by labeled frame index
+                if lf_index < 0 or lf_index >= len(labels.labeled_frames):
+                    n_lf = len(labels.labeled_frames)
+                    raise click.ClickException(
+                        f"--lf {lf_index} out of range. "
+                        f"Labels has {n_lf} labeled frames (0-{n_lf - 1})."
+                    )
+                render_image(
+                    labels,
+                    output=output_path,
+                    frame_idx=lf_index,
+                    scale=effective_scale,
+                    color_by=color_by,
+                    palette=palette,
+                    marker_shape=marker_shape,
+                    marker_size=marker_size,
+                    line_width=line_width,
+                    alpha=alpha,
+                    show_nodes=not no_nodes,
+                    show_edges=not no_edges,
+                )
+            else:
+                # Render by video + frame_idx
+                if video_index >= len(labels.videos):
+                    n_vid = len(labels.videos)
+                    raise click.ClickException(
+                        f"--video-index {video_index} out of range. "
+                        f"Labels has {n_vid} videos (0-{n_vid - 1})."
+                    )
+                video = labels.videos[video_index]
+                render_image(
+                    labels,
+                    output=output_path,
+                    video_frame=(video, frame_idx),
+                    scale=effective_scale,
+                    color_by=color_by,
+                    palette=palette,
+                    marker_shape=marker_shape,
+                    marker_size=marker_size,
+                    line_width=line_width,
+                    alpha=alpha,
+                    show_nodes=not no_nodes,
+                    show_edges=not no_edges,
+                )
+        else:
+            # Video rendering
+            from sleap_io.rendering import render_video
+
+            render_video(
+                labels,
+                output_path,
+                video=video_index,
+                scale=effective_scale,
+                fps=fps,
+                crf=crf,
+                x264_preset=x264_preset,
+                color_by=color_by,
+                palette=palette,
+                marker_shape=marker_shape,
+                marker_size=marker_size,
+                line_width=line_width,
+                alpha=alpha,
+                show_nodes=not no_nodes,
+                show_edges=not no_edges,
+                start=start_frame,
+                end=end_frame,
+                show_progress=True,
+            )
     except ImportError:
         raise click.ClickException(
             "Rendering requires optional dependencies. "
