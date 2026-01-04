@@ -578,10 +578,10 @@ last_frame = video[-1]
     Video backends are optional. Install the backend you need:
 
     ```bash
+    # imageio-ffmpeg is included by default
     pip install sleap-io[opencv]  # OpenCV backend (fastest)
-    pip install sleap-io[ffmpeg]   # FFMPEG backend (most reliable, auto-selected)
     pip install sleap-io[pyav]     # PyAV backend (balanced)
-    pip install sleap-io[all]      # All backends
+    pip install sleap-io[all]      # All optional backends
     ```
 
     To check which backends are available or get installation help:
@@ -627,7 +627,7 @@ import sleap_io as sio
 sio.set_default_video_plugin("opencv")
 video = sio.load_video("test.mp4")
 
-# Or use imageio-ffmpeg (default, always available)
+# Or use imageio-ffmpeg (bundled, always available)
 sio.set_default_video_plugin("FFMPEG")
 video = sio.load_video("test.mp4")
 
@@ -644,8 +644,9 @@ print(sio.get_default_video_plugin())  # "FFMPEG"
     - ❌ Frame seeking may be less accurate for some codecs
     - 📦 Requires: `pip install sleap-io[opencv]` or `sleap-io[all]`
 
-    **imageio-ffmpeg** (`FFMPEG`):
+    **imageio-ffmpeg** (`FFMPEG`) - *bundled by default*:
 
+    - ✅ Works out of the box (bundled with sleap-io)
     - ✅ More reliable and cross-platform
     - ✅ Better seeking accuracy
     - ✅ Always installed with sleap-io (default)
