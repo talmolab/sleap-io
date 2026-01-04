@@ -994,7 +994,7 @@ def test_installation_instructions():
     assert "pip install sleap-io[opencv]" in opencv_instructions
 
     ffmpeg_instructions = sio.get_installation_instructions("FFMPEG")
-    assert "pip install sleap-io[ffmpeg]" in ffmpeg_instructions
+    assert "Included by default" in ffmpeg_instructions
 
     pyav_instructions = sio.get_installation_instructions("pyav")
     assert "pip install sleap-io[pyav]" in pyav_instructions
@@ -1097,11 +1097,10 @@ def test_no_video_backends_error(monkeypatch):
 
         # Check error message contains helpful installation instructions
         error_msg = str(exc_info.value)
-        assert "No video backend plugins are installed" in error_msg
+        assert "No video backend plugins are available" in error_msg
+        assert "bundled imageio-ffmpeg should be available" in error_msg
         assert "pip install sleap-io[opencv]" in error_msg
-        assert "pip install sleap-io[ffmpeg]" in error_msg
         assert "pip install sleap-io[pyav]" in error_msg
-        assert "pip install sleap-io[all]" in error_msg
         assert "io.sleap.ai" in error_msg
 
     finally:
