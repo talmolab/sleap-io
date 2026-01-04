@@ -3977,7 +3977,6 @@ def test_labels_copy_preserves_skeleton_references(slp_minimal):
 
 def test_labels_copy_video_backend(centered_pair_low_quality_video):
     """Test video backends are properly handled in copy."""
-
     labels = Labels([LabeledFrame(video=centered_pair_low_quality_video, frame_idx=0)])
 
     # Open backend
@@ -4292,10 +4291,10 @@ def test_labels_copy_performance_profile(
 
     # Performance should scale roughly linearly with instance count
     # (this is a loose check, not a strict requirement)
-    if results["centered_pair"]["instances"] > 0 and results["minimal"]["instances"] > 0:
-        scale_factor = (
-            results["centered_pair"]["instances"] / results["minimal"]["instances"]
-        )
+    cp_instances = results["centered_pair"]["instances"]
+    min_instances = results["minimal"]["instances"]
+    if cp_instances > 0 and min_instances > 0:
+        scale_factor = cp_instances / min_instances
         time_ratio = results["centered_pair"]["time_ms"] / max(
             results["minimal"]["time_ms"], 0.001
         )
