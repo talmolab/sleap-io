@@ -106,7 +106,7 @@ class Video:
         new_video = Video(
             filename=self.filename,
             backend=None,
-            backend_metadata=self.backend_metadata,
+            backend_metadata=self.backend_metadata.copy(),
             source_video=self.source_video,
             open_backend=self.open_backend,
         )
