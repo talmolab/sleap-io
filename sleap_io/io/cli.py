@@ -1529,32 +1529,35 @@ def filenames(
 # Frame selection options
 @click.option(
     "--lf",
-    "lf_index",
+    "lf_ind",
     type=int,
     default=None,
     help="Render single labeled frame by index. Outputs PNG image.",
 )
 @click.option(
-    "--frame-idx",
+    "--frame",
     "frame_idx",
     type=int,
     default=None,
-    help="Render frame by video frame index (with --video-index). Outputs PNG.",
+    help="Render frame by video frame index (with --video). Outputs PNG.",
 )
 @click.option(
-    "--start-frame",
+    "--start",
+    "start_frame_idx",
     type=int,
     default=None,
     help="Start frame index for video (0-based, inclusive).",
 )
 @click.option(
-    "--end-frame",
+    "--end",
+    "end_frame_idx",
     type=int,
     default=None,
     help="End frame index for video (0-based, exclusive). Default: last labeled frame.",
 )
 @click.option(
-    "--video-index",
+    "--video",
+    "video_ind",
     type=int,
     default=0,
     show_default=True,
@@ -1654,11 +1657,11 @@ def filenames(
 def render(
     input_path: Path,
     output_path: Optional[Path],
-    lf_index: Optional[int],
+    lf_ind: Optional[int],
     frame_idx: Optional[int],
-    start_frame: Optional[int],
-    end_frame: Optional[int],
-    video_index: int,
+    start_frame_idx: Optional[int],
+    end_frame_idx: Optional[int],
+    video_ind: int,
     preset: Optional[str],
     scale: Optional[float],
     fps: Optional[float],
@@ -1677,7 +1680,7 @@ def render(
 
     [bold]Video mode[/] (default): Renders all labeled frames to a video file.
 
-    [bold]Image mode[/]: Renders a single frame to PNG using --lf or --frame-idx.
+    [bold]Image mode[/]: Renders a single frame to PNG using --lf or --frame.
 
     [dim]Examples:[/]
 
@@ -1689,7 +1692,7 @@ def render(
 
         $ sio render -i predictions.slp --preset preview     # Fast 0.25x preview
 
-        $ sio render -i predictions.slp --start-frame 100 --end-frame 200
+        $ sio render -i predictions.slp --start 100 --end 200
 
         $ sio render -i predictions.slp --fps 15             # Slow motion
 
@@ -1697,7 +1700,7 @@ def render(
 
         $ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
 
-        $ sio render -i predictions.slp --frame-idx 42       # -> *.frame_idx=42.png
+        $ sio render -i predictions.slp --frame 42           # -> *.frame=42.png
 
         $ sio render -i labels.slp --lf 5 -o frame.png       # Explicit output
     """
@@ -1713,27 +1716,27 @@ def render(
         )
 
     # Determine render mode: single image vs video
-    single_image_mode = lf_index is not None or frame_idx is not None
+    single_image_mode = lf_ind is not None or frame_idx is not None
 
     # Validate conflicting options
-    if single_image_mode and (start_frame is not None or end_frame is not None):
+    if single_image_mode and (start_frame_idx is not None or end_frame_idx is not None):
         raise click.ClickException(
-            "Cannot use --start-frame/--end-frame with --lf or --frame-idx. "
+            "Cannot use --start/--end with --lf or --frame. "
             "Use --lf for single image or omit it for video."
         )
 
-    if lf_index is not None and frame_idx is not None:
-        raise click.ClickException("Cannot use both --lf and --frame-idx. Choose one.")
+    if lf_ind is not None and frame_idx is not None:
+        raise click.ClickException("Cannot use both --lf and --frame. Choose one.")
 
     # Determine output path
     if output_path is None:
         input_stem = input_path.stem
         if single_image_mode:
-            if lf_index is not None:
-                output_path = input_path.with_name(f"{input_stem}.lf={lf_index}.png")
+            if lf_ind is not None:
+                output_path = input_path.with_name(f"{input_stem}.lf={lf_ind}.png")
             else:
                 output_path = input_path.with_name(
-                    f"{input_stem}.video={video_index}.frame_idx={frame_idx}.png"
+                    f"{input_stem}.video={video_ind}.frame={frame_idx}.png"
                 )
         else:
             output_path = input_path.with_suffix(".viz.mp4")
@@ -1753,18 +1756,18 @@ def render(
             # Single image rendering
             from sleap_io.rendering import render_image
 
-            if lf_index is not None:
+            if lf_ind is not None:
                 # Render by labeled frame index
-                if lf_index < 0 or lf_index >= len(labels.labeled_frames):
+                if lf_ind < 0 or lf_ind >= len(labels.labeled_frames):
                     n_lf = len(labels.labeled_frames)
                     raise click.ClickException(
-                        f"--lf {lf_index} out of range. "
+                        f"--lf {lf_ind} out of range. "
                         f"Labels has {n_lf} labeled frames (0-{n_lf - 1})."
                     )
                 render_image(
                     labels,
                     output=output_path,
-                    frame_idx=lf_index,
+                    lf_ind=lf_ind,
                     scale=effective_scale,
                     color_by=color_by,
                     palette=palette,
@@ -1777,17 +1780,18 @@ def render(
                 )
             else:
                 # Render by video + frame_idx
-                if video_index >= len(labels.videos):
+                if video_ind >= len(labels.videos):
                     n_vid = len(labels.videos)
                     raise click.ClickException(
-                        f"--video-index {video_index} out of range. "
+                        f"--video {video_ind} out of range. "
                         f"Labels has {n_vid} videos (0-{n_vid - 1})."
                     )
-                video = labels.videos[video_index]
+                video = labels.videos[video_ind]
                 render_image(
                     labels,
                     output=output_path,
-                    video_frame=(video, frame_idx),
+                    video=video,
+                    frame_idx=frame_idx,
                     scale=effective_scale,
                     color_by=color_by,
                     palette=palette,
@@ -1805,7 +1809,7 @@ def render(
             render_video(
                 labels,
                 output_path,
-                video=video_index,
+                video=video_ind,
                 scale=effective_scale,
                 fps=fps,
                 crf=crf,
@@ -1818,8 +1822,8 @@ def render(
                 alpha=alpha,
                 show_nodes=not no_nodes,
                 show_edges=not no_edges,
-                start=start_frame,
-                end=end_frame,
+                start=start_frame_idx,
+                end=end_frame_idx,
                 show_progress=True,
             )
     except ImportError:

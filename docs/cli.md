@@ -97,7 +97,7 @@ sio filenames -i labels.slp -o out.slp --prefix /old/path /new/path
 # Render video with pose overlays (requires: pip install sleap-io[all])
 sio render -i predictions.slp                                 # -> predictions.viz.mp4
 sio render -i predictions.slp --preset preview                # Fast 0.25x preview
-sio render -i predictions.slp --start-frame 100 --end-frame 200
+sio render -i predictions.slp --start 100 --end 200
 sio render -i predictions.slp --lf 0                          # Single frame -> PNG
 sio render -i predictions.slp --color-by track --marker-shape diamond
 ```
@@ -758,7 +758,7 @@ sio render -i <input> --lf <index> [-o <output>] [options]
 
 **Video mode** (default): Renders all labeled frames to a video file.
 
-**Image mode**: Renders a single frame to a PNG image. Use `--lf` or `--frame-idx`.
+**Image mode**: Renders a single frame to a PNG image. Use `--lf` or `--frame`.
 
 #### Basic Usage
 
@@ -773,7 +773,7 @@ sio render -i predictions.slp -o output.mp4
 sio render -i predictions.slp --preset preview
 
 # Render a specific clip
-sio render -i predictions.slp --start-frame 100 --end-frame 200
+sio render -i predictions.slp --start 100 --end 200
 
 # Render a single frame to PNG
 sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
@@ -793,10 +793,10 @@ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--lf` | none | Render single labeled frame by index. Outputs PNG. |
-| `--frame-idx` | none | Render single frame by video frame index (use with `--video-index`). Outputs PNG. |
-| `--start-frame` | first labeled | Start frame index for video (0-based, inclusive) |
-| `--end-frame` | last labeled | End frame index for video (0-based, exclusive) |
-| `--video-index` | 0 | Video index for multi-video labels |
+| `--frame` | none | Render single frame by video frame index (use with `--video`). Outputs PNG. |
+| `--start` | first labeled | Start frame index for video (0-based, inclusive) |
+| `--end` | last labeled | End frame index for video (0-based, exclusive) |
+| `--video` | 0 | Video index for multi-video labels |
 
 ##### Quality Options
 
@@ -831,8 +831,8 @@ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
 sio render -i predictions.slp --lf 42              # -> predictions.lf=42.png
 
 # Render specific video frame by index
-sio render -i predictions.slp --frame-idx 100      # -> predictions.video=0.frame_idx=100.png
-sio render -i predictions.slp --frame-idx 100 --video-index 1
+sio render -i predictions.slp --frame 100          # -> predictions.video=0.frame=100.png
+sio render -i predictions.slp --frame 100 --video 1
 
 # Explicit output path
 sio render -i predictions.slp --lf 5 -o frame.png
@@ -840,7 +840,7 @@ sio render -i predictions.slp --lf 5 -o frame.png
 
 !!! tip "Labeled frame vs frame index"
     - `--lf N` renders the Nth labeled frame in the file (regardless of video frame number)
-    - `--frame-idx N` renders video frame N (must have predictions at that frame)
+    - `--frame N` renders video frame N (must have predictions at that frame)
 
 #### Video Frame Ranges
 
@@ -848,13 +848,13 @@ Render specific portions of the video:
 
 ```bash
 # Frames 100 to 200 (0-based, end is exclusive)
-sio render -i predictions.slp --start-frame 100 --end-frame 200
+sio render -i predictions.slp --start 100 --end 200
 
 # From frame 500 to end
-sio render -i predictions.slp --start-frame 500
+sio render -i predictions.slp --start 500
 
 # First 100 frames
-sio render -i predictions.slp --end-frame 100
+sio render -i predictions.slp --end 100
 ```
 
 #### Adjusting Playback Speed
@@ -962,7 +962,7 @@ For labels with multiple videos, select which video to render:
 
 ```bash
 # Render the second video (0-indexed)
-sio render -i multiview.slp --video-index 1
+sio render -i multiview.slp --video 1
 ```
 
 #### Example Workflow
@@ -972,7 +972,7 @@ sio render -i multiview.slp --video-index 1
 sio render -i predictions.slp --preset preview
 
 # 2. Check a specific section
-sio render -i predictions.slp --start-frame 500 --end-frame 600 --preset draft
+sio render -i predictions.slp --start 500 --end 600 --preset draft
 
 # 3. Render a single interesting frame
 sio render -i predictions.slp --lf 42 -o highlight.png

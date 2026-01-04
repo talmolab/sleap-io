@@ -344,8 +344,9 @@ def render_image(
     output: Optional[Union[str, Path]] = None,
     *,
     # Frame specification (for Labels input)
+    lf_ind: Optional[int] = None,
+    video: Optional[Union["Video", int]] = None,
     frame_idx: Optional[int] = None,
-    video_frame: Optional[tuple["Video", int]] = None,
     # Image override
     image: Optional[np.ndarray] = None,
     # Appearance
@@ -371,8 +372,9 @@ def render_image(
     Args:
         source: LabeledFrame, Labels (with frame specifier), or list of instances.
         output: Output image path (PNG/JPEG). If None, only returns array.
-        frame_idx: Frame index when source is Labels.
-        video_frame: (video, frame_idx) tuple when source is Labels.
+        lf_ind: LabeledFrame index within Labels.labeled_frames (when source is Labels).
+        video: Video object or video index (used with frame_idx when source is Labels).
+        frame_idx: Video frame index (0-based, used with video when source is Labels).
         image: Override image array (H, W) or (H, W, C) uint8. Fetched from
             LabeledFrame if not provided.
         color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
@@ -400,7 +402,8 @@ def render_image(
     Example:
         >>> lf = labels.labeled_frames[0]
         >>> img = sio.render_image(lf)
-        >>> sio.render_image(labels, frame_idx=0, output="frame.png")
+        >>> sio.render_image(labels, lf_ind=0, output="frame.png")
+        >>> sio.render_image(labels, video=0, frame_idx=42, output="frame.png")
     """
     try:
         import skia  # noqa: F401
@@ -415,17 +418,21 @@ def render_image(
 
     # Resolve source to LabeledFrame or instances
     if isinstance(source, Labels):
-        if video_frame is not None:
-            video, fidx = video_frame
-            lf_list = source.find(video, fidx)
+        if video is not None and frame_idx is not None:
+            # Render by video + frame_idx
+            target_video = source.videos[video] if isinstance(video, int) else video
+            lf_list = source.find(target_video, frame_idx)
             if not lf_list:
                 raise ValueError(
-                    f"No labeled frame found for video {video} at frame {fidx}"
+                    f"No labeled frame found for video {target_video} "
+                    f"at frame {frame_idx}"
                 )
             lf = lf_list[0]
-        elif frame_idx is not None:
-            lf = source.labeled_frames[frame_idx]
+        elif lf_ind is not None:
+            # Render by labeled frame index
+            lf = source.labeled_frames[lf_ind]
         else:
+            # Default to first labeled frame
             lf = source.labeled_frames[0]
 
         instances = list(lf.instances)
