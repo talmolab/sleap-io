@@ -152,12 +152,13 @@ The default view shows:
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--skeleton` | `-s` | Show detailed skeleton tables (nodes, edges, symmetries) |
-| `--video` | `-v` | Show detailed video info (path, backend, status) |
+| `--video` | `-v` | Show detailed video info (opens backends by default) |
 | `--tracks` | `-t` | Show track table with instance counts per track |
 | `--provenance` | `-p` | Show provenance/metadata from the file |
 | `--all` | `-a` | Show all details (combines all flags above) |
 | `--lf N` | | Show details for labeled frame at index N |
-| `--open-videos` | | Load video backends (slower, enables live video info) |
+| `--open-videos` | | Force open video backends |
+| `--no-open-videos` | | Don't open video backends (overrides -v default) |
 
 #### Detailed Skeleton View
 

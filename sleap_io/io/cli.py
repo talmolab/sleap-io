@@ -791,8 +791,8 @@ def _print_provenance(labels: Labels) -> None:
 @click.option(
     "open_videos",
     "--open-videos/--no-open-videos",
-    default=False,
-    help="Open video backends when reading files (defaults to no).",
+    default=None,
+    help="Open video backends. Default: only when -v/--all is used.",
 )
 @click.option(
     "lf_index",
@@ -813,7 +813,7 @@ def _print_provenance(labels: Labels) -> None:
     "--video",
     "-v",
     is_flag=True,
-    help="Print detailed video info.",
+    help="Print detailed video info (opens backends by default).",
 )
 @click.option(
     "tracks",
@@ -838,7 +838,7 @@ def _print_provenance(labels: Labels) -> None:
 )
 def show(
     path: Path,
-    open_videos: bool,
+    open_videos: Optional[bool],
     lf_index: Optional[int],
     skeleton: bool,
     video: bool,
@@ -867,6 +867,11 @@ def show(
         tracks = True
         provenance = True
 
+    # Determine whether to open videos:
+    # - If explicitly set via --open-videos or --no-open-videos, use that
+    # - Otherwise, open videos only when -v or --all is used
+    if open_videos is None:
+        open_videos = video or show_all
     obj = io_main.load_file(str(path), open_videos=open_videos)
 
     if isinstance(obj, Labels):
