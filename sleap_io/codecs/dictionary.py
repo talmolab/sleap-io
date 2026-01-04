@@ -94,10 +94,15 @@ def to_dict(
         if skeleton.symmetries:
             symmetries_list = []
             for symmetry in skeleton.symmetries:
-                symmetries_list.append([
-                    skeleton.nodes.index(symmetry.nodes[0]),
-                    skeleton.nodes.index(symmetry.nodes[1])
-                ])
+                # Convert set to list for indexing and get indices
+                nodes_list = list(symmetry.nodes)
+                indices = [
+                    skeleton.nodes.index(nodes_list[0]),
+                    skeleton.nodes.index(nodes_list[1])
+                ]
+                # Sort indices for consistent ordering
+                indices.sort()
+                symmetries_list.append(indices)
             skeleton_dict["symmetries"] = symmetries_list
 
         skeletons_list.append(skeleton_dict)

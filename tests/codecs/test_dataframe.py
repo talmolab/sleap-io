@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from sleap_io import Instance, Labels, LabeledFrame, PredictedInstance, Skeleton, Track, Video
+from sleap_io import Instance, Labels, LabeledFrame, PredictedInstance, Skeleton, Track, Video, load_slp
 from sleap_io.codecs.dataframe import DataFrameFormat, to_dataframe
 
 
@@ -18,9 +18,9 @@ def test_dataframe_format_enum():
 
 def test_to_dataframe_points_format(slp_typical):
     """Test conversion to points format."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
-    df = to_dataframe(labels, format="points")
+    df = to_dataframe(labels, format="points", include_video=True)
 
     assert isinstance(df, pd.DataFrame)
     assert not df.empty
@@ -187,7 +187,7 @@ def test_to_dataframe_frames_format():
 
 def test_to_dataframe_multi_index_format(slp_typical):
     """Test conversion to multi-index format."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     df = to_dataframe(labels, format="multi_index")
 

@@ -3,13 +3,13 @@
 import numpy as np
 import pytest
 
-from sleap_io import Instance, Labels, LabeledFrame, PredictedInstance, Skeleton, Track, Video
+from sleap_io import Instance, Labels, LabeledFrame, PredictedInstance, Skeleton, Track, Video, load_slp
 from sleap_io.codecs.numpy import from_numpy, to_numpy
 
 
 def test_to_numpy_basic(slp_typical):
     """Test basic conversion to numpy array."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     arr = to_numpy(labels)
 
@@ -21,7 +21,7 @@ def test_to_numpy_basic(slp_typical):
 
 def test_to_numpy_with_confidence(slp_typical):
     """Test conversion with confidence scores."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     arr = to_numpy(labels, return_confidence=True)
 
@@ -31,7 +31,7 @@ def test_to_numpy_with_confidence(slp_typical):
 
 def test_to_numpy_matches_labels_method(slp_typical):
     """Test that to_numpy matches Labels.numpy() output."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     arr1 = to_numpy(labels)
     arr2 = labels.numpy()
@@ -41,7 +41,7 @@ def test_to_numpy_matches_labels_method(slp_typical):
 
 def test_to_numpy_with_confidence_matches_labels_method(slp_typical):
     """Test that to_numpy with confidence matches Labels.numpy()."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     arr1 = to_numpy(labels, return_confidence=True)
     arr2 = labels.numpy(return_confidence=True)
@@ -92,9 +92,9 @@ def test_from_numpy_with_confidence():
     inst = labels.labeled_frames[0].instances[0]
     assert isinstance(inst, PredictedInstance)
 
-    # Check scores
-    assert inst.points[0]["score"] == 0.95
-    assert inst.points[1]["score"] == 0.98
+    # Check scores (use approximate comparison for floating point)
+    assert inst.points[0]["score"] == pytest.approx(0.95, abs=1e-6)
+    assert inst.points[1]["score"] == pytest.approx(0.98, abs=1e-6)
 
 
 def test_from_numpy_matches_labels_method():
@@ -214,7 +214,7 @@ def test_roundtrip_numpy():
 
 def test_to_numpy_user_only(slp_typical):
     """Test getting only user instances."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     arr = to_numpy(labels, user_instances=True, predicted_instances=False)
 
@@ -224,7 +224,7 @@ def test_to_numpy_user_only(slp_typical):
 
 def test_to_numpy_predicted_only(slp_typical):
     """Test getting only predicted instances."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     arr = to_numpy(labels, user_instances=False, predicted_instances=True)
 
@@ -234,7 +234,7 @@ def test_to_numpy_predicted_only(slp_typical):
 
 def test_to_numpy_video_selection(slp_typical):
     """Test selecting specific video."""
-    labels = slp_typical
+    labels = load_slp(slp_typical)
 
     if len(labels.videos) > 0:
         # Select by index
