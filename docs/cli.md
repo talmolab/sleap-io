@@ -9,24 +9,20 @@ sleap-io provides a command-line interface (CLI) for inspecting and converting p
 Run CLI commands instantly using [`uvx`](https://docs.astral.sh/uv/) without installing:
 
 ```bash
-# Inspect a labels file (no video access needed)
+# Inspect a labels file
 uvx sleap-io show labels.slp
 
-# Convert between formats (no video access needed)
+# Convert between formats
 uvx sleap-io convert -i labels.slp -o labels.nwb
+
+# Embed frames in output (video reading works out of the box)
+uvx sleap-io convert -i labels.slp -o labels.pkg.slp --embed user
+
+# Export to Ultralytics format
+uvx sleap-io convert -i labels.slp -o dataset/ --to ultralytics
 
 # Check version
 uvx sleap-io --version
-```
-
-For operations that require video access (embedding frames, exporting images), use the `[all]` extra:
-
-```bash
-# Embed frames in output (requires video backends)
-uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o labels.pkg.slp --embed user
-
-# Export to Ultralytics format (requires reading video frames)
-uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o dataset/ --to ultralytics
 ```
 
 ### Permanent Installation with `uv tool`
@@ -34,7 +30,10 @@ uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o dataset/ --to ultra
 For regular use, install sleap-io as a global tool:
 
 ```bash
-# Install with all video backends (recommended for full functionality)
+# Basic install (includes video support via imageio-ffmpeg)
+uv tool install sleap-io
+
+# Or with faster video backends (OpenCV, PyAV)
 uv tool install "sleap-io[all]"
 
 # Now use the short command
@@ -45,14 +44,14 @@ sio convert -i labels.slp -o labels.nwb
 !!! tip "The `sio` command"
     After installation with `uv tool install`, you can use either `sio` or `sleap-io` as the command name. The short `sio` form is recommended for convenience.
 
-!!! info "When do you need video backends?"
-    The `[all]` extra installs video backends (OpenCV, PyAV, imageio-ffmpeg) needed for:
+!!! info "When do you need the `[all]` extra?"
+    Video support works out of the box via the bundled imageio-ffmpeg backend.
+    The `[all]` extra installs faster video backends (OpenCV, PyAV) for improved performance.
+    
+    Use `[all]` when:
 
-    - Embedding frames with `sio convert --embed`
-    - Converting to Ultralytics format (exports images)
-    - Using `--open-videos` to load video metadata from files
-
-    Basic inspection (`sio show`) and format conversion work without video backends.
+    - Processing many videos or large files (OpenCV is ~2-3x faster)
+    - You need specific codec support from PyAV
 
 ## Quick Reference
 
@@ -153,12 +152,13 @@ The default view shows:
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--skeleton` | `-s` | Show detailed skeleton tables (nodes, edges, symmetries) |
-| `--video` | `-v` | Show detailed video info (path, backend, status) |
+| `--video` | `-v` | Show detailed video info (opens backends by default) |
 | `--tracks` | `-t` | Show track table with instance counts per track |
 | `--provenance` | `-p` | Show provenance/metadata from the file |
 | `--all` | `-a` | Show all details (combines all flags above) |
 | `--lf N` | | Show details for labeled frame at index N |
-| `--open-videos` | | Load video backends (slower, enables live video info) |
+| `--open-videos` | | Force open video backends |
+| `--no-open-videos` | | Don't open video backends (overrides -v default) |
 
 #### Detailed Skeleton View
 
@@ -506,7 +506,7 @@ sio split -i labels.slp -o splits/ --embed user --seed 42
 This creates `train.pkg.slp`, `val.pkg.slp`, and optionally `test.pkg.slp` with frames embedded directly in the files.
 
 !!! info "Video access required"
-    Embedding frames requires video backends. Use `uvx --from "sleap-io[all]" sleap-io split ...` or install with `uv tool install "sleap-io[all]"`.
+    Embedding frames requires video file access. Video reading works out of the box via the bundled imageio-ffmpeg.
 
 #### Reproducibility
 
@@ -870,7 +870,7 @@ Use `uvx` in CI pipelines without installation overhead:
   run: uvx sleap-io convert -i labels.slp -o labels.nwb
 
 - name: Create package with embedded frames
-  run: uvx --from "sleap-io[all]" sleap-io convert -i labels.slp -o labels.pkg.slp --embed user
+  run: uvx sleap-io convert -i labels.slp -o labels.pkg.slp --embed user
 ```
 
 ---
