@@ -797,6 +797,7 @@ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
 | `--start` | first labeled | Start frame index for video (0-based, inclusive) |
 | `--end` | last labeled | End frame index for video (0-based, exclusive) |
 | `--video` | 0 | Video index for multi-video labels |
+| `--all-frames` | false | Render all video frames, not just those with annotations |
 
 ##### Quality Options
 

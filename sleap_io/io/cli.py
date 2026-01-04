@@ -1563,6 +1563,13 @@ def filenames(
     show_default=True,
     help="Video index for multi-video labels.",
 )
+@click.option(
+    "--all-frames",
+    "all_frames",
+    is_flag=True,
+    default=False,
+    help="Render all video frames, not just those with annotations.",
+)
 # Quality options
 @click.option(
     "--preset",
@@ -1662,6 +1669,7 @@ def render(
     start_frame_idx: Optional[int],
     end_frame_idx: Optional[int],
     video_ind: int,
+    all_frames: bool,
     preset: Optional[str],
     scale: Optional[float],
     fps: Optional[float],
@@ -1695,6 +1703,8 @@ def render(
         $ sio render -i predictions.slp --start 100 --end 200
 
         $ sio render -i predictions.slp --fps 15             # Slow motion
+
+        $ sio render -i predictions.slp --all-frames         # Include unlabeled frames
 
         [bold]Single image rendering:[/]
 
@@ -1824,6 +1834,7 @@ def render(
                 show_edges=not no_edges,
                 start=start_frame_idx,
                 end=end_frame_idx,
+                include_unlabeled=all_frames,
                 show_progress=True,
             )
     except ImportError:

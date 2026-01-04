@@ -601,6 +601,7 @@ def render_video(
     frame_inds: Optional[list[int]] = None,
     start: Optional[int] = None,
     end: Optional[int] = None,
+    include_unlabeled: bool = False,
     # Quality/scale
     preset: Optional[Literal["preview", "draft", "final"]] = None,
     scale: float = 1.0,
@@ -638,6 +639,8 @@ def render_video(
         frame_inds: Specific frame indices to render.
         start: Start frame index (inclusive).
         end: End frame index (exclusive).
+        include_unlabeled: If True, render all frames in range even if they have
+            no LabeledFrame (just shows video frame without poses). Default False.
         preset: Quality preset ('preview'=0.25x, 'draft'=0.5x, 'final'=1.0x).
         scale: Scale factor (overrides preset if both provided).
         color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
@@ -760,16 +763,34 @@ def render_video(
     # Create frame index mapping
     frame_idx_to_lf = {lf.frame_idx: lf for lf in labeled_frames}
 
+    # Get video frame count for include_unlabeled mode
+    n_video_frames = None
+    if include_unlabeled:
+        if hasattr(target_video, "shape") and target_video.shape is not None:
+            n_video_frames = target_video.shape[0]
+
     # Determine frame indices to render
     if frame_inds is not None:
         render_indices = frame_inds
     elif start is not None or end is not None:
-        all_indices = sorted(frame_idx_to_lf.keys())
-        start_idx = start if start is not None else min(all_indices)
-        end_idx = end if end is not None else max(all_indices) + 1
-        render_indices = [i for i in all_indices if start_idx <= i < end_idx]
+        labeled_indices = sorted(frame_idx_to_lf.keys())
+        if include_unlabeled and n_video_frames is not None:
+            # Render all frames in range, not just labeled ones
+            start_idx = start if start is not None else 0
+            end_idx = end if end is not None else n_video_frames
+            render_indices = list(range(start_idx, end_idx))
+        else:
+            # Only render labeled frames in range
+            start_idx = start if start is not None else min(labeled_indices, default=0)
+            end_idx = end if end is not None else max(labeled_indices, default=0) + 1
+            render_indices = [i for i in labeled_indices if start_idx <= i < end_idx]
     else:
-        render_indices = sorted(frame_idx_to_lf.keys())
+        if include_unlabeled and n_video_frames is not None:
+            # Render entire video
+            render_indices = list(range(n_video_frames))
+        else:
+            # Only render labeled frames
+            render_indices = sorted(frame_idx_to_lf.keys())
 
     if not render_indices:
         raise ValueError("No frames to render")
@@ -814,7 +835,58 @@ def render_video(
                 break
 
         lf = frame_idx_to_lf.get(fidx)
+
+        # Handle frames without LabeledFrame
         if lf is None:
+            if not include_unlabeled:
+                continue
+            # Render just the video frame without poses
+            try:
+                image = target_video[fidx]
+                if image is None:
+                    raise ValueError("No image")
+            except Exception:
+                if require_video and fallback_color is None:
+                    raise ValueError(
+                        f"Video unavailable at frame {fidx} and require_video=True. "
+                        "Set require_video=False or provide fallback_color."
+                    )
+                if fallback_color is not None:
+                    if (
+                        hasattr(target_video, "shape")
+                        and target_video.shape is not None
+                    ):
+                        h, w = target_video.shape[1:3]
+                    else:
+                        h, w = 384, 384
+                    image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+                else:
+                    continue
+
+            # Render frame without poses
+            rendered = render_frame(
+                frame=image,
+                instances_points=[],
+                edge_inds=edge_inds,
+                node_names=node_names,
+                color_by=resolved_scheme,
+                palette=palette,
+                marker_shape=marker_shape,
+                marker_size=marker_size,
+                line_width=line_width,
+                alpha=alpha,
+                show_nodes=show_nodes,
+                show_edges=show_edges,
+                scale=scale,
+                track_indices=None,
+                n_tracks=n_tracks,
+                pre_render_callback=pre_render_callback,
+                post_render_callback=post_render_callback,
+                per_instance_callback=None,
+                frame_idx=fidx,
+                instance_metadata=[],
+            )
+            rendered_frames.append(rendered)
             continue
 
         instances = list(lf.instances)
