@@ -60,6 +60,8 @@ def to_dataframe(
     include_score: bool = True,
     include_user_instances: bool = True,
     include_predicted_instances: bool = True,
+    video_id: Literal["path", "index", "name", "object"] = "path",
+    include_video: Optional[bool] = None,
     backend: Literal["pandas", "polars"] = "pandas",
 ) -> pd.DataFrame | "pl.DataFrame":
     """Convert Labels to a DataFrame.
@@ -73,6 +75,15 @@ def to_dataframe(
         include_score: Include confidence scores for predicted instances.
         include_user_instances: Include user-labeled instances.
         include_predicted_instances: Include predicted instances.
+        video_id: How to represent videos in the DataFrame. Options:
+            - "path": Full filename/path (default). Works for all video types.
+            - "index": Integer video index. Compact, requires video list for decoding.
+            - "name": Just the video filename (no directory). May not be unique.
+            - "object": Store Video object directly. Not serializable but preserves
+              all video metadata (dataset for HDF5, frame-specific paths for ImageVideo).
+        include_video: Whether to include video information. If None (default),
+            automatically includes video info if there are multiple videos or if
+            video metadata is needed. Set to False to always omit, True to always include.
         backend: "pandas" or "polars". Polars requires the polars package.
 
     Returns:
@@ -83,6 +94,8 @@ def to_dataframe(
             not installed.
 
     Examples:
+        Basic usage:
+
         >>> labels = load_file("predictions.slp")
         >>> df = to_dataframe(labels, format="points")
         >>> df.head()
@@ -90,15 +103,25 @@ def to_dataframe(
         0          0  video.mp4      track0       nose  10.0  20.0   0.95
         1          0  video.mp4      track0       tail   5.0   8.0   0.92
 
-        >>> df = to_dataframe(labels, format="instances")
-        >>> df.head()
-           frame_idx  track_name  nose_x  nose_y  tail_x  tail_y
-        0          0      track0    10.0    20.0     5.0     8.0
+        Use video index instead of path (more compact):
 
-        >>> df = to_dataframe(labels, format="multi_index")
-        >>> df.columns
-        MultiIndex([('video.mp4', 'skeleton1', 'track0', 'nose', 'x'),
-                    ('video.mp4', 'skeleton1', 'track0', 'nose', 'y'), ...])
+        >>> df = to_dataframe(labels, format="points", video_id="index")
+        >>> df.head()
+           frame_idx  video_idx  track_name  node_name     x     y  score
+        0          0          0      track0       nose  10.0  20.0   0.95
+
+        Single video - omit video column entirely:
+
+        >>> df = to_dataframe(labels, format="points", include_video=False)
+        >>> df.head()
+           frame_idx  track_name  node_name     x     y  score
+        0          0      track0       nose  10.0  20.0   0.95
+
+        Use video object (preserves HDF5 dataset, ImageVideo frame paths):
+
+        >>> df = to_dataframe(labels, format="points", video_id="object")
+        >>> df["video"].iloc[0]  # Full Video object with all metadata
+        <Video: video.mp4>
 
     Notes:
         The specific columns and structure depend on the format parameter.
@@ -129,6 +152,11 @@ def to_dataframe(
     else:
         labeled_frames = labels.labeled_frames
 
+    # Determine whether to include video info
+    if include_video is None:
+        # Auto-detect: include if multiple videos, unless explicitly omitted
+        include_video = len(labels.videos) > 1
+
     # Route to appropriate converter based on format
     if format == DataFrameFormat.POINTS:
         df = _to_points_df(
@@ -138,6 +166,8 @@ def to_dataframe(
             include_score=include_score,
             include_user_instances=include_user_instances,
             include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
         )
     elif format == DataFrameFormat.INSTANCES:
         df = _to_instances_df(
@@ -147,6 +177,8 @@ def to_dataframe(
             include_score=include_score,
             include_user_instances=include_user_instances,
             include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
         )
     elif format == DataFrameFormat.FRAMES:
         df = _to_frames_df(
@@ -156,6 +188,8 @@ def to_dataframe(
             include_score=include_score,
             include_user_instances=include_user_instances,
             include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
         )
     elif format == DataFrameFormat.MULTI_INDEX:
         df = _to_multi_index_df(
@@ -164,6 +198,8 @@ def to_dataframe(
             include_score=include_score,
             include_user_instances=include_user_instances,
             include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
         )
     else:
         raise ValueError(f"Unknown format: {format}")
@@ -175,6 +211,36 @@ def to_dataframe(
     return df
 
 
+def _format_video(video: Video, labels: Labels, video_id: str) -> Union[str, int, Video]:
+    """Format video based on video_id parameter.
+
+    Args:
+        video: Video object to format.
+        labels: Labels object (for getting video index).
+        video_id: How to represent the video ("path", "index", "name", "object").
+
+    Returns:
+        Formatted video representation.
+    """
+    if video_id == "path":
+        return video.filename
+    elif video_id == "index":
+        return labels.videos.index(video)
+    elif video_id == "name":
+        # Get just the filename, handling both string and list filenames
+        if isinstance(video.filename, list):
+            # For ImageVideo, return first filename's basename
+            from pathlib import Path
+            return Path(video.filename[0]).name
+        else:
+            from pathlib import Path
+            return Path(video.filename).name
+    elif video_id == "object":
+        return video
+    else:
+        raise ValueError(f"Invalid video_id: {video_id}")
+
+
 def _to_points_df(
     labels: Labels,
     labeled_frames: list,
@@ -183,6 +249,8 @@ def _to_points_df(
     include_score: bool = True,
     include_user_instances: bool = True,
     include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
 ) -> pd.DataFrame:
     """Convert to points format (one row per point)."""
     rows = []
@@ -210,7 +278,17 @@ def _to_points_df(
                 }
 
                 if include_metadata:
-                    row["video_path"] = lf.video.filename
+                    # Add video info if requested
+                    if include_video:
+                        video_value = _format_video(lf.video, labels, video_id)
+                        # Use appropriate column name based on video_id type
+                        if video_id == "index":
+                            row["video_idx"] = video_value
+                        elif video_id == "object":
+                            row["video"] = video_value
+                        else:  # "path" or "name"
+                            row["video_path"] = video_value
+
                     row["skeleton_name"] = instance.skeleton.name
                     row["track_name"] = (
                         instance.track.name if instance.track else None
@@ -233,6 +311,8 @@ def _to_instances_df(
     include_score: bool = True,
     include_user_instances: bool = True,
     include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
 ) -> pd.DataFrame:
     """Convert to instances format (one row per instance)."""
     rows = []
@@ -252,7 +332,16 @@ def _to_instances_df(
             row = {"frame_idx": int(lf.frame_idx)}
 
             if include_metadata:
-                row["video_path"] = lf.video.filename
+                # Add video info if requested
+                if include_video:
+                    video_value = _format_video(lf.video, labels, video_id)
+                    if video_id == "index":
+                        row["video_idx"] = video_value
+                    elif video_id == "object":
+                        row["video"] = video_value
+                    else:  # "path" or "name"
+                        row["video_path"] = video_value
+
                 row["skeleton_name"] = instance.skeleton.name
                 row["track_name"] = instance.track.name if instance.track else None
                 row["instance_idx"] = instance_idx
@@ -280,6 +369,8 @@ def _to_frames_df(
     include_score: bool = True,
     include_user_instances: bool = True,
     include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
 ) -> pd.DataFrame:
     """Convert to frames format (one row per frame-track combination)."""
     rows = []
@@ -314,7 +405,16 @@ def _to_frames_df(
         }
 
         if include_metadata:
-            row["video_path"] = video.filename
+            # Add video info if requested
+            if include_video:
+                video_value = _format_video(video, labels, video_id)
+                if video_id == "index":
+                    row["video_idx"] = video_value
+                elif video_id == "object":
+                    row["video"] = video_value
+                else:  # "path" or "name"
+                    row["video_path"] = video_value
+
             row["skeleton_name"] = instance.skeleton.name
             row["instance_type"] = "predicted" if is_predicted else "user"
 
@@ -345,11 +445,14 @@ def _to_multi_index_df(
     include_score: bool = True,
     include_user_instances: bool = True,
     include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
 ) -> pd.DataFrame:
     """Convert to multi-index format (hierarchical columns)."""
     # This format is similar to the NWB predictions format
-    # Columns: (video_path, skeleton_name, track_name, node_name, coord)
+    # Columns: (video_id, skeleton_name, track_name, node_name, coord)
     # Index: frame_idx
+    # Note: video level is omitted if include_video=False
 
     # First collect all data
     data_list = []
@@ -375,8 +478,19 @@ def _to_multi_index_df(
                     "node_name": node.name,
                     "skeleton_name": skeleton.name,
                     "track_name": instance.track.name if instance.track else "untracked",
-                    "video_path": lf.video.filename,
                 }
+
+                # Add video info if requested
+                if include_video:
+                    video_value = _format_video(lf.video, labels, video_id)
+                    # For multi-index, always use consistent column name
+                    if video_id == "index":
+                        row_dict["video_idx"] = video_value
+                    elif video_id == "object":
+                        # For objects, convert to string representation for multi-index
+                        row_dict["video_path"] = str(video_value.filename)
+                    else:  # "path" or "name"
+                        row_dict["video_path"] = video_value
 
                 if include_score and is_predicted:
                     row_dict["score"] = float(instance[node]["score"])
@@ -390,7 +504,15 @@ def _to_multi_index_df(
     df = pd.DataFrame(data_list)
 
     # Create multi-index structure
-    index_cols = ["skeleton_name", "track_name", "node_name", "video_path", "frame_idx"]
+    # Build index columns based on whether video is included
+    if include_video:
+        # Determine which video column was used
+        video_col = "video_idx" if "video_idx" in df.columns else "video_path"
+        index_cols = ["skeleton_name", "track_name", "node_name", video_col, "frame_idx"]
+        unstack_levels = [0, 1, 2, 3]  # All except frame_idx
+    else:
+        index_cols = ["skeleton_name", "track_name", "node_name", "frame_idx"]
+        unstack_levels = [0, 1, 2]  # All except frame_idx
 
     # Determine value columns
     value_cols = ["x", "y"]
@@ -399,8 +521,15 @@ def _to_multi_index_df(
 
     df_tidy = (
         df.set_index(index_cols)
-        .unstack(level=[0, 1, 2, 3])
-        .swaplevel(0, -1, axis=1)  # video_path on top, coords on bottom
+        .unstack(level=unstack_levels)
+    )
+
+    # For multi-level columns, put the most specific (coords) on the bottom
+    if include_video:
+        df_tidy = df_tidy.swaplevel(0, -1, axis=1)  # video on top, coords on bottom
+
+    df_tidy = (
+        df_tidy
         .sort_index(axis=1)  # Sort columns
         .sort_index(axis=0)  # Sort by frame_idx
     )

@@ -355,3 +355,156 @@ def test_to_dataframe_format_string_normalization():
     # All should produce the same result
     assert df1.equals(df2)
     assert df2.equals(df3)
+
+
+def test_to_dataframe_video_id_index():
+    """Test using video index instead of path."""
+    skeleton = Skeleton(["node1"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    inst1 = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    inst2 = Instance.from_numpy(points_data=np.array([[3.0, 4.0]]), skeleton=skeleton)
+
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    labels = Labels([lf1, lf2])
+
+    # Use video index
+    df = to_dataframe(labels, format="points", video_id="index")
+
+    # Should have video_idx column instead of video_path
+    assert "video_idx" in df.columns
+    assert "video_path" not in df.columns
+    assert df["video_idx"].tolist() == [0, 1]
+
+
+def test_to_dataframe_video_id_name():
+    """Test using just video filename (no directory)."""
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="/path/to/video.mp4")
+
+    inst = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", video_id="name", include_video=True)
+
+    # Should have just the filename
+    assert "video_path" in df.columns
+    assert df["video_path"].iloc[0] == "video.mp4"
+
+
+def test_to_dataframe_video_id_object():
+    """Test storing Video objects directly."""
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", video_id="object", include_video=True)
+
+    # Should have video column with Video objects
+    assert "video" in df.columns
+    assert isinstance(df["video"].iloc[0], Video)
+    assert df["video"].iloc[0] == video
+
+
+def test_to_dataframe_include_video_false():
+    """Test omitting video information entirely."""
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", include_video=False)
+
+    # Should not have any video columns
+    assert "video_path" not in df.columns
+    assert "video_idx" not in df.columns
+    assert "video" not in df.columns
+
+
+def test_to_dataframe_single_video_auto_omit():
+    """Test that single video automatically omits video column."""
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    # With single video, should auto-omit
+    df = to_dataframe(labels, format="points")
+
+    # Should not have video column by default
+    assert "video_path" not in df.columns
+
+
+def test_to_dataframe_multi_video_auto_include():
+    """Test that multiple videos automatically includes video column."""
+    skeleton = Skeleton(["node1"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    inst1 = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    inst2 = Instance.from_numpy(points_data=np.array([[3.0, 4.0]]), skeleton=skeleton)
+
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    labels = Labels([lf1, lf2])
+
+    # With multiple videos, should auto-include
+    df = to_dataframe(labels, format="points")
+
+    # Should have video column by default
+    assert "video_path" in df.columns
+
+
+def test_to_dataframe_instances_format_video_options():
+    """Test video options work with instances format."""
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    # Test with video index
+    df_idx = to_dataframe(labels, format="instances", video_id="index", include_video=True)
+    assert "video_idx" in df_idx.columns
+
+    # Test without video
+    df_no_video = to_dataframe(labels, format="instances", include_video=False)
+    assert "video_path" not in df_no_video.columns
+    assert "video_idx" not in df_no_video.columns
+
+
+def test_to_dataframe_multi_index_without_video():
+    """Test multi-index format without video level."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+    track = Track("track1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+        track=track,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="multi_index", include_video=False)
+
+    # Should have multi-index columns without video level
+    assert isinstance(df.columns, pd.MultiIndex)
+    # Column levels should be: skeleton, track, node, coord (no video)
+    assert df.columns.nlevels < 5  # Less than with video
