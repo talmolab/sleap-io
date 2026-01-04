@@ -22,7 +22,6 @@ from sleap_io.rendering.colors import (
 from sleap_io.rendering.shapes import MarkerShape, get_marker_func
 
 if TYPE_CHECKING:
-
     from sleap_io.model.instance import Instance, PredictedInstance
     from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels
