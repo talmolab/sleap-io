@@ -411,15 +411,58 @@ img = sio.render_image(lf, crop="auto", crop_padding=0.5)
 
 ---
 
-## Handling Missing Videos
+## Background Control
 
-When video files are unavailable, render with a fallback background:
+Control the background when rendering poses. Use `background="video"` (default) to load video frames, or specify a color to render with a solid background.
+
+### Named color
 
 ```python
-img = sio.render_image(lf, require_video=False, fallback_color=(40, 40, 40))
+img = sio.render_image(lf, background="black")
 ```
 
-![fallback](assets/rendering/fallback.png)
+![background black](assets/rendering/background_black.png)
+
+### RGB tuple
+
+```python
+img = sio.render_image(lf, background=(40, 40, 40))
+```
+
+![background rgb](assets/rendering/background_rgb.png)
+
+### Hex color
+
+```python
+img = sio.render_image(lf, background="#1a1a2e")
+```
+
+![background hex](assets/rendering/background_hex.png)
+
+### Palette color
+
+```python
+img = sio.render_image(lf, background="tableau10[0]")
+```
+
+![background palette](assets/rendering/background_palette.png)
+
+### Color specification formats
+
+The `background` parameter accepts many formats:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Named color | `"black"`, `"white"`, `"gray"` | Predefined color names |
+| Hex (6-digit) | `"#ff8000"` | Standard hex color |
+| Hex (3-digit) | `"#f80"` | Shorthand hex |
+| RGB int tuple | `(255, 128, 0)` | Values 0-255 |
+| RGB float tuple | `(1.0, 0.5, 0.0)` | Values 0.0-1.0 |
+| Grayscale int | `40` | Single value 0-255 |
+| Grayscale float | `0.15` | Single value 0.0-1.0 |
+| Palette index | `"tableau10[0]"` | Color from palette |
+
+Available named colors: `black`, `white`, `red`, `green`, `blue`, `yellow`, `cyan`, `magenta`, `gray`/`grey`, `orange`, `purple`, `pink`, `brown`.
 
 ---
 
@@ -450,14 +493,23 @@ montage = np.concatenate(frames, axis=1)
 
 Callbacks let you add custom graphics. You get direct access to the Skia canvas.
 
+There are three callback types:
+
+| Callback | Context Type | When Called |
+|----------|--------------|-------------|
+| `pre_render_callback` | [`RenderContext`](#sleap_io.rendering.RenderContext) | Before poses are drawn |
+| `post_render_callback` | [`RenderContext`](#sleap_io.rendering.RenderContext) | After all poses are drawn |
+| `per_instance_callback` | [`InstanceContext`](#sleap_io.rendering.InstanceContext) | After each instance is drawn |
+
 ### Instance labels
 
 Draw track names above each instance:
 
 ```python
 import skia
+from sleap_io.rendering import InstanceContext
 
-def draw_labels(ctx):
+def draw_labels(ctx: InstanceContext):
     centroid = ctx.get_centroid()
     if centroid is None:
         return
@@ -484,8 +536,9 @@ Draw dashed bounding boxes around instances:
 
 ```python
 import skia
+from sleap_io.rendering import InstanceContext
 
-def draw_bbox(ctx):
+def draw_bbox(ctx: InstanceContext):
     bbox = ctx.get_bbox()
     if bbox is None:
         return
@@ -514,8 +567,9 @@ Add frame number and instance count:
 
 ```python
 import skia
+from sleap_io.rendering import RenderContext
 
-def draw_frame_info(ctx):
+def draw_frame_info(ctx: RenderContext):
     font = skia.Font(skia.Typeface("Arial"), 14)
     text = f"Frame: {ctx.frame_idx}  Instances: {len(ctx.instances)}"
     blob = skia.TextBlob(text, font)
@@ -532,7 +586,9 @@ img = sio.render_image(lf, post_render_callback=draw_frame_info)
 ### Combining callbacks
 
 ```python
-def combined_per_instance(ctx):
+from sleap_io.rendering import InstanceContext
+
+def combined_per_instance(ctx: InstanceContext):
     draw_bbox(ctx)
     draw_labels(ctx)
 
@@ -622,6 +678,11 @@ sio render -i predictions.slp -o styled.mp4 \
       heading_level: 3
 
 ::: sleap_io.rendering.get_palette
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.resolve_color
     options:
       show_root_heading: true
       heading_level: 3

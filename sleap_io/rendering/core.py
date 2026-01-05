@@ -13,10 +13,12 @@ import numpy as np
 from sleap_io.rendering.callbacks import InstanceContext, RenderContext
 from sleap_io.rendering.colors import (
     ColorScheme,
+    ColorSpec,
     PaletteName,
     build_color_map,
     determine_color_scheme,
     get_palette,
+    resolve_color,
     rgb_to_skia_color,
 )
 from sleap_io.rendering.shapes import MarkerShape, get_marker_func
@@ -202,6 +204,47 @@ def _create_blank_frame(
     frame[:, :, 2] = color[2]
     frame[:, :, 3] = 255
     return frame
+
+
+def _estimate_frame_size(
+    instances_points: list[np.ndarray],
+    padding: float = 0.1,
+    min_size: int = 64,
+) -> tuple[int, int]:
+    """Estimate frame dimensions from instance keypoints.
+
+    Computes a bounding box around all valid points and adds padding.
+
+    Args:
+        instances_points: List of (n_nodes, 2) arrays of keypoint coordinates.
+        padding: Padding as fraction of bounding box size (default 0.1).
+        min_size: Minimum dimension size (default 64).
+
+    Returns:
+        Tuple of (height, width).
+    """
+    if not instances_points:
+        return (min_size, min_size)
+
+    all_points = np.concatenate(instances_points)
+    valid = np.isfinite(all_points).all(axis=1)
+    pts = all_points[valid]
+
+    if len(pts) == 0:
+        return (min_size, min_size)
+
+    x_min, y_min = pts.min(axis=0)
+    x_max, y_max = pts.max(axis=0)
+
+    # Add padding
+    pad_x = max((x_max - x_min) * padding, 10)
+    pad_y = max((y_max - y_min) * padding, 10)
+
+    # Compute dimensions (ensure non-zero)
+    width = max(int(x_max + pad_x), min_size)
+    height = max(int(y_max + pad_y), min_size)
+
+    return (height, width)
 
 
 def _scale_frame(frame_rgba: np.ndarray, scale: float) -> np.ndarray:
@@ -475,9 +518,8 @@ def render_image(
     show_nodes: bool = True,
     show_edges: bool = True,
     scale: float = 1.0,
-    # Error handling
-    require_video: bool = True,
-    fallback_color: Optional[tuple[int, int, int]] = None,
+    # Background control
+    background: Union[Literal["video"], ColorSpec] = "video",
     # Callbacks
     pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
     post_render_callback: Optional[Callable[[RenderContext], None]] = None,
@@ -507,8 +549,12 @@ def render_image(
         show_nodes: Whether to draw node markers.
         show_edges: Whether to draw skeleton edges.
         scale: Output scale factor. Applied after cropping.
-        require_video: If True, raise error if video unavailable.
-        fallback_color: RGB background color if video unavailable.
+        background: Background control. Can be:
+            - ``"video"``: Load video frame (default). Raises error if unavailable.
+            - Any color spec: Use solid color background, skip video loading entirely.
+              Supports RGB tuples ``(255, 128, 0)``, float tuples ``(1.0, 0.5, 0.0)``,
+              grayscale ``128`` or ``0.5``, named colors ``"black"``, hex ``"#ff8000"``,
+              or palette index ``"tableau10[2]"``.
         pre_render_callback: Called before poses are drawn.
         post_render_callback: Called after poses are drawn.
         per_instance_callback: Called after each instance is drawn.
@@ -517,14 +563,34 @@ def render_image(
         Rendered numpy array (H, W, 3) uint8.
 
     Raises:
-        ValueError: If video unavailable and require_video=True.
+        ValueError: If background="video" and video unavailable.
         ImportError: If skia-python is not installed.
 
-    Example:
+    Examples:
+        Render a single labeled frame:
+
+        >>> import sleap_io as sio
+        >>> labels = sio.load_slp("predictions.slp")
         >>> lf = labels.labeled_frames[0]
         >>> img = sio.render_image(lf)
-        >>> sio.render_image(lf, crop="auto")  # Auto-fit around instances
-        >>> sio.render_image(lf, crop=(100, 100, 300, 300))  # Explicit crop
+
+        Render with solid color background (no video required):
+
+        >>> img = sio.render_image(lf, background="black")
+        >>> img = sio.render_image(lf, background=(40, 40, 40))
+        >>> img = sio.render_image(lf, background="#404040")
+        >>> img = sio.render_image(lf, background=0.25)
+
+        Auto-fit crop around instances:
+
+        >>> img = sio.render_image(lf, crop="auto")
+
+        Explicit crop region:
+
+        >>> img = sio.render_image(lf, crop=(100, 100, 300, 300))
+
+        Render and save to file:
+
         >>> sio.render_image(labels, lf_ind=0, save_path="frame.png")
         >>> sio.render_image(labels, video=0, frame_idx=42, save_path="frame.png")
     """
@@ -538,6 +604,12 @@ def render_image(
     from sleap_io.model.instance import Instance, PredictedInstance
     from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels
+
+    # Handle background parameter
+    use_video = background == "video"
+    background_color: Optional[tuple[int, int, int]] = None
+    if not use_video:
+        background_color = resolve_color(background)
 
     # Resolve source to LabeledFrame or instances
     if isinstance(source, Labels):
@@ -575,29 +647,32 @@ def render_image(
 
         has_tracks = n_tracks > 0
 
+        # Convert instances to point arrays (needed for both image size and rendering)
+        instances_points = [inst.numpy() for inst in instances]
+
         # Get image if not provided
         if image is None:
-            try:
-                image = lf.image
-                if image is None:
-                    raise ValueError("No image available")
-            except Exception:
-                if require_video and fallback_color is None:
-                    raise ValueError(
-                        "Video unavailable and require_video=True. "
-                        "Set require_video=False or provide fallback_color."
-                    )
-                # Use fallback
-                if fallback_color is not None:
-                    # Need frame dimensions - try to get from video metadata
-                    video = lf.video
-                    if hasattr(video, "shape") and video.shape is not None:
-                        h, w = video.shape[1:3]
-                    else:
-                        h, w = 384, 384  # Default size
-                    image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+            if background_color is not None:
+                # Solid color background - skip video loading entirely
+                video_obj = lf.video
+                if hasattr(video_obj, "shape") and video_obj.shape is not None:
+                    h, w = video_obj.shape[1:3]
                 else:
-                    raise
+                    # Estimate from points
+                    h, w = _estimate_frame_size(instances_points)
+                image = _create_blank_frame(h, w, background_color)[:, :, :3]
+            else:
+                # Load video frame
+                try:
+                    image = lf.image
+                    if image is None:
+                        raise ValueError("No image available")
+                except Exception:
+                    raise ValueError(
+                        "Video unavailable. Use 'background=<color>' to render "
+                        "without video, e.g., background='black' or "
+                        "background=(40, 40, 40)."
+                    )
 
     elif isinstance(source, LabeledFrame):
         lf = source
@@ -612,27 +687,32 @@ def render_image(
         n_tracks = 0
         has_tracks = False
 
+        # Convert instances to point arrays (needed for both image size and rendering)
+        instances_points = [inst.numpy() for inst in instances]
+
         # Get image if not provided
         if image is None:
-            try:
-                image = lf.image
-                if image is None:
-                    raise ValueError("No image available")
-            except Exception:
-                if require_video and fallback_color is None:
-                    raise ValueError(
-                        "Video unavailable and require_video=True. "
-                        "Set require_video=False or provide fallback_color."
-                    )
-                if fallback_color is not None:
-                    video = lf.video
-                    if hasattr(video, "shape") and video.shape is not None:
-                        h, w = video.shape[1:3]
-                    else:
-                        h, w = 384, 384
-                    image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+            if background_color is not None:
+                # Solid color background - skip video loading entirely
+                video_obj = lf.video
+                if hasattr(video_obj, "shape") and video_obj.shape is not None:
+                    h, w = video_obj.shape[1:3]
                 else:
-                    raise
+                    # Estimate from points
+                    h, w = _estimate_frame_size(instances_points)
+                image = _create_blank_frame(h, w, background_color)[:, :, :3]
+            else:
+                # Load video frame
+                try:
+                    image = lf.image
+                    if image is None:
+                        raise ValueError("No image available")
+                except Exception:
+                    raise ValueError(
+                        "Video unavailable. Use 'background=<color>' to render "
+                        "without video, e.g., background='black' or "
+                        "background=(40, 40, 40)."
+                    )
 
     elif isinstance(source, list) and all(
         isinstance(x, (Instance, PredictedInstance)) for x in source
@@ -648,6 +728,9 @@ def render_image(
         n_tracks = 0
         has_tracks = False
 
+        # Convert instances to point arrays
+        instances_points = [inst.numpy() for inst in instances]
+
         if image is None:
             raise ValueError(
                 "image parameter required when source is list of instances"
@@ -658,9 +741,6 @@ def render_image(
             f"source must be Labels, LabeledFrame, or list of instances, "
             f"got {type(source)}"
         )
-
-    # Convert instances to point arrays
-    instances_points = [inst.numpy() for inst in instances]
 
     # Apply cropping if specified
     render_image_data = image
@@ -758,9 +838,8 @@ def render_video(
     codec: str = "libx264",
     crf: int = 25,
     x264_preset: str = "superfast",
-    # Error handling
-    require_video: bool = True,
-    fallback_color: Optional[tuple[int, int, int]] = None,
+    # Background control
+    background: Union[Literal["video"], ColorSpec] = "video",
     # Callbacks
     pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
     post_render_callback: Optional[Callable[[RenderContext], None]] = None,
@@ -794,8 +873,12 @@ def render_video(
         codec: Video codec for encoding.
         crf: Constant rate factor for quality (2-32, lower=better). Default 25.
         x264_preset: H.264 encoding preset (ultrafast, superfast, fast, medium, slow).
-        require_video: If True, raise error if video unavailable.
-        fallback_color: RGB background color if video unavailable.
+        background: Background control. Can be:
+            - ``"video"``: Load video frame (default). Raises error if unavailable.
+            - Any color spec: Use solid color background, skip video loading entirely.
+              Supports RGB tuples ``(255, 128, 0)``, float tuples ``(1.0, 0.5, 0.0)``,
+              grayscale ``128`` or ``0.5``, named colors ``"black"``, hex ``"#ff8000"``,
+              or palette index ``"tableau10[2]"``.
         pre_render_callback: Called before each frame's poses are drawn.
         post_render_callback: Called after each frame's poses are drawn.
         per_instance_callback: Called after each instance is drawn.
@@ -807,14 +890,23 @@ def render_video(
         If save_path is None: List of rendered numpy arrays (H, W, 3) uint8.
 
     Raises:
-        ValueError: If video unavailable and require_video=True.
+        ValueError: If background="video" and video unavailable.
         ImportError: If skia-python is not installed.
 
-    Example:
+    Examples:
+        Render full video with pose overlays:
+
+        >>> import sleap_io as sio
         >>> labels = sio.load_slp("predictions.slp")
         >>> sio.render_video(labels, "output.mp4")
+
+        Fast preview at reduced resolution:
+
         >>> sio.render_video(labels, "preview.mp4", preset="preview")
-        >>> frames = sio.render_video(labels)  # Returns arrays
+
+        Get rendered frames as numpy arrays:
+
+        >>> frames = sio.render_video(labels)
     """
     try:
         import skia  # noqa: F401
@@ -826,6 +918,12 @@ def render_video(
     from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels
     from sleap_io.model.video import Video as VideoModel
+
+    # Handle background parameter
+    use_video = background == "video"
+    background_color: Optional[tuple[int, int, int]] = None
+    if not use_video:
+        background_color = resolve_color(background)
 
     # Handle preset
     if preset is not None and preset in PRESETS:
@@ -980,27 +1078,24 @@ def render_video(
             if not include_unlabeled:
                 continue
             # Render just the video frame without poses
-            try:
-                image = target_video[fidx]
-                if image is None:
-                    raise ValueError("No image")
-            except Exception:
-                if require_video and fallback_color is None:
-                    raise ValueError(
-                        f"Video unavailable at frame {fidx} and require_video=True. "
-                        "Set require_video=False or provide fallback_color."
-                    )
-                if fallback_color is not None:
-                    if (
-                        hasattr(target_video, "shape")
-                        and target_video.shape is not None
-                    ):
-                        h, w = target_video.shape[1:3]
-                    else:
-                        h, w = 384, 384
-                    image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+            if background_color is not None:
+                # Solid color background - skip video loading entirely
+                if hasattr(target_video, "shape") and target_video.shape is not None:
+                    h, w = target_video.shape[1:3]
                 else:
-                    continue
+                    # No video metadata and no points - use minimum default
+                    h, w = 64, 64
+                image = _create_blank_frame(h, w, background_color)[:, :, :3]
+            else:
+                try:
+                    image = target_video[fidx]
+                    if image is None:
+                        raise ValueError("No image")
+                except Exception:
+                    raise ValueError(
+                        f"Video unavailable at frame {fidx}. Use "
+                        "'background=<color>' to render without video."
+                    )
 
             # Render frame without poses
             rendered = render_frame(
@@ -1052,24 +1147,24 @@ def render_video(
             instance_metadata.append(meta)
 
         # Get image
-        try:
-            image = lf.image
-            if image is None:
-                raise ValueError("No image")
-        except Exception:
-            if require_video and fallback_color is None:
-                raise ValueError(
-                    f"Video unavailable at frame {fidx} and require_video=True. "
-                    "Set require_video=False or provide fallback_color."
-                )
-            if fallback_color is not None:
-                if hasattr(target_video, "shape") and target_video.shape is not None:
-                    h, w = target_video.shape[1:3]
-                else:
-                    h, w = 384, 384
-                image = _create_blank_frame(h, w, fallback_color)[:, :, :3]
+        if background_color is not None:
+            # Solid color background - skip video loading entirely
+            if hasattr(target_video, "shape") and target_video.shape is not None:
+                h, w = target_video.shape[1:3]
             else:
-                continue
+                # Estimate from points
+                h, w = _estimate_frame_size(instances_points)
+            image = _create_blank_frame(h, w, background_color)[:, :, :3]
+        else:
+            try:
+                image = lf.image
+                if image is None:
+                    raise ValueError("No image")
+            except Exception:
+                raise ValueError(
+                    f"Video unavailable at frame {fidx}. Use "
+                    "'background=<color>' to render without video."
+                )
 
         # Render frame
         rendered = render_frame(

@@ -6,10 +6,38 @@ to Skia format for rendering pose data.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Literal, Optional, Sequence, Union
 
 if TYPE_CHECKING:
     import skia
+
+# Named colors (CSS-like subset)
+NAMED_COLORS: dict[str, tuple[int, int, int]] = {
+    "black": (0, 0, 0),
+    "white": (255, 255, 255),
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "yellow": (255, 255, 0),
+    "cyan": (0, 255, 255),
+    "magenta": (255, 0, 255),
+    "gray": (128, 128, 128),
+    "grey": (128, 128, 128),
+    "orange": (255, 165, 0),
+    "purple": (128, 0, 128),
+    "pink": (255, 192, 203),
+    "brown": (139, 69, 19),
+}
+
+# Type alias for flexible color specification
+ColorSpec = Union[
+    tuple[int, int, int],  # RGB int tuple: (255, 128, 0)
+    tuple[float, float, float],  # RGB float tuple: (1.0, 0.5, 0.0)
+    int,  # Grayscale int: 128 → (128, 128, 128)
+    float,  # Grayscale float: 0.5 → (127, 127, 127)
+    str,  # Named, hex, or palette reference
+]
 
 # Built-in color palettes as RGB tuples
 PALETTES: dict[str, list[tuple[int, int, int]]] = {
@@ -214,11 +242,127 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
         (R, G, B) tuple with values 0-255.
     """
     hex_color = hex_color.lstrip("#")
+    # Handle 3-digit hex (#rgb -> #rrggbb)
+    if len(hex_color) == 3:
+        hex_color = hex_color[0] * 2 + hex_color[1] * 2 + hex_color[2] * 2
     return (
         int(hex_color[0:2], 16),
         int(hex_color[2:4], 16),
         int(hex_color[4:6], 16),
     )
+
+
+def resolve_color(color: ColorSpec) -> tuple[int, int, int]:
+    """Resolve a flexible color specification to an RGB tuple.
+
+    Args:
+        color: Color specification in various formats:
+            - RGB int tuple: ``(255, 128, 0)``
+            - RGB float tuple: ``(1.0, 0.5, 0.0)`` - values in 0.0-1.0 range
+            - Grayscale int: ``128`` → ``(128, 128, 128)``
+            - Grayscale float: ``0.5`` → ``(127, 127, 127)``
+            - Named color: ``"black"``, ``"white"``, ``"red"``, etc.
+            - Hex color: ``"#ff8000"`` or ``"#f80"``
+            - Palette index: ``"tableau10[2]"``, ``"glasbey[5]"``
+
+    Returns:
+        RGB tuple of integers in 0-255 range.
+
+    Raises:
+        ValueError: If color specification is invalid.
+
+    Examples:
+        >>> resolve_color((255, 128, 0))
+        (255, 128, 0)
+
+        >>> resolve_color((1.0, 0.5, 0.0))
+        (255, 127, 0)
+
+        >>> resolve_color("red")
+        (255, 0, 0)
+
+        >>> resolve_color("#ff8000")
+        (255, 128, 0)
+
+        >>> resolve_color("#f80")
+        (255, 136, 0)
+
+        >>> resolve_color("tableau10[2]")
+        (44, 160, 44)
+
+        >>> resolve_color(128)
+        (128, 128, 128)
+
+        >>> resolve_color(0.5)
+        (127, 127, 127)
+    """
+    # Grayscale int
+    if isinstance(color, int):
+        value = max(0, min(255, color))
+        return (value, value, value)
+
+    # Grayscale float (0.0-1.0 range)
+    if isinstance(color, float):
+        value = int(max(0.0, min(1.0, color)) * 255)
+        return (value, value, value)
+
+    # Tuple (RGB)
+    if isinstance(color, tuple):
+        if len(color) != 3:
+            raise ValueError(f"RGB tuple must have 3 elements, got {len(color)}")
+
+        r, g, b = color
+
+        # Detect float vs int by Python type
+        if isinstance(r, float) or isinstance(g, float) or isinstance(b, float):
+            # Float tuple: 0.0-1.0 range
+            r_int = int(max(0.0, min(1.0, float(r))) * 255)
+            g_int = int(max(0.0, min(1.0, float(g))) * 255)
+            b_int = int(max(0.0, min(1.0, float(b))) * 255)
+            return (r_int, g_int, b_int)
+        else:
+            # Int tuple: 0-255 range
+            r_int = max(0, min(255, int(r)))
+            g_int = max(0, min(255, int(g)))
+            b_int = max(0, min(255, int(b)))
+            return (r_int, g_int, b_int)
+
+    # String
+    if isinstance(color, str):
+        color_lower = color.lower().strip()
+
+        # Named color
+        if color_lower in NAMED_COLORS:
+            return NAMED_COLORS[color_lower]
+
+        # Hex color
+        if color.startswith("#"):
+            hex_part = color[1:]
+            if len(hex_part) == 3 or len(hex_part) == 6:
+                return _hex_to_rgb(color)
+            raise ValueError(f"Invalid hex color: {color}")
+
+        # Palette index: "palette_name[index]"
+        palette_match = re.match(r"^(\w+)\[(\d+)\]$", color)
+        if palette_match:
+            palette_name = palette_match.group(1)
+            index = int(palette_match.group(2))
+
+            # Get palette colors
+            try:
+                palette_colors = get_palette(palette_name, index + 1)
+                if index < len(palette_colors):
+                    return palette_colors[index]
+            except ValueError:
+                pass
+
+            raise ValueError(f"Invalid palette index: {color}")
+
+        raise ValueError(
+            f"Unknown color: {color!r}. Valid named colors: {list(NAMED_COLORS.keys())}"
+        )
+
+    raise TypeError(f"Invalid color type: {type(color).__name__}")
 
 
 def rgb_to_skia_color(rgb: tuple[int, int, int], alpha: int = 255) -> "skia.Color4f":

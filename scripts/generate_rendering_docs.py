@@ -19,6 +19,7 @@ import numpy as np
 from PIL import Image
 
 import sleap_io as sio
+from sleap_io.rendering import InstanceContext, RenderContext
 
 # Paths
 DATA_PATH = Path("tests/data/slp/centered_pair_predictions.slp")
@@ -199,12 +200,25 @@ def main():
     save_image(img, "crop_autofit.png")
 
     # =========================================================================
-    # Fallback rendering
+    # Background control
     # =========================================================================
-    print("\nFallback rendering...")
+    print("\nBackground control...")
 
-    img = sio.render_image(lf, require_video=False, fallback_color=(40, 40, 40))
-    save_image(img, "fallback.png")
+    # Named color
+    img = sio.render_image(lf, background="black")
+    save_image(img, "background_black.png")
+
+    # RGB tuple
+    img = sio.render_image(lf, background=(40, 40, 40))
+    save_image(img, "background_rgb.png")
+
+    # Hex color (dark blue)
+    img = sio.render_image(lf, background="#1a1a2e")
+    save_image(img, "background_hex.png")
+
+    # Palette color as background
+    img = sio.render_image(lf, background="tableau10[0]")
+    save_image(img, "background_palette.png")
 
     # =========================================================================
     # Callback examples
@@ -212,7 +226,7 @@ def main():
     print("\nCallback examples...")
 
     # Instance labels
-    def draw_labels(ctx):
+    def draw_labels(ctx: InstanceContext):
         centroid = ctx.get_centroid()
         if centroid is None:
             return
@@ -232,7 +246,7 @@ def main():
     save_image(img, "callback_labels.png")
 
     # Bounding boxes
-    def draw_bbox(ctx):
+    def draw_bbox(ctx: InstanceContext):
         bbox = ctx.get_bbox()
         if bbox is None:
             return
@@ -254,7 +268,7 @@ def main():
     save_image(img, "callback_bbox.png")
 
     # Frame info
-    def draw_frame_info(ctx):
+    def draw_frame_info(ctx: RenderContext):
         font = skia.Font(skia.Typeface("Arial"), 14)
         text = f"Frame: {ctx.frame_idx}  Instances: {len(ctx.instances)}"
         blob = skia.TextBlob(text, font)
@@ -267,7 +281,7 @@ def main():
     save_image(img, "callback_frame_info.png")
 
     # Combined callbacks
-    def combined_per_instance(ctx):
+    def combined_per_instance(ctx: InstanceContext):
         draw_bbox(ctx)
         draw_labels(ctx)
 

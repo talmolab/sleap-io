@@ -18,13 +18,21 @@ Note:
 """
 
 from sleap_io.rendering.callbacks import InstanceContext, RenderContext
-from sleap_io.rendering.colors import get_palette
+from sleap_io.rendering.colors import (
+    NAMED_COLORS,
+    ColorSpec,
+    get_palette,
+    resolve_color,
+)
 from sleap_io.rendering.core import render_image, render_video
 
 __all__ = [
     "render_video",
     "render_image",
     "get_palette",
+    "resolve_color",
+    "ColorSpec",
+    "NAMED_COLORS",
     "RenderContext",
     "InstanceContext",
 ]

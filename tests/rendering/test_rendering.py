@@ -105,6 +105,87 @@ class TestColors:
         assert "node_colors" in colors
         assert len(colors["node_colors"]) == 5
 
+    def test_resolve_color_rgb_int_tuple(self):
+        """Test resolve_color with RGB int tuple."""
+        from sleap_io.rendering.colors import resolve_color
+
+        assert resolve_color((255, 128, 0)) == (255, 128, 0)
+        assert resolve_color((0, 0, 0)) == (0, 0, 0)
+        assert resolve_color((255, 255, 255)) == (255, 255, 255)
+
+    def test_resolve_color_rgb_float_tuple(self):
+        """Test resolve_color with RGB float tuple."""
+        from sleap_io.rendering.colors import resolve_color
+
+        assert resolve_color((1.0, 0.5, 0.0)) == (255, 127, 0)
+        assert resolve_color((0.0, 0.0, 0.0)) == (0, 0, 0)
+        assert resolve_color((1.0, 1.0, 1.0)) == (255, 255, 255)
+
+    def test_resolve_color_grayscale_int(self):
+        """Test resolve_color with grayscale int."""
+        from sleap_io.rendering.colors import resolve_color
+
+        assert resolve_color(128) == (128, 128, 128)
+        assert resolve_color(0) == (0, 0, 0)
+        assert resolve_color(255) == (255, 255, 255)
+
+    def test_resolve_color_grayscale_float(self):
+        """Test resolve_color with grayscale float."""
+        from sleap_io.rendering.colors import resolve_color
+
+        assert resolve_color(0.5) == (127, 127, 127)
+        assert resolve_color(0.0) == (0, 0, 0)
+        assert resolve_color(1.0) == (255, 255, 255)
+
+    def test_resolve_color_named(self):
+        """Test resolve_color with named colors."""
+        from sleap_io.rendering.colors import resolve_color
+
+        assert resolve_color("black") == (0, 0, 0)
+        assert resolve_color("white") == (255, 255, 255)
+        assert resolve_color("red") == (255, 0, 0)
+        assert resolve_color("GREEN") == (0, 255, 0)  # Case insensitive
+        assert resolve_color("gray") == (128, 128, 128)
+        assert resolve_color("grey") == (128, 128, 128)  # British spelling
+
+    def test_resolve_color_hex(self):
+        """Test resolve_color with hex colors."""
+        from sleap_io.rendering.colors import resolve_color
+
+        assert resolve_color("#ff0000") == (255, 0, 0)
+        assert resolve_color("#FF0000") == (255, 0, 0)  # Case insensitive
+        assert resolve_color("#f00") == (255, 0, 0)  # 3-digit hex
+        assert resolve_color("#808080") == (128, 128, 128)
+
+    def test_resolve_color_palette_index(self):
+        """Test resolve_color with palette index."""
+        from sleap_io.rendering.colors import resolve_color, get_palette
+
+        # Test tableau10 palette
+        tableau_colors = get_palette("tableau10", 10)
+        assert resolve_color("tableau10[0]") == tableau_colors[0]
+        assert resolve_color("tableau10[2]") == tableau_colors[2]
+
+        # Test distinct palette
+        distinct_colors = get_palette("distinct", 5)
+        assert resolve_color("distinct[0]") == distinct_colors[0]
+
+    def test_resolve_color_invalid(self):
+        """Test resolve_color with invalid inputs."""
+        from sleap_io.rendering.colors import resolve_color
+
+        with pytest.raises(ValueError):
+            resolve_color("not_a_color")
+
+        with pytest.raises(ValueError):
+            resolve_color("#invalid")
+
+        with pytest.raises(ValueError):
+            resolve_color((1, 2))  # Wrong tuple length
+
+        with pytest.raises(TypeError):
+            resolve_color(["list", "not", "valid"])
+
 
 # ============================================================================
 # Shapes Module Tests
@@ -530,20 +611,25 @@ class TestRenderImage:
         assert output_path.exists()
         assert isinstance(rendered, np.ndarray)
 
-    def test_render_image_fallback_color(self, labels_predictions):
-        """Test render_image with fallback color when video unavailable."""
+    def test_render_image_background_color(self, labels_predictions):
+        """Test render_image with solid color background."""
         from sleap_io.rendering import render_image
 
         lf = labels_predictions.labeled_frames[0]
 
-        # Without providing image and require_video=False, should use fallback
-        rendered = render_image(
-            lf,
-            require_video=False,
-            fallback_color=(128, 128, 128),
-        )
+        # Using background=<color> renders on solid color, skips video loading
+        rendered = render_image(lf, background=(128, 128, 128))
 
         assert isinstance(rendered, np.ndarray)
+        assert rendered.shape[2] == 3
+
+        # Test named color
+        rendered2 = render_image(lf, background="gray")
+        assert isinstance(rendered2, np.ndarray)
+
+        # Test hex color
+        rendered3 = render_image(lf, background="#808080")
+        assert isinstance(rendered3, np.ndarray)
 
     def test_render_image_crop_explicit(self, labels_predictions):
         """Test render_image with explicit crop bounds."""
