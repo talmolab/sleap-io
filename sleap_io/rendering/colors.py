@@ -7,7 +7,7 @@ to Skia format for rendering pose data.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple, Union
 
 if TYPE_CHECKING:
     import skia
@@ -31,9 +31,10 @@ NAMED_COLORS: dict[str, tuple[int, int, int]] = {
 }
 
 # Type alias for flexible color specification
+# Note: Use Tuple (not tuple) for Python 3.8 compatibility in Union
 ColorSpec = Union[
-    tuple[int, int, int],  # RGB int tuple: (255, 128, 0)
-    tuple[float, float, float],  # RGB float tuple: (1.0, 0.5, 0.0)
+    Tuple[int, int, int],  # RGB int tuple: (255, 128, 0)
+    Tuple[float, float, float],  # RGB float tuple: (1.0, 0.5, 0.0)
     int,  # Grayscale int: 128 → (128, 128, 128)
     float,  # Grayscale float: 0.5 → (127, 127, 127)
     str,  # Named, hex, or palette reference

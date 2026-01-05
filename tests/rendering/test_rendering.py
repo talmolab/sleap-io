@@ -159,7 +159,7 @@ class TestColors:
 
     def test_resolve_color_palette_index(self):
         """Test resolve_color with palette index."""
-        from sleap_io.rendering.colors import resolve_color, get_palette
+        from sleap_io.rendering.colors import get_palette, resolve_color
 
         # Test tableau10 palette
         tableau_colors = get_palette("tableau10", 10)

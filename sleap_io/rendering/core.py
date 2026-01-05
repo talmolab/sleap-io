@@ -6,7 +6,7 @@ This module provides the main API for rendering pose data with skia-python.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Tuple, Union
 
 import numpy as np
 
@@ -37,7 +37,8 @@ PRESETS: dict[str, dict] = {
 }
 
 # Type alias for crop specification
-CropSpec = Union[tuple[int, int, int, int], Literal["auto"], None]
+# Note: Use Tuple (not tuple) for Python 3.8 compatibility in Union
+CropSpec = Union[Tuple[int, int, int, int], Literal["auto"], None]
 
 
 def _compute_auto_crop(
