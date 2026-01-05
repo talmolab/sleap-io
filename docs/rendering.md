@@ -111,7 +111,7 @@ import sleap_io as sio
 labels = sio.load_slp("predictions.slp")
 
 # Save single frame to PNG
-sio.render_image(labels, lf_ind=0, output="frame_0.png")
+sio.render_image(labels, lf_ind=0, save_path="frame_0.png")
 
 # Or use LabeledFrame directly
 sio.render_image(labels.labeled_frames[42], "frame_42.png")
@@ -130,7 +130,7 @@ import sleap_io as sio
 labels = sio.load_slp("predictions.slp")
 
 # Render video frame 100 from video 0
-sio.render_image(labels, video=0, frame_idx=100, output="frame_100.png")
+sio.render_image(labels, video=0, frame_idx=100, save_path="frame_100.png")
 
 # Or get as array
 img = sio.render_image(labels, video=0, frame_idx=100)
@@ -203,6 +203,7 @@ sio.render_video(labels, "output.mp4", color_by="auto")
 ```
 
 Auto mode uses these rules:
+
 - If tracks available → color by track (consistent identity across frames)
 - If single image → color by instance (distinguishes animals)
 - If video without tracks → color by node (prevents flicker)
@@ -215,7 +216,7 @@ Each tracked animal gets a consistent color across all frames.
 sio.render_video(labels, "by_track.mp4", color_by="track")
 ```
 
-Best for: tracked data where you want to follow specific animals.
+**Best for:** tracked data where you want to follow specific animals.
 
 ### Color by instance
 
@@ -225,7 +226,7 @@ Each animal within a frame gets a unique color, but colors may change between fr
 sio.render_video(labels, "by_instance.mp4", color_by="instance")
 ```
 
-Best for: single-frame renders or untracked data.
+**Best for:** single-frame renders or untracked data.
 
 ### Color by node
 
@@ -235,7 +236,7 @@ Each body part gets a unique color (same for all animals).
 sio.render_video(labels, "by_node.mp4", color_by="node")
 ```
 
-Best for: highlighting skeleton structure or comparing body parts.
+**Best for:** highlighting skeleton structure or comparing body parts.
 
 ---
 
@@ -386,6 +387,7 @@ Typical rendering speeds (measured on 1024x1024 frames with 13 nodes):
 | Preview (0.25x) | ~15 FPS | Reduced resolution helps |
 
 **Tips for faster rendering:**
+
 1. Use `preset="preview"` for quick checks
 2. Use `start`/`end` to render clips instead of full videos
 3. For maximum speed, pre-extract frames to image sequences

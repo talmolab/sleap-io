@@ -341,7 +341,7 @@ def render_image(
         "LabeledFrame",
         list[Union["Instance", "PredictedInstance"]],
     ],
-    output: Optional[Union[str, Path]] = None,
+    save_path: Optional[Union[str, Path]] = None,
     *,
     # Frame specification (for Labels input)
     lf_ind: Optional[int] = None,
@@ -371,7 +371,7 @@ def render_image(
 
     Args:
         source: LabeledFrame, Labels (with frame specifier), or list of instances.
-        output: Output image path (PNG/JPEG). If None, only returns array.
+        save_path: Output image path (PNG/JPEG). If None, only returns array.
         lf_ind: LabeledFrame index within Labels.labeled_frames (when source is Labels).
         video: Video object or video index (used with frame_idx when source is Labels).
         frame_idx: Video frame index (0-based, used with video when source is Labels).
@@ -402,8 +402,8 @@ def render_image(
     Example:
         >>> lf = labels.labeled_frames[0]
         >>> img = sio.render_image(lf)
-        >>> sio.render_image(labels, lf_ind=0, output="frame.png")
-        >>> sio.render_image(labels, video=0, frame_idx=42, output="frame.png")
+        >>> sio.render_image(labels, lf_ind=0, save_path="frame.png")
+        >>> sio.render_image(labels, video=0, frame_idx=42, save_path="frame.png")
     """
     try:
         import skia  # noqa: F401
@@ -580,20 +580,20 @@ def render_image(
         instance_metadata=instance_metadata,
     )
 
-    # Save if output path provided
-    if output is not None:
+    # Save if save_path provided
+    if save_path is not None:
         from PIL import Image
 
-        output_path = Path(output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(rendered).save(output_path)
+        save_path_ = Path(save_path)
+        save_path_.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(rendered).save(save_path_)
 
     return rendered
 
 
 def render_video(
     source: Union["Labels", list["LabeledFrame"]],
-    output: Optional[Union[str, Path]] = None,
+    save_path: Optional[Union[str, Path]] = None,
     *,
     # Video selection
     video: Optional[Union["Video", int]] = None,
@@ -634,7 +634,7 @@ def render_video(
 
     Args:
         source: Labels object or list of LabeledFrames to render.
-        output: Output video path. If None, returns list of rendered arrays.
+        save_path: Output video path. If None, returns list of rendered arrays.
         video: Video to render from (default: first video in Labels).
         frame_inds: Specific frame indices to render.
         start: Start frame index (inclusive).
@@ -664,8 +664,8 @@ def render_video(
         show_progress: Show tqdm progress bar.
 
     Returns:
-        If output provided: Video object pointing to output file.
-        If output is None: List of rendered numpy arrays (H, W, 3) uint8.
+        If save_path provided: Video object pointing to output file.
+        If save_path is None: List of rendered numpy arrays (H, W, 3) uint8.
 
     Raises:
         ValueError: If video unavailable and require_video=True.
@@ -959,14 +959,14 @@ def render_video(
         rendered_frames.append(rendered)
 
     # Write video or return frames
-    if output is not None:
+    if save_path is not None:
         from sleap_io.io.video_writing import VideoWriter
 
-        output_path = Path(output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path_ = Path(save_path)
+        save_path_.parent.mkdir(parents=True, exist_ok=True)
 
         with VideoWriter(
-            filename=output_path,
+            filename=save_path_,
             fps=fps,
             codec=codec,
             crf=crf,
@@ -976,6 +976,6 @@ def render_video(
                 writer(frame)
 
         # Return Video object pointing to output
-        return VideoModel.from_filename(str(output_path))
+        return VideoModel.from_filename(str(save_path_))
 
     return rendered_frames

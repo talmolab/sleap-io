@@ -525,7 +525,7 @@ class TestRenderImage:
         frame = lf.video[lf.frame_idx]
         output_path = tmp_path / "rendered.png"
 
-        rendered = render_image(lf, output=output_path, image=frame)
+        rendered = render_image(lf, save_path=output_path, image=frame)
 
         assert output_path.exists()
         assert isinstance(rendered, np.ndarray)

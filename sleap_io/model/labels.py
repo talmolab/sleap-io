@@ -681,7 +681,7 @@ class Labels:
 
     def render(
         self,
-        output: Optional[Union[str, Path]] = None,
+        save_path: Optional[Union[str, Path]] = None,
         **kwargs,
     ) -> Union["Video", list]:
         """Render video with pose overlays.
@@ -690,12 +690,12 @@ class Labels:
         See that function for full parameter documentation.
 
         Args:
-            output: Output video path. If None, returns list of rendered arrays.
+            save_path: Output video path. If None, returns list of rendered arrays.
             **kwargs: Additional arguments passed to `render_video()`.
 
         Returns:
-            If output provided: Video object pointing to output file.
-            If output is None: List of rendered numpy arrays (H, W, 3) uint8.
+            If save_path provided: Video object pointing to output file.
+            If save_path is None: List of rendered numpy arrays (H, W, 3) uint8.
 
         Raises:
             ImportError: If rendering dependencies are not installed.
@@ -710,7 +710,7 @@ class Labels:
         """
         from sleap_io.rendering import render_video
 
-        return render_video(self, output, **kwargs)
+        return render_video(self, save_path, **kwargs)
 
     def clean(
         self,
