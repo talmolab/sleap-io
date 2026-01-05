@@ -3309,3 +3309,70 @@ def test_progress_callback_none_uses_tqdm(tmp_path, slp_real_data, capsys):
     # tqdm outputs to stderr
     captured = capsys.readouterr()
     assert "Embedding frames" in captured.err
+
+
+def test_embed_inplace_false_preserves_original(tmp_path, slp_real_data):
+    """Test that embed_inplace=False (default) doesn't modify the original labels."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    # Store original video info
+    original_video_filename = base_labels.video.filename
+    original_video_type = type(base_labels.video.backend)
+
+    # Save with embedding (default embed_inplace=False)
+    write_labels(labels_path, base_labels, embed="user")
+
+    # Original labels should NOT be modified
+    assert base_labels.video.filename == original_video_filename
+    assert type(base_labels.video.backend) is original_video_type
+    assert base_labels.video.filename != labels_path  # Should not point to pkg.slp
+
+
+def test_embed_inplace_true_modifies_original(tmp_path, slp_real_data):
+    """Test that embed_inplace=True modifies the labels in-place."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    # Store original video info
+    original_video_filename = base_labels.video.filename
+
+    # Save with embedding and embed_inplace=True
+    write_labels(labels_path, base_labels, embed="user", embed_inplace=True)
+
+    # Original labels SHOULD be modified to point to embedded videos
+    assert base_labels.video.filename == labels_path
+    assert type(base_labels.video.backend) is HDF5Video
+    assert base_labels.video.filename != original_video_filename
+
+
+def test_embed_inplace_via_labels_save(tmp_path, slp_real_data):
+    """Test embed_inplace parameter works through Labels.save()."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    # Store original video info
+    original_video_filename = base_labels.video.filename
+
+    # Save with embedding via Labels.save() (default embed_inplace=False)
+    base_labels.save(labels_path, embed="user")
+
+    # Original labels should NOT be modified
+    assert base_labels.video.filename == original_video_filename
+
+
+def test_embed_inplace_via_save_slp(tmp_path, slp_real_data):
+    """Test embed_inplace parameter works through save_slp()."""
+    base_labels = read_labels(slp_real_data)
+    labels_path = str(tmp_path / "labels.pkg.slp")
+
+    # Store original video info
+    original_video_filename = base_labels.video.filename
+
+    # Save with embedding via save_slp() with embed_inplace=True
+    save_slp(base_labels, labels_path, embed="user", embed_inplace=True)
+
+    # Original labels SHOULD be modified
+    assert base_labels.video.filename != original_video_filename
+    assert base_labels.video.filename == labels_path
+    assert type(base_labels.video.backend) is HDF5Video

@@ -44,6 +44,7 @@ def save_slp(
     filename: str,
     embed: bool | str | list[tuple[Video, int]] | None = False,
     restore_original_videos: bool = True,
+    embed_inplace: bool = False,
     verbose: bool = True,
     plugin: Optional[str] = None,
     progress_callback: Callable[[int, int], bool] | None = None,
@@ -70,6 +71,10 @@ def save_slp(
         restore_original_videos: If `True` (default) and `embed=False`, use original
             video files. If `False` and `embed=False`, keep references to source
             `.pkg.slp` files. Only applies when `embed=False`.
+        embed_inplace: If `False` (default), a copy of the labels is made before
+            embedding to avoid modifying the in-memory labels. If `True`, the
+            labels will be modified in-place to point to the embedded videos,
+            which is faster but mutates the input. Only applies when embedding.
         verbose: If `True` (the default), display a progress bar when embedding frames.
         plugin: Image plugin to use for encoding embedded frames. One of "opencv"
             or "imageio". If None, uses the global default from
@@ -87,6 +92,7 @@ def save_slp(
         labels,
         embed=embed,
         restore_original_videos=restore_original_videos,
+        embed_inplace=embed_inplace,
         verbose=verbose,
         plugin=plugin,
         progress_callback=progress_callback,
@@ -688,6 +694,8 @@ def save_file(
               to embed in the saved labels file. One of None, True, "all", "user",
               "suggestions", "user+suggestions", "source" or list of tuples of
               (video, frame_idx). If False (the default), no frames are embedded.
+              embed_inplace (bool): If False (default), copy labels before embedding
+              to avoid mutating the input. If True, modify labels in-place.
             - For "nwb" format: pose_estimation_metadata (dict): Metadata to store
               in the
               NWB file. append (bool): If True, append to existing NWB file.
