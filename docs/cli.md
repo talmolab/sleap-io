@@ -94,7 +94,7 @@ sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
 sio filenames -i labels.slp -o out.slp --map old.mp4 /new/video.mp4
 sio filenames -i labels.slp -o out.slp --prefix /old/path /new/path
 
-# Render video with pose overlays (requires: pip install sleap-io[all])
+# Render video with pose overlays (requires: pip install sleap-io[all] or [rendering])
 sio render -i predictions.slp                                 # -> predictions.viz.mp4
 sio render -i predictions.slp --preset preview                # Fast 0.25x preview
 sio render -i predictions.slp --start 100 --end 200
@@ -744,9 +744,10 @@ sio render -i <input> --lf <index> [-o <output>] [options]
 ```
 
 !!! info "Required dependencies"
-    Rendering requires optional dependencies. Install with:
+    Rendering requires optional dependencies:
     ```bash
-    pip install sleap-io[all]
+    pip install sleap-io[all]        # All optional deps
+    pip install sleap-io[rendering]  # Minimal rendering deps only
     ```
 
     Or with `uvx`:
@@ -1115,7 +1116,8 @@ sio render -i predictions.slp -o final.mp4 \
 
 !!! info "Installing render dependencies"
     ```bash
-    pip install sleap-io[all]
+    pip install sleap-io[all]        # All optional deps
+    pip install sleap-io[rendering]  # Minimal rendering deps only
     ```
 
 ### Creating Training Splits
