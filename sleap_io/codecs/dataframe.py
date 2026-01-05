@@ -51,6 +51,55 @@ class DataFrameFormat(str, Enum):
     """Hierarchical column structure. Similar to NWB format."""
 
 
+def _create_dataframe_from_rows(
+    rows: list[dict],
+    backend: str = "pandas",
+) -> "pd.DataFrame | pl.DataFrame":
+    """Create a DataFrame from a list of row dictionaries.
+
+    This helper function provides native DataFrame construction for both pandas
+    and polars backends, avoiding the overhead of pandas→polars conversion.
+
+    Args:
+        rows: List of dictionaries where each dict represents a row.
+        backend: "pandas" or "polars".
+
+    Returns:
+        DataFrame in the specified backend format.
+    """
+    if not rows:
+        if backend == "polars":
+            return pl.DataFrame()
+        return pd.DataFrame()
+
+    if backend == "polars":
+        return pl.from_dicts(rows)
+    return pd.DataFrame(rows)
+
+
+def _flatten_tuple_keys(rows: list[dict]) -> list[dict]:
+    """Convert tuple keys to dot-separated strings for polars compatibility.
+
+    Args:
+        rows: List of row dicts with potentially tuple keys like (inst0, nose, x).
+
+    Returns:
+        List of row dicts with flattened string keys like "inst0.nose.x".
+    """
+    flattened = []
+    for row in rows:
+        new_row = {}
+        for key, value in row.items():
+            if isinstance(key, tuple):
+                parts = [str(p) for p in key if p]
+                new_key = ".".join(parts)
+                new_row[new_key] = value
+            else:
+                new_row[key] = value
+        flattened.append(new_row)
+    return flattened
+
+
 def to_dataframe(
     labels: Labels,
     format: DataFrameFormat | str = DataFrameFormat.POINTS,
@@ -93,6 +142,8 @@ def to_dataframe(
             - "error": Raise error if any instance lacks a track (default).
             - "ignore": Skip untracked instances silently.
         backend: "pandas" or "polars". Polars requires the polars package.
+            When using polars, DataFrames are constructed natively without
+            going through pandas, providing better performance for large datasets.
 
     Returns:
         DataFrame in the specified format. Type depends on backend parameter.
@@ -121,6 +172,12 @@ def to_dataframe(
         >>> df = to_dataframe(labels, format="frames", instance_id="track")
         >>> df.columns  # mouse1.nose.x, mouse1.nose.y, mouse2.nose.x, ...
 
+        Native polars backend for better performance:
+
+        >>> df = to_dataframe(labels, format="points", backend="polars")
+        >>> type(df)
+        <class 'polars.dataframe.frame.DataFrame'>
+
     Notes:
         The specific columns and structure depend on the format parameter.
         See the DataFrameFormat enum documentation for details on each format.
@@ -131,6 +188,8 @@ def to_dataframe(
         - Frames: frame_idx, {inst}.track, {inst}.track_score, {inst}.score,
           {inst}.{node}.x, {inst}.{node}.y, {inst}.{node}.score
         - Multi-index: Hierarchical columns (inst, node, coord) with frame idx
+          For polars backend, multi-index columns are flattened to dot-separated
+          names (e.g., "inst0.nose.x").
     """
     # Validate backend
     if backend == "polars" and not HAS_POLARS:
@@ -173,6 +232,7 @@ def to_dataframe(
             include_predicted_instances=include_predicted_instances,
             include_video=include_video,
             video_id=video_id,
+            backend=backend,
         )
     elif format == DataFrameFormat.INSTANCES:
         df = _to_instances_df(
@@ -184,6 +244,7 @@ def to_dataframe(
             include_predicted_instances=include_predicted_instances,
             include_video=include_video,
             video_id=video_id,
+            backend=backend,
         )
     elif format == DataFrameFormat.FRAMES:
         df = _to_frames_df(
@@ -197,6 +258,7 @@ def to_dataframe(
             video_id=video_id,
             instance_id=instance_id,
             untracked=untracked,
+            backend=backend,
         )
     elif format == DataFrameFormat.MULTI_INDEX:
         df = _to_multi_index_df(
@@ -209,13 +271,10 @@ def to_dataframe(
             video_id=video_id,
             instance_id=instance_id,
             untracked=untracked,
+            backend=backend,
         )
     else:
         raise ValueError(f"Unknown format: {format}")
-
-    # Convert to polars if requested
-    if backend == "polars":
-        df = pl.from_pandas(df)
 
     return df
 
@@ -271,6 +330,8 @@ def to_dataframe_iter(
             - "error": Raise error if any instance lacks a track (default).
             - "ignore": Skip untracked instances silently.
         backend: "pandas" or "polars". Polars requires the polars package.
+            When using polars, DataFrames are constructed natively without
+            going through pandas, providing better performance for large datasets.
 
     Yields:
         DataFrames, each containing up to `chunk_size` rows.
@@ -421,18 +482,20 @@ def to_dataframe_iter(
     for row in row_iter:
         buffer.append(row)
         if len(buffer) >= chunk_size:
-            df = pd.DataFrame(buffer)
-            if backend == "polars":
-                df = pl.from_pandas(df)
+            # For multi_index with polars, flatten tuple keys
+            if format == DataFrameFormat.MULTI_INDEX and backend == "polars":
+                buffer = _flatten_tuple_keys(buffer)
+            df = _create_dataframe_from_rows(buffer, backend)
             yield df
             yielded_any = True
             buffer = []
 
     # Yield remaining rows (or empty DataFrame if no data)
     if buffer or not yielded_any:
-        df = pd.DataFrame(buffer)
-        if backend == "polars":
-            df = pl.from_pandas(df)
+        # For multi_index with polars, flatten tuple keys
+        if format == DataFrameFormat.MULTI_INDEX and backend == "polars":
+            buffer = _flatten_tuple_keys(buffer)
+        df = _create_dataframe_from_rows(buffer, backend)
         yield df
 
 
@@ -853,7 +916,8 @@ def _to_points_df(
     include_predicted_instances: bool = True,
     include_video: bool = True,
     video_id: str = "path",
-) -> pd.DataFrame:
+    backend: str = "pandas",
+) -> "pd.DataFrame | pl.DataFrame":
     """Convert to points format (one row per point).
 
     Column structure:
@@ -918,7 +982,7 @@ def _to_points_df(
 
                 rows.append(row)
 
-    return pd.DataFrame(rows)
+    return _create_dataframe_from_rows(rows, backend)
 
 
 def _to_instances_df(
@@ -931,7 +995,8 @@ def _to_instances_df(
     include_predicted_instances: bool = True,
     include_video: bool = True,
     video_id: str = "path",
-) -> pd.DataFrame:
+    backend: str = "pandas",
+) -> "pd.DataFrame | pl.DataFrame":
     """Convert to instances format (one row per instance).
 
     Column structure:
@@ -991,7 +1056,7 @@ def _to_instances_df(
 
             rows.append(row)
 
-    return pd.DataFrame(rows)
+    return _create_dataframe_from_rows(rows, backend)
 
 
 def _to_frames_df(  # noqa: D417
@@ -1006,7 +1071,8 @@ def _to_frames_df(  # noqa: D417
     video_id: str = "path",
     instance_id: str = "index",
     untracked: str = "error",
-) -> pd.DataFrame:
+    backend: str = "pandas",
+) -> "pd.DataFrame | pl.DataFrame":
     """Convert to frames format (one row per frame, wide format).
 
     This format multiplexes all instances across columns for each frame.
@@ -1029,7 +1095,7 @@ def _to_frames_df(  # noqa: D417
         {track}.{node}.x | {track}.{node}.y | {track}.{node}.score | ...
     """
     if not labeled_frames:
-        return pd.DataFrame()
+        return _create_dataframe_from_rows([], backend)
 
     # Get skeleton from first available instance
     skeleton = None
@@ -1041,7 +1107,7 @@ def _to_frames_df(  # noqa: D417
             break
 
     if skeleton is None:
-        return pd.DataFrame()
+        return _create_dataframe_from_rows([], backend)
 
     # Collect all data into a frame-indexed structure
     frame_data = {}  # (video, frame_idx) -> list of (instance, prefix)
@@ -1198,11 +1264,15 @@ def _to_frames_df(  # noqa: D417
 
         rows.append(row)
 
-    df = pd.DataFrame(rows)
+    df = _create_dataframe_from_rows(rows, backend)
 
     # Sort by frame_idx
-    if not df.empty:
-        df = df.sort_values("frame_idx").reset_index(drop=True)
+    if backend == "polars":
+        if not df.is_empty():
+            df = df.sort("frame_idx")
+    else:
+        if not df.empty:
+            df = df.sort_values("frame_idx").reset_index(drop=True)
 
     return df
 
@@ -1218,7 +1288,8 @@ def _to_multi_index_df(  # noqa: D417
     video_id: str = "path",
     instance_id: str = "index",
     untracked: str = "error",
-) -> pd.DataFrame:
+    backend: str = "pandas",
+) -> "pd.DataFrame | pl.DataFrame":
     """Convert to multi-index format (hierarchical columns).
 
     This format uses hierarchical column structure similar to NWB format.
@@ -1242,9 +1313,12 @@ def _to_multi_index_df(  # noqa: D417
             for nodes: (x, y, score)
 
     Index: frame_idx
+
+    Note: For polars backend, hierarchical columns are flattened to dot-separated
+    names (e.g., "inst0.nose.x") since polars doesn't support MultiIndex columns.
     """
     if not labeled_frames:
-        return pd.DataFrame()
+        return _create_dataframe_from_rows([], backend)
 
     # Get skeleton from first available instance
     skeleton = None
@@ -1256,7 +1330,7 @@ def _to_multi_index_df(  # noqa: D417
             break
 
     if skeleton is None:
-        return pd.DataFrame()
+        return _create_dataframe_from_rows([], backend)
 
     # Collect all data into a frame-indexed structure
     frame_data = {}  # (video, frame_idx) -> list of instances
@@ -1297,7 +1371,10 @@ def _to_multi_index_df(  # noqa: D417
         frame_data[key] = instances_to_process
         max_instances = max(max_instances, len(instances_to_process))
 
-    # Build rows as flat dictionaries first, then create multi-index
+    # For polars backend, use flat column names directly (avoid tuple key overhead)
+    use_flat_keys = backend == "polars"
+
+    # Build rows
     rows = []
 
     for (video, frame_idx), instances in frame_data.items():
@@ -1313,45 +1390,84 @@ def _to_multi_index_df(  # noqa: D417
                     is_predicted = isinstance(instance, PredictedInstance)
 
                     # Instance metadata
-                    row_dict[(prefix, "track", "")] = (
-                        instance.track.name if instance.track else None
-                    )
-                    if is_predicted:
-                        row_dict[(prefix, "track_score", "")] = (
-                            float(instance.tracking_score)
-                            if instance.tracking_score is not None
-                            else None
+                    if use_flat_keys:
+                        row_dict[f"{prefix}.track"] = (
+                            instance.track.name if instance.track else None
                         )
-                        row_dict[(prefix, "score", "")] = (
-                            float(instance.score)
-                            if instance.score is not None
-                            else None
-                        )
+                        if is_predicted:
+                            row_dict[f"{prefix}.track_score"] = (
+                                float(instance.tracking_score)
+                                if instance.tracking_score is not None
+                                else None
+                            )
+                            row_dict[f"{prefix}.score"] = (
+                                float(instance.score)
+                                if instance.score is not None
+                                else None
+                            )
+                        else:
+                            row_dict[f"{prefix}.track_score"] = None
+                            row_dict[f"{prefix}.score"] = None
                     else:
-                        row_dict[(prefix, "track_score", "")] = None
-                        row_dict[(prefix, "score", "")] = None
+                        row_dict[(prefix, "track", "")] = (
+                            instance.track.name if instance.track else None
+                        )
+                        if is_predicted:
+                            row_dict[(prefix, "track_score", "")] = (
+                                float(instance.tracking_score)
+                                if instance.tracking_score is not None
+                                else None
+                            )
+                            row_dict[(prefix, "score", "")] = (
+                                float(instance.score)
+                                if instance.score is not None
+                                else None
+                            )
+                        else:
+                            row_dict[(prefix, "track_score", "")] = None
+                            row_dict[(prefix, "score", "")] = None
 
                     # Node coordinates
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
-                        row_dict[(prefix, node.name, "x")] = float(point["xy"][0])
-                        row_dict[(prefix, node.name, "y")] = float(point["xy"][1])
-                        if include_score and is_predicted:
-                            row_dict[(prefix, node.name, "score")] = float(
-                                point["score"]
-                            )
-                        elif include_score:
-                            row_dict[(prefix, node.name, "score")] = None
+                        if use_flat_keys:
+                            row_dict[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
+                            row_dict[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                            if include_score and is_predicted:
+                                row_dict[f"{prefix}.{node.name}.score"] = float(
+                                    point["score"]
+                                )
+                            elif include_score:
+                                row_dict[f"{prefix}.{node.name}.score"] = None
+                        else:
+                            row_dict[(prefix, node.name, "x")] = float(point["xy"][0])
+                            row_dict[(prefix, node.name, "y")] = float(point["xy"][1])
+                            if include_score and is_predicted:
+                                row_dict[(prefix, node.name, "score")] = float(
+                                    point["score"]
+                                )
+                            elif include_score:
+                                row_dict[(prefix, node.name, "score")] = None
                 else:
                     # Pad with NaN for missing instances
-                    row_dict[(prefix, "track", "")] = None
-                    row_dict[(prefix, "track_score", "")] = None
-                    row_dict[(prefix, "score", "")] = None
-                    for node in skeleton.nodes:
-                        row_dict[(prefix, node.name, "x")] = np.nan
-                        row_dict[(prefix, node.name, "y")] = np.nan
-                        if include_score:
-                            row_dict[(prefix, node.name, "score")] = np.nan
+                    if use_flat_keys:
+                        row_dict[f"{prefix}.track"] = None
+                        row_dict[f"{prefix}.track_score"] = None
+                        row_dict[f"{prefix}.score"] = None
+                        for node in skeleton.nodes:
+                            row_dict[f"{prefix}.{node.name}.x"] = np.nan
+                            row_dict[f"{prefix}.{node.name}.y"] = np.nan
+                            if include_score:
+                                row_dict[f"{prefix}.{node.name}.score"] = np.nan
+                    else:
+                        row_dict[(prefix, "track", "")] = None
+                        row_dict[(prefix, "track_score", "")] = None
+                        row_dict[(prefix, "score", "")] = None
+                        for node in skeleton.nodes:
+                            row_dict[(prefix, node.name, "x")] = np.nan
+                            row_dict[(prefix, node.name, "y")] = np.nan
+                            if include_score:
+                                row_dict[(prefix, node.name, "score")] = np.nan
 
         else:  # instance_id == "track"
             # Track-named mode: use track names as prefixes
@@ -1370,41 +1486,76 @@ def _to_multi_index_df(  # noqa: D417
                     is_predicted = isinstance(instance, PredictedInstance)
 
                     # Instance metadata (no track column in track mode)
-                    if is_predicted:
-                        row_dict[(prefix, "track_score", "")] = (
-                            float(instance.tracking_score)
-                            if instance.tracking_score is not None
-                            else None
-                        )
-                        row_dict[(prefix, "score", "")] = (
-                            float(instance.score)
-                            if instance.score is not None
-                            else None
-                        )
+                    if use_flat_keys:
+                        if is_predicted:
+                            row_dict[f"{prefix}.track_score"] = (
+                                float(instance.tracking_score)
+                                if instance.tracking_score is not None
+                                else None
+                            )
+                            row_dict[f"{prefix}.score"] = (
+                                float(instance.score)
+                                if instance.score is not None
+                                else None
+                            )
+                        else:
+                            row_dict[f"{prefix}.track_score"] = None
+                            row_dict[f"{prefix}.score"] = None
                     else:
-                        row_dict[(prefix, "track_score", "")] = None
-                        row_dict[(prefix, "score", "")] = None
+                        if is_predicted:
+                            row_dict[(prefix, "track_score", "")] = (
+                                float(instance.tracking_score)
+                                if instance.tracking_score is not None
+                                else None
+                            )
+                            row_dict[(prefix, "score", "")] = (
+                                float(instance.score)
+                                if instance.score is not None
+                                else None
+                            )
+                        else:
+                            row_dict[(prefix, "track_score", "")] = None
+                            row_dict[(prefix, "score", "")] = None
 
                     # Node coordinates
                     for node_idx, node in enumerate(skeleton.nodes):
                         point = instance.points[node_idx]
-                        row_dict[(prefix, node.name, "x")] = float(point["xy"][0])
-                        row_dict[(prefix, node.name, "y")] = float(point["xy"][1])
-                        if include_score and is_predicted:
-                            row_dict[(prefix, node.name, "score")] = float(
-                                point["score"]
-                            )
-                        elif include_score:
-                            row_dict[(prefix, node.name, "score")] = None
+                        if use_flat_keys:
+                            row_dict[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
+                            row_dict[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                            if include_score and is_predicted:
+                                row_dict[f"{prefix}.{node.name}.score"] = float(
+                                    point["score"]
+                                )
+                            elif include_score:
+                                row_dict[f"{prefix}.{node.name}.score"] = None
+                        else:
+                            row_dict[(prefix, node.name, "x")] = float(point["xy"][0])
+                            row_dict[(prefix, node.name, "y")] = float(point["xy"][1])
+                            if include_score and is_predicted:
+                                row_dict[(prefix, node.name, "score")] = float(
+                                    point["score"]
+                                )
+                            elif include_score:
+                                row_dict[(prefix, node.name, "score")] = None
                 else:
                     # Track not present in this frame
-                    row_dict[(prefix, "track_score", "")] = None
-                    row_dict[(prefix, "score", "")] = None
-                    for node in skeleton.nodes:
-                        row_dict[(prefix, node.name, "x")] = np.nan
-                        row_dict[(prefix, node.name, "y")] = np.nan
-                        if include_score:
-                            row_dict[(prefix, node.name, "score")] = np.nan
+                    if use_flat_keys:
+                        row_dict[f"{prefix}.track_score"] = None
+                        row_dict[f"{prefix}.score"] = None
+                        for node in skeleton.nodes:
+                            row_dict[f"{prefix}.{node.name}.x"] = np.nan
+                            row_dict[f"{prefix}.{node.name}.y"] = np.nan
+                            if include_score:
+                                row_dict[f"{prefix}.{node.name}.score"] = np.nan
+                    else:
+                        row_dict[(prefix, "track_score", "")] = None
+                        row_dict[(prefix, "score", "")] = None
+                        for node in skeleton.nodes:
+                            row_dict[(prefix, node.name, "x")] = np.nan
+                            row_dict[(prefix, node.name, "y")] = np.nan
+                            if include_score:
+                                row_dict[(prefix, node.name, "score")] = np.nan
 
         # Add video info if requested (as part of index or separate)
         row_dict["frame_idx"] = int(frame_idx)
@@ -1420,9 +1571,15 @@ def _to_multi_index_df(  # noqa: D417
         rows.append(row_dict)
 
     if not rows:
-        return pd.DataFrame()
+        return _create_dataframe_from_rows([], backend)
 
-    # Create DataFrame and set up multi-index columns
+    # Handle polars backend: rows already have flat keys
+    if backend == "polars":
+        df = _create_dataframe_from_rows(rows, backend)
+        df = df.sort("frame_idx")
+        return df
+
+    # For pandas, create DataFrame and set up multi-index columns
     df = pd.DataFrame(rows)
 
     # Set frame_idx as index

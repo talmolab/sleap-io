@@ -2943,3 +2943,308 @@ def test_to_dataframe_iter_invalid_format():
 
     with pytest.raises(ValueError, match="Invalid format"):
         list(to_dataframe_iter(labels, format="invalid", chunk_size=10))
+
+
+# ============================================================================
+# Native Polars Backend Tests (Phase 3)
+# ============================================================================
+
+
+def test_polars_native_points_format_values():
+    """Test that native polars backend produces correct values in points format."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    track = Track("mouse1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[10.5, 20.3], [15.2, 25.1]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.92, 0.89]),
+        track=track,
+        score=0.95,
+        tracking_score=0.98,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+    assert len(df) == 2  # Two nodes
+
+    # Check values
+    nose_row = df.filter(pl.col("node") == "nose")
+    assert nose_row["x"][0] == 10.5
+    assert nose_row["y"][0] == 20.3
+    assert nose_row["score"][0] == 0.92
+    assert nose_row["track"][0] == "mouse1"
+    assert nose_row["instance_score"][0] == 0.95
+    assert nose_row["track_score"][0] == 0.98
+
+
+def test_polars_native_instances_format_values():
+    """Test that native polars backend produces correct values in instances format."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    track = Track("mouse1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[10.5, 20.3], [15.2, 25.1]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.92, 0.89]),
+        track=track,
+        score=0.95,
+        tracking_score=0.98,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="instances", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+    assert len(df) == 1  # One instance
+
+    # Check values
+    assert df["frame_idx"][0] == 0
+    assert df["track"][0] == "mouse1"
+    assert df["score"][0] == 0.95
+    assert df["track_score"][0] == 0.98
+    assert df["nose.x"][0] == 10.5
+    assert df["nose.y"][0] == 20.3
+    assert df["nose.score"][0] == 0.92
+    assert df["tail.x"][0] == 15.2
+    assert df["tail.y"][0] == 25.1
+    assert df["tail.score"][0] == 0.89
+
+
+def test_polars_native_frames_format_values():
+    """Test that native polars backend produces correct values in frames format."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    track1 = Track("mouse1")
+    track2 = Track("mouse2")
+
+    inst1 = PredictedInstance.from_numpy(
+        points_data=np.array([[10.0, 20.0], [15.0, 25.0]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.8]),
+        track=track1,
+        score=0.95,
+    )
+    inst2 = PredictedInstance.from_numpy(
+        points_data=np.array([[50.0, 60.0], [55.0, 65.0]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.85, 0.82]),
+        track=track2,
+        score=0.88,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+    labels = Labels([lf], tracks=[track1, track2])
+
+    df = to_dataframe(labels, format="frames", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+    assert len(df) == 1  # One frame
+
+    # Check instance 0 values
+    assert df["inst0.track"][0] == "mouse1"
+    assert df["inst0.score"][0] == 0.95
+    assert df["inst0.nose.x"][0] == 10.0
+    assert df["inst0.nose.y"][0] == 20.0
+    assert df["inst0.tail.x"][0] == 15.0
+
+    # Check instance 1 values
+    assert df["inst1.track"][0] == "mouse2"
+    assert df["inst1.score"][0] == 0.88
+    assert df["inst1.nose.x"][0] == 50.0
+
+
+def test_polars_native_multi_index_format_values():
+    """Test that native polars backend produces correct values in multi_index format."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    track = Track("mouse1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[10.5, 20.3], [15.2, 25.1]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.92, 0.89]),
+        track=track,
+        score=0.95,
+        tracking_score=0.98,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="multi_index", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+
+    # For polars, multi_index uses flat dot-separated column names
+    assert "inst0.track" in df.columns
+    assert "inst0.nose.x" in df.columns
+    assert "inst0.nose.y" in df.columns
+    assert "inst0.nose.score" in df.columns
+
+    # Check values
+    assert df["inst0.track"][0] == "mouse1"
+    assert df["inst0.nose.x"][0] == 10.5
+    assert df["inst0.nose.y"][0] == 20.3
+    assert df["inst0.nose.score"][0] == 0.92
+
+
+def test_polars_pandas_equivalence():
+    """Test that polars and pandas backends produce equivalent data."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+    track = Track("t1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.8]),
+        track=track,
+        score=0.95,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    for fmt in ["points", "instances", "frames"]:
+        df_pandas = to_dataframe(labels, format=fmt, backend="pandas")
+        df_polars = to_dataframe(labels, format=fmt, backend="polars")
+
+        # Convert polars to pandas for comparison
+        df_polars_pd = df_polars.to_pandas()
+
+        # Sort columns for consistent comparison
+        df_pandas = df_pandas[sorted(df_pandas.columns)]
+        df_polars_pd = df_polars_pd[sorted(df_polars_pd.columns)]
+
+        # Check same columns
+        assert set(df_pandas.columns) == set(df_polars_pd.columns), f"Format {fmt}"
+
+        # Check same values (with tolerance for floats)
+        for col in df_pandas.columns:
+            pd_vals = df_pandas[col].values
+            pl_vals = df_polars_pd[col].values
+            if np.issubdtype(pd_vals.dtype, np.floating):
+                np.testing.assert_array_almost_equal(pd_vals, pl_vals)
+            else:
+                np.testing.assert_array_equal(pd_vals, pl_vals)
+
+
+def test_polars_native_iter_values():
+    """Test that native polars iterator produces correct values."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="test.mp4")
+
+    instances = [
+        PredictedInstance.from_numpy(
+            points_data=np.array([[i * 10.0, i * 20.0]]),
+            skeleton=skeleton,
+            point_scores=np.array([0.9]),
+            score=0.95,
+        )
+        for i in range(5)
+    ]
+
+    lfs = [
+        LabeledFrame(video=video, frame_idx=i, instances=[instances[i]])
+        for i in range(5)
+    ]
+    labels = Labels(lfs)
+
+    # Get chunks
+    chunks = list(
+        to_dataframe_iter(labels, format="points", chunk_size=2, backend="polars")
+    )
+
+    # Should have 3 chunks (2+2+1)
+    assert len(chunks) == 3
+
+    # All chunks should be polars DataFrames
+    for chunk in chunks:
+        assert isinstance(chunk, pl.DataFrame)
+
+    # Concatenate and verify values
+    df = pl.concat(chunks)
+    assert len(df) == 5
+
+    for i in range(5):
+        row = df.filter(pl.col("frame_idx") == i)
+        assert row["x"][0] == i * 10.0
+        assert row["y"][0] == i * 20.0
+
+
+def test_polars_empty_labels():
+    """Test that native polars handles empty labels correctly."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    labels = Labels()
+
+    for fmt in ["points", "instances", "frames", "multi_index"]:
+        df = to_dataframe(labels, format=fmt, backend="polars")
+        assert isinstance(df, pl.DataFrame)
+        assert df.is_empty()
+
+
+def test_polars_multi_index_track_mode():
+    """Test multi_index format with track mode in polars."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="test.mp4")
+    track1 = Track("mouse1")
+    track2 = Track("mouse2")
+
+    inst1 = PredictedInstance.from_numpy(
+        points_data=np.array([[10.0, 20.0]]),
+        skeleton=skeleton,
+        track=track1,
+        score=0.9,
+    )
+    inst2 = PredictedInstance.from_numpy(
+        points_data=np.array([[50.0, 60.0]]),
+        skeleton=skeleton,
+        track=track2,
+        score=0.8,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+    labels = Labels([lf], tracks=[track1, track2])
+
+    df = to_dataframe(
+        labels, format="multi_index", backend="polars", instance_id="track"
+    )
+
+    assert isinstance(df, pl.DataFrame)
+    # Track mode: column names are track names
+    assert "mouse1.nose.x" in df.columns
+    assert "mouse2.nose.x" in df.columns
+    assert df["mouse1.nose.x"][0] == 10.0
+    assert df["mouse2.nose.x"][0] == 50.0
