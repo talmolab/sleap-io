@@ -13,7 +13,7 @@ Supported formats:
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Generator, Iterator, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -89,7 +89,7 @@ def to_dataframe(
         instance_id: How to name instance columns in "frames" and "multi_index" formats.
             - "index": Use inst0, inst1, inst2, etc. (default).
             - "track": Use track names as column prefixes (e.g., mouse1, mouse2).
-        untracked: Behavior when encountering untracked instances with instance_id="track".
+        untracked: Behavior for untracked instances with instance_id="track".
             - "error": Raise error if any instance lacks a track (default).
             - "ignore": Skip untracked instances silently.
         backend: "pandas" or "polars". Polars requires the polars package.
@@ -126,11 +126,11 @@ def to_dataframe(
         See the DataFrameFormat enum documentation for details on each format.
 
         Column naming conventions:
-        - Points format: frame_idx, node, x, y, track, track_score, instance_score, score
-        - Instances format: frame_idx, track, track_score, score, {node}.x, {node}.y, {node}.score
-        - Frames format: frame_idx, {inst}.track, {inst}.track_score, {inst}.score,
+        - Points: frame_idx, node, x, y, track, track_score, instance_score
+        - Instances: frame_idx, track, track_score, score, {node}.x/y/score
+        - Frames: frame_idx, {inst}.track, {inst}.track_score, {inst}.score,
           {inst}.{node}.x, {inst}.{node}.y, {inst}.{node}.score
-        - Multi-index format: Hierarchical columns (inst, node, coord) with frame as index
+        - Multi-index: Hierarchical columns (inst, node, coord) with frame idx
     """
     # Validate backend
     if backend == "polars" and not HAS_POLARS:
@@ -220,6 +220,222 @@ def to_dataframe(
     return df
 
 
+def to_dataframe_iter(
+    labels: Labels,
+    format: DataFrameFormat | str = DataFrameFormat.POINTS,
+    *,
+    chunk_size: int | None = None,
+    video: Optional[Video | int] = None,
+    include_metadata: bool = True,
+    include_score: bool = True,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    video_id: Literal["path", "index", "name", "object"] = "path",
+    include_video: Optional[bool] = None,
+    instance_id: Literal["index", "track"] = "index",
+    untracked: Literal["error", "ignore"] = "error",
+    backend: Literal["pandas", "polars"] = "pandas",
+) -> Iterator[pd.DataFrame | "pl.DataFrame"]:
+    """Iterate over Labels data, yielding DataFrames in chunks.
+
+    This is a memory-efficient alternative to `to_dataframe()` for large datasets.
+    Instead of materializing the entire DataFrame at once, it yields smaller
+    DataFrames (chunks) that can be processed incrementally.
+
+    Args:
+        labels: Labels object to convert.
+        format: Output format. One of "points", "instances", "frames", "multi_index".
+        chunk_size: Number of rows per chunk. If None (default), yields the entire
+            DataFrame in a single chunk (equivalent to `to_dataframe()`).
+            The meaning of "row" depends on the format:
+            - points: One point (node) per row
+            - instances: One instance per row
+            - frames: One frame per row
+            - multi_index: One frame per row
+        video: Optional video filter. If specified, only frames from this video
+            are included. Can be a Video object or integer index.
+        include_metadata: Include track, video information in columns.
+        include_score: Include confidence scores for predicted instances.
+        include_user_instances: Include user-labeled instances.
+        include_predicted_instances: Include predicted instances.
+        video_id: How to represent videos in the DataFrame. Options:
+            - "path": Full filename/path (default).
+            - "index": Integer video index.
+            - "name": Just the video filename.
+            - "object": Store Video object directly.
+        include_video: Whether to include video information.
+        instance_id: How to name instance columns in "frames" and "multi_index" formats.
+            - "index": Use inst0, inst1, inst2, etc. (default).
+            - "track": Use track names as column prefixes.
+        untracked: Behavior for untracked instances with instance_id="track".
+            - "error": Raise error if any instance lacks a track (default).
+            - "ignore": Skip untracked instances silently.
+        backend: "pandas" or "polars". Polars requires the polars package.
+
+    Yields:
+        DataFrames, each containing up to `chunk_size` rows.
+
+    Examples:
+        Process large datasets in chunks:
+
+        >>> for df_chunk in to_dataframe_iter(labels, chunk_size=10000):
+        ...     df_chunk.to_parquet("output.parquet", append=True)
+
+        Concatenate chunks to get full DataFrame (equivalent to to_dataframe):
+
+        >>> import pandas as pd
+        >>> df = pd.concat(list(to_dataframe_iter(labels, chunk_size=1000)))
+
+        Memory-efficient per-video processing:
+
+        >>> for video in labels.videos:
+        ...     for chunk in to_dataframe_iter(labels, video=video, chunk_size=5000):
+        ...         process_chunk(chunk)
+    """
+    # Validate backend
+    if backend == "polars" and not HAS_POLARS:
+        raise ValueError(
+            "Polars backend requested but polars is not installed. "
+            "Install with: pip install polars"
+        )
+
+    # Normalize format parameter
+    if isinstance(format, str):
+        try:
+            format = DataFrameFormat(format.lower())
+        except ValueError:
+            valid_formats = ", ".join([f.value for f in DataFrameFormat])
+            raise ValueError(
+                f"Invalid format '{format}'. Must be one of: {valid_formats}"
+            )
+
+    # Filter to specific video if requested
+    if video is not None:
+        if isinstance(video, int):
+            video = labels.videos[video]
+        labeled_frames = [lf for lf in labels.labeled_frames if lf.video == video]
+    else:
+        labeled_frames = labels.labeled_frames
+
+    # Determine whether to include video info
+    if include_video is None:
+        include_video = len(labels.videos) > 1
+
+    # If no chunk_size specified, yield entire DataFrame at once
+    if chunk_size is None:
+        df = to_dataframe(
+            labels,
+            format=format,
+            video=video,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            video_id=video_id,
+            include_video=include_video,
+            instance_id=instance_id,
+            untracked=untracked,
+            backend=backend,
+        )
+        yield df
+        return
+
+    # Get the appropriate row iterator and DataFrame builder
+    if format == DataFrameFormat.POINTS:
+        row_iter = _iter_points_rows(
+            labels,
+            labeled_frames,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
+        )
+    elif format == DataFrameFormat.INSTANCES:
+        row_iter = _iter_instances_rows(
+            labels,
+            labeled_frames,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
+        )
+    elif format == DataFrameFormat.FRAMES:
+        # For frames format, we need to pre-scan for max_instances and tracks
+        max_instances, all_tracks, skeleton = _prescan_for_frames(
+            labels,
+            labeled_frames,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            instance_id=instance_id,
+            untracked=untracked,
+        )
+        row_iter = _iter_frames_rows(
+            labels,
+            labeled_frames,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
+            instance_id=instance_id,
+            untracked=untracked,
+            max_instances=max_instances,
+            all_tracks=all_tracks,
+            skeleton=skeleton,
+        )
+    elif format == DataFrameFormat.MULTI_INDEX:
+        # For multi_index format, we also need to pre-scan
+        max_instances, all_tracks, skeleton = _prescan_for_frames(
+            labels,
+            labeled_frames,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            instance_id=instance_id,
+            untracked=untracked,
+        )
+        row_iter = _iter_multi_index_rows(
+            labels,
+            labeled_frames,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            include_video=include_video,
+            video_id=video_id,
+            instance_id=instance_id,
+            untracked=untracked,
+            max_instances=max_instances,
+            all_tracks=all_tracks,
+            skeleton=skeleton,
+        )
+    else:
+        raise ValueError(f"Unknown format: {format}")
+
+    # Buffer rows and yield DataFrames
+    buffer: list[dict] = []
+    yielded_any = False
+    for row in row_iter:
+        buffer.append(row)
+        if len(buffer) >= chunk_size:
+            df = pd.DataFrame(buffer)
+            if backend == "polars":
+                df = pl.from_pandas(df)
+            yield df
+            yielded_any = True
+            buffer = []
+
+    # Yield remaining rows (or empty DataFrame if no data)
+    if buffer or not yielded_any:
+        df = pd.DataFrame(buffer)
+        if backend == "polars":
+            df = pl.from_pandas(df)
+        yield df
+
+
 def _format_video(
     video: Video, labels: Labels, video_id: str
 ) -> Union[str, int, Video]:
@@ -252,6 +468,379 @@ def _format_video(
         return video
     else:
         raise ValueError(f"Invalid video_id: {video_id}")
+
+
+# =============================================================================
+# Row Iterators for Streaming
+# =============================================================================
+
+
+def _iter_points_rows(
+    labels: Labels,
+    labeled_frames: list,
+    *,
+    include_metadata: bool = True,
+    include_score: bool = True,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
+) -> Generator[dict, None, None]:
+    """Yield row dicts for points format (one row per point)."""
+    for lf in labeled_frames:
+        # Collect instances to include
+        instances_to_process = []
+
+        if include_user_instances:
+            instances_to_process.extend(lf.user_instances)
+        if include_predicted_instances:
+            instances_to_process.extend(lf.predicted_instances)
+
+        for instance in instances_to_process:
+            is_predicted = isinstance(instance, PredictedInstance)
+
+            for node_idx, node in enumerate(instance.skeleton.nodes):
+                point = instance.points[node_idx]
+
+                row = {
+                    "frame_idx": int(lf.frame_idx),
+                    "node": node.name,
+                    "x": float(point["xy"][0]),
+                    "y": float(point["xy"][1]),
+                }
+
+                if include_metadata:
+                    # Add video info if requested
+                    if include_video:
+                        video_value = _format_video(lf.video, labels, video_id)
+                        if video_id == "index":
+                            row["video_idx"] = video_value
+                        elif video_id == "object":
+                            row["video"] = video_value
+                        else:
+                            row["video_path"] = video_value
+
+                    row["track"] = instance.track.name if instance.track else None
+
+                    if is_predicted:
+                        row["track_score"] = (
+                            float(instance.tracking_score)
+                            if instance.tracking_score is not None
+                            else None
+                        )
+                        row["instance_score"] = (
+                            float(instance.score)
+                            if instance.score is not None
+                            else None
+                        )
+                    else:
+                        row["track_score"] = None
+                        row["instance_score"] = None
+
+                if include_score and is_predicted:
+                    row["score"] = float(point["score"])
+
+                yield row
+
+
+def _iter_instances_rows(
+    labels: Labels,
+    labeled_frames: list,
+    *,
+    include_metadata: bool = True,
+    include_score: bool = True,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
+) -> Generator[dict, None, None]:
+    """Yield row dicts for instances format (one row per instance)."""
+    for lf in labeled_frames:
+        instances_to_process = []
+
+        if include_user_instances:
+            instances_to_process.extend(lf.user_instances)
+        if include_predicted_instances:
+            instances_to_process.extend(lf.predicted_instances)
+
+        for instance in instances_to_process:
+            is_predicted = isinstance(instance, PredictedInstance)
+
+            row = {"frame_idx": int(lf.frame_idx)}
+
+            if include_metadata:
+                if include_video:
+                    video_value = _format_video(lf.video, labels, video_id)
+                    if video_id == "index":
+                        row["video_idx"] = video_value
+                    elif video_id == "object":
+                        row["video"] = video_value
+                    else:
+                        row["video_path"] = video_value
+
+                row["track"] = instance.track.name if instance.track else None
+
+                if is_predicted:
+                    row["track_score"] = (
+                        float(instance.tracking_score)
+                        if instance.tracking_score is not None
+                        else None
+                    )
+                    row["score"] = (
+                        float(instance.score) if instance.score is not None else None
+                    )
+                else:
+                    row["track_score"] = None
+                    row["score"] = None
+
+            # Add node coordinates
+            for node_idx, node in enumerate(instance.skeleton.nodes):
+                point = instance.points[node_idx]
+                row[f"{node.name}.x"] = float(point["xy"][0])
+                row[f"{node.name}.y"] = float(point["xy"][1])
+                if include_score and is_predicted:
+                    row[f"{node.name}.score"] = float(point["score"])
+                elif include_score:
+                    row[f"{node.name}.score"] = None
+
+            yield row
+
+
+def _prescan_for_frames(
+    labels: Labels,
+    labeled_frames: list,
+    *,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    instance_id: str = "index",
+    untracked: str = "error",
+) -> tuple:
+    """Pre-scan labeled frames to determine max_instances, tracks, and skeleton.
+
+    This is used by frames and multi_index formats to ensure consistent column
+    structure across chunks.
+
+    Returns:
+        Tuple of (max_instances, all_tracks, skeleton)
+    """
+    max_instances = 0
+    skeleton = None
+
+    # Collect all track names if using track mode
+    all_tracks = []
+    if instance_id == "track":
+        all_tracks = [t.name for t in labels.tracks]
+
+    for lf in labeled_frames:
+        # Get skeleton from first available instance
+        if skeleton is None:
+            for inst in lf.instances:
+                skeleton = inst.skeleton
+                break
+
+        # Count instances
+        instances_to_process = []
+        if include_user_instances:
+            instances_to_process.extend(lf.user_instances)
+        if include_predicted_instances:
+            instances_to_process.extend(lf.predicted_instances)
+
+        # Filter/validate for track mode
+        if instance_id == "track":
+            filtered = []
+            for inst in instances_to_process:
+                if inst.track is None:
+                    if untracked == "error":
+                        raise ValueError(
+                            f"Instance in frame {lf.frame_idx} has no track. "
+                            "Use instance_id='index' or untracked='ignore'."
+                        )
+                else:
+                    filtered.append(inst)
+            instances_to_process = filtered
+
+        max_instances = max(max_instances, len(instances_to_process))
+
+    return max_instances, all_tracks, skeleton
+
+
+def _iter_frames_rows(
+    labels: Labels,
+    labeled_frames: list,
+    *,
+    include_metadata: bool = True,
+    include_score: bool = True,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
+    instance_id: str = "index",
+    untracked: str = "error",
+    max_instances: int,
+    all_tracks: list,
+    skeleton,
+) -> Generator[dict, None, None]:
+    """Yield row dicts for frames format (one row per frame)."""
+    if skeleton is None:
+        return
+
+    for lf in labeled_frames:
+        # Collect instances to include
+        instances_to_process = []
+
+        if include_user_instances:
+            instances_to_process.extend(lf.user_instances)
+        if include_predicted_instances:
+            instances_to_process.extend(lf.predicted_instances)
+
+        # Filter for track mode
+        if instance_id == "track":
+            instances_to_process = [
+                inst for inst in instances_to_process if inst.track is not None
+            ]
+
+        row = {"frame_idx": int(lf.frame_idx)}
+
+        if include_video:
+            video_value = _format_video(lf.video, labels, video_id)
+            if video_id == "index":
+                row["video_idx"] = video_value
+            elif video_id == "object":
+                row["video"] = video_value
+            else:
+                row["video_path"] = video_value
+
+        if instance_id == "index":
+            # Instance-indexed mode: inst0, inst1, ...
+            for inst_idx in range(max_instances):
+                prefix = f"inst{inst_idx}"
+
+                if inst_idx < len(instances_to_process):
+                    instance = instances_to_process[inst_idx]
+                    is_predicted = isinstance(instance, PredictedInstance)
+
+                    row[f"{prefix}.track"] = (
+                        instance.track.name if instance.track else None
+                    )
+                    if is_predicted:
+                        row[f"{prefix}.track_score"] = (
+                            float(instance.tracking_score)
+                            if instance.tracking_score is not None
+                            else None
+                        )
+                        row[f"{prefix}.score"] = (
+                            float(instance.score)
+                            if instance.score is not None
+                            else None
+                        )
+                    else:
+                        row[f"{prefix}.track_score"] = None
+                        row[f"{prefix}.score"] = None
+
+                    for node_idx, node in enumerate(skeleton.nodes):
+                        point = instance.points[node_idx]
+                        row[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
+                        row[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                        if include_score and is_predicted:
+                            row[f"{prefix}.{node.name}.score"] = float(point["score"])
+                        elif include_score:
+                            row[f"{prefix}.{node.name}.score"] = None
+                else:
+                    # Pad with NaN for missing instances
+                    row[f"{prefix}.track"] = None
+                    row[f"{prefix}.track_score"] = None
+                    row[f"{prefix}.score"] = None
+                    for node in skeleton.nodes:
+                        row[f"{prefix}.{node.name}.x"] = np.nan
+                        row[f"{prefix}.{node.name}.y"] = np.nan
+                        if include_score:
+                            row[f"{prefix}.{node.name}.score"] = np.nan
+
+        else:  # instance_id == "track"
+            # Build mapping of track_name -> instance for this frame
+            track_instances = {}
+            for instance in instances_to_process:
+                if instance.track:
+                    track_instances[instance.track.name] = instance
+
+            for track_name in all_tracks:
+                prefix = track_name
+
+                if track_name in track_instances:
+                    instance = track_instances[track_name]
+                    is_predicted = isinstance(instance, PredictedInstance)
+
+                    if is_predicted:
+                        row[f"{prefix}.track_score"] = (
+                            float(instance.tracking_score)
+                            if instance.tracking_score is not None
+                            else None
+                        )
+                        row[f"{prefix}.score"] = (
+                            float(instance.score)
+                            if instance.score is not None
+                            else None
+                        )
+                    else:
+                        row[f"{prefix}.track_score"] = None
+                        row[f"{prefix}.score"] = None
+
+                    for node_idx, node in enumerate(skeleton.nodes):
+                        point = instance.points[node_idx]
+                        row[f"{prefix}.{node.name}.x"] = float(point["xy"][0])
+                        row[f"{prefix}.{node.name}.y"] = float(point["xy"][1])
+                        if include_score and is_predicted:
+                            row[f"{prefix}.{node.name}.score"] = float(point["score"])
+                        elif include_score:
+                            row[f"{prefix}.{node.name}.score"] = None
+                else:
+                    row[f"{prefix}.track_score"] = None
+                    row[f"{prefix}.score"] = None
+                    for node in skeleton.nodes:
+                        row[f"{prefix}.{node.name}.x"] = np.nan
+                        row[f"{prefix}.{node.name}.y"] = np.nan
+                        if include_score:
+                            row[f"{prefix}.{node.name}.score"] = np.nan
+
+        yield row
+
+
+def _iter_multi_index_rows(
+    labels: Labels,
+    labeled_frames: list,
+    *,
+    include_score: bool = True,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
+    instance_id: str = "index",
+    untracked: str = "error",
+    max_instances: int,
+    all_tracks: list,
+    skeleton,
+) -> Generator[dict, None, None]:
+    """Yield row dicts for multi_index format.
+
+    Note: This yields flat dicts with dot-separated column names.
+    The caller is responsible for converting to MultiIndex if needed.
+    """
+    # Reuse frames iterator - the structure is the same
+    yield from _iter_frames_rows(
+        labels,
+        labeled_frames,
+        include_metadata=True,  # Always include for multi_index
+        include_score=include_score,
+        include_user_instances=include_user_instances,
+        include_predicted_instances=include_predicted_instances,
+        include_video=include_video,
+        video_id=video_id,
+        instance_id=instance_id,
+        untracked=untracked,
+        max_instances=max_instances,
+        all_tracks=all_tracks,
+        skeleton=skeleton,
+    )
 
 
 def _to_points_df(
@@ -346,7 +935,7 @@ def _to_instances_df(
     """Convert to instances format (one row per instance).
 
     Column structure:
-        frame_idx | video | track | track_score | score | {node}.x | {node}.y | {node}.score
+        frame_idx | video | track | track_score | score | {node}.x/y/score
     """
     rows = []
 
@@ -385,9 +974,7 @@ def _to_instances_df(
                         else None
                     )
                     row["score"] = (
-                        float(instance.score)
-                        if instance.score is not None
-                        else None
+                        float(instance.score) if instance.score is not None else None
                     )
                 else:
                     row["track_score"] = None
@@ -407,7 +994,7 @@ def _to_instances_df(
     return pd.DataFrame(rows)
 
 
-def _to_frames_df(
+def _to_frames_df(  # noqa: D417
     labels: Labels,
     labeled_frames: list,
     *,
@@ -423,6 +1010,7 @@ def _to_frames_df(
     """Convert to frames format (one row per frame, wide format).
 
     This format multiplexes all instances across columns for each frame.
+    Other parameters mirror to_dataframe().
 
     Args:
         instance_id: How to name instance column prefixes.
@@ -619,7 +1207,7 @@ def _to_frames_df(
     return df
 
 
-def _to_multi_index_df(
+def _to_multi_index_df(  # noqa: D417
     labels: Labels,
     labeled_frames: list,
     *,
@@ -635,6 +1223,7 @@ def _to_multi_index_df(
 
     This format uses hierarchical column structure similar to NWB format.
     The hierarchy is: instance -> node -> coordinate.
+    Other parameters mirror to_dataframe().
 
     Args:
         instance_id: How to name instance column prefixes.
@@ -710,7 +1299,6 @@ def _to_multi_index_df(
 
     # Build rows as flat dictionaries first, then create multi-index
     rows = []
-    tuples_to_columns = []  # Will be built from first row
 
     for (video, frame_idx), instances in frame_data.items():
         row_dict = {}
@@ -987,9 +1575,7 @@ def _from_points_df(
     elif "skeleton_name" in df.columns:
         # Legacy format with skeleton_name column
         skeleton_nodes = {}
-        for _, row in df.drop_duplicates(
-            subset=["skeleton_name", node_col]
-        ).iterrows():
+        for _, row in df.drop_duplicates(subset=["skeleton_name", node_col]).iterrows():
             skel_name = row["skeleton_name"]
             if skel_name not in skeleton_nodes:
                 skeleton_nodes[skel_name] = []
@@ -1415,8 +2001,8 @@ def _from_frames_df(
 
     # Detect instance columns - look for {inst}.{node}.x patterns or {inst}.track
     # Instance prefixes can be inst0, inst1, ... or track names like mouse1, mouse2
-    instance_data = {}  # prefix -> {"track": col, "track_score": col, "score": col,
-    #                                 nodes: {node_name: {"x": col, "y": col, "score": col}}}
+    # Structure: prefix -> {"track", "track_score", "score", nodes: {name: {x,y,score}}}
+    instance_data: dict = {}
 
     for col in df.columns:
         if "." not in col:
@@ -1441,9 +2027,7 @@ def _from_frames_df(
                 instance_data[prefix]["nodes"][node_name][coord] = col
 
     if not instance_data:
-        raise ValueError(
-            "No instance columns found. Expected {inst}.{node}.x format."
-        )
+        raise ValueError("No instance columns found. Expected {inst}.{node}.x format.")
 
     # Determine if this is index mode (inst0, inst1) or track mode (track names)
     is_index_mode = all(
@@ -1625,16 +2209,12 @@ def _from_multi_index_df(
     skeleton: Optional["Skeleton"] = None,  # noqa: F821
 ) -> Labels:
     """Create Labels from a multi-index format DataFrame (hierarchical columns)."""
-    from sleap_io.model.labeled_frame import LabeledFrame
-    from sleap_io.model.skeleton import Node, Skeleton
-
     # Handle multi-index columns
     if isinstance(df.columns, pd.MultiIndex):
         # Flatten the multi-index into dot-separated column names
         df_flat = df.copy()
         df_flat.columns = [
-            ".".join(str(c) for c in col if c).strip(".")
-            for col in df.columns.values
+            ".".join(str(c) for c in col if c).strip(".") for col in df.columns.values
         ]
         # Reset index to get frame_idx as a column
         df_flat = df_flat.reset_index()

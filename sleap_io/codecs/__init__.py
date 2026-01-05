@@ -37,7 +37,12 @@ Examples:
     >>> df.to_csv("predictions.csv")
 """
 
-from sleap_io.codecs.dataframe import DataFrameFormat, from_dataframe, to_dataframe
+from sleap_io.codecs.dataframe import (
+    DataFrameFormat,
+    from_dataframe,
+    to_dataframe,
+    to_dataframe_iter,
+)
 from sleap_io.codecs.dictionary import from_dict, to_dict
 from sleap_io.codecs.numpy import from_numpy, to_numpy
 
@@ -45,6 +50,7 @@ __all__ = [
     # DataFrame codec
     "DataFrameFormat",
     "to_dataframe",
+    "to_dataframe_iter",
     "from_dataframe",
     # Dictionary codec
     "to_dict",

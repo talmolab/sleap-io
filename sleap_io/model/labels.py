@@ -347,6 +347,79 @@ class Labels:
             backend=backend,
         )
 
+    def to_dataframe_iter(
+        self,
+        format: str = "points",
+        *,
+        chunk_size: Optional[int] = None,
+        video: Optional[Union[Video, int]] = None,
+        include_metadata: bool = True,
+        include_score: bool = True,
+        include_user_instances: bool = True,
+        include_predicted_instances: bool = True,
+        video_id: str = "path",
+        include_video: Optional[bool] = None,
+        instance_id: str = "index",
+        untracked: str = "error",
+        backend: str = "pandas",
+    ):
+        """Iterate over labels data, yielding DataFrames in chunks.
+
+        This is a memory-efficient alternative to `to_dataframe()` for large datasets.
+        Instead of materializing the entire DataFrame at once, it yields smaller
+        DataFrames (chunks) that can be processed incrementally.
+
+        Args:
+            format: Output format. One of "points", "instances", "frames",
+                "multi_index".
+            chunk_size: Number of rows per chunk. If None, yields entire DataFrame.
+                The meaning of "row" depends on the format:
+                - points: One point (node) per row
+                - instances: One instance per row
+                - frames/multi_index: One frame per row
+            video: Optional video filter.
+            include_metadata: Include track, video information in columns.
+            include_score: Include confidence scores for predicted instances.
+            include_user_instances: Include user-labeled instances.
+            include_predicted_instances: Include predicted instances.
+            video_id: How to represent videos ("path", "index", "name", "object").
+            include_video: Whether to include video information.
+            instance_id: How to name instance columns ("index" or "track").
+            untracked: Behavior for untracked instances ("error" or "ignore").
+            backend: "pandas" or "polars".
+
+        Yields:
+            DataFrames, each containing up to `chunk_size` rows.
+
+        Examples:
+            >>> for chunk in labels.to_dataframe_iter(chunk_size=10000):
+            ...     chunk.to_parquet("output.parquet", append=True)
+
+            >>> # Memory-efficient processing
+            >>> import pandas as pd
+            >>> df = pd.concat(labels.to_dataframe_iter(chunk_size=1000))
+
+        Notes:
+            This method delegates to `sleap_io.codecs.dataframe.to_dataframe_iter()`.
+        """
+        from sleap_io.codecs.dataframe import to_dataframe_iter
+
+        return to_dataframe_iter(
+            self,
+            format=format,
+            chunk_size=chunk_size,
+            video=video,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            video_id=video_id,
+            include_video=include_video,
+            instance_id=instance_id,
+            untracked=untracked,
+            backend=backend,
+        )
+
     @classmethod
     def from_numpy(
         cls,

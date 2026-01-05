@@ -14,7 +14,12 @@ from sleap_io import (
     Video,
     load_slp,
 )
-from sleap_io.codecs.dataframe import DataFrameFormat, from_dataframe, to_dataframe
+from sleap_io.codecs.dataframe import (
+    DataFrameFormat,
+    from_dataframe,
+    to_dataframe,
+    to_dataframe_iter,
+)
 
 
 def test_dataframe_format_enum():
@@ -1302,7 +1307,9 @@ def test_to_dataframe_frames_untracked_ignore():
         score=0.8,
     )
 
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[tracked_inst, untracked_inst])
+    lf = LabeledFrame(
+        video=video, frame_idx=0, instances=[tracked_inst, untracked_inst]
+    )
     labels = Labels([lf])
 
     # Should not raise, should only have tracked_one columns
@@ -1771,7 +1778,6 @@ def test_to_dataframe_multi_index_untracked_error():
 def test_from_frames_with_video_column():
     """Test from_dataframe frames format with video column."""
     skeleton = Skeleton(["pt"])
-    video = Video(filename="test.mp4")
 
     df = pd.DataFrame(
         {
@@ -2104,9 +2110,12 @@ def test_from_multi_index_with_true_multi_index():
 
     # Create a true multi-index DataFrame
     columns = pd.MultiIndex.from_tuples(
-        [("inst0", "pt", "x"), ("inst0", "pt", "y")], names=["instance", "node", "coord"]
+        [("inst0", "pt", "x"), ("inst0", "pt", "y")],
+        names=["instance", "node", "coord"],
     )
-    df = pd.DataFrame([[1.0, 2.0]], columns=columns, index=pd.Index([0], name="frame_idx"))
+    df = pd.DataFrame(
+        [[1.0, 2.0]], columns=columns, index=pd.Index([0], name="frame_idx")
+    )
 
     labels = from_dataframe(df, format="multi_index", video=video, skeleton=skeleton)
 
@@ -2317,9 +2326,7 @@ def test_multi_index_format_video_path():
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels([lf])
 
-    df = to_dataframe(
-        labels, format="multi_index", include_video=True, video_id="path"
-    )
+    df = to_dataframe(labels, format="multi_index", include_video=True, video_id="path")
 
     assert "video_path" in df.columns
 
@@ -2494,7 +2501,9 @@ def test_frames_format_track_mode_untracked_ignore():
         score=0.8,
     )
 
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[tracked_inst, untracked_inst])
+    lf = LabeledFrame(
+        video=video, frame_idx=0, instances=[tracked_inst, untracked_inst]
+    )
     labels = Labels([lf])
 
     # With ignore, untracked should be skipped
@@ -2506,3 +2515,431 @@ def test_frames_format_track_mode_untracked_ignore():
     tuple_cols = [c for c in df.columns if isinstance(c, tuple)]
     col_str = str(tuple_cols)
     assert "tracked" in col_str
+
+
+# =============================================================================
+# Iterator Tests
+# =============================================================================
+
+
+def test_to_dataframe_iter_points_basic(slp_typical):
+    """Test basic iteration with points format."""
+    labels = load_slp(slp_typical)
+
+    chunks = list(to_dataframe_iter(labels, format="points", chunk_size=5))
+
+    assert len(chunks) > 0
+    for chunk in chunks:
+        assert isinstance(chunk, pd.DataFrame)
+        assert len(chunk) <= 5
+
+    # Verify concatenation equals full dataframe
+    df_iter = pd.concat(chunks, ignore_index=True)
+    df_full = to_dataframe(labels, format="points")
+    assert len(df_iter) == len(df_full)
+
+
+def test_to_dataframe_iter_all_formats(slp_typical):
+    """Test that all formats work with iterator."""
+    labels = load_slp(slp_typical)
+
+    for fmt in ["points", "instances", "frames", "multi_index"]:
+        chunks = list(to_dataframe_iter(labels, format=fmt, chunk_size=3))
+        df_iter = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+        df_full = to_dataframe(labels, format=fmt)
+        assert len(df_iter) == len(df_full), f"Format {fmt} row count mismatch"
+
+
+def test_to_dataframe_iter_no_chunk_size(slp_typical):
+    """Test that chunk_size=None yields entire DataFrame."""
+    labels = load_slp(slp_typical)
+
+    chunks = list(to_dataframe_iter(labels, format="points", chunk_size=None))
+
+    assert len(chunks) == 1
+    df_full = to_dataframe(labels, format="points")
+    assert len(chunks[0]) == len(df_full)
+
+
+def test_to_dataframe_iter_chunk_larger_than_data(slp_typical):
+    """Test when chunk_size is larger than total rows."""
+    labels = load_slp(slp_typical)
+
+    df_full = to_dataframe(labels, format="points")
+    chunks = list(
+        to_dataframe_iter(labels, format="points", chunk_size=len(df_full) * 2)
+    )
+
+    assert len(chunks) == 1
+    assert len(chunks[0]) == len(df_full)
+
+
+def test_to_dataframe_iter_chunk_size_one():
+    """Test with chunk_size=1 yields individual rows."""
+    skeleton = Skeleton(["node1", "node2"])
+    video = Video(filename="test.mp4")
+    instance = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+        score=0.9,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    # points format: 1 instance * 2 nodes = 2 rows
+    chunks = list(to_dataframe_iter(labels, format="points", chunk_size=1))
+    assert len(chunks) == 2
+    for chunk in chunks:
+        assert len(chunk) == 1
+
+
+def test_to_dataframe_iter_empty_labels():
+    """Test iteration with empty labels."""
+    labels = Labels([])
+
+    chunks = list(to_dataframe_iter(labels, format="points", chunk_size=10))
+
+    # Should yield empty DataFrame
+    assert len(chunks) == 1
+    assert len(chunks[0]) == 0
+
+
+def test_to_dataframe_iter_instances_format():
+    """Test instances format iteration."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+    instances = [
+        PredictedInstance.from_numpy(
+            points_data=np.array([[i * 10.0, i * 20.0], [i * 10.0 + 1, i * 20.0 + 1]]),
+            skeleton=skeleton,
+            score=0.9,
+        )
+        for i in range(5)
+    ]
+    lf = LabeledFrame(video=video, frame_idx=0, instances=instances)
+    labels = Labels([lf])
+
+    # 5 instances, chunk_size=2 -> 3 chunks
+    chunks = list(to_dataframe_iter(labels, format="instances", chunk_size=2))
+    assert len(chunks) == 3
+    assert len(chunks[0]) == 2
+    assert len(chunks[1]) == 2
+    assert len(chunks[2]) == 1
+
+
+def test_to_dataframe_iter_frames_format():
+    """Test frames format iteration."""
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="test.mp4")
+
+    lfs = []
+    for i in range(5):
+        instance = PredictedInstance.from_numpy(
+            points_data=np.array([[i * 10.0, i * 20.0]]),
+            skeleton=skeleton,
+            score=0.9,
+        )
+        lfs.append(LabeledFrame(video=video, frame_idx=i, instances=[instance]))
+    labels = Labels(lfs)
+
+    # 5 frames, chunk_size=2 -> 3 chunks
+    chunks = list(to_dataframe_iter(labels, format="frames", chunk_size=2))
+    assert len(chunks) == 3
+
+    # Verify all frame_idx values are present
+    df_iter = pd.concat(chunks, ignore_index=True)
+    assert set(df_iter["frame_idx"]) == {0, 1, 2, 3, 4}
+
+
+def test_to_dataframe_iter_polars_backend():
+    """Test iterator with polars backend."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+    instance = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    chunks = list(
+        to_dataframe_iter(labels, format="points", chunk_size=10, backend="polars")
+    )
+    assert len(chunks) == 1
+    assert isinstance(chunks[0], pl.DataFrame)
+
+
+def test_to_dataframe_iter_video_filter(slp_typical):
+    """Test iterator with video filter."""
+    labels = load_slp(slp_typical)
+
+    if len(labels.videos) > 0:
+        video = labels.videos[0]
+        chunks = list(
+            to_dataframe_iter(labels, format="points", chunk_size=5, video=video)
+        )
+
+        # Verify all rows are from the specified video
+        for chunk in chunks:
+            if "video_path" in chunk.columns:
+                assert all(chunk["video_path"] == video.filename)
+
+
+def test_to_dataframe_iter_parameter_passthrough(slp_typical):
+    """Test that parameters are correctly passed to converter."""
+    labels = load_slp(slp_typical)
+
+    # Test without scores
+    chunks = list(
+        to_dataframe_iter(labels, format="points", chunk_size=100, include_score=False)
+    )
+    df = pd.concat(chunks, ignore_index=True)
+    assert "score" not in df.columns
+
+    # Test without metadata
+    chunks = list(
+        to_dataframe_iter(
+            labels, format="points", chunk_size=100, include_metadata=False
+        )
+    )
+    df = pd.concat(chunks, ignore_index=True)
+    assert "track" not in df.columns
+
+
+def test_labels_to_dataframe_iter_wrapper(slp_typical):
+    """Test Labels.to_dataframe_iter() wrapper method."""
+    labels = load_slp(slp_typical)
+
+    # Test that wrapper method works
+    chunks = list(labels.to_dataframe_iter(format="points", chunk_size=5))
+
+    assert len(chunks) > 0
+    df_iter = pd.concat(chunks, ignore_index=True)
+    df_full = labels.to_dataframe(format="points")
+    assert len(df_iter) == len(df_full)
+
+
+def test_to_dataframe_iter_frames_track_mode():
+    """Test frames format iteration with track mode."""
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="test.mp4")
+    track = Track("mouse1")
+
+    lfs = []
+    for i in range(3):
+        instance = PredictedInstance.from_numpy(
+            points_data=np.array([[i * 10.0, i * 20.0]]),
+            skeleton=skeleton,
+            score=0.9,
+            track=track,
+        )
+        lfs.append(LabeledFrame(video=video, frame_idx=i, instances=[instance]))
+    labels = Labels(lfs)
+
+    chunks = list(
+        to_dataframe_iter(labels, format="frames", chunk_size=2, instance_id="track")
+    )
+    assert len(chunks) == 2
+
+    # Check track columns exist
+    df = pd.concat(chunks, ignore_index=True)
+    assert "mouse1.nose.x" in df.columns
+
+
+def test_to_dataframe_iter_multi_index_format():
+    """Test multi_index format iteration."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+
+    lfs = []
+    for i in range(4):
+        instance = PredictedInstance.from_numpy(
+            points_data=np.array([[i * 10.0, i * 20.0], [i * 10.0 + 1, i * 20.0 + 1]]),
+            skeleton=skeleton,
+            score=0.9,
+        )
+        lfs.append(LabeledFrame(video=video, frame_idx=i, instances=[instance]))
+    labels = Labels(lfs)
+
+    # 4 frames, chunk_size=2 -> 2 chunks
+    chunks = list(to_dataframe_iter(labels, format="multi_index", chunk_size=2))
+    assert len(chunks) == 2
+
+    df_iter = pd.concat(chunks, ignore_index=True)
+    df_full = to_dataframe(labels, format="multi_index")
+    assert len(df_iter) == len(df_full)
+
+
+def test_to_dataframe_iter_video_id_options():
+    """Test different video_id options with iterator."""
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="/path/to/test.mp4")
+    instance = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    # Test video_id="index"
+    chunks = list(
+        to_dataframe_iter(
+            labels, format="points", chunk_size=10, video_id="index", include_video=True
+        )
+    )
+    df = chunks[0]
+    assert "video_idx" in df.columns
+    assert df["video_idx"].iloc[0] == 0
+
+    # Test video_id="name"
+    chunks = list(
+        to_dataframe_iter(
+            labels, format="points", chunk_size=10, video_id="name", include_video=True
+        )
+    )
+    df = chunks[0]
+    assert "video_path" in df.columns
+    assert df["video_path"].iloc[0] == "test.mp4"
+
+    # Test video_id="object"
+    chunks = list(
+        to_dataframe_iter(
+            labels,
+            format="points",
+            chunk_size=10,
+            video_id="object",
+            include_video=True,
+        )
+    )
+    df = chunks[0]
+    assert "video" in df.columns
+    assert df["video"].iloc[0] is video
+
+
+def test_to_dataframe_iter_instances_video_id():
+    """Test instances format with different video_id options."""
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="/path/to/test.mp4")
+    instance = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    # Test video_id="index" with instances format
+    chunks = list(
+        to_dataframe_iter(
+            labels,
+            format="instances",
+            chunk_size=10,
+            video_id="index",
+            include_video=True,
+        )
+    )
+    df = chunks[0]
+    assert "video_idx" in df.columns
+
+
+def test_to_dataframe_iter_frames_video_id():
+    """Test frames format with different video_id options."""
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="/path/to/test.mp4")
+    instance = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    # Test video_id="index" with frames format
+    chunks = list(
+        to_dataframe_iter(
+            labels, format="frames", chunk_size=10, video_id="index", include_video=True
+        )
+    )
+    df = chunks[0]
+    assert "video_idx" in df.columns
+
+    # Test video_id="object" with frames format
+    chunks = list(
+        to_dataframe_iter(
+            labels,
+            format="frames",
+            chunk_size=10,
+            video_id="object",
+            include_video=True,
+        )
+    )
+    df = chunks[0]
+    assert "video" in df.columns
+
+
+def test_to_dataframe_iter_user_instances():
+    """Test iterator with user instances (not predicted)."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Create user instance (not predicted)
+    instance = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    # Test points format with user instances
+    chunks = list(to_dataframe_iter(labels, format="points", chunk_size=10))
+    df = chunks[0]
+    assert len(df) == 2
+    assert df["track_score"].isna().all()  # User instances have no track_score
+
+    # Test instances format with user instances
+    chunks = list(to_dataframe_iter(labels, format="instances", chunk_size=10))
+    df = chunks[0]
+    assert len(df) == 1
+    assert df["score"].isna().all()  # User instances have no score
+
+
+def test_to_dataframe_iter_frames_user_instances():
+    """Test frames format iterator with user instances."""
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="test.mp4")
+    track = Track("track1")
+
+    instance = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    # Test frames format in index mode
+    chunks = list(to_dataframe_iter(labels, format="frames", chunk_size=10))
+    df = chunks[0]
+    assert "inst0.track" in df.columns
+    assert df["inst0.track"].iloc[0] == "track1"
+    assert df["inst0.track_score"].isna().all()
+
+    # Test frames format in track mode
+    chunks = list(
+        to_dataframe_iter(labels, format="frames", chunk_size=10, instance_id="track")
+    )
+    df = chunks[0]
+    assert "track1.nose.x" in df.columns
+
+
+def test_to_dataframe_iter_invalid_format():
+    """Test that invalid format raises error."""
+    labels = Labels([])
+
+    with pytest.raises(ValueError, match="Invalid format"):
+        list(to_dataframe_iter(labels, format="invalid", chunk_size=10))
