@@ -347,6 +347,70 @@ img = sio.render_image(lf, show_nodes=True, show_edges=False)
 
 ---
 
+## Scaling and Cropping
+
+Control output resolution and focus on regions of interest.
+
+### Output scaling
+
+The `scale` parameter resizes the output. Graphics (markers, lines) scale proportionally:
+
+```python
+# Full resolution (default)
+img = sio.render_image(lf, scale=1.0)
+
+# Half resolution - faster, smaller files
+img = sio.render_image(lf, scale=0.5)
+
+# Quarter resolution - quick preview
+img = sio.render_image(lf, scale=0.25)
+```
+
+![scale comparison](assets/rendering/scale_comparison.png)
+
+### Cropping to a region
+
+Use the `crop` parameter to render a specific region:
+
+```python
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+lf = labels.labeled_frames[0]
+
+# Crop to region (x1, y1, x2, y2)
+img = sio.render_image(lf, crop=(100, 100, 300, 300))
+```
+
+![crop region](assets/rendering/crop_region.png)
+
+### Zoomed crop
+
+Combine cropping with scaling for zoomed-in views:
+
+```python
+# Crop a small region and scale up for zoom effect
+img = sio.render_image(lf, crop=(140, 120, 240, 220), scale=2.0)
+```
+
+![zoomed crop](assets/rendering/crop_zoomed.png)
+
+### Auto-fit around instances
+
+Use `crop="auto"` to automatically crop around all instances:
+
+```python
+# Auto-fit with 20% padding (default)
+img = sio.render_image(lf, crop="auto")
+
+# Custom padding (50% of bounding box)
+img = sio.render_image(lf, crop="auto", crop_padding=0.5)
+```
+
+![auto-fit crop](assets/rendering/crop_autofit.png)
+
+---
+
 ## Handling Missing Videos
 
 When video files are unavailable, render with a fallback background:

@@ -159,6 +159,46 @@ def main():
     save_image(img, "toggle_nodes_only.png")
 
     # =========================================================================
+    # Scaling and cropping
+    # =========================================================================
+    print("\nScaling and cropping...")
+
+    # Scale comparison - show 3 scales side by side
+    scales = [1.0, 0.5, 0.25]
+    scale_imgs = []
+    for s in scales:
+        img = sio.render_image(lf, scale=s)
+        # Resize all to same height for comparison
+        pil_img = Image.fromarray(img)
+        target_h = 192  # Common height
+        ratio = target_h / pil_img.height
+        new_w = int(pil_img.width * ratio)
+        pil_img = pil_img.resize((new_w, target_h), Image.Resampling.NEAREST)
+        scale_imgs.append(np.array(pil_img))
+    # Pad to same width and concatenate
+    max_w = max(img.shape[1] for img in scale_imgs)
+    padded = []
+    for img in scale_imgs:
+        if img.shape[1] < max_w:
+            pad = np.zeros((img.shape[0], max_w - img.shape[1], 3), dtype=np.uint8)
+            img = np.concatenate([img, pad], axis=1)
+        padded.append(img)
+    scale_comp = np.concatenate(padded, axis=0)
+    save_image(scale_comp, "scale_comparison.png", max_width=600)
+
+    # Crop region - crop a 200x200 region
+    img = sio.render_image(lf, crop=(100, 100, 300, 300))
+    save_image(img, "crop_region.png")
+
+    # Zoomed crop - small region at 2x scale
+    img = sio.render_image(lf, crop=(140, 120, 240, 220), scale=2.0)
+    save_image(img, "crop_zoomed.png")
+
+    # Auto-fit around all instances
+    img = sio.render_image(lf, crop="auto")
+    save_image(img, "crop_autofit.png")
+
+    # =========================================================================
     # Fallback rendering
     # =========================================================================
     print("\nFallback rendering...")

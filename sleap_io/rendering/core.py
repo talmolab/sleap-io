@@ -34,6 +34,119 @@ PRESETS: dict[str, dict] = {
     "final": {"scale": 1.0},
 }
 
+# Type alias for crop specification
+CropSpec = Union[tuple[int, int, int, int], Literal["auto"], None]
+
+
+def _compute_auto_crop(
+    instances_points: list[np.ndarray],
+    frame_shape: tuple[int, int],
+    padding: float = 0.2,
+) -> tuple[int, int, int, int]:
+    """Compute auto-fit crop bounds around all instances.
+
+    Args:
+        instances_points: List of (n_nodes, 2) arrays of keypoint coordinates.
+        frame_shape: (height, width) of the frame.
+        padding: Padding as fraction of bounding box size.
+
+    Returns:
+        Tuple of (x1, y1, x2, y2) crop bounds.
+    """
+    h, w = frame_shape
+
+    # Stack all points
+    if not instances_points:
+        return (0, 0, w, h)
+
+    all_points = np.concatenate(instances_points)
+    valid = np.isfinite(all_points).all(axis=1)
+    pts = all_points[valid]
+
+    if len(pts) == 0:
+        return (0, 0, w, h)
+
+    x_min, y_min = pts.min(axis=0)
+    x_max, y_max = pts.max(axis=0)
+
+    # Add padding
+    pad_x = (x_max - x_min) * padding
+    pad_y = (y_max - y_min) * padding
+
+    # Compute bounds (clamp to frame)
+    x1 = max(0, int(x_min - pad_x))
+    y1 = max(0, int(y_min - pad_y))
+    x2 = min(w, int(x_max + pad_x))
+    y2 = min(h, int(y_max + pad_y))
+
+    return (x1, y1, x2, y2)
+
+
+def _apply_crop(
+    frame: np.ndarray,
+    instances_points: list[np.ndarray],
+    crop: tuple[int, int, int, int],
+    output_size: Optional[tuple[int, int]] = None,
+) -> tuple[np.ndarray, list[np.ndarray], float]:
+    """Apply crop to frame and shift instance coordinates.
+
+    Args:
+        frame: Input frame array.
+        instances_points: List of (n_nodes, 2) arrays.
+        crop: (x1, y1, x2, y2) crop bounds.
+        output_size: Optional (width, height) for output. If None, uses crop size.
+
+    Returns:
+        Tuple of (cropped_frame, shifted_points, scale_factor).
+    """
+    from PIL import Image
+
+    x1, y1, x2, y2 = crop
+    crop_w, crop_h = x2 - x1, y2 - y1
+
+    # Extract crop region
+    h, w = frame.shape[:2]
+    # Clamp to valid bounds
+    src_x1 = max(0, x1)
+    src_y1 = max(0, y1)
+    src_x2 = min(w, x2)
+    src_y2 = min(h, y2)
+
+    cropped = frame[src_y1:src_y2, src_x1:src_x2]
+
+    # Handle crop extending beyond frame bounds
+    if x1 < 0 or y1 < 0 or x2 > w or y2 > h:
+        # Create padded frame
+        padded = np.zeros((crop_h, crop_w) + frame.shape[2:], dtype=frame.dtype)
+        paste_x1 = src_x1 - x1
+        paste_y1 = src_y1 - y1
+        paste_x2 = paste_x1 + (src_x2 - src_x1)
+        paste_y2 = paste_y1 + (src_y2 - src_y1)
+        padded[paste_y1:paste_y2, paste_x1:paste_x2] = cropped
+        cropped = padded
+
+    # Scale if output_size specified
+    scale = 1.0
+    if output_size is not None:
+        out_w, out_h = output_size
+        scale = min(out_w / crop_w, out_h / crop_h)
+        if scale != 1.0:
+            pil_img = Image.fromarray(cropped)
+            new_w = int(crop_w * scale)
+            new_h = int(crop_h * scale)
+            pil_img = pil_img.resize((new_w, new_h), Image.Resampling.BILINEAR)
+            cropped = np.array(pil_img)
+
+    # Shift instance coordinates
+    shifted_points = []
+    for pts in instances_points:
+        shifted = pts.copy()
+        shifted[:, 0] = (shifted[:, 0] - x1) * scale
+        shifted[:, 1] = (shifted[:, 1] - y1) * scale
+        shifted_points.append(shifted)
+
+    return cropped, shifted_points, scale
+
 
 def _prepare_frame_rgba(frame: np.ndarray) -> np.ndarray:
     """Convert frame to RGBA format for Skia.
@@ -349,6 +462,9 @@ def render_image(
     frame_idx: Optional[int] = None,
     # Image override
     image: Optional[np.ndarray] = None,
+    # Cropping
+    crop: CropSpec = None,
+    crop_padding: float = 0.2,
     # Appearance
     color_by: ColorScheme = "auto",
     palette: Union[PaletteName, str] = "glasbey",
@@ -377,6 +493,11 @@ def render_image(
         frame_idx: Video frame index (0-based, used with video when source is Labels).
         image: Override image array (H, W) or (H, W, C) uint8. Fetched from
             LabeledFrame if not provided.
+        crop: Crop specification. Can be:
+            - ``(x1, y1, x2, y2)``: Explicit crop bounds in pixels.
+            - ``"auto"``: Auto-fit crop around all instances.
+            - ``None``: No cropping (default).
+        crop_padding: Padding for auto-crop as fraction of bounding box (default 0.2).
         color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
         palette: Color palette name.
         marker_shape: Node marker shape.
@@ -385,7 +506,7 @@ def render_image(
         alpha: Global transparency (0.0-1.0).
         show_nodes: Whether to draw node markers.
         show_edges: Whether to draw skeleton edges.
-        scale: Output scale factor.
+        scale: Output scale factor. Applied after cropping.
         require_video: If True, raise error if video unavailable.
         fallback_color: RGB background color if video unavailable.
         pre_render_callback: Called before poses are drawn.
@@ -402,6 +523,8 @@ def render_image(
     Example:
         >>> lf = labels.labeled_frames[0]
         >>> img = sio.render_image(lf)
+        >>> sio.render_image(lf, crop="auto")  # Auto-fit around instances
+        >>> sio.render_image(lf, crop=(100, 100, 300, 300))  # Explicit crop
         >>> sio.render_image(labels, lf_ind=0, save_path="frame.png")
         >>> sio.render_image(labels, video=0, frame_idx=42, save_path="frame.png")
     """
@@ -539,6 +662,22 @@ def render_image(
     # Convert instances to point arrays
     instances_points = [inst.numpy() for inst in instances]
 
+    # Apply cropping if specified
+    render_image_data = image
+    render_points = instances_points
+    if crop is not None:
+        h, w = image.shape[:2]
+        if crop == "auto":
+            crop_bounds = _compute_auto_crop(
+                instances_points, (h, w), padding=crop_padding
+            )
+        else:
+            crop_bounds = crop
+
+        render_image_data, render_points, _ = _apply_crop(
+            image, instances_points, crop_bounds
+        )
+
     # Build instance metadata for callbacks
     instance_metadata = []
     for inst in instances:
@@ -558,8 +697,8 @@ def render_image(
 
     # Render
     rendered = render_frame(
-        frame=image,
-        instances_points=instances_points,
+        frame=render_image_data,
+        instances_points=render_points,
         edge_inds=edge_inds,
         node_names=node_names,
         color_by=resolved_scheme,
