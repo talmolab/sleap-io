@@ -29,10 +29,6 @@
          <lastmod>2026-01-05</lastmod>
     </url>
     <url>
-         <loc>https://io.sleap.ai/dev/rendering/</loc>
-         <lastmod>2026-01-05</lastmod>
-    </url>
-    <url>
          <loc>https://io.sleap.ai/dev/reference/SUMMARY/</loc>
          <lastmod>2026-01-05</lastmod>
     </url>
@@ -42,6 +38,22 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/version/</loc>
+         <lastmod>2026-01-05</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/</loc>
+         <lastmod>2026-01-05</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/dataframe/</loc>
+         <lastmod>2026-01-05</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/dictionary/</loc>
+         <lastmod>2026-01-05</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/numpy/</loc>
          <lastmod>2026-01-05</lastmod>
     </url>
     <url>
@@ -154,26 +166,6 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/model/video/</loc>
-         <lastmod>2026-01-05</lastmod>
-    </url>
-    <url>
-         <loc>https://io.sleap.ai/dev/reference/sleap_io/rendering/</loc>
-         <lastmod>2026-01-05</lastmod>
-    </url>
-    <url>
-         <loc>https://io.sleap.ai/dev/reference/sleap_io/rendering/callbacks/</loc>
-         <lastmod>2026-01-05</lastmod>
-    </url>
-    <url>
-         <loc>https://io.sleap.ai/dev/reference/sleap_io/rendering/colors/</loc>
-         <lastmod>2026-01-05</lastmod>
-    </url>
-    <url>
-         <loc>https://io.sleap.ai/dev/reference/sleap_io/rendering/core/</loc>
-         <lastmod>2026-01-05</lastmod>
-    </url>
-    <url>
-         <loc>https://io.sleap.ai/dev/reference/sleap_io/rendering/shapes/</loc>
          <lastmod>2026-01-05</lastmod>
     </url>
 </urlset>
