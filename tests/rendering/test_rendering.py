@@ -545,6 +545,65 @@ class TestRenderImage:
 
         assert isinstance(rendered, np.ndarray)
 
+    def test_render_image_crop_explicit(self, labels_predictions):
+        """Test render_image with explicit crop bounds."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Crop to 100x100 region
+        rendered = render_image(lf, image=frame, crop=(100, 100, 200, 200))
+
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.shape[0] == 100  # height
+        assert rendered.shape[1] == 100  # width
+        assert rendered.shape[2] == 3
+
+    def test_render_image_crop_auto(self, labels_predictions):
+        """Test render_image with auto crop around instances."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        rendered = render_image(lf, image=frame, crop="auto")
+
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.ndim == 3
+        assert rendered.shape[2] == 3
+        # Auto crop should be smaller than full frame
+        assert rendered.shape[0] <= frame.shape[0]
+        assert rendered.shape[1] <= frame.shape[1]
+
+    def test_render_image_crop_auto_with_padding(self, labels_predictions):
+        """Test render_image with auto crop and custom padding."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Smaller padding should give smaller crop
+        rendered_small = render_image(lf, image=frame, crop="auto", crop_padding=0.1)
+        rendered_large = render_image(lf, image=frame, crop="auto", crop_padding=0.5)
+
+        assert rendered_small.shape[0] <= rendered_large.shape[0]
+        assert rendered_small.shape[1] <= rendered_large.shape[1]
+
+    def test_render_image_crop_with_scale(self, labels_predictions):
+        """Test render_image with crop and scale combined."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Crop to 100x100, then scale 2x
+        rendered = render_image(lf, image=frame, crop=(100, 100, 200, 200), scale=2.0)
+
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.shape[0] == 200  # 100 * 2
+        assert rendered.shape[1] == 200  # 100 * 2
+
 
 # ============================================================================
 # render_video Tests
