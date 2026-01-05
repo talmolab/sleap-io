@@ -22,7 +22,7 @@ Examples:
     >>> from sleap_io.codecs import to_dataframe
     >>> labels = load_file("predictions.slp")
     >>> df = to_dataframe(labels, format="instances")
-    >>> df.groupby("track_name")["nose_x"].mean()
+    >>> df.groupby("track")["nose.x"].mean()
 
     Round-trip through dict:
 
