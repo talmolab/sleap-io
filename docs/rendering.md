@@ -9,47 +9,28 @@ sleap-io provides high-performance pose visualization using [skia-python](https:
     pip install sleap-io[rendering]  # Minimal rendering deps only
     ```
 
+---
+
 ## Quick Start
 
-### One-liner video rendering
-
-```python
-import sleap_io as sio
-
-# Load and render in one line
-sio.load_slp("predictions.slp").render("output.mp4")
-```
-
-### Render a single frame
+![Basic rendering example](assets/rendering/render_basic.png){ align=right }
 
 ```python
 import sleap_io as sio
 
 labels = sio.load_slp("predictions.slp")
 
-# Get rendered array (H, W, 3) uint8
+# Render full video
+labels.render("output.mp4")
+
+# Render single frame to array
 img = sio.render_image(labels.labeled_frames[0])
 
-# Or save directly to file
+# Save single frame to file
 sio.render_image(labels.labeled_frames[0], "frame.png")
 ```
 
-This produces a single image with skeleton overlays on the video frame:
-
-![Basic rendering example](assets/rendering/render_basic.png)
-
-### CLI rendering
-
-```bash
-# Render full video
-sio render -i predictions.slp -o output.mp4
-
-# Fast preview (0.25x resolution)
-sio render -i predictions.slp --preset preview
-
-# Single frame to PNG
-sio render -i predictions.slp --lf 0
-```
+<div style="clear: both;"></div>
 
 ---
 
@@ -142,6 +123,8 @@ img = sio.render_image(labels, video=0, frame_idx=100)
 
 ### Pattern 4: Batch render multiple frames
 
+![Multi-frame montage](assets/rendering/render_montage.png){ align=right }
+
 Render many frames efficiently for creating figures or montages.
 
 ```python
@@ -157,13 +140,11 @@ for i in range(0, 100, 10):
         img = sio.render_image(labels, lf_ind=i)
         frames.append(img)
 
-# Stack into array for montage
-montage = np.concatenate(frames, axis=1)  # Horizontal strip
+# Stack into horizontal strip
+montage = np.concatenate(frames, axis=1)
 ```
 
-This creates a strip of rendered frames useful for figures and visualizations:
-
-![Multi-frame montage](assets/rendering/render_montage.png)
+<div style="clear: both;"></div>
 
 ### Pattern 5: Video clip rendering
 
@@ -180,8 +161,6 @@ sio.render_video(labels, "clip.mp4", start=100, end=200)
 # Or render specific frame indices
 sio.render_video(labels, "selected.mp4", frame_inds=[0, 50, 100, 150])
 ```
-
-The first example outputs a 100-frame video clip (`clip.mp4`). The second outputs a 4-frame video containing only the specified frames.
 
 ### Pattern 6: Include unlabeled frames
 
@@ -207,14 +186,9 @@ By default, only frames with predictions are rendered. With `include_unlabeled=T
 
 Color scheme determines how poses are colored across instances and frames.
 
-![Color schemes comparison: track, instance, and node](assets/rendering/render_color_schemes.png)
-
-*From left to right: `color_by="track"`, `color_by="instance"`, `color_by="node"`*
-
 ### Auto mode (default)
 
 ```python
-# Auto-selects the best scheme based on data
 sio.render_video(labels, "output.mp4", color_by="auto")
 ```
 
@@ -226,35 +200,57 @@ Auto mode uses these rules:
 
 ### Color by track
 
-Each tracked animal gets a consistent color across all frames.
+![Color by track](assets/rendering/render_color_track.png){ align=right }
 
 ```python
-sio.render_video(labels, "by_track.mp4", color_by="track")
+sio.render_video(
+    labels,
+    "by_track.mp4",
+    color_by="track"
+)
 ```
 
-**Best for:** tracked data where you want to follow specific animals. In the output video, each animal maintains its color identity even as it moves—useful for verifying tracking quality.
+Each tracked animal gets a consistent color across all frames.
+
+**Best for:** Tracked data where you want to follow specific animals. Each animal maintains its color identity even as it moves.
+
+<div style="clear: both;"></div>
 
 ### Color by instance
 
-Each animal within a frame gets a unique color, but colors may change between frames.
+![Color by instance](assets/rendering/render_color_instance.png){ align=right }
 
 ```python
-sio.render_video(labels, "by_instance.mp4", color_by="instance")
+sio.render_video(
+    labels,
+    "by_instance.mp4",
+    color_by="instance"
+)
 ```
 
-**Best for:** single-frame renders or untracked data. In video output, colors are assigned by detection order each frame, so the same animal may appear in different colors across frames.
+Each animal within a frame gets a unique color, but colors may change between frames.
+
+**Best for:** Single-frame renders or untracked data.
+
+<div style="clear: both;"></div>
 
 ### Color by node
 
-Each body part gets a unique color (same for all animals).
+![Color by node](assets/rendering/render_color_node.png){ align=right }
 
 ```python
-sio.render_video(labels, "by_node.mp4", color_by="node")
+sio.render_video(
+    labels,
+    "by_node.mp4",
+    color_by="node"
+)
 ```
 
-**Best for:** highlighting skeleton structure or comparing body parts. All animals share the same color scheme, making it easy to compare corresponding body parts (e.g., all heads are red, all tails are blue).
+Each body part gets a unique color (same for all animals).
 
-![Color by node detail with rainbow palette](assets/rendering/render_color_node_detail.png)
+**Best for:** Highlighting skeleton structure or comparing body parts across animals.
+
+<div style="clear: both;"></div>
 
 ---
 
@@ -264,20 +260,18 @@ sio.render_video(labels, "by_node.mp4", color_by="node")
 
 8 palettes are included with no additional dependencies:
 
-![Palette comparison: distinct, tableau10, seaborn, viridis](assets/rendering/render_palettes.png)
+![Built-in palettes](assets/rendering/render_palettes.png)
 
-*Top row: `distinct`, `tableau10`. Bottom row: `seaborn`, `viridis`*
-
-| Palette | Description | Best for |
-|---------|-------------|----------|
-| `distinct` | High-contrast colors | Instances/tracks |
-| `rainbow` | Spectrum colors | Node types |
-| `warm` | Orange/red tones | Single-animal |
-| `cool` | Blue/purple tones | Single-animal |
-| `pastel` | Subtle colors | Overlays on busy backgrounds |
-| `seaborn` | Professional look | Publications |
-| `tableau10` | Data viz standard | Publications |
-| `viridis` | Perceptually uniform | Scientific |
+| Palette | Colors | Description |
+|---------|--------|-------------|
+| `distinct` | 10 | High-contrast colors for instances/tracks |
+| `rainbow` | 256 | Spectrum colors for node types |
+| `warm` | 256 | Orange/red tones |
+| `cool` | 256 | Blue/purple tones |
+| `pastel` | 10 | Subtle colors for overlays |
+| `seaborn` | 10 | Professional look for publications |
+| `tableau10` | 10 | Data visualization standard |
+| `viridis` | 256 | Perceptually uniform scientific |
 
 ```python
 # Use a built-in palette
@@ -285,9 +279,11 @@ sio.render_video(labels, "output.mp4", palette="tableau10")
 sio.render_video(labels, "output.mp4", palette="rainbow")
 ```
 
-### Colorcet palettes (included with `[all]`)
+### Colorcet palettes
 
-With the `[all]` extra, you get access to colorcet's expanded palettes:
+With the `[all]` or `[rendering]` extras, you get access to [colorcet](https://colorcet.holoviz.org/)'s expanded palettes:
+
+![Colorcet palettes](assets/rendering/render_palettes_colorcet.png)
 
 | Palette | Colors | Description |
 |---------|--------|-------------|
@@ -307,14 +303,14 @@ sio.render_video(labels, "output.mp4", palette="glasbey_hv")
 ### Getting palette colors programmatically
 
 ```python
-from sleap_io.rendering import get_palette
+import sleap_io as sio
 
 # Get 10 colors from a palette
-colors = get_palette("tableau10", 10)
+colors = sio.rendering.get_palette("tableau10", 10)
 # Returns: [(31, 119, 180), (255, 127, 14), ...]
 
 # Palettes cycle if you request more colors than they have
-colors = get_palette("distinct", 20)  # Repeats the 10 distinct colors
+colors = sio.rendering.get_palette("distinct", 20)  # Repeats the 10 colors
 ```
 
 ---
@@ -323,9 +319,7 @@ colors = get_palette("distinct", 20)  # Repeats the 10 distinct colors
 
 Five marker shapes are available for node visualization:
 
-![Marker shapes: circle, square, diamond, triangle, cross](assets/rendering/render_marker_shapes.png)
-
-*Top row: `circle`, `square`, `diamond`. Bottom row: `triangle`, `cross`*
+![Marker shapes](assets/rendering/render_marker_shapes.png)
 
 | Shape | Description |
 |-------|-------------|
@@ -336,50 +330,49 @@ Five marker shapes are available for node visualization:
 | `cross` | Plus sign |
 
 ```python
-# Different marker shapes
-sio.render_video(labels, "circles.mp4", marker_shape="circle")
-sio.render_video(labels, "squares.mp4", marker_shape="square")
-sio.render_video(labels, "diamonds.mp4", marker_shape="diamond")
+sio.render_video(labels, "output.mp4", marker_shape="circle")
+sio.render_video(labels, "output.mp4", marker_shape="diamond")
+sio.render_video(labels, "output.mp4", marker_shape="cross")
 ```
 
-Each shape produces a video where all node markers use that shape consistently. The default `circle` shape works well for most cases; `cross` and `diamond` can improve visibility on cluttered backgrounds.
+The `cross` and `diamond` shapes can improve visibility on cluttered backgrounds.
 
 ---
 
 ## Styling Options
 
-### Adjust marker and line sizes
+### Marker and line sizes
+
+![Size variations](assets/rendering/render_sizes.png)
 
 ```python
-sio.render_video(
-    labels,
-    "styled.mp4",
-    marker_size=6.0,    # Larger nodes
-    line_width=3.0,     # Thicker edges
-)
+# Small (detailed work)
+sio.render_video(labels, "small.mp4", marker_size=3.0, line_width=1.5)
+
+# Medium (default-ish)
+sio.render_video(labels, "medium.mp4", marker_size=6.0, line_width=3.0)
+
+# Large (visibility)
+sio.render_video(labels, "large.mp4", marker_size=10.0, line_width=5.0)
 ```
-
-![Size variations: small, medium, large](assets/rendering/render_sizes.png)
-
-*From left to right: `marker_size=3, line_width=1.5` (small), `marker_size=6, line_width=3` (medium), `marker_size=10, line_width=5` (large)*
 
 ### Transparency
 
+![Alpha variations](assets/rendering/render_alpha.png)
+
 ```python
 # Semi-transparent overlay
-sio.render_video(labels, "translucent.mp4", alpha=0.7)
+sio.render_video(labels, "translucent.mp4", alpha=0.5)
 
 # Very subtle overlay
-sio.render_video(labels, "subtle.mp4", alpha=0.3)
+sio.render_video(labels, "subtle.mp4", alpha=0.25)
 ```
 
-![Alpha variations: 1.0, 0.5, 0.25](assets/rendering/render_alpha.png)
-
-*From left to right: `alpha=1.0` (fully opaque), `alpha=0.5` (semi-transparent), `alpha=0.25` (subtle overlay)*
-
-Lower alpha values let the underlying video show through, useful when you want to see fine details obscured by the skeleton overlay.
+Lower alpha values let the underlying video show through.
 
 ### Toggle elements
+
+![Toggle options](assets/rendering/render_toggles.png)
 
 ```python
 # Edges only (no node markers)
@@ -389,19 +382,11 @@ sio.render_video(labels, "edges_only.mp4", show_nodes=False)
 sio.render_video(labels, "nodes_only.mp4", show_edges=False)
 ```
 
-![Toggle options: both, edges only, nodes only](assets/rendering/render_toggles.png)
-
-*From left to right: both (default), edges only (`show_nodes=False`), nodes only (`show_edges=False`)*
-
-Hiding nodes can reduce visual clutter when you only need to see the body pose. Hiding edges shows just the keypoint locations without connectivity.
-
 ---
 
 ## Quality and Performance
 
 ### Quality presets
-
-Three presets balance speed vs quality:
 
 | Preset | Scale | Use case |
 |--------|-------|----------|
@@ -420,7 +405,7 @@ sio.render_video(labels, "final.mp4", preset="final")
 sio.render_video(labels, "output.mp4", scale=0.75)
 ```
 
-The `preview` preset outputs a video at 1/4 resolution (e.g., 1920×1080 → 480×270), rendering ~9× faster. This is ideal for quickly scanning through predictions before committing to a full-quality render.
+The `preview` preset outputs a video at 1/4 resolution, rendering ~9x faster.
 
 ### Performance characteristics
 
@@ -439,8 +424,6 @@ Typical rendering speeds (measured on 1024x1024 frames with 13 nodes):
 3. For maximum speed, pre-extract frames to image sequences
 
 ### Video encoding options
-
-Control output quality and file size:
 
 ```python
 sio.render_video(
@@ -497,134 +480,120 @@ ctx.world_to_canvas(x, y)  # Coordinate transform
 
 ### Example: Instance labels
 
-Draw track names above each animal:
+![Callback: instance labels](assets/rendering/render_callback_labels.png){ align=right }
 
 ```python
 import sleap_io as sio
-from sleap_io.rendering import InstanceContext
 import skia
 
-def draw_instance_labels(ctx: InstanceContext):
-    """Draw track name above each instance."""
+def draw_labels(ctx):
     centroid = ctx.get_centroid()
     if centroid is None:
         return
 
-    cx, cy = ctx.world_to_canvas(centroid[0], centroid[1])
-
-    # Create text
-    font = skia.Font(skia.Typeface("Arial"), 14 * ctx.scale)
+    cx, cy = ctx.world_to_canvas(*centroid)
+    font = skia.Font(skia.Typeface("Arial"), 14)
     label = ctx.track_name or f"Instance {ctx.instance_idx}"
-    text_blob = skia.TextBlob(label, font)
+    blob = skia.TextBlob(label, font)
 
-    # Draw with white fill
-    paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
-    ctx.canvas.drawTextBlob(text_blob, cx - 20, cy - 20 * ctx.scale, paint)
+    paint = skia.Paint(Color=skia.ColorWHITE)
+    ctx.canvas.drawTextBlob(blob, cx, cy - 20, paint)
 
 labels = sio.load_slp("predictions.slp")
-sio.render_video(labels, "labeled.mp4", per_instance_callback=draw_instance_labels)
+sio.render_video(
+    labels, "labeled.mp4",
+    per_instance_callback=draw_labels
+)
 ```
 
-![Callback: instance labels](assets/rendering/render_callback_labels.png)
-
-*Track names drawn above each instance's centroid with a semi-transparent background for readability.*
+<div style="clear: both;"></div>
 
 ### Example: Bounding boxes
 
-Draw dashed bounding boxes around instances:
+![Callback: bounding boxes](assets/rendering/render_callback_boxes.png){ align=right }
 
 ```python
 import sleap_io as sio
-from sleap_io.rendering import InstanceContext
 import skia
 
-def draw_bounding_box(ctx: InstanceContext):
-    """Draw dashed bounding box around each instance."""
+def draw_bbox(ctx):
     bbox = ctx.get_bbox()
     if bbox is None:
         return
 
     x1, y1, x2, y2 = bbox
-
-    # Transform to canvas coordinates
     x1, y1 = ctx.world_to_canvas(x1, y1)
     x2, y2 = ctx.world_to_canvas(x2, y2)
 
-    # Add padding
-    pad = 10 * ctx.scale
+    pad = 8
     rect = skia.Rect(x1 - pad, y1 - pad, x2 + pad, y2 + pad)
 
-    # Create dashed stroke
-    dash_effect = skia.DashPathEffect.Make([8, 4], 0)
+    dash = skia.DashPathEffect.Make([6, 3], 0)
     paint = skia.Paint(
         Color=skia.ColorWHITE,
-        AntiAlias=True,
         Style=skia.Paint.kStroke_Style,
-        StrokeWidth=2 * ctx.scale,
-        PathEffect=dash_effect,
+        StrokeWidth=2,
+        PathEffect=dash,
     )
-
     ctx.canvas.drawRect(rect, paint)
 
-labels = sio.load_slp("predictions.slp")
-sio.render_video(labels, "boxes.mp4", per_instance_callback=draw_bounding_box)
+sio.render_video(
+    labels, "boxes.mp4",
+    per_instance_callback=draw_bbox
+)
 ```
 
-![Callback: bounding boxes](assets/rendering/render_callback_boxes.png)
+<div style="clear: both;"></div>
 
-*Dashed bounding boxes around each instance with padding. The dashed style provides clear boundaries without obscuring the skeleton.*
+### Example: Frame info overlay
 
-### Example: Frame information overlay
-
-Add frame number and instance count:
+![Callback: frame info](assets/rendering/render_callback_info.png){ align=right }
 
 ```python
 import sleap_io as sio
-from sleap_io.rendering import RenderContext
 import skia
 
-def draw_frame_info(ctx: RenderContext):
-    """Draw frame info in corner."""
-    font = skia.Font(skia.Typeface("Arial"), 16)
-    text = f"Frame: {ctx.frame_idx} | Instances: {len(ctx.instances)}"
-    text_blob = skia.TextBlob(text, font)
+def draw_frame_info(ctx):
+    font = skia.Font(skia.Typeface("Arial"), 14)
+    text = f"Frame: {ctx.frame_idx}"
+    blob = skia.TextBlob(text, font)
 
-    # Background rectangle
-    bg_paint = skia.Paint(Color=skia.Color4f(0, 0, 0, 0.5))
-    ctx.canvas.drawRect(skia.Rect(5, 5, 250, 30), bg_paint)
+    # Background
+    bg = skia.Paint(Color=skia.Color4f(0, 0, 0, 0.7))
+    ctx.canvas.drawRect(skia.Rect(4, 4, 100, 24), bg)
 
     # Text
-    text_paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
-    ctx.canvas.drawTextBlob(text_blob, 10, 24, text_paint)
+    paint = skia.Paint(Color=skia.ColorWHITE)
+    ctx.canvas.drawTextBlob(blob, 8, 18, paint)
 
-labels = sio.load_slp("predictions.slp")
-sio.render_video(labels, "info.mp4", post_render_callback=draw_frame_info)
+sio.render_video(
+    labels, "info.mp4",
+    post_render_callback=draw_frame_info
+)
 ```
 
-![Callback: frame info overlay](assets/rendering/render_callback_info.png)
+<div style="clear: both;"></div>
 
-*Frame number and instance count displayed in the top-left corner with a semi-transparent background.*
+### Combining callbacks
 
-### Combining multiple callbacks
+![Callback: combined](assets/rendering/render_callback_combined.png){ align=right }
 
 ```python
-def combined_instance_callback(ctx):
-    """Draw both label and bounding box."""
-    draw_bounding_box(ctx)
-    draw_instance_labels(ctx)
+def combined(ctx):
+    draw_bbox(ctx)
+    draw_labels(ctx)
 
 sio.render_video(
     labels,
     "annotated.mp4",
-    pre_render_callback=draw_grid,           # Background layer
-    post_render_callback=draw_frame_info,    # Overlay layer
-    per_instance_callback=combined_instance_callback,
+    post_render_callback=draw_frame_info,
+    per_instance_callback=combined,
 )
 ```
 
-![Callback: combined](assets/rendering/render_callback_combined.png)
+Callbacks are applied in order: pre-render, skeleton drawing, per-instance, then post-render.
 
-*Multiple callbacks combined: bounding boxes + instance labels + frame info overlay. Callbacks are applied in order, with pre-render first, then skeleton drawing, then per-instance, then post-render.*
+<div style="clear: both;"></div>
 
 ### Skia drawing reference
 
@@ -648,13 +617,14 @@ When video files are unavailable, you can still render with fallback options:
 
 ### Fallback solid color background
 
+![Fallback rendering](assets/rendering/render_fallback.png){ align=right }
+
 ```python
-# Render with gray background if video is missing
 sio.render_video(
     labels,
     "output.mp4",
     require_video=False,
-    fallback_color=(128, 128, 128),  # Gray RGB
+    fallback_color=(128, 128, 128),
 )
 
 # Single frame with fallback
@@ -662,13 +632,13 @@ sio.render_image(
     labels.labeled_frames[0],
     "frame.png",
     require_video=False,
-    fallback_color=(0, 0, 0),  # Black
+    fallback_color=(0, 0, 0),
 )
 ```
 
-![Fallback rendering with solid color background](assets/rendering/render_fallback.png)
+Useful for visualizing predictions when the original video is missing.
 
-*Skeleton rendered on a dark gray background when no video frame is available. Useful for visualizing predictions when the original video is missing or inaccessible.*
+<div style="clear: both;"></div>
 
 ### Custom background image
 
@@ -679,9 +649,9 @@ import sleap_io as sio
 labels = sio.load_slp("predictions.slp")
 lf = labels.labeled_frames[0]
 
-# Create custom background (or load from file)
+# Create custom background
 bg = np.zeros((1024, 1024, 3), dtype=np.uint8)
-bg[:] = (30, 30, 30)  # Dark gray
+bg[:] = (30, 30, 30)
 
 # Render with custom background
 img = sio.render_image(lf, image=bg)
@@ -691,7 +661,7 @@ img = sio.render_image(lf, image=bg)
 
 ## CLI Reference
 
-Full CLI documentation is in the [CLI Guide](cli.md#sio-render---render-pose-videos-and-images). Quick reference:
+For CLI usage, see the [CLI Guide](cli.md#sio-render---render-pose-videos-and-images). Quick reference:
 
 ```bash
 # Basic rendering
@@ -707,8 +677,7 @@ sio render -i predictions.slp --lf 0 -o frame.png
 sio render -i predictions.slp -o styled.mp4 \
     --color-by track \
     --palette tableau10 \
-    --marker-shape diamond \
-    --marker-size 6
+    --marker-shape diamond
 
 # Render a clip
 sio render -i predictions.slp -o clip.mp4 --start 100 --end 200
