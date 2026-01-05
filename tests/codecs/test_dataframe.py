@@ -3249,7 +3249,6 @@ def test_polars_multi_index_track_mode():
     assert df["mouse2.nose.x"][0] == 50.0
 
 
-
 # =============================================================================
 # Additional coverage tests for uncovered branches
 # =============================================================================
@@ -3307,9 +3306,7 @@ def test_frames_format_user_instances_track_mode():
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels([lf], tracks=[track])
 
-    df = to_dataframe(
-        labels, format="frames", instance_id="track", include_video=False
-    )
+    df = to_dataframe(labels, format="frames", instance_id="track", include_video=False)
 
     # User instances have no scores (should be None)
     assert "animal1.track_score" in df.columns
@@ -3335,9 +3332,7 @@ def test_frames_format_user_instances_index_mode():
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels([lf])
 
-    df = to_dataframe(
-        labels, format="frames", instance_id="index", include_video=False
-    )
+    df = to_dataframe(labels, format="frames", instance_id="index", include_video=False)
 
     # User instances have None for track_score and score
     assert "inst0.track_score" in df.columns
@@ -3404,9 +3399,7 @@ def test_frames_format_track_mode_partial_frames():
 
     labels = Labels([lf1, lf2], tracks=[track1, track2])
 
-    df = to_dataframe(
-        labels, format="frames", instance_id="track", include_video=False
-    )
+    df = to_dataframe(labels, format="frames", instance_id="track", include_video=False)
 
     # Frame 0: track2 should have NaN
     assert df.loc[df["frame_idx"] == 0, "a1.pt.x"].iloc[0] == 1.0
