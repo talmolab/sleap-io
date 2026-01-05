@@ -405,3 +405,166 @@ def test_from_dict_missing_keys():
 
     with pytest.raises(ValueError, match="Missing required key"):
         from_dict({"videos": []})
+
+
+def test_to_dict_with_suggestions():
+    """Test that suggestions are included in dict."""
+    from sleap_io.model.suggestions import SuggestionFrame
+
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+    instance = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    suggestion = SuggestionFrame(video=video, frame_idx=5)
+
+    labels = Labels([lf])
+    labels.suggestions = [suggestion]
+
+    d = to_dict(labels)
+
+    assert len(d["suggestions"]) == 1
+    assert d["suggestions"][0]["frame_idx"] == 5
+    assert d["suggestions"][0]["video_idx"] == 0
+
+
+def test_from_dict_with_suggestions():
+    """Test that suggestions are restored from dict."""
+    d = {
+        "version": "1.0.0",
+        "skeletons": [{"name": "skel", "nodes": ["a"], "edges": []}],
+        "videos": [{"filename": "test.mp4"}],
+        "tracks": [],
+        "labeled_frames": [],
+        "suggestions": [{"frame_idx": 10, "video_idx": 0}],
+        "provenance": {},
+    }
+
+    labels = from_dict(d)
+
+    assert len(labels.suggestions) == 1
+    assert labels.suggestions[0].frame_idx == 10
+
+
+def test_to_dict_with_tracking_score():
+    """Test that tracking_score is preserved."""
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+    track = Track("animal1")
+
+    instance = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+        tracking_score=0.85,
+        score=0.95,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    d = to_dict(labels)
+
+    inst_dict = d["labeled_frames"][0]["instances"][0]
+    assert inst_dict["tracking_score"] == pytest.approx(0.85)
+
+
+def test_to_dict_video_filter_with_suggestions():
+    """Test that suggestions are filtered by video."""
+    from sleap_io.model.suggestions import SuggestionFrame
+
+    skeleton = Skeleton(["node1"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    instance1 = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+    instance2 = Instance.from_numpy(
+        points_data=np.array([[3.0, 4.0]]),
+        skeleton=skeleton,
+    )
+
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[instance1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[instance2])
+
+    labels = Labels([lf1, lf2])
+    labels.suggestions = [
+        SuggestionFrame(video=video1, frame_idx=5),
+        SuggestionFrame(video=video2, frame_idx=10),
+    ]
+
+    # Filter to video1 only
+    d = to_dict(labels, video=0)
+
+    assert len(d["labeled_frames"]) == 1
+    assert len(d["suggestions"]) == 1
+    assert d["suggestions"][0]["frame_idx"] == 5
+
+
+def test_to_dict_track_without_spawned_on():
+    """Test that tracks without spawned_on don't include it in dict.
+
+    Note: The spawned_on serialization code in dictionary.py is defensive for
+    future compatibility. Current Track class doesn't have spawned_on attribute.
+    """
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+    track = Track("animal1")
+
+    instance = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    d = to_dict(labels)
+
+    # Track should not have spawned_on since it's not set
+    assert len(d["tracks"]) == 1
+    assert "spawned_on" not in d["tracks"][0]
+
+
+def test_to_dict_with_from_predicted():
+    """Test that from_predicted link is indicated in serialization.
+
+    Covers line 200: has_from_predicted = True serialization.
+    """
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+    track = Track("animal1")
+
+    # Create predicted instance
+    pred_inst = PredictedInstance.from_numpy(
+        points_data=np.array([[5.0, 6.0]]),
+        skeleton=skeleton,
+        score=0.9,
+        track=track,
+    )
+
+    # Create user instance linked to predicted
+    user_inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+        from_predicted=pred_inst,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[pred_inst, user_inst])
+    labels = Labels([lf])
+
+    d = to_dict(labels)
+
+    # Find the user instance (type="instance")
+    instances = d["labeled_frames"][0]["instances"]
+    user_dict = next(i for i in instances if i["type"] == "instance")
+
+    # Should have has_from_predicted flag
+    assert user_dict.get("has_from_predicted") is True

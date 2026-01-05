@@ -47,7 +47,8 @@ readme = {file = ["README.md"], content-type="text/markdown"}
 opencv = ["opencv-python"]
 pyav = ["av<16.0.0"]
 mat = ["pymatreader"]
-all = ["opencv-python", "av<16.0.0", "pymatreader"]
+polars = ["polars", "pyarrow"]
+all = ["opencv-python", "av<16.0.0", "pymatreader", "polars", "pyarrow"]
 
 [dependency-groups]
 # PEP 735: Dev-only dependencies (`dev` is installed automatically by `uv`)

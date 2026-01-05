@@ -691,3 +691,494 @@ def test_from_dataframe_missing_columns():
 
     with pytest.raises(ValueError, match="Missing required columns"):
         from_dataframe(df)
+
+
+def test_from_dataframe_with_video_idx():
+    """Test from_dataframe with video_idx column."""
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    # Create DataFrame with video_idx
+    df = to_dataframe(
+        labels,
+        format="points",
+        include_metadata=True,
+        video_id="index",
+        include_video=True,
+    )
+    assert "video_idx" in df.columns
+
+    # Convert back
+    labels2 = from_dataframe(df, skeleton=skeleton, video=video)
+    assert len(labels2.labeled_frames) == 1
+
+
+def test_from_dataframe_with_video_object():
+    """Test from_dataframe with video object column."""
+    skeleton = Skeleton(["node1"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    # Create DataFrame with video object
+    df = to_dataframe(
+        labels,
+        format="points",
+        include_metadata=True,
+        video_id="object",
+        include_video=True,
+    )
+    assert "video" in df.columns
+    assert isinstance(df["video"].iloc[0], Video)
+
+    # Convert back - should handle Video objects
+    labels2 = from_dataframe(df, skeleton=skeleton)
+    assert len(labels2.labeled_frames) == 1
+
+
+def test_from_dataframe_no_video_no_skeleton():
+    """Test from_dataframe creates defaults when not provided."""
+    # Create minimal DataFrame
+    df = pd.DataFrame(
+        {
+            "frame_idx": [0, 0],
+            "node_name": ["a", "b"],
+            "x": [1.0, 2.0],
+            "y": [3.0, 4.0],
+        }
+    )
+
+    # Should create default video and skeleton
+    labels = from_dataframe(df)
+    assert len(labels.videos) == 1
+    assert len(labels.skeletons) == 1
+    assert labels.videos[0].filename == "video.mp4"
+
+
+def test_from_dataframe_video_idx_no_video_provided():
+    """Test from_dataframe with video_idx but no video object provided."""
+    df = pd.DataFrame(
+        {
+            "frame_idx": [0, 0],
+            "node_name": ["a", "b"],
+            "x": [1.0, 2.0],
+            "y": [3.0, 4.0],
+            "video_idx": [0, 0],
+        }
+    )
+
+    skeleton = Skeleton(["a", "b"])
+    labels = from_dataframe(df, skeleton=skeleton)
+
+    # Should create placeholder video
+    assert len(labels.videos) == 1
+    assert "video_0" in labels.videos[0].filename
+
+
+def test_from_dataframe_invalid_format_string():
+    """Test from_dataframe with invalid format string."""
+    df = pd.DataFrame(
+        {
+            "frame_idx": [0],
+            "node_name": ["a"],
+            "x": [1.0],
+            "y": [2.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="Invalid format"):
+        from_dataframe(df, format="invalid_format")
+
+
+def test_to_dataframe_frames_format_basic():
+    """Test frames format produces correct output."""
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="test.mp4")
+    track = Track("animal1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+        track=track,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="frames")
+    assert len(df) >= 1
+    # Frames format should have node columns
+    assert any("head" in str(col) for col in df.columns)
+
+
+def test_to_dataframe_frames_format_with_track():
+    """Test frames format with tracked instances."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track = Track("animal1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="frames")
+    assert len(df) >= 1
+
+
+def test_to_dataframe_multi_index_with_video_idx():
+    """Test multi_index format with video_idx."""
+    skeleton = Skeleton(["a"])
+    video = Video(filename="test.mp4")
+    track = Track("t1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(
+        labels, format="multi_index", video_id="index", include_video=True
+    )
+    assert isinstance(df.columns, pd.MultiIndex)
+
+
+def test_to_dataframe_video_as_int_index():
+    """Test video parameter as integer index.
+
+    Covers line 150: video = labels.videos[video] when video is int.
+    """
+    skeleton = Skeleton(["pt"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    inst1 = Instance.from_numpy(points_data=np.array([[1.0, 2.0]]), skeleton=skeleton)
+    inst2 = Instance.from_numpy(points_data=np.array([[3.0, 4.0]]), skeleton=skeleton)
+
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    labels = Labels([lf1, lf2])
+
+    # Filter by video index
+    df = to_dataframe(labels, format="points", video=1)
+
+    assert len(df) == 1
+    assert df.iloc[0]["x"] == 3.0  # From video2
+
+
+def test_to_dataframe_instances_video_id_object():
+    """Test instances format with video_id='object'.
+
+    Covers lines 342-343: video_id == 'object' in instances format.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="instances", video_id="object", include_video=True)
+
+    assert "video" in df.columns
+    assert df["video"].iloc[0] is video  # Should be the actual Video object
+
+
+def test_to_dataframe_instances_video_id_index():
+    """Test instances format with video_id='index'.
+
+    Covers lines 340-341: video_id == 'index' in instances format.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="instances", video_id="index", include_video=True)
+
+    assert "video_idx" in df.columns
+    assert df["video_idx"].iloc[0] == 0
+
+
+def test_to_dataframe_frames_video_id_object():
+    """Test frames format with video_id='object'.
+
+    Covers lines 415-416: video_id == 'object' in frames format.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track = Track("t1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+        track=track,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="frames", video_id="object", include_video=True)
+
+    assert "video" in df.columns
+    assert df["video"].iloc[0] is video
+
+
+def test_to_dataframe_frames_video_id_index():
+    """Test frames format with video_id='index'.
+
+    Covers lines 413-414: video_id == 'index' in frames format.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track = Track("t1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+        track=track,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="frames", video_id="index", include_video=True)
+
+    assert "video_idx" in df.columns
+    assert df["video_idx"].iloc[0] == 0
+
+
+def test_to_dataframe_multi_index_video_id_object():
+    """Test multi_index format with video_id='object'.
+
+    Covers lines 493-495: video_id == 'object' in multi_index format.
+    Multi-index with objects converts to string representation.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(
+        labels, format="multi_index", video_id="object", include_video=True
+    )
+
+    assert isinstance(df.columns, pd.MultiIndex)
+
+
+def test_to_dataframe_multi_index_empty():
+    """Test multi_index format with no data returns empty DataFrame.
+
+    Covers line 506: Return empty DataFrame when data_list is empty.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    labels = Labels()
+    labels.videos.append(video)
+    labels.skeletons.append(skeleton)
+
+    df = to_dataframe(labels, format="multi_index")
+
+    assert isinstance(df, pd.DataFrame)
+    assert df.empty
+
+
+def test_from_dataframe_minimal_columns():
+    """Test from_dataframe with minimal columns (no instance_type, no track).
+
+    Covers lines 770-773: Fallback when no grouping columns available.
+    """
+    skeleton = Skeleton(["node1", "node2"])
+    video = Video(filename="test.mp4")
+
+    # Create DataFrame with minimal columns (no instance_type, no track_name)
+    data = {
+        "frame_idx": [0, 0],
+        "node_name": ["node1", "node2"],
+        "x": [1.0, 3.0],
+        "y": [2.0, 4.0],
+    }
+    df = pd.DataFrame(data)
+
+    labels = from_dataframe(df, video=video, skeleton=skeleton)
+
+    assert len(labels.labeled_frames) == 1
+    assert len(labels.labeled_frames[0].instances) == 1
+
+
+def test_from_dataframe_unknown_node():
+    """Test from_dataframe handles nodes not in skeleton gracefully.
+
+    Covers lines 815-817: Node not in skeleton is skipped.
+    """
+    skeleton = Skeleton(["node1", "node2"])
+    video = Video(filename="test.mp4")
+
+    # Create DataFrame with an extra node not in skeleton
+    data = {
+        "frame_idx": [0, 0, 0],
+        "node_name": ["node1", "node2", "unknown_node"],  # unknown_node not in skeleton
+        "x": [1.0, 3.0, 99.0],
+        "y": [2.0, 4.0, 99.0],
+    }
+    df = pd.DataFrame(data)
+
+    labels = from_dataframe(df, video=video, skeleton=skeleton)
+
+    assert len(labels.labeled_frames) == 1
+    inst = labels.labeled_frames[0].instances[0]
+
+    # Should have points for node1 and node2, unknown_node should be skipped
+    assert inst.numpy()[0, 0] == pytest.approx(1.0)  # node1 x
+    assert inst.numpy()[1, 0] == pytest.approx(3.0)  # node2 x
+
+
+def test_to_dataframe_polars_backend():
+    """Test polars backend for to_dataframe.
+
+    Covers lines 32 (HAS_POLARS=True) and 209 (pl.from_pandas conversion).
+    """
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+    assert "frame_idx" in df.columns
+    assert "x" in df.columns
+    assert "y" in df.columns
+    assert df["x"][0] == 1.0
+    assert df["y"][0] == 2.0
+
+
+def test_to_dataframe_polars_instances_format():
+    """Test polars backend with instances format."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+    track = Track("track1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+        track=track,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="instances", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+    assert "frame_idx" in df.columns
+    assert "a_x" in df.columns
+    assert "b_y" in df.columns
+
+
+def test_to_dataframe_polars_frames_format():
+    """Test polars backend with frames format."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track = Track("t1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="frames", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+    assert "frame_idx" in df.columns
+    assert "track_name" in df.columns
+
+
+def test_to_dataframe_polars_multi_index_format():
+    """Test polars backend with multi_index format."""
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="multi_index", backend="polars")
+
+    # Multi-index format returns a polars DataFrame converted from pandas MultiIndex
+    assert isinstance(df, pl.DataFrame)
