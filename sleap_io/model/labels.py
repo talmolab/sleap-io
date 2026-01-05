@@ -160,85 +160,43 @@ class Labels:
         """Return a readable representation of the labels."""
         return self.__repr__()
 
-    def copy(
-        self,
-        *,
-        include_predictions: bool = True,
-        include_suggestions: bool = True,
-        include_sessions: bool = True,
-    ) -> Labels:
+    def copy(self, *, open_videos: Optional[bool] = None) -> Labels:
         """Create a deep copy of the Labels object.
 
-        This method creates a complete copy of the Labels object, including all
-        nested data structures. Video backends are not copied but will be reopened
-        when needed.
-
         Args:
-            include_predictions: If `True` (default), copy predicted instances.
-                If `False`, only copy user instances.
-            include_suggestions: If `True` (default), copy suggestion frames.
-            include_sessions: If `True` (default), copy recording sessions.
+            open_videos: Controls video backend auto-opening in the copy:
+
+                - `None` (default): Preserve each video's current setting.
+                - `True`: Enable auto-opening for all videos.
+                - `False`: Disable auto-opening and close any open backends.
 
         Returns:
-            A new Labels object with copied data.
+            A new Labels object with deep copied data.
 
         Notes:
-            - Video backends are not copied (file handles). They are closed and
-              reopened when accessing frames.
-            - All references between nested objects (e.g., Instance -> Skeleton,
-              LabeledFrame -> Video) are preserved in the copy.
-            - Provenance dictionary is copied to avoid mutations.
-            - This method uses Python's deepcopy internally but provides a cleaner
-              API and handles special cases explicitly.
+            Video backends are not copied (file handles cannot be duplicated).
+            The `open_videos` parameter controls whether backends will auto-open
+            when frames are accessed.
 
-        Performance:
-            Copying large Labels objects can be expensive due to numpy array copies
-            and nested structure traversal. For Labels with N frames and M instances:
-            - Time complexity: O(N * M * K) where K is points per instance
-            - Space complexity: O(N * M * K)
-
-            Typical performance (measured on test fixtures):
-            - Small (~10 instances): < 1ms
-            - Medium (~100 instances): 1-10ms
-            - Large (~2000 instances): 10-100ms
-
-        See also: `Labels.extract`, `Labels.make_training_splits`
+        See also: `Labels.extract`, `Labels.remove_predictions`
 
         Examples:
-            >>> labels = sleap_io.load_slp("path/to/labels.slp")
+            >>> labels_copy = labels.copy()  # Preserves original settings
+
+            >>> # Prevent auto-opening to avoid file handles
+            >>> labels_copy = labels.copy(open_videos=False)
+
+            >>> # Copy and filter predictions separately
             >>> labels_copy = labels.copy()
-            >>> labels_copy.labeled_frames[0].instances[0].points[0] = [0, 0]
-            >>> # Original is unchanged
-            >>> labels.labeled_frames[0].instances[0].points[0]
-            array([10.5, 20.3])
-
-            >>> # Copy without predictions
-            >>> user_only = labels.copy(include_predictions=False)
-
-            >>> # Copy without suggestions and sessions
-            >>> minimal_copy = labels.copy(
-            ...     include_suggestions=False,
-            ...     include_sessions=False
-            ... )
+            >>> labels_copy.remove_predictions()
         """
-        # Fast path: full deep copy
-        if include_predictions and include_suggestions and include_sessions:
-            return deepcopy(self)
-
-        # Selective copy: start with full deep copy, then filter
         labels_copy = deepcopy(self)
 
-        # Remove predictions if requested
-        if not include_predictions:
-            labels_copy.remove_predictions()
-
-        # Remove suggestions if requested
-        if not include_suggestions:
-            labels_copy.suggestions = []
-
-        # Remove sessions if requested
-        if not include_sessions:
-            labels_copy.sessions = []
+        if open_videos is not None:
+            for video in labels_copy.videos:
+                video.open_backend = open_videos
+                if not open_videos:
+                    video.close()
 
         return labels_copy
 

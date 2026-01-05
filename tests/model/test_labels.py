@@ -4080,62 +4080,6 @@ def test_labels_copy_provenance(slp_real_data):
     assert "new_key" not in labels.provenance
 
 
-def test_labels_copy_exclude_predictions(slp_real_data):
-    """Test copying without predictions."""
-    labels = load_slp(slp_real_data)
-
-    # Count predicted instances in original
-    n_predicted_orig = sum(
-        1
-        for lf in labels.labeled_frames
-        for inst in lf.instances
-        if isinstance(inst, PredictedInstance)
-    )
-    assert n_predicted_orig > 0, "Test requires data with predictions"
-
-    labels_copy = labels.copy(include_predictions=False)
-
-    # No predicted instances in copy
-    n_predicted_copy = sum(
-        1
-        for lf in labels_copy.labeled_frames
-        for inst in lf.instances
-        if isinstance(inst, PredictedInstance)
-    )
-    assert n_predicted_copy == 0
-
-    # Original unchanged
-    n_predicted_orig_after = sum(
-        1
-        for lf in labels.labeled_frames
-        for inst in lf.instances
-        if isinstance(inst, PredictedInstance)
-    )
-    assert n_predicted_orig_after == n_predicted_orig
-
-
-def test_labels_copy_exclude_suggestions(slp_real_data):
-    """Test copying without suggestions."""
-    labels = load_slp(slp_real_data)
-    assert len(labels.suggestions) > 0, "Test requires data with suggestions"
-
-    labels_copy = labels.copy(include_suggestions=False)
-
-    assert len(labels_copy.suggestions) == 0
-    assert len(labels.suggestions) > 0  # Original unchanged
-
-
-def test_labels_copy_exclude_sessions(slp_multiview):
-    """Test copying without sessions."""
-    labels = load_slp(slp_multiview)
-    assert len(labels.sessions) > 0, "Test requires data with sessions"
-
-    labels_copy = labels.copy(include_sessions=False)
-
-    assert len(labels_copy.sessions) == 0
-    assert len(labels.sessions) > 0  # Original unchanged
-
-
 def test_labels_copy_numpy_arrays(slp_minimal):
     """Test numpy arrays are properly copied."""
     labels = load_slp(slp_minimal)
@@ -4195,27 +4139,53 @@ def test_labels_copy_backend_metadata():
     assert labels.videos[0].backend_metadata == {"key": "value"}
 
 
-def test_labels_copy_multiple_options(slp_real_data):
-    """Test combining multiple exclusion options."""
-    labels = load_slp(slp_real_data)
-    assert len(labels.suggestions) > 0, "Test requires suggestions"
+def test_labels_copy_open_videos_default(centered_pair_low_quality_video):
+    """Test default open_videos=None preserves original settings."""
+    # Create labels with mixed open_backend settings
+    video1 = Video(filename="test1.mp4", open_backend=True)
+    video2 = Video(filename="test2.mp4", open_backend=False)
+    labels = Labels(videos=[video1, video2])
 
-    labels_copy = labels.copy(include_predictions=False, include_suggestions=False)
+    labels_copy = labels.copy()
 
-    # No predictions
-    n_predicted = sum(
-        1
-        for lf in labels_copy.labeled_frames
-        for inst in lf.instances
-        if isinstance(inst, PredictedInstance)
-    )
-    assert n_predicted == 0
+    # Settings preserved per-video
+    assert labels_copy.videos[0].open_backend is True
+    assert labels_copy.videos[1].open_backend is False
 
-    # No suggestions
-    assert len(labels_copy.suggestions) == 0
+
+def test_labels_copy_open_videos_true():
+    """Test open_videos=True enables auto-opening for all videos."""
+    video1 = Video(filename="test1.mp4", open_backend=True)
+    video2 = Video(filename="test2.mp4", open_backend=False)
+    labels = Labels(videos=[video1, video2])
+
+    labels_copy = labels.copy(open_videos=True)
+
+    # All videos have open_backend=True
+    assert labels_copy.videos[0].open_backend is True
+    assert labels_copy.videos[1].open_backend is True
+
+    # Originals unchanged
+    assert labels.videos[0].open_backend is True
+    assert labels.videos[1].open_backend is False
+
+
+def test_labels_copy_open_videos_false(centered_pair_low_quality_video):
+    """Test open_videos=False disables auto-opening for all videos."""
+    labels = Labels([LabeledFrame(video=centered_pair_low_quality_video, frame_idx=0)])
+
+    # Verify original has auto-open enabled
+    assert labels.videos[0].open_backend is True
+
+    labels_copy = labels.copy(open_videos=False)
+
+    # Copy has auto-open disabled
+    assert labels_copy.videos[0].open_backend is False
+    # Backend should not open on copy
+    assert labels_copy.videos[0].backend is None
 
     # Original unchanged
-    assert len(labels.suggestions) > 0
+    assert labels.videos[0].open_backend is True
 
 
 def test_labels_copy_performance_profile(
