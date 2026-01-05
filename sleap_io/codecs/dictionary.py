@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from sleap_io.model.instance import Instance, PredictedInstance
+from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labels import Labels
 from sleap_io.model.video import Video
 
@@ -86,8 +86,13 @@ def to_dict(
         skeleton_dict = {
             "name": skeleton.name,
             "nodes": [node.name for node in skeleton.nodes],
-            "edges": [[skeleton.nodes.index(edge.source), skeleton.nodes.index(edge.destination)]
-                      for edge in skeleton.edges],
+            "edges": [
+                [
+                    skeleton.nodes.index(edge.source),
+                    skeleton.nodes.index(edge.destination),
+                ]
+                for edge in skeleton.edges
+            ],
         }
 
         # Add symmetries if present
@@ -98,7 +103,7 @@ def to_dict(
                 nodes_list = list(symmetry.nodes)
                 indices = [
                     skeleton.nodes.index(nodes_list[0]),
-                    skeleton.nodes.index(nodes_list[1])
+                    skeleton.nodes.index(nodes_list[1]),
                 ]
                 # Sort indices for consistent ordering
                 indices.sort()
@@ -176,7 +181,10 @@ def to_dict(
                 instance_dict["track_idx"] = labels.tracks.index(instance.track)
 
             # Add tracking score if present
-            if hasattr(instance, "tracking_score") and instance.tracking_score is not None:
+            if (
+                hasattr(instance, "tracking_score")
+                and instance.tracking_score is not None
+            ):
                 instance_dict["tracking_score"] = float(instance.tracking_score)
 
             # Add score for predicted instances
@@ -184,7 +192,10 @@ def to_dict(
                 instance_dict["score"] = float(instance.score)
 
             # Add from_predicted if present
-            if hasattr(instance, "from_predicted") and instance.from_predicted is not None:
+            if (
+                hasattr(instance, "from_predicted")
+                and instance.from_predicted is not None
+            ):
                 # Note: We can't serialize the reference, just indicate it exists
                 instance_dict["has_from_predicted"] = True
 
@@ -223,3 +234,167 @@ def to_dict(
     }
 
     return result
+
+
+def from_dict(data: dict[str, Any]) -> Labels:
+    """Create a Labels object from a dictionary.
+
+    This is the inverse of `to_dict()` and reconstructs a Labels object from
+    its dictionary representation.
+
+    Args:
+        data: Dictionary in the format produced by `to_dict()`.
+
+    Returns:
+        A Labels object reconstructed from the dictionary.
+
+    Raises:
+        ValueError: If the dictionary format is invalid or missing required keys.
+
+    Examples:
+        >>> d = to_dict(labels)
+        >>> labels_restored = from_dict(d)
+
+        >>> # Round-trip through JSON
+        >>> import json
+        >>> json_str = json.dumps(to_dict(labels))
+        >>> labels_restored = from_dict(json.loads(json_str))
+
+    Notes:
+        - The `from_predicted` relationship cannot be fully restored since the
+          dictionary only indicates its presence, not the actual reference.
+        - Video backends are not restored; videos are created with filename only.
+    """
+    import numpy as np
+
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
+    from sleap_io.model.suggestions import SuggestionFrame
+
+    # Validate required keys
+    required_keys = ["skeletons", "videos", "labeled_frames"]
+    for key in required_keys:
+        if key not in data:
+            raise ValueError(f"Missing required key: {key}")
+
+    # Build skeletons
+    skeletons = []
+    for skel_dict in data["skeletons"]:
+        # Create nodes
+        nodes = [Node(name=name) for name in skel_dict["nodes"]]
+
+        # Create edges
+        edges = []
+        for src_idx, dst_idx in skel_dict.get("edges", []):
+            edges.append(Edge(source=nodes[src_idx], destination=nodes[dst_idx]))
+
+        # Create symmetries
+        symmetries = []
+        for sym_indices in skel_dict.get("symmetries", []):
+            symmetries.append(
+                Symmetry(nodes={nodes[sym_indices[0]], nodes[sym_indices[1]]})
+            )
+
+        skeleton = Skeleton(
+            nodes=nodes,
+            edges=edges,
+            symmetries=symmetries,
+            name=skel_dict.get("name", ""),
+        )
+        skeletons.append(skeleton)
+
+    # Build videos
+    videos = []
+    for vid_dict in data["videos"]:
+        video = Video(filename=vid_dict["filename"])
+        videos.append(video)
+
+    # Build tracks
+    tracks = []
+    for track_dict in data.get("tracks", []):
+        track = Track(name=track_dict["name"])
+        tracks.append(track)
+
+    # Build labeled frames
+    labeled_frames = []
+    for lf_dict in data["labeled_frames"]:
+        video = videos[lf_dict["video_idx"]]
+        frame_idx = lf_dict["frame_idx"]
+
+        instances = []
+        for inst_dict in lf_dict.get("instances", []):
+            skeleton = skeletons[inst_dict["skeleton_idx"]]
+            is_predicted = inst_dict["type"] == "predicted_instance"
+
+            # Build points array
+            points_list = inst_dict["points"]
+            n_nodes = len(points_list)
+            points_data = np.full((n_nodes, 2), np.nan, dtype="float64")
+
+            for node_idx, pt in enumerate(points_list):
+                if pt.get("visible", True):
+                    points_data[node_idx, 0] = pt["x"]
+                    points_data[node_idx, 1] = pt["y"]
+
+            # Get track if present
+            track = None
+            if "track_idx" in inst_dict:
+                track = tracks[inst_dict["track_idx"]]
+
+            # Get tracking score if present
+            tracking_score = inst_dict.get("tracking_score")
+
+            if is_predicted:
+                # Get instance score
+                score = inst_dict.get("score", 0.0)
+
+                # Create predicted instance
+                instance = PredictedInstance.from_numpy(
+                    points_data=points_data,
+                    skeleton=skeleton,
+                    score=score,
+                    track=track,
+                    tracking_score=tracking_score,
+                )
+            else:
+                # Create user instance
+                instance = Instance.from_numpy(
+                    points_data=points_data,
+                    skeleton=skeleton,
+                    track=track,
+                    tracking_score=tracking_score,
+                )
+
+            instances.append(instance)
+
+        labeled_frame = LabeledFrame(
+            video=video,
+            frame_idx=frame_idx,
+            instances=instances,
+        )
+        labeled_frames.append(labeled_frame)
+
+    # Build suggestions
+    suggestions = []
+    for sug_dict in data.get("suggestions", []):
+        video = videos[sug_dict["video_idx"]]
+        suggestion = SuggestionFrame(
+            video=video,
+            frame_idx=sug_dict["frame_idx"],
+        )
+        suggestions.append(suggestion)
+
+    # Build provenance
+    provenance = dict(data.get("provenance", {}))
+
+    # Create Labels object
+    labels = Labels(
+        labeled_frames=labeled_frames,
+        videos=videos,
+        skeletons=skeletons,
+        tracks=tracks,
+        suggestions=suggestions,
+        provenance=provenance,
+    )
+
+    return labels

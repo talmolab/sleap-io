@@ -255,6 +255,98 @@ class Labels:
             user_instances=user_instances,
         )
 
+    def to_dict(
+        self,
+        *,
+        video: Optional[Union[Video, int]] = None,
+        skip_empty_frames: bool = False,
+    ) -> dict:
+        """Convert labels to a JSON-serializable dictionary.
+
+        Args:
+            video: Optional video filter. If specified, only frames from this video
+                are included. Can be a Video object or integer index.
+            skip_empty_frames: If True, exclude frames with no instances.
+
+        Returns:
+            Dictionary with structure containing skeletons, videos, tracks,
+            labeled_frames, suggestions, and provenance. All values are
+            JSON-serializable primitives.
+
+        Examples:
+            >>> d = labels.to_dict()
+            >>> import json
+            >>> json.dumps(d)  # Fully serializable!
+
+            >>> # Filter to specific video
+            >>> d = labels.to_dict(video=0)
+
+        Notes:
+            This method delegates to `sleap_io.codecs.dictionary.to_dict()`.
+            See that function for implementation details.
+        """
+        from sleap_io.codecs.dictionary import to_dict
+
+        return to_dict(self, video=video, skip_empty_frames=skip_empty_frames)
+
+    def to_dataframe(
+        self,
+        format: str = "points",
+        *,
+        video: Optional[Union[Video, int]] = None,
+        include_metadata: bool = True,
+        include_score: bool = True,
+        include_user_instances: bool = True,
+        include_predicted_instances: bool = True,
+        video_id: str = "path",
+        include_video: Optional[bool] = None,
+        backend: str = "pandas",
+    ):
+        """Convert labels to a pandas or polars DataFrame.
+
+        Args:
+            format: Output format. One of "points", "instances", "frames",
+                "multi_index".
+            video: Optional video filter. If specified, only frames from this video
+                are included. Can be a Video object or integer index.
+            include_metadata: Include skeleton, track, video information in columns.
+            include_score: Include confidence scores for predicted instances.
+            include_user_instances: Include user-labeled instances.
+            include_predicted_instances: Include predicted instances.
+            video_id: How to represent videos ("path", "index", "name", "object").
+            include_video: Whether to include video information. If None, auto-detects
+                based on number of videos.
+            backend: "pandas" or "polars".
+
+        Returns:
+            DataFrame in the specified format.
+
+        Examples:
+            >>> df = labels.to_dataframe(format="points")
+            >>> df.to_csv("predictions.csv")
+
+            >>> # Get instances format for ML
+            >>> df = labels.to_dataframe(format="instances")
+
+        Notes:
+            This method delegates to `sleap_io.codecs.dataframe.to_dataframe()`.
+            See that function for implementation details on formats and options.
+        """
+        from sleap_io.codecs.dataframe import to_dataframe
+
+        return to_dataframe(
+            self,
+            format=format,
+            video=video,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            video_id=video_id,
+            include_video=include_video,
+            backend=backend,
+        )
+
     @classmethod
     def from_numpy(
         cls,

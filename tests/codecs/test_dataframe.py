@@ -4,8 +4,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from sleap_io import Instance, Labels, LabeledFrame, PredictedInstance, Skeleton, Track, Video, load_slp
-from sleap_io.codecs.dataframe import DataFrameFormat, to_dataframe
+from sleap_io import (
+    Instance,
+    LabeledFrame,
+    Labels,
+    PredictedInstance,
+    Skeleton,
+    Track,
+    Video,
+    load_slp,
+)
+from sleap_io.codecs.dataframe import DataFrameFormat, from_dataframe, to_dataframe
 
 
 def test_dataframe_format_enum():
@@ -287,6 +296,7 @@ def test_to_dataframe_polars_backend_not_installed():
         df = to_dataframe(labels, format="points", backend="polars")
         # If we get here, polars is installed
         import polars as pl
+
         assert isinstance(df, pl.DataFrame)
     except ValueError as e:
         # Polars not installed
@@ -477,7 +487,9 @@ def test_to_dataframe_instances_format_video_options():
     labels = Labels([lf])
 
     # Test with video index
-    df_idx = to_dataframe(labels, format="instances", video_id="index", include_video=True)
+    df_idx = to_dataframe(
+        labels, format="instances", video_id="index", include_video=True
+    )
     assert "video_idx" in df_idx.columns
 
     # Test without video
@@ -508,3 +520,174 @@ def test_to_dataframe_multi_index_without_video():
     assert isinstance(df.columns, pd.MultiIndex)
     # Column levels should be: skeleton, track, node, coord (no video)
     assert df.columns.nlevels < 5  # Less than with video
+
+
+def test_from_dataframe_basic():
+    """Test basic round-trip through DataFrame."""
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    # Convert to dataframe and back
+    df = to_dataframe(labels, format="points", include_metadata=True)
+    labels2 = from_dataframe(df, skeleton=skeleton, video=video)
+
+    assert len(labels2.labeled_frames) == 1
+    assert len(labels2.labeled_frames[0]) == 1
+
+
+def test_from_dataframe_with_predicted():
+    """Test that predicted instances are properly restored."""
+    skeleton = Skeleton(["a", "b"])
+    video = Video(filename="test.mp4")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[10.0, 20.0], [30.0, 40.0]]),
+        skeleton=skeleton,
+        score=0.95,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", include_metadata=True)
+    labels2 = from_dataframe(df, skeleton=skeleton, video=video)
+
+    assert len(labels2.labeled_frames[0].predicted_instances) == 1
+    assert len(labels2.labeled_frames[0].user_instances) == 0
+
+
+def test_from_dataframe_multiple_instances():
+    """Test with multiple instances per frame."""
+    skeleton = Skeleton(["node1", "node2"])
+    video = Video(filename="test.mp4")
+
+    inst1 = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+        skeleton=skeleton,
+    )
+    inst2 = Instance.from_numpy(
+        points_data=np.array([[5.0, 6.0], [7.0, 8.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", include_metadata=True)
+    labels2 = from_dataframe(df, skeleton=skeleton, video=video)
+
+    assert len(labels2.labeled_frames) == 1
+    assert len(labels2.labeled_frames[0]) == 2
+
+
+def test_from_dataframe_with_tracks():
+    """Test that tracks are restored."""
+    skeleton = Skeleton(["head"])
+    video = Video(filename="test.mp4")
+    track = Track(name="animal1")
+
+    inst = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track,
+        score=0.9,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", include_metadata=True)
+    labels2 = from_dataframe(df, skeleton=skeleton, video=video)
+
+    assert len(labels2.tracks) == 1
+    assert labels2.tracks[0].name == "animal1"
+    assert labels2.labeled_frames[0][0].track is not None
+
+
+def test_from_dataframe_multiple_frames():
+    """Test with multiple frames."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    frames = []
+    for i in range(5):
+        inst = Instance.from_numpy(
+            points_data=np.array([[float(i), float(i * 2)]]),
+            skeleton=skeleton,
+        )
+        frames.append(LabeledFrame(video=video, frame_idx=i * 10, instances=[inst]))
+
+    labels = Labels(frames)
+
+    df = to_dataframe(labels, format="points", include_metadata=True)
+    labels2 = from_dataframe(df, skeleton=skeleton, video=video)
+
+    assert len(labels2.labeled_frames) == 5
+
+    # Check frame indices
+    frame_indices = sorted([lf.frame_idx for lf in labels2.labeled_frames])
+    assert frame_indices == [0, 10, 20, 30, 40]
+
+
+def test_from_dataframe_slp_roundtrip(slp_typical):
+    """Test round-trip with real SLP file."""
+    labels = load_slp(slp_typical)
+
+    df = to_dataframe(labels, format="points", include_metadata=True)
+    labels2 = from_dataframe(df, skeleton=labels.skeleton, video=labels.video)
+
+    assert len(labels2.labeled_frames) == len(labels.labeled_frames)
+
+    orig_instances = sum(len(lf) for lf in labels)
+    restored_instances = sum(len(lf) for lf in labels2)
+    assert orig_instances == restored_instances
+
+
+def test_from_dataframe_infer_skeleton():
+    """Test skeleton inference from DataFrame."""
+    skeleton = Skeleton(["head", "body", "tail"])
+    video = Video(filename="test.mp4")
+
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="points", include_metadata=True)
+
+    # Restore without providing skeleton - should infer from node names
+    labels2 = from_dataframe(df, video=video)
+
+    assert len(labels2.skeletons) == 1
+    assert len(labels2.skeletons[0].nodes) == 3
+
+    # Node names should match
+    node_names = {n.name for n in labels2.skeletons[0].nodes}
+    assert node_names == {"head", "body", "tail"}
+
+
+def test_from_dataframe_unsupported_format():
+    """Test that unsupported formats raise NotImplementedError."""
+    df = pd.DataFrame({"frame_idx": [0], "node_name": ["a"], "x": [1.0], "y": [2.0]})
+
+    with pytest.raises(NotImplementedError):
+        from_dataframe(df, format="instances")
+
+
+def test_from_dataframe_missing_columns():
+    """Test that missing columns raise ValueError."""
+    df = pd.DataFrame({"frame_idx": [0], "x": [1.0], "y": [2.0]})  # Missing node_name
+
+    with pytest.raises(ValueError, match="Missing required columns"):
+        from_dataframe(df)

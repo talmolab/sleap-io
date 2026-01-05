@@ -3,7 +3,15 @@
 import numpy as np
 import pytest
 
-from sleap_io import Instance, Labels, LabeledFrame, PredictedInstance, Skeleton, Track, Video, load_slp
+from sleap_io import (
+    LabeledFrame,
+    Labels,
+    PredictedInstance,
+    Skeleton,
+    Track,
+    Video,
+    load_slp,
+)
 from sleap_io.codecs.numpy import from_numpy, to_numpy
 
 
@@ -73,8 +81,7 @@ def test_from_numpy_basic():
     inst0 = lf0.instances[0]
     assert isinstance(inst0, PredictedInstance)
     np.testing.assert_array_almost_equal(
-        inst0.numpy()[:, :2],
-        [[10.0, 20.0], [30.0, 40.0]]
+        inst0.numpy()[:, :2], [[10.0, 20.0], [30.0, 40.0]]
     )
 
 
@@ -181,7 +188,9 @@ def test_from_numpy_validation():
 
     # Both video and videos
     with pytest.raises(ValueError, match="both"):
-        from_numpy(np.zeros((1, 1, 1, 2)), video=video, videos=[video], skeleton=skeleton)
+        from_numpy(
+            np.zeros((1, 1, 1, 2)), video=video, videos=[video], skeleton=skeleton
+        )
 
 
 def test_roundtrip_numpy():
@@ -203,7 +212,9 @@ def test_roundtrip_numpy():
 
     # Convert to numpy and back
     arr = to_numpy(labels1, return_confidence=True)
-    labels2 = from_numpy(arr, video=video, skeleton=skeleton, tracks=[track], return_confidence=True)
+    labels2 = from_numpy(
+        arr, video=video, skeleton=skeleton, tracks=[track], return_confidence=True
+    )
 
     # Convert both to numpy for comparison
     arr1 = to_numpy(labels1, return_confidence=True)

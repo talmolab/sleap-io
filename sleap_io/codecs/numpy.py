@@ -18,7 +18,7 @@ from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
-    from typing_extensions import Literal
+    pass
 
 
 def to_numpy(
