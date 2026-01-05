@@ -673,6 +673,7 @@ class Labels:
         format: Optional[str] = None,
         embed: bool | str | list[tuple[Video, int]] | None = False,
         restore_original_videos: bool = True,
+        embed_inplace: bool = False,
         verbose: bool = True,
         **kwargs,
     ):
@@ -700,6 +701,10 @@ class Labels:
             restore_original_videos: If `True` (default) and `embed=False`, use original
                 video files. If `False` and `embed=False`, keep references to source
                 `.pkg.slp` files. Only applies when `embed=False`.
+            embed_inplace: If `False` (default), a copy of the labels is made before
+                embedding to avoid modifying the in-memory labels. If `True`, the
+                labels will be modified in-place to point to the embedded videos,
+                which is faster but mutates the input. Only applies when embedding.
             verbose: If `True` (the default), display a progress bar when embedding
                 frames.
             **kwargs: Additional format-specific arguments passed to the save function.
@@ -737,6 +742,7 @@ class Labels:
             format=format,
             embed=embed,
             restore_original_videos=restore_original_videos,
+            embed_inplace=embed_inplace,
             verbose=verbose,
             **kwargs,
         )

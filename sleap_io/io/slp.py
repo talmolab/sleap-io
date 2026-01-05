@@ -2194,6 +2194,7 @@ def write_labels(
     labels: Labels,
     embed: bool | str | list[tuple[Video, int]] | None = None,
     restore_original_videos: bool = True,
+    embed_inplace: bool = False,
     verbose: bool = True,
     plugin: Optional[str] = None,
     embed_all_videos: bool = True,
@@ -2221,6 +2222,10 @@ def write_labels(
         restore_original_videos: If `True` (default) and `embed=False`, use original
             video files. If `False` and `embed=False`, keep references to source
             `.pkg.slp` files. Only applies when `embed=False`.
+        embed_inplace: If `False` (default), a copy of the labels is made before
+            embedding to avoid modifying the in-memory labels. If `True`, the
+            labels will be modified in-place to point to the embedded videos,
+            which is faster but mutates the input. Only applies when embedding.
         verbose: If `True` (the default), display a progress bar when embedding frames.
         plugin: Image plugin to use for encoding embedded frames. One of "opencv"
             or "imageio". If None, uses the global default from
@@ -2236,6 +2241,10 @@ def write_labels(
     """
     if Path(labels_path).exists():
         Path(labels_path).unlink()
+
+    # Make a copy to avoid mutating the input labels when embedding
+    if embed and not embed_inplace:
+        labels = labels.copy(open_videos=True)
 
     # Store original videos before embedding modifies them
     # We need to make a copy of the actual video objects, not just the list
