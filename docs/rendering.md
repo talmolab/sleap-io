@@ -34,6 +34,10 @@ img = sio.render_image(labels.labeled_frames[0])
 sio.render_image(labels.labeled_frames[0], "frame.png")
 ```
 
+This produces a single image with skeleton overlays on the video frame:
+
+![Basic rendering example](assets/rendering/render_basic.png)
+
 ### CLI rendering
 
 ```bash
@@ -157,6 +161,10 @@ for i in range(0, 100, 10):
 montage = np.concatenate(frames, axis=1)  # Horizontal strip
 ```
 
+This creates a strip of rendered frames useful for figures and visualizations:
+
+![Multi-frame montage](assets/rendering/render_montage.png)
+
 ### Pattern 5: Video clip rendering
 
 Render a subset of frames to video.
@@ -172,6 +180,8 @@ sio.render_video(labels, "clip.mp4", start=100, end=200)
 # Or render specific frame indices
 sio.render_video(labels, "selected.mp4", frame_inds=[0, 50, 100, 150])
 ```
+
+The first example outputs a 100-frame video clip (`clip.mp4`). The second outputs a 4-frame video containing only the specified frames.
 
 ### Pattern 6: Include unlabeled frames
 
@@ -189,11 +199,17 @@ sio.render_video(labels, "full_video.mp4", include_unlabeled=True)
 sio.render_video(labels, "clip.mp4", start=0, end=500, include_unlabeled=True)
 ```
 
+By default, only frames with predictions are rendered. With `include_unlabeled=True`, the video includes all frames in the range—frames without predictions show just the video frame without skeleton overlays.
+
 ---
 
 ## Color Schemes
 
 Color scheme determines how poses are colored across instances and frames.
+
+![Color schemes comparison: track, instance, and node](assets/rendering/render_color_schemes.png)
+
+*From left to right: `color_by="track"`, `color_by="instance"`, `color_by="node"`*
 
 ### Auto mode (default)
 
@@ -216,7 +232,7 @@ Each tracked animal gets a consistent color across all frames.
 sio.render_video(labels, "by_track.mp4", color_by="track")
 ```
 
-**Best for:** tracked data where you want to follow specific animals.
+**Best for:** tracked data where you want to follow specific animals. In the output video, each animal maintains its color identity even as it moves—useful for verifying tracking quality.
 
 ### Color by instance
 
@@ -226,7 +242,7 @@ Each animal within a frame gets a unique color, but colors may change between fr
 sio.render_video(labels, "by_instance.mp4", color_by="instance")
 ```
 
-**Best for:** single-frame renders or untracked data.
+**Best for:** single-frame renders or untracked data. In video output, colors are assigned by detection order each frame, so the same animal may appear in different colors across frames.
 
 ### Color by node
 
@@ -236,7 +252,9 @@ Each body part gets a unique color (same for all animals).
 sio.render_video(labels, "by_node.mp4", color_by="node")
 ```
 
-**Best for:** highlighting skeleton structure or comparing body parts.
+**Best for:** highlighting skeleton structure or comparing body parts. All animals share the same color scheme, making it easy to compare corresponding body parts (e.g., all heads are red, all tails are blue).
+
+![Color by node detail with rainbow palette](assets/rendering/render_color_node_detail.png)
 
 ---
 
@@ -245,6 +263,10 @@ sio.render_video(labels, "by_node.mp4", color_by="node")
 ### Built-in palettes
 
 8 palettes are included with no additional dependencies:
+
+![Palette comparison: distinct, tableau10, seaborn, viridis](assets/rendering/render_palettes.png)
+
+*Top row: `distinct`, `tableau10`. Bottom row: `seaborn`, `viridis`*
 
 | Palette | Description | Best for |
 |---------|-------------|----------|
@@ -301,6 +323,10 @@ colors = get_palette("distinct", 20)  # Repeats the 10 distinct colors
 
 Five marker shapes are available for node visualization:
 
+![Marker shapes: circle, square, diamond, triangle, cross](assets/rendering/render_marker_shapes.png)
+
+*Top row: `circle`, `square`, `diamond`. Bottom row: `triangle`, `cross`*
+
 | Shape | Description |
 |-------|-------------|
 | `circle` | Filled circle (default) |
@@ -315,6 +341,8 @@ sio.render_video(labels, "circles.mp4", marker_shape="circle")
 sio.render_video(labels, "squares.mp4", marker_shape="square")
 sio.render_video(labels, "diamonds.mp4", marker_shape="diamond")
 ```
+
+Each shape produces a video where all node markers use that shape consistently. The default `circle` shape works well for most cases; `cross` and `diamond` can improve visibility on cluttered backgrounds.
 
 ---
 
@@ -331,6 +359,10 @@ sio.render_video(
 )
 ```
 
+![Size variations: small, medium, large](assets/rendering/render_sizes.png)
+
+*From left to right: `marker_size=3, line_width=1.5` (small), `marker_size=6, line_width=3` (medium), `marker_size=10, line_width=5` (large)*
+
 ### Transparency
 
 ```python
@@ -341,6 +373,12 @@ sio.render_video(labels, "translucent.mp4", alpha=0.7)
 sio.render_video(labels, "subtle.mp4", alpha=0.3)
 ```
 
+![Alpha variations: 1.0, 0.5, 0.25](assets/rendering/render_alpha.png)
+
+*From left to right: `alpha=1.0` (fully opaque), `alpha=0.5` (semi-transparent), `alpha=0.25` (subtle overlay)*
+
+Lower alpha values let the underlying video show through, useful when you want to see fine details obscured by the skeleton overlay.
+
 ### Toggle elements
 
 ```python
@@ -350,6 +388,12 @@ sio.render_video(labels, "edges_only.mp4", show_nodes=False)
 # Nodes only (no skeleton edges)
 sio.render_video(labels, "nodes_only.mp4", show_edges=False)
 ```
+
+![Toggle options: both, edges only, nodes only](assets/rendering/render_toggles.png)
+
+*From left to right: both (default), edges only (`show_nodes=False`), nodes only (`show_edges=False`)*
+
+Hiding nodes can reduce visual clutter when you only need to see the body pose. Hiding edges shows just the keypoint locations without connectivity.
 
 ---
 
@@ -375,6 +419,8 @@ sio.render_video(labels, "final.mp4", preset="final")
 # Custom scale
 sio.render_video(labels, "output.mp4", scale=0.75)
 ```
+
+The `preview` preset outputs a video at 1/4 resolution (e.g., 1920×1080 → 480×270), rendering ~9× faster. This is ideal for quickly scanning through predictions before committing to a full-quality render.
 
 ### Performance characteristics
 
@@ -479,6 +525,10 @@ labels = sio.load_slp("predictions.slp")
 sio.render_video(labels, "labeled.mp4", per_instance_callback=draw_instance_labels)
 ```
 
+![Callback: instance labels](assets/rendering/render_callback_labels.png)
+
+*Track names drawn above each instance's centroid with a semi-transparent background for readability.*
+
 ### Example: Bounding boxes
 
 Draw dashed bounding boxes around instances:
@@ -520,6 +570,10 @@ labels = sio.load_slp("predictions.slp")
 sio.render_video(labels, "boxes.mp4", per_instance_callback=draw_bounding_box)
 ```
 
+![Callback: bounding boxes](assets/rendering/render_callback_boxes.png)
+
+*Dashed bounding boxes around each instance with padding. The dashed style provides clear boundaries without obscuring the skeleton.*
+
 ### Example: Frame information overlay
 
 Add frame number and instance count:
@@ -547,6 +601,10 @@ labels = sio.load_slp("predictions.slp")
 sio.render_video(labels, "info.mp4", post_render_callback=draw_frame_info)
 ```
 
+![Callback: frame info overlay](assets/rendering/render_callback_info.png)
+
+*Frame number and instance count displayed in the top-left corner with a semi-transparent background.*
+
 ### Combining multiple callbacks
 
 ```python
@@ -563,6 +621,10 @@ sio.render_video(
     per_instance_callback=combined_instance_callback,
 )
 ```
+
+![Callback: combined](assets/rendering/render_callback_combined.png)
+
+*Multiple callbacks combined: bounding boxes + instance labels + frame info overlay. Callbacks are applied in order, with pre-render first, then skeleton drawing, then per-instance, then post-render.*
 
 ### Skia drawing reference
 
@@ -603,6 +665,10 @@ sio.render_image(
     fallback_color=(0, 0, 0),  # Black
 )
 ```
+
+![Fallback rendering with solid color background](assets/rendering/render_fallback.png)
+
+*Skeleton rendered on a dark gray background when no video frame is available. Useful for visualizing predictions when the original video is missing or inaccessible.*
 
 ### Custom background image
 
