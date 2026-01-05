@@ -500,28 +500,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rendering-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rendering Patterns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#color-schemes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -566,10 +544,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quality-and-performance" class="md-nav__link">
+  <a href="#handling-missing-videos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quality and Performance
+        Handling Missing Videos
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-montages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Montages
       
     </span>
   </a>
@@ -588,10 +577,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#handling-missing-videos" class="md-nav__link">
+  <a href="#video-rendering" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Handling Missing Videos
+        Video Rendering
       
     </span>
   </a>
@@ -2026,28 +2015,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rendering-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rendering Patterns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#color-schemes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2092,10 +2059,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quality-and-performance" class="md-nav__link">
+  <a href="#handling-missing-videos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quality and Performance
+        Handling Missing Videos
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-montages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Montages
       
     </span>
   </a>
@@ -2114,10 +2092,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#handling-missing-videos" class="md-nav__link">
+  <a href="#video-rendering" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Handling Missing Videos
+        Video Rendering
       
     </span>
   </a>
@@ -2167,7 +2145,7 @@
 
 
 <h1 id="rendering">Rendering<a class="headerlink" href="#rendering" title="Permanent link">&para;</a></h1>
-<p>sleap-io provides high-performance pose visualization using <a href="https://kyamagu.github.io/skia-python/">skia-python</a>, a production-quality 2D graphics library. This guide covers all rendering capabilities from quick one-liners to advanced custom overlays.</p>
+<p>sleap-io provides high-performance pose visualization using <a href="https://kyamagu.github.io/skia-python/">skia-python</a>, a production-quality 2D graphics library.</p>
 <div class="admonition info">
 <p class="admonition-title">Required dependencies</p>
 <p>Rendering requires optional dependencies:
@@ -2177,757 +2155,318 @@
 </div>
 <hr />
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p><img align="right" alt="Basic rendering example" src="../assets/rendering/render_basic.png" /></p>
+<p>Render a single frame to a numpy array:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Render full video</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">labels</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Render single frame to array</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># Save single frame to file</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;frame.png&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
 </code></pre></div>
-<div style="clear: both;"></div>
-
-<hr />
-<h2 id="api-overview">API Overview<a class="headerlink" href="#api-overview" title="Permanent link">&para;</a></h2>
-<h3 id="main-functions">Main Functions<a class="headerlink" href="#main-functions" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Function</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="#render-video"><code>sio.render_video()</code></a></td>
-<td>Render video with pose overlays</td>
-</tr>
-<tr>
-<td><a href="#render-image"><code>sio.render_image()</code></a></td>
-<td>Render single frame</td>
-</tr>
-<tr>
-<td><a href="#labelsrender"><code>Labels.render()</code></a></td>
-<td>Convenience method on Labels</td>
-</tr>
-</tbody>
-</table>
-<h3 id="color-options">Color Options<a class="headerlink" href="#color-options" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Option</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>color_by</code></td>
-<td>Scheme: <code>"auto"</code>, <code>"track"</code>, <code>"instance"</code>, <code>"node"</code></td>
-</tr>
-<tr>
-<td><code>palette</code></td>
-<td>Color palette name</td>
-</tr>
-</tbody>
-</table>
-<h3 id="appearance-options">Appearance Options<a class="headerlink" href="#appearance-options" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Option</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>marker_shape</code></td>
-<td><code>"circle"</code></td>
-<td>Node marker shape</td>
-</tr>
-<tr>
-<td><code>marker_size</code></td>
-<td><code>4.0</code></td>
-<td>Node radius in pixels</td>
-</tr>
-<tr>
-<td><code>line_width</code></td>
-<td><code>2.0</code></td>
-<td>Edge line width</td>
-</tr>
-<tr>
-<td><code>alpha</code></td>
-<td><code>1.0</code></td>
-<td>Transparency (0.0-1.0)</td>
-</tr>
-<tr>
-<td><code>show_nodes</code></td>
-<td><code>True</code></td>
-<td>Draw node markers</td>
-</tr>
-<tr>
-<td><code>show_edges</code></td>
-<td><code>True</code></td>
-<td>Draw skeleton edges</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="rendering-patterns">Rendering Patterns<a class="headerlink" href="#rendering-patterns" title="Permanent link">&para;</a></h2>
-<h3 id="pattern-1-in-memory-rendering">Pattern 1: In-memory rendering<a class="headerlink" href="#pattern-1-in-memory-rendering" title="Permanent link">&para;</a></h3>
-<p>Render frames to numpy arrays for display, further processing, or custom pipelines.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Render single frame to array</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># (H, W, 3) uint8</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Display with matplotlib</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s2">&quot;off&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s2">&quot;figure.png&quot;</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">&quot;tight&quot;</span><span class="p">)</span>
+<p><img alt="Basic rendering" src="../assets/rendering/render_basic.png" /></p>
+<p>Render a full video:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
 </code></pre></div>
-<h3 id="pattern-2-render-to-disk">Pattern 2: Render to disk<a class="headerlink" href="#pattern-2-render-to-disk" title="Permanent link">&para;</a></h3>
-<p>Save rendered output directly to image or video files.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Save single frame to PNG</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">lf_ind</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">save_path</span><span class="o">=</span><span class="s2">&quot;frame_0.png&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Or use LabeledFrame directly</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">42</span><span class="p">],</span> <span class="s2">&quot;frame_42.png&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># Render video to MP4</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="pattern-3-render-specific-video-frame">Pattern 3: Render specific video frame<a class="headerlink" href="#pattern-3-render-specific-video-frame" title="Permanent link">&para;</a></h3>
-<p>Render by video frame index rather than labeled frame index.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Render video frame 100 from video 0</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">save_path</span><span class="o">=</span><span class="s2">&quot;frame_100.png&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Or get as array</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">frame_idx</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="pattern-4-batch-render-multiple-frames">Pattern 4: Batch render multiple frames<a class="headerlink" href="#pattern-4-batch-render-multiple-frames" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Multi-frame montage" src="../assets/rendering/render_montage.png" /></p>
-<p>Render many frames efficiently for creating figures or montages.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Render frames 0, 10, 20, ... 90</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">):</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">lf_ind</span><span class="o">=</span><span class="n">i</span><span class="p">)</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Stack into horizontal strip</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">montage</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-</code></pre></div>
-<div style="clear: both;"></div>
-
-<h3 id="pattern-5-video-clip-rendering">Pattern 5: Video clip rendering<a class="headerlink" href="#pattern-5-video-clip-rendering" title="Permanent link">&para;</a></h3>
-<p>Render a subset of frames to video.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Render frames 100-200</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;clip.mp4&quot;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Or render specific frame indices</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;selected.mp4&quot;</span><span class="p">,</span> <span class="n">frame_inds</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">150</span><span class="p">])</span>
-</code></pre></div>
-<h3 id="pattern-6-include-unlabeled-frames">Pattern 6: Include unlabeled frames<a class="headerlink" href="#pattern-6-include-unlabeled-frames" title="Permanent link">&para;</a></h3>
-<p>Render all frames in a range, not just those with predictions.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Render all video frames, showing blank poses where no predictions exist</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;full_video.mp4&quot;</span><span class="p">,</span> <span class="n">include_unlabeled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Combine with frame range</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;clip.mp4&quot;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">include_unlabeled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</code></pre></div>
-<p>By default, only frames with predictions are rendered. With <code>include_unlabeled=True</code>, the video includes all frames in the range—frames without predictions show just the video frame without skeleton overlays.</p>
+<p>This produces an MP4 video file with skeleton overlays on all labeled frames.</p>
 <hr />
 <h2 id="color-schemes">Color Schemes<a class="headerlink" href="#color-schemes" title="Permanent link">&para;</a></h2>
 <p>Color scheme determines how poses are colored across instances and frames.</p>
-<h3 id="auto-mode-default">Auto mode (default)<a class="headerlink" href="#auto-mode-default" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
-</code></pre></div>
-<p>Auto mode uses these rules:</p>
-<ul>
-<li>If tracks available → color by track (consistent identity across frames)</li>
-<li>If single image → color by instance (distinguishes animals)</li>
-<li>If video without tracks → color by node (prevents flicker)</li>
-</ul>
 <h3 id="color-by-track">Color by track<a class="headerlink" href="#color-by-track" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Color by track" src="../assets/rendering/render_color_track.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="s2">&quot;by_track.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;track&quot;</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="p">)</span>
+<p>Each tracked animal gets a consistent color across all frames:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;track&quot;</span><span class="p">)</span>
 </code></pre></div>
-<p>Each tracked animal gets a consistent color across all frames.</p>
-<p><strong>Best for:</strong> Tracked data where you want to follow specific animals. Each animal maintains its color identity even as it moves.</p>
-<div style="clear: both;"></div>
-
+<p><img alt="Color by track" src="../assets/rendering/color_by_track.png" /></p>
 <h3 id="color-by-instance">Color by instance<a class="headerlink" href="#color-by-instance" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Color by instance" src="../assets/rendering/render_color_instance.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="s2">&quot;by_instance.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;instance&quot;</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="p">)</span>
+<p>Each animal within a frame gets a unique color (colors may change between frames):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;instance&quot;</span><span class="p">)</span>
 </code></pre></div>
-<p>Each animal within a frame gets a unique color, but colors may change between frames.</p>
-<p><strong>Best for:</strong> Single-frame renders or untracked data.</p>
-<div style="clear: both;"></div>
-
+<p><img alt="Color by instance" src="../assets/rendering/color_by_instance.png" /></p>
 <h3 id="color-by-node">Color by node<a class="headerlink" href="#color-by-node" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Color by node" src="../assets/rendering/render_color_node.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="s2">&quot;by_node.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="p">)</span>
+<p>Each body part gets a unique color (same across all animals):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">)</span>
 </code></pre></div>
-<p>Each body part gets a unique color (same for all animals).</p>
-<p><strong>Best for:</strong> Highlighting skeleton structure or comparing body parts across animals.</p>
-<div style="clear: both;"></div>
-
+<p><img alt="Color by node" src="../assets/rendering/color_by_node.png" /></p>
 <hr />
 <h2 id="color-palettes">Color Palettes<a class="headerlink" href="#color-palettes" title="Permanent link">&para;</a></h2>
 <h3 id="built-in-palettes">Built-in palettes<a class="headerlink" href="#built-in-palettes" title="Permanent link">&para;</a></h3>
-<p>8 palettes are included with no additional dependencies:</p>
-<p><img alt="Built-in palettes" src="../assets/rendering/render_palettes.png" /></p>
-<table>
-<thead>
-<tr>
-<th>Palette</th>
-<th>Colors</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>distinct</code></td>
-<td>10</td>
-<td>High-contrast colors for instances/tracks</td>
-</tr>
-<tr>
-<td><code>rainbow</code></td>
-<td>256</td>
-<td>Spectrum colors for node types</td>
-</tr>
-<tr>
-<td><code>warm</code></td>
-<td>256</td>
-<td>Orange/red tones</td>
-</tr>
-<tr>
-<td><code>cool</code></td>
-<td>256</td>
-<td>Blue/purple tones</td>
-</tr>
-<tr>
-<td><code>pastel</code></td>
-<td>10</td>
-<td>Subtle colors for overlays</td>
-</tr>
-<tr>
-<td><code>seaborn</code></td>
-<td>10</td>
-<td>Professional look for publications</td>
-</tr>
-<tr>
-<td><code>tableau10</code></td>
-<td>10</td>
-<td>Data visualization standard</td>
-</tr>
-<tr>
-<td><code>viridis</code></td>
-<td>256</td>
-<td>Perceptually uniform scientific</td>
-</tr>
-</tbody>
-</table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Use a built-in palette</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;tableau10&quot;</span><span class="p">)</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;rainbow&quot;</span><span class="p">)</span>
+<p>8 palettes are included with no additional dependencies.</p>
+<h4 id="distinct">distinct<a class="headerlink" href="#distinct" title="Permanent link">&para;</a></h4>
+<p>High-contrast colors for instances/tracks:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;distinct&quot;</span><span class="p">)</span>
 </code></pre></div>
+<p><img alt="palette distinct" src="../assets/rendering/palette_distinct.png" /></p>
+<h4 id="rainbow">rainbow<a class="headerlink" href="#rainbow" title="Permanent link">&para;</a></h4>
+<p>Spectrum colors for node types:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;rainbow&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette rainbow" src="../assets/rendering/palette_rainbow.png" /></p>
+<h4 id="warm">warm<a class="headerlink" href="#warm" title="Permanent link">&para;</a></h4>
+<p>Orange/red tones:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;warm&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette warm" src="../assets/rendering/palette_warm.png" /></p>
+<h4 id="cool">cool<a class="headerlink" href="#cool" title="Permanent link">&para;</a></h4>
+<p>Blue/purple tones:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;cool&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette cool" src="../assets/rendering/palette_cool.png" /></p>
+<h4 id="pastel">pastel<a class="headerlink" href="#pastel" title="Permanent link">&para;</a></h4>
+<p>Subtle colors for overlays:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;pastel&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette pastel" src="../assets/rendering/palette_pastel.png" /></p>
+<h4 id="seaborn">seaborn<a class="headerlink" href="#seaborn" title="Permanent link">&para;</a></h4>
+<p>Professional look for publications:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;seaborn&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette seaborn" src="../assets/rendering/palette_seaborn.png" /></p>
+<h4 id="tableau10">tableau10<a class="headerlink" href="#tableau10" title="Permanent link">&para;</a></h4>
+<p>Data visualization standard:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;tableau10&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette tableau10" src="../assets/rendering/palette_tableau10.png" /></p>
+<h4 id="viridis">viridis<a class="headerlink" href="#viridis" title="Permanent link">&para;</a></h4>
+<p>Perceptually uniform scientific:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette viridis" src="../assets/rendering/palette_viridis.png" /></p>
 <h3 id="colorcet-palettes">Colorcet palettes<a class="headerlink" href="#colorcet-palettes" title="Permanent link">&para;</a></h3>
-<p>With the <code>[all]</code> or <code>[rendering]</code> extras, you get access to <a href="https://colorcet.holoviz.org/">colorcet</a>'s expanded palettes:</p>
-<p><img alt="Colorcet palettes" src="../assets/rendering/render_palettes_colorcet.png" /></p>
-<table>
-<thead>
-<tr>
-<th>Palette</th>
-<th>Colors</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>glasbey</code></td>
-<td>256</td>
-<td>Maximally distinct colors</td>
-</tr>
-<tr>
-<td><code>glasbey_hv</code></td>
-<td>256</td>
-<td>High visibility variant</td>
-</tr>
-<tr>
-<td><code>glasbey_cool</code></td>
-<td>256</td>
-<td>Cool-toned variant</td>
-</tr>
-<tr>
-<td><code>glasbey_warm</code></td>
-<td>256</td>
-<td>Warm-toned variant</td>
-</tr>
-</tbody>
-</table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Great for many tracked instances</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;glasbey&quot;</span><span class="p">)</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># High visibility for dark backgrounds</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;glasbey_hv&quot;</span><span class="p">)</span>
+<p>With <code>[all]</code> or <code>[rendering]</code> extras, you get <a href="https://colorcet.holoviz.org/">colorcet</a> palettes:</p>
+<h4 id="glasbey">glasbey<a class="headerlink" href="#glasbey" title="Permanent link">&para;</a></h4>
+<p>256 maximally distinct colors:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;glasbey&quot;</span><span class="p">)</span>
 </code></pre></div>
+<p><img alt="palette glasbey" src="../assets/rendering/palette_glasbey.png" /></p>
+<h4 id="glasbey_hv">glasbey_hv<a class="headerlink" href="#glasbey_hv" title="Permanent link">&para;</a></h4>
+<p>High visibility variant:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;glasbey_hv&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette glasbey_hv" src="../assets/rendering/palette_glasbey_hv.png" /></p>
+<h4 id="glasbey_cool">glasbey_cool<a class="headerlink" href="#glasbey_cool" title="Permanent link">&para;</a></h4>
+<p>Cool-toned variant:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;glasbey_cool&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette glasbey_cool" src="../assets/rendering/palette_glasbey_cool.png" /></p>
+<h4 id="glasbey_warm">glasbey_warm<a class="headerlink" href="#glasbey_warm" title="Permanent link">&para;</a></h4>
+<p>Warm-toned variant:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;node&quot;</span><span class="p">,</span> <span class="n">palette</span><span class="o">=</span><span class="s2">&quot;glasbey_warm&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="palette glasbey_warm" src="../assets/rendering/palette_glasbey_warm.png" /></p>
 <h3 id="getting-palette-colors-programmatically">Getting palette colors programmatically<a class="headerlink" href="#getting-palette-colors-programmatically" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Get 10 colors from a palette</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">colors</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">rendering</span><span class="o">.</span><span class="n">get_palette</span><span class="p">(</span><span class="s2">&quot;tableau10&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Returns: [(31, 119, 180), (255, 127, 14), ...]</span>
-<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
-<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Palettes cycle if you request more colors than they have</span>
-<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="n">colors</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">rendering</span><span class="o">.</span><span class="n">get_palette</span><span class="p">(</span><span class="s2">&quot;distinct&quot;</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>  <span class="c1"># Repeats the 10 colors</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">colors</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">rendering</span><span class="o">.</span><span class="n">get_palette</span><span class="p">(</span><span class="s2">&quot;tableau10&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Returns: [(31, 119, 180), (255, 127, 14), ...]</span>
 </code></pre></div>
 <hr />
 <h2 id="marker-shapes">Marker Shapes<a class="headerlink" href="#marker-shapes" title="Permanent link">&para;</a></h2>
-<p>Five marker shapes are available for node visualization:</p>
-<p><img alt="Marker shapes" src="../assets/rendering/render_marker_shapes.png" /></p>
-<table>
-<thead>
-<tr>
-<th>Shape</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>circle</code></td>
-<td>Filled circle (default)</td>
-</tr>
-<tr>
-<td><code>square</code></td>
-<td>Filled square</td>
-</tr>
-<tr>
-<td><code>diamond</code></td>
-<td>Rotated square</td>
-</tr>
-<tr>
-<td><code>triangle</code></td>
-<td>Upward-pointing triangle</td>
-</tr>
-<tr>
-<td><code>cross</code></td>
-<td>Plus sign</td>
-</tr>
-</tbody>
-</table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;circle&quot;</span><span class="p">)</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;diamond&quot;</span><span class="p">)</span>
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;cross&quot;</span><span class="p">)</span>
+<p>Five marker shapes are available for node visualization.</p>
+<h4 id="circle">circle<a class="headerlink" href="#circle" title="Permanent link">&para;</a></h4>
+<p>Filled circle (default):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;circle&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">)</span>
 </code></pre></div>
-<p>The <code>cross</code> and <code>diamond</code> shapes can improve visibility on cluttered backgrounds.</p>
+<p><img alt="shape circle" src="../assets/rendering/shape_circle.png" /></p>
+<h4 id="square">square<a class="headerlink" href="#square" title="Permanent link">&para;</a></h4>
+<p>Filled square:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;square&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="shape square" src="../assets/rendering/shape_square.png" /></p>
+<h4 id="diamond">diamond<a class="headerlink" href="#diamond" title="Permanent link">&para;</a></h4>
+<p>Rotated square:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;diamond&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="shape diamond" src="../assets/rendering/shape_diamond.png" /></p>
+<h4 id="triangle">triangle<a class="headerlink" href="#triangle" title="Permanent link">&para;</a></h4>
+<p>Upward-pointing triangle:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;triangle&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="shape triangle" src="../assets/rendering/shape_triangle.png" /></p>
+<h4 id="cross">cross<a class="headerlink" href="#cross" title="Permanent link">&para;</a></h4>
+<p>Plus sign:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_shape</span><span class="o">=</span><span class="s2">&quot;cross&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="shape cross" src="../assets/rendering/shape_cross.png" /></p>
 <hr />
 <h2 id="styling-options">Styling Options<a class="headerlink" href="#styling-options" title="Permanent link">&para;</a></h2>
 <h3 id="marker-and-line-sizes">Marker and line sizes<a class="headerlink" href="#marker-and-line-sizes" title="Permanent link">&para;</a></h3>
-<p><img alt="Size variations" src="../assets/rendering/render_sizes.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Small (detailed work)</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;small.mp4&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Medium (default-ish)</span>
-<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;medium.mp4&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mf">3.0</span><span class="p">)</span>
-<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Large (visibility)</span>
-<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;large.mp4&quot;</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+<p>Small markers and thin lines for detailed work:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
 </code></pre></div>
+<p><img alt="size small" src="../assets/rendering/size_small.png" /></p>
+<p>Medium markers and lines:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mf">3.0</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="size medium" src="../assets/rendering/size_medium.png" /></p>
+<p>Large markers and thick lines for visibility:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">marker_size</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="size large" src="../assets/rendering/size_large.png" /></p>
 <h3 id="transparency">Transparency<a class="headerlink" href="#transparency" title="Permanent link">&para;</a></h3>
-<p><img alt="Alpha variations" src="../assets/rendering/render_alpha.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Semi-transparent overlay</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;translucent.mp4&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Very subtle overlay</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;subtle.mp4&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.25</span><span class="p">)</span>
+<p>Full opacity (default):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
 </code></pre></div>
-<p>Lower alpha values let the underlying video show through.</p>
+<p><img alt="alpha 100" src="../assets/rendering/alpha_100.png" /></p>
+<p>Semi-transparent overlay:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="alpha 50" src="../assets/rendering/alpha_50.png" /></p>
+<p>Subtle overlay:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.25</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="alpha 25" src="../assets/rendering/alpha_25.png" /></p>
 <h3 id="toggle-elements">Toggle elements<a class="headerlink" href="#toggle-elements" title="Permanent link">&para;</a></h3>
-<p><img alt="Toggle options" src="../assets/rendering/render_toggles.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Edges only (no node markers)</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;edges_only.mp4&quot;</span><span class="p">,</span> <span class="n">show_nodes</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
-<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Nodes only (no skeleton edges)</span>
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;nodes_only.mp4&quot;</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<p>Both nodes and edges (default):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">show_nodes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
-<hr />
-<h2 id="quality-and-performance">Quality and Performance<a class="headerlink" href="#quality-and-performance" title="Permanent link">&para;</a></h2>
-<h3 id="quality-presets">Quality presets<a class="headerlink" href="#quality-presets" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Preset</th>
-<th>Scale</th>
-<th>Use case</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>preview</code></td>
-<td>0.25x</td>
-<td>Quick checks, scrubbing</td>
-</tr>
-<tr>
-<td><code>draft</code></td>
-<td>0.5x</td>
-<td>Review, iteration</td>
-</tr>
-<tr>
-<td><code>final</code></td>
-<td>1.0x</td>
-<td>Publication, sharing</td>
-</tr>
-</tbody>
-</table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Fast preview for checking predictions</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;preview.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;preview&quot;</span><span class="p">)</span>
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Full quality for publication</span>
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;final.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;final&quot;</span><span class="p">)</span>
-<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
-<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Custom scale</span>
-<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">0.75</span><span class="p">)</span>
+<p><img alt="toggle both" src="../assets/rendering/toggle_both.png" /></p>
+<p>Edges only:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">show_nodes</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
-<p>The <code>preview</code> preset outputs a video at &frac14; resolution, rendering ~9x faster.</p>
-<h3 id="performance-characteristics">Performance characteristics<a class="headerlink" href="#performance-characteristics" title="Permanent link">&para;</a></h3>
-<p>Typical rendering speeds (measured on 1024x1024 frames with 13 nodes):</p>
-<table>
-<thead>
-<tr>
-<th>Operation</th>
-<th>Speed</th>
-<th>Notes</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Skia rendering</td>
-<td>~93 FPS</td>
-<td>Vector graphics are fast</td>
-</tr>
-<tr>
-<td>Video I/O</td>
-<td>~5 FPS</td>
-<td>Bottleneck is video decoding</td>
-</tr>
-<tr>
-<td>Preview (0.25x)</td>
-<td>~15 FPS</td>
-<td>Reduced resolution helps</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Tips for faster rendering:</strong></p>
-<ol>
-<li>Use <code>preset="preview"</code> for quick checks</li>
-<li>Use <code>start</code>/<code>end</code> to render clips instead of full videos</li>
-<li>For maximum speed, pre-extract frames to image sequences</li>
-</ol>
-<h3 id="video-encoding-options">Video encoding options<a class="headerlink" href="#video-encoding-options" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">fps</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>           <span class="c1"># Output frame rate</span>
-<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="n">crf</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span>             <span class="c1"># Quality (2-32, lower=better, default 25)</span>
-<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>    <span class="n">x264_preset</span><span class="o">=</span><span class="s2">&quot;slow&quot;</span><span class="p">,</span> <span class="c1"># Encoding speed (ultrafast to slow)</span>
-<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="p">)</span>
+<p><img alt="toggle edges only" src="../assets/rendering/toggle_edges_only.png" /></p>
+<p>Nodes only:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">show_nodes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </code></pre></div>
-<hr />
-<h2 id="custom-rendering-with-callbacks">Custom Rendering with Callbacks<a class="headerlink" href="#custom-rendering-with-callbacks" title="Permanent link">&para;</a></h2>
-<p>Callbacks let you add custom graphics like labels, bounding boxes, or annotations. You get direct access to the Skia canvas for arbitrary drawing.</p>
-<h3 id="callback-types">Callback types<a class="headerlink" href="#callback-types" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Callback</th>
-<th>When called</th>
-<th>Use case</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>pre_render_callback</code></td>
-<td>Before poses drawn</td>
-<td>Background layers, grids, ROIs</td>
-</tr>
-<tr>
-<td><code>post_render_callback</code></td>
-<td>After all poses</td>
-<td>Frame info, legends, watermarks</td>
-</tr>
-<tr>
-<td><code>per_instance_callback</code></td>
-<td>After each instance</td>
-<td>Labels, bounding boxes, badges</td>
-</tr>
-</tbody>
-</table>
-<h3 id="context-objects">Context objects<a class="headerlink" href="#context-objects" title="Permanent link">&para;</a></h3>
-<p>Callbacks receive context objects with useful information:</p>
-<p><strong><code>RenderContext</code></strong> (frame-level):
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span>          <span class="c1"># Skia canvas for drawing</span>
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">ctx</span><span class="o">.</span><span class="n">frame_idx</span>       <span class="c1"># Current frame index</span>
-<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">ctx</span><span class="o">.</span><span class="n">frame_size</span>      <span class="c1"># (width, height) tuple</span>
-<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="n">ctx</span><span class="o">.</span><span class="n">instances</span>       <span class="c1"># List of point arrays</span>
-<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">ctx</span><span class="o">.</span><span class="n">skeleton_edges</span>  <span class="c1"># Edge connectivity</span>
-<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="n">ctx</span><span class="o">.</span><span class="n">node_names</span>      <span class="c1"># Node name list</span>
-<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="n">ctx</span><span class="o">.</span><span class="n">scale</span>           <span class="c1"># Current scale factor</span>
-<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="n">ctx</span><span class="o">.</span><span class="n">offset</span>          <span class="c1"># Current offset (x, y)</span>
-<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># Coordinate transform</span>
-</code></pre></div></p>
-<p><strong><code>InstanceContext</code></strong> (instance-level):
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span>          <span class="c1"># Skia canvas for drawing</span>
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">ctx</span><span class="o">.</span><span class="n">instance_idx</span>    <span class="c1"># Index in frame</span>
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">ctx</span><span class="o">.</span><span class="n">points</span>          <span class="c1"># (n_nodes, 2) array</span>
-<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">ctx</span><span class="o">.</span><span class="n">track_name</span>      <span class="c1"># Track name string</span>
-<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">ctx</span><span class="o">.</span><span class="n">confidence</span>      <span class="c1"># Instance confidence score</span>
-<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="n">ctx</span><span class="o">.</span><span class="n">get_centroid</span><span class="p">()</span>  <span class="c1"># Mean of valid points</span>
-<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="n">ctx</span><span class="o">.</span><span class="n">get_bbox</span><span class="p">()</span>      <span class="c1"># (x1, y1, x2, y2) bounding box</span>
-<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># Coordinate transform</span>
-</code></pre></div></p>
-<h3 id="example-instance-labels">Example: Instance labels<a class="headerlink" href="#example-instance-labels" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Callback: instance labels" src="../assets/rendering/render_callback_labels.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">skia</span>
-<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
-<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">draw_labels</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
-<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>    <span class="n">centroid</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_centroid</span><span class="p">()</span>
-<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>    <span class="k">if</span> <span class="n">centroid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>        <span class="k">return</span>
-<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>
-<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>    <span class="n">cx</span><span class="p">,</span> <span class="n">cy</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="o">*</span><span class="n">centroid</span><span class="p">)</span>
-<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>    <span class="n">font</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Font</span><span class="p">(</span><span class="n">skia</span><span class="o">.</span><span class="n">Typeface</span><span class="p">(</span><span class="s2">&quot;Arial&quot;</span><span class="p">),</span> <span class="mi">14</span><span class="p">)</span>
-<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>    <span class="n">label</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">track_name</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;Instance </span><span class="si">{</span><span class="n">ctx</span><span class="o">.</span><span class="n">instance_idx</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>    <span class="n">blob</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">TextBlob</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">font</span><span class="p">)</span>
-<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>
-<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>    <span class="n">paint</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span><span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">ColorWHITE</span><span class="p">)</span>
-<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawTextBlob</span><span class="p">(</span><span class="n">blob</span><span class="p">,</span> <span class="n">cx</span><span class="p">,</span> <span class="n">cy</span> <span class="o">-</span> <span class="mi">20</span><span class="p">,</span> <span class="n">paint</span><span class="p">)</span>
-<a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a>
-<a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a>    <span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;labeled.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a>    <span class="n">per_instance_callback</span><span class="o">=</span><span class="n">draw_labels</span>
-<a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a><span class="p">)</span>
-</code></pre></div>
-<div style="clear: both;"></div>
-
-<h3 id="example-bounding-boxes">Example: Bounding boxes<a class="headerlink" href="#example-bounding-boxes" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Callback: bounding boxes" src="../assets/rendering/render_callback_boxes.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">skia</span>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
-<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">draw_bbox</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
-<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>    <span class="n">bbox</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_bbox</span><span class="p">()</span>
-<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>    <span class="k">if</span> <span class="n">bbox</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>        <span class="k">return</span>
-<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
-<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>    <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">bbox</span>
-<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>    <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">)</span>
-<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>    <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">)</span>
-<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>
-<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>    <span class="n">pad</span> <span class="o">=</span> <span class="mi">8</span>
-<a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>    <span class="n">rect</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Rect</span><span class="p">(</span><span class="n">x1</span> <span class="o">-</span> <span class="n">pad</span><span class="p">,</span> <span class="n">y1</span> <span class="o">-</span> <span class="n">pad</span><span class="p">,</span> <span class="n">x2</span> <span class="o">+</span> <span class="n">pad</span><span class="p">,</span> <span class="n">y2</span> <span class="o">+</span> <span class="n">pad</span><span class="p">)</span>
-<a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>
-<a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>    <span class="n">dash</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">DashPathEffect</span><span class="o">.</span><span class="n">Make</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>    <span class="n">paint</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span>
-<a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>        <span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">ColorWHITE</span><span class="p">,</span>
-<a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a>        <span class="n">Style</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="o">.</span><span class="n">kStroke_Style</span><span class="p">,</span>
-<a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>        <span class="n">StrokeWidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>        <span class="n">PathEffect</span><span class="o">=</span><span class="n">dash</span><span class="p">,</span>
-<a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>    <span class="p">)</span>
-<a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawRect</span><span class="p">(</span><span class="n">rect</span><span class="p">,</span> <span class="n">paint</span><span class="p">)</span>
-<a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>
-<a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-24-26" name="__codelineno-24-26" href="#__codelineno-24-26"></a>    <span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;boxes.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-24-27" name="__codelineno-24-27" href="#__codelineno-24-27"></a>    <span class="n">per_instance_callback</span><span class="o">=</span><span class="n">draw_bbox</span>
-<a id="__codelineno-24-28" name="__codelineno-24-28" href="#__codelineno-24-28"></a><span class="p">)</span>
-</code></pre></div>
-<div style="clear: both;"></div>
-
-<h3 id="example-frame-info-overlay">Example: Frame info overlay<a class="headerlink" href="#example-frame-info-overlay" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Callback: frame info" src="../assets/rendering/render_callback_info.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">skia</span>
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
-<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">draw_frame_info</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
-<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>    <span class="n">font</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Font</span><span class="p">(</span><span class="n">skia</span><span class="o">.</span><span class="n">Typeface</span><span class="p">(</span><span class="s2">&quot;Arial&quot;</span><span class="p">),</span> <span class="mi">14</span><span class="p">)</span>
-<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>    <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Frame: </span><span class="si">{</span><span class="n">ctx</span><span class="o">.</span><span class="n">frame_idx</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>    <span class="n">blob</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">TextBlob</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">font</span><span class="p">)</span>
-<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
-<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>    <span class="c1"># Background</span>
-<a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>    <span class="n">bg</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span><span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">Color4f</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">))</span>
-<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawRect</span><span class="p">(</span><span class="n">skia</span><span class="o">.</span><span class="n">Rect</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">24</span><span class="p">),</span> <span class="n">bg</span><span class="p">)</span>
-<a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>
-<a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>    <span class="c1"># Text</span>
-<a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>    <span class="n">paint</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span><span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">ColorWHITE</span><span class="p">)</span>
-<a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawTextBlob</span><span class="p">(</span><span class="n">blob</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">18</span><span class="p">,</span> <span class="n">paint</span><span class="p">)</span>
-<a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>
-<a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a>    <span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;info.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a>    <span class="n">post_render_callback</span><span class="o">=</span><span class="n">draw_frame_info</span>
-<a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a><span class="p">)</span>
-</code></pre></div>
-<div style="clear: both;"></div>
-
-<h3 id="combining-callbacks">Combining callbacks<a class="headerlink" href="#combining-callbacks" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Callback: combined" src="../assets/rendering/render_callback_combined.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">combined</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>    <span class="n">draw_bbox</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>    <span class="n">draw_labels</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>
-<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>    <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>    <span class="s2">&quot;annotated.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>    <span class="n">post_render_callback</span><span class="o">=</span><span class="n">draw_frame_info</span><span class="p">,</span>
-<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>    <span class="n">per_instance_callback</span><span class="o">=</span><span class="n">combined</span><span class="p">,</span>
-<a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="p">)</span>
-</code></pre></div>
-<p>Callbacks are applied in order: pre-render, skeleton drawing, per-instance, then post-render.</p>
-<div style="clear: both;"></div>
-
-<h3 id="skia-drawing-reference">Skia drawing reference<a class="headerlink" href="#skia-drawing-reference" title="Permanent link">&para;</a></h3>
-<p>Common Skia operations available in callbacks:</p>
-<table>
-<thead>
-<tr>
-<th>Feature</th>
-<th>Method</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Text</td>
-<td><code>canvas.drawTextBlob(blob, x, y, paint)</code></td>
-</tr>
-<tr>
-<td>Circles</td>
-<td><code>canvas.drawCircle(x, y, radius, paint)</code></td>
-</tr>
-<tr>
-<td>Lines</td>
-<td><code>canvas.drawLine(x1, y1, x2, y2, paint)</code></td>
-</tr>
-<tr>
-<td>Rectangles</td>
-<td><code>canvas.drawRect(rect, paint)</code></td>
-</tr>
-<tr>
-<td>Rounded rects</td>
-<td><code>canvas.drawRoundRect(rect, rx, ry, paint)</code></td>
-</tr>
-<tr>
-<td>Paths/Polygons</td>
-<td><code>canvas.drawPath(path, paint)</code></td>
-</tr>
-<tr>
-<td>Images</td>
-<td><code>canvas.drawImage(image, x, y)</code></td>
-</tr>
-</tbody>
-</table>
+<p><img alt="toggle nodes only" src="../assets/rendering/toggle_nodes_only.png" /></p>
 <hr />
 <h2 id="handling-missing-videos">Handling Missing Videos<a class="headerlink" href="#handling-missing-videos" title="Permanent link">&para;</a></h2>
-<p>When video files are unavailable, you can still render with fallback options:</p>
-<h3 id="fallback-solid-color-background">Fallback solid color background<a class="headerlink" href="#fallback-solid-color-background" title="Permanent link">&para;</a></h3>
-<p><img align="right" alt="Fallback rendering" src="../assets/rendering/render_fallback.png" /></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>    <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span>
-<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>    <span class="n">require_video</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="n">fallback_color</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">),</span>
-<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="p">)</span>
-<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>
-<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="c1"># Single frame with fallback</span>
-<a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span>
-<a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>    <span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-<a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a>    <span class="s2">&quot;frame.png&quot;</span><span class="p">,</span>
-<a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>    <span class="n">require_video</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a>    <span class="n">fallback_color</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
-<a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a><span class="p">)</span>
+<p>When video files are unavailable, render with a fallback background:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">require_video</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fallback_color</span><span class="o">=</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="mi">40</span><span class="p">))</span>
 </code></pre></div>
-<p>Useful for visualizing predictions when the original video is missing.</p>
-<div style="clear: both;"></div>
-
-<h3 id="custom-background-image">Custom background image<a class="headerlink" href="#custom-background-image" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
-<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="n">lf</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>
-<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="c1"># Create custom background</span>
-<a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a><span class="n">bg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
-<a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a><span class="n">bg</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
-<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>
-<a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a><span class="c1"># Render with custom background</span>
-<a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">image</span><span class="o">=</span><span class="n">bg</span><span class="p">)</span>
+<p><img alt="fallback" src="../assets/rendering/fallback.png" /></p>
+<hr />
+<h2 id="creating-montages">Creating Montages<a class="headerlink" href="#creating-montages" title="Permanent link">&para;</a></h2>
+<p>Render multiple frames and combine them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>
+<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="n">frame_indices</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">400</span><span class="p">]</span>
+<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">frame_indices</span><span class="p">:</span>
+<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a>    <span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">labeled_frames</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">color_by</span><span class="o">=</span><span class="s2">&quot;track&quot;</span><span class="p">)</span>
+<a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a>    <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+<a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a>
+<a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a><span class="n">montage</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="montage" src="../assets/rendering/montage.png" /></p>
+<hr />
+<h2 id="custom-rendering-with-callbacks">Custom Rendering with Callbacks<a class="headerlink" href="#custom-rendering-with-callbacks" title="Permanent link">&para;</a></h2>
+<p>Callbacks let you add custom graphics. You get direct access to the Skia canvas.</p>
+<h3 id="instance-labels">Instance labels<a class="headerlink" href="#instance-labels" title="Permanent link">&para;</a></h3>
+<p>Draw track names above each instance:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">skia</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">draw_labels</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>    <span class="n">centroid</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_centroid</span><span class="p">()</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>    <span class="k">if</span> <span class="n">centroid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>        <span class="k">return</span>
+<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>    <span class="n">cx</span><span class="p">,</span> <span class="n">cy</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="o">*</span><span class="n">centroid</span><span class="p">)</span>
+<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a>    <span class="n">font</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Font</span><span class="p">(</span><span class="n">skia</span><span class="o">.</span><span class="n">Typeface</span><span class="p">(</span><span class="s2">&quot;Arial&quot;</span><span class="p">),</span> <span class="mi">14</span><span class="p">)</span>
+<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a>    <span class="n">label</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">track_name</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;Instance </span><span class="si">{</span><span class="n">ctx</span><span class="o">.</span><span class="n">instance_idx</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a>    <span class="n">blob</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">TextBlob</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">font</span><span class="p">)</span>
+<a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a>    <span class="c1"># Background</span>
+<a id="__codelineno-35-12" name="__codelineno-35-12" href="#__codelineno-35-12"></a>    <span class="n">bounds</span> <span class="o">=</span> <span class="n">font</span><span class="o">.</span><span class="n">measureText</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+<a id="__codelineno-35-13" name="__codelineno-35-13" href="#__codelineno-35-13"></a>    <span class="n">bg</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span><span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">Color4f</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">))</span>
+<a id="__codelineno-35-14" name="__codelineno-35-14" href="#__codelineno-35-14"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawRect</span><span class="p">(</span><span class="n">skia</span><span class="o">.</span><span class="n">Rect</span><span class="p">(</span><span class="n">cx</span> <span class="o">-</span> <span class="mi">2</span><span class="p">,</span> <span class="n">cy</span> <span class="o">-</span> <span class="mi">18</span><span class="p">,</span> <span class="n">cx</span> <span class="o">+</span> <span class="n">bounds</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span> <span class="n">cy</span> <span class="o">-</span> <span class="mi">4</span><span class="p">),</span> <span class="n">bg</span><span class="p">)</span>
+<a id="__codelineno-35-15" name="__codelineno-35-15" href="#__codelineno-35-15"></a>    <span class="c1"># Text</span>
+<a id="__codelineno-35-16" name="__codelineno-35-16" href="#__codelineno-35-16"></a>    <span class="n">paint</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span><span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">ColorWHITE</span><span class="p">,</span> <span class="n">AntiAlias</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-35-17" name="__codelineno-35-17" href="#__codelineno-35-17"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawTextBlob</span><span class="p">(</span><span class="n">blob</span><span class="p">,</span> <span class="n">cx</span><span class="p">,</span> <span class="n">cy</span> <span class="o">-</span> <span class="mi">6</span><span class="p">,</span> <span class="n">paint</span><span class="p">)</span>
+<a id="__codelineno-35-18" name="__codelineno-35-18" href="#__codelineno-35-18"></a>
+<a id="__codelineno-35-19" name="__codelineno-35-19" href="#__codelineno-35-19"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">per_instance_callback</span><span class="o">=</span><span class="n">draw_labels</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="callback labels" src="../assets/rendering/callback_labels.png" /></p>
+<h3 id="bounding-boxes">Bounding boxes<a class="headerlink" href="#bounding-boxes" title="Permanent link">&para;</a></h3>
+<p>Draw dashed bounding boxes around instances:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">skia</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">draw_bbox</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>    <span class="n">bbox</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_bbox</span><span class="p">()</span>
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>    <span class="k">if</span> <span class="n">bbox</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a>        <span class="k">return</span>
+<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a>    <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">bbox</span>
+<a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a>    <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">)</span>
+<a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a>    <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">world_to_canvas</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">)</span>
+<a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a>    <span class="n">pad</span> <span class="o">=</span> <span class="mi">8</span>
+<a id="__codelineno-36-11" name="__codelineno-36-11" href="#__codelineno-36-11"></a>    <span class="n">rect</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Rect</span><span class="p">(</span><span class="n">x1</span> <span class="o">-</span> <span class="n">pad</span><span class="p">,</span> <span class="n">y1</span> <span class="o">-</span> <span class="n">pad</span><span class="p">,</span> <span class="n">x2</span> <span class="o">+</span> <span class="n">pad</span><span class="p">,</span> <span class="n">y2</span> <span class="o">+</span> <span class="n">pad</span><span class="p">)</span>
+<a id="__codelineno-36-12" name="__codelineno-36-12" href="#__codelineno-36-12"></a>    <span class="n">dash</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">DashPathEffect</span><span class="o">.</span><span class="n">Make</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-36-13" name="__codelineno-36-13" href="#__codelineno-36-13"></a>    <span class="n">paint</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span>
+<a id="__codelineno-36-14" name="__codelineno-36-14" href="#__codelineno-36-14"></a>        <span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">ColorWHITE</span><span class="p">,</span>
+<a id="__codelineno-36-15" name="__codelineno-36-15" href="#__codelineno-36-15"></a>        <span class="n">Style</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="o">.</span><span class="n">kStroke_Style</span><span class="p">,</span>
+<a id="__codelineno-36-16" name="__codelineno-36-16" href="#__codelineno-36-16"></a>        <span class="n">StrokeWidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-36-17" name="__codelineno-36-17" href="#__codelineno-36-17"></a>        <span class="n">PathEffect</span><span class="o">=</span><span class="n">dash</span><span class="p">,</span>
+<a id="__codelineno-36-18" name="__codelineno-36-18" href="#__codelineno-36-18"></a>    <span class="p">)</span>
+<a id="__codelineno-36-19" name="__codelineno-36-19" href="#__codelineno-36-19"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawRect</span><span class="p">(</span><span class="n">rect</span><span class="p">,</span> <span class="n">paint</span><span class="p">)</span>
+<a id="__codelineno-36-20" name="__codelineno-36-20" href="#__codelineno-36-20"></a>
+<a id="__codelineno-36-21" name="__codelineno-36-21" href="#__codelineno-36-21"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">per_instance_callback</span><span class="o">=</span><span class="n">draw_bbox</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="callback bbox" src="../assets/rendering/callback_bbox.png" /></p>
+<h3 id="frame-info-overlay">Frame info overlay<a class="headerlink" href="#frame-info-overlay" title="Permanent link">&para;</a></h3>
+<p>Add frame number and instance count:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">skia</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">draw_frame_info</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a>    <span class="n">font</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Font</span><span class="p">(</span><span class="n">skia</span><span class="o">.</span><span class="n">Typeface</span><span class="p">(</span><span class="s2">&quot;Arial&quot;</span><span class="p">),</span> <span class="mi">14</span><span class="p">)</span>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a>    <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Frame: </span><span class="si">{</span><span class="n">ctx</span><span class="o">.</span><span class="n">frame_idx</span><span class="si">}</span><span class="s2">  Instances: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">instances</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a>    <span class="n">blob</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">TextBlob</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">font</span><span class="p">)</span>
+<a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a>    <span class="n">bg</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span><span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">Color4f</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">))</span>
+<a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawRect</span><span class="p">(</span><span class="n">skia</span><span class="o">.</span><span class="n">Rect</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">24</span><span class="p">),</span> <span class="n">bg</span><span class="p">)</span>
+<a id="__codelineno-37-9" name="__codelineno-37-9" href="#__codelineno-37-9"></a>    <span class="n">paint</span> <span class="o">=</span> <span class="n">skia</span><span class="o">.</span><span class="n">Paint</span><span class="p">(</span><span class="n">Color</span><span class="o">=</span><span class="n">skia</span><span class="o">.</span><span class="n">ColorWHITE</span><span class="p">,</span> <span class="n">AntiAlias</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-37-10" name="__codelineno-37-10" href="#__codelineno-37-10"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">drawTextBlob</span><span class="p">(</span><span class="n">blob</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">18</span><span class="p">,</span> <span class="n">paint</span><span class="p">)</span>
+<a id="__codelineno-37-11" name="__codelineno-37-11" href="#__codelineno-37-11"></a>
+<a id="__codelineno-37-12" name="__codelineno-37-12" href="#__codelineno-37-12"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span><span class="n">lf</span><span class="p">,</span> <span class="n">post_render_callback</span><span class="o">=</span><span class="n">draw_frame_info</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="callback frame info" src="../assets/rendering/callback_frame_info.png" /></p>
+<h3 id="combining-callbacks">Combining callbacks<a class="headerlink" href="#combining-callbacks" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">combined_per_instance</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>    <span class="n">draw_bbox</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>    <span class="n">draw_labels</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a>
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="n">img</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">render_image</span><span class="p">(</span>
+<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a>    <span class="n">lf</span><span class="p">,</span>
+<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a>    <span class="n">per_instance_callback</span><span class="o">=</span><span class="n">combined_per_instance</span><span class="p">,</span>
+<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a>    <span class="n">post_render_callback</span><span class="o">=</span><span class="n">draw_frame_info</span><span class="p">,</span>
+<a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="p">)</span>
+</code></pre></div>
+<p><img alt="callback combined" src="../assets/rendering/callback_combined.png" /></p>
+<hr />
+<h2 id="video-rendering">Video Rendering<a class="headerlink" href="#video-rendering" title="Permanent link">&para;</a></h2>
+<h3 id="basic-video-rendering">Basic video rendering<a class="headerlink" href="#basic-video-rendering" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.mp4&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="render-a-clip">Render a clip<a class="headerlink" href="#render-a-clip" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;clip.mp4&quot;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="quality-presets">Quality presets<a class="headerlink" href="#quality-presets" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Fast preview (0.25x resolution)</span>
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;preview.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;preview&quot;</span><span class="p">)</span>
+<a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>
+<a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="c1"># Draft quality (0.5x resolution)</span>
+<a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;draft.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;draft&quot;</span><span class="p">)</span>
+<a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a>
+<a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a><span class="c1"># Full quality (default)</span>
+<a id="__codelineno-41-8" name="__codelineno-41-8" href="#__codelineno-41-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;final.mp4&quot;</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="s2">&quot;final&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="encoding-options">Encoding options<a class="headerlink" href="#encoding-options" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="n">sio</span><span class="o">.</span><span class="n">render_video</span><span class="p">(</span>
+<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>    <span class="n">labels</span><span class="p">,</span>
+<a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a>    <span class="s2">&quot;output.mp4&quot;</span><span class="p">,</span>
+<a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a>    <span class="n">fps</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>           <span class="c1"># Output frame rate</span>
+<a id="__codelineno-42-5" name="__codelineno-42-5" href="#__codelineno-42-5"></a>    <span class="n">crf</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span>             <span class="c1"># Quality (2-32, lower=better)</span>
+<a id="__codelineno-42-6" name="__codelineno-42-6" href="#__codelineno-42-6"></a>    <span class="n">x264_preset</span><span class="o">=</span><span class="s2">&quot;slow&quot;</span><span class="p">,</span> <span class="c1"># Encoding speed</span>
+<a id="__codelineno-42-7" name="__codelineno-42-7" href="#__codelineno-42-7"></a><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h2>
-<p>For CLI usage, see the <a href="../cli/#sio-render---render-pose-videos-and-images">CLI Guide</a>. Quick reference:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Basic rendering</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># Fast preview</span>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--preset<span class="w"> </span>preview
-<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
-<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="c1"># Single frame</span>
-<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>-o<span class="w"> </span>frame.png
-<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>
-<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="c1"># Custom styling</span>
-<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>styled.mp4<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="w">    </span>--color-by<span class="w"> </span>track<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="w">    </span>--palette<span class="w"> </span>tableau10<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a><span class="w">    </span>--marker-shape<span class="w"> </span>diamond
-<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>
-<a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a><span class="c1"># Render a clip</span>
-<a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>clip.mp4<span class="w"> </span>--start<span class="w"> </span><span class="m">100</span><span class="w"> </span>--end<span class="w"> </span><span class="m">200</span>
+<p>For CLI usage, see the <a href="../cli/#sio-render---render-pose-videos-and-images">CLI Guide</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># Basic rendering</span>
+<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>output.mp4
+<a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a>
+<a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="c1"># Fast preview</span>
+<a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--preset<span class="w"> </span>preview
+<a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a>
+<a id="__codelineno-43-7" name="__codelineno-43-7" href="#__codelineno-43-7"></a><span class="c1"># Single frame to PNG</span>
+<a id="__codelineno-43-8" name="__codelineno-43-8" href="#__codelineno-43-8"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>--lf<span class="w"> </span><span class="m">0</span><span class="w"> </span>-o<span class="w"> </span>frame.png
+<a id="__codelineno-43-9" name="__codelineno-43-9" href="#__codelineno-43-9"></a>
+<a id="__codelineno-43-10" name="__codelineno-43-10" href="#__codelineno-43-10"></a><span class="c1"># Custom styling</span>
+<a id="__codelineno-43-11" name="__codelineno-43-11" href="#__codelineno-43-11"></a>sio<span class="w"> </span>render<span class="w"> </span>-i<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>styled.mp4<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-43-12" name="__codelineno-43-12" href="#__codelineno-43-12"></a><span class="w">    </span>--color-by<span class="w"> </span>track<span class="w"> </span>--palette<span class="w"> </span>tableau10<span class="w"> </span>--marker-shape<span class="w"> </span>diamond
 </code></pre></div>
 <hr />
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
@@ -5015,7 +4554,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.rendering.RenderContext.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f76e15c8b80</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f4d528dcb80</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -5940,7 +5479,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.rendering.InstanceContext.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f76e15c8b80</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f4d528dcb80</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
