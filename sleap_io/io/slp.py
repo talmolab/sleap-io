@@ -2244,7 +2244,20 @@ def write_labels(
 
     # Make a copy to avoid mutating the input labels when embedding
     if embed and not embed_inplace:
+        original_labels = labels
         labels = labels.copy(open_videos=True)
+
+        # If embed is a list of (video, frame_idx) tuples, remap videos to the copy
+        if isinstance(embed, list):
+            # Create mapping from original videos to copied videos
+            video_map = {
+                orig: copied
+                for orig, copied in zip(original_labels.videos, labels.videos)
+            }
+            # Remap the embed list to use copied video objects
+            embed = [
+                (video_map.get(video, video), frame_idx) for video, frame_idx in embed
+            ]
 
     # Store original videos before embedding modifies them
     # We need to make a copy of the actual video objects, not just the list

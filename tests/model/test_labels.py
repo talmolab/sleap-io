@@ -824,8 +824,8 @@ def test_split(slp_real_data, tmp_path):
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
 
-    split1.save(tmp_path / "split1.pkg.slp", embed=True)
-    split2.save(tmp_path / "split2.pkg.slp", embed=True)
+    split1.save(tmp_path / "split1.pkg.slp", embed=True, embed_inplace=True)
+    split2.save(tmp_path / "split2.pkg.slp", embed=True, embed_inplace=True)
     assert pkg.video.filename == (tmp_path / "test.pkg.slp").as_posix()
     assert (
         Path(split1.video.filename).as_posix()
