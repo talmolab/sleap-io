@@ -90,7 +90,9 @@ def _flatten_tuple_keys(rows: list[dict]) -> list[dict]:
     for row in rows:
         new_row = {}
         for key, value in row.items():
-            if isinstance(key, tuple):
+            if isinstance(key, tuple):  # pragma: no cover
+                # Note: This branch is currently unreachable because multi_index
+                # with polars backend now uses flat keys directly (use_flat_keys=True)
                 parts = [str(p) for p in key if p]
                 new_key = ".".join(parts)
                 new_row[new_key] = value

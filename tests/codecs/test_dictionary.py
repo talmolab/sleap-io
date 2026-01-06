@@ -619,3 +619,22 @@ def test_to_dict_with_video_backend(centered_pair_low_quality_video):
     assert "backend" in video_dict
     assert "type" in video_dict["backend"]
     assert video_dict["backend"]["type"] == "MediaVideo"
+
+
+def test_labels_to_dict_wrapper(slp_typical):
+    """Test Labels.to_dict() wrapper method calls the codec correctly."""
+    labels = load_slp(slp_typical)
+
+    # Call via the Labels method
+    d = labels.to_dict()
+
+    # Verify it returns the same result as the codec function
+    assert "version" in d
+    assert d["version"] == "1.0.0"
+    assert "skeletons" in d
+    assert "videos" in d
+    assert "labeled_frames" in d
+
+    # Test with video filter
+    d_filtered = labels.to_dict(video=0)
+    assert len(d_filtered["videos"]) == 1

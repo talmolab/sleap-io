@@ -2749,6 +2749,183 @@ def test_to_dataframe_iter_multi_index_format():
     assert len(df_iter) == len(df_full)
 
 
+def test_to_dataframe_iter_multi_index_user_instances():
+    """Test multi_index format iteration with user instances.
+
+    Note: The iterator always uses flat keys (dot-separated), even for pandas.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+
+    # Use user instances (not predicted) to test the non-predicted path
+    inst = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    chunks = list(
+        to_dataframe_iter(
+            labels, format="multi_index", chunk_size=1, include_video=False
+        )
+    )
+
+    assert len(chunks) == 1
+    df = chunks[0]
+    # Iterator uses flat keys (dot-separated)
+    assert "inst0.track_score" in df.columns
+    assert "inst0.pt.x" in df.columns
+    # User instances have None for track_score and score
+    assert df.iloc[0]["inst0.track_score"] is None
+    assert df.iloc[0]["inst0.score"] is None
+
+
+def test_to_dataframe_iter_multi_index_padding():
+    """Test multi_index format iteration with NaN padding for missing instances.
+
+    Note: The iterator always uses flat keys (dot-separated), even for pandas.
+    """
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track1 = Track("t1")
+    track2 = Track("t2")
+
+    # Frame 0: 2 instances
+    inst1 = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track1,
+        score=0.9,
+    )
+    inst2 = PredictedInstance.from_numpy(
+        points_data=np.array([[3.0, 4.0]]),
+        skeleton=skeleton,
+        track=track2,
+        score=0.8,
+    )
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+
+    # Frame 1: 1 instance only (triggers padding)
+    inst3 = PredictedInstance.from_numpy(
+        points_data=np.array([[5.0, 6.0]]),
+        skeleton=skeleton,
+        track=track1,
+        score=0.85,
+    )
+    lf1 = LabeledFrame(video=video, frame_idx=1, instances=[inst3])
+
+    labels = Labels([lf0, lf1])
+
+    chunks = list(
+        to_dataframe_iter(
+            labels, format="multi_index", chunk_size=1, include_video=False
+        )
+    )
+
+    assert len(chunks) == 2
+
+    # Frame 1 (second chunk) should have NaN for inst1
+    df1 = chunks[1]
+    # Iterator uses flat keys (dot-separated)
+    assert "inst1.pt.x" in df1.columns
+    assert pd.isna(df1.iloc[0]["inst1.pt.x"])
+    assert pd.isna(df1.iloc[0]["inst1.pt.y"])
+
+
+def test_to_dataframe_iter_frames_padding():
+    """Test frames format iteration with NaN padding for missing instances."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track1 = Track("t1")
+    track2 = Track("t2")
+
+    # Frame 0: 2 instances
+    inst1 = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track1,
+        score=0.9,
+    )
+    inst2 = PredictedInstance.from_numpy(
+        points_data=np.array([[3.0, 4.0]]),
+        skeleton=skeleton,
+        track=track2,
+        score=0.8,
+    )
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+
+    # Frame 1: 1 instance only (triggers padding)
+    inst3 = PredictedInstance.from_numpy(
+        points_data=np.array([[5.0, 6.0]]),
+        skeleton=skeleton,
+        track=track1,
+        score=0.85,
+    )
+    lf1 = LabeledFrame(video=video, frame_idx=1, instances=[inst3])
+
+    labels = Labels([lf0, lf1])
+
+    # Use iterator to trigger _iter_frames_rows (not _to_frames_df)
+    chunks = list(to_dataframe_iter(labels, format="frames", chunk_size=1))
+
+    assert len(chunks) == 2
+
+    # Frame 1 (second chunk) should have NaN for inst1
+    df1 = chunks[1]
+    assert pd.isna(df1.iloc[0]["inst1.pt.x"])
+    assert pd.isna(df1.iloc[0]["inst1.pt.y"])
+    assert pd.isna(df1.iloc[0]["inst1.pt.score"])
+
+
+def test_to_dataframe_iter_frames_track_mode_padding():
+    """Test frames format iteration with track mode and NaN padding."""
+    skeleton = Skeleton(["pt"])
+    video = Video(filename="test.mp4")
+    track1 = Track("mouse1")
+    track2 = Track("mouse2")
+
+    # Frame 0: 2 instances with tracks
+    inst1 = PredictedInstance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+        track=track1,
+        score=0.9,
+    )
+    inst2 = PredictedInstance.from_numpy(
+        points_data=np.array([[3.0, 4.0]]),
+        skeleton=skeleton,
+        track=track2,
+        score=0.8,
+    )
+    lf0 = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+
+    # Frame 1: Only one track present (mouse1 only, mouse2 missing)
+    inst3 = PredictedInstance.from_numpy(
+        points_data=np.array([[5.0, 6.0]]),
+        skeleton=skeleton,
+        track=track1,
+        score=0.85,
+    )
+    lf1 = LabeledFrame(video=video, frame_idx=1, instances=[inst3])
+
+    labels = Labels([lf0, lf1])
+
+    # Use iterator with track mode
+    chunks = list(
+        to_dataframe_iter(labels, format="frames", chunk_size=1, instance_id="track")
+    )
+
+    assert len(chunks) == 2
+
+    # Frame 1 (second chunk) should have NaN for mouse2
+    df1 = chunks[1]
+    assert pd.isna(df1.iloc[0]["mouse2.pt.x"])
+    assert pd.isna(df1.iloc[0]["mouse2.pt.y"])
+    assert pd.isna(df1.iloc[0]["mouse2.pt.score"])
+
+
 def test_to_dataframe_iter_video_id_options():
     """Test different video_id options with iterator."""
     skeleton = Skeleton(["nose"])
@@ -3222,6 +3399,35 @@ def test_polars_multi_index_track_mode():
     assert "mouse2.nose.x" in df.columns
     assert df["mouse1.nose.x"][0] == 10.0
     assert df["mouse2.nose.x"][0] == 50.0
+
+
+def test_polars_multi_index_user_instances():
+    """Test multi_index format with user instances in polars.
+
+    This covers the `elif include_score:` branch in the use_flat_keys=True path.
+    """
+    pytest.importorskip("polars")
+    import polars as pl
+
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="test.mp4")
+
+    # Use user instances (not predicted) to test the non-predicted path
+    inst = Instance.from_numpy(
+        points_data=np.array([[10.0, 20.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    df = to_dataframe(labels, format="multi_index", backend="polars")
+
+    assert isinstance(df, pl.DataFrame)
+    # User instances have None for scores
+    assert df["inst0.score"][0] is None
+    assert df["inst0.nose.score"][0] is None
+    assert df["inst0.nose.x"][0] == 10.0
 
 
 # =============================================================================
