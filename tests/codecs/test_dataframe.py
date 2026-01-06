@@ -1446,19 +1446,19 @@ def test_from_dataframe_instances_with_scores():
     assert inst0.tracking_score == pytest.approx(0.98)
 
 
-def test_from_dataframe_points_legacy_column_names():
-    """Test that from_dataframe handles legacy column names (node_name, track_name)."""
+def test_from_dataframe_points_alternative_column_names():
+    """Test that from_dataframe accepts alternative column names."""
     skeleton = Skeleton(["a", "b"])
     video = Video(filename="test.mp4")
 
-    # Legacy format with old column names
+    # Alternative column names for external tool compatibility
     df = pd.DataFrame(
         {
             "frame_idx": [0, 0],
-            "node_name": ["a", "b"],  # Legacy: node_name instead of node
+            "node_name": ["a", "b"],  # Alternative: node_name instead of node
             "x": [1.0, 3.0],
             "y": [2.0, 4.0],
-            "track_name": ["t1", "t1"],  # Legacy: track_name instead of track
+            "track_name": ["t1", "t1"],  # Alternative: track_name instead of track
         }
     )
 
@@ -1924,7 +1924,7 @@ def test_frames_format_track_mode_with_missing_track():
 
 
 def test_from_points_with_skeleton_name():
-    """Test from_dataframe points format with skeleton_name column (legacy)."""
+    """Test from_dataframe points format with skeleton_name column."""
     video = Video(filename="test.mp4")
 
     df = pd.DataFrame(
@@ -2239,7 +2239,7 @@ def test_multi_index_index_mode_padding():
 
 
 def test_from_points_with_instance_type_column():
-    """Test from_dataframe points format handles instance_type column (legacy)."""
+    """Test from_dataframe points format handles instance_type column."""
     skeleton = Skeleton(["a"])
     video = Video(filename="test.mp4")
 

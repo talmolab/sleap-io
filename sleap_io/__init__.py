@@ -11,7 +11,7 @@ from sleap_io.version import __version__
 # Lazy load everything else using lazy_loader
 __getattr__, __dir__, __all__ = lazy.attach(
     __name__,
-    submodules=["io", "model"],
+    submodules=["io", "model", "codecs"],
     submod_attrs={
         # I/O functions from sleap_io.io.main
         "io.main": [

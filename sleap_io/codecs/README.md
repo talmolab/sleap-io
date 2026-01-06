@@ -238,8 +238,8 @@ Where `{inst}` is either `inst0`, `inst1`, ... or track names like `mouse1`, `mo
 
 ## Notes
 
-- All DataFrame formats now support both encoding (Labels -> DataFrame) and decoding (DataFrame -> Labels)
-- Use dot separator (`.`) for hierarchical column names: `nose.x`, `inst0.nose.x`
+- All DataFrame formats support both encoding (Labels -> DataFrame) and decoding (DataFrame -> Labels)
+- Uses dot separator (`.`) for hierarchical column names: `nose.x`, `inst0.nose.x`
 - Dictionary format is lossless and preserves all information
 - NumPy format is optimized for tracking data and assumes single skeleton per project
-- Backward compatibility: Legacy column names (`node_name`, `track_name`, `nose_x`) are still supported when decoding
+- Alternative column names (`node_name`, `track_name`) are accepted when decoding for interoperability with external tools

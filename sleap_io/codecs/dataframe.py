@@ -1739,7 +1739,7 @@ def _from_points_df(
             tracks.append(track)
             track_lookup[track_name] = track
 
-    # Determine instance type column (legacy format)
+    # Determine instance type column (optional for interoperability)
     has_instance_type = "instance_type" in df.columns
     has_score = "score" in df.columns
     has_instance_score = "instance_score" in df.columns
