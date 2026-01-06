@@ -2258,6 +2258,91 @@ def read_labels_set(
     return LabelsSet(labels=labels_dict)
 
 
+
+def _write_labels_lazy(
+    labels_path: str,
+    labels: Labels,
+    embed: bool | str | list[tuple[Video, int]] | None = None,
+    restore_original_videos: bool = True,
+    verbose: bool = True,
+) -> None:
+    """Write lazy Labels to SLP file using fast path.
+
+    This function copies raw HDF5 arrays directly without materializing
+    LabeledFrame or Instance objects, providing significant performance
+    improvement for save operations on lazy-loaded labels.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file to save.
+        labels: A lazy `Labels` object to save (must have is_lazy=True).
+        embed: Embedding mode. For lazy labels, only `None`, `False`, and
+            `"source"` are supported without materialization. Other values
+            will trigger materialization.
+        restore_original_videos: If `True` (default) and `embed=False`, use original
+            video files.
+        verbose: If `True` (the default), display progress information.
+
+    Raises:
+        ValueError: If labels is not lazy.
+    """
+    if not labels.is_lazy:
+        raise ValueError("_write_labels_lazy requires lazy Labels")
+
+    lazy_store = labels._lazy_store
+
+    # Delete existing file if it exists
+    if Path(labels_path).exists():
+        Path(labels_path).unlink()
+
+    # Determine reference mode based on parameters
+    if embed == "source" or (embed is False and restore_original_videos):
+        reference_mode = VideoReferenceMode.RESTORE_ORIGINAL
+    elif embed is False and not restore_original_videos:
+        reference_mode = VideoReferenceMode.PRESERVE_SOURCE
+    else:
+        reference_mode = VideoReferenceMode.EMBED
+
+    # Write videos metadata (uses labels.videos which may have been modified)
+    write_videos(
+        labels_path,
+        labels.videos,
+        reference_mode=reference_mode,
+        original_videos=None,
+        verbose=verbose,
+    )
+
+    # Write other metadata
+    write_tracks(labels_path, labels.tracks)
+    write_suggestions(labels_path, labels.suggestions, labels.videos)
+    # For sessions, pass empty list since we don't have materialized frames
+    # (consistent with lazy load behavior)
+    write_sessions(labels_path, labels.sessions, labels.videos, [])
+    write_metadata(labels_path, labels)
+
+    # Write raw arrays directly from lazy store (fast path)
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset(
+            "points",
+            data=lazy_store.points_data,
+            dtype=lazy_store.points_data.dtype,
+        )
+        f.create_dataset(
+            "pred_points",
+            data=lazy_store.pred_points_data,
+            dtype=lazy_store.pred_points_data.dtype,
+        )
+        f.create_dataset(
+            "instances",
+            data=lazy_store.instances_data,
+            dtype=lazy_store.instances_data.dtype,
+        )
+        f.create_dataset(
+            "frames",
+            data=lazy_store.frames_data,
+            dtype=lazy_store.frames_data.dtype,
+        )
+
+
 def write_labels(
     labels_path: str,
     labels: Labels,
@@ -2308,6 +2393,31 @@ def write_labels(
             with `(current, total)` arguments. If it returns `False`, the operation
             is cancelled and `ExportCancelled` is raised.
     """
+    # Fast path for lazy labels (avoids materializing frames/instances)
+    # Supported for simple embed modes: None, False, "source"
+    if labels.is_lazy:
+        # Check if embed mode requires materialization
+        needs_materialization = embed is True or embed in (
+            "all",
+            "user",
+            "suggestions",
+            "user+suggestions",
+        ) or isinstance(embed, list)
+
+        if needs_materialization:
+            # Materialize to support embedding
+            labels = labels.materialize()
+        else:
+            # Use fast path - copy raw arrays directly
+            _write_labels_lazy(
+                labels_path,
+                labels,
+                embed=embed,
+                restore_original_videos=restore_original_videos,
+                verbose=verbose,
+            )
+            return
+
     if Path(labels_path).exists():
         Path(labels_path).unlink()
 

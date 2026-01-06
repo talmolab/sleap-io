@@ -474,3 +474,162 @@ class TestLabelsMaterialize:
         new_frame = LabeledFrame(video=materialized.videos[0], frame_idx=99999)
         materialized.append(new_frame)
         assert len(materialized) == initial_len + 1
+
+
+# === Save Round-Trip Tests ===
+
+
+class TestLazySaveRoundTrip:
+    """Tests for lazy save/load round-trip correctness."""
+
+    def test_lazy_save_creates_valid_file(self, slp_real_data, tmp_path):
+        """Lazy save creates a valid SLP file."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        sio.save_slp(lazy, str(out_path))
+
+        assert out_path.exists()
+        # Should be loadable
+        reloaded = sio.load_slp(str(out_path))
+        assert len(reloaded) == len(lazy)
+
+    def test_lazy_save_preserves_frame_data(self, slp_real_data, tmp_path):
+        """Lazy save preserves all frame/instance data."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        sio.save_slp(lazy, str(out_path))
+        reloaded = sio.load_slp(str(out_path))
+
+        # numpy() output should match
+        np.testing.assert_allclose(
+            reloaded.numpy(), lazy.numpy(), equal_nan=True,
+            err_msg="Frame data not preserved through round-trip"
+        )
+
+    def test_lazy_save_preserves_metadata(self, slp_real_data, tmp_path):
+        """Lazy save preserves videos/skeletons/tracks."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        sio.save_slp(lazy, str(out_path))
+        reloaded = sio.load_slp(str(out_path))
+
+        assert len(reloaded.videos) == len(lazy.videos)
+        assert len(reloaded.skeletons) == len(lazy.skeletons)
+        assert len(reloaded.tracks) == len(lazy.tracks)
+
+        # Check skeleton structure
+        for skel_orig, skel_reload in zip(lazy.skeletons, reloaded.skeletons):
+            assert skel_orig.name == skel_reload.name
+            assert len(skel_orig.nodes) == len(skel_reload.nodes)
+
+        # Check track names
+        for track_orig, track_reload in zip(lazy.tracks, reloaded.tracks):
+            assert track_orig.name == track_reload.name
+
+    def test_roundtrip_lazy_save_eager_load(self, slp_real_data, tmp_path):
+        """Lazy save -> eager load preserves data."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        sio.save_slp(lazy, str(out_path))
+        eager = sio.load_slp(str(out_path), lazy=False)
+
+        np.testing.assert_allclose(
+            lazy.numpy(), eager.numpy(), equal_nan=True
+        )
+
+    def test_roundtrip_lazy_save_lazy_load(self, slp_real_data, tmp_path):
+        """Lazy save -> lazy load preserves data."""
+        lazy1 = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        sio.save_slp(lazy1, str(out_path))
+        lazy2 = sio.load_slp(str(out_path), lazy=True)
+
+        np.testing.assert_allclose(
+            lazy1.numpy(), lazy2.numpy(), equal_nan=True
+        )
+
+    def test_roundtrip_with_predictions(self, centered_pair, tmp_path):
+        """Round-trip works with prediction files."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        sio.save_slp(lazy, str(out_path))
+        reloaded = sio.load_slp(str(out_path))
+
+        assert len(reloaded) == len(lazy)
+        # Compare numpy output (handles predictions correctly)
+        np.testing.assert_allclose(
+            reloaded.numpy(user_instances=False),
+            lazy.numpy(user_instances=False),
+            equal_nan=True
+        )
+
+    def test_lazy_save_with_embed_false(self, slp_real_data, tmp_path):
+        """Lazy save with embed=False works."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        # embed=False should use the fast path
+        sio.save_slp(lazy, str(out_path), embed=False)
+
+        reloaded = sio.load_slp(str(out_path))
+        assert len(reloaded) == len(lazy)
+
+    def test_lazy_save_with_embed_source(self, slp_real_data, tmp_path):
+        """Lazy save with embed='source' works."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        # embed="source" should use the fast path
+        sio.save_slp(lazy, str(out_path), embed="source")
+
+        reloaded = sio.load_slp(str(out_path))
+        assert len(reloaded) == len(lazy)
+
+    def test_lazy_save_with_embedding_materializes(self, slp_real_data, tmp_path):
+        """Lazy save with embed=True triggers materialization."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        # embed=True requires materialization internally
+        # This should work (not raise) and produce valid output
+        sio.save_slp(lazy, str(out_path), embed="user")
+
+        reloaded = sio.load_slp(str(out_path))
+        # Frame count should be preserved
+        assert len(reloaded) == len(lazy)
+
+    def test_roundtrip_preserves_suggestions(self, slp_real_data, tmp_path):
+        """Round-trip preserves suggestions."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        out_path = tmp_path / "output.slp"
+
+        sio.save_slp(lazy, str(out_path))
+        reloaded = sio.load_slp(str(out_path))
+
+        assert len(reloaded.suggestions) == len(lazy.suggestions)
+
+    def test_double_roundtrip(self, slp_real_data, tmp_path):
+        """Double round-trip preserves data."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        original_numpy = lazy.numpy()
+
+        # First round-trip
+        out1 = tmp_path / "output1.slp"
+        sio.save_slp(lazy, str(out1))
+        lazy2 = sio.load_slp(str(out1), lazy=True)
+
+        # Second round-trip
+        out2 = tmp_path / "output2.slp"
+        sio.save_slp(lazy2, str(out2))
+        lazy3 = sio.load_slp(str(out2), lazy=True)
+
+        np.testing.assert_allclose(
+            original_numpy, lazy3.numpy(), equal_nan=True,
+            err_msg="Data not preserved through double round-trip"
+        )
