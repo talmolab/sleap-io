@@ -1044,6 +1044,99 @@ class TestRenderImage:
         with pytest.raises(ValueError, match="no instances with skeleton"):
             render_image(lf, image=np.zeros((100, 100, 3), dtype=np.uint8))
 
+    def test_render_image_video_unavailable_with_background(self, labels_predictions):
+        """Test render_image estimates frame size from keypoints when video unavailable."""
+        from sleap_io.rendering import render_image
+
+        # Make a copy so we don't modify the fixture
+        import copy
+
+        labels = copy.deepcopy(labels_predictions)
+        lf = labels.labeled_frames[0]
+
+        # Replace video filename with non-existent path to make video unavailable
+        labels.video.replace_filename("nonexistent_video.mp4", open=True)
+        assert labels.video.backend is None
+
+        # Also clear the cached shape metadata to force estimation from keypoints
+        labels.video.backend_metadata.pop("shape", None)
+        assert labels.video.shape is None
+
+        # With background color, should estimate frame size from keypoints
+        rendered = render_image(lf, background="black")
+
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.ndim == 3
+        assert rendered.shape[2] == 3
+        # Frame size should be estimated from keypoints with padding
+        assert rendered.shape[0] > 0
+        assert rendered.shape[1] > 0
+
+    def test_render_image_video_unavailable_no_background_error(
+        self, labels_predictions
+    ):
+        """Test render_image raises helpful error when video unavailable and no background."""
+        from sleap_io.rendering import render_image
+
+        # Make a copy so we don't modify the fixture
+        import copy
+
+        labels = copy.deepcopy(labels_predictions)
+        lf = labels.labeled_frames[0]
+
+        # Replace video filename with non-existent path to make video unavailable
+        labels.video.replace_filename("nonexistent_video.mp4", open=True)
+        assert labels.video.backend is None
+
+        # Without background color, should raise helpful error
+        with pytest.raises(ValueError, match="Video unavailable.*background"):
+            render_image(lf)
+
+    def test_render_image_labels_video_unavailable_with_background(
+        self, labels_predictions
+    ):
+        """Test render_image with Labels source when video unavailable."""
+        from sleap_io.rendering import render_image
+
+        # Make a copy so we don't modify the fixture
+        import copy
+
+        labels = copy.deepcopy(labels_predictions)
+
+        # Replace video filename with non-existent path
+        labels.video.replace_filename("nonexistent_video.mp4", open=True)
+        assert labels.video.backend is None
+
+        # Also clear the cached shape metadata to force estimation from keypoints
+        labels.video.backend_metadata.pop("shape", None)
+        assert labels.video.shape is None
+
+        # With background color, should estimate frame size from keypoints
+        rendered = render_image(labels, lf_ind=0, background="gray")
+
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.ndim == 3
+        assert rendered.shape[2] == 3
+
+    def test_render_image_labels_video_unavailable_no_background_error(
+        self, labels_predictions
+    ):
+        """Test render_image with Labels source raises error when video unavailable."""
+        from sleap_io.rendering import render_image
+
+        # Make a copy so we don't modify the fixture
+        import copy
+
+        labels = copy.deepcopy(labels_predictions)
+
+        # Replace video filename with non-existent path
+        labels.video.replace_filename("nonexistent_video.mp4", open=True)
+        assert labels.video.backend is None
+
+        # Without background color, should raise helpful error
+        with pytest.raises(ValueError, match="Video unavailable.*background"):
+            render_image(labels, lf_ind=0)
+
 
 # ============================================================================
 # _resolve_crop Tests
