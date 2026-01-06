@@ -568,3 +568,54 @@ def test_to_dict_with_from_predicted():
 
     # Should have has_from_predicted flag
     assert user_dict.get("has_from_predicted") is True
+
+
+def test_to_dict_with_video_shape(centered_pair_low_quality_video):
+    """Test that video shape is serialized when available.
+
+    Covers line 124: video_dict["shape"] = list(vid.shape)
+    """
+    skeleton = Skeleton(["node1"])
+    video = centered_pair_low_quality_video
+
+    instance = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    d = to_dict(labels)
+
+    # Video should have shape
+    assert len(d["videos"]) == 1
+    video_dict = d["videos"][0]
+    assert "shape" in video_dict
+    assert video_dict["shape"] is not None
+    assert len(video_dict["shape"]) == 4  # (frames, height, width, channels)
+
+
+def test_to_dict_with_video_backend(centered_pair_low_quality_video):
+    """Test that video backend info is serialized.
+
+    Covers line 128: video_dict["backend"] = {"type": type(vid.backend).__name__}
+    """
+    skeleton = Skeleton(["node1"])
+    video = centered_pair_low_quality_video
+
+    instance = Instance.from_numpy(
+        points_data=np.array([[1.0, 2.0]]),
+        skeleton=skeleton,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels([lf])
+
+    d = to_dict(labels)
+
+    # Video should have backend info
+    video_dict = d["videos"][0]
+    assert "backend" in video_dict
+    assert "type" in video_dict["backend"]
+    assert video_dict["backend"]["type"] == "MediaVideo"
