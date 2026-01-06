@@ -2258,7 +2258,6 @@ def read_labels_set(
     return LabelsSet(labels=labels_dict)
 
 
-
 def _write_labels_lazy(
     labels_path: str,
     labels: Labels,
@@ -2397,12 +2396,17 @@ def write_labels(
     # Supported for simple embed modes: None, False, "source"
     if labels.is_lazy:
         # Check if embed mode requires materialization
-        needs_materialization = embed is True or embed in (
-            "all",
-            "user",
-            "suggestions",
-            "user+suggestions",
-        ) or isinstance(embed, list)
+        needs_materialization = (
+            embed is True
+            or embed
+            in (
+                "all",
+                "user",
+                "suggestions",
+                "user+suggestions",
+            )
+            or isinstance(embed, list)
+        )
 
         if needs_materialization:
             # Materialize to support embedding

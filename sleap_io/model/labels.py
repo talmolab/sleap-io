@@ -718,8 +718,7 @@ class Labels:
                     if np.isscalar(frame_idx):
                         frame_idx = np.array(frame_idx).reshape(-1)
                     return [
-                        LabeledFrame(video=video, frame_idx=int(fi))
-                        for fi in frame_idx
+                        LabeledFrame(video=video, frame_idx=int(fi)) for fi in frame_idx
                     ]
                 return []
 
@@ -730,8 +729,7 @@ class Labels:
                 video_mask = frames_data["video"] == video_id
                 matching_indices = np.where(video_mask)[0]
                 return [
-                    self._lazy_store.materialize_frame(int(i))
-                    for i in matching_indices
+                    self._lazy_store.materialize_frame(int(i)) for i in matching_indices
                 ]
 
             if np.isscalar(frame_idx):
@@ -744,9 +742,7 @@ class Labels:
                     & (frames_data["frame_idx"] == frame_ind)
                 )[0]
                 if len(matches) > 0:
-                    results.append(
-                        self._lazy_store.materialize_frame(int(matches[0]))
-                    )
+                    results.append(self._lazy_store.materialize_frame(int(matches[0])))
                 elif return_new:
                     results.append(LabeledFrame(video=video, frame_idx=int(frame_ind)))
 
