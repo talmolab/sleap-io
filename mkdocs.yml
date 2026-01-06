@@ -140,6 +140,7 @@ nav:
   - Releases: https://github.com/talmolab/sleap-io/releases
   - Guides:
     - Examples: examples.md
+    - Codecs: codecs.md
     - Merging: merging.md
   - Reference:
     - Model: model.md

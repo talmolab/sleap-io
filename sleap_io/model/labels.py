@@ -281,146 +281,184 @@ class Labels:
         Notes:
             This method assumes that instances have tracks assigned and is intended to
             function primarily for single-video prediction results.
+
+            This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
+            See that function for implementation details.
         """
-        # Get labeled frames for specified video.
-        if video is None:
-            video = 0
-        if type(video) is int:
-            video = self.videos[video]
-        lfs = [lf for lf in self.labeled_frames if lf.video == video]
+        from sleap_io.codecs.numpy import to_numpy
 
-        # Figure out frame index range.
-        first_frame, last_frame = 0, 0
-        for lf in lfs:
-            first_frame = min(first_frame, lf.frame_idx)
-            last_frame = max(last_frame, lf.frame_idx)
+        return to_numpy(
+            self,
+            video=video,
+            untracked=untracked,
+            return_confidence=return_confidence,
+            user_instances=user_instances,
+        )
 
-        # Figure out the number of tracks based on number of instances in each frame.
-        # Check the max number of instances (predicted or user, depending on settings)
-        n_instances = 0
-        for lf in lfs:
-            if user_instances:
-                # Count max of either user or predicted instances per frame (not sum)
-                n_frame_instances = max(
-                    len(lf.user_instances), len(lf.predicted_instances)
-                )
-            else:
-                n_frame_instances = len(lf.predicted_instances)
-            n_instances = max(n_instances, n_frame_instances)
+    def to_dict(
+        self,
+        *,
+        video: Optional[Union[Video, int]] = None,
+        skip_empty_frames: bool = False,
+    ) -> dict:
+        """Convert labels to a JSON-serializable dictionary.
 
-        # Case 1: We don't care about order because there's only 1 instance per frame,
-        # or we're considering untracked instances.
-        is_single_instance = n_instances == 1
-        untracked = untracked or is_single_instance
-        if untracked:
-            n_tracks = n_instances
-        else:
-            # Case 2: We're considering only tracked instances.
-            n_tracks = len(self.tracks)
+        Args:
+            video: Optional video filter. If specified, only frames from this video
+                are included. Can be a Video object or integer index.
+            skip_empty_frames: If True, exclude frames with no instances.
 
-        n_frames = int(last_frame - first_frame + 1)
-        skeleton = self.skeletons[-1]  # Assume project only uses last skeleton
-        n_nodes = len(skeleton.nodes)
+        Returns:
+            Dictionary with structure containing skeletons, videos, tracks,
+            labeled_frames, suggestions, and provenance. All values are
+            JSON-serializable primitives.
 
-        if return_confidence:
-            tracks = np.full((n_frames, n_tracks, n_nodes, 3), np.nan, dtype="float32")
-        else:
-            tracks = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, dtype="float32")
+        Examples:
+            >>> d = labels.to_dict()
+            >>> import json
+            >>> json.dumps(d)  # Fully serializable!
 
-        for lf in lfs:
-            i = int(lf.frame_idx - first_frame)
+            >>> # Filter to specific video
+            >>> d = labels.to_dict(video=0)
 
-            if untracked:
-                # For untracked instances, fill them in arbitrary order
-                j = 0
-                instances_to_include = []
+        Notes:
+            This method delegates to `sleap_io.codecs.dictionary.to_dict()`.
+            See that function for implementation details.
+        """
+        from sleap_io.codecs.dictionary import to_dict
 
-                # If user instances are preferred, add them first
-                if user_instances and lf.has_user_instances:
-                    # First collect all user instances
-                    for inst in lf.user_instances:
-                        instances_to_include.append(inst)
+        return to_dict(self, video=video, skip_empty_frames=skip_empty_frames)
 
-                    # For the trivial case (single instance per frame), if we found
-                    # user instances, we shouldn't include any predicted instances
-                    if is_single_instance and len(instances_to_include) > 0:
-                        pass  # Skip adding predicted instances
-                    else:
-                        # Add predicted instances that don't have a corresponding
-                        # user instance
-                        for inst in lf.predicted_instances:
-                            skip = False
-                            for user_inst in lf.user_instances:
-                                # Skip if this predicted instance is linked to a user
-                                # instance via from_predicted
-                                if (
-                                    hasattr(user_inst, "from_predicted")
-                                    and user_inst.from_predicted == inst
-                                ):
-                                    skip = True
-                                    break
-                                # Skip if user and predicted instances share same track
-                                if (
-                                    user_inst.track is not None
-                                    and inst.track is not None
-                                    and user_inst.track == inst.track
-                                ):
-                                    skip = True
-                                    break
-                            if not skip:
-                                instances_to_include.append(inst)
-                else:
-                    # If user_instances=False, only include predicted instances
-                    instances_to_include = lf.predicted_instances
+    def to_dataframe(
+        self,
+        format: str = "points",
+        *,
+        video: Optional[Union[Video, int]] = None,
+        include_metadata: bool = True,
+        include_score: bool = True,
+        include_user_instances: bool = True,
+        include_predicted_instances: bool = True,
+        video_id: str = "path",
+        include_video: Optional[bool] = None,
+        backend: str = "pandas",
+    ):
+        """Convert labels to a pandas or polars DataFrame.
 
-                # Now process all the instances we want to include
-                for inst in instances_to_include:
-                    if j < n_tracks:
-                        if return_confidence:
-                            if isinstance(inst, PredictedInstance):
-                                tracks[i, j] = inst.numpy(scores=True)
-                            else:
-                                # For user instances, set confidence to 1.0
-                                points_data = inst.numpy()
-                                confidence = np.ones(
-                                    (points_data.shape[0], 1), dtype="float32"
-                                )
-                                tracks[i, j] = np.hstack((points_data, confidence))
-                        else:
-                            tracks[i, j] = inst.numpy()
-                        j += 1
-            else:  # untracked is False
-                # For tracked instances, organize by track ID
+        Args:
+            format: Output format. One of "points", "instances", "frames",
+                "multi_index".
+            video: Optional video filter. If specified, only frames from this video
+                are included. Can be a Video object or integer index.
+            include_metadata: Include skeleton, track, video information in columns.
+            include_score: Include confidence scores for predicted instances.
+            include_user_instances: Include user-labeled instances.
+            include_predicted_instances: Include predicted instances.
+            video_id: How to represent videos ("path", "index", "name", "object").
+            include_video: Whether to include video information. If None, auto-detects
+                based on number of videos.
+            backend: "pandas" or "polars".
 
-                # Create mapping from track to best instance for this frame
-                track_to_instance = {}
+        Returns:
+            DataFrame in the specified format.
 
-                # First, add predicted instances to the mapping
-                for inst in lf.predicted_instances:
-                    if inst.track is not None:
-                        track_to_instance[inst.track] = inst
+        Examples:
+            >>> df = labels.to_dataframe(format="points")
+            >>> df.to_csv("predictions.csv")
 
-                # Then, add user instances to the mapping (if user_instances=True)
-                if user_instances:
-                    for inst in lf.user_instances:
-                        if inst.track is not None:
-                            track_to_instance[inst.track] = inst
+            >>> # Get instances format for ML
+            >>> df = labels.to_dataframe(format="instances")
 
-                # Process the preferred instances for each track
-                for track in track_to_instance:
-                    inst = track_to_instance[track]
-                    j = self.tracks.index(track)
+        Notes:
+            This method delegates to `sleap_io.codecs.dataframe.to_dataframe()`.
+            See that function for implementation details on formats and options.
+        """
+        from sleap_io.codecs.dataframe import to_dataframe
 
-                    if type(inst) is PredictedInstance:
-                        tracks[i, j] = inst.numpy(scores=return_confidence)
-                    elif type(inst) is Instance:
-                        tracks[i, j, :, :2] = inst.numpy()
+        return to_dataframe(
+            self,
+            format=format,
+            video=video,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            video_id=video_id,
+            include_video=include_video,
+            backend=backend,
+        )
 
-                        # If return_confidence is True, add dummy confidence scores
-                        if return_confidence:
-                            tracks[i, j, :, 2] = 1.0
+    def to_dataframe_iter(
+        self,
+        format: str = "points",
+        *,
+        chunk_size: Optional[int] = None,
+        video: Optional[Union[Video, int]] = None,
+        include_metadata: bool = True,
+        include_score: bool = True,
+        include_user_instances: bool = True,
+        include_predicted_instances: bool = True,
+        video_id: str = "path",
+        include_video: Optional[bool] = None,
+        instance_id: str = "index",
+        untracked: str = "error",
+        backend: str = "pandas",
+    ):
+        """Iterate over labels data, yielding DataFrames in chunks.
 
-        return tracks
+        This is a memory-efficient alternative to `to_dataframe()` for large datasets.
+        Instead of materializing the entire DataFrame at once, it yields smaller
+        DataFrames (chunks) that can be processed incrementally.
+
+        Args:
+            format: Output format. One of "points", "instances", "frames",
+                "multi_index".
+            chunk_size: Number of rows per chunk. If None, yields entire DataFrame.
+                The meaning of "row" depends on the format:
+                - points: One point (node) per row
+                - instances: One instance per row
+                - frames/multi_index: One frame per row
+            video: Optional video filter.
+            include_metadata: Include track, video information in columns.
+            include_score: Include confidence scores for predicted instances.
+            include_user_instances: Include user-labeled instances.
+            include_predicted_instances: Include predicted instances.
+            video_id: How to represent videos ("path", "index", "name", "object").
+            include_video: Whether to include video information.
+            instance_id: How to name instance columns ("index" or "track").
+            untracked: Behavior for untracked instances ("error" or "ignore").
+            backend: "pandas" or "polars".
+
+        Yields:
+            DataFrames, each containing up to `chunk_size` rows.
+
+        Examples:
+            >>> for chunk in labels.to_dataframe_iter(chunk_size=10000):
+            ...     chunk.to_parquet("output.parquet", append=True)
+
+            >>> # Memory-efficient processing
+            >>> import pandas as pd
+            >>> df = pd.concat(labels.to_dataframe_iter(chunk_size=1000))
+
+        Notes:
+            This method delegates to `sleap_io.codecs.dataframe.to_dataframe_iter()`.
+        """
+        from sleap_io.codecs.dataframe import to_dataframe_iter
+
+        return to_dataframe_iter(
+            self,
+            format=format,
+            chunk_size=chunk_size,
+            video=video,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            video_id=video_id,
+            include_video=include_video,
+            instance_id=instance_id,
+            untracked=untracked,
+            backend=backend,
+        )
 
     @classmethod
     def from_numpy(
@@ -473,127 +511,21 @@ class Labels:
             >>> skeleton = Skeleton(["head", "tail"])
             >>> # Create labels from the array
             >>> labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+
+        Notes:
+            This method now delegates to `sleap_io.codecs.numpy.from_numpy()`.
+            See that function for implementation details.
         """
-        # Check dimensions
-        if len(tracks_arr.shape) != 4:
-            raise ValueError(
-                f"Array must have 4 dimensions (n_frames, n_tracks, n_nodes, 2 or 3), "
-                f"but got {tracks_arr.shape}"
-            )
+        from sleap_io.codecs.numpy import from_numpy
 
-        # Validate videos
-        if not videos:
-            raise ValueError("At least one video must be provided")
-        video = videos[0]  # Use the first video for creating labeled frames
-
-        # Process skeletons input
-        if skeletons is None:
-            raise ValueError("At least one skeleton must be provided")
-        elif isinstance(skeletons, Skeleton):
-            skeletons = [skeletons]
-        elif not skeletons:  # Check for empty list
-            raise ValueError("At least one skeleton must be provided")
-
-        skeleton = skeletons[0]  # Use the first skeleton for creating instances
-        n_nodes = len(skeleton.nodes)
-
-        # Check if tracks_arr contains confidence scores
-        has_confidence = tracks_arr.shape[-1] == 3 or return_confidence
-
-        # Get dimensions
-        n_frames, n_tracks_arr, _ = tracks_arr.shape[:3]
-
-        # Create or validate tracks
-        if tracks is None:
-            # Auto-create tracks if not provided
-            tracks = [Track(f"track_{i}") for i in range(n_tracks_arr)]
-        elif len(tracks) < n_tracks_arr:
-            # Add missing tracks if needed
-            original_len = len(tracks)
-            for i in range(n_tracks_arr - original_len):
-                tracks.append(Track(f"track_{i}"))
-
-        # Create a new empty Labels object
-        labels = cls()
-        labels.videos = list(videos)
-        labels.skeletons = list(skeletons)
-        labels.tracks = list(tracks)
-
-        # Create labeled frames and instances from the array data
-        for i in range(n_frames):
-            frame_idx = i + first_frame
-
-            # Check if this frame has any valid data across all tracks
-            frame_has_valid_data = False
-            for j in range(n_tracks_arr):
-                track_data = tracks_arr[i, j]
-                # Check if at least one node in this track has valid xy coordinates
-                if np.any(~np.isnan(track_data[:, 0])):
-                    frame_has_valid_data = True
-                    break
-
-            # Skip creating a frame if there's no valid data
-            if not frame_has_valid_data:
-                continue
-
-            # Create a new labeled frame
-            labeled_frame = LabeledFrame(video=video, frame_idx=frame_idx)
-            frame_has_valid_instances = False
-
-            # Process each track in this frame
-            for j in range(n_tracks_arr):
-                track = tracks[j]
-                track_data = tracks_arr[i, j]
-
-                # Check if there's any valid data for this track at this frame
-                valid_points = ~np.isnan(track_data[:, 0])
-                if not np.any(valid_points):
-                    continue
-
-                # Create points from numpy data
-                points = track_data[:, :2].copy()
-
-                # Create new instance
-                if has_confidence:
-                    # Get confidence scores
-                    if tracks_arr.shape[-1] == 3:
-                        scores = track_data[:, 2].copy()
-                    else:
-                        scores = np.ones(n_nodes)
-
-                    # Fix NaN scores
-                    scores = np.where(np.isnan(scores), 1.0, scores)
-
-                    # Create instance with confidence scores
-                    new_instance = PredictedInstance.from_numpy(
-                        points_data=points,
-                        skeleton=skeleton,
-                        point_scores=scores,
-                        score=1.0,
-                        track=track,
-                    )
-                else:
-                    # Create instance with default scores
-                    new_instance = PredictedInstance.from_numpy(
-                        points_data=points,
-                        skeleton=skeleton,
-                        point_scores=np.ones(n_nodes),
-                        score=1.0,
-                        track=track,
-                    )
-
-                # Add to frame
-                labeled_frame.instances.append(new_instance)
-                frame_has_valid_instances = True
-
-            # Only add frames that have instances
-            if frame_has_valid_instances:
-                labels.append(labeled_frame, update=False)
-
-        # Update internal references
-        labels.update()
-
-        return labels
+        return from_numpy(
+            tracks_array=tracks_arr,
+            videos=videos,
+            skeletons=skeletons,
+            tracks=tracks,
+            first_frame=first_frame,
+            return_confidence=return_confidence,
+        )
 
     @property
     def video(self) -> Video:
