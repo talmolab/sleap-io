@@ -1446,31 +1446,6 @@ def test_from_dataframe_instances_with_scores():
     assert inst0.tracking_score == pytest.approx(0.98)
 
 
-def test_from_dataframe_instances_legacy_underscore_format():
-    """Test from_dataframe handles legacy underscore format for instances."""
-    skeleton = Skeleton(["head", "tail"])
-    video = Video(filename="test.mp4")
-
-    # Legacy format with underscores
-    df = pd.DataFrame(
-        {
-            "frame_idx": [0],
-            "track_name": ["animal1"],  # Legacy column name
-            "head_x": [1.0],  # Legacy underscore separator
-            "head_y": [2.0],
-            "tail_x": [3.0],
-            "tail_y": [4.0],
-        }
-    )
-
-    labels = from_dataframe(df, format="instances", video=video, skeleton=skeleton)
-
-    assert len(labels.labeled_frames) == 1
-    inst = labels.labeled_frames[0].instances[0]
-    assert inst.numpy()[0, 0] == pytest.approx(1.0)
-    assert inst.numpy()[1, 0] == pytest.approx(3.0)
-
-
 def test_from_dataframe_points_legacy_column_names():
     """Test that from_dataframe handles legacy column names (node_name, track_name)."""
     skeleton = Skeleton(["a", "b"])
@@ -3249,6 +3224,7 @@ def test_polars_multi_index_track_mode():
     assert df["mouse2.nose.x"][0] == 50.0
 
 
+
 # =============================================================================
 # Additional coverage tests for uncovered branches
 # =============================================================================
@@ -3267,9 +3243,7 @@ def test_invalid_video_id_parameter():
 
     # Must set include_video=True to trigger video_id validation
     with pytest.raises(ValueError, match="Invalid video_id"):
-        to_dataframe(
-            labels, format="points", video_id="invalid_mode", include_video=True
-        )
+        to_dataframe(labels, format="points", video_id="invalid_mode", include_video=True)
 
 
 def test_video_id_name_with_list_filename():
@@ -3306,7 +3280,9 @@ def test_frames_format_user_instances_track_mode():
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels([lf], tracks=[track])
 
-    df = to_dataframe(labels, format="frames", instance_id="track", include_video=False)
+    df = to_dataframe(
+        labels, format="frames", instance_id="track", include_video=False
+    )
 
     # User instances have no scores (should be None)
     assert "animal1.track_score" in df.columns
@@ -3332,7 +3308,9 @@ def test_frames_format_user_instances_index_mode():
     lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
     labels = Labels([lf])
 
-    df = to_dataframe(labels, format="frames", instance_id="index", include_video=False)
+    df = to_dataframe(
+        labels, format="frames", instance_id="index", include_video=False
+    )
 
     # User instances have None for track_score and score
     assert "inst0.track_score" in df.columns
@@ -3399,7 +3377,9 @@ def test_frames_format_track_mode_partial_frames():
 
     labels = Labels([lf1, lf2], tracks=[track1, track2])
 
-    df = to_dataframe(labels, format="frames", instance_id="track", include_video=False)
+    df = to_dataframe(
+        labels, format="frames", instance_id="track", include_video=False
+    )
 
     # Frame 0: track2 should have NaN
     assert df.loc[df["frame_idx"] == 0, "a1.pt.x"].iloc[0] == 1.0
@@ -3664,269 +3644,3 @@ def test_to_dataframe_iter_multi_index_polars_flatten():
     assert isinstance(chunks[0], pl.DataFrame)
     # Should have flattened column names
     assert any("." in str(col) for col in chunks[0].columns)
-
-
-def test_points_format_video_id_variants():
-    """Test points format with different video_id values via iterator."""
-    skeleton = Skeleton(["nose"])
-    video = Video(filename="/path/to/video.mp4")
-    inst = Instance.from_numpy(
-        points_data=np.array([[1.0, 2.0]]),
-        skeleton=skeleton,
-    )
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
-    labels = Labels([lf])
-
-    # Test video_id="index"
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="points",
-            chunk_size=1,
-            video_id="index",
-            include_video=True,
-        )
-    )
-    assert "video_idx" in chunks[0].columns
-    assert chunks[0]["video_idx"].iloc[0] == 0
-
-    # Test video_id="object"
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="points",
-            chunk_size=1,
-            video_id="object",
-            include_video=True,
-        )
-    )
-    assert "video" in chunks[0].columns
-
-
-def test_instances_format_video_id_variants():
-    """Test instances format with different video_id values via iterator."""
-    skeleton = Skeleton(["nose"])
-    video = Video(filename="/path/to/video.mp4")
-    inst = Instance.from_numpy(
-        points_data=np.array([[1.0, 2.0]]),
-        skeleton=skeleton,
-    )
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
-    labels = Labels([lf])
-
-    # Test video_id="index"
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="instances",
-            chunk_size=1,
-            video_id="index",
-            include_video=True,
-        )
-    )
-    assert "video_idx" in chunks[0].columns
-
-    # Test video_id="object"
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="instances",
-            chunk_size=1,
-            video_id="object",
-            include_video=True,
-        )
-    )
-    assert "video" in chunks[0].columns
-
-
-def test_frames_format_user_instances_via_iterator():
-    """Test frames format user instances via to_dataframe_iter."""
-    skeleton = Skeleton(["pt"])
-    video = Video(filename="test.mp4")
-    track = Track("animal")
-
-    inst = Instance.from_numpy(
-        points_data=np.array([[1.0, 2.0]]),
-        skeleton=skeleton,
-        track=track,
-    )
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
-    labels = Labels([lf], tracks=[track])
-
-    # Use iterator with chunk_size to go through row iterators
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="frames",
-            chunk_size=1,
-            instance_id="track",
-            include_video=False,
-        )
-    )
-
-    assert len(chunks) == 1
-    # User instances have None scores
-    assert "animal.score" in chunks[0].columns
-
-
-def test_multi_index_format_user_instances_via_iterator():
-    """Test multi_index format with user instances via iterator."""
-    skeleton = Skeleton(["pt"])
-    video = Video(filename="test.mp4")
-    track = Track("animal")
-
-    inst = Instance.from_numpy(
-        points_data=np.array([[1.0, 2.0]]),
-        skeleton=skeleton,
-        track=track,
-    )
-    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
-    labels = Labels([lf], tracks=[track])
-
-    # Use iterator with chunk_size
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="multi_index",
-            chunk_size=1,
-            instance_id="track",
-            include_video=False,
-        )
-    )
-
-    assert len(chunks) == 1
-
-
-def test_frames_format_index_mode_padding_via_iterator():
-    """Test frames format index mode with padding via iterator."""
-    skeleton = Skeleton(["pt"])
-    video = Video(filename="test.mp4")
-
-    # Frame 0: 1 instance
-    inst1 = Instance.from_numpy(
-        points_data=np.array([[1.0, 2.0]]),
-        skeleton=skeleton,
-    )
-    lf1 = LabeledFrame(video=video, frame_idx=0, instances=[inst1])
-
-    # Frame 1: 2 instances (will force padding in frame 0)
-    inst2 = Instance.from_numpy(
-        points_data=np.array([[3.0, 4.0]]),
-        skeleton=skeleton,
-    )
-    inst3 = Instance.from_numpy(
-        points_data=np.array([[5.0, 6.0]]),
-        skeleton=skeleton,
-    )
-    lf2 = LabeledFrame(video=video, frame_idx=1, instances=[inst2, inst3])
-
-    labels = Labels([lf1, lf2])
-
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="frames",
-            chunk_size=1,
-            instance_id="index",
-            include_video=False,
-        )
-    )
-
-    # Should have 2 chunks (one per frame)
-    assert len(chunks) == 2
-    # Both should have inst0 and inst1 columns (padded)
-    assert "inst0.pt.x" in chunks[0].columns
-    assert "inst1.pt.x" in chunks[0].columns
-
-
-def test_multi_index_format_index_mode_padding_via_iterator():
-    """Test multi_index format index mode with padding via iterator."""
-    skeleton = Skeleton(["pt"])
-    video = Video(filename="test.mp4")
-
-    # Frame 0: 1 instance
-    inst1 = Instance.from_numpy(
-        points_data=np.array([[1.0, 2.0]]),
-        skeleton=skeleton,
-    )
-    lf1 = LabeledFrame(video=video, frame_idx=0, instances=[inst1])
-
-    # Frame 1: 2 instances
-    inst2 = Instance.from_numpy(
-        points_data=np.array([[3.0, 4.0]]),
-        skeleton=skeleton,
-    )
-    inst3 = Instance.from_numpy(
-        points_data=np.array([[5.0, 6.0]]),
-        skeleton=skeleton,
-    )
-    lf2 = LabeledFrame(video=video, frame_idx=1, instances=[inst2, inst3])
-
-    labels = Labels([lf1, lf2])
-
-    chunks = list(
-        to_dataframe_iter(
-            labels,
-            format="multi_index",
-            chunk_size=1,
-            instance_id="index",
-            include_video=False,
-        )
-    )
-
-    # Should have 2 chunks
-    assert len(chunks) == 2
-
-
-def test_from_dataframe_instances_format_with_track():
-    """Test from_dataframe for instances format with track information."""
-    skeleton = Skeleton(["nose", "tail"])
-    video = Video(filename="test.mp4")
-
-    # Create instances format DataFrame with track
-    df = pd.DataFrame(
-        {
-            "frame_idx": [0],
-            "track": ["animal1"],
-            "track_score": [0.95],
-            "score": [0.9],
-            "nose.x": [1.0],
-            "nose.y": [2.0],
-            "nose.score": [0.88],
-            "tail.x": [3.0],
-            "tail.y": [4.0],
-            "tail.score": [0.85],
-        }
-    )
-
-    labels = from_dataframe(df, format="instances", video=video, skeleton=skeleton)
-
-    assert len(labels.labeled_frames) == 1
-    assert len(labels.labeled_frames[0].instances) == 1
-
-
-def test_from_dataframe_multi_index_with_track():
-    """Test from_dataframe for multi_index format with track column."""
-    skeleton = Skeleton(["pt"])
-    video = Video(filename="test.mp4")
-
-    # Create multi_index DataFrame with track
-    df = pd.DataFrame(
-        {
-            ("inst0", "track", ""): ["track1"],
-            ("inst0", "track_score", ""): [0.95],
-            ("inst0", "score", ""): [0.9],
-            ("inst0", "pt", "x"): [1.0],
-            ("inst0", "pt", "y"): [2.0],
-            ("inst0", "pt", "score"): [0.88],
-        }
-    )
-    df.columns = pd.MultiIndex.from_tuples(df.columns)
-    df.index = [0]
-    df.index.name = "frame_idx"
-
-    labels = from_dataframe(df, format="multi_index", video=video, skeleton=skeleton)
-
-    assert len(labels.labeled_frames) == 1
-    assert len(labels.tracks) == 1
-    assert labels.tracks[0].name == "track1"

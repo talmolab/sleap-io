@@ -30,7 +30,7 @@ try:
     import polars as pl
 
     HAS_POLARS = True
-except ImportError:
+except ImportError:  # pragma: no cover
     HAS_POLARS = False
     pl = None  # type: ignore[assignment]
 
@@ -687,7 +687,9 @@ def _prescan_for_frames(
         Tuple of (max_instances, all_tracks, skeleton)
     """
     max_instances = 0
-    skeleton = None
+
+    # Use skeleton from labels (Labels always have at least one skeleton)
+    skeleton = labels.skeletons[0] if labels.skeletons else None
 
     # Collect all track names if using track mode
     all_tracks = []
@@ -695,12 +697,6 @@ def _prescan_for_frames(
         all_tracks = [t.name for t in labels.tracks]
 
     for lf in labeled_frames:
-        # Get skeleton from first available instance
-        if skeleton is None:
-            for inst in lf.instances:
-                skeleton = inst.skeleton
-                break
-
         # Count instances
         instances_to_process = []
         if include_user_instances:
@@ -744,9 +740,6 @@ def _iter_frames_rows(
     skeleton,
 ) -> Generator[dict, None, None]:
     """Yield row dicts for frames format (one row per frame)."""
-    if skeleton is None:
-        return
-
     for lf in labeled_frames:
         # Collect instances to include
         instances_to_process = []
@@ -1097,17 +1090,8 @@ def _to_frames_df(  # noqa: D417
     if not labeled_frames:
         return _create_dataframe_from_rows([], backend)
 
-    # Get skeleton from first available instance
-    skeleton = None
-    for lf in labeled_frames:
-        for inst in lf.instances:
-            skeleton = inst.skeleton
-            break
-        if skeleton:
-            break
-
-    if skeleton is None:
-        return _create_dataframe_from_rows([], backend)
+    # Use skeleton from labels (Labels always have at least one skeleton)
+    skeleton = labels.skeletons[0]
 
     # Collect all data into a frame-indexed structure
     frame_data = {}  # (video, frame_idx) -> list of (instance, prefix)
@@ -1320,17 +1304,8 @@ def _to_multi_index_df(  # noqa: D417
     if not labeled_frames:
         return _create_dataframe_from_rows([], backend)
 
-    # Get skeleton from first available instance
-    skeleton = None
-    for lf in labeled_frames:
-        for inst in lf.instances:
-            skeleton = inst.skeleton
-            break
-        if skeleton:
-            break
-
-    if skeleton is None:
-        return _create_dataframe_from_rows([], backend)
+    # Use skeleton from labels (Labels always have at least one skeleton)
+    skeleton = labels.skeletons[0]
 
     # Collect all data into a frame-indexed structure
     frame_data = {}  # (video, frame_idx) -> list of instances
@@ -1949,44 +1924,20 @@ def _from_instances_df(
     if "frame_idx" not in df.columns:
         raise ValueError("Missing required column: frame_idx")
 
-    # Detect node columns - look for {node}.x or {node}_x patterns
-    node_cols_dot = {}  # node_name -> {"x": col, "y": col, "score": col}
-    node_cols_underscore = {}
+    # Detect node columns - look for {node}.x patterns
+    node_cols = {}  # node_name -> {"x": col, "y": col, "score": col}
 
     for col in df.columns:
         if "." in col:
-            # New format: node.x, node.y, node.score
             parts = col.rsplit(".", 1)
             if len(parts) == 2 and parts[1] in ("x", "y", "score"):
                 node_name = parts[0]
-                if node_name not in node_cols_dot:
-                    node_cols_dot[node_name] = {}
-                node_cols_dot[node_name][parts[1]] = col
-        elif col.endswith("_x") or col.endswith("_y") or col.endswith("_score"):
-            # Legacy format: node_x, node_y, node_score
-            if col.endswith("_score"):
-                node_name = col[:-6]
-                coord = "score"
-            elif col.endswith("_x"):
-                node_name = col[:-2]
-                coord = "x"
-            else:  # _y
-                node_name = col[:-2]
-                coord = "y"
-
-            # Skip metadata columns
-            if node_name in ("frame", "video", "skeleton", "track", "instance"):
-                continue
-
-            if node_name not in node_cols_underscore:
-                node_cols_underscore[node_name] = {}
-            node_cols_underscore[node_name][coord] = col
-
-    # Use dot format if available, otherwise underscore
-    node_cols = node_cols_dot if node_cols_dot else node_cols_underscore
+                if node_name not in node_cols:
+                    node_cols[node_name] = {}
+                node_cols[node_name][parts[1]] = col
 
     if not node_cols:
-        raise ValueError("No node columns found. Expected {node}.x or {node}_x format.")
+        raise ValueError("No node columns found. Expected {node}.x format.")
 
     # Validate that we have x and y for each node
     for node_name, coords in node_cols.items():

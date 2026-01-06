@@ -119,35 +119,18 @@ def to_dict(
             "filename": vid.filename,
         }
 
-        # Add shape if available
-        try:
-            if hasattr(vid, "shape") and vid.shape is not None:
-                video_dict["shape"] = list(vid.shape)
-        except Exception:
-            # Shape might not be accessible
-            pass
+        # Add shape if available (Video.shape handles exceptions internally)
+        if vid.shape is not None:
+            video_dict["shape"] = list(vid.shape)
 
         # Add backend info if available
-        if hasattr(vid, "backend") and vid.backend is not None:
-            backend_dict = {
-                "type": type(vid.backend).__name__,
-            }
-            # Add any other relevant backend info
-            if hasattr(vid.backend, "grayscale"):
-                backend_dict["grayscale"] = vid.backend.grayscale
-            video_dict["backend"] = backend_dict
+        if vid.backend is not None:
+            video_dict["backend"] = {"type": type(vid.backend).__name__}
 
         videos_list.append(video_dict)
 
     # Build track list
-    tracks_list = []
-    for track in labels.tracks:
-        track_dict = {
-            "name": track.name,
-        }
-        if hasattr(track, "spawned_on") and track.spawned_on is not None:
-            track_dict["spawned_on"] = track.spawned_on
-        tracks_list.append(track_dict)
+    tracks_list = [{"name": track.name} for track in labels.tracks]
 
     # Build labeled frames list
     labeled_frames_list = []
