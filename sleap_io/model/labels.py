@@ -29,6 +29,7 @@ from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.matching import (
         InstanceMatcher,
@@ -69,8 +70,25 @@ class Labels:
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
+    # Internal lazy state (private, not part of public API)
+    _lazy_store: Optional["LazyDataStore"] = field(
+        default=None, repr=False, eq=False, alias="lazy_store"
+    )
+
+    @property
+    def is_lazy(self) -> bool:
+        """Whether this Labels uses lazy loading.
+
+        Returns:
+            True if loaded with lazy=True and not yet materialized.
+        """
+        return self._lazy_store is not None
+
     def __attrs_post_init__(self):
         """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
+        # Skip update for lazy Labels - metadata is already set from HDF5
+        if self.is_lazy:
+            return
         self.update()
 
     def update(self):

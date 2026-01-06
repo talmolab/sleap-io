@@ -2029,6 +2029,75 @@ def write_sessions(
         f.create_dataset("sessions_json", data=sessions_json, maxshape=(None,))
 
 
+def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
+    """Read SLP file with lazy loading.
+
+    This function reads raw HDF5 arrays into memory but defers creation of
+    LabeledFrame and Instance objects until they are accessed.
+
+    Args:
+        labels_path: Path to .slp file.
+        open_videos: Whether to open video backends.
+
+    Returns:
+        Labels with LazyFrameList for labeled_frames.
+    """
+    from sleap_io.io.slp_lazy import LazyDataStore, LazyFrameList
+
+    # Read raw arrays
+    frames_data = read_hdf5_dataset(labels_path, "frames")
+    instances_data = read_hdf5_dataset(labels_path, "instances")
+    points_data = read_points(labels_path)
+    pred_points_data = read_pred_points(labels_path)
+
+    # Read format ID
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+
+    # Read metadata eagerly (these are small and needed for lazy access)
+    videos = read_videos(labels_path, open_backend=open_videos)
+    skeletons = read_skeletons(labels_path)
+    tracks = read_tracks(labels_path)
+    suggestions = read_suggestions(labels_path, videos)
+    metadata = read_metadata(labels_path)
+    provenance = metadata.get("provenance", dict())
+
+    # Read sessions (small, no need for lazy loading)
+    # Note: sessions require labeled_frames for full linking, but for lazy loading
+    # we pass an empty list since we don't have materialized frames yet
+    sessions = read_sessions(labels_path, videos, [])
+
+    # Create LazyDataStore
+    lazy_store = LazyDataStore(
+        frames_data=frames_data,
+        instances_data=instances_data,
+        pred_points_data=pred_points_data,
+        points_data=points_data,
+        videos=videos,
+        skeletons=skeletons,
+        tracks=tracks,
+        format_id=format_id,
+        source_path=str(labels_path),
+    )
+
+    # Create LazyFrameList
+    lazy_frames = LazyFrameList(lazy_store)
+
+    # Create Labels with lazy state
+    labels = Labels(
+        labeled_frames=lazy_frames,
+        videos=videos,
+        skeletons=skeletons,
+        tracks=tracks,
+        suggestions=suggestions,
+        sessions=sessions,
+        provenance=provenance,
+        lazy_store=lazy_store,
+    )
+    labels.provenance["filename"] = labels_path
+
+    return labels
+
+
 def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     """Read a SLEAP labels file.
 
