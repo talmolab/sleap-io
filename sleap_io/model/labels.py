@@ -160,6 +160,46 @@ class Labels:
         """Return a readable representation of the labels."""
         return self.__repr__()
 
+    def copy(self, *, open_videos: Optional[bool] = None) -> Labels:
+        """Create a deep copy of the Labels object.
+
+        Args:
+            open_videos: Controls video backend auto-opening in the copy:
+
+                - `None` (default): Preserve each video's current setting.
+                - `True`: Enable auto-opening for all videos.
+                - `False`: Disable auto-opening and close any open backends.
+
+        Returns:
+            A new Labels object with deep copied data.
+
+        Notes:
+            Video backends are not copied (file handles cannot be duplicated).
+            The `open_videos` parameter controls whether backends will auto-open
+            when frames are accessed.
+
+        See also: `Labels.extract`, `Labels.remove_predictions`
+
+        Examples:
+            >>> labels_copy = labels.copy()  # Preserves original settings
+
+            >>> # Prevent auto-opening to avoid file handles
+            >>> labels_copy = labels.copy(open_videos=False)
+
+            >>> # Copy and filter predictions separately
+            >>> labels_copy = labels.copy()
+            >>> labels_copy.remove_predictions()
+        """
+        labels_copy = deepcopy(self)
+
+        if open_videos is not None:
+            for video in labels_copy.videos:
+                video.open_backend = open_videos
+                if not open_videos:
+                    video.close()
+
+        return labels_copy
+
     def append(self, lf: LabeledFrame, update: bool = True):
         """Append a labeled frame to the labels.
 
@@ -565,6 +605,7 @@ class Labels:
         format: Optional[str] = None,
         embed: bool | str | list[tuple[Video, int]] | None = False,
         restore_original_videos: bool = True,
+        embed_inplace: bool = False,
         verbose: bool = True,
         **kwargs,
     ):
@@ -592,6 +633,10 @@ class Labels:
             restore_original_videos: If `True` (default) and `embed=False`, use original
                 video files. If `False` and `embed=False`, keep references to source
                 `.pkg.slp` files. Only applies when `embed=False`.
+            embed_inplace: If `False` (default), a copy of the labels is made before
+                embedding to avoid modifying the in-memory labels. If `True`, the
+                labels will be modified in-place to point to the embedded videos,
+                which is faster but mutates the input. Only applies when embedding.
             verbose: If `True` (the default), display a progress bar when embedding
                 frames.
             **kwargs: Additional format-specific arguments passed to the save function.
@@ -629,6 +674,7 @@ class Labels:
             format=format,
             embed=embed,
             restore_original_videos=restore_original_videos,
+            embed_inplace=embed_inplace,
             verbose=verbose,
             **kwargs,
         )

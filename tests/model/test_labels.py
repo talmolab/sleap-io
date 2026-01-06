@@ -824,8 +824,8 @@ def test_split(slp_real_data, tmp_path):
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
 
-    split1.save(tmp_path / "split1.pkg.slp", embed=True)
-    split2.save(tmp_path / "split2.pkg.slp", embed=True)
+    split1.save(tmp_path / "split1.pkg.slp", embed=True, embed_inplace=True)
+    split2.save(tmp_path / "split2.pkg.slp", embed=True, embed_inplace=True)
     assert pkg.video.filename == (tmp_path / "test.pkg.slp").as_posix()
     assert (
         Path(split1.video.filename).as_posix()
@@ -3905,3 +3905,373 @@ def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
             assert instance.skeleton in labels1.skeletons, (
                 "Instance skeleton not in labels.skeletons list"
             )
+
+
+def test_labels_copy_basic(slp_minimal):
+    """Test basic copy creates independent object."""
+    labels = load_slp(slp_minimal)
+    labels_copy = labels.copy()
+
+    # Assert independence
+    assert labels_copy is not labels
+    assert labels_copy.labeled_frames is not labels.labeled_frames
+    assert labels_copy.videos is not labels.videos
+    assert labels_copy.skeletons is not labels.skeletons
+    assert labels_copy.tracks is not labels.tracks
+
+    # Assert equivalence
+    assert len(labels_copy) == len(labels)
+    assert len(labels_copy.videos) == len(labels.videos)
+    assert len(labels_copy.skeletons) == len(labels.skeletons)
+    assert len(labels_copy.tracks) == len(labels.tracks)
+
+
+def test_labels_copy_independence(slp_real_data):
+    """Test modifications to copy don't affect original."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Store original value
+    original_point = labels.labeled_frames[0].instances[0].points["xy"][0].copy()
+
+    # Modify copy
+    labels_copy.labeled_frames[0].instances[0].points["xy"][0] = [999.0, 999.0]
+
+    # Assert original unchanged
+    assert np.array_equal(
+        labels.labeled_frames[0].instances[0].points["xy"][0], original_point
+    )
+    assert not np.array_equal(
+        labels.labeled_frames[0].instances[0].points["xy"][0], [999.0, 999.0]
+    )
+
+
+def test_labels_copy_preserves_video_references(slp_real_data):
+    """Test object references are preserved within copy."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Get video reference from first frame
+    video_from_frame = labels_copy.labeled_frames[0].video
+    # Same video should be in videos list (by identity)
+    assert video_from_frame in labels_copy.videos
+
+    # But should not be same object as original
+    original_video = labels.labeled_frames[0].video
+    assert video_from_frame is not original_video
+
+
+def test_labels_copy_preserves_skeleton_references(slp_minimal):
+    """Test skeleton references are preserved within copy."""
+    labels = load_slp(slp_minimal)
+    labels_copy = labels.copy()
+
+    # Check skeleton references
+    skeleton_from_inst = labels_copy.labeled_frames[0].instances[0].skeleton
+    assert skeleton_from_inst in labels_copy.skeletons
+
+    # Skeleton should be copied
+    original_skeleton = labels.labeled_frames[0].instances[0].skeleton
+    assert skeleton_from_inst is not original_skeleton
+
+
+def test_labels_copy_video_backend(centered_pair_low_quality_video):
+    """Test video backends are properly handled in copy."""
+    labels = Labels([LabeledFrame(video=centered_pair_low_quality_video, frame_idx=0)])
+
+    # Open backend
+    _ = labels.videos[0][0]
+    assert labels.videos[0].backend is not None
+
+    # Copy
+    labels_copy = labels.copy()
+
+    # Backend should work in copy
+    frame = labels_copy.videos[0][0]
+    assert frame is not None
+    assert frame.shape[0] > 0  # Should have valid frame data
+
+
+def test_labels_copy_tracks(centered_pair):
+    """Test track references are preserved."""
+    labels = load_slp(centered_pair)
+    labels_copy = labels.copy()
+
+    # Find instance with track in copy
+    inst_with_track = None
+    for lf in labels_copy.labeled_frames:
+        for inst in lf.instances:
+            if inst.track is not None:
+                inst_with_track = inst
+                break
+        if inst_with_track:
+            break
+
+    # Should have found at least one
+    assert inst_with_track is not None
+
+    # Track should be in tracks list
+    assert inst_with_track.track in labels_copy.tracks
+
+    # But should be copied
+    original_inst = None
+    for lf in labels.labeled_frames:
+        for inst in lf.instances:
+            if inst.track is not None:
+                original_inst = inst
+                break
+        if original_inst:
+            break
+
+    assert inst_with_track.track is not original_inst.track
+
+
+def test_labels_copy_suggestions(slp_real_data):
+    """Test suggestion frames are copied."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Independent lists
+    assert labels_copy.suggestions is not labels.suggestions
+    assert len(labels_copy.suggestions) == len(labels.suggestions)
+
+    # Video references preserved within copy
+    for sf in labels_copy.suggestions:
+        assert sf.video in labels_copy.videos
+
+    # But should be independent from original
+    for sf_copy, sf_orig in zip(labels_copy.suggestions, labels.suggestions):
+        assert sf_copy is not sf_orig
+        assert sf_copy.video is not sf_orig.video
+
+
+def test_labels_copy_sessions(slp_multiview):
+    """Test recording sessions are copied."""
+    labels = load_slp(slp_multiview)
+    labels_copy = labels.copy()
+
+    assert labels_copy.sessions is not labels.sessions
+    assert len(labels_copy.sessions) == len(labels.sessions)
+
+    # Sessions should be independent
+    for session_copy, session_orig in zip(labels_copy.sessions, labels.sessions):
+        assert session_copy is not session_orig
+
+    # Check camera-video mappings preserved in copy
+    if len(labels_copy.sessions) > 0:
+        session = labels_copy.sessions[0]
+        for camera, video in session._video_by_camera.items():
+            assert video in labels_copy.videos
+
+
+def test_labels_copy_provenance(slp_real_data):
+    """Test provenance dict is copied."""
+    labels = load_slp(slp_real_data)
+    labels.provenance["test_key"] = "test_value"
+
+    labels_copy = labels.copy()
+
+    # Independent dict
+    assert labels_copy.provenance is not labels.provenance
+    assert labels_copy.provenance["test_key"] == "test_value"
+
+    # Mutation test
+    labels_copy.provenance["new_key"] = "new_value"
+    assert "new_key" not in labels.provenance
+
+
+def test_labels_copy_numpy_arrays(slp_minimal):
+    """Test numpy arrays are properly copied."""
+    labels = load_slp(slp_minimal)
+    labels_copy = labels.copy()
+
+    # Get points from both
+    orig_points = labels.labeled_frames[0].instances[0].points
+    copy_points = labels_copy.labeled_frames[0].instances[0].points
+
+    # Different arrays
+    assert orig_points is not copy_points
+
+    # Same values
+    assert np.array_equal(orig_points["xy"], copy_points["xy"])
+    assert np.array_equal(orig_points["visible"], copy_points["visible"])
+
+    # Independence - modify copy
+    original_xy = orig_points["xy"][0].copy()
+    copy_points["xy"][0] = [999.0, 999.0]
+    assert np.array_equal(orig_points["xy"][0], original_xy)
+    assert not np.array_equal(orig_points["xy"][0], [999.0, 999.0])
+
+
+def test_labels_copy_skeleton_structure(slp_real_data):
+    """Test skeleton edges and symmetries are copied."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Independent objects
+    assert labels_copy.skeletons[0] is not labels.skeletons[0]
+
+    # Same structure
+    assert len(labels_copy.skeletons[0].nodes) == len(labels.skeletons[0].nodes)
+    assert len(labels_copy.skeletons[0].edges) == len(labels.skeletons[0].edges)
+
+
+def test_labels_copy_empty():
+    """Test copying empty labels."""
+    labels = Labels()
+    labels_copy = labels.copy()
+
+    assert len(labels_copy) == 0
+    assert labels_copy is not labels
+
+
+def test_labels_copy_backend_metadata():
+    """Test backend_metadata dict is copied (PR #243 regression test)."""
+    video = Video(filename="test.mp4", backend_metadata={"key": "value"})
+    labels = Labels(videos=[video])
+    labels_copy = labels.copy()
+
+    # Modify copy metadata
+    labels_copy.videos[0].backend_metadata["new_key"] = "new_value"
+
+    # Original unchanged
+    assert "new_key" not in labels.videos[0].backend_metadata
+    assert labels.videos[0].backend_metadata == {"key": "value"}
+
+
+def test_labels_copy_open_videos_default(centered_pair_low_quality_video):
+    """Test default open_videos=None preserves original settings."""
+    # Create labels with mixed open_backend settings
+    video1 = Video(filename="test1.mp4", open_backend=True)
+    video2 = Video(filename="test2.mp4", open_backend=False)
+    labels = Labels(videos=[video1, video2])
+
+    labels_copy = labels.copy()
+
+    # Settings preserved per-video
+    assert labels_copy.videos[0].open_backend is True
+    assert labels_copy.videos[1].open_backend is False
+
+
+def test_labels_copy_open_videos_true():
+    """Test open_videos=True enables auto-opening for all videos."""
+    video1 = Video(filename="test1.mp4", open_backend=True)
+    video2 = Video(filename="test2.mp4", open_backend=False)
+    labels = Labels(videos=[video1, video2])
+
+    labels_copy = labels.copy(open_videos=True)
+
+    # All videos have open_backend=True
+    assert labels_copy.videos[0].open_backend is True
+    assert labels_copy.videos[1].open_backend is True
+
+    # Originals unchanged
+    assert labels.videos[0].open_backend is True
+    assert labels.videos[1].open_backend is False
+
+
+def test_labels_copy_open_videos_false(centered_pair_low_quality_video):
+    """Test open_videos=False disables auto-opening for all videos."""
+    labels = Labels([LabeledFrame(video=centered_pair_low_quality_video, frame_idx=0)])
+
+    # Verify original has auto-open enabled
+    assert labels.videos[0].open_backend is True
+
+    labels_copy = labels.copy(open_videos=False)
+
+    # Copy has auto-open disabled
+    assert labels_copy.videos[0].open_backend is False
+    # Backend should not open on copy
+    assert labels_copy.videos[0].backend is None
+
+    # Original unchanged
+    assert labels.videos[0].open_backend is True
+
+
+def test_labels_copy_performance_profile(
+    slp_minimal, slp_real_data, centered_pair, slp_multiview
+):
+    """Profile copy performance on various fixture sizes.
+
+    This test measures and reports performance characteristics of the copy operation
+    across different dataset sizes. It does not enforce strict performance limits,
+    but documents expected performance ranges.
+    """
+    import time
+
+    fixtures = {
+        "minimal": load_slp(slp_minimal),
+        "real_data": load_slp(slp_real_data),
+        "centered_pair": load_slp(centered_pair),
+        "multiview": load_slp(slp_multiview),
+    }
+
+    results = {}
+    for name, labels in fixtures.items():
+        # Gather metadata
+        n_frames = len(labels.labeled_frames)
+        n_instances = sum(len(lf.instances) for lf in labels.labeled_frames)
+        n_points = sum(
+            inst.points.shape[0]
+            for lf in labels.labeled_frames
+            for inst in lf.instances
+        )
+
+        # Warm up (first copy may be slower due to caching)
+        _ = labels.copy()
+
+        # Benchmark with multiple runs for stability
+        times = []
+        for _ in range(5):
+            start = time.perf_counter()
+            labels_copy = labels.copy()
+            elapsed = time.perf_counter() - start
+            times.append(elapsed)
+
+            # Verify copy worked
+            assert labels_copy is not labels
+
+        # Use median time for stability
+        median_time = sorted(times)[len(times) // 2]
+
+        results[name] = {
+            "frames": n_frames,
+            "instances": n_instances,
+            "points": n_points,
+            "time_ms": median_time * 1000,
+            "time_per_instance_us": (median_time * 1e6) / max(n_instances, 1),
+        }
+
+    # Print report (helpful for development and CI logs)
+    print("\n\nLabels.copy() Performance Profile")
+    print("=" * 80)
+    for name, stats in results.items():
+        print(f"\n{name}:")
+        print(f"  Frames: {stats['frames']}")
+        print(f"  Instances: {stats['instances']}")
+        print(f"  Total points: {stats['points']}")
+        print(f"  Copy time: {stats['time_ms']:.2f} ms")
+        print(f"  Time per instance: {stats['time_per_instance_us']:.2f} µs")
+    print("=" * 80)
+
+    # Sanity check: copy should complete in reasonable time
+    # These are very generous limits just to catch major performance regressions
+    assert results["minimal"]["time_ms"] < 100, "Minimal dataset copy too slow"
+    assert results["centered_pair"]["time_ms"] < 5000, "Large dataset copy too slow"
+
+    # Performance should scale roughly linearly with instance count
+    # (this is a loose check, not a strict requirement)
+    cp_instances = results["centered_pair"]["instances"]
+    min_instances = results["minimal"]["instances"]
+    if cp_instances > 0 and min_instances > 0:
+        scale_factor = cp_instances / min_instances
+        time_ratio = results["centered_pair"]["time_ms"] / max(
+            results["minimal"]["time_ms"], 0.001
+        )
+
+        # Time ratio shouldn't be more than 100x the scale factor
+        # (allows for some overhead that's not purely linear)
+        assert time_ratio < scale_factor * 100, (
+            f"Copy performance doesn't scale well: "
+            f"{scale_factor:.1f}x more instances but {time_ratio:.1f}x slower"
+        )
