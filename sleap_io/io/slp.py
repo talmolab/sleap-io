@@ -2078,7 +2078,9 @@ def _read_labels_lazy(
     return labels
 
 
-def read_labels(labels_path: str, open_videos: bool = True, lazy: bool = False) -> Labels:
+def read_labels(
+    labels_path: str, open_videos: bool = True, lazy: bool = False
+) -> Labels:
     """Read a SLEAP labels file.
 
     Args:
