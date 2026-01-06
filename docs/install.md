@@ -15,7 +15,7 @@ sleap-io can be used as a CLI tool, a Python library, or a dependency of another
     uvx sleap-io convert -i labels.slp -o labels.nwb
     ```
 
-    Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
+    Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). See [CLI Reference](cli.md) for available commands.
 
 === "Install CLI tool"
 
@@ -37,6 +37,7 @@ sleap-io can be used as a CLI tool, a Python library, or a dependency of another
 
     ```bash
     pip install "sleap-io[all]"
+    # or: uv add "sleap-io[all]"
     ```
 
     Then import:
@@ -170,11 +171,15 @@ Use sleap-io programmatically to load, manipulate, and save pose tracking data.
 
 === "pip"
 
+    For environments not managed by uv:
+
     ```bash
     pip install "sleap-io[all]" @ git+https://github.com/talmolab/sleap-io.git@main
     ```
 
 === "uv pip"
+
+    For quick installation into an existing virtual environment:
 
     ```bash
     uv pip install "sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@main"
@@ -182,13 +187,18 @@ Use sleap-io programmatically to load, manipulate, and save pose tracking data.
 
 === "uv add (pyproject.toml)"
 
+    For uv-managed projects (adds to pyproject.toml and syncs):
+
     ```bash
     uv add "sleap-io[all]" --git https://github.com/talmolab/sleap-io.git --branch main
     ```
 
 #### Quick usage example
 
-```python
+```python title="quick_demo.py"
+# /// script
+# dependencies = ["sleap-io[all]"]
+# ///
 import sleap_io as sio
 
 # Load labels from any supported format
@@ -204,6 +214,12 @@ locations = labels.numpy()  # shape: (frames, tracks, nodes, 2)
 
 # Save to a different format
 sio.save_nwb(labels, "labels.nwb")
+```
+
+Run directly with uv (no installation needed):
+
+```bash
+uv run quick_demo.py
 ```
 
 See [Examples](examples.md) for more usage patterns.
@@ -380,6 +396,15 @@ pip install "sleap-io[all]"         # Everything
 !!! info "Default video support"
     Video reading works out of the box via `imageio-ffmpeg`, which is always installed. The optional video backends provide faster performance or additional codec support.
 
+!!! warning "OpenCV dependency conflicts"
+    The `opencv-python` package can cause dependency conflicts in environments with other packages that also depend on OpenCV (e.g., some ML frameworks install `opencv-python-headless`). If you encounter conflicts, install without the `opencv` extra:
+
+    ```bash
+    pip install "sleap-io[pyav,mat]"  # Skip opencv
+    ```
+
+    The `pyav` backend provides good performance without the conflict risk.
+
 ---
 
 ## Upgrading
@@ -401,14 +426,18 @@ uv tool upgrade sleap-io
 === "uv pip"
 
     ```bash
-    uv pip install --upgrade "sleap-io[all]"
+    uv pip install -U "sleap-io[all]"
     ```
+
+    The `-U` flag allows upgrades and implies `--refresh` to update cached package metadata.
 
 === "uv add"
 
     ```bash
-    uv add "sleap-io[all]" --upgrade
+    uv add -U "sleap-io[all]"
     ```
+
+    The `-U` flag upgrades the package and refreshes the lock file.
 
 === "conda"
 
