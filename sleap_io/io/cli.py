@@ -28,7 +28,8 @@ from sleap_io.model.video import Video
 from sleap_io.version import __version__
 
 # Rich console for formatted output
-console = Console()
+# Set minimum width to avoid truncation issues in CI/non-TTY environments
+console = Console(width=120, soft_wrap=True)
 
 # Rich-click theme configuration
 click.rich_click.THEME = "solarized-slim"
