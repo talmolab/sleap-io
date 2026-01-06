@@ -634,6 +634,31 @@ class TestLabelsMaterialize:
         materialized.append(new_frame)
         assert len(materialized) == initial_len + 1
 
+    def test_materialize_creates_deep_copies(self, slp_real_data):
+        """Materialized Labels has independent (deep copied) metadata objects."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        materialized = lazy.materialize()
+
+        # Videos should be different objects
+        assert materialized.videos[0] is not lazy.videos[0]
+
+        # Skeletons should be different objects
+        assert materialized.skeletons[0] is not lazy.skeletons[0]
+
+        # Modifying materialized should not affect lazy
+        original_filename = lazy.videos[0].filename
+        materialized.videos[0].replace_filename("modified.mp4", open=False)
+        assert lazy.videos[0].filename == original_filename
+
+        # Frames should reference the new (materialized) video objects
+        assert materialized[0].video is materialized.videos[0]
+        assert materialized[0].video is not lazy.videos[0]
+
+        # Instances should reference the new (materialized) skeleton objects
+        if len(materialized[0].instances) > 0:
+            assert materialized[0].instances[0].skeleton is materialized.skeletons[0]
+            assert materialized[0].instances[0].skeleton is not lazy.skeletons[0]
+
 
 # === Save Round-Trip Tests ===
 

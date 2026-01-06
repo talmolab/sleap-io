@@ -111,7 +111,9 @@ class Labels:
         to modify the Labels.
 
         Returns:
-            Labels with all frames/instances as Python objects.
+            A new Labels with all frames/instances as Python objects and
+            deep-copied metadata (videos, skeletons, tracks). The returned
+            Labels is fully independent from the original lazy Labels.
 
         Example:
             >>> lazy = sio.load_slp("file.slp", lazy=True)
@@ -121,12 +123,41 @@ class Labels:
         if not self.is_lazy:
             return self
 
+        # Deep copy metadata to ensure full independence
+        new_videos = [deepcopy(v) for v in self.videos]
+        new_skeletons = [deepcopy(s) for s in self.skeletons]
+        new_tracks = [deepcopy(t) for t in self.tracks]
+
+        # Build mappings from old to new objects for relinking
+        video_map = {id(old): new for old, new in zip(self.videos, new_videos)}
+        skeleton_map = {id(old): new for old, new in zip(self.skeletons, new_skeletons)}
+        track_map = {id(old): new for old, new in zip(self.tracks, new_tracks)}
+
+        # Materialize frames and relink to new metadata objects
+        labeled_frames = []
+        for lf in self._lazy_store.materialize_all():
+            # Relink video
+            lf.video = video_map.get(id(lf.video), lf.video)
+            # Relink instances
+            for inst in lf.instances:
+                inst.skeleton = skeleton_map.get(id(inst.skeleton), inst.skeleton)
+                if inst.track is not None:
+                    inst.track = track_map.get(id(inst.track), inst.track)
+            labeled_frames.append(lf)
+
+        # Deep copy suggestions and relink videos
+        new_suggestions = []
+        for s in self.suggestions:
+            new_s = deepcopy(s)
+            new_s.video = video_map.get(id(s.video), new_s.video)
+            new_suggestions.append(new_s)
+
         return Labels(
-            labeled_frames=self._lazy_store.materialize_all(),
-            videos=list(self.videos),
-            skeletons=list(self.skeletons),
-            tracks=list(self.tracks),
-            suggestions=list(self.suggestions),
+            labeled_frames=labeled_frames,
+            videos=new_videos,
+            skeletons=new_skeletons,
+            tracks=new_tracks,
+            suggestions=new_suggestions,
             provenance=dict(self.provenance),
             # _lazy_store is None (not lazy)
         )

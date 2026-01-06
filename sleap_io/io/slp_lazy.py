@@ -304,23 +304,23 @@ class LazyDataStore:
         if not np.any(user_mask):
             return []
 
-        # Build frame index ranges for efficient lookup
-        frame_starts = self.frames_data["instance_id_start"]
+        # Get frame boundaries for binary search
         frame_ends = self.frames_data["instance_id_end"]
 
-        # Find which frames contain user instances
-        user_frame_indices = []
+        # Use binary search to find frame for each user instance - O(n log m)
         user_instance_indices = np.where(user_mask)[0]
 
-        for inst_idx in user_instance_indices:
-            # Binary search for containing frame
-            for fi in range(len(self.frames_data)):
-                if frame_starts[fi] <= inst_idx < frame_ends[fi]:
-                    if fi not in user_frame_indices:
-                        user_frame_indices.append(fi)
-                    break
+        # searchsorted finds insertion point; instance i is in frame fi where
+        # frame_ends[fi-1] <= i < frame_ends[fi] (with frame_ends[-1] = 0)
+        frame_indices = np.searchsorted(frame_ends, user_instance_indices, side="right")
 
-        return sorted(user_frame_indices)
+        # Get unique frame indices (already sorted by searchsorted)
+        unique_frames = np.unique(frame_indices)
+
+        # Filter out any out-of-bounds indices (shouldn't happen with valid data)
+        valid_mask = unique_frames < len(self.frames_data)
+
+        return unique_frames[valid_mask].tolist()
 
     def to_numpy(
         self,
