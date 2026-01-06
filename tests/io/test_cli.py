@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from sleap_io import load_slp
@@ -2186,3 +2187,168 @@ def test_filenames_save_failure(tmp_path, slp_typical):
     )
     assert result.exit_code != 0
     assert "Failed to save output file" in result.output
+
+
+# ============================================================================
+# Render command crop tests
+# ============================================================================
+
+
+def test_render_crop_auto(centered_pair, tmp_path):
+    """Test render with --crop auto."""
+    runner = CliRunner()
+    output_path = tmp_path / "cropped.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "--crop",
+            "auto",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
+
+
+def test_render_crop_pixel(centered_pair, tmp_path):
+    """Test render with pixel crop coordinates."""
+    runner = CliRunner()
+    output_path = tmp_path / "cropped.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "--crop",
+            "100,100,300,300",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
+
+
+def test_render_crop_normalized(centered_pair, tmp_path):
+    """Test render with normalized crop coordinates."""
+    runner = CliRunner()
+    output_path = tmp_path / "cropped.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "--crop",
+            "0.25,0.25,0.75,0.75",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+    assert output_path.exists()
+
+
+def test_render_crop_with_padding(centered_pair, tmp_path):
+    """Test render with auto crop and custom padding."""
+    runner = CliRunner()
+    output_path = tmp_path / "cropped.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "--crop",
+            "auto",
+            "--crop-padding",
+            "0.3",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_crop_video_mode_error(centered_pair, tmp_path):
+    """Test error when crop is used with video mode."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--crop",
+            "auto",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "--crop is only supported for single image mode" in output
+
+
+def test_render_crop_invalid_format():
+    """Test error with invalid crop format."""
+    from sleap_io.io.cli import _parse_crop_string
+
+    # Valid formats should work
+    assert _parse_crop_string(None) is None
+    assert _parse_crop_string("auto") == "auto"
+    assert _parse_crop_string("AUTO") == "auto"
+    assert _parse_crop_string("100,100,300,300") == (100, 100, 300, 300)
+    assert _parse_crop_string("0.25,0.25,0.75,0.75") == (0.25, 0.25, 0.75, 0.75)
+
+    # Invalid formats should raise ClickException
+    with pytest.raises(Exception) as exc_info:
+        _parse_crop_string("100,100,300")  # Not enough values
+    assert "Expected 'auto' or 'x1,y1,x2,y2'" in str(exc_info.value)
+
+    with pytest.raises(Exception) as exc_info:
+        _parse_crop_string("a,b,c,d")  # Not numbers
+    assert "must be numbers" in str(exc_info.value)
+
+
+def test_render_crop_normalized_out_of_range():
+    """Test error when normalized crop values are out of range."""
+    from sleap_io.io.cli import _parse_crop_string
+
+    with pytest.raises(Exception) as exc_info:
+        _parse_crop_string("0.0,0.0,1.5,1.0")  # x2 > 1.0
+    assert "Normalized crop values must be in [0.0, 1.0] range" in str(exc_info.value)
+
+
+def test_render_crop_help_shows_options():
+    """Test that render --help shows crop options."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+    assert "--crop" in output
+    assert "--crop-padding" in output
+    assert "auto" in output or "x1,y1,x2,y2" in output

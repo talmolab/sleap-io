@@ -89,6 +89,59 @@ def _get_package_version(package: str) -> str:
         return "not installed"
 
 
+def _parse_crop_string(
+    crop_str: Optional[str],
+) -> Optional[tuple]:
+    """Parse crop string from CLI into crop specification.
+
+    Args:
+        crop_str: Crop string from CLI. Can be:
+            - None: No cropping
+            - "auto": Auto-fit around instances
+            - "x1,y1,x2,y2": Coordinates (pixels if integers, normalized if floats)
+
+    Returns:
+        None, "auto", or (x1, y1, x2, y2) tuple.
+
+    Raises:
+        click.ClickException: If crop string format is invalid.
+    """
+    if crop_str is None:
+        return None
+
+    crop_str = crop_str.strip()
+
+    if crop_str.lower() == "auto":
+        return "auto"
+
+    # Parse x1,y1,x2,y2 format
+    parts = crop_str.split(",")
+    if len(parts) != 4:
+        raise click.ClickException(
+            f"Invalid --crop format: '{crop_str}'. "
+            "Expected 'auto' or 'x1,y1,x2,y2' (e.g., '100,100,300,300' or "
+            "'0.25,0.25,0.75,0.75')."
+        )
+
+    try:
+        # Check if any value contains a decimal point -> treat as normalized floats
+        if any("." in p for p in parts):
+            values = tuple(float(p.strip()) for p in parts)
+            # Validate normalized range
+            if not all(0.0 <= v <= 1.0 for v in values):
+                raise click.ClickException(
+                    f"Normalized crop values must be in [0.0, 1.0] range. Got: {values}"
+                )
+        else:
+            values = tuple(int(p.strip()) for p in parts)
+    except ValueError as e:
+        raise click.ClickException(
+            f"Invalid --crop values: '{crop_str}'. Values must be numbers. Error: {e}"
+        )
+
+    return values
+
+
 def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
     """Print version info with plugin status and exit."""
     if not value or ctx.resilient_parsing:
@@ -1661,6 +1714,22 @@ def filenames(
     default=False,
     help="Hide skeleton edges. Default: show edges.",
 )
+# Crop options
+@click.option(
+    "--crop",
+    "crop_str",
+    type=str,
+    default=None,
+    help="Crop region: 'auto' or 'x1,y1,x2,y2' (pixels or normalized 0.0-1.0).",
+)
+@click.option(
+    "--crop-padding",
+    "crop_padding",
+    type=float,
+    default=0.2,
+    show_default=True,
+    help="Padding for auto-crop as fraction of bounding box.",
+)
 def render(
     input_path: Path,
     output_path: Optional[Path],
@@ -1683,6 +1752,8 @@ def render(
     alpha: float,
     no_nodes: bool,
     no_edges: bool,
+    crop_str: Optional[str],
+    crop_padding: float,
 ) -> None:
     """Render pose predictions as video or single image.
 
@@ -1713,6 +1784,16 @@ def render(
         $ sio render -i predictions.slp --frame 42           # -> *.frame=42.png
 
         $ sio render -i labels.slp --lf 5 -o frame.png       # Explicit output
+
+        [bold]Cropping (single image only):[/]
+
+        $ sio render -i predictions.slp --lf 0 --crop auto   # Auto-fit to instances
+
+        $ sio render -i predictions.slp --lf 0 --crop 100,100,300,300  # Pixel crop
+
+        $ sio render -i predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75  # Normalized
+
+        $ sio render -i predictions.slp --lf 0 --crop auto --crop-padding 0.3
     """
     # Load labels
     try:
@@ -1781,6 +1862,16 @@ def render(
         preset_scales = {"preview": 0.25, "draft": 0.5, "final": 1.0}
         effective_scale = preset_scales.get(preset, 1.0)
 
+    # Parse crop specification
+    crop = _parse_crop_string(crop_str)
+
+    # Warn if crop is used with video mode (not yet supported)
+    if crop is not None and not single_image_mode:
+        raise click.ClickException(
+            "--crop is only supported for single image mode (use --lf or --frame). "
+            "Video cropping is not yet implemented."
+        )
+
     try:
         if single_image_mode:
             # Single image rendering
@@ -1796,8 +1887,10 @@ def render(
                     )
                 render_image(
                     labels,
-                    output=output_path,
+                    save_path=output_path,
                     lf_ind=lf_ind,
+                    crop=crop,
+                    crop_padding=crop_padding,
                     scale=effective_scale,
                     color_by=color_by,
                     palette=palette,
@@ -1819,9 +1912,11 @@ def render(
                 video = labels.videos[video_ind]
                 render_image(
                     labels,
-                    output=output_path,
+                    save_path=output_path,
                     video=video,
                     frame_idx=frame_idx,
+                    crop=crop,
+                    crop_padding=crop_padding,
                     scale=effective_scale,
                     color_by=color_by,
                     palette=palette,

@@ -99,6 +99,7 @@ sio render -i predictions.slp                                 # -> predictions.v
 sio render -i predictions.slp --preset preview                # Fast 0.25x preview
 sio render -i predictions.slp --start 100 --end 200
 sio render -i predictions.slp --lf 0                          # Single frame -> PNG
+sio render -i predictions.slp --lf 0 --crop auto              # Auto-fit to instances
 sio render -i predictions.slp --color-by track --marker-shape diamond
 ```
 
@@ -823,6 +824,13 @@ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
 | `--no-nodes` | false | Hide node markers |
 | `--no-edges` | false | Hide skeleton edges |
 
+##### Crop Options (Single Image Only)
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--crop` | none | Crop region: `auto` or `x1,y1,x2,y2` (pixels or normalized 0.0-1.0) |
+| `--crop-padding` | 0.2 | Padding for auto-crop as fraction of bounding box |
+
 #### Single Image Rendering
 
 Render individual frames to PNG files for figures, thumbnails, or quick inspection:
@@ -843,6 +851,33 @@ sio render -i predictions.slp --lf 5 -o frame.png
 !!! tip "Labeled frame vs frame index"
     - `--lf N` renders the Nth labeled frame in the file (regardless of video frame number)
     - `--frame N` renders video frame N (must have predictions at that frame)
+
+#### Cropping (Single Image Only)
+
+Crop the output image to focus on specific regions or automatically fit around detected instances:
+
+```bash
+# Auto-fit: crop to bounding box of all instances with 20% padding (default)
+sio render -i predictions.slp --lf 0 --crop auto
+
+# Auto-fit with custom padding (30% of bounding box)
+sio render -i predictions.slp --lf 0 --crop auto --crop-padding 0.3
+
+# Pixel coordinates (x1, y1, x2, y2)
+sio render -i predictions.slp --lf 0 --crop 100,100,300,300
+
+# Normalized coordinates (center 50% of frame)
+sio render -i predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75
+```
+
+The crop modes:
+
+- **`auto`**: Automatically fit to the bounding box of all instances, with padding. Best for focusing on animals.
+- **Pixel coordinates**: `x1,y1,x2,y2` as integers. Use for precise cropping when you know exact pixel locations.
+- **Normalized coordinates**: `x1,y1,x2,y2` as floats between 0.0-1.0. Use for relative cropping that works across different video resolutions.
+
+!!! note "Video mode limitation"
+    Cropping is currently only supported for single image mode (`--lf` or `--frame`). Video cropping is not yet implemented.
 
 #### Video Frame Ranges
 
