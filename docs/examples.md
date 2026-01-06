@@ -13,9 +13,6 @@ This page provides practical examples for common tasks with sleap-io. Each examp
     ```bash
     # Save any example to a file (e.g., example.py)
     uv run --with sleap-io example.py
-
-    # For rendering examples, use the [all] extra (or [rendering] for minimal deps)
-    uv run --with "sleap-io[all]" example.py
     ```
 
     This automatically handles dependencies without needing to manage environments.
@@ -735,13 +732,6 @@ sio render -i predictions.slp -o output.mp4
 sio render -i predictions.slp --preset preview
 sio render -i predictions.slp --lf 0  # Single frame
 ```
-
-!!! info "Required dependencies"
-    Rendering requires optional dependencies:
-    ```bash
-    pip install sleap-io[all]        # All optional deps
-    pip install sleap-io[rendering]  # Minimal rendering deps only
-    ```
 
 !!! note "See also"
     See the **[Rendering Guide](rendering.md)** for complete documentation including color schemes, marker shapes, custom callbacks, and all CLI options.

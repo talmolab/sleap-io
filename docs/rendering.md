@@ -2,13 +2,6 @@
 
 sleap-io provides high-performance pose visualization using [skia-python](https://kyamagu.github.io/skia-python/), a production-quality 2D graphics library.
 
-!!! info "Required dependencies"
-    Rendering requires optional dependencies:
-    ```bash
-    pip install sleap-io[all]        # All optional deps
-    pip install sleap-io[rendering]  # Minimal rendering deps only
-    ```
-
 ---
 
 ## Quick Start
@@ -158,7 +151,7 @@ img = sio.render_image(lf, color_by="node", palette="viridis")
 
 ### Colorcet palettes
 
-With `[all]` or `[rendering]` extras, you get [colorcet](https://colorcet.holoviz.org/) palettes:
+sleap-io includes [colorcet](https://colorcet.holoviz.org/) palettes:
 
 #### glasbey
 

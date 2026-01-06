@@ -152,9 +152,11 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     lines.append(f"  numpy: {_get_package_version('numpy')}")
     lines.append(f"  h5py: {_get_package_version('h5py')}")
     lines.append(f"  imageio: {_get_package_version('imageio')}")
+    lines.append(f"  skia-python: {_get_package_version('skia-python')}")
+    lines.append(f"  colorcet: {_get_package_version('colorcet')}")
     lines.append("")
 
-    # Video plugins
+    # Video plugins (optional)
     lines.append("Video plugins:")
     lines.append(f"  opencv: {_get_package_version('opencv-python')}")
     lines.append(f"  pyav: {_get_package_version('av')}")
@@ -164,12 +166,6 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     # Optional dependencies
     lines.append("Optional:")
     lines.append(f"  pymatreader: {_get_package_version('pymatreader')}")
-    lines.append("")
-
-    # Rendering
-    lines.append("Rendering:")
-    lines.append(f"  skia-python: {_get_package_version('skia-python')}")
-    lines.append(f"  colorcet: {_get_package_version('colorcet')}")
 
     click.echo("\n".join(lines))
     ctx.exit()
@@ -1929,11 +1925,6 @@ def render(
                 include_unlabeled=effective_all_frames,
                 show_progress=True,
             )
-    except ImportError:
-        raise click.ClickException(
-            "Rendering requires optional dependencies. "
-            "Install with: pip install sleap-io[all]"
-        )
     except Exception as e:
         raise click.ClickException(f"Failed to render: {e}")
 

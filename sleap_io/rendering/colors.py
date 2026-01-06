@@ -183,32 +183,18 @@ def get_palette(
         return _extend_palette(palette, n_colors)
 
     # Try colorcet palettes
-    if name.startswith("glasbey") or name in (
-        "fire",
-        "bmy",
-        "rainbow4",
-        "isolum",
-    ):
-        try:
-            import colorcet as cc
+    import colorcet as cc
 
-            if name in cc.palette:
-                hex_colors = cc.palette[name]
-                rgb_colors = [_hex_to_rgb(c) for c in hex_colors]
-                return _extend_palette(rgb_colors, n_colors)
-        except ImportError:
-            pass
+    if name in cc.palette:
+        hex_colors = cc.palette[name]
+        rgb_colors = [_hex_to_rgb(c) for c in hex_colors]
+        return _extend_palette(rgb_colors, n_colors)
 
-    # Fallback to distinct palette
-    if name not in PALETTES:
-        # Use distinct as default
-        palette = PALETTES["distinct"]
-        return _extend_palette(palette, n_colors)
-
+    # Unknown palette - raise error with available options
     raise ValueError(
         f"Unknown palette: {name}. "
         f"Available: {list(PALETTES.keys())} (built-in), "
-        "glasbey/glasbey_hv/glasbey_cool/glasbey_warm (with colorcet)"
+        "or any colorcet palette (e.g., glasbey, glasbey_hv, fire, rainbow4)"
     )
 
 

@@ -94,7 +94,7 @@ sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
 sio filenames -i labels.slp -o out.slp --map old.mp4 /new/video.mp4
 sio filenames -i labels.slp -o out.slp --prefix /old/path /new/path
 
-# Render video with pose overlays (requires: pip install sleap-io[all] or [rendering])
+# Render video with pose overlays
 sio render -i predictions.slp                                 # -> predictions.viz.mp4
 sio render -i predictions.slp --preset preview                # Fast 0.25x preview
 sio render -i predictions.slp --start 100 --end 200
@@ -744,18 +744,6 @@ sio render -i <input> [-o <output>] [options]
 sio render -i <input> --lf <index> [-o <output>] [options]
 ```
 
-!!! info "Required dependencies"
-    Rendering requires optional dependencies:
-    ```bash
-    pip install sleap-io[all]        # All optional deps
-    pip install sleap-io[rendering]  # Minimal rendering deps only
-    ```
-
-    Or with `uvx`:
-    ```bash
-    uvx --with "sleap-io[all]" sleap-io render -i predictions.slp
-    ```
-
 #### Render Modes
 
 **Video mode** (default): Renders all labeled frames to a video file.
@@ -961,7 +949,7 @@ sio render -i predictions.slp --palette distinct
 sio render -i predictions.slp --palette rainbow
 sio render -i predictions.slp --palette tableau10
 
-# Colorcet palettes (included with [all])
+# Colorcet palettes
 sio render -i predictions.slp --palette glasbey  # 256 distinct colors
 sio render -i predictions.slp --palette glasbey_warm
 ```
@@ -1149,12 +1137,6 @@ sio render -i predictions.slp -o final.mp4 \
     --marker-shape diamond
 ```
 
-!!! info "Installing render dependencies"
-    ```bash
-    pip install sleap-io[all]        # All optional deps
-    pip install sleap-io[rendering]  # Minimal rendering deps only
-    ```
-
 ### Creating Training Splits
 
 Prepare datasets for machine learning with reproducible splits:
@@ -1216,6 +1198,8 @@ Core:
   numpy: 2.4.0
   h5py: 3.15.1
   imageio: 2.37.2
+  skia-python: 138.0
+  colorcet: 3.1.0
 
 Video plugins:
   opencv: 4.8.1
@@ -1224,10 +1208,6 @@ Video plugins:
 
 Optional:
   pymatreader: 0.0.32
-
-Rendering:
-  skia-python: 138.0
-  colorcet: 3.1.0
 ```
 
 !!! tip "Troubleshooting video issues"

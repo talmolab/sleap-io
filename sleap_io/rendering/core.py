@@ -581,7 +581,6 @@ def render_image(
 
     Raises:
         ValueError: If background="video" and video unavailable.
-        ImportError: If skia-python is not installed.
 
     Examples:
         Render a single labeled frame:
@@ -611,12 +610,7 @@ def render_image(
         >>> sio.render_image(labels, lf_ind=0, save_path="frame.png")
         >>> sio.render_image(labels, video=0, frame_idx=42, save_path="frame.png")
     """
-    try:
-        import skia  # noqa: F401
-    except ImportError as e:
-        raise ImportError(
-            "Rendering requires skia-python. Install with: pip install sleap-io[all]"
-        ) from e
+    import skia  # noqa: F401
 
     from sleap_io.model.instance import Instance, PredictedInstance
     from sleap_io.model.labeled_frame import LabeledFrame
@@ -914,7 +908,6 @@ def render_video(
 
     Raises:
         ValueError: If background="video" and video unavailable.
-        ImportError: If skia-python is not installed.
 
     Examples:
         Render full video with pose overlays:
@@ -931,12 +924,7 @@ def render_video(
 
         >>> frames = sio.render_video(labels)
     """
-    try:
-        import skia  # noqa: F401
-    except ImportError as e:
-        raise ImportError(
-            "Rendering requires skia-python. Install with: pip install sleap-io[all]"
-        ) from e
+    import skia  # noqa: F401
 
     from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels

@@ -12,9 +12,6 @@ Example:
     >>> labels = sio.load_slp("predictions.slp")
     >>> sio.render_video(labels, "output.mp4")
     >>> sio.render_image(labels.labeled_frames[0], "frame.png")
-
-Note:
-    Requires optional dependencies. Install with: pip install sleap-io[all]
 """
 
 from sleap_io.rendering.callbacks import InstanceContext, RenderContext
