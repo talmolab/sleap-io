@@ -70,11 +70,15 @@ sio --version
 # Inspect a labels file
 sio show labels.slp                    # Basic summary
 sio show labels.slp --skeleton         # Detailed skeleton info
-sio show labels.slp --video            # Detailed video info
+sio show labels.slp --video            # Detailed video info (all videos)
+sio show labels.slp --vi 0             # Show specific video by index
 sio show labels.slp --tracks           # Track details
 sio show labels.slp --provenance       # Metadata/provenance
 sio show labels.slp --all              # Everything
 sio show labels.slp --lf 0             # Labeled frame details
+
+# Inspect a video file directly
+sio show video.mp4                     # Video properties and metadata
 
 # Convert between formats
 sio convert -i labels.slp -o labels.nwb
@@ -107,9 +111,9 @@ sio render -i predictions.slp --color-by track --marker-shape diamond
 
 ## Commands
 
-### `sio show` - Inspect Labels Files
+### `sio show` - Inspect Labels and Video Files
 
-Display information about a SLEAP labels file with rich formatted output.
+Display information about a SLEAP labels file or video file with rich formatted output.
 
 ```bash
 sio show <path> [options]
@@ -120,20 +124,24 @@ sio show <path> [options]
 ```bash
 # View file summary with skeleton and video info
 sio show labels.slp
+
+# Inspect a video file directly
+sio show video.mp4
 ```
 
 **Example output:**
 
 ```
-╭─ sleap-io ─────────────────────────────────────────────╮
-│ labels.slp                                             │
-│ /home/user/projects/mouse-tracking                     │
-│                                                        │
-│ Type:     Labels                                       │
-│ Size:     2.4 MB                                       │
-│                                                        │
-│ 1 video | 100 frames | 200 labeled | 2 tracks          │
-╰────────────────────────────────────────────────────────╯
+╭─ sleap-io ─────────────────────────────────────────────────────────────╮
+│ labels.slp                                                             │
+│ /home/user/projects/mouse-tracking                                     │
+│                                                                        │
+│ Type:     Labels                                                       │
+│ Size:     2.4 MB                                                       │
+│                                                                        │
+│ 1 video | 100 frames | 200 labeled | 2 tracks                          │
+╰────────────────────────────────────────────────────────────────────────╯
+  Full: /home/user/projects/mouse-tracking/labels.slp
 
 Skeletons
   mouse (7 nodes, 6 edges)
@@ -162,12 +170,16 @@ The default view shows:
 |--------|-------|-------------|
 | `--skeleton` | `-s` | Show detailed skeleton tables (nodes, edges, symmetries) |
 | `--video` | `-v` | Show detailed video info (opens backends by default) |
+| `--video-index N` | `--vi N` | Show only video at index N (0-based). Implies --video |
 | `--tracks` | `-t` | Show track table with instance counts per track |
 | `--provenance` | `-p` | Show provenance/metadata from the file |
 | `--all` | `-a` | Show all details (combines all flags above) |
 | `--lf N` | | Show details for labeled frame at index N |
 | `--open-videos` | | Force open video backends |
 | `--no-open-videos` | | Don't open video backends (overrides -v default) |
+
+!!! tip "Viewing a specific video"
+    Use `--video-index N` (or `--vi N`) to show only a specific video by its index. For example, `sio show labels.slp --vi 0` shows only the first video, while `sio show labels.slp -v` shows all videos.
 
 #### Detailed Skeleton View
 
@@ -211,6 +223,10 @@ Symmetries:
 
 ```bash
 sio show labels.slp --video
+# Or show a specific video by index:
+sio show labels.slp --video-index 0
+# Short form:
+sio show labels.slp --vi 0
 ```
 
 Shows comprehensive video information including backend status:
@@ -219,13 +235,16 @@ Shows comprehensive video information including backend status:
 Video 0: video.mp4
 
   Type      MediaVideo
-  Path      /data/videos/video.mp4
+  Path      video.mp4
+  Full      /data/videos/video.mp4
   Status    File exists, backend not loaded
 
   Frames    5000
   Size      1920 × 1080 (RGB)
   Labeled   100 frames
 ```
+
+The "Full" path is shown when it differs from the stored path, making it easy to copy absolute paths.
 
 For embedded package files (`.pkg.slp`):
 
@@ -313,6 +332,34 @@ sio show labels.slp --all
 ```
 
 Combines `--skeleton`, `--video`, `--tracks`, and `--provenance` for a complete view.
+
+#### Standalone Video Files
+
+You can also use `sio show` to inspect video files directly:
+
+```bash
+sio show video.mp4
+```
+
+**Example output:**
+
+```
+╭─ sleap-io ────────────────────────────────────────────────────────────╮
+│ video.mp4                                                             │
+│ /data/videos                                                          │
+│                                                                       │
+│ Type:     Video (MediaVideo)                                          │
+│ Size:     934.3 KB                                                    │
+│                                                                       │
+│ 1100 frames | 384×384 | grayscale                                     │
+╰───────────────────────────────────────────────────────────────────────╯
+
+  Full      /data/videos/video.mp4
+  Status    Backend loaded (opencv)
+  Plugin    opencv
+```
+
+This is useful for quickly checking video properties without needing a labels file.
 
 ---
 

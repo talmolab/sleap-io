@@ -172,7 +172,7 @@ def test_show_empty_labels_with_lf(tmp_path):
 
 
 def test_show_video_file():
-    """Test show on a video file (non-Labels object)."""
+    """Test show on a video file displays rich formatted output."""
     runner = CliRunner()
     path = _data_path("videos/centered_pair_low_quality.mp4")
 
@@ -182,8 +182,30 @@ def test_show_video_file():
 
     result = runner.invoke(cli, ["show", str(path), "--open-videos"])
     assert result.exit_code == 0, result.output
-    # Should print repr of Video object
-    assert "Video" in result.output
+    out = _strip_ansi(result.output)
+    # Should show rich panel with video info
+    assert "sleap-io" in out
+    assert "centered_pair_low_quality.mp4" in out
+    assert "Video (MediaVideo)" in out
+    assert "frames" in out
+    assert "Status" in out
+    assert "Plugin" in out or "Backend" in out
+
+
+def test_show_video_file_full_path():
+    """Test show on a video file displays full absolute path."""
+    runner = CliRunner()
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+
+    if not path.exists():
+        return
+
+    result = runner.invoke(cli, ["show", str(path), "--open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show full path for copy-paste convenience
+    assert "Full" in out
+    assert str(path.resolve()) in out
 
 
 def test_show_video_flag():
@@ -296,6 +318,60 @@ def test_show_multiview_videos():
     assert "Video 7" in out
 
 
+def test_show_video_index_specific():
+    """Test --video-index shows only that video."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    # Show only video 1
+    result = runner.invoke(
+        cli, ["show", str(path), "--video-index", "1", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show video 1
+    assert "Video 1:" in out
+    # Should NOT show video 0 or video 7
+    assert "Video 0:" not in out
+    assert "Video 7:" not in out
+
+
+def test_show_video_index_out_of_range():
+    """Test --video-index with out-of-range index gives clear error."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    result = runner.invoke(
+        cli, ["show", str(path), "--video-index", "99", "--no-open-videos"]
+    )
+    assert result.exit_code == 1
+    out = _strip_ansi(result.output)
+    assert "out of range" in out
+    assert "8 video(s)" in out
+
+
+def test_show_video_index_first_video():
+    """Test --video-index 0 shows first video."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    result = runner.invoke(
+        cli, ["show", str(path), "--video-index", "0", "--no-open-videos"]
+    )
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Video 0:" in out
+    assert "Video 1:" not in out
+
+
+def test_show_video_index_short_form():
+    """Test --vi short form for video-index."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    result = runner.invoke(cli, ["show", str(path), "--vi", "2", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Video 2:" in out
+    assert "Video 0:" not in out
+
+
 def test_show_header_shows_file_size():
     """Test that header panel shows file size."""
     runner = CliRunner()
@@ -317,6 +393,18 @@ def test_show_header_shows_instance_counts():
     # typical.slp has both user and predicted instances
     assert "labeled" in out
     assert "predicted" in out
+
+
+def test_show_header_shows_full_path():
+    """Test that header shows full absolute path."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show "Full:" line with absolute path
+    assert "Full:" in out
+    assert str(path.resolve()) in out
 
 
 def test_show_pkg_file_type():
@@ -539,12 +627,13 @@ def test_show_video_image_sequence():
     from sleap_io import Labels, Video
     from sleap_io.io.cli import _print_video_details, _print_video_summary
 
-    # Create labels with image sequence video (without save/load)
+    # Create labels with image sequence video using RELATIVE paths
+    # This ensures the Full path line is displayed (when resolved != original)
     video = Video(
         filename=[
-            "/path/to/frame_0000.png",
-            "/path/to/frame_0001.png",
-            "/path/to/frame_0002.png",
+            "tests/data/videos/imgs/img.00.jpg",
+            "tests/data/videos/imgs/img.01.jpg",
+            "tests/data/videos/imgs/img.02.jpg",
         ],
         open_backend=False,
     )
@@ -573,8 +662,142 @@ def test_show_video_image_sequence():
         # Should show first and last (new format without colons)
         assert "First" in out
         assert "Last" in out
+        # Should show Full path since relative paths resolve to absolute
+        assert "Full" in out
     finally:
         cli_module.console = original_console
+
+
+def test_show_standalone_video_no_backend():
+    """Test standalone video display when backend cannot be loaded (shape unknown)."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from sleap_io import Video
+    from sleap_io.io.cli import _print_video_standalone
+
+    # Create video pointing to nonexistent file - backend won't load
+    video = Video(filename="nonexistent_video.mp4", open_backend=False)
+
+    from pathlib import Path
+
+    import sleap_io.io.cli as cli_module
+
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_video_standalone(Path("nonexistent_video.mp4"), video)
+        out = _strip_ansi(string_io.getvalue())
+        # Should show shape unknown message
+        assert "Shape unknown" in out or "unknown" in out.lower()
+        # Should still show type and other info
+        assert "MediaVideo" in out
+    finally:
+        cli_module.console = original_console
+
+
+def test_show_standalone_video_with_backend_metadata():
+    """Test standalone video display with backend_metadata grayscale field."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from sleap_io import Video
+    from sleap_io.io.cli import _print_video_standalone
+
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+    if not path.exists():
+        return
+
+    # Load video and set backend_metadata
+    video = Video.from_filename(str(path))
+    video.backend_metadata = {"grayscale": True}
+
+    import sleap_io.io.cli as cli_module
+
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_video_standalone(path, video)
+        out = _strip_ansi(string_io.getvalue())
+        # Should show grayscale info from backend_metadata
+        assert "Grayscale" in out
+        assert "yes" in out
+    finally:
+        cli_module.console = original_console
+
+
+def test_show_video_details_unknown_shape():
+    """Test video details display when shape is unknown."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from sleap_io import Labels, Video
+    from sleap_io.io.cli import _print_video_details
+
+    # Create video with no backend (shape will be None)
+    video = Video(filename="nonexistent.mp4", open_backend=False)
+    labels = Labels(videos=[video])
+
+    import sleap_io.io.cli as cli_module
+
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_video_details(labels)
+        out = _strip_ansi(string_io.getvalue())
+        # Should show unknown for frames and size
+        assert "unknown" in out.lower()
+    finally:
+        cli_module.console = original_console
+
+
+def test_show_embedded_video_many_indices(slp_minimal_pkg, tmp_path):
+    """Test embedded video display with >5 source indices shows range format."""
+    from io import StringIO
+
+    import numpy as np
+    from rich.console import Console
+
+    import sleap_io as sio
+    from sleap_io.io.cli import _print_video_details
+    from sleap_io.io.video_reading import HDF5Video
+
+    # Load the pkg file
+    labels = sio.load_slp(slp_minimal_pkg)
+    video = labels.videos[0]
+
+    # Ensure backend is loaded and modify source_inds to have >5 entries
+    if isinstance(video.backend, HDF5Video):
+        # Save original and set many indices
+        original_inds = video.backend.source_inds
+        video.backend.source_inds = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+        import sleap_io.io.cli as cli_module
+
+        original_console = cli_module.console
+        string_io = StringIO()
+        cli_module.console = Console(file=string_io, force_terminal=True)
+
+        try:
+            _print_video_details(labels)
+            out = _strip_ansi(string_io.getvalue())
+            # Should show range format (0-9) instead of listing all
+            assert "0" in out and "9" in out
+            # Should use range notation with dash/en-dash
+            assert "-" in out or "–" in out
+        finally:
+            cli_module.console = original_console
+            # Restore original
+            video.backend.source_inds = original_inds
 
 
 def test_show_many_tracks(tmp_path):
