@@ -42,53 +42,8 @@ PRESETS: dict[str, dict] = {
 CropSpec = Union[
     Tuple[int, int, int, int],  # Pixel coordinates
     Tuple[float, float, float, float],  # Normalized coordinates (0.0-1.0)
-    Literal["auto"],
     None,
 ]
-
-
-def _compute_auto_crop(
-    instances_points: list[np.ndarray],
-    frame_shape: tuple[int, int],
-    padding: float = 0.2,
-) -> tuple[int, int, int, int]:
-    """Compute auto-fit crop bounds around all instances.
-
-    Args:
-        instances_points: List of (n_nodes, 2) arrays of keypoint coordinates.
-        frame_shape: (height, width) of the frame.
-        padding: Padding as fraction of bounding box size.
-
-    Returns:
-        Tuple of (x1, y1, x2, y2) crop bounds.
-    """
-    h, w = frame_shape
-
-    # Stack all points
-    if not instances_points:
-        return (0, 0, w, h)
-
-    all_points = np.concatenate(instances_points)
-    valid = np.isfinite(all_points).all(axis=1)
-    pts = all_points[valid]
-
-    if len(pts) == 0:
-        return (0, 0, w, h)
-
-    x_min, y_min = pts.min(axis=0)
-    x_max, y_max = pts.max(axis=0)
-
-    # Add padding
-    pad_x = (x_max - x_min) * padding
-    pad_y = (y_max - y_min) * padding
-
-    # Compute bounds (clamp to frame)
-    x1 = max(0, int(x_min - pad_x))
-    y1 = max(0, int(y_min - pad_y))
-    x2 = min(w, int(x_max + pad_x))
-    y2 = min(h, int(y_max + pad_y))
-
-    return (x1, y1, x2, y2)
 
 
 def _resolve_crop(
@@ -565,7 +520,6 @@ def render_image(
     image: Optional[np.ndarray] = None,
     # Cropping
     crop: CropSpec = None,
-    crop_padding: float = 0.2,
     # Appearance
     color_by: ColorScheme = "auto",
     palette: Union[PaletteName, str] = "glasbey",
@@ -602,9 +556,7 @@ def render_image(
             - **Normalized coordinates** (float tuple in [0.0, 1.0]):
               ``(0.25, 0.25, 0.75, 0.75)`` crops the center 50% of the frame.
               Detection is type-based: all values must be ``float`` and in range.
-            - ``"auto"``: Auto-fit crop around all instances with padding.
             - ``None``: No cropping (default).
-        crop_padding: Padding for auto-crop as fraction of bounding box (default 0.2).
         color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
         palette: Color palette name.
         marker_shape: Node marker shape.
@@ -646,11 +598,7 @@ def render_image(
         >>> img = sio.render_image(lf, background="#404040")
         >>> img = sio.render_image(lf, background=0.25)
 
-        Auto-fit crop around instances:
-
-        >>> img = sio.render_image(lf, crop="auto")
-
-        Explicit crop region (pixel coordinates):
+        Crop to a region (pixel coordinates):
 
         >>> img = sio.render_image(lf, crop=(100, 100, 300, 300))
 
@@ -816,13 +764,8 @@ def render_image(
     render_points = instances_points
     if crop is not None:
         h, w = image.shape[:2]
-        if crop == "auto":
-            crop_bounds = _compute_auto_crop(
-                instances_points, (h, w), padding=crop_padding
-            )
-        else:
-            # Resolve normalized or pixel coordinates
-            crop_bounds = _resolve_crop(crop, (h, w))
+        # Resolve normalized or pixel coordinates
+        crop_bounds = _resolve_crop(crop, (h, w))
 
         render_image_data, render_points, _ = _apply_crop(
             image, instances_points, crop_bounds
@@ -891,6 +834,8 @@ def render_video(
     start: Optional[int] = None,
     end: Optional[int] = None,
     include_unlabeled: bool = False,
+    # Cropping
+    crop: CropSpec = None,
     # Quality/scale
     preset: Optional[Literal["preview", "draft", "final"]] = None,
     scale: float = 1.0,
@@ -929,6 +874,14 @@ def render_video(
         end: End frame index (exclusive).
         include_unlabeled: If True, render all frames in range even if they have
             no LabeledFrame (just shows video frame without poses). Default False.
+        crop: Static crop applied uniformly to all frames. Bounds are
+            (x1, y1, x2, y2) where (x1, y1) is the top-left corner and (x2, y2)
+            is the bottom-right (exclusive). Supports:
+
+            - **Pixel coordinates** (int tuple): ``(100, 100, 300, 300)``
+            - **Normalized coordinates** (float tuple in [0.0, 1.0]):
+              ``(0.25, 0.25, 0.75, 0.75)`` crops the center 50%.
+            - ``None``: No cropping (default).
         preset: Quality preset ('preview'=0.25x, 'draft'=0.5x, 'final'=1.0x).
         scale: Scale factor (overrides preset if both provided).
         color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
@@ -1120,6 +1073,17 @@ def render_video(
         scheme=color_by,
     )
 
+    # Resolve crop bounds once (before the loop)
+    # We need the video shape to resolve normalized coordinates
+    crop_bounds: Optional[tuple[int, int, int, int]] = None
+    if crop is not None:
+        if hasattr(target_video, "shape") and target_video.shape is not None:
+            h, w = target_video.shape[1:3]
+        else:
+            # Fallback: try to get from first frame
+            h, w = 480, 640  # reasonable default
+        crop_bounds = _resolve_crop(crop, (h, w))
+
     # Setup progress
     if show_progress:
         try:
@@ -1167,9 +1131,14 @@ def render_video(
                         "'background=<color>' to render without video."
                     )
 
+            # Apply cropping if specified
+            render_image_data = image
+            if crop_bounds is not None:
+                render_image_data, _, _ = _apply_crop(image, [], crop_bounds)
+
             # Render frame without poses
             rendered = render_frame(
-                frame=image,
+                frame=render_image_data,
                 instances_points=[],
                 edge_inds=edge_inds,
                 node_names=node_names,
@@ -1236,10 +1205,18 @@ def render_video(
                     "'background=<color>' to render without video."
                 )
 
+        # Apply cropping if specified
+        render_image_data = image
+        render_points = instances_points
+        if crop_bounds is not None:
+            render_image_data, render_points, _ = _apply_crop(
+                image, instances_points, crop_bounds
+            )
+
         # Render frame
         rendered = render_frame(
-            frame=image,
-            instances_points=instances_points,
+            frame=render_image_data,
+            instances_points=render_points,
             edge_inds=edge_inds,
             node_names=node_names,
             color_by=resolved_scheme,

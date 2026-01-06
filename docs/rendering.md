@@ -372,6 +372,8 @@ img = sio.render_image(lf, scale=0.25)
 
 Use the `crop` parameter to render a specific region. Bounds are `(x1, y1, x2, y2)` where `(x1, y1)` is the top-left corner and `(x2, y2)` is the bottom-right (exclusive). Origin `(0, 0)` is at the image top-left.
 
+Cropping works for both single images and videos. For videos, the same crop region is applied uniformly to all frames.
+
 **Pixel coordinates** (integer tuple):
 
 ```python
@@ -382,6 +384,9 @@ lf = labels.labeled_frames[0]
 
 # Crop to region (x1, y1, x2, y2) in pixels
 img = sio.render_image(lf, crop=(100, 100, 300, 300))
+
+# Same for video rendering
+sio.render_video(labels, "cropped.mp4", crop=(100, 100, 300, 300))
 ```
 
 ![crop region](assets/rendering/crop_region.png)
@@ -408,20 +413,6 @@ img = sio.render_image(lf, crop=(140, 120, 240, 220), scale=2.0)
 ```
 
 ![zoomed crop](assets/rendering/crop_zoomed.png)
-
-### Auto-fit around instances
-
-Use `crop="auto"` to automatically crop around all instances:
-
-```python
-# Auto-fit with 20% padding (default)
-img = sio.render_image(lf, crop="auto")
-
-# Custom padding (50% of bounding box)
-img = sio.render_image(lf, crop="auto", crop_padding=0.5)
-```
-
-![auto-fit crop](assets/rendering/crop_autofit.png)
 
 ---
 

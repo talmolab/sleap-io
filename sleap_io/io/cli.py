@@ -97,11 +97,10 @@ def _parse_crop_string(
     Args:
         crop_str: Crop string from CLI. Can be:
             - None: No cropping
-            - "auto": Auto-fit around instances
             - "x1,y1,x2,y2": Coordinates (pixels if integers, normalized if floats)
 
     Returns:
-        None, "auto", or (x1, y1, x2, y2) tuple.
+        None or (x1, y1, x2, y2) tuple.
 
     Raises:
         click.ClickException: If crop string format is invalid.
@@ -111,15 +110,12 @@ def _parse_crop_string(
 
     crop_str = crop_str.strip()
 
-    if crop_str.lower() == "auto":
-        return "auto"
-
     # Parse x1,y1,x2,y2 format
     parts = crop_str.split(",")
     if len(parts) != 4:
         raise click.ClickException(
             f"Invalid --crop format: '{crop_str}'. "
-            "Expected 'auto' or 'x1,y1,x2,y2' (e.g., '100,100,300,300' or "
+            "Expected 'x1,y1,x2,y2' (e.g., '100,100,300,300' or "
             "'0.25,0.25,0.75,0.75')."
         )
 
@@ -1720,15 +1716,7 @@ def filenames(
     "crop_str",
     type=str,
     default=None,
-    help="Crop region: 'auto' or 'x1,y1,x2,y2' (pixels or normalized 0.0-1.0).",
-)
-@click.option(
-    "--crop-padding",
-    "crop_padding",
-    type=float,
-    default=0.2,
-    show_default=True,
-    help="Padding for auto-crop as fraction of bounding box.",
+    help="Crop region: 'x1,y1,x2,y2' (pixels or normalized 0.0-1.0).",
 )
 def render(
     input_path: Path,
@@ -1753,7 +1741,6 @@ def render(
     no_nodes: bool,
     no_edges: bool,
     crop_str: Optional[str],
-    crop_padding: float,
 ) -> None:
     """Render pose predictions as video or single image.
 
@@ -1785,15 +1772,13 @@ def render(
 
         $ sio render -i labels.slp --lf 5 -o frame.png       # Explicit output
 
-        [bold]Cropping (single image only):[/]
-
-        $ sio render -i predictions.slp --lf 0 --crop auto   # Auto-fit to instances
+        [bold]Cropping:[/]
 
         $ sio render -i predictions.slp --lf 0 --crop 100,100,300,300  # Pixel crop
 
         $ sio render -i predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75  # Normalized
 
-        $ sio render -i predictions.slp --lf 0 --crop auto --crop-padding 0.3
+        $ sio render -i predictions.slp -o cropped.mp4 --crop 100,100,300,300  # Video
     """
     # Load labels
     try:
@@ -1865,13 +1850,6 @@ def render(
     # Parse crop specification
     crop = _parse_crop_string(crop_str)
 
-    # Warn if crop is used with video mode (not yet supported)
-    if crop is not None and not single_image_mode:
-        raise click.ClickException(
-            "--crop is only supported for single image mode (use --lf or --frame). "
-            "Video cropping is not yet implemented."
-        )
-
     try:
         if single_image_mode:
             # Single image rendering
@@ -1890,7 +1868,6 @@ def render(
                     save_path=output_path,
                     lf_ind=lf_ind,
                     crop=crop,
-                    crop_padding=crop_padding,
                     scale=effective_scale,
                     color_by=color_by,
                     palette=palette,
@@ -1916,7 +1893,6 @@ def render(
                     video=video,
                     frame_idx=frame_idx,
                     crop=crop,
-                    crop_padding=crop_padding,
                     scale=effective_scale,
                     color_by=color_by,
                     palette=palette,
@@ -1935,6 +1911,7 @@ def render(
                 labels,
                 output_path,
                 video=video_ind,
+                crop=crop,
                 scale=effective_scale,
                 fps=fps,
                 crf=crf,

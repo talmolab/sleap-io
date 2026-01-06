@@ -646,36 +646,6 @@ class TestRenderImage:
         assert rendered.shape[1] == 100  # width
         assert rendered.shape[2] == 3
 
-    def test_render_image_crop_auto(self, labels_predictions):
-        """Test render_image with auto crop around instances."""
-        from sleap_io.rendering import render_image
-
-        lf = labels_predictions.labeled_frames[0]
-        frame = lf.video[lf.frame_idx]
-
-        rendered = render_image(lf, image=frame, crop="auto")
-
-        assert isinstance(rendered, np.ndarray)
-        assert rendered.ndim == 3
-        assert rendered.shape[2] == 3
-        # Auto crop should be smaller than full frame
-        assert rendered.shape[0] <= frame.shape[0]
-        assert rendered.shape[1] <= frame.shape[1]
-
-    def test_render_image_crop_auto_with_padding(self, labels_predictions):
-        """Test render_image with auto crop and custom padding."""
-        from sleap_io.rendering import render_image
-
-        lf = labels_predictions.labeled_frames[0]
-        frame = lf.video[lf.frame_idx]
-
-        # Smaller padding should give smaller crop
-        rendered_small = render_image(lf, image=frame, crop="auto", crop_padding=0.1)
-        rendered_large = render_image(lf, image=frame, crop="auto", crop_padding=0.5)
-
-        assert rendered_small.shape[0] <= rendered_large.shape[0]
-        assert rendered_small.shape[1] <= rendered_large.shape[1]
-
     def test_render_image_crop_with_scale(self, labels_predictions):
         """Test render_image with crop and scale combined."""
         from sleap_io.rendering import render_image
@@ -878,6 +848,66 @@ class TestRenderVideo:
 
         # Should have frames in range [start, end)
         assert len(frames) <= (end - start)
+
+    def test_render_video_with_crop(self, labels_predictions):
+        """Test render_video with static crop applied to all frames."""
+        from sleap_io.rendering import render_video
+
+        all_indices = [lf.frame_idx for lf in labels_predictions.labeled_frames]
+        start = min(all_indices)
+        end = min(all_indices) + 2
+
+        # Render without crop
+        frames_full = render_video(
+            labels_predictions,
+            start=start,
+            end=end,
+            show_progress=False,
+        )
+
+        # Render with pixel crop
+        frames_cropped = render_video(
+            labels_predictions,
+            start=start,
+            end=end,
+            crop=(100, 100, 300, 300),
+            show_progress=False,
+        )
+
+        # Cropped frames should have the crop dimensions
+        assert len(frames_cropped) == len(frames_full)
+        for frame in frames_cropped:
+            assert frame.shape[0] == 200  # 300 - 100
+            assert frame.shape[1] == 200  # 300 - 100
+            assert frame.shape[2] == 3
+
+    def test_render_video_with_crop_normalized(self, labels_predictions):
+        """Test render_video with normalized crop coordinates."""
+        from sleap_io.rendering import render_video
+
+        all_indices = [lf.frame_idx for lf in labels_predictions.labeled_frames]
+        start = min(all_indices)
+        end = min(all_indices) + 2
+
+        # Get original frame dimensions
+        lf = labels_predictions.labeled_frames[0]
+        original_frame = lf.video[lf.frame_idx]
+        h, w = original_frame.shape[:2]
+
+        # Render with normalized crop (center 50%)
+        frames = render_video(
+            labels_predictions,
+            start=start,
+            end=end,
+            crop=(0.25, 0.25, 0.75, 0.75),
+            show_progress=False,
+        )
+
+        # Cropped frames should be approximately half size
+        for frame in frames:
+            assert frame.shape[0] == int(0.5 * h)
+            assert frame.shape[1] == int(0.5 * w)
+            assert frame.shape[2] == 3
 
     def test_render_video_progress_callback(self, labels_predictions):
         """Test render_video with progress callback."""
