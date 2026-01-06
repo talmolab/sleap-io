@@ -3376,3 +3376,59 @@ def test_embed_inplace_via_save_slp(tmp_path, slp_real_data):
     assert base_labels.video.filename != original_video_filename
     assert base_labels.video.filename == labels_path
     assert type(base_labels.video.backend) is HDF5Video
+
+
+def test_load_slp_lazy(centered_pair):
+    """Test lazy=True defers instance creation."""
+    labels = load_slp(centered_pair, lazy=True)
+
+    # Should return a Labels object
+    assert type(labels) is Labels
+
+    # Lazy-loaded Labels should have empty labeled_frames
+    assert len(labels.labeled_frames) == 0
+
+    # But should have metadata loaded
+    assert len(labels.videos) > 0
+    assert len(labels.skeletons) > 0
+    assert len(labels.tracks) > 0
+
+    # Should have lazy data populated
+    assert labels._lazy_frames is not None
+    assert labels._lazy_instances is not None
+    assert labels._lazy_pred_points is not None
+    assert labels._lazy_format_id is not None
+
+
+def test_load_slp_lazy_numpy_output(centered_pair):
+    """Test that lazy loading produces correct numpy() output."""
+    # Load with and without lazy
+    labels_normal = load_slp(centered_pair, lazy=False)
+    labels_lazy = load_slp(centered_pair, lazy=True)
+
+    # Get numpy arrays from both
+    arr_normal = labels_normal.numpy()
+    arr_lazy = labels_lazy.numpy()
+
+    # Arrays should have the same shape
+    assert arr_normal.shape == arr_lazy.shape
+
+    # Arrays should have the same values (within floating point tolerance)
+    np.testing.assert_allclose(arr_normal, arr_lazy, rtol=1e-5, equal_nan=True)
+
+
+def test_load_slp_lazy_numpy_with_confidence(centered_pair):
+    """Test lazy loading with return_confidence=True."""
+    labels_normal = load_slp(centered_pair, lazy=False)
+    labels_lazy = load_slp(centered_pair, lazy=True)
+
+    # Get numpy arrays with confidence
+    arr_normal = labels_normal.numpy(return_confidence=True)
+    arr_lazy = labels_lazy.numpy(return_confidence=True)
+
+    # Arrays should have the same shape (including confidence column)
+    assert arr_normal.shape == arr_lazy.shape
+    assert arr_normal.shape[-1] == 3  # x, y, confidence
+
+    # Arrays should have the same values
+    np.testing.assert_allclose(arr_normal, arr_lazy, rtol=1e-5, equal_nan=True)

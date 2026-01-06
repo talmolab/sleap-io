@@ -69,6 +69,13 @@ class Labels:
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
+    # Lazy loading fields (private, for internal use)
+    # These store raw HDF5 data when lazy=True is used in load_slp()
+    _lazy_frames: Optional[np.ndarray] = field(default=None, repr=False)
+    _lazy_instances: Optional[np.ndarray] = field(default=None, repr=False)
+    _lazy_pred_points: Optional[np.ndarray] = field(default=None, repr=False)
+    _lazy_format_id: Optional[float] = field(default=None, repr=False)
+
     def __attrs_post_init__(self):
         """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
         self.update()
@@ -282,6 +289,14 @@ class Labels:
             This method assumes that instances have tracks assigned and is intended to
             function primarily for single-video prediction results.
         """
+        # Fast path: use lazy-loaded raw data if available
+        if self._lazy_pred_points is not None:
+            return self._numpy_from_lazy(
+                video=video,
+                untracked=untracked,
+                return_confidence=return_confidence,
+            )
+
         # Get labeled frames for specified video.
         if video is None:
             video = 0
@@ -421,6 +436,90 @@ class Labels:
                             tracks[i, j, :, 2] = 1.0
 
         return tracks
+
+    def _numpy_from_lazy(
+        self,
+        video: Optional[Union[Video, int]] = None,
+        untracked: bool = False,
+        return_confidence: bool = False,
+    ) -> np.ndarray:
+        """Build numpy array directly from lazy-loaded raw HDF5 data.
+
+        This is a fast path that avoids creating Instance objects by building
+        the output array directly from the raw HDF5 arrays.
+
+        Args:
+            video: Video or video index to convert (only first video supported for now).
+            untracked: If True, don't organize by track (not supported in lazy mode).
+            return_confidence: If True, include confidence scores in output.
+
+        Returns:
+            Array of shape (n_frames, n_tracks, n_nodes, 2) or
+            (n_frames, n_tracks, n_nodes, 3).
+        """
+        # Get raw data from lazy loading
+        frames_data = self._lazy_frames
+        instances_data = self._lazy_instances
+        pred_points = self._lazy_pred_points
+        format_id = self._lazy_format_id
+
+        # Get dimensions
+        n_frames = len(frames_data)
+        n_tracks = len(self.tracks)
+        skeleton = self.skeletons[-1]  # Assume project only uses last skeleton
+        n_nodes = len(skeleton.nodes)
+
+        # Allocate output array
+        n_cols = 3 if return_confidence else 2
+        tracks_arr = np.full(
+            (n_frames, n_tracks, n_nodes, n_cols), np.nan, dtype="float32"
+        )
+
+        # Instance data fields: instance_id, instance_type, frame_id, skeleton, track,
+        #                       from_predicted, score, point_id_start, point_id_end
+        inst_frame_ids = instances_data["frame_id"]
+        inst_tracks = instances_data["track"]
+        inst_point_starts = instances_data["point_id_start"]
+        inst_point_ends = instances_data["point_id_end"]
+
+        # Get point coordinates
+        point_x = pred_points["x"]
+        point_y = pred_points["y"]
+        point_scores = pred_points["score"] if return_confidence else None
+
+        # Apply coordinate system adjustment for legacy formats
+        coord_offset = 0.5 if format_id < 1.1 else 0.0
+
+        # Fill in the array
+        for inst_idx in range(len(instances_data)):
+            frame_id = inst_frame_ids[inst_idx]
+            track_id = inst_tracks[inst_idx]
+
+            if track_id < 0 or track_id >= n_tracks:
+                continue  # Skip untracked instances
+
+            if frame_id < 0 or frame_id >= n_frames:
+                continue
+
+            p_start = inst_point_starts[inst_idx]
+            p_end = inst_point_ends[inst_idx]
+            n_pts = min(p_end - p_start, n_nodes)
+
+            # Fill x, y coordinates
+            tracks_arr[frame_id, track_id, :n_pts, 0] = (
+                point_x[p_start : p_start + n_pts] - coord_offset
+            )
+            tracks_arr[frame_id, track_id, :n_pts, 1] = (
+                point_y[p_start : p_start + n_pts] - coord_offset
+            )
+
+            # Fill confidence scores if requested
+            if return_confidence and point_scores is not None:
+                tracks_arr[frame_id, track_id, :n_pts, 2] = point_scores[
+                    p_start : p_start + n_pts
+                ]
+
+        return tracks_arr
 
     @classmethod
     def from_numpy(
