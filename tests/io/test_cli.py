@@ -2352,6 +2352,7 @@ def test_render_conflicting_options(centered_pair, tmp_path):
             "-o",
             str(output_path),
         ],
+        env={"NO_COLOR": "1"},  # Disable Rich colors for consistent output
     )
     assert result.exit_code != 0
     assert "Cannot use --start/--end with --lf" in result.output
@@ -2375,6 +2376,7 @@ def test_render_conflicting_lf_and_frame(centered_pair, tmp_path):
             "-o",
             str(output_path),
         ],
+        env={"NO_COLOR": "1"},  # Disable Rich colors for consistent output
     )
     assert result.exit_code != 0
     assert "Cannot use both --lf and --frame" in result.output
