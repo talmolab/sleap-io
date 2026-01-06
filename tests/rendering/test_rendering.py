@@ -48,12 +48,12 @@ class TestColors:
         colors = get_palette("cool", 20)
         assert len(colors) == 20
 
-    def test_get_palette_unknown_fallback(self):
-        """Test that unknown palette falls back to distinct."""
+    def test_get_palette_unknown_raises(self):
+        """Test that unknown palette raises ValueError."""
         from sleap_io.rendering.colors import get_palette
 
-        colors = get_palette("unknown_palette", 5)
-        assert len(colors) == 5
+        with pytest.raises(ValueError, match="Unknown palette"):
+            get_palette("unknown_palette", 5)
 
     def test_rgb_to_skia_color(self):
         """Test RGB to Skia color conversion."""
@@ -186,14 +186,13 @@ class TestColors:
         with pytest.raises(TypeError):
             resolve_color(["list", "not", "valid"])
 
-    def test_resolve_color_unknown_palette_falls_back(self):
-        """Test resolve_color with unknown palette falls back to distinct."""
-        from sleap_io.rendering.colors import get_palette, resolve_color
+    def test_resolve_color_unknown_palette_raises(self):
+        """Test resolve_color with unknown palette raises ValueError."""
+        from sleap_io.rendering.colors import resolve_color
 
-        # Unknown palette in palette[n] format should fall back to distinct
-        result = resolve_color("unknown_palette[0]")
-        distinct_colors = get_palette("distinct", 1)
-        assert result == distinct_colors[0]
+        # Unknown palette in palette[n] format should raise ValueError
+        with pytest.raises(ValueError, match="Invalid palette index"):
+            resolve_color("unknown_palette[0]")
 
     def test_build_color_map_track_without_indices(self):
         """Test build_color_map for track scheme without track_indices."""
