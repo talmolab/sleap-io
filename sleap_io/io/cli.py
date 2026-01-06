@@ -956,11 +956,16 @@ def _print_provenance(labels: Labels) -> None:
     "video",
     "--video",
     "-v",
-    is_flag=False,
-    flag_value=-1,
-    default=None,
+    is_flag=True,
+    help="Print detailed video info (opens backends by default).",
+)
+@click.option(
+    "video_index",
+    "--video-index",
+    "--vi",
     type=int,
-    help="Print detailed video info. Optional: specify video index (0-based).",
+    default=None,
+    help="Show only video at this index (0-based). Implies --video.",
 )
 @click.option(
     "tracks",
@@ -988,7 +993,8 @@ def show(
     open_videos: Optional[bool],
     lf_index: Optional[int],
     skeleton: bool,
-    video: Optional[int],
+    video: bool,
+    video_index: Optional[int],
     tracks: bool,
     provenance: bool,
     show_all: bool,
@@ -1007,10 +1013,14 @@ def show(
         $ sio show labels.slp --lf 0
         $ sio show labels.slp --all
     """
+    # --video-index implies --video
+    if video_index is not None:
+        video = True
+
     # Expand --all flag
     if show_all:
         skeleton = True
-        video = -1  # Show all videos
+        video = True
         tracks = True
         provenance = True
 
@@ -1018,7 +1028,7 @@ def show(
     # - If explicitly set via --open-videos or --no-open-videos, use that
     # - Otherwise, open videos only when -v or --all is used
     if open_videos is None:
-        open_videos = video is not None or show_all
+        open_videos = video or show_all
     obj = io_main.load_file(str(path), open_videos=open_videos)
 
     if isinstance(obj, Labels):
@@ -1027,7 +1037,7 @@ def show(
         console.print()
 
         # Determine if we're showing detailed views
-        show_details = skeleton or video is not None or tracks or lf_index is not None
+        show_details = skeleton or video or tracks or lf_index is not None
 
         if not show_details:
             # Default: show compact summaries
@@ -1040,9 +1050,9 @@ def show(
                 console.print("[bold]Skeleton Details[/]")
                 _print_skeleton_details(obj)
 
-            if video is not None:
+            if video:
                 console.print("[bold]Video Details[/]")
-                _print_video_details(obj, video_index=video)
+                _print_video_details(obj, video_index=video_index)
 
             if tracks:
                 console.print("[bold]Tracks[/]")

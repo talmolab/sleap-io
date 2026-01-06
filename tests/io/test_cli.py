@@ -319,11 +319,13 @@ def test_show_multiview_videos():
 
 
 def test_show_video_index_specific():
-    """Test -v with index shows only that video."""
+    """Test --video-index shows only that video."""
     runner = CliRunner()
     path = _data_path("slp/multiview.slp")
     # Show only video 1
-    result = runner.invoke(cli, ["show", str(path), "-v", "1", "--no-open-videos"])
+    result = runner.invoke(
+        cli, ["show", str(path), "--video-index", "1", "--no-open-videos"]
+    )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show video 1
@@ -334,10 +336,12 @@ def test_show_video_index_specific():
 
 
 def test_show_video_index_out_of_range():
-    """Test -v with out-of-range index gives clear error."""
+    """Test --video-index with out-of-range index gives clear error."""
     runner = CliRunner()
     path = _data_path("slp/multiview.slp")
-    result = runner.invoke(cli, ["show", str(path), "-v", "99", "--no-open-videos"])
+    result = runner.invoke(
+        cli, ["show", str(path), "--video-index", "99", "--no-open-videos"]
+    )
     assert result.exit_code == 1
     out = _strip_ansi(result.output)
     assert "out of range" in out
@@ -345,14 +349,27 @@ def test_show_video_index_out_of_range():
 
 
 def test_show_video_index_first_video():
-    """Test -v 0 shows first video."""
+    """Test --video-index 0 shows first video."""
     runner = CliRunner()
     path = _data_path("slp/multiview.slp")
-    result = runner.invoke(cli, ["show", str(path), "-v", "0", "--no-open-videos"])
+    result = runner.invoke(
+        cli, ["show", str(path), "--video-index", "0", "--no-open-videos"]
+    )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     assert "Video 0:" in out
     assert "Video 1:" not in out
+
+
+def test_show_video_index_short_form():
+    """Test --vi short form for video-index."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    result = runner.invoke(cli, ["show", str(path), "--vi", "2", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Video 2:" in out
+    assert "Video 0:" not in out
 
 
 def test_show_header_shows_file_size():

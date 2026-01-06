@@ -71,7 +71,7 @@ sio --version
 sio show labels.slp                    # Basic summary
 sio show labels.slp --skeleton         # Detailed skeleton info
 sio show labels.slp --video            # Detailed video info (all videos)
-sio show labels.slp -v 0               # Show specific video by index
+sio show labels.slp --vi 0             # Show specific video by index
 sio show labels.slp --tracks           # Track details
 sio show labels.slp --provenance       # Metadata/provenance
 sio show labels.slp --all              # Everything
@@ -169,7 +169,8 @@ The default view shows:
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--skeleton` | `-s` | Show detailed skeleton tables (nodes, edges, symmetries) |
-| `--video [N]` | `-v [N]` | Show detailed video info. Optional: specify video index (0-based) |
+| `--video` | `-v` | Show detailed video info (opens backends by default) |
+| `--video-index N` | `--vi N` | Show only video at index N (0-based). Implies --video |
 | `--tracks` | `-t` | Show track table with instance counts per track |
 | `--provenance` | `-p` | Show provenance/metadata from the file |
 | `--all` | `-a` | Show all details (combines all flags above) |
@@ -178,7 +179,7 @@ The default view shows:
 | `--no-open-videos` | | Don't open video backends (overrides -v default) |
 
 !!! tip "Viewing a specific video"
-    Use `-v N` to show only a specific video by its index. For example, `sio show labels.slp -v 0` shows only the first video, while `sio show labels.slp -v` shows all videos.
+    Use `--video-index N` (or `--vi N`) to show only a specific video by its index. For example, `sio show labels.slp --vi 0` shows only the first video, while `sio show labels.slp -v` shows all videos.
 
 #### Detailed Skeleton View
 
@@ -223,7 +224,9 @@ Symmetries:
 ```bash
 sio show labels.slp --video
 # Or show a specific video by index:
-sio show labels.slp -v 0
+sio show labels.slp --video-index 0
+# Short form:
+sio show labels.slp --vi 0
 ```
 
 Shows comprehensive video information including backend status:
