@@ -2272,7 +2272,7 @@ The <code>[all]</code> extra installs faster video backends (OpenCV, PyAV) for i
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w">                    </span><span class="c1"># Basic summary</span>
 <a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--skeleton<span class="w">         </span><span class="c1"># Detailed skeleton info</span>
 <a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--video<span class="w">            </span><span class="c1"># Detailed video info (all videos)</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>-v<span class="w"> </span><span class="m">0</span><span class="w">               </span><span class="c1"># Show specific video by index</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--vi<span class="w"> </span><span class="m">0</span><span class="w">             </span><span class="c1"># Show specific video by index</span>
 <a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--tracks<span class="w">           </span><span class="c1"># Track details</span>
 <a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--provenance<span class="w">       </span><span class="c1"># Metadata/provenance</span>
 <a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--all<span class="w">              </span><span class="c1"># Everything</span>
@@ -2368,9 +2368,14 @@ The <code>[all]</code> extra installs faster video backends (OpenCV, PyAV) for i
 <td>Show detailed skeleton tables (nodes, edges, symmetries)</td>
 </tr>
 <tr>
-<td><code>--video [N]</code></td>
-<td><code>-v [N]</code></td>
-<td>Show detailed video info. Optional: specify video index (0-based)</td>
+<td><code>--video</code></td>
+<td><code>-v</code></td>
+<td>Show detailed video info (opens backends by default)</td>
+</tr>
+<tr>
+<td><code>--video-index N</code></td>
+<td><code>--vi N</code></td>
+<td>Show only video at index N (0-based). Implies --video</td>
 </tr>
 <tr>
 <td><code>--tracks</code></td>
@@ -2406,7 +2411,7 @@ The <code>[all]</code> extra installs faster video backends (OpenCV, PyAV) for i
 </table>
 <div class="admonition tip">
 <p class="admonition-title">Viewing a specific video</p>
-<p>Use <code>-v N</code> to show only a specific video by its index. For example, <code>sio show labels.slp -v 0</code> shows only the first video, while <code>sio show labels.slp -v</code> shows all videos.</p>
+<p>Use <code>--video-index N</code> (or <code>--vi N</code>) to show only a specific video by its index. For example, <code>sio show labels.slp --vi 0</code> shows only the first video, while <code>sio show labels.slp -v</code> shows all videos.</p>
 </div>
 <h4 id="detailed-skeleton-view">Detailed Skeleton View<a class="headerlink" href="#detailed-skeleton-view" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--skeleton
@@ -2443,7 +2448,9 @@ The <code>[all]</code> extra installs faster video backends (OpenCV, PyAV) for i
 <h4 id="detailed-video-view">Detailed Video View<a class="headerlink" href="#detailed-video-view" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--video
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Or show a specific video by index:</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>-v<span class="w"> </span><span class="m">0</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--video-index<span class="w"> </span><span class="m">0</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Short form:</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--vi<span class="w"> </span><span class="m">0</span>
 </code></pre></div>
 <p>Shows comprehensive video information including backend status:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Video 0: video.mp4
