@@ -4,8 +4,166 @@ import numpy as np
 import pytest
 
 import sleap_io as sio
+from sleap_io.io.slp import InstanceType
 from sleap_io.io.slp_lazy import LazyDataStore, LazyFrameList
 from sleap_io.model.labeled_frame import LabeledFrame  # noqa: F401
+from sleap_io.model.skeleton import Skeleton
+
+# === LazyDataStore Validation Tests ===
+
+
+class TestLazyDataStoreValidation:
+    """Tests for LazyDataStore validation logic."""
+
+    def _make_minimal_store(
+        self,
+        n_frames=1,
+        n_instances=1,
+        n_points=2,
+        n_pred_points=2,
+        frame_inst_start=0,
+        frame_inst_end=1,
+        inst_point_start=0,
+        inst_point_end=2,
+        inst_type=InstanceType.USER,
+        skeleton=None,
+    ):
+        """Helper to create a LazyDataStore with controlled data."""
+        # Create minimal skeleton
+        if skeleton is None:
+            skeleton = Skeleton(name="test", nodes=["a", "b"])
+
+        # Create frames_data
+        frames_dtype = np.dtype(
+            [
+                ("frame_id", "<i8"),
+                ("video", "<i8"),
+                ("frame_idx", "<u8"),
+                ("instance_id_start", "<u8"),
+                ("instance_id_end", "<u8"),
+            ]
+        )
+        frames_data = np.zeros(n_frames, dtype=frames_dtype)
+        if n_frames > 0:
+            frames_data[0] = (0, 0, 0, frame_inst_start, frame_inst_end)
+
+        # Create instances_data
+        instances_dtype = np.dtype(
+            [
+                ("instance_id", "<i8"),
+                ("instance_type", "<u1"),
+                ("frame_id", "<i8"),
+                ("skeleton", "<i4"),
+                ("track", "<i4"),
+                ("from_predicted", "<i8"),
+                ("instance_score", "<f8"),
+                ("point_id_start", "<u8"),
+                ("point_id_end", "<u8"),
+                ("tracking_score", "<f8"),
+            ]
+        )
+        instances_data = np.zeros(n_instances, dtype=instances_dtype)
+        if n_instances > 0:
+            instances_data[0] = (
+                0,
+                int(inst_type),
+                0,
+                0,
+                -1,
+                -1,
+                1.0,
+                inst_point_start,
+                inst_point_end,
+                0.0,
+            )
+
+        # Create points_data
+        points_dtype = np.dtype(
+            [("x", "<f8"), ("y", "<f8"), ("visible", "?"), ("complete", "?")]
+        )
+        points_data = np.zeros(n_points, dtype=points_dtype)
+        for i in range(n_points):
+            points_data[i] = (float(i), float(i), True, True)
+
+        # Create pred_points_data
+        pred_points_dtype = np.dtype(
+            [
+                ("x", "<f8"),
+                ("y", "<f8"),
+                ("visible", "?"),
+                ("complete", "?"),
+                ("score", "<f8"),
+            ]
+        )
+        pred_points_data = np.zeros(n_pred_points, dtype=pred_points_dtype)
+        for i in range(n_pred_points):
+            pred_points_data[i] = (float(i), float(i), True, True, 1.0)
+
+        return LazyDataStore(
+            frames_data=frames_data,
+            instances_data=instances_data,
+            pred_points_data=pred_points_data,
+            points_data=points_data,
+            videos=[],
+            skeletons=[skeleton],
+            tracks=[],
+            format_id=1.2,
+            source_path=None,
+        )
+
+    def test_validate_empty_frames_data(self):
+        """Validation passes for empty frames_data (early return)."""
+        store = self._make_minimal_store(n_frames=0, n_instances=0)
+        # Should not raise - empty data is valid
+        store.validate()
+
+    def test_validate_frames_with_no_instances(self):
+        """Validation passes for frames with no instances."""
+        store = self._make_minimal_store(
+            n_frames=1, n_instances=0, frame_inst_start=0, frame_inst_end=0
+        )
+        # Should not raise - no instances means no point validation needed
+        store.validate()
+
+    def test_validate_invalid_instance_bounds(self):
+        """Validation raises ValueError for out-of-bounds instance references."""
+        with pytest.raises(ValueError, match="Frame references instance index"):
+            # Frame references instance index 5 but only 1 instance exists
+            self._make_minimal_store(
+                n_frames=1,
+                n_instances=1,
+                frame_inst_start=0,
+                frame_inst_end=5,  # Out of bounds!
+            )
+
+    def test_validate_invalid_user_point_bounds(self):
+        """Validation raises ValueError for out-of-bounds user point references."""
+        with pytest.raises(ValueError, match="User instance references point index"):
+            # User instance references point index 10 but only 2 points exist
+            self._make_minimal_store(
+                n_frames=1,
+                n_instances=1,
+                n_points=2,
+                inst_point_start=0,
+                inst_point_end=10,  # Out of bounds!
+                inst_type=InstanceType.USER,
+            )
+
+    def test_validate_invalid_pred_point_bounds(self):
+        """Validation raises ValueError for out-of-bounds pred_point references."""
+        with pytest.raises(
+            ValueError, match="Predicted instance references pred_point index"
+        ):
+            # Predicted instance references pred_point index 10 but only 2 exist
+            self._make_minimal_store(
+                n_frames=1,
+                n_instances=1,
+                n_pred_points=2,
+                inst_point_start=0,
+                inst_point_end=10,  # Out of bounds!
+                inst_type=InstanceType.PREDICTED,
+            )
+
 
 # === LazyDataStore Tests ===
 
@@ -883,3 +1041,110 @@ class TestLazyLoadingIntegration:
         for lf in labels.labeled_frames:
             _ = lf.frame_idx
             break  # Just test first frame
+
+
+# === Additional Edge Case Tests ===
+
+
+class TestLazyNumpyEdgeCases:
+    """Tests for edge cases in LazyDataStore.to_numpy()."""
+
+    def test_numpy_tracked_mode_with_predictions(self, centered_pair):
+        """Test tracked mode with prediction file (has tracks)."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        # Default mode should use tracked organization when tracks exist
+        lazy_arr = lazy.numpy()
+        eager_arr = eager.numpy()
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_user_instances_false_tracked_mode(self, centered_pair):
+        """Test user_instances=False with tracked mode."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        # user_instances=False should only include predicted instances
+        lazy_arr = lazy.numpy(user_instances=False)
+        eager_arr = eager.numpy(user_instances=False)
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_untracked_with_predictions(self, centered_pair):
+        """Test untracked mode with prediction file."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        lazy_arr = lazy.numpy(untracked=True)
+        eager_arr = eager.numpy(untracked=True)
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_all_params_combined_predictions(self, centered_pair):
+        """Test all numpy params combined with prediction file."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        lazy_arr = lazy.numpy(
+            untracked=True, return_confidence=True, user_instances=False
+        )
+        eager_arr = eager.numpy(
+            untracked=True, return_confidence=True, user_instances=False
+        )
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+
+class TestLazyUserFrameIndices:
+    """Tests for LazyDataStore.get_user_frame_indices()."""
+
+    def test_get_user_frame_indices_with_user_instances(self, slp_real_data):
+        """get_user_frame_indices returns frame indices with user instances."""
+        labels = sio.load_slp(slp_real_data, lazy=True)
+        store = labels._lazy_store
+
+        indices = store.get_user_frame_indices()
+        assert isinstance(indices, list)
+        # Should return sorted list
+        assert indices == sorted(indices)
+
+    def test_get_user_frame_indices_predictions_only(self, centered_pair):
+        """get_user_frame_indices on predictions-only file."""
+        labels = sio.load_slp(centered_pair, lazy=True)
+        store = labels._lazy_store
+
+        # Check if there are any user instances
+        indices = store.get_user_frame_indices()
+
+        # This file may or may not have user instances
+        # Just verify the return type and that it doesn't crash
+        assert isinstance(indices, list)
+
+
+class TestLazyEmptyFrameList:
+    """Tests for LazyFrameList with empty or minimal data."""
+
+    def test_lazy_frame_list_empty_slice(self, slp_real_data):
+        """Empty slice returns empty list."""
+        labels = sio.load_slp(slp_real_data, lazy=True)
+        # Slice that returns nothing
+        result = labels.labeled_frames[100:100]
+        assert result == []
+
+    def test_lazy_frame_list_step_slice(self, slp_real_data):
+        """Step slicing works correctly."""
+        labels = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        # Slice with step
+        lazy_frames = labels.labeled_frames[0:6:2]
+        eager_frames = eager.labeled_frames[0:6:2]
+
+        assert len(lazy_frames) == len(eager_frames)
+        for lf, ef in zip(lazy_frames, eager_frames):
+            assert lf.frame_idx == ef.frame_idx
