@@ -51,6 +51,10 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         # Video writing from sleap_io.io.video_writing
         "io.video_writing": ["VideoWriter"],
+        # Rendering from sleap_io.rendering
+        "rendering.core": ["render_video", "render_image"],
+        "rendering.colors": ["get_palette"],
+        "rendering.callbacks": ["RenderContext", "InstanceContext"],
         # Model classes from sleap_io.model.*
         "model.camera": [
             "Camera",

@@ -44,6 +44,7 @@ click.rich_click.COMMAND_GROUPS = {
     "sio": [
         {"name": "Inspection", "commands": ["show", "filenames"]},
         {"name": "Transformation", "commands": ["convert", "split"]},
+        {"name": "Rendering", "commands": ["render"]},
     ]
 }
 
@@ -88,6 +89,55 @@ def _get_package_version(package: str) -> str:
         return "not installed"
 
 
+def _parse_crop_string(
+    crop_str: Optional[str],
+) -> Optional[tuple]:
+    """Parse crop string from CLI into crop specification.
+
+    Args:
+        crop_str: Crop string from CLI. Can be:
+            - None: No cropping
+            - "x1,y1,x2,y2": Coordinates (pixels if integers, normalized if floats)
+
+    Returns:
+        None or (x1, y1, x2, y2) tuple.
+
+    Raises:
+        click.ClickException: If crop string format is invalid.
+    """
+    if crop_str is None:
+        return None
+
+    crop_str = crop_str.strip()
+
+    # Parse x1,y1,x2,y2 format
+    parts = crop_str.split(",")
+    if len(parts) != 4:
+        raise click.ClickException(
+            f"Invalid --crop format: '{crop_str}'. "
+            "Expected 'x1,y1,x2,y2' (e.g., '100,100,300,300' or "
+            "'0.25,0.25,0.75,0.75')."
+        )
+
+    try:
+        # Check if any value contains a decimal point -> treat as normalized floats
+        if any("." in p for p in parts):
+            values = tuple(float(p.strip()) for p in parts)
+            # Validate normalized range
+            if not all(0.0 <= v <= 1.0 for v in values):
+                raise click.ClickException(
+                    f"Normalized crop values must be in [0.0, 1.0] range. Got: {values}"
+                )
+        else:
+            values = tuple(int(p.strip()) for p in parts)
+    except ValueError as e:
+        raise click.ClickException(
+            f"Invalid --crop values: '{crop_str}'. Values must be numbers. Error: {e}"
+        )
+
+    return values
+
+
 def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
     """Print version info with plugin status and exit."""
     if not value or ctx.resilient_parsing:
@@ -102,9 +152,11 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     lines.append(f"  numpy: {_get_package_version('numpy')}")
     lines.append(f"  h5py: {_get_package_version('h5py')}")
     lines.append(f"  imageio: {_get_package_version('imageio')}")
+    lines.append(f"  skia-python: {_get_package_version('skia-python')}")
+    lines.append(f"  colorcet: {_get_package_version('colorcet')}")
     lines.append("")
 
-    # Video plugins
+    # Video plugins (optional)
     lines.append("Video plugins:")
     lines.append(f"  opencv: {_get_package_version('opencv-python')}")
     lines.append(f"  pyav: {_get_package_version('av')}")
@@ -1596,3 +1648,380 @@ def filenames(
     mode_name = "list" if new_filenames else "map" if filename_map else "prefix"
     click.echo(f"Replaced filenames in {n_videos} video(s) using {mode_name} mode")
     click.echo(f"Saved: {output_path}")
+
+
+@cli.command()
+@click.option(
+    "-i",
+    "--input",
+    "input_path",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input labels file (.slp, .nwb, etc.).",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Output path. Default: {input}.viz.mp4 (video), {input}.lf={N}.png (image).",
+)
+# Frame selection options
+@click.option(
+    "--lf",
+    "lf_ind",
+    type=int,
+    default=None,
+    help="Render single labeled frame by index. Outputs PNG image.",
+)
+@click.option(
+    "--frame",
+    "frame_idx",
+    type=int,
+    default=None,
+    help="Render frame by video frame index (with --video). Outputs PNG.",
+)
+@click.option(
+    "--start",
+    "start_frame_idx",
+    type=int,
+    default=None,
+    help="Start frame index for video (0-based, inclusive).",
+)
+@click.option(
+    "--end",
+    "end_frame_idx",
+    type=int,
+    default=None,
+    help="End frame index for video (0-based, exclusive). Default: last labeled frame.",
+)
+@click.option(
+    "--video",
+    "video_ind",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Video index for multi-video labels.",
+)
+@click.option(
+    "--all-frames/--labeled-only",
+    "all_frames",
+    default=None,
+    help="Render all frames (--all-frames) or only labeled (--labeled-only). "
+    "Default: --all-frames for single-video files.",
+)
+# Quality options
+@click.option(
+    "--preset",
+    type=click.Choice(["preview", "draft", "final"]),
+    default=None,
+    help="Quality preset: preview=0.25x, draft=0.5x, final=1.0x scale. Default: 1.0x.",
+)
+@click.option(
+    "--scale",
+    type=float,
+    default=None,
+    help="Scale factor (overrides --preset). Default: 1.0.",
+)
+@click.option(
+    "--fps",
+    type=float,
+    default=None,
+    help="Output video FPS. Default: source video FPS.",
+)
+@click.option(
+    "--crf",
+    type=int,
+    default=25,
+    show_default=True,
+    help="Video quality (2-32, lower=better quality, larger file).",
+)
+@click.option(
+    "--x264-preset",
+    "x264_preset",
+    type=click.Choice(
+        ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"]
+    ),
+    default="superfast",
+    show_default=True,
+    help="H.264 encoding speed/compression trade-off.",
+)
+# Appearance options
+@click.option(
+    "--color-by",
+    type=click.Choice(["auto", "track", "instance", "node"]),
+    default="auto",
+    show_default=True,
+    help="Color scheme: auto (smart default), track, instance, or node.",
+)
+@click.option(
+    "--palette",
+    type=str,
+    default="glasbey",
+    show_default=True,
+    help="Color palette (glasbey, tableau10, distinct, rainbow, etc.).",
+)
+@click.option(
+    "--marker-shape",
+    type=click.Choice(["circle", "square", "diamond", "triangle", "cross"]),
+    default="circle",
+    show_default=True,
+    help="Node marker shape.",
+)
+@click.option(
+    "--marker-size",
+    type=float,
+    default=4.0,
+    show_default=True,
+    help="Node marker radius in pixels.",
+)
+@click.option(
+    "--line-width",
+    type=float,
+    default=2.0,
+    show_default=True,
+    help="Edge line width in pixels.",
+)
+@click.option(
+    "--alpha",
+    type=float,
+    default=1.0,
+    show_default=True,
+    help="Pose overlay transparency (0.0-1.0).",
+)
+@click.option(
+    "--no-nodes",
+    is_flag=True,
+    default=False,
+    help="Hide node markers. Default: show nodes.",
+)
+@click.option(
+    "--no-edges",
+    is_flag=True,
+    default=False,
+    help="Hide skeleton edges. Default: show edges.",
+)
+# Crop options
+@click.option(
+    "--crop",
+    "crop_str",
+    type=str,
+    default=None,
+    help="Crop region: 'x1,y1,x2,y2' (pixels or normalized 0.0-1.0).",
+)
+def render(
+    input_path: Path,
+    output_path: Optional[Path],
+    lf_ind: Optional[int],
+    frame_idx: Optional[int],
+    start_frame_idx: Optional[int],
+    end_frame_idx: Optional[int],
+    video_ind: int,
+    all_frames: Optional[bool],
+    preset: Optional[str],
+    scale: Optional[float],
+    fps: Optional[float],
+    crf: int,
+    x264_preset: str,
+    color_by: str,
+    palette: str,
+    marker_shape: str,
+    marker_size: float,
+    line_width: float,
+    alpha: float,
+    no_nodes: bool,
+    no_edges: bool,
+    crop_str: Optional[str],
+) -> None:
+    """Render pose predictions as video or single image.
+
+    [bold]Video mode[/] (default): Renders all labeled frames to a video file.
+
+    [bold]Image mode[/]: Renders a single frame to PNG using --lf or --frame.
+
+    [dim]Examples:[/]
+
+        [bold]Video rendering:[/]
+
+        $ sio render -i predictions.slp                      # -> predictions.viz.mp4
+
+        $ sio render -i predictions.slp -o output.mp4        # Explicit output
+
+        $ sio render -i predictions.slp --preset preview     # Fast 0.25x preview
+
+        $ sio render -i predictions.slp --start 100 --end 200
+
+        $ sio render -i predictions.slp --fps 15             # Slow motion
+
+        $ sio render -i predictions.slp --all-frames         # Include unlabeled frames
+
+        [bold]Single image rendering:[/]
+
+        $ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
+
+        $ sio render -i predictions.slp --frame 42           # -> *.frame=42.png
+
+        $ sio render -i labels.slp --lf 5 -o frame.png       # Explicit output
+
+        [bold]Cropping:[/]
+
+        $ sio render -i predictions.slp --lf 0 --crop 100,100,300,300  # Pixel crop
+
+        $ sio render -i predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75  # Normalized
+
+        $ sio render -i predictions.slp -o cropped.mp4 --crop 100,100,300,300  # Video
+    """
+    # Load labels
+    try:
+        labels = io_main.load_file(str(input_path), open_videos=True)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input is not a labels file (got {type(labels).__name__})"
+        )
+
+    # Determine render mode: single image vs video
+    single_image_mode = lf_ind is not None or frame_idx is not None
+
+    # Detect single-video prediction file and auto-enable --all-frames
+    # This is the common "pure prediction" case where every frame has predictions
+    effective_all_frames = all_frames  # May be None, True, or False
+    if not single_image_mode and all_frames is None:
+        is_single_video = len(labels.videos) == 1
+        if is_single_video:
+            # Check if all labeled frames are from this video
+            target_video = (
+                labels.videos[video_ind] if video_ind < len(labels.videos) else None
+            )
+            all_from_same_video = all(
+                lf.video == target_video for lf in labels.labeled_frames
+            )
+            if all_from_same_video:
+                # Auto-enable all_frames for single-video prediction files
+                effective_all_frames = True
+    # Default to False if not auto-detected
+    if effective_all_frames is None:
+        effective_all_frames = False
+
+    # Validate conflicting options
+    if single_image_mode and (start_frame_idx is not None or end_frame_idx is not None):
+        raise click.ClickException(
+            "Cannot use --start/--end with --lf or --frame. "
+            "Use --lf for single image or omit it for video."
+        )
+
+    if lf_ind is not None and frame_idx is not None:
+        raise click.ClickException("Cannot use both --lf and --frame. Choose one.")
+
+    # Determine output path
+    if output_path is None:
+        input_stem = input_path.stem
+        if single_image_mode:
+            if lf_ind is not None:
+                output_path = input_path.with_name(f"{input_stem}.lf={lf_ind}.png")
+            else:
+                output_path = input_path.with_name(
+                    f"{input_stem}.video={video_ind}.frame={frame_idx}.png"
+                )
+        else:
+            output_path = input_path.with_suffix(".viz.mp4")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Handle scale/preset
+    effective_scale = 1.0
+    if scale is not None:
+        effective_scale = scale
+    elif preset is not None:
+        preset_scales = {"preview": 0.25, "draft": 0.5, "final": 1.0}
+        effective_scale = preset_scales.get(preset, 1.0)
+
+    # Parse crop specification
+    crop = _parse_crop_string(crop_str)
+
+    try:
+        if single_image_mode:
+            # Single image rendering
+            from sleap_io.rendering import render_image
+
+            if lf_ind is not None:
+                # Render by labeled frame index
+                if lf_ind < 0 or lf_ind >= len(labels.labeled_frames):
+                    n_lf = len(labels.labeled_frames)
+                    raise click.ClickException(
+                        f"--lf {lf_ind} out of range. "
+                        f"Labels has {n_lf} labeled frames (0-{n_lf - 1})."
+                    )
+                render_image(
+                    labels,
+                    save_path=output_path,
+                    lf_ind=lf_ind,
+                    crop=crop,
+                    scale=effective_scale,
+                    color_by=color_by,
+                    palette=palette,
+                    marker_shape=marker_shape,
+                    marker_size=marker_size,
+                    line_width=line_width,
+                    alpha=alpha,
+                    show_nodes=not no_nodes,
+                    show_edges=not no_edges,
+                )
+            else:
+                # Render by video + frame_idx
+                if video_ind >= len(labels.videos):
+                    n_vid = len(labels.videos)
+                    raise click.ClickException(
+                        f"--video {video_ind} out of range. "
+                        f"Labels has {n_vid} videos (0-{n_vid - 1})."
+                    )
+                video = labels.videos[video_ind]
+                render_image(
+                    labels,
+                    save_path=output_path,
+                    video=video,
+                    frame_idx=frame_idx,
+                    crop=crop,
+                    scale=effective_scale,
+                    color_by=color_by,
+                    palette=palette,
+                    marker_shape=marker_shape,
+                    marker_size=marker_size,
+                    line_width=line_width,
+                    alpha=alpha,
+                    show_nodes=not no_nodes,
+                    show_edges=not no_edges,
+                )
+        else:
+            # Video rendering
+            from sleap_io.rendering import render_video
+
+            render_video(
+                labels,
+                output_path,
+                video=video_ind,
+                crop=crop,
+                scale=effective_scale,
+                fps=fps,
+                crf=crf,
+                x264_preset=x264_preset,
+                color_by=color_by,
+                palette=palette,
+                marker_shape=marker_shape,
+                marker_size=marker_size,
+                line_width=line_width,
+                alpha=alpha,
+                show_nodes=not no_nodes,
+                show_edges=not no_edges,
+                start=start_frame_idx,
+                end=end_frame_idx,
+                include_unlabeled=effective_all_frames,
+                show_progress=True,
+            )
+    except Exception as e:
+        raise click.ClickException(f"Failed to render: {e}")
+
+    click.echo(f"Rendered: {input_path} -> {output_path}")

@@ -35,7 +35,9 @@ dependencies = [
     "tqdm",
     "pyyaml",
     "rich_click",
-    "lazy-loader>=0.4"]
+    "lazy-loader>=0.4",
+    "skia-python>=87.0",
+    "colorcet>=3.0"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
