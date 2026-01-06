@@ -13,6 +13,10 @@
          <lastmod>2026-01-06</lastmod>
     </url>
     <url>
+         <loc>https://io.sleap.ai/dev/codecs/</loc>
+         <lastmod>2026-01-06</lastmod>
+    </url>
+    <url>
          <loc>https://io.sleap.ai/dev/examples/</loc>
          <lastmod>2026-01-06</lastmod>
     </url>
@@ -38,6 +42,22 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/version/</loc>
+         <lastmod>2026-01-06</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/</loc>
+         <lastmod>2026-01-06</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/dataframe/</loc>
+         <lastmod>2026-01-06</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/dictionary/</loc>
+         <lastmod>2026-01-06</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/codecs/numpy/</loc>
          <lastmod>2026-01-06</lastmod>
     </url>
     <url>
