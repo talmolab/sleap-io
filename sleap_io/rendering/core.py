@@ -38,7 +38,13 @@ PRESETS: dict[str, dict] = {
 
 # Type alias for crop specification
 # Note: Use Tuple (not tuple) for Python 3.8 compatibility in Union
-CropSpec = Union[Tuple[int, int, int, int], Literal["auto"], None]
+# Supports both pixel coordinates (int tuple) and normalized coordinates (float tuple)
+CropSpec = Union[
+    Tuple[int, int, int, int],  # Pixel coordinates
+    Tuple[float, float, float, float],  # Normalized coordinates (0.0-1.0)
+    Literal["auto"],
+    None,
+]
 
 
 def _compute_auto_crop(
@@ -83,6 +89,57 @@ def _compute_auto_crop(
     y2 = min(h, int(y_max + pad_y))
 
     return (x1, y1, x2, y2)
+
+
+def _resolve_crop(
+    crop: Union[
+        Tuple[int, int, int, int],
+        Tuple[float, float, float, float],
+    ],
+    frame_shape: tuple[int, int],
+) -> tuple[int, int, int, int]:
+    """Resolve crop specification to pixel coordinates.
+
+    Supports both pixel coordinates (integers) and normalized coordinates
+    (floats in 0.0-1.0 range). Detection is based on Python types:
+
+    - If all values are ``float`` type AND all are in [0.0, 1.0]: normalized
+    - Otherwise: pixel coordinates
+
+    Args:
+        crop: Crop bounds as (x1, y1, x2, y2) where (x1, y1) is the top-left
+            corner and (x2, y2) is the bottom-right corner (exclusive).
+        frame_shape: (height, width) of the frame.
+
+    Returns:
+        Tuple of (x1, y1, x2, y2) as integer pixel coordinates.
+
+    Examples:
+        >>> _resolve_crop((100, 100, 300, 300), (480, 640))
+        (100, 100, 300, 300)
+
+        >>> _resolve_crop((0.25, 0.25, 0.75, 0.75), (480, 640))
+        (160, 120, 480, 360)
+    """
+    h, w = frame_shape
+    x1, y1, x2, y2 = crop
+
+    # Check if normalized: all values are float type AND in [0.0, 1.0] range
+    is_normalized = all(isinstance(v, float) for v in crop) and all(
+        0.0 <= v <= 1.0 for v in crop
+    )
+
+    if is_normalized:
+        # Convert normalized to pixels
+        return (
+            int(x1 * w),
+            int(y1 * h),
+            int(x2 * w),
+            int(y2 * h),
+        )
+    else:
+        # Already pixel coordinates
+        return (int(x1), int(y1), int(x2), int(y2))
 
 
 def _apply_crop(
@@ -536,9 +593,16 @@ def render_image(
         frame_idx: Video frame index (0-based, used with video when source is Labels).
         image: Override image array (H, W) or (H, W, C) uint8. Fetched from
             LabeledFrame if not provided.
-        crop: Crop specification. Can be:
-            - ``(x1, y1, x2, y2)``: Explicit crop bounds in pixels.
-            - ``"auto"``: Auto-fit crop around all instances.
+        crop: Crop specification. Bounds are (x1, y1, x2, y2) where (x1, y1) is
+            the top-left corner and (x2, y2) is the bottom-right (exclusive).
+            Origin (0, 0) is at the image top-left. Can be:
+
+            - **Pixel coordinates** (int tuple): ``(100, 100, 300, 300)`` crops
+              from pixel (100, 100) to (300, 300).
+            - **Normalized coordinates** (float tuple in [0.0, 1.0]):
+              ``(0.25, 0.25, 0.75, 0.75)`` crops the center 50% of the frame.
+              Detection is type-based: all values must be ``float`` and in range.
+            - ``"auto"``: Auto-fit crop around all instances with padding.
             - ``None``: No cropping (default).
         crop_padding: Padding for auto-crop as fraction of bounding box (default 0.2).
         color_by: Color scheme - 'track', 'instance', 'node', or 'auto'.
@@ -586,9 +650,13 @@ def render_image(
 
         >>> img = sio.render_image(lf, crop="auto")
 
-        Explicit crop region:
+        Explicit crop region (pixel coordinates):
 
         >>> img = sio.render_image(lf, crop=(100, 100, 300, 300))
+
+        Normalized crop (center 50% of frame):
+
+        >>> img = sio.render_image(lf, crop=(0.25, 0.25, 0.75, 0.75))
 
         Render and save to file:
 
@@ -753,7 +821,8 @@ def render_image(
                 instances_points, (h, w), padding=crop_padding
             )
         else:
-            crop_bounds = crop
+            # Resolve normalized or pixel coordinates
+            crop_bounds = _resolve_crop(crop, (h, w))
 
         render_image_data, render_points, _ = _apply_crop(
             image, instances_points, crop_bounds

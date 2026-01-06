@@ -370,7 +370,9 @@ img = sio.render_image(lf, scale=0.25)
 
 ### Cropping to a region
 
-Use the `crop` parameter to render a specific region:
+Use the `crop` parameter to render a specific region. Bounds are `(x1, y1, x2, y2)` where `(x1, y1)` is the top-left corner and `(x2, y2)` is the bottom-right (exclusive). Origin `(0, 0)` is at the image top-left.
+
+**Pixel coordinates** (integer tuple):
 
 ```python
 import sleap_io as sio
@@ -378,11 +380,23 @@ import sleap_io as sio
 labels = sio.load_slp("predictions.slp")
 lf = labels.labeled_frames[0]
 
-# Crop to region (x1, y1, x2, y2)
+# Crop to region (x1, y1, x2, y2) in pixels
 img = sio.render_image(lf, crop=(100, 100, 300, 300))
 ```
 
 ![crop region](assets/rendering/crop_region.png)
+
+**Normalized coordinates** (float tuple in [0.0, 1.0]):
+
+```python
+# Crop center 50% of the frame
+img = sio.render_image(lf, crop=(0.25, 0.25, 0.75, 0.75))
+
+# Crop right half of the frame
+img = sio.render_image(lf, crop=(0.5, 0.0, 1.0, 1.0))
+```
+
+Detection is type-based: all values must be Python `float` type and in [0.0, 1.0] range. Values outside this range (e.g., `(100.0, 100.0, 300.0, 300.0)`) are treated as pixel coordinates.
 
 ### Zoomed crop
 

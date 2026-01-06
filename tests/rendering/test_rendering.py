@@ -690,6 +690,102 @@ class TestRenderImage:
         assert rendered.shape[0] == 200  # 100 * 2
         assert rendered.shape[1] == 200  # 100 * 2
 
+    def test_render_image_crop_normalized(self, labels_predictions):
+        """Test render_image with normalized crop coordinates (floats in 0-1)."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+        h, w = frame.shape[:2]
+
+        # Crop center 50% using normalized coordinates
+        rendered = render_image(lf, image=frame, crop=(0.25, 0.25, 0.75, 0.75))
+
+        assert isinstance(rendered, np.ndarray)
+        # Should be approximately half the width and height
+        assert rendered.shape[0] == int(0.5 * h)
+        assert rendered.shape[1] == int(0.5 * w)
+        assert rendered.shape[2] == 3
+
+    def test_render_image_crop_normalized_full_frame(self, labels_predictions):
+        """Test normalized crop (0.0, 0.0, 1.0, 1.0) returns full frame."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+        h, w = frame.shape[:2]
+
+        # Full frame in normalized coordinates
+        rendered = render_image(lf, image=frame, crop=(0.0, 0.0, 1.0, 1.0))
+
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.shape[0] == h
+        assert rendered.shape[1] == w
+
+    def test_render_image_crop_int_not_normalized(self, labels_predictions):
+        """Test that int tuples are treated as pixel coords even if small values."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Small int values should be pixels, not normalized
+        # (0, 0, 1, 1) with ints should give 1x1 crop, not full frame
+        rendered = render_image(lf, image=frame, crop=(0, 0, 10, 10))
+
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.shape[0] == 10  # 10 pixels
+        assert rendered.shape[1] == 10  # 10 pixels
+
+
+# ============================================================================
+# _resolve_crop Tests
+# ============================================================================
+
+
+class TestResolveCrop:
+    """Tests for _resolve_crop helper function."""
+
+    def test_resolve_crop_pixel_coordinates(self):
+        """Test pixel coordinates (int tuple) pass through."""
+        from sleap_io.rendering.core import _resolve_crop
+
+        result = _resolve_crop((100, 100, 300, 300), (480, 640))
+        assert result == (100, 100, 300, 300)
+
+    def test_resolve_crop_normalized_coordinates(self):
+        """Test normalized coordinates (float tuple) are scaled."""
+        from sleap_io.rendering.core import _resolve_crop
+
+        # Center 50% of a 480x640 frame
+        result = _resolve_crop((0.25, 0.25, 0.75, 0.75), (480, 640))
+        # x: 0.25 * 640 = 160, 0.75 * 640 = 480
+        # y: 0.25 * 480 = 120, 0.75 * 480 = 360
+        assert result == (160, 120, 480, 360)
+
+    def test_resolve_crop_full_frame_normalized(self):
+        """Test (0.0, 0.0, 1.0, 1.0) gives full frame."""
+        from sleap_io.rendering.core import _resolve_crop
+
+        result = _resolve_crop((0.0, 0.0, 1.0, 1.0), (480, 640))
+        assert result == (0, 0, 640, 480)
+
+    def test_resolve_crop_float_out_of_range_treated_as_pixels(self):
+        """Test floats outside [0, 1] are treated as pixel coordinates."""
+        from sleap_io.rendering.core import _resolve_crop
+
+        # Values > 1.0 should be treated as pixels
+        result = _resolve_crop((100.0, 100.0, 300.0, 300.0), (480, 640))
+        assert result == (100, 100, 300, 300)
+
+    def test_resolve_crop_mixed_types_treated_as_pixels(self):
+        """Test mixed int/float tuples are treated as pixel coordinates."""
+        from sleap_io.rendering.core import _resolve_crop
+
+        # Mixed types should be treated as pixels
+        result = _resolve_crop((100, 100.0, 300, 300.0), (480, 640))
+        assert result == (100, 100, 300, 300)
+
 
 # ============================================================================
 # render_video Tests
