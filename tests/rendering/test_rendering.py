@@ -186,6 +186,42 @@ class TestColors:
         with pytest.raises(TypeError):
             resolve_color(["list", "not", "valid"])
 
+    def test_resolve_color_unknown_palette_falls_back(self):
+        """Test resolve_color with unknown palette falls back to distinct."""
+        from sleap_io.rendering.colors import get_palette, resolve_color
+
+        # Unknown palette in palette[n] format should fall back to distinct
+        result = resolve_color("unknown_palette[0]")
+        distinct_colors = get_palette("distinct", 1)
+        assert result == distinct_colors[0]
+
+    def test_build_color_map_track_without_indices(self):
+        """Test build_color_map for track scheme without track_indices."""
+        from sleap_io.rendering.colors import build_color_map
+
+        colors = build_color_map(
+            scheme="track",
+            n_instances=3,
+            n_nodes=5,
+            n_tracks=5,
+            track_indices=None,  # No track indices provided
+        )
+
+        assert "instance_colors" in colors
+        assert len(colors["instance_colors"]) == 3
+
+    def test_get_palette_colorcet_names(self):
+        """Test get_palette with colorcet palette names (falls back if missing)."""
+        from sleap_io.rendering.colors import get_palette
+
+        # These should work whether colorcet is installed or not
+        # (falls back to distinct palette if not installed)
+        colors = get_palette("glasbey", 10)
+        assert len(colors) == 10
+
+        colors = get_palette("glasbey_hv", 10)
+        assert len(colors) == 10
+
 
 # ============================================================================
 # Shapes Module Tests
@@ -404,6 +440,122 @@ class TestCallbacks:
 # ============================================================================
 
 
+class TestPrepareFrame:
+    """Tests for _prepare_frame_rgba helper function."""
+
+    def test_prepare_frame_grayscale_with_channel(self):
+        """Test grayscale with channel dimension (H, W, 1)."""
+        from sleap_io.rendering.core import _prepare_frame_rgba
+
+        frame = np.full((100, 100, 1), 128, dtype=np.uint8)
+        result = _prepare_frame_rgba(frame)
+
+        assert result.shape == (100, 100, 4)
+        assert result.dtype == np.uint8
+        assert result[50, 50, 3] == 255  # Alpha channel
+
+    def test_prepare_frame_rgba_passthrough(self):
+        """Test RGBA passthrough (H, W, 4)."""
+        from sleap_io.rendering.core import _prepare_frame_rgba
+
+        frame = np.zeros((100, 100, 4), dtype=np.uint8)
+        frame[:, :, 0] = 255  # Red
+        frame[:, :, 3] = 200  # Alpha
+        result = _prepare_frame_rgba(frame)
+
+        assert result.shape == (100, 100, 4)
+        assert result[50, 50, 0] == 255  # Red preserved
+        assert result[50, 50, 3] == 200  # Alpha preserved
+
+    def test_prepare_frame_unsupported_shape(self):
+        """Test unsupported frame shape raises error."""
+        from sleap_io.rendering.core import _prepare_frame_rgba
+
+        frame = np.zeros((100, 100, 5), dtype=np.uint8)
+
+        with pytest.raises(ValueError, match="Unsupported frame shape"):
+            _prepare_frame_rgba(frame)
+
+
+class TestEstimateFrameSize:
+    """Tests for _estimate_frame_size helper function."""
+
+    def test_estimate_frame_size_basic(self):
+        """Test frame size estimation from keypoints."""
+        from sleap_io.rendering.core import _estimate_frame_size
+
+        points = [
+            np.array([[100, 100], [200, 200], [150, 150]]),
+            np.array([[120, 120], [180, 180]]),
+        ]
+
+        h, w = _estimate_frame_size(points)
+
+        # Should be at least as large as max coordinates plus padding
+        assert w >= 200
+        assert h >= 200
+
+    def test_estimate_frame_size_empty_list(self):
+        """Test frame size estimation with empty list."""
+        from sleap_io.rendering.core import _estimate_frame_size
+
+        h, w = _estimate_frame_size([])
+
+        assert h == 64  # min_size
+        assert w == 64
+
+    def test_estimate_frame_size_all_nan(self):
+        """Test frame size estimation when all points are NaN."""
+        from sleap_io.rendering.core import _estimate_frame_size
+
+        points = [np.array([[np.nan, np.nan], [np.nan, np.nan]])]
+
+        h, w = _estimate_frame_size(points)
+
+        assert h == 64  # min_size
+        assert w == 64
+
+
+class TestApplyCrop:
+    """Tests for _apply_crop helper function."""
+
+    def test_apply_crop_out_of_bounds(self):
+        """Test crop extending beyond frame bounds adds padding."""
+        from sleap_io.rendering.core import _apply_crop
+
+        frame = np.full((100, 100, 3), 128, dtype=np.uint8)
+        points = [np.array([[50, 50]])]
+        # Crop extends 50px outside frame on all sides
+        crop = (-50, -50, 150, 150)
+
+        cropped_frame, shifted_points, scale = _apply_crop(frame, points, crop)
+
+        assert cropped_frame.shape == (200, 200, 3)
+        # Original content should be offset by 50px
+        assert cropped_frame[50:150, 50:150, 0].mean() == pytest.approx(128, abs=1)
+        # Padding should be zeros
+        assert cropped_frame[0:50, 0:50, 0].mean() == 0
+
+    def test_apply_crop_with_output_size(self):
+        """Test crop with output size scaling."""
+        from sleap_io.rendering.core import _apply_crop
+
+        frame = np.full((200, 200, 3), 128, dtype=np.uint8)
+        points = [np.array([[100, 100]])]
+        crop = (50, 50, 150, 150)  # 100x100 crop
+        output_size = (200, 200)  # Scale up 2x
+
+        cropped_frame, shifted_points, scale = _apply_crop(
+            frame, points, crop, output_size
+        )
+
+        assert cropped_frame.shape == (200, 200, 3)
+        assert scale == pytest.approx(2.0)
+        # Point should be shifted and scaled
+        assert shifted_points[0][0, 0] == pytest.approx((100 - 50) * 2)
+        assert shifted_points[0][0, 1] == pytest.approx((100 - 50) * 2)
+
+
 class TestCoreRendering:
     """Tests for sleap_io.rendering.core module."""
 
@@ -548,6 +700,88 @@ class TestCoreRendering:
         assert pre_called == [42]
         assert post_called == [42]
         assert per_instance_called == [0]
+
+    def test_render_frame_track_coloring_without_track_indices(self):
+        """Test track coloring falls back correctly when no track_indices."""
+        from sleap_io.rendering.core import render_frame
+
+        frame = np.full((100, 100, 3), 128, dtype=np.uint8)
+        points = [np.array([[50, 50]])]
+        edges = []
+        node_names = ["a"]
+
+        # Track coloring without track_indices should still work
+        rendered = render_frame(
+            frame,
+            points,
+            edges,
+            node_names,
+            color_by="track",
+            track_indices=None,
+            n_tracks=3,
+        )
+
+        assert rendered.shape == (100, 100, 3)
+
+    def test_render_frame_empty_instances(self):
+        """Test render_frame with no instances."""
+        from sleap_io.rendering.core import render_frame
+
+        frame = np.full((100, 100, 3), 128, dtype=np.uint8)
+        points = []  # No instances
+        edges = [(0, 1)]
+        node_names = ["a", "b"]
+
+        rendered = render_frame(frame, points, edges, node_names)
+
+        assert rendered.shape == (100, 100, 3)
+        # Should just be the original frame (no nodes/edges drawn)
+
+    def test_render_frame_edge_out_of_bounds(self):
+        """Test render_frame handles edge indices beyond points."""
+        from sleap_io.rendering.core import render_frame
+
+        frame = np.full((100, 100, 3), 128, dtype=np.uint8)
+        points = [np.array([[50, 50]])]  # Only 1 point
+        edges = [(0, 1), (1, 2)]  # Edges reference non-existent points
+        node_names = ["a"]
+
+        # Should not raise, just skip invalid edges
+        rendered = render_frame(frame, points, edges, node_names)
+        assert rendered.shape == (100, 100, 3)
+
+    def test_render_frame_with_instance_metadata(self):
+        """Test render_frame passes instance metadata to callbacks."""
+        from sleap_io.rendering.callbacks import InstanceContext
+        from sleap_io.rendering.core import render_frame
+
+        frame = np.full((100, 100, 3), 128, dtype=np.uint8)
+        points = [np.array([[50, 50]])]
+        edges = []
+        node_names = ["a"]
+
+        received_metadata = []
+
+        def per_instance_cb(ctx: InstanceContext):
+            received_metadata.append(
+                {
+                    "track_name": ctx.track_name,
+                    "confidence": ctx.confidence,
+                }
+            )
+
+        render_frame(
+            frame,
+            points,
+            edges,
+            node_names,
+            per_instance_callback=per_instance_cb,
+            instance_metadata=[{"track_name": "track1", "confidence": 0.95}],
+        )
+
+        assert len(received_metadata) == 1
+        assert received_metadata[0]["track_name"] == "track1"
+        assert received_metadata[0]["confidence"] == 0.95
 
 
 # ============================================================================
@@ -706,6 +940,110 @@ class TestRenderImage:
         assert isinstance(rendered, np.ndarray)
         assert rendered.shape[0] == 10  # 10 pixels
         assert rendered.shape[1] == 10  # 10 pixels
+
+    def test_render_image_from_instance_list(self, labels_predictions):
+        """Test render_image with list of instances requires image."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        instances = list(lf.instances)
+        frame = lf.video[lf.frame_idx]
+
+        # With image provided, should work
+        rendered = render_image(instances, image=frame)
+        assert isinstance(rendered, np.ndarray)
+        assert rendered.shape[2] == 3
+
+    def test_render_image_from_instance_list_no_image_error(self, labels_predictions):
+        """Test render_image with instance list raises error if no image."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        instances = list(lf.instances)
+
+        with pytest.raises(ValueError, match="image parameter required"):
+            render_image(instances)
+
+    def test_render_image_empty_instance_list_error(self, labels_predictions):
+        """Test render_image with empty instance list raises error."""
+        from sleap_io.rendering import render_image
+
+        with pytest.raises(ValueError, match="Empty instances list"):
+            render_image([], image=np.zeros((100, 100, 3), dtype=np.uint8))
+
+    def test_render_image_invalid_source_type(self):
+        """Test render_image with invalid source type."""
+        from sleap_io.rendering import render_image
+
+        with pytest.raises(TypeError, match="must be Labels, LabeledFrame"):
+            render_image("not_valid")
+
+    def test_render_image_labels_with_video_frame_idx(self, labels_predictions):
+        """Test render_image with Labels + video + frame_idx."""
+        from sleap_io.rendering import render_image
+
+        # Get a frame that exists
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Render by video + frame_idx
+        rendered = render_image(
+            labels_predictions,
+            video=0,
+            frame_idx=lf.frame_idx,
+            image=frame,
+        )
+
+        assert isinstance(rendered, np.ndarray)
+
+    def test_render_image_labels_no_frame_found_error(self, labels_predictions):
+        """Test render_image raises error when frame not found."""
+        from sleap_io.rendering import render_image
+
+        with pytest.raises(ValueError, match="No labeled frame found"):
+            render_image(
+                labels_predictions,
+                video=0,
+                frame_idx=999999,  # Doesn't exist
+                image=np.zeros((100, 100, 3), dtype=np.uint8),
+            )
+
+    def test_render_image_labels_default_first_frame(self, labels_predictions):
+        """Test render_image defaults to first labeled frame."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # No lf_ind, no video/frame_idx -> should use first frame
+        rendered = render_image(labels_predictions, image=frame)
+
+        assert isinstance(rendered, np.ndarray)
+
+    def test_render_image_background_with_no_video_metadata(self, labels_predictions):
+        """Test render_image with background color when video has no shape."""
+        from sleap_io.rendering import render_image
+
+        lf = labels_predictions.labeled_frames[0]
+
+        # Render with background color - should estimate frame size from points
+        rendered = render_image(lf, background="black")
+
+        assert isinstance(rendered, np.ndarray)
+        # Should have some reasonable size based on keypoints
+
+    def test_render_image_labeled_frame_no_skeleton_error(self):
+        """Test render_image with LabeledFrame that has no instances."""
+        from sleap_io.model.labeled_frame import LabeledFrame
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_image
+
+        # Create empty labeled frame
+        video = Video(filename="dummy.mp4")
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[])
+
+        with pytest.raises(ValueError, match="no instances with skeleton"):
+            render_image(lf, image=np.zeros((100, 100, 3), dtype=np.uint8))
 
 
 # ============================================================================
@@ -953,6 +1291,172 @@ class TestRenderVideo:
 
         # Should have stopped early
         assert len(frames) <= 2
+
+    def test_render_video_from_labeled_frame_list(self, labels_predictions):
+        """Test render_video with list of LabeledFrames."""
+        from sleap_io.rendering import render_video
+
+        # Use first 2 labeled frames as a list
+        lf_list = labels_predictions.labeled_frames[:2]
+
+        frames = render_video(
+            lf_list,
+            show_progress=False,
+        )
+
+        assert isinstance(frames, list)
+        assert len(frames) == 2
+
+    def test_render_video_empty_labeled_frame_list_error(self):
+        """Test render_video with empty list raises error."""
+        from sleap_io.rendering import render_video
+
+        with pytest.raises(ValueError, match="Empty labeled frames list"):
+            render_video([], show_progress=False)
+
+    def test_render_video_no_frames_to_render_error(self, labels_predictions):
+        """Test render_video raises error when no frames match criteria."""
+        from sleap_io.rendering import render_video
+
+        with pytest.raises(ValueError, match="No frames to render"):
+            render_video(
+                labels_predictions,
+                frame_inds=[],  # Empty frame list
+                show_progress=False,
+            )
+
+    def test_render_video_invalid_source_type(self):
+        """Test render_video with invalid source type."""
+        from sleap_io.rendering import render_video
+
+        with pytest.raises(TypeError, match="must be Labels or list of LabeledFrame"):
+            render_video("not_valid", show_progress=False)
+
+    def test_render_video_no_videos_error(self):
+        """Test render_video raises error when Labels has no videos."""
+        from sleap_io.model.labels import Labels
+        from sleap_io.rendering import render_video
+
+        labels = Labels()
+
+        with pytest.raises(ValueError, match="Labels has no videos"):
+            render_video(labels, show_progress=False)
+
+    def test_render_video_no_skeleton_error(self):
+        """Test render_video raises error when no skeleton found."""
+        from sleap_io.model.labeled_frame import LabeledFrame
+        from sleap_io.model.labels import Labels
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_video
+
+        video = Video(filename="dummy.mp4")
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[])
+        labels = Labels(videos=[video], labeled_frames=[lf])
+
+        with pytest.raises(ValueError, match="No skeleton found"):
+            render_video(labels, show_progress=False)
+
+    def test_render_video_with_background_color(self, labels_predictions):
+        """Test render_video with solid background color."""
+        from sleap_io.rendering import render_video
+
+        frame_inds = [labels_predictions.labeled_frames[0].frame_idx]
+
+        frames = render_video(
+            labels_predictions,
+            frame_inds=frame_inds,
+            background="gray",
+            show_progress=False,
+        )
+
+        assert len(frames) == 1
+        assert isinstance(frames[0], np.ndarray)
+
+    def test_render_video_labeled_frame_list_no_skeleton_error(self):
+        """Test render_video with labeled frames that have no skeleton."""
+        from sleap_io.model.labeled_frame import LabeledFrame
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_video
+
+        video = Video(filename="dummy.mp4")
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[])
+
+        with pytest.raises(ValueError, match="No skeleton found"):
+            render_video([lf], show_progress=False)
+
+    def test_render_video_skeleton_from_instances(self, labels_predictions):
+        """Test render_video finds skeleton from instances when not in skeletons."""
+        from sleap_io.rendering import render_video
+
+        # This tests the loop that finds skeleton from instances
+        # The standard test data already tests this path since skeleton
+        # is typically found via instances
+        frame_inds = [labels_predictions.labeled_frames[0].frame_idx]
+
+        frames = render_video(
+            labels_predictions,
+            frame_inds=frame_inds,
+            show_progress=False,
+        )
+
+        assert len(frames) == 1
+
+    def test_render_video_start_end_range(self, labels_predictions):
+        """Test render_video with start/end that filters labeled frames."""
+        from sleap_io.rendering import render_video
+
+        # Get all frame indices
+        all_indices = sorted(lf.frame_idx for lf in labels_predictions.labeled_frames)
+
+        # Render just a subset
+        start = all_indices[1]
+        end = all_indices[3]
+
+        frames = render_video(
+            labels_predictions,
+            start=start,
+            end=end,
+            show_progress=False,
+        )
+
+        # Should only include frames in [start, end) range
+        assert len(frames) >= 1
+
+    def test_render_video_video_object_param(self, labels_predictions):
+        """Test render_video with Video object instead of int."""
+        from sleap_io.rendering import render_video
+
+        video_obj = labels_predictions.videos[0]
+        frame_inds = [labels_predictions.labeled_frames[0].frame_idx]
+
+        frames = render_video(
+            labels_predictions,
+            video=video_obj,  # Pass Video object directly
+            frame_inds=frame_inds,
+            show_progress=False,
+        )
+
+        assert len(frames) == 1
+
+    def test_render_video_track_index_fallback(self, labels_predictions):
+        """Test render_video handles instances without tracks."""
+        from sleap_io.rendering import render_video
+
+        # Remove tracks from instances to test fallback path
+        lf = labels_predictions.labeled_frames[0]
+        for inst in lf.instances:
+            inst.track = None
+
+        frame_inds = [lf.frame_idx]
+
+        frames = render_video(
+            labels_predictions,
+            frame_inds=frame_inds,
+            color_by="track",  # Force track coloring
+            show_progress=False,
+        )
+
+        assert len(frames) == 1
 
 
 # ============================================================================

@@ -2304,3 +2304,205 @@ def test_render_crop_help_shows_options():
     output = _strip_ansi(result.output)
     assert "--crop" in output
     assert "x1,y1,x2,y2" in output
+
+
+def test_render_input_not_found(tmp_path):
+    """Test render with non-existent input file."""
+    runner = CliRunner()
+    nonexistent = tmp_path / "nonexistent.slp"
+    result = runner.invoke(
+        cli,
+        ["render", "-i", str(nonexistent), "--lf", "0"],
+    )
+    assert result.exit_code != 0
+    # Click validates path existence before command runs
+    assert "does not exist" in result.output
+
+
+def test_render_non_labels_input(tmp_path):
+    """Test render with a file that is not a Labels file."""
+    # Create a dummy text file
+    dummy_file = tmp_path / "dummy.txt"
+    dummy_file.write_text("not a labels file")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["render", "-i", str(dummy_file), "--lf", "0"],
+    )
+    assert result.exit_code != 0
+    # Should fail to load since it's not a valid format
+
+
+def test_render_conflicting_options(centered_pair, tmp_path):
+    """Test render error when using --lf with --start/--end."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "--start",
+            "0",  # Conflicting with --lf
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Cannot use --start/--end with --lf" in result.output
+
+
+def test_render_conflicting_lf_and_frame(centered_pair, tmp_path):
+    """Test render error when using both --lf and --frame."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "--frame",
+            "0",  # Conflicting with --lf
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Cannot use both --lf and --frame" in result.output
+
+
+def test_render_default_output_path_lf(centered_pair, tmp_path):
+    """Test render generates default output path for --lf mode."""
+    import shutil
+    from pathlib import Path
+
+    # Copy input to temp dir to control output location
+    src_path = Path(centered_pair).resolve()
+    input_path = tmp_path / "test.slp"
+    shutil.copy(src_path, input_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            str(input_path),
+            "--lf",
+            "0",
+            # No -o: should generate default output path
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+
+    # Default output should be {stem}.lf={lf_ind}.png
+    expected_output = tmp_path / "test.lf=0.png"
+    assert expected_output.exists()
+
+
+def test_render_default_output_path_frame(centered_pair, tmp_path):
+    """Test render generates default output path for --frame mode."""
+    import shutil
+    from pathlib import Path
+
+    src_path = Path(centered_pair).resolve()
+    input_path = tmp_path / "test.slp"
+    shutil.copy(src_path, input_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            str(input_path),
+            "--video",
+            "0",
+            "--frame",
+            "0",
+            # No -o: should generate default output path
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rendered:" in result.output
+
+    # Default output should be {stem}.video={v}.frame={f}.png
+    expected_output = tmp_path / "test.video=0.frame=0.png"
+    assert expected_output.exists()
+
+
+def test_render_with_preset(centered_pair, tmp_path):
+    """Test render with preset option."""
+    runner = CliRunner()
+    output_path = tmp_path / "preview.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "--preset",
+            "preview",  # 0.25x scale
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_render_lf_out_of_range(centered_pair, tmp_path):
+    """Test render error when --lf is out of range."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "99999",  # Way out of range
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "out of range" in result.output
+
+
+def test_render_video_out_of_range(centered_pair, tmp_path):
+    """Test render error when --video index is out of range."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.png"
+
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--video",
+            "99",  # Only 1 video in test file
+            "--frame",
+            "0",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "out of range" in result.output
