@@ -141,6 +141,7 @@ nav:
   - Guides:
     - Examples: examples.md
     - Codecs: codecs.md
+    - Rendering: rendering.md
     - Merging: merging.md
   - Reference:
     - Model: model.md

@@ -62,6 +62,7 @@ sio show --help
 sio convert --help
 sio split --help
 sio filenames --help
+sio render --help
 
 # Check version and installed plugins
 sio --version
@@ -92,6 +93,14 @@ sio filenames -i labels.slp                                   # List video paths
 sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
 sio filenames -i labels.slp -o out.slp --map old.mp4 /new/video.mp4
 sio filenames -i labels.slp -o out.slp --prefix /old/path /new/path
+
+# Render video with pose overlays
+sio render -i predictions.slp                                 # -> predictions.viz.mp4
+sio render -i predictions.slp --preset preview                # Fast 0.25x preview
+sio render -i predictions.slp --start 100 --end 200
+sio render -i predictions.slp --lf 0                          # Single frame -> PNG
+sio render -i predictions.slp --lf 0 --crop auto              # Auto-fit to instances
+sio render -i predictions.slp --color-by track --marker-shape diamond
 ```
 
 ---
@@ -723,6 +732,287 @@ sio filenames -i labels.slp -o fixed.slp \
 
 ---
 
+### `sio render` - Render Pose Videos and Images
+
+Create video files or single images with pose annotations overlaid on video frames.
+
+```bash
+# Video mode (default)
+sio render -i <input> [-o <output>] [options]
+
+# Image mode (single frame)
+sio render -i <input> --lf <index> [-o <output>] [options]
+```
+
+#### Render Modes
+
+**Video mode** (default): Renders all labeled frames to a video file.
+
+**Image mode**: Renders a single frame to a PNG image. Use `--lf` or `--frame`.
+
+#### Basic Usage
+
+```bash
+# Render video with automatic output filename
+sio render -i predictions.slp                      # -> predictions.viz.mp4
+
+# Render with explicit output path
+sio render -i predictions.slp -o output.mp4
+
+# Fast preview (0.25x resolution)
+sio render -i predictions.slp --preset preview
+
+# Render a specific clip
+sio render -i predictions.slp --start 100 --end 200
+
+# Render a single frame to PNG
+sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
+```
+
+#### Options Reference
+
+##### Input/Output Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-i, --input` | (required) | Input labels file (.slp, .nwb, etc.) |
+| `-o, --output` | auto | Output path. Default: `{input}.viz.mp4` for video, `{input}.lf={N}.png` for image |
+
+##### Frame Selection Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--lf` | none | Render single labeled frame by index. Outputs PNG. |
+| `--frame` | none | Render single frame by video frame index (use with `--video`). Outputs PNG. |
+| `--start` | first labeled | Start frame index for video (0-based, inclusive) |
+| `--end` | last labeled | End frame index for video (0-based, exclusive) |
+| `--video` | 0 | Video index for multi-video labels |
+| `--all-frames` / `--labeled-only` | auto | Render all frames or only labeled. Default: `--all-frames` for single-video files. |
+
+##### Quality Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--preset` | none (1.0x) | Quality preset: `preview` (0.25x), `draft` (0.5x), `final` (1.0x) |
+| `--scale` | 1.0 | Scale factor (overrides `--preset`) |
+| `--fps` | source FPS | Output video FPS. Change to slow down or speed up playback. |
+| `--crf` | 25 | Video quality (2-32, lower=better quality, larger file) |
+| `--x264-preset` | superfast | H.264 encoding speed trade-off (ultrafast to slow) |
+
+##### Appearance Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--color-by` | auto | Color scheme: `auto`, `track`, `instance`, `node` |
+| `--palette` | glasbey | Color palette (glasbey, tableau10, distinct, rainbow, etc.) |
+| `--marker-shape` | circle | Node marker: `circle`, `square`, `diamond`, `triangle`, `cross` |
+| `--marker-size` | 4.0 | Node marker radius in pixels |
+| `--line-width` | 2.0 | Edge line width in pixels |
+| `--alpha` | 1.0 | Pose overlay transparency (0.0-1.0) |
+| `--no-nodes` | false | Hide node markers |
+| `--no-edges` | false | Hide skeleton edges |
+
+##### Crop Options (Single Image Only)
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--crop` | none | Crop region: `auto` or `x1,y1,x2,y2` (pixels or normalized 0.0-1.0) |
+| `--crop-padding` | 0.2 | Padding for auto-crop as fraction of bounding box |
+
+#### Single Image Rendering
+
+Render individual frames to PNG files for figures, thumbnails, or quick inspection:
+
+```bash
+# Render labeled frame by index (0-based)
+sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
+sio render -i predictions.slp --lf 42              # -> predictions.lf=42.png
+
+# Render specific video frame by index
+sio render -i predictions.slp --frame 100          # -> predictions.video=0.frame=100.png
+sio render -i predictions.slp --frame 100 --video 1
+
+# Explicit output path
+sio render -i predictions.slp --lf 5 -o frame.png
+```
+
+!!! tip "Labeled frame vs frame index"
+    - `--lf N` renders the Nth labeled frame in the file (regardless of video frame number)
+    - `--frame N` renders video frame N (must have predictions at that frame)
+
+#### Cropping (Single Image Only)
+
+Crop the output image to focus on specific regions or automatically fit around detected instances:
+
+```bash
+# Auto-fit: crop to bounding box of all instances with 20% padding (default)
+sio render -i predictions.slp --lf 0 --crop auto
+
+# Auto-fit with custom padding (30% of bounding box)
+sio render -i predictions.slp --lf 0 --crop auto --crop-padding 0.3
+
+# Pixel coordinates (x1, y1, x2, y2)
+sio render -i predictions.slp --lf 0 --crop 100,100,300,300
+
+# Normalized coordinates (center 50% of frame)
+sio render -i predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75
+```
+
+The crop modes:
+
+- **`auto`**: Automatically fit to the bounding box of all instances, with padding. Best for focusing on animals.
+- **Pixel coordinates**: `x1,y1,x2,y2` as integers. Use for precise cropping when you know exact pixel locations.
+- **Normalized coordinates**: `x1,y1,x2,y2` as floats between 0.0-1.0. Use for relative cropping that works across different video resolutions.
+
+!!! note "Video mode limitation"
+    Cropping is currently only supported for single image mode (`--lf` or `--frame`). Video cropping is not yet implemented.
+
+#### Video Frame Ranges
+
+Render specific portions of the video:
+
+```bash
+# Frames 100 to 200 (0-based, end is exclusive)
+sio render -i predictions.slp --start 100 --end 200
+
+# From frame 500 to end
+sio render -i predictions.slp --start 500
+
+# First 100 frames
+sio render -i predictions.slp --end 100
+```
+
+#### Adjusting Playback Speed
+
+Use `--fps` to control playback speed:
+
+```bash
+# Slow motion (half speed if source is 30fps)
+sio render -i predictions.slp --fps 15
+
+# Speed up (double speed if source is 30fps)
+sio render -i predictions.slp --fps 60
+
+# Fixed frame rate output
+sio render -i predictions.slp --fps 24
+```
+
+#### Quality Presets
+
+Use presets for quick quality/speed trade-offs:
+
+```bash
+# Fast preview for checking results (0.25x resolution)
+sio render -i predictions.slp --preset preview     # -> predictions.viz.mp4
+
+# Draft quality for review (0.5x resolution)
+sio render -i predictions.slp --preset draft
+
+# Full quality for publication (1.0x resolution)
+sio render -i predictions.slp --preset final
+
+# Or specify exact scale
+sio render -i predictions.slp --scale 0.75
+```
+
+#### Color Schemes
+
+Control how poses are colored:
+
+```bash
+# Auto-select based on data (default)
+sio render -i predictions.slp --color-by auto
+
+# Color by track identity (consistent across frames)
+sio render -i predictions.slp --color-by track
+
+# Color by instance (each animal in frame gets different color)
+sio render -i predictions.slp --color-by instance
+
+# Color by node type (each body part gets different color)
+sio render -i predictions.slp --color-by node
+```
+
+The `auto` mode uses smart defaults:
+
+- If tracks available → color by track
+- If single frame → color by instance
+- If video (multiple frames) → color by node
+
+#### Color Palettes
+
+Choose from built-in or colorcet palettes:
+
+```bash
+# Built-in palettes
+sio render -i predictions.slp --palette distinct
+sio render -i predictions.slp --palette rainbow
+sio render -i predictions.slp --palette tableau10
+
+# Colorcet palettes
+sio render -i predictions.slp --palette glasbey  # 256 distinct colors
+sio render -i predictions.slp --palette glasbey_warm
+```
+
+Available built-in palettes: `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `seaborn`, `tableau10`, `viridis`
+
+#### Marker Shapes and Styles
+
+Customize the appearance of pose overlays:
+
+```bash
+# Different marker shapes
+sio render -i predictions.slp --marker-shape circle
+sio render -i predictions.slp --marker-shape square
+sio render -i predictions.slp --marker-shape diamond
+sio render -i predictions.slp --marker-shape triangle
+sio render -i predictions.slp --marker-shape cross
+
+# Adjust sizes
+sio render -i predictions.slp --marker-size 6 --line-width 3
+
+# Semi-transparent overlays
+sio render -i predictions.slp --alpha 0.7
+
+# Show only edges (no node markers)
+sio render -i predictions.slp --no-nodes
+
+# Show only nodes (no skeleton edges)
+sio render -i predictions.slp --no-edges
+```
+
+#### Multi-Video Labels
+
+For labels with multiple videos, select which video to render:
+
+```bash
+# Render the second video (0-indexed)
+sio render -i multiview.slp --video 1
+```
+
+#### Example Workflow
+
+```bash
+# 1. Quick preview to check predictions
+sio render -i predictions.slp --preset preview
+
+# 2. Check a specific section
+sio render -i predictions.slp --start 500 --end 600 --preset draft
+
+# 3. Render a single interesting frame
+sio render -i predictions.slp --lf 42 -o highlight.png
+
+# 4. Final render with custom styling
+sio render -i predictions.slp -o final.mp4 \
+    --color-by track \
+    --palette tableau10 \
+    --marker-shape diamond \
+    --marker-size 5 \
+    --line-width 2.5
+```
+
+---
+
 ## Use Cases
 
 ### Inspecting an Unknown Labels File
@@ -832,6 +1122,21 @@ sio convert -i labels.slp -o annotations.json --to coco
 sio convert -i labels.slp -o data.nwb --to nwb
 ```
 
+### Rendering Pose Videos
+
+Create video visualizations of your pose predictions:
+
+```bash
+# Quick preview to check predictions
+sio render -i predictions.slp -o preview.mp4 --preset preview
+
+# Final render with custom styling for publication
+sio render -i predictions.slp -o final.mp4 \
+    --color-by track \
+    --palette tableau10 \
+    --marker-shape diamond
+```
+
 ### Creating Training Splits
 
 Prepare datasets for machine learning with reproducible splits:
@@ -886,18 +1191,20 @@ sio --version
 **Example output:**
 
 ```
-sleap-io 0.2.0
-python 3.11.5
+sleap-io 0.5.8
+python 3.12.11
 
 Core:
-  numpy: 1.26.0
-  h5py: 3.10.0
-  imageio: 2.33.0
+  numpy: 2.4.0
+  h5py: 3.15.1
+  imageio: 2.37.2
+  skia-python: 138.0
+  colorcet: 3.1.0
 
 Video plugins:
   opencv: 4.8.1
   pyav: 12.0.0
-  imageio-ffmpeg: 0.4.9
+  imageio-ffmpeg: 0.6.0
 
 Optional:
   pymatreader: 0.0.32

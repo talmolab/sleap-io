@@ -3,20 +3,20 @@
 This page provides practical examples for common tasks with sleap-io. Each example includes working code that you can copy and adapt for your needs.
 
 !!! info "Prerequisites"
-    
+
     All examples assume you have sleap-io installed:
     ```bash
     pip install sleap-io
     ```
-    
+
     Or run any example script directly with [`uv`](https://docs.astral.sh/uv/):
     ```bash
     # Save any example to a file (e.g., example.py)
     uv run --with sleap-io example.py
     ```
-    
+
     This automatically handles dependencies without needing to manage environments.
-    
+
     Most examples use `import sleap_io as sio` for brevity.
 
 ## Basics
@@ -707,3 +707,31 @@ print(sio.get_default_image_plugin())  # "opencv"
     - [`set_default_image_plugin`](formats.md#sleap_io.set_default_image_plugin): Set image encoding backend
     - [`get_default_video_plugin`](formats.md#sleap_io.get_default_video_plugin): Get current video backend
     - [`get_default_image_plugin`](formats.md#sleap_io.get_default_image_plugin): Get current image backend
+
+## Rendering
+
+Create videos and images with pose overlays for visualization and publication.
+
+```python title="render_poses.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# Render full video
+labels.render("output.mp4")
+
+# Fast preview (0.25x resolution)
+labels.render("preview.mp4", preset="preview")
+
+# Single frame to image
+sio.render_image(labels.labeled_frames[0], "frame.png")
+```
+
+```bash title="CLI"
+sio render -i predictions.slp -o output.mp4
+sio render -i predictions.slp --preset preview
+sio render -i predictions.slp --lf 0  # Single frame
+```
+
+!!! note "See also"
+    See the **[Rendering Guide](rendering.md)** for complete documentation including color schemes, marker shapes, custom callbacks, and all CLI options.
