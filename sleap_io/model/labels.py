@@ -84,6 +84,36 @@ class Labels:
         """
         return self._lazy_store is not None
 
+    def materialize(self) -> "Labels":
+        """Create a fully materialized (non-lazy) copy.
+
+        If already non-lazy, returns self unchanged.
+
+        This converts a lazy-loaded Labels into a regular Labels with all
+        LabeledFrame and Instance objects created. Use this when you need
+        to modify the Labels.
+
+        Returns:
+            Labels with all frames/instances as Python objects.
+
+        Example:
+            >>> lazy = sio.load_slp("file.slp", lazy=True)
+            >>> eager = lazy.materialize()
+            >>> eager.append(new_frame)  # Now mutations work
+        """
+        if not self.is_lazy:
+            return self
+
+        return Labels(
+            labeled_frames=self._lazy_store.materialize_all(),
+            videos=list(self.videos),
+            skeletons=list(self.skeletons),
+            tracks=list(self.tracks),
+            suggestions=list(self.suggestions),
+            provenance=dict(self.provenance),
+            # _lazy_store is None (not lazy)
+        )
+
     def __attrs_post_init__(self):
         """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
         # Skip update for lazy Labels - metadata is already set from HDF5
@@ -300,9 +330,27 @@ class Labels:
             This method assumes that instances have tracks assigned and is intended to
             function primarily for single-video prediction results.
 
-            This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
+            When lazy-loaded, uses an optimized path that avoids creating Python
+            objects. This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
             See that function for implementation details.
         """
+        # Fast path for lazy-loaded Labels
+        if self.is_lazy:
+            # Resolve video argument
+            if video is None:
+                resolved_video = None  # Will default to first video
+            elif isinstance(video, int):
+                resolved_video = self.videos[video]
+            else:
+                resolved_video = video
+
+            return self._lazy_store.to_numpy(
+                video=resolved_video,
+                untracked=untracked,
+                return_confidence=return_confidence,
+                user_instances=user_instances,
+            )
+
         from sleap_io.codecs.numpy import to_numpy
 
         return to_numpy(

@@ -310,3 +310,167 @@ class TestLazyPredictions:
         lazy = sio.load_slp(centered_pair, lazy=True)
         eager = sio.load_slp(centered_pair, lazy=False)
         assert len(lazy.tracks) == len(eager.tracks)
+
+
+# === NumPy Output Correctness Tests ===
+
+
+class TestLazyNumpyEquivalence:
+    """Tests verifying lazy numpy() produces identical output to eager."""
+
+    def test_numpy_default_params(self, slp_real_data):
+        """Default params produce identical output."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        lazy_arr = lazy.numpy()
+        eager_arr = eager.numpy()
+
+        assert lazy_arr.shape == eager_arr.shape, (
+            f"Shape mismatch: lazy={lazy_arr.shape}, eager={eager_arr.shape}"
+        )
+        np.testing.assert_allclose(
+            lazy_arr, eager_arr, equal_nan=True, err_msg="numpy() output mismatch"
+        )
+
+    def test_numpy_untracked(self, slp_real_data):
+        """untracked=True produces identical output."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        lazy_arr = lazy.numpy(untracked=True)
+        eager_arr = eager.numpy(untracked=True)
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_return_confidence(self, slp_real_data):
+        """return_confidence=True produces identical output."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        lazy_arr = lazy.numpy(return_confidence=True)
+        eager_arr = eager.numpy(return_confidence=True)
+
+        assert lazy_arr.shape == eager_arr.shape
+        assert lazy_arr.shape[-1] == 3  # x, y, confidence
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_user_instances_false(self, centered_pair):
+        """user_instances=False produces identical output."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        lazy_arr = lazy.numpy(user_instances=False)
+        eager_arr = eager.numpy(user_instances=False)
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_with_video_index(self, slp_real_data):
+        """Video index parameter works correctly."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        # Test with video index
+        lazy_arr = lazy.numpy(video=0)
+        eager_arr = eager.numpy(video=0)
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_with_video_object(self, slp_real_data):
+        """Video object parameter works correctly."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        # Test with video object
+        lazy_arr = lazy.numpy(video=lazy.videos[0])
+        eager_arr = eager.numpy(video=eager.videos[0])
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_predictions_file(self, centered_pair):
+        """numpy() works correctly for prediction-heavy files."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        lazy_arr = lazy.numpy()
+        eager_arr = eager.numpy()
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+    def test_numpy_predictions_with_confidence(self, centered_pair):
+        """numpy(return_confidence=True) works for prediction files."""
+        lazy = sio.load_slp(centered_pair, lazy=True)
+        eager = sio.load_slp(centered_pair, lazy=False)
+
+        lazy_arr = lazy.numpy(return_confidence=True)
+        eager_arr = eager.numpy(return_confidence=True)
+
+        assert lazy_arr.shape == eager_arr.shape
+        np.testing.assert_allclose(lazy_arr, eager_arr, equal_nan=True)
+
+
+# === Labels.materialize() Tests ===
+
+
+class TestLabelsMaterialize:
+    """Tests for Labels.materialize() method."""
+
+    def test_materialize_returns_labels(self, slp_real_data):
+        """materialize() returns a Labels object."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        materialized = lazy.materialize()
+        assert isinstance(materialized, sio.Labels)
+
+    def test_materialize_not_lazy(self, slp_real_data):
+        """materialize() returns non-lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        materialized = lazy.materialize()
+        assert materialized.is_lazy is False
+
+    def test_materialize_eager_returns_self(self, slp_real_data):
+        """materialize() on eager Labels returns self."""
+        eager = sio.load_slp(slp_real_data, lazy=False)
+        result = eager.materialize()
+        assert result is eager
+
+    def test_materialize_preserves_frame_count(self, slp_real_data):
+        """Materialized Labels has same frame count."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        materialized = lazy.materialize()
+        assert len(materialized) == len(lazy)
+
+    def test_materialize_preserves_metadata(self, slp_real_data):
+        """Materialized Labels has copied metadata."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        materialized = lazy.materialize()
+
+        assert len(materialized.videos) == len(lazy.videos)
+        assert len(materialized.skeletons) == len(lazy.skeletons)
+        assert len(materialized.tracks) == len(lazy.tracks)
+
+    def test_materialize_numpy_equivalent(self, slp_real_data):
+        """Materialized Labels produces same numpy output."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        materialized = lazy.materialize()
+
+        lazy_arr = lazy.numpy()
+        mat_arr = materialized.numpy()
+
+        assert lazy_arr.shape == mat_arr.shape
+        np.testing.assert_allclose(lazy_arr, mat_arr, equal_nan=True)
+
+    def test_materialize_allows_mutations(self, slp_real_data):
+        """Mutations work on materialized Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        materialized = lazy.materialize()
+
+        # Should not raise
+        initial_len = len(materialized)
+        new_frame = LabeledFrame(video=materialized.videos[0], frame_idx=99999)
+        materialized.append(new_frame)
+        assert len(materialized) == initial_len + 1
