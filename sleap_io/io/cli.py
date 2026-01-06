@@ -185,9 +185,11 @@ def _print_header(path: Path, labels: Labels) -> None:
     n_pred = sum(len(lf.predicted_instances) for lf in labels.labeled_frames)
 
     # Build header content
+    full_path = path.resolve()
     header_lines = [
         f"[bold cyan]{path.name}[/]",
         f"[dim]{path.parent}[/]",
+        f"[dim]Full:[/] {full_path}",
         "",
         f"[dim]Type:[/]     {file_type}",
         f"[dim]Size:[/]     {_format_file_size(file_size)}",
@@ -222,6 +224,68 @@ def _print_header(path: Path, labels: Labels) -> None:
             box=box.ROUNDED,
         )
     )
+
+
+def _print_video_standalone(path: Path, video: Video) -> None:
+    """Print header panel and details for a standalone video file."""
+    # Calculate file size
+    file_size = path.stat().st_size if path.exists() else 0
+
+    # Get video info using defensive helpers
+    video_type = _get_video_type(video)
+    status = _build_status_line(video)
+    plugin = _get_plugin(video)
+
+    # Build header content
+    full_path = path.resolve()
+    header_lines = [
+        f"[bold cyan]{path.name}[/]",
+        f"[dim]{path.parent}[/]",
+        f"[dim]Full:[/] {full_path}",
+        "",
+        f"[dim]Type:[/]     Video ({video_type})",
+        f"[dim]Size:[/]     {_format_file_size(file_size)}",
+    ]
+
+    # Shape info
+    if video.shape:
+        n_frames, h, w, c = video.shape
+        channels = "grayscale" if c == 1 else "RGB" if c == 3 else "RGBA"
+        stats_parts = [
+            f"[bold]{n_frames}[/] frames",
+            f"{w}×{h}",
+            channels,
+        ]
+        header_lines.append("")
+        header_lines.append(" | ".join(stats_parts))
+    else:
+        header_lines.append("")
+        header_lines.append("[yellow]Shape unknown (backend not loaded)[/]")
+
+    console.print(
+        Panel(
+            "\n".join(header_lines),
+            title="[bold]sleap-io[/]",
+            title_align="left",
+            border_style="cyan",
+            box=box.ROUNDED,
+        )
+    )
+
+    # Additional details below panel
+    console.print()
+    console.print(f"  [dim]Status[/]    {status}")
+    if plugin:
+        console.print(f"  [dim]Plugin[/]    {plugin}")
+
+    # Show backend metadata if available
+    if video.backend_metadata:
+        meta = video.backend_metadata
+        if meta.get("grayscale") is not None:
+            gs_str = "yes" if meta["grayscale"] else "no"
+            console.print(f"  [dim]Grayscale[/] {gs_str}")
+
+    console.print()
 
 
 def _print_skeleton_summary(labels: Labels) -> None:
@@ -553,13 +617,30 @@ def _print_video_summary(labels: Labels) -> None:
         console.print(f"  {idx_str} [cyan]{fname}[/]  {shape_str}  {frames_str}{tag}")
 
 
-def _print_video_details(labels: Labels) -> None:
-    """Print detailed video information with consistent field ordering."""
+def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> None:
+    """Print detailed video information with consistent field ordering.
+
+    Args:
+        labels: Labels object containing videos.
+        video_index: If None or -1, show all videos. Otherwise show specific video.
+    """
     if not labels.videos:
         console.print("[dim]No videos[/]")
         return
 
-    for i, vid in enumerate(labels.videos):
+    # Determine which videos to show
+    if video_index is None or video_index == -1:
+        videos_to_show = list(enumerate(labels.videos))
+    else:
+        if video_index < 0 or video_index >= len(labels.videos):
+            n_vids = len(labels.videos)
+            raise click.ClickException(
+                f"Video index {video_index} out of range. "
+                f"File has {n_vids} video(s) (indices 0-{n_vids - 1})."
+            )
+        videos_to_show = [(video_index, labels.videos[video_index])]
+
+    for i, vid in videos_to_show:
         console.print()
 
         # Get video info using defensive helpers
@@ -590,6 +671,10 @@ def _print_video_details(labels: Labels) -> None:
             console.print(f"  [dim]First[/]     {filenames[0]}")
             if len(filenames) > 1:
                 console.print(f"  [dim]Last[/]      {filenames[-1]}")
+            # Show full path of first image
+            full_path = Path(filenames[0]).resolve()
+            if str(full_path) != filenames[0]:
+                console.print(f"  [dim]Full[/]      {full_path.parent}/")
         elif is_embedded:
             # Embedded video - show source if available
             source_filename = None
@@ -607,6 +692,11 @@ def _print_video_details(labels: Labels) -> None:
         else:
             # Regular file - show path
             console.print(f"  [dim]Path[/]      {vid.filename}")
+            # Show full path if different from stored path
+            if isinstance(vid.filename, str):
+                full_path = Path(vid.filename).resolve()
+                if str(full_path) != vid.filename:
+                    console.print(f"  [dim]Full[/]      {full_path}")
 
         # Status line
         console.print(f"  [dim]Status[/]    {status}")
@@ -812,8 +902,11 @@ def _print_provenance(labels: Labels) -> None:
     "video",
     "--video",
     "-v",
-    is_flag=True,
-    help="Print detailed video info (opens backends by default).",
+    is_flag=False,
+    flag_value=-1,
+    default=None,
+    type=int,
+    help="Print detailed video info. Optional: specify video index (0-based).",
 )
 @click.option(
     "tracks",
@@ -841,7 +934,7 @@ def show(
     open_videos: Optional[bool],
     lf_index: Optional[int],
     skeleton: bool,
-    video: bool,
+    video: Optional[int],
     tracks: bool,
     provenance: bool,
     show_all: bool,
@@ -863,7 +956,7 @@ def show(
     # Expand --all flag
     if show_all:
         skeleton = True
-        video = True
+        video = -1  # Show all videos
         tracks = True
         provenance = True
 
@@ -871,7 +964,7 @@ def show(
     # - If explicitly set via --open-videos or --no-open-videos, use that
     # - Otherwise, open videos only when -v or --all is used
     if open_videos is None:
-        open_videos = video or show_all
+        open_videos = video is not None or show_all
     obj = io_main.load_file(str(path), open_videos=open_videos)
 
     if isinstance(obj, Labels):
@@ -880,7 +973,7 @@ def show(
         console.print()
 
         # Determine if we're showing detailed views
-        show_details = skeleton or video or tracks or lf_index is not None
+        show_details = skeleton or video is not None or tracks or lf_index is not None
 
         if not show_details:
             # Default: show compact summaries
@@ -893,9 +986,9 @@ def show(
                 console.print("[bold]Skeleton Details[/]")
                 _print_skeleton_details(obj)
 
-            if video:
+            if video is not None:
                 console.print("[bold]Video Details[/]")
-                _print_video_details(obj)
+                _print_video_details(obj, video_index=video)
 
             if tracks:
                 console.print("[bold]Tracks[/]")
@@ -910,8 +1003,11 @@ def show(
             _print_provenance(obj)
 
         console.print()
+    elif isinstance(obj, Video):
+        # Standalone video file
+        _print_video_standalone(path, obj)
     else:
-        # For non-Labels objects, print repr
+        # For other objects, print repr
         click.echo(repr(obj))
 
 

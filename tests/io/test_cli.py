@@ -171,7 +171,7 @@ def test_show_empty_labels_with_lf(tmp_path):
 
 
 def test_show_video_file():
-    """Test show on a video file (non-Labels object)."""
+    """Test show on a video file displays rich formatted output."""
     runner = CliRunner()
     path = _data_path("videos/centered_pair_low_quality.mp4")
 
@@ -181,8 +181,30 @@ def test_show_video_file():
 
     result = runner.invoke(cli, ["show", str(path), "--open-videos"])
     assert result.exit_code == 0, result.output
-    # Should print repr of Video object
-    assert "Video" in result.output
+    out = _strip_ansi(result.output)
+    # Should show rich panel with video info
+    assert "sleap-io" in out
+    assert "centered_pair_low_quality.mp4" in out
+    assert "Video (MediaVideo)" in out
+    assert "frames" in out
+    assert "Status" in out
+    assert "Plugin" in out or "Backend" in out
+
+
+def test_show_video_file_full_path():
+    """Test show on a video file displays full absolute path."""
+    runner = CliRunner()
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+
+    if not path.exists():
+        return
+
+    result = runner.invoke(cli, ["show", str(path), "--open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show full path for copy-paste convenience
+    assert "Full:" in out
+    assert str(path.resolve()) in out
 
 
 def test_show_video_flag():
@@ -295,6 +317,43 @@ def test_show_multiview_videos():
     assert "Video 7" in out
 
 
+def test_show_video_index_specific():
+    """Test -v with index shows only that video."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    # Show only video 1
+    result = runner.invoke(cli, ["show", str(path), "-v", "1", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show video 1
+    assert "Video 1:" in out
+    # Should NOT show video 0 or video 7
+    assert "Video 0:" not in out
+    assert "Video 7:" not in out
+
+
+def test_show_video_index_out_of_range():
+    """Test -v with out-of-range index gives clear error."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    result = runner.invoke(cli, ["show", str(path), "-v", "99", "--no-open-videos"])
+    assert result.exit_code == 1
+    out = _strip_ansi(result.output)
+    assert "out of range" in out
+    assert "8 video(s)" in out
+
+
+def test_show_video_index_first_video():
+    """Test -v 0 shows first video."""
+    runner = CliRunner()
+    path = _data_path("slp/multiview.slp")
+    result = runner.invoke(cli, ["show", str(path), "-v", "0", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    assert "Video 0:" in out
+    assert "Video 1:" not in out
+
+
 def test_show_header_shows_file_size():
     """Test that header panel shows file size."""
     runner = CliRunner()
@@ -316,6 +375,18 @@ def test_show_header_shows_instance_counts():
     # typical.slp has both user and predicted instances
     assert "labeled" in out
     assert "predicted" in out
+
+
+def test_show_header_shows_full_path():
+    """Test that header shows full absolute path."""
+    runner = CliRunner()
+    path = _data_path("slp/typical.slp")
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show "Full:" line with absolute path
+    assert "Full:" in out
+    assert str(path.resolve()) in out
 
 
 def test_show_pkg_file_type():
