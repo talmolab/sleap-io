@@ -504,8 +504,10 @@ class TestLazySaveRoundTrip:
 
         # numpy() output should match
         np.testing.assert_allclose(
-            reloaded.numpy(), lazy.numpy(), equal_nan=True,
-            err_msg="Frame data not preserved through round-trip"
+            reloaded.numpy(),
+            lazy.numpy(),
+            equal_nan=True,
+            err_msg="Frame data not preserved through round-trip",
         )
 
     def test_lazy_save_preserves_metadata(self, slp_real_data, tmp_path):
@@ -537,9 +539,7 @@ class TestLazySaveRoundTrip:
         sio.save_slp(lazy, str(out_path))
         eager = sio.load_slp(str(out_path), lazy=False)
 
-        np.testing.assert_allclose(
-            lazy.numpy(), eager.numpy(), equal_nan=True
-        )
+        np.testing.assert_allclose(lazy.numpy(), eager.numpy(), equal_nan=True)
 
     def test_roundtrip_lazy_save_lazy_load(self, slp_real_data, tmp_path):
         """Lazy save -> lazy load preserves data."""
@@ -549,9 +549,7 @@ class TestLazySaveRoundTrip:
         sio.save_slp(lazy1, str(out_path))
         lazy2 = sio.load_slp(str(out_path), lazy=True)
 
-        np.testing.assert_allclose(
-            lazy1.numpy(), lazy2.numpy(), equal_nan=True
-        )
+        np.testing.assert_allclose(lazy1.numpy(), lazy2.numpy(), equal_nan=True)
 
     def test_roundtrip_with_predictions(self, centered_pair, tmp_path):
         """Round-trip works with prediction files."""
@@ -566,7 +564,7 @@ class TestLazySaveRoundTrip:
         np.testing.assert_allclose(
             reloaded.numpy(user_instances=False),
             lazy.numpy(user_instances=False),
-            equal_nan=True
+            equal_nan=True,
         )
 
     def test_lazy_save_with_embed_false(self, slp_real_data, tmp_path):
@@ -630,8 +628,10 @@ class TestLazySaveRoundTrip:
         lazy3 = sio.load_slp(str(out2), lazy=True)
 
         np.testing.assert_allclose(
-            original_numpy, lazy3.numpy(), equal_nan=True,
-            err_msg="Data not preserved through double round-trip"
+            original_numpy,
+            lazy3.numpy(),
+            equal_nan=True,
+            err_msg="Data not preserved through double round-trip",
         )
 
 
@@ -802,9 +802,7 @@ class TestLabelsCopyLazy:
         lazy = sio.load_slp(slp_real_data, lazy=True)
         copy = lazy.copy()
 
-        np.testing.assert_allclose(
-            lazy.numpy(), copy.numpy(), equal_nan=True
-        )
+        np.testing.assert_allclose(lazy.numpy(), copy.numpy(), equal_nan=True)
 
 
 # === Labels.__repr__() Lazy Tests ===
