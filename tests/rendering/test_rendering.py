@@ -1045,11 +1045,11 @@ class TestRenderImage:
             render_image(lf, image=np.zeros((100, 100, 3), dtype=np.uint8))
 
     def test_render_image_video_unavailable_with_background(self, labels_predictions):
-        """Test render_image estimates frame size from keypoints when video unavailable."""
-        from sleap_io.rendering import render_image
-
+        """Test frame size estimation from keypoints when video unavailable."""
         # Make a copy so we don't modify the fixture
         import copy
+
+        from sleap_io.rendering import render_image
 
         labels = copy.deepcopy(labels_predictions)
         lf = labels.labeled_frames[0]
@@ -1075,11 +1075,11 @@ class TestRenderImage:
     def test_render_image_video_unavailable_no_background_error(
         self, labels_predictions
     ):
-        """Test render_image raises helpful error when video unavailable and no background."""
-        from sleap_io.rendering import render_image
-
+        """Test error raised when video unavailable and no background."""
         # Make a copy so we don't modify the fixture
         import copy
+
+        from sleap_io.rendering import render_image
 
         labels = copy.deepcopy(labels_predictions)
         lf = labels.labeled_frames[0]
@@ -1096,10 +1096,10 @@ class TestRenderImage:
         self, labels_predictions
     ):
         """Test render_image with Labels source when video unavailable."""
-        from sleap_io.rendering import render_image
-
         # Make a copy so we don't modify the fixture
         import copy
+
+        from sleap_io.rendering import render_image
 
         labels = copy.deepcopy(labels_predictions)
 
@@ -1122,10 +1122,10 @@ class TestRenderImage:
         self, labels_predictions
     ):
         """Test render_image with Labels source raises error when video unavailable."""
-        from sleap_io.rendering import render_image
-
         # Make a copy so we don't modify the fixture
         import copy
+
+        from sleap_io.rendering import render_image
 
         labels = copy.deepcopy(labels_predictions)
 
