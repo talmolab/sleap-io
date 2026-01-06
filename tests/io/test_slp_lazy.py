@@ -633,3 +633,255 @@ class TestLazySaveRoundTrip:
             original_numpy, lazy3.numpy(), equal_nan=True,
             err_msg="Data not preserved through double round-trip"
         )
+
+
+# === Mutation Guard Tests ===
+
+
+class TestLazyMutationBlocking:
+    """Tests for mutation blocking on lazy Labels."""
+
+    def test_append_blocked(self, slp_real_data):
+        """append() raises RuntimeError on lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        new_frame = LabeledFrame(video=lazy.videos[0], frame_idx=99999)
+        with pytest.raises(RuntimeError, match="Cannot append"):
+            lazy.append(new_frame)
+
+    def test_extend_blocked(self, slp_real_data):
+        """extend() raises RuntimeError on lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        with pytest.raises(RuntimeError, match="Cannot extend"):
+            lazy.extend([])
+
+    def test_clean_blocked(self, slp_real_data):
+        """clean() raises RuntimeError on lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        with pytest.raises(RuntimeError, match="Cannot clean"):
+            lazy.clean()
+
+    def test_remove_predictions_blocked(self, slp_real_data):
+        """remove_predictions() raises RuntimeError on lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        with pytest.raises(RuntimeError, match="Cannot remove_predictions"):
+            lazy.remove_predictions()
+
+    def test_merge_blocked(self, slp_real_data):
+        """merge() raises RuntimeError on lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        other = sio.Labels()
+        with pytest.raises(RuntimeError, match="Cannot merge"):
+            lazy.merge(other)
+
+    def test_error_message_includes_materialize_guidance(self, slp_real_data):
+        """Error messages include materialize() guidance."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        new_frame = LabeledFrame(video=lazy.videos[0], frame_idx=99999)
+        with pytest.raises(RuntimeError) as exc_info:
+            lazy.append(new_frame)
+        assert "materialize()" in str(exc_info.value)
+
+
+# === Labels.find() Lazy Tests ===
+
+
+class TestLabelsFindLazy:
+    """Tests for Labels.find() with lazy loading."""
+
+    def test_find_existing_frame(self, slp_real_data):
+        """find() returns existing frame from lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        video = lazy.videos[0]
+        # Get a known frame index
+        first_frame = lazy[0]
+        frame_idx = first_frame.frame_idx
+
+        result = lazy.find(video, frame_idx)
+        assert len(result) == 1
+        assert result[0].frame_idx == frame_idx
+
+    def test_find_nonexistent_returns_empty(self, slp_real_data):
+        """find() returns empty list for nonexistent frame."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        video = lazy.videos[0]
+        result = lazy.find(video, 999999)
+        assert result == []
+
+    def test_find_return_new_true(self, slp_real_data):
+        """find(return_new=True) returns new frame for nonexistent."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        video = lazy.videos[0]
+        result = lazy.find(video, 999999, return_new=True)
+        assert len(result) == 1
+        assert result[0].frame_idx == 999999
+
+    def test_find_lazy_matches_eager(self, slp_real_data):
+        """Lazy find() produces same results as eager."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        # Use respective video objects for each Labels
+        lazy_video = lazy.videos[0]
+        eager_video = eager.videos[0]
+        first_frame = lazy[0]
+        frame_idx = first_frame.frame_idx
+
+        lazy_result = lazy.find(lazy_video, frame_idx)
+        eager_result = eager.find(eager_video, frame_idx)
+
+        assert len(lazy_result) == len(eager_result)
+        assert lazy_result[0].frame_idx == eager_result[0].frame_idx
+
+    def test_find_all_frames_for_video(self, slp_real_data):
+        """find(video) returns all frames for that video."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        # Use respective video objects for each Labels
+        lazy_video = lazy.videos[0]
+        eager_video = eager.videos[0]
+        lazy_result = lazy.find(lazy_video)
+        eager_result = eager.find(eager_video)
+
+        assert len(lazy_result) == len(eager_result)
+
+
+# === Labels.user_labeled_frames Lazy Tests ===
+
+
+class TestLabelsUserLabeledFramesLazy:
+    """Tests for Labels.user_labeled_frames with lazy loading."""
+
+    def test_user_labeled_frames_returns_list(self, slp_real_data):
+        """user_labeled_frames returns list for lazy Labels."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        result = lazy.user_labeled_frames
+        assert isinstance(result, list)
+
+    def test_user_labeled_frames_lazy_matches_eager(self, slp_real_data):
+        """Lazy user_labeled_frames matches eager."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        lazy_result = lazy.user_labeled_frames
+        eager_result = eager.user_labeled_frames
+
+        assert len(lazy_result) == len(eager_result)
+        for lf_lazy, lf_eager in zip(lazy_result, eager_result):
+            assert lf_lazy.frame_idx == lf_eager.frame_idx
+
+
+# === Labels.copy() Lazy Tests ===
+
+
+class TestLabelsCopyLazy:
+    """Tests for Labels.copy() with lazy loading."""
+
+    def test_copy_returns_labels(self, slp_real_data):
+        """copy() returns Labels object."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        copy = lazy.copy()
+        assert isinstance(copy, sio.Labels)
+
+    def test_copy_is_lazy(self, slp_real_data):
+        """Copy of lazy Labels is also lazy."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        copy = lazy.copy()
+        assert copy.is_lazy
+
+    def test_copy_is_independent(self, slp_real_data):
+        """Copy has independent arrays."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        copy = lazy.copy()
+
+        # Arrays should be different objects
+        assert lazy._lazy_store.frames_data is not copy._lazy_store.frames_data
+
+    def test_copy_lazy_matches_eager(self, slp_real_data):
+        """Lazy copy produces same data as eager copy."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        copy = lazy.copy()
+
+        np.testing.assert_allclose(
+            lazy.numpy(), copy.numpy(), equal_nan=True
+        )
+
+
+# === Labels.__repr__() Lazy Tests ===
+
+
+class TestLabelsReprLazy:
+    """Tests for Labels.__repr__() with lazy loading."""
+
+    def test_lazy_repr_shows_lazy_true(self, slp_real_data):
+        """Lazy Labels repr shows lazy=True."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        repr_str = repr(lazy)
+        assert "lazy=True" in repr_str
+
+    def test_eager_repr_no_lazy(self, slp_real_data):
+        """Eager Labels repr doesn't show lazy."""
+        eager = sio.load_slp(slp_real_data, lazy=False)
+        repr_str = repr(eager)
+        assert "lazy=True" not in repr_str
+
+
+# === End-to-End Integration Tests ===
+
+
+class TestLazyLoadingIntegration:
+    """End-to-end integration tests."""
+
+    def test_load_numpy_workflow(self, slp_real_data):
+        """Load lazy -> numpy() workflow."""
+        labels = sio.load_slp(slp_real_data, lazy=True)
+        arr = labels.numpy()
+        assert isinstance(arr, np.ndarray)
+        assert arr.ndim == 4
+
+    def test_load_save_workflow(self, slp_real_data, tmp_path):
+        """Load lazy -> save workflow."""
+        labels = sio.load_slp(slp_real_data, lazy=True)
+        out = tmp_path / "out.slp"
+        sio.save_slp(labels, str(out))
+        assert out.exists()
+
+    def test_load_modify_save_workflow(self, slp_real_data, tmp_path):
+        """Load lazy -> materialize -> modify -> save workflow."""
+        labels = sio.load_slp(slp_real_data, lazy=True)
+        labels = labels.materialize()
+        # Make a modification
+        labels.provenance["modified"] = True
+        out = tmp_path / "out.slp"
+        sio.save_slp(labels, str(out))
+
+        reloaded = sio.load_slp(str(out))
+        assert reloaded.provenance.get("modified") is True
+
+    def test_lazy_iteration(self, slp_real_data):
+        """Lazy iteration yields correct frames."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        for lf_lazy, lf_eager in zip(lazy, eager):
+            assert lf_lazy.frame_idx == lf_eager.frame_idx
+            assert len(lf_lazy) == len(lf_eager)
+
+    def test_lazy_indexing(self, slp_real_data):
+        """Lazy indexing returns correct frames."""
+        lazy = sio.load_slp(slp_real_data, lazy=True)
+        eager = sio.load_slp(slp_real_data, lazy=False)
+
+        for i in [0, len(lazy) // 2, -1]:
+            lf_lazy = lazy[i]
+            lf_eager = eager[i]
+            assert lf_lazy.frame_idx == lf_eager.frame_idx
+
+    def test_labeled_frames_access_pattern(self, slp_real_data):
+        """Common labeled_frames access pattern works."""
+        labels = sio.load_slp(slp_real_data, lazy=True)
+
+        # Common pattern in existing code
+        for lf in labels.labeled_frames:
+            _ = lf.frame_idx
+            break  # Just test first frame

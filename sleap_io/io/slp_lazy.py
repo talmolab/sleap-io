@@ -290,6 +290,38 @@ class LazyDataStore:
         """
         return [self.materialize_frame(i) for i in range(len(self))]
 
+    def get_user_frame_indices(self) -> list[int]:
+        """Find indices of frames containing user (non-predicted) instances.
+
+        Returns:
+            List of frame indices (into frames_data) that have at least one user
+            instance.
+        """
+        from sleap_io.io.slp import InstanceType
+
+        # Find all user instances
+        user_mask = self.instances_data["instance_type"] == InstanceType.USER
+        if not np.any(user_mask):
+            return []
+
+        # Build frame index ranges for efficient lookup
+        frame_starts = self.frames_data["instance_id_start"]
+        frame_ends = self.frames_data["instance_id_end"]
+
+        # Find which frames contain user instances
+        user_frame_indices = []
+        user_instance_indices = np.where(user_mask)[0]
+
+        for inst_idx in user_instance_indices:
+            # Binary search for containing frame
+            for fi in range(len(self.frames_data)):
+                if frame_starts[fi] <= inst_idx < frame_ends[fi]:
+                    if fi not in user_frame_indices:
+                        user_frame_indices.append(fi)
+                    break
+
+        return sorted(user_frame_indices)
+
     def to_numpy(
         self,
         video: Optional["Video"] = None,
