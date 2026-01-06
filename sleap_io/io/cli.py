@@ -236,12 +236,10 @@ def _print_header(path: Path, labels: Labels) -> None:
     n_user = sum(len(lf.user_instances) for lf in labels.labeled_frames)
     n_pred = sum(len(lf.predicted_instances) for lf in labels.labeled_frames)
 
-    # Build header content
-    full_path = path.resolve()
+    # Build header content (without full path - shown below to avoid truncation)
     header_lines = [
         f"[bold cyan]{path.name}[/]",
         f"[dim]{path.parent}[/]",
-        f"[dim]Full:[/] {full_path}",
         "",
         f"[dim]Type:[/]     {file_type}",
         f"[dim]Size:[/]     {_format_file_size(file_size)}",
@@ -277,6 +275,10 @@ def _print_header(path: Path, labels: Labels) -> None:
         )
     )
 
+    # Show full path below panel to avoid truncation
+    full_path = path.resolve()
+    console.print(f"  [dim]Full:[/] {full_path}")
+
 
 def _print_video_standalone(path: Path, video: Video) -> None:
     """Print header panel and details for a standalone video file."""
@@ -288,12 +290,10 @@ def _print_video_standalone(path: Path, video: Video) -> None:
     status = _build_status_line(video)
     plugin = _get_plugin(video)
 
-    # Build header content
-    full_path = path.resolve()
+    # Build header content (without full path - shown below to avoid truncation)
     header_lines = [
         f"[bold cyan]{path.name}[/]",
         f"[dim]{path.parent}[/]",
-        f"[dim]Full:[/] {full_path}",
         "",
         f"[dim]Type:[/]     Video ({video_type})",
         f"[dim]Size:[/]     {_format_file_size(file_size)}",
@@ -324,8 +324,10 @@ def _print_video_standalone(path: Path, video: Video) -> None:
         )
     )
 
-    # Additional details below panel
+    # Additional details below panel (full path here to avoid truncation)
     console.print()
+    full_path = path.resolve()
+    console.print(f"  [dim]Full[/]      {full_path}")
     console.print(f"  [dim]Status[/]    {status}")
     if plugin:
         console.print(f"  [dim]Plugin[/]    {plugin}")

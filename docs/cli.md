@@ -135,13 +135,13 @@ sio show video.mp4
 ╭─ sleap-io ─────────────────────────────────────────────────────────────╮
 │ labels.slp                                                             │
 │ /home/user/projects/mouse-tracking                                     │
-│ Full: /home/user/projects/mouse-tracking/labels.slp                    │
 │                                                                        │
 │ Type:     Labels                                                       │
 │ Size:     2.4 MB                                                       │
 │                                                                        │
 │ 1 video | 100 frames | 200 labeled | 2 tracks                          │
 ╰────────────────────────────────────────────────────────────────────────╯
+  Full: /home/user/projects/mouse-tracking/labels.slp
 
 Skeletons
   mouse (7 nodes, 6 edges)
@@ -344,7 +344,6 @@ sio show video.mp4
 ╭─ sleap-io ────────────────────────────────────────────────────────────╮
 │ video.mp4                                                             │
 │ /data/videos                                                          │
-│ Full: /data/videos/video.mp4                                          │
 │                                                                       │
 │ Type:     Video (MediaVideo)                                          │
 │ Size:     934.3 KB                                                    │
@@ -352,6 +351,7 @@ sio show video.mp4
 │ 1100 frames | 384×384 | grayscale                                     │
 ╰───────────────────────────────────────────────────────────────────────╯
 
+  Full      /data/videos/video.mp4
   Status    Backend loaded (opencv)
   Plugin    opencv
 ```

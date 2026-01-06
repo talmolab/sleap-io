@@ -204,7 +204,7 @@ def test_show_video_file_full_path():
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # Should show full path for copy-paste convenience
-    assert "Full:" in out
+    assert "Full" in out
     assert str(path.resolve()) in out
 
 
