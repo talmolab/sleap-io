@@ -2881,3 +2881,102 @@ def test_show_lazy_shows_correct_instance_counts(centered_pair):
     assert "1100" in out  # frames
     assert "2274" in out  # predicted instances
     assert "27" in out  # tracks
+
+
+# =======================
+# Render Additional Tests
+# =======================
+
+
+def test_render_list_colors():
+    """Test --list-colors shows available colors."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render", "--list-colors"])
+    assert result.exit_code == 0, result.output
+    out = result.output
+
+    # Check that named colors are listed
+    assert "black" in out
+    assert "white" in out
+    assert "red" in out
+
+    # Check format hints are shown
+    assert "Hex codes" in out
+    assert "RGB tuples" in out
+
+
+def test_render_list_palettes():
+    """Test --list-palettes shows available palettes."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render", "--list-palettes"])
+    assert result.exit_code == 0, result.output
+    out = result.output
+
+    # Check that built-in palettes are listed
+    assert "distinct" in out
+    assert "rainbow" in out
+    assert "tableau10" in out
+
+    # Check colorcet info is shown
+    assert "glasbey" in out
+    assert "colorcet" in out
+
+
+def test_render_missing_input():
+    """Test render fails gracefully when no input provided."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render"])
+    assert result.exit_code != 0
+    assert "Missing input file" in result.output
+
+
+def test_render_positional_input(centered_pair, tmp_path):
+    """Test render accepts positional input argument."""
+    runner = CliRunner()
+    output = tmp_path / "output.png"
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            centered_pair,  # positional, not -i
+            "--lf",
+            "0",
+            "-o",
+            str(output),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
+def test_render_with_background(centered_pair, tmp_path):
+    """Test render with --background flag."""
+    runner = CliRunner()
+    output = tmp_path / "output.png"
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "-o",
+            str(output),
+            "--background",
+            "black",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
+def test_render_help_short_flag():
+    """Test render -h shows help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["render", "-h"])
+    assert result.exit_code == 0, result.output
+    assert "Render pose predictions" in result.output
+    assert "--background" in result.output
+    assert "--list-colors" in result.output
+    assert "--list-palettes" in result.output

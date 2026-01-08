@@ -36,9 +36,8 @@ click.rich_click.THEME = "solarized-slim"
 click.rich_click.TEXT_MARKUP = "rich"
 click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.MAX_WIDTH = 100
-click.rich_click.ERRORS_EPILOGUE = (
-    "See [link=https://io.sleap.ai]io.sleap.ai[/] for documentation."
-)
+# Show documentation link only in --help, not in error messages
+click.rich_click.ERRORS_EPILOGUE = ""
 
 # Command panels for organized help display
 click.rich_click.COMMAND_GROUPS = {
@@ -172,7 +171,7 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     ctx.exit()
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--version",
     is_flag=True,
@@ -191,6 +190,8 @@ def cli():
 
         $ sio show labels.slp
         $ sio show labels.slp --skeleton
+
+    [dim]Documentation:[/] [link=https://io.sleap.ai]io.sleap.ai[/]
     """
     pass
 
@@ -1681,13 +1682,19 @@ def filenames(
 
 
 @cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
 @click.option(
     "-i",
     "--input",
-    "input_path",
-    required=True,
+    "input_opt",
+    default=None,
     type=click.Path(exists=True, path_type=Path),
-    help="Input labels file (.slp, .nwb, etc.).",
+    help="Input labels file (.slp, .nwb, etc.). Can also be passed as positional arg.",
 )
 @click.option(
     "-o",
@@ -1840,8 +1847,31 @@ def filenames(
     default=None,
     help="Crop region: 'x1,y1,x2,y2' (pixels or normalized 0.0-1.0).",
 )
+# Background options
+@click.option(
+    "--background",
+    type=str,
+    default="video",
+    show_default=True,
+    help="Background: 'video' (use source video), or color name/hex/RGB "
+    "(e.g., 'black', '#ff0000', '128,128,128'). Use a color if video unavailable.",
+)
+# Info options
+@click.option(
+    "--list-colors",
+    is_flag=True,
+    default=False,
+    help="List available named colors and exit.",
+)
+@click.option(
+    "--list-palettes",
+    is_flag=True,
+    default=False,
+    help="List available color palettes and exit.",
+)
 def render(
-    input_path: Path,
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
     output_path: Optional[Path],
     lf_ind: Optional[int],
     frame_idx: Optional[int],
@@ -1863,6 +1893,9 @@ def render(
     no_nodes: bool,
     no_edges: bool,
     crop_str: Optional[str],
+    background: str,
+    list_colors: bool,
+    list_palettes: bool,
 ) -> None:
     """Render pose predictions as video or single image.
 
@@ -1874,34 +1907,86 @@ def render(
 
         [bold]Video rendering:[/]
 
-        $ sio render -i predictions.slp                      # -> predictions.viz.mp4
+        $ sio render predictions.slp                         # -> predictions.viz.mp4
 
-        $ sio render -i predictions.slp -o output.mp4        # Explicit output
+        $ sio render predictions.slp -o output.mp4           # Explicit output
 
-        $ sio render -i predictions.slp --preset preview     # Fast 0.25x preview
+        $ sio render predictions.slp --preset preview        # Fast 0.25x preview
 
-        $ sio render -i predictions.slp --start 100 --end 200
+        $ sio render predictions.slp --start 100 --end 200
 
-        $ sio render -i predictions.slp --fps 15             # Slow motion
+        $ sio render predictions.slp --fps 15                # Slow motion
 
-        $ sio render -i predictions.slp --all-frames         # Include unlabeled frames
+        $ sio render predictions.slp --all-frames            # Include unlabeled frames
 
         [bold]Single image rendering:[/]
 
-        $ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
+        $ sio render predictions.slp --lf 0                  # -> predictions.lf=0.png
 
-        $ sio render -i predictions.slp --frame 42           # -> *.frame=42.png
+        $ sio render predictions.slp --frame 42              # -> *.frame=42.png
 
-        $ sio render -i labels.slp --lf 5 -o frame.png       # Explicit output
+        $ sio render labels.slp --lf 5 -o frame.png          # Explicit output
 
         [bold]Cropping:[/]
 
-        $ sio render -i predictions.slp --lf 0 --crop 100,100,300,300  # Pixel crop
+        $ sio render predictions.slp --lf 0 --crop 100,100,300,300
 
-        $ sio render -i predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75  # Normalized
+        $ sio render predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75  # Normalized
 
-        $ sio render -i predictions.slp -o cropped.mp4 --crop 100,100,300,300  # Video
+        $ sio render predictions.slp -o cropped.mp4 --crop 100,100,300,300
+
+        [bold]Background (when video unavailable):[/]
+
+        $ sio render predictions.slp --background black      # Solid black background
+
+        $ sio render predictions.slp --background "#333333"  # Custom hex color
+
+        [bold]Color info:[/]
+
+        $ sio render --list-colors                           # Show available colors
+
+        $ sio render --list-palettes                         # Show available palettes
     """
+    # Handle --list-colors flag
+    if list_colors:
+        from sleap_io.rendering.colors import NAMED_COLORS
+
+        console.print("[bold]Available named colors:[/]")
+        color_items = []
+        for name, rgb in sorted(NAMED_COLORS.items()):
+            hex_code = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+            color_items.append(f"[{hex_code}]{name}[/] ({hex_code})")
+        console.print("  " + ", ".join(color_items))
+        console.print()
+        console.print("[dim]You can also use:[/]")
+        console.print("  - Hex codes: #ff0000, #333")
+        console.print("  - RGB tuples: 255,128,0")
+        console.print("  - Grayscale: 128 or 0.5")
+        return
+
+    # Handle --list-palettes flag
+    if list_palettes:
+        from sleap_io.rendering.colors import PALETTES
+
+        console.print("[bold]Built-in palettes:[/]")
+        for name in sorted(PALETTES.keys()):
+            n_colors = len(PALETTES[name])
+            console.print(f"  {name} ({n_colors} colors)")
+        console.print()
+        console.print("[bold]Colorcet palettes[/] (require [cyan]colorcet[/] package):")
+        console.print("  glasbey, glasbey_hv, glasbey_cool, glasbey_warm")
+        console.print("  fire, rainbow4, blues, and many more")
+        console.print()
+        console.print("[dim]Install colorcet: pip install colorcet[/]")
+        return
+
+    # Resolve input path from positional arg or -i option
+    input_path: Optional[Path] = input_arg or input_opt
+    if input_path is None:
+        raise click.ClickException(
+            "Missing input file. Provide as positional arg or with -i/--input."
+        )
+
     # Load labels
     try:
         labels = io_main.load_file(str(input_path), open_videos=True)
@@ -1999,6 +2084,7 @@ def render(
                     alpha=alpha,
                     show_nodes=not no_nodes,
                     show_edges=not no_edges,
+                    background=background,
                 )
             else:
                 # Render by video + frame_idx
@@ -2024,6 +2110,7 @@ def render(
                     alpha=alpha,
                     show_nodes=not no_nodes,
                     show_edges=not no_edges,
+                    background=background,
                 )
         else:
             # Video rendering
@@ -2050,6 +2137,7 @@ def render(
                 end=end_frame_idx,
                 include_unlabeled=effective_all_frames,
                 show_progress=True,
+                background=background,
             )
     except Exception as e:
         raise click.ClickException(f"Failed to render: {e}")
