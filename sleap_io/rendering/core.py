@@ -680,7 +680,7 @@ def render_image(
                         raise ValueError("No image available")
                 except Exception:
                     raise ValueError(
-                        "Video unavailable. Use 'background=<color>' to render "
+                        "Video unavailable. Specify a background color to render "
                         "without video, e.g., background='black' or "
                         "background=(40, 40, 40)."
                     )
@@ -720,7 +720,7 @@ def render_image(
                         raise ValueError("No image available")
                 except Exception:
                     raise ValueError(
-                        "Video unavailable. Use 'background=<color>' to render "
+                        "Video unavailable. Specify a background color to render "
                         "without video, e.g., background='black' or "
                         "background=(40, 40, 40)."
                     )
@@ -1115,8 +1115,8 @@ def render_video(
                         raise ValueError("No image")
                 except Exception:
                     raise ValueError(
-                        f"Video unavailable at frame {fidx}. Use "
-                        "'background=<color>' to render without video."
+                        f"Video unavailable at frame {fidx}. "
+                        "Specify a background color to render without video."
                     )
 
             # Apply cropping if specified
@@ -1189,8 +1189,8 @@ def render_video(
                     raise ValueError("No image")
             except Exception:
                 raise ValueError(
-                    f"Video unavailable at frame {fidx}. Use "
-                    "'background=<color>' to render without video."
+                    f"Video unavailable at frame {fidx}. "
+                    "Specify a background color to render without video."
                 )
 
         # Apply cropping if specified
