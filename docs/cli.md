@@ -1249,7 +1249,7 @@ sio --version
 **Example output:**
 
 ```
-sleap-io 0.5.8
+sleap-io 0.6.0
 python 3.12.11
 
 Core:

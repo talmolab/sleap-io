@@ -207,6 +207,41 @@ export_labeled_frames(
 )
 ```
 
+
+##### Multi-Subject Support
+
+For multi-animal experiments, sleap-io supports the [ndx-multisubjects](https://pypi.org/project/ndx-multisubjects/) NWB extension. This links each tracked animal to a proper NWB Subject entry.
+
+```python
+from sleap_io.io.nwb_annotations import save_labels
+
+# Basic multi-subject export (uses track names as subject IDs)
+save_labels(labels, "output.nwb", use_multisubjects=True)
+
+# With detailed subject metadata
+subjects_metadata = [
+    {"sex": "M", "species": "Mus musculus", "age": "P30D"},
+    {"sex": "F", "species": "Mus musculus", "age": "P45D"},
+]
+save_labels(
+    labels,
+    "output.nwb",
+    use_multisubjects=True,
+    subjects_metadata=subjects_metadata
+)
+```
+
+!!! info "Subject metadata fields"
+    The `subjects_metadata` list should have one entry per track. Each entry can include:
+
+    - `sex`: Subject sex (defaults to "U" for unknown)
+    - `species`: Species name (defaults to "unknown")
+    - `age`: Age in ISO 8601 duration format (e.g., "P30D" for 30 days)
+    - Any other fields supported by NWB Subject
+
+!!! warning "Tracked instances required"
+    Multi-subject export requires all instances to have track assignments. A warning is issued if untracked instances are present.
+
 #### NWB Metadata
 
 The NWB format requires certain metadata fields. sleap-io provides sensible defaults:
