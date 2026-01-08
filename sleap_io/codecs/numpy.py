@@ -80,15 +80,23 @@ def to_numpy(
         >>> # Include untracked instances
         >>> arr = to_numpy(labels, untracked=True)
     """
-    # This is essentially the same as Labels.numpy() but extracted to the codec
-    # We'll delegate to the existing implementation for now, but this gives us
-    # a place to add more flexibility in the future
-
-    # Get labeled frames for specified video.
+    # Convert video parameter to Video object
     if video is None:
-        video = 0
-    if type(video) is int:
+        video = labels.videos[0] if labels.videos else None
+    elif type(video) is int:
         video = labels.videos[video]
+
+    # Use lazy fast path when available
+    if labels.is_lazy:
+        store = labels.labeled_frames._store
+        return store.to_numpy(
+            video=video,
+            untracked=untracked,
+            return_confidence=return_confidence,
+            user_instances=user_instances,
+        )
+
+    # Eager path: filter labeled frames by video
     lfs = [lf for lf in labels.labeled_frames if lf.video == video]
 
     # Figure out frame index range.

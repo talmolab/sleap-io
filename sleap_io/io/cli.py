@@ -233,9 +233,9 @@ def _print_header(path: Path, labels: Labels) -> None:
     is_pkg = ".pkg.slp" in path.name.lower()
     file_type = "Package (embedded)" if is_pkg else "Labels"
 
-    # Count instances
-    n_user = sum(len(lf.user_instances) for lf in labels.labeled_frames)
-    n_pred = sum(len(lf.predicted_instances) for lf in labels.labeled_frames)
+    # Count instances using fast stats (works for both eager and lazy)
+    n_user = labels.n_user_instances
+    n_pred = labels.n_pred_instances
 
     # Build header content (without full path - shown below to avoid truncation)
     header_lines = [
@@ -695,6 +695,9 @@ def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> N
             )
         videos_to_show = [(video_index, labels.videos[video_index])]
 
+    # Pre-compute frame counts using fast path (works for both eager and lazy)
+    frame_counts = labels.n_frames_per_video()
+
     for i, vid in videos_to_show:
         console.print()
 
@@ -783,8 +786,8 @@ def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> N
             console.print("  [dim]Frames[/]    [yellow]unknown[/]")
             console.print("  [dim]Size[/]      [yellow]unknown[/]")
 
-        # Labeled frames in this video
-        n_frames_labeled = sum(1 for lf in labels.labeled_frames if lf.video == vid)
+        # Labeled frames in this video - use pre-computed count
+        n_frames_labeled = frame_counts.get(vid, 0)
         console.print(f"  [dim]Labeled[/]   {n_frames_labeled} frames")
 
         # Show source video metadata for embedded videos
@@ -828,12 +831,8 @@ def _print_tracks_details(labels: Labels) -> None:
         console.print("[dim]No tracks[/]")
         return
 
-    # Count instances per track
-    track_counts = {t: 0 for t in labels.tracks}
-    for lf in labels.labeled_frames:
-        for inst in lf.instances:
-            if inst.track and inst.track in track_counts:
-                track_counts[inst.track] += 1
+    # Use fast path for instance counts (works for both eager and lazy)
+    track_counts = labels.n_instances_per_track()
 
     console.print()
     table = Table(box=box.SIMPLE, show_header=True, header_style="dim")
@@ -843,7 +842,7 @@ def _print_tracks_details(labels: Labels) -> None:
 
     for idx, track in enumerate(labels.tracks):
         table.add_row(
-            str(idx), track.name or "[dim]unnamed[/]", str(track_counts[track])
+            str(idx), track.name or "[dim]unnamed[/]", str(track_counts.get(track, 0))
         )
 
     console.print(table)
@@ -934,6 +933,12 @@ def _print_provenance(labels: Labels) -> None:
 @cli.command()
 @click.argument("path", type=click.Path(exists=True, path_type=Path))
 @click.option(
+    "lazy",
+    "--lazy/--no-lazy",
+    default=True,
+    help="Use lazy loading for faster startup (SLP files only). Default: lazy.",
+)
+@click.option(
     "open_videos",
     "--open-videos/--no-open-videos",
     default=None,
@@ -991,6 +996,7 @@ def _print_provenance(labels: Labels) -> None:
 )
 def show(
     path: Path,
+    lazy: bool,
     open_videos: Optional[bool],
     lf_index: Optional[int],
     skeleton: bool,
@@ -1030,7 +1036,18 @@ def show(
     # - Otherwise, open videos only when -v or --all is used
     if open_videos is None:
         open_videos = video or show_all
-    obj = io_main.load_file(str(path), open_videos=open_videos)
+
+    # Use lazy loading only for SLP files (other formats don't support it)
+    use_lazy = lazy and path.suffix.lower() == ".slp"
+    try:
+        obj = io_main.load_file(str(path), open_videos=open_videos, lazy=use_lazy)
+    except (IndexError, KeyError):
+        # Fall back to eager loading if lazy loading fails
+        # (e.g., for files with sessions that require labeled_frames)
+        if use_lazy:
+            obj = io_main.load_file(str(path), open_videos=open_videos, lazy=False)
+        else:
+            raise
 
     if isinstance(obj, Labels):
         # Always show header

@@ -29,6 +29,7 @@ from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.matching import (
         InstanceMatcher,
@@ -69,8 +70,186 @@ class Labels:
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
+    # Internal lazy state (private, not part of public API)
+    _lazy_store: Optional["LazyDataStore"] = field(
+        default=None, repr=False, eq=False, alias="lazy_store"
+    )
+
+    @property
+    def is_lazy(self) -> bool:
+        """Whether this Labels uses lazy loading.
+
+        Returns:
+            True if loaded with lazy=True and not yet materialized.
+        """
+        return self._lazy_store is not None
+
+    def _check_not_lazy(self, operation: str) -> None:
+        """Raise if Labels is lazy-loaded.
+
+        Args:
+            operation: Description of blocked operation for error message.
+
+        Raises:
+            RuntimeError: If is_lazy is True.
+        """
+        if self.is_lazy:
+            raise RuntimeError(
+                f"Cannot {operation} on lazy-loaded Labels.\n\n"
+                f"To modify, first create a materialized copy:\n"
+                f"    labels = labels.materialize()\n"
+                f"    labels.{operation}(...)"
+            )
+
+    @property
+    def n_user_instances(self) -> int:
+        """Total number of user-labeled instances across all frames.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Total count of user instances.
+        """
+        if self.is_lazy:
+            from sleap_io.io.slp import InstanceType
+
+            store = self.labeled_frames._store
+            mask = store.instances_data["instance_type"] == InstanceType.USER
+            return int(mask.sum())
+        return sum(len(lf.user_instances) for lf in self.labeled_frames)
+
+    @property
+    def n_pred_instances(self) -> int:
+        """Total number of predicted instances across all frames.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Total count of predicted instances.
+        """
+        if self.is_lazy:
+            from sleap_io.io.slp import InstanceType
+
+            store = self.labeled_frames._store
+            return int(
+                (store.instances_data["instance_type"] == InstanceType.PREDICTED).sum()
+            )
+        return sum(len(lf.predicted_instances) for lf in self.labeled_frames)
+
+    def n_frames_per_video(self) -> dict["Video", int]:
+        """Get the number of labeled frames for each video.
+
+        When lazy-loaded, this uses a fast path that queries the raw frame
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Dictionary mapping Video objects to their labeled frame counts.
+        """
+        if self.is_lazy:
+            store = self.labeled_frames._store
+            counts = np.bincount(store.frames_data["video"], minlength=len(self.videos))
+            return {v: int(counts[i]) for i, v in enumerate(self.videos)}
+
+        counts: dict[Video, int] = {}
+        for lf in self.labeled_frames:
+            counts[lf.video] = counts.get(lf.video, 0) + 1
+        return counts
+
+    def n_instances_per_track(self) -> dict["Track", int]:
+        """Get the number of instances for each track.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame or Instance objects.
+
+        Returns:
+            Dictionary mapping Track objects to their instance counts.
+            Untracked instances are not included.
+        """
+        if self.is_lazy:
+            store = self.labeled_frames._store
+            track_ids = store.instances_data["track"]
+            # Filter out untracked instances (track == -1)
+            valid_mask = track_ids >= 0
+            if not np.any(valid_mask):
+                return {t: 0 for t in self.tracks}
+            counts = np.bincount(track_ids[valid_mask], minlength=len(self.tracks))
+            return {t: int(counts[i]) for i, t in enumerate(self.tracks)}
+
+        counts: dict[Track, int] = {t: 0 for t in self.tracks}
+        for lf in self.labeled_frames:
+            for inst in lf.instances:
+                if inst.track is not None and inst.track in counts:
+                    counts[inst.track] += 1
+        return counts
+
+    def materialize(self) -> "Labels":
+        """Create a fully materialized (non-lazy) copy.
+
+        If already non-lazy, returns self unchanged.
+
+        This converts a lazy-loaded Labels into a regular Labels with all
+        LabeledFrame and Instance objects created. Use this when you need
+        to modify the Labels.
+
+        Returns:
+            A new Labels with all frames/instances as Python objects and
+            deep-copied metadata (videos, skeletons, tracks). The returned
+            Labels is fully independent from the original lazy Labels.
+
+        Example:
+            >>> lazy = sio.load_slp("file.slp", lazy=True)
+            >>> eager = lazy.materialize()
+            >>> eager.append(new_frame)  # Now mutations work
+        """
+        if not self.is_lazy:
+            return self
+
+        # Deep copy metadata to ensure full independence
+        new_videos = [deepcopy(v) for v in self.videos]
+        new_skeletons = [deepcopy(s) for s in self.skeletons]
+        new_tracks = [deepcopy(t) for t in self.tracks]
+
+        # Build mappings from old to new objects for relinking
+        video_map = {id(old): new for old, new in zip(self.videos, new_videos)}
+        skeleton_map = {id(old): new for old, new in zip(self.skeletons, new_skeletons)}
+        track_map = {id(old): new for old, new in zip(self.tracks, new_tracks)}
+
+        # Materialize frames and relink to new metadata objects
+        labeled_frames = []
+        for lf in self._lazy_store.materialize_all():
+            # Relink video
+            lf.video = video_map.get(id(lf.video), lf.video)
+            # Relink instances
+            for inst in lf.instances:
+                inst.skeleton = skeleton_map.get(id(inst.skeleton), inst.skeleton)
+                if inst.track is not None:
+                    inst.track = track_map.get(id(inst.track), inst.track)
+            labeled_frames.append(lf)
+
+        # Deep copy suggestions and relink videos
+        new_suggestions = []
+        for s in self.suggestions:
+            new_s = deepcopy(s)
+            new_s.video = video_map.get(id(s.video), new_s.video)
+            new_suggestions.append(new_s)
+
+        return Labels(
+            labeled_frames=labeled_frames,
+            videos=new_videos,
+            skeletons=new_skeletons,
+            tracks=new_tracks,
+            suggestions=new_suggestions,
+            provenance=dict(self.provenance),
+            # _lazy_store is None (not lazy)
+        )
+
     def __attrs_post_init__(self):
         """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
+        # Skip update for lazy Labels - metadata is already set from HDF5
+        if self.is_lazy:
+            return
         self.update()
 
     def update(self):
@@ -145,6 +324,18 @@ class Labels:
 
     def __repr__(self) -> str:
         """Return a readable representation of the labels."""
+        if self.is_lazy:
+            return (
+                "Labels("
+                "lazy=True, "
+                f"labeled_frames={len(self)}, "
+                f"videos={len(self.videos)}, "
+                f"skeletons={len(self.skeletons)}, "
+                f"tracks={len(self.tracks)}, "
+                f"suggestions={len(self.suggestions)}, "
+                f"sessions={len(self.sessions)}"
+                ")"
+            )
         return (
             "Labels("
             f"labeled_frames={len(self.labeled_frames)}, "
@@ -171,7 +362,8 @@ class Labels:
                 - `False`: Disable auto-opening and close any open backends.
 
         Returns:
-            A new Labels object with deep copied data.
+            A new Labels object with deep copied data. If lazy, the copy is
+            also lazy with independent array copies.
 
         Notes:
             Video backends are not copied (file handles cannot be duplicated).
@@ -190,7 +382,33 @@ class Labels:
             >>> labels_copy = labels.copy()
             >>> labels_copy.remove_predictions()
         """
-        labels_copy = deepcopy(self)
+        if self.is_lazy:
+            # Lazy-aware copy: deep copy the lazy store with independent arrays
+            from sleap_io.io.slp_lazy import LazyFrameList
+
+            new_store = self._lazy_store.copy()
+            # Update store's video/skeleton/track references to new copies
+            new_videos = [deepcopy(v) for v in self.videos]
+            new_skeletons = [deepcopy(s) for s in self.skeletons]
+            new_tracks = [deepcopy(t) for t in self.tracks]
+
+            # Update store references
+            new_store.videos = new_videos
+            new_store.skeletons = new_skeletons
+            new_store.tracks = new_tracks
+
+            labels_copy = Labels(
+                labeled_frames=LazyFrameList(new_store),
+                videos=new_videos,
+                skeletons=new_skeletons,
+                tracks=new_tracks,
+                suggestions=[deepcopy(s) for s in self.suggestions],
+                sessions=[deepcopy(s) for s in self.sessions],
+                provenance=dict(self.provenance),
+                lazy_store=new_store,
+            )
+        else:
+            labels_copy = deepcopy(self)
 
         if open_videos is not None:
             for video in labels_copy.videos:
@@ -207,7 +425,11 @@ class Labels:
             lf: A labeled frame to add to the labels.
             update: If `True` (the default), update list of videos, tracks and
                 skeletons from the contents.
+
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
         """
+        self._check_not_lazy("append")
         self.labeled_frames.append(lf)
 
         if update:
@@ -222,13 +444,17 @@ class Labels:
                     self.tracks.append(inst.track)
 
     def extend(self, lfs: list[LabeledFrame], update: bool = True):
-        """Append a labeled frame to the labels.
+        """Append labeled frames to the labels.
 
         Args:
             lfs: A list of labeled frames to add to the labels.
             update: If `True` (the default), update list of videos, tracks and
                 skeletons from the contents.
+
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
         """
+        self._check_not_lazy("extend")
         self.labeled_frames.extend(lfs)
 
         if update:
@@ -282,9 +508,27 @@ class Labels:
             This method assumes that instances have tracks assigned and is intended to
             function primarily for single-video prediction results.
 
-            This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
+            When lazy-loaded, uses an optimized path that avoids creating Python
+            objects. This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
             See that function for implementation details.
         """
+        # Fast path for lazy-loaded Labels
+        if self.is_lazy:
+            # Resolve video argument
+            if video is None:
+                resolved_video = None  # Will default to first video
+            elif isinstance(video, int):
+                resolved_video = self.videos[video]
+            else:
+                resolved_video = video
+
+            return self._lazy_store.to_numpy(
+                video=resolved_video,
+                untracked=untracked,
+                return_confidence=return_confidence,
+                user_instances=user_instances,
+            )
+
         from sleap_io.codecs.numpy import to_numpy
 
         return to_numpy(
@@ -578,6 +822,47 @@ class Labels:
         """
         results = []
 
+        # Lazy fast path: scan raw arrays directly
+        if self.is_lazy:
+            try:
+                video_id = self.videos.index(video)
+            except ValueError:
+                # Video not in labels
+                if return_new and frame_idx is not None:
+                    if np.isscalar(frame_idx):
+                        frame_idx = np.array(frame_idx).reshape(-1)
+                    return [
+                        LabeledFrame(video=video, frame_idx=int(fi)) for fi in frame_idx
+                    ]
+                return []
+
+            frames_data = self._lazy_store.frames_data
+
+            if frame_idx is None:
+                # Return all frames for this video
+                video_mask = frames_data["video"] == video_id
+                matching_indices = np.where(video_mask)[0]
+                return [
+                    self._lazy_store.materialize_frame(int(i)) for i in matching_indices
+                ]
+
+            if np.isscalar(frame_idx):
+                frame_idx = np.array(frame_idx).reshape(-1)
+
+            for frame_ind in frame_idx:
+                # Find matching frame in raw data
+                matches = np.where(
+                    (frames_data["video"] == video_id)
+                    & (frames_data["frame_idx"] == frame_ind)
+                )[0]
+                if len(matches) > 0:
+                    results.append(self._lazy_store.materialize_frame(int(matches[0])))
+                elif return_new:
+                    results.append(LabeledFrame(video=video, frame_idx=int(frame_ind)))
+
+            return results
+
+        # Eager path
         if frame_idx is None:
             for lf in self.labeled_frames:
                 if lf.video == video:
@@ -729,7 +1014,11 @@ class Labels:
             skeletons: If `True` (the default), remove unused skeletons.
             tracks: If `True` (the default), remove unused tracks.
             videos: If `True` (NOT default), remove videos that have no labeled frames.
+
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
         """
+        self._check_not_lazy("clean")
         used_skeletons = []
         used_tracks = []
         used_videos = []
@@ -780,8 +1069,12 @@ class Labels:
                 tracks and skeletons. It does NOT remove videos that have no labeled
                 frames or instances with no visible points.
 
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
+
         See also: `Labels.clean`
         """
+        self._check_not_lazy("remove_predictions")
         for lf in self.labeled_frames:
             lf.remove_predictions()
 
@@ -797,6 +1090,9 @@ class Labels:
     @property
     def user_labeled_frames(self) -> list[LabeledFrame]:
         """Return all labeled frames with user (non-predicted) instances."""
+        if self.is_lazy:
+            indices = self._lazy_store.get_user_frame_indices()
+            return [self._lazy_store.materialize_frame(i) for i in indices]
         return [lf for lf in self.labeled_frames if lf.has_user_instances]
 
     @property
@@ -1718,10 +2014,14 @@ class Labels:
         Returns:
             MergeResult object with statistics and any errors/conflicts.
 
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
+
         Notes:
             This method modifies the Labels object in place. The merge is designed to
             handle common workflows like merging predictions back into a project.
         """
+        self._check_not_lazy("merge")
         from datetime import datetime
         from pathlib import Path
 

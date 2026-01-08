@@ -4275,3 +4275,209 @@ def test_labels_copy_performance_profile(
             f"Copy performance doesn't scale well: "
             f"{scale_factor:.1f}x more instances but {time_ratio:.1f}x slower"
         )
+
+
+# =======================
+# Fast Stats Tests
+# =======================
+
+
+def test_n_user_instances_basic():
+    """Test n_user_instances returns correct count for eager-loaded Labels."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    PredictedInstance([[4, 5], [6, 7]], skeleton=skel),
+                ],
+            ),
+            LabeledFrame(
+                video=vid,
+                frame_idx=1,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    Instance([[4, 5], [6, 7]], skeleton=skel),
+                    PredictedInstance([[8, 9], [10, 11]], skeleton=skel),
+                ],
+            ),
+        ]
+    )
+
+    # 1 user instance in frame 0 + 2 user instances in frame 1 = 3 total
+    assert labels.n_user_instances == 3
+
+
+def test_n_pred_instances_basic():
+    """Test n_pred_instances returns correct count for eager-loaded Labels."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    PredictedInstance([[4, 5], [6, 7]], skeleton=skel),
+                ],
+            ),
+            LabeledFrame(
+                video=vid,
+                frame_idx=1,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    PredictedInstance([[4, 5], [6, 7]], skeleton=skel),
+                    PredictedInstance([[8, 9], [10, 11]], skeleton=skel),
+                ],
+            ),
+        ]
+    )
+
+    # 1 predicted instance in frame 0 + 2 predicted instances in frame 1 = 3 total
+    assert labels.n_pred_instances == 3
+
+
+def test_n_user_instances_empty():
+    """Test n_user_instances returns 0 for empty Labels."""
+    labels = Labels()
+    assert labels.n_user_instances == 0
+
+
+def test_n_pred_instances_empty():
+    """Test n_pred_instances returns 0 for empty Labels."""
+    labels = Labels()
+    assert labels.n_pred_instances == 0
+
+
+def test_n_user_instances_lazy(centered_pair):
+    """Test n_user_instances with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    assert lazy.n_user_instances == eager.n_user_instances
+    # centered_pair has 0 user instances
+    assert lazy.n_user_instances == 0
+
+
+def test_n_pred_instances_lazy(centered_pair):
+    """Test n_pred_instances with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    assert lazy.n_pred_instances == eager.n_pred_instances
+    # centered_pair has 2274 predicted instances
+    assert lazy.n_pred_instances == 2274
+
+
+def test_n_frames_per_video_basic():
+    """Test n_frames_per_video returns correct counts."""
+    vid1 = Video(filename="video1")
+    vid2 = Video(filename="video2")
+    labels = Labels(
+        [
+            LabeledFrame(video=vid1, frame_idx=0, instances=[]),
+            LabeledFrame(video=vid1, frame_idx=1, instances=[]),
+            LabeledFrame(video=vid1, frame_idx=2, instances=[]),
+            LabeledFrame(video=vid2, frame_idx=0, instances=[]),
+        ]
+    )
+
+    frame_counts = labels.n_frames_per_video()
+    assert frame_counts[vid1] == 3
+    assert frame_counts[vid2] == 1
+
+
+def test_n_frames_per_video_empty():
+    """Test n_frames_per_video returns empty dict for empty Labels."""
+    labels = Labels()
+    assert labels.n_frames_per_video() == {}
+
+
+def test_n_frames_per_video_lazy(centered_pair):
+    """Test n_frames_per_video with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    lazy_counts = lazy.n_frames_per_video()
+    eager_counts = eager.n_frames_per_video()
+
+    # Should have same videos and counts
+    for vid in eager.videos:
+        lazy_vid = lazy.videos[eager.videos.index(vid)]
+        assert lazy_counts[lazy_vid] == eager_counts[vid]
+
+
+def test_n_instances_per_track_basic():
+    """Test n_instances_per_track returns correct counts."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    track1 = Track("track1")
+    track2 = Track("track2")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel, track=track1),
+                    Instance([[4, 5], [6, 7]], skeleton=skel, track=track2),
+                ],
+            ),
+            LabeledFrame(
+                video=vid,
+                frame_idx=1,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel, track=track1),
+                    Instance([[4, 5], [6, 7]], skeleton=skel),  # No track
+                ],
+            ),
+        ],
+        tracks=[track1, track2],
+    )
+
+    track_counts = labels.n_instances_per_track()
+    assert track_counts[track1] == 2  # 2 instances with track1
+    assert track_counts[track2] == 1  # 1 instance with track2
+
+
+def test_n_instances_per_track_empty():
+    """Test n_instances_per_track returns empty dict for empty Labels."""
+    labels = Labels()
+    assert labels.n_instances_per_track() == {}
+
+
+def test_n_instances_per_track_no_tracks():
+    """Test n_instances_per_track with Labels that have no tracks defined."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+            ),
+        ]
+    )
+
+    # No tracks defined, should return empty dict
+    assert labels.n_instances_per_track() == {}
+
+
+def test_n_instances_per_track_lazy(centered_pair):
+    """Test n_instances_per_track with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    lazy_counts = lazy.n_instances_per_track()
+    eager_counts = eager.n_instances_per_track()
+
+    # Should have same tracks and counts
+    for track in eager.tracks:
+        lazy_track = lazy.tracks[eager.tracks.index(track)]
+        assert lazy_counts[lazy_track] == eager_counts[track]

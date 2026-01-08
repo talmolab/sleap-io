@@ -638,3 +638,57 @@ def test_labels_to_dict_wrapper(slp_typical):
     # Test with video filter
     d_filtered = labels.to_dict(video=0)
     assert len(d_filtered["videos"]) == 1
+
+
+# =============================================================================
+# Lazy Fast Path Tests
+# =============================================================================
+
+
+def test_to_dict_lazy_matches_eager(slp_typical):
+    """Test that lazy fast path produces same output as eager."""
+    # Load eager
+    labels_eager = load_slp(slp_typical, lazy=False)
+    dict_eager = to_dict(labels_eager)
+
+    # Load lazy
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    assert labels_lazy.is_lazy
+    dict_lazy = to_dict(labels_lazy)
+
+    # Compare top-level structure
+    assert set(dict_eager.keys()) == set(dict_lazy.keys())
+    assert len(dict_eager["skeletons"]) == len(dict_lazy["skeletons"])
+    assert len(dict_eager["videos"]) == len(dict_lazy["videos"])
+    assert len(dict_eager["tracks"]) == len(dict_lazy["tracks"])
+    assert len(dict_eager["labeled_frames"]) == len(dict_lazy["labeled_frames"])
+
+    # Compare first frame in detail
+    if dict_eager["labeled_frames"]:
+        frame_eager = dict_eager["labeled_frames"][0]
+        frame_lazy = dict_lazy["labeled_frames"][0]
+        assert frame_eager["frame_idx"] == frame_lazy["frame_idx"]
+        assert frame_eager["video_idx"] == frame_lazy["video_idx"]
+        assert len(frame_eager["instances"]) == len(frame_lazy["instances"])
+
+
+def test_to_dict_lazy_with_video_filter(slp_typical):
+    """Test lazy fast path with video filtering."""
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    labels_eager = load_slp(slp_typical, lazy=False)
+
+    dict_lazy = to_dict(labels_lazy, video=0)
+    dict_eager = to_dict(labels_eager, video=0)
+
+    assert len(dict_lazy["labeled_frames"]) == len(dict_eager["labeled_frames"])
+
+
+def test_to_dict_lazy_skip_empty_frames(slp_typical):
+    """Test lazy fast path with skip_empty_frames."""
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    labels_eager = load_slp(slp_typical, lazy=False)
+
+    dict_lazy = to_dict(labels_lazy, skip_empty_frames=True)
+    dict_eager = to_dict(labels_eager, skip_empty_frames=True)
+
+    assert len(dict_lazy["labeled_frames"]) == len(dict_eager["labeled_frames"])

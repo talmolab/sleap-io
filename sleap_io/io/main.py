@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sleap_io.model.labels_set import LabelsSet
 
 
-def load_slp(filename: str, open_videos: bool = True) -> Labels:
+def load_slp(filename: str, open_videos: bool = True, lazy: bool = False) -> Labels:
     """Load a SLEAP dataset.
 
     Args:
@@ -30,12 +30,21 @@ def load_slp(filename: str, open_videos: bool = True) -> Labels:
         open_videos: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
+        lazy: If `True`, defer instance materialization for faster loading.
+            Lazy-loaded Labels support read operations and fast numpy/save.
+            To modify, call `labels.materialize()` first. Default is `False`.
 
     Returns:
         The dataset as a `Labels` object.
+
+    See Also:
+        Labels.is_lazy: Check if Labels is lazy-loaded.
+        Labels.materialize: Convert lazy Labels to eager.
     """
     from sleap_io.io import slp
 
+    if lazy:
+        return slp._read_labels_lazy(filename, open_videos=open_videos)
     return slp.read_labels(filename, open_videos=open_videos)
 
 

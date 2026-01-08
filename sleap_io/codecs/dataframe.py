@@ -25,6 +25,8 @@ from sleap_io.model.video import Video
 if TYPE_CHECKING:
     from typing_extensions import Literal
 
+    from sleap_io.io.slp_lazy import LazyDataStore
+
 # Optional polars support
 try:
     import polars as pl
@@ -210,18 +212,56 @@ def to_dataframe(
                 f"Invalid format '{format}'. Must be one of: {valid_formats}"
             )
 
-    # Filter to specific video if requested
+    # Convert video parameter to index for fast path filtering
+    video_filter_idx: Optional[int] = None
     if video is not None:
         if isinstance(video, int):
+            video_filter_idx = video
             video = labels.videos[video]
-        labeled_frames = [lf for lf in labels.labeled_frames if lf.video == video]
-    else:
-        labeled_frames = labels.labeled_frames
+        else:
+            video_filter_idx = labels.videos.index(video)
 
     # Determine whether to include video info
     if include_video is None:
         # Auto-detect: include if multiple videos, unless explicitly omitted
         include_video = len(labels.videos) > 1
+
+    # Use lazy fast path when available (for POINTS and INSTANCES formats)
+    if labels.is_lazy and format in (DataFrameFormat.POINTS, DataFrameFormat.INSTANCES):
+        store = labels.labeled_frames._store
+
+        if format == DataFrameFormat.POINTS:
+            return _to_points_df_lazy(
+                store,
+                labels,
+                video_filter=video_filter_idx,
+                include_metadata=include_metadata,
+                include_score=include_score,
+                include_user_instances=include_user_instances,
+                include_predicted_instances=include_predicted_instances,
+                include_video=include_video,
+                video_id=video_id,
+                backend=backend,
+            )
+        else:  # INSTANCES
+            return _to_instances_df_lazy(
+                store,
+                labels,
+                video_filter=video_filter_idx,
+                include_metadata=include_metadata,
+                include_score=include_score,
+                include_user_instances=include_user_instances,
+                include_predicted_instances=include_predicted_instances,
+                include_video=include_video,
+                video_id=video_id,
+                backend=backend,
+            )
+
+    # Eager path: filter labeled frames
+    if video is not None:
+        labeled_frames = [lf for lf in labels.labeled_frames if lf.video == video]
+    else:
+        labeled_frames = labels.labeled_frames
 
     # Route to appropriate converter based on format
     if format == DataFrameFormat.POINTS:
@@ -1050,6 +1090,258 @@ def _to_instances_df(
                     row[f"{node.name}.score"] = float(point["score"])
 
             rows.append(row)
+
+    return _create_dataframe_from_rows(rows, backend)
+
+
+# =============================================================================
+# Lazy Fast Path Functions
+# =============================================================================
+
+
+def _to_points_df_lazy(
+    store: "LazyDataStore",
+    labels: Labels,
+    *,
+    video_filter: Optional[int] = None,
+    include_metadata: bool = True,
+    include_score: bool = True,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
+    backend: str = "pandas",
+) -> "pd.DataFrame | pl.DataFrame":
+    """Fast path for points format using raw LazyDataStore arrays.
+
+    This builds the DataFrame directly from structured arrays without
+    materializing any LabeledFrame or Instance objects.
+    """
+    from sleap_io.io.slp import InstanceType
+
+    rows = []
+
+    # Get node names from skeleton
+    skeleton = store.skeletons[0] if store.skeletons else None
+    if skeleton is None:
+        return _create_dataframe_from_rows([], backend)
+    node_names = skeleton.node_names
+
+    # Build frame_id -> (video, frame_idx) mapping
+    frame_lookup = {}
+    for frame_row in store.frames_data:
+        frame_id = int(frame_row["frame_id"])
+        vid_id = int(frame_row["video"])
+        frame_idx = int(frame_row["frame_idx"])
+        frame_lookup[frame_id] = (vid_id, frame_idx)
+
+    # Determine coordinate adjustment for legacy format
+    coord_offset = 0.5 if store.format_id < 1.1 else 0.0
+
+    # Iterate over instances
+    for inst_idx, inst_row in enumerate(store.instances_data):
+        instance_type = int(inst_row["instance_type"])
+
+        # Filter by instance type
+        is_user = instance_type == InstanceType.USER
+        is_predicted = instance_type == InstanceType.PREDICTED
+
+        if is_user and not include_user_instances:
+            continue
+        if is_predicted and not include_predicted_instances:
+            continue
+
+        # Get frame info
+        frame_id = int(inst_row["frame_id"])
+        if frame_id not in frame_lookup:
+            continue
+        vid_id, frame_idx = frame_lookup[frame_id]
+
+        # Filter by video if requested
+        if video_filter is not None and vid_id != video_filter:
+            continue
+
+        # Get instance metadata
+        track_id = int(inst_row["track"])
+        track_name = store.tracks[track_id].name if track_id >= 0 else None
+        instance_score = float(inst_row["score"]) if is_predicted else None
+
+        # Get tracking score
+        tracking_score = float(inst_row["tracking_score"]) if is_predicted else None
+
+        # Get points
+        point_start = int(inst_row["point_id_start"])
+        point_end = int(inst_row["point_id_end"])
+
+        if is_user:
+            pts_data = store.points_data[point_start:point_end]
+        else:
+            pts_data = store.pred_points_data[point_start:point_end]
+
+        # Yield one row per point
+        for node_idx, node_name in enumerate(node_names):
+            if node_idx >= len(pts_data):
+                continue  # Safety check
+
+            pt = pts_data[node_idx]
+            x = float(pt["x"]) - coord_offset
+            y = float(pt["y"]) - coord_offset
+
+            row: dict = {
+                "frame_idx": frame_idx,
+                "node": node_name,
+                "x": x,
+                "y": y,
+            }
+
+            if include_metadata:
+                if include_video:
+                    video_obj = store.videos[vid_id]
+                    video_value = _format_video(video_obj, labels, video_id)
+                    if video_id == "index":
+                        row["video_idx"] = video_value
+                    elif video_id == "object":
+                        row["video"] = video_value
+                    else:
+                        row["video_path"] = video_value
+
+                row["track"] = track_name
+
+                if is_predicted:
+                    row["track_score"] = tracking_score
+                    row["instance_score"] = instance_score
+                else:
+                    row["track_score"] = None
+                    row["instance_score"] = None
+
+            if include_score and is_predicted:
+                row["score"] = float(pt["score"])
+
+            rows.append(row)
+
+    return _create_dataframe_from_rows(rows, backend)
+
+
+def _to_instances_df_lazy(
+    store: "LazyDataStore",
+    labels: Labels,
+    *,
+    video_filter: Optional[int] = None,
+    include_metadata: bool = True,
+    include_score: bool = True,
+    include_user_instances: bool = True,
+    include_predicted_instances: bool = True,
+    include_video: bool = True,
+    video_id: str = "path",
+    backend: str = "pandas",
+) -> "pd.DataFrame | pl.DataFrame":
+    """Fast path for instances format using raw LazyDataStore arrays.
+
+    This builds the DataFrame directly from structured arrays without
+    materializing any LabeledFrame or Instance objects.
+    """
+    from sleap_io.io.slp import InstanceType
+
+    rows = []
+
+    # Get node names from skeleton
+    skeleton = store.skeletons[0] if store.skeletons else None
+    if skeleton is None:
+        return _create_dataframe_from_rows([], backend)
+    node_names = skeleton.node_names
+
+    # Build frame_id -> (video, frame_idx) mapping
+    frame_lookup = {}
+    for frame_row in store.frames_data:
+        frame_id = int(frame_row["frame_id"])
+        vid_id = int(frame_row["video"])
+        frame_idx = int(frame_row["frame_idx"])
+        frame_lookup[frame_id] = (vid_id, frame_idx)
+
+    # Determine coordinate adjustment for legacy format
+    coord_offset = 0.5 if store.format_id < 1.1 else 0.0
+
+    # Iterate over instances
+    for inst_idx, inst_row in enumerate(store.instances_data):
+        instance_type = int(inst_row["instance_type"])
+
+        # Filter by instance type
+        is_user = instance_type == InstanceType.USER
+        is_predicted = instance_type == InstanceType.PREDICTED
+
+        if is_user and not include_user_instances:
+            continue
+        if is_predicted and not include_predicted_instances:
+            continue
+
+        # Get frame info
+        frame_id = int(inst_row["frame_id"])
+        if frame_id not in frame_lookup:
+            continue
+        vid_id, frame_idx = frame_lookup[frame_id]
+
+        # Filter by video if requested
+        if video_filter is not None and vid_id != video_filter:
+            continue
+
+        # Get instance metadata
+        track_id = int(inst_row["track"])
+        track_name = store.tracks[track_id].name if track_id >= 0 else None
+        instance_score = float(inst_row["score"]) if is_predicted else None
+
+        # Get tracking score
+        tracking_score = float(inst_row["tracking_score"]) if is_predicted else None
+
+        # Build row
+        row: dict = {"frame_idx": frame_idx}
+
+        if include_metadata:
+            if include_video:
+                video_obj = store.videos[vid_id]
+                video_value = _format_video(video_obj, labels, video_id)
+                if video_id == "index":
+                    row["video_idx"] = video_value
+                elif video_id == "object":
+                    row["video"] = video_value
+                else:
+                    row["video_path"] = video_value
+
+            row["track"] = track_name
+
+            if is_predicted:
+                row["track_score"] = tracking_score
+                row["score"] = instance_score
+            else:
+                row["track_score"] = None
+                row["score"] = None
+
+        # Get points and add node columns
+        point_start = int(inst_row["point_id_start"])
+        point_end = int(inst_row["point_id_end"])
+
+        if is_user:
+            pts_data = store.points_data[point_start:point_end]
+        else:
+            pts_data = store.pred_points_data[point_start:point_end]
+
+        for node_idx, node_name in enumerate(node_names):
+            if node_idx >= len(pts_data):
+                row[f"{node_name}.x"] = np.nan
+                row[f"{node_name}.y"] = np.nan
+                if include_score:
+                    row[f"{node_name}.score"] = None
+                continue
+
+            pt = pts_data[node_idx]
+            row[f"{node_name}.x"] = float(pt["x"]) - coord_offset
+            row[f"{node_name}.y"] = float(pt["y"]) - coord_offset
+
+            if include_score and is_predicted:
+                row[f"{node_name}.score"] = float(pt["score"])
+            elif include_score:
+                row[f"{node_name}.score"] = None
+
+        rows.append(row)
 
     return _create_dataframe_from_rows(rows, backend)
 

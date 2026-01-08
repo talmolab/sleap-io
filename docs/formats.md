@@ -24,6 +24,86 @@ The native SLEAP format stores complete pose tracking projects including videos,
 
 ::: sleap_io.io.main.save_slp
 
+#### Lazy Loading for Large Files
+
+When working with large SLP files (hundreds of thousands of frames), loading can be slow due to the creation of many Python objects. sleap-io provides a **lazy loading** mode that defers object creation until needed, significantly speeding up common workflows.
+
+##### When to Use Lazy Loading
+
+Lazy loading is recommended when:
+
+- You only need to convert data to NumPy arrays (`labels.numpy()`)
+- You're saving to a different file without modifications
+- You're accessing a small subset of frames
+- You want fast load times for large files
+
+##### Basic Usage
+
+```python
+import sleap_io as sio
+
+# Load lazily (up to 90x faster than eager loading!)
+labels = sio.load_slp("predictions.slp", lazy=True)
+
+# Check if labels is lazy
+print(labels.is_lazy)  # True
+
+# Fast path: convert directly to NumPy (no object creation)
+poses = labels.numpy()
+
+# Fast path: save without materialization
+sio.save_slp(labels, "copy.slp")
+```
+
+##### Accessing Frames
+
+Lazy-loaded `Labels` support standard read operations:
+
+```python
+# These work normally (frames materialized on-demand)
+print(len(labels))  # Number of frames
+first_frame = labels[0]  # Access single frame
+last_frame = labels[-1]  # Negative indexing
+subset = labels[10:20]  # Slicing
+
+# Iteration (materializes each frame)
+for lf in labels:
+    print(f"Frame {lf.frame_idx}: {len(lf)} instances")
+```
+
+##### Modifying Lazy Labels
+
+Lazy `Labels` are read-only. To make modifications, first materialize:
+
+```python
+# This raises RuntimeError
+labels.append(new_frame)  # Error: Cannot append on lazy-loaded Labels
+
+# Materialize first to enable modifications
+labels = labels.materialize()  # Creates eager copy
+labels.append(new_frame)  # Now works
+```
+
+##### Performance Comparison
+
+| Operation | Eager | Lazy | Speedup |
+|-----------|-------|------|---------|
+| Load only | 0.47s | 0.005s | **~90x** |
+| Load + numpy() | 0.86s | 0.38s | **~2x** |
+| Full iteration | 0.0002s | 0.41s | Eager faster |
+
+*Benchmarks on 18,000 frames with ~40,000 instances.*
+
+Lazy loading excels at avoiding unnecessary work. If you need to iterate over all frames, eager loading is faster.
+
+##### API Reference
+
+**Labels properties and methods for lazy loading:**
+
+- `Labels.is_lazy` - `True` if lazy-loaded
+- `Labels.materialize()` - Convert to eager `Labels` (returns self if already eager)
+- `Labels.numpy()` - Uses fast path when lazy (no object creation)
+
 ### NWB Format (.nwb)
 
 [Neurodata Without Borders (NWB)](https://www.nwb.org/) is a standardized format for neurophysiology data. sleap-io provides comprehensive support for both reading and writing pose tracking data in NWB format.

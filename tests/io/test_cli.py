@@ -2731,3 +2731,153 @@ def test_render_video_out_of_range(centered_pair, tmp_path):
     )
     assert result.exit_code != 0
     assert "out of range" in result.output
+
+
+# =======================
+# Lazy Loading Tests
+# =======================
+
+
+def test_show_lazy_flag_recognized():
+    """Test that --lazy flag is recognized by the CLI."""
+    runner = CliRunner()
+    path = _data_path("slp/centered_pair_predictions.slp")
+    result = runner.invoke(cli, ["show", str(path), "--lazy", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+
+
+def test_show_no_lazy_flag_recognized():
+    """Test that --no-lazy flag is recognized by the CLI."""
+    runner = CliRunner()
+    path = _data_path("slp/centered_pair_predictions.slp")
+    result = runner.invoke(cli, ["show", str(path), "--no-lazy", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+
+
+def test_show_lazy_output_matches_eager():
+    """Test that --lazy and --no-lazy produce identical output."""
+    runner = CliRunner()
+    path = _data_path("slp/centered_pair_predictions.slp")
+
+    lazy_result = runner.invoke(cli, ["show", str(path), "--lazy", "--no-open-videos"])
+    eager_result = runner.invoke(
+        cli, ["show", str(path), "--no-lazy", "--no-open-videos"]
+    )
+
+    assert lazy_result.exit_code == 0, lazy_result.output
+    assert eager_result.exit_code == 0, eager_result.output
+
+    # Output should be identical
+    lazy_out = _strip_ansi(lazy_result.output)
+    eager_out = _strip_ansi(eager_result.output)
+    assert lazy_out == eager_out
+
+
+def test_show_lazy_tracks_output_matches_eager(centered_pair):
+    """Test that --tracks with --lazy matches --no-lazy output."""
+    runner = CliRunner()
+
+    lazy_result = runner.invoke(
+        cli, ["show", centered_pair, "--tracks", "--lazy", "--no-open-videos"]
+    )
+    eager_result = runner.invoke(
+        cli, ["show", centered_pair, "--tracks", "--no-lazy", "--no-open-videos"]
+    )
+
+    assert lazy_result.exit_code == 0, lazy_result.output
+    assert eager_result.exit_code == 0, eager_result.output
+
+    lazy_out = _strip_ansi(lazy_result.output)
+    eager_out = _strip_ansi(eager_result.output)
+    assert lazy_out == eager_out
+
+
+def test_show_lazy_video_output_matches_eager(centered_pair):
+    """Test that --video with --lazy matches --no-lazy output."""
+    runner = CliRunner()
+
+    lazy_result = runner.invoke(
+        cli, ["show", centered_pair, "--video", "--lazy", "--no-open-videos"]
+    )
+    eager_result = runner.invoke(
+        cli, ["show", centered_pair, "--video", "--no-lazy", "--no-open-videos"]
+    )
+
+    assert lazy_result.exit_code == 0, lazy_result.output
+    assert eager_result.exit_code == 0, eager_result.output
+
+    lazy_out = _strip_ansi(lazy_result.output)
+    eager_out = _strip_ansi(eager_result.output)
+    assert lazy_out == eager_out
+
+
+def test_show_lazy_all_output_matches_eager(centered_pair):
+    """Test that --all with --lazy has same key stats as --no-lazy output.
+
+    Note: Skeleton symmetry ordering may differ between lazy and eager loading
+    due to how symmetries are stored/retrieved, so we check key statistics
+    rather than exact match.
+    """
+    runner = CliRunner()
+
+    lazy_result = runner.invoke(
+        cli, ["show", centered_pair, "--all", "--lazy", "--no-open-videos"]
+    )
+    eager_result = runner.invoke(
+        cli, ["show", centered_pair, "--all", "--no-lazy", "--no-open-videos"]
+    )
+
+    assert lazy_result.exit_code == 0, lazy_result.output
+    assert eager_result.exit_code == 0, eager_result.output
+
+    lazy_out = _strip_ansi(lazy_result.output)
+    eager_out = _strip_ansi(eager_result.output)
+
+    # Check key statistics are present and matching
+    assert "1100" in lazy_out and "1100" in eager_out  # frames
+    assert "2274" in lazy_out and "2274" in eager_out  # predicted instances
+    assert "27" in lazy_out and "27" in eager_out  # tracks
+    assert "24 nodes" in lazy_out and "24 nodes" in eager_out  # skeleton nodes
+    assert "23 edges" in lazy_out and "23 edges" in eager_out  # skeleton edges
+
+
+def test_show_lazy_only_for_slp_files():
+    """Test that lazy loading only applies to SLP files."""
+    runner = CliRunner()
+    # Using a video file (not SLP) - lazy should be ignored
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+    result = runner.invoke(cli, ["show", str(path), "--lazy"])
+    # Should still work (lazy is ignored for non-SLP files)
+    assert result.exit_code == 0, result.output
+
+
+def test_show_lazy_default_is_lazy():
+    """Test that lazy loading is the default for SLP files."""
+    runner = CliRunner()
+    path = _data_path("slp/centered_pair_predictions.slp")
+
+    # Running without any lazy flag (default is lazy)
+    default_result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    lazy_result = runner.invoke(cli, ["show", str(path), "--lazy", "--no-open-videos"])
+
+    assert default_result.exit_code == 0, default_result.output
+    assert lazy_result.exit_code == 0, lazy_result.output
+
+    # Output should be identical
+    default_out = _strip_ansi(default_result.output)
+    lazy_out = _strip_ansi(lazy_result.output)
+    assert default_out == lazy_out
+
+
+def test_show_lazy_shows_correct_instance_counts(centered_pair):
+    """Test that lazy loading shows correct instance counts in header."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["show", centered_pair, "--lazy", "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+
+    # centered_pair has 1100 frames, 2274 predicted instances, 27 tracks
+    assert "1100" in out  # frames
+    assert "2274" in out  # predicted instances
+    assert "27" in out  # tracks
