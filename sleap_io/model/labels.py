@@ -149,9 +149,7 @@ class Labels:
         """
         if self.is_lazy:
             store = self.labeled_frames._store
-            counts = np.bincount(
-                store.frames_data["video"], minlength=len(self.videos)
-            )
+            counts = np.bincount(store.frames_data["video"], minlength=len(self.videos))
             return {v: int(counts[i]) for i, v in enumerate(self.videos)}
 
         counts: dict[Video, int] = {}

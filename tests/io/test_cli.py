@@ -2759,9 +2759,7 @@ def test_show_lazy_output_matches_eager():
     runner = CliRunner()
     path = _data_path("slp/centered_pair_predictions.slp")
 
-    lazy_result = runner.invoke(
-        cli, ["show", str(path), "--lazy", "--no-open-videos"]
-    )
+    lazy_result = runner.invoke(cli, ["show", str(path), "--lazy", "--no-open-videos"])
     eager_result = runner.invoke(
         cli, ["show", str(path), "--no-lazy", "--no-open-videos"]
     )
@@ -2859,12 +2857,8 @@ def test_show_lazy_default_is_lazy():
     path = _data_path("slp/centered_pair_predictions.slp")
 
     # Running without any lazy flag (default is lazy)
-    default_result = runner.invoke(
-        cli, ["show", str(path), "--no-open-videos"]
-    )
-    lazy_result = runner.invoke(
-        cli, ["show", str(path), "--lazy", "--no-open-videos"]
-    )
+    default_result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    lazy_result = runner.invoke(cli, ["show", str(path), "--lazy", "--no-open-videos"])
 
     assert default_result.exit_code == 0, default_result.output
     assert lazy_result.exit_code == 0, lazy_result.output
@@ -2879,9 +2873,7 @@ def test_show_lazy_shows_correct_instance_counts(centered_pair):
     """Test that lazy loading shows correct instance counts in header."""
     runner = CliRunner()
 
-    result = runner.invoke(
-        cli, ["show", centered_pair, "--lazy", "--no-open-videos"]
-    )
+    result = runner.invoke(cli, ["show", centered_pair, "--lazy", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
 

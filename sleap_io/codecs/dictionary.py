@@ -142,9 +142,7 @@ def to_dict(
     else:
         # Eager path: filter labeled frames
         if video is not None:
-            labeled_frames = [
-                lf for lf in labels.labeled_frames if lf.video == video
-            ]
+            labeled_frames = [lf for lf in labels.labeled_frames if lf.video == video]
         else:
             labeled_frames = labels.labeled_frames
 

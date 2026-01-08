@@ -3867,12 +3867,8 @@ def test_to_dataframe_lazy_points_matches_eager(slp_typical):
     assert df_eager.shape == df_lazy.shape
 
     # Sort both for comparison (order may differ)
-    df_eager_sorted = df_eager.sort_values(
-        ["frame_idx", "node"]
-    ).reset_index(drop=True)
-    df_lazy_sorted = df_lazy.sort_values(
-        ["frame_idx", "node"]
-    ).reset_index(drop=True)
+    df_eager_sorted = df_eager.sort_values(["frame_idx", "node"]).reset_index(drop=True)
+    df_lazy_sorted = df_lazy.sort_values(["frame_idx", "node"]).reset_index(drop=True)
 
     # Compare values
     for col in df_eager_sorted.columns:
