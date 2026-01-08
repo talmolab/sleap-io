@@ -377,6 +377,13 @@ class TestLabelsMerge:
         assert "timestamp" in merge_record
         assert merge_record["source_labels"]["n_frames"] == 1
         assert merge_record["result"]["frames_merged"] == 1
+        # Verify new provenance fields
+        assert "source_filename" in merge_record
+        assert "target_filename" in merge_record
+        assert "sleap_io_version" in merge_record
+        # In-memory labels have None for filenames
+        assert merge_record["source_filename"] is None
+        assert merge_record["target_filename"] is None
 
     def test_merge_auto_video_matching_with_identical_shapes(self):
         """Test AUTO video matching with multiple videos of identical shape.

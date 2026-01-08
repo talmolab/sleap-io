@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_equal
 
+import sleap_io
 from sleap_io import (
     Instance,
     LabeledFrame,
@@ -3133,6 +3134,85 @@ def test_labels_merge_provenance_tracking():
     assert merge_record["source_labels"]["n_videos"] == 1
     assert merge_record["source_labels"]["n_skeletons"] == 1
     assert merge_record["strategy"] == "smart"
+    # Verify new provenance fields
+    assert "source_filename" in merge_record
+    assert "target_filename" in merge_record
+    assert "sleap_io_version" in merge_record
+    # In-memory labels have None for filenames
+    assert merge_record["source_filename"] is None
+    assert merge_record["target_filename"] is None
+    # Version should match current version
+    assert merge_record["sleap_io_version"] == sleap_io.__version__
+
+
+def test_labels_merge_provenance_with_filenames():
+    """Test that merge history captures filenames from provenance."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Create labels with filenames in provenance
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    labels1.provenance["filename"] = "/path/to/base_labels.slp"
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    labels2.provenance["filename"] = "/path/to/source_predictions.slp"
+
+    # Add a frame to labels2
+    frame = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels2.append(frame)
+
+    # Merge
+    result = labels1.merge(labels2)
+
+    assert result.successful
+    merge_record = labels1.provenance["merge_history"][0]
+
+    # Verify filenames are captured
+    assert merge_record["source_filename"] == "/path/to/source_predictions.slp"
+    assert merge_record["target_filename"] == "/path/to/base_labels.slp"
+    assert merge_record["sleap_io_version"] == sleap_io.__version__
+
+
+def test_labels_merge_provenance_mixed_filenames():
+    """Test merge provenance when only one Labels has a filename."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Target has filename, source does not
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    labels1.provenance["filename"] = "/path/to/base_labels.slp"
+
+    labels2 = Labels()  # In-memory, no filename
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+
+    # Add a frame to labels2
+    frame = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels2.append(frame)
+
+    # Merge
+    result = labels1.merge(labels2)
+
+    assert result.successful
+    merge_record = labels1.provenance["merge_history"][0]
+
+    # Source is in-memory (None), target has filename
+    assert merge_record["source_filename"] is None
+    assert merge_record["target_filename"] == "/path/to/base_labels.slp"
 
 
 def test_labels_merge_custom_matchers():
