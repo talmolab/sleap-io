@@ -796,11 +796,18 @@ Create video files or single images with pose annotations overlaid on video fram
 ```bash
 # Video mode (default)
 sio render <input> [-o <output>] [options]
-sio render -i <input> [-o <output>] [options]
 
 # Image mode (single frame)
 sio render <input> --lf <index> [-o <output>] [options]
 ```
+
+
+!!! tip "Input argument"
+    Like `sio show`, the input can be passed as a positional argument or with `-i`:
+    ```bash
+    sio render predictions.slp           # Positional (preferred)
+    sio render -i predictions.slp        # Explicit flag (also works)
+    ```
 
 #### Render Modes
 
@@ -825,6 +832,10 @@ sio render predictions.slp --start 100 --end 200
 
 # Render a single frame to PNG
 sio render predictions.slp --lf 0               # -> predictions.lf=0.png
+
+# Render without source video (solid background)
+sio render predictions.slp --background black
+sio render predictions.slp --background "#333"
 ```
 
 #### Options Reference
@@ -835,6 +846,7 @@ sio render predictions.slp --lf 0               # -> predictions.lf=0.png
 |--------|---------|-------------|
 | `-i, --input` | (required) | Input labels file (can also pass as positional argument) |
 | `-o, --output` | auto | Output path. Default: `{input}.viz.mp4` for video, `{input}.lf={N}.png` for image |
+| `--background` | video | Background mode: `video` (load frames) or a color (e.g., `black`, `#333`) |
 
 ##### Frame Selection Options
 
@@ -1013,6 +1025,13 @@ sio render predictions.slp --palette glasbey_warm
 ```
 
 Available built-in palettes: `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `seaborn`, `tableau10`, `viridis`
+
+!!! tip "Discover available options"
+    Use the discovery flags to see all available colors and palettes:
+    ```bash
+    sio render --list-colors    # Show all named colors
+    sio render --list-palettes  # Show all available palettes
+    ```
 
 #### Marker Shapes and Styles
 
