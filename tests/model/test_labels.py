@@ -4561,3 +4561,134 @@ def test_n_instances_per_track_lazy(centered_pair):
     for track in eager.tracks:
         lazy_track = lazy.tracks[eager.tracks.index(track)]
         assert lazy_counts[lazy_track] == eager_counts[track]
+
+
+# =============================================================================
+# Tests for Labels.add_video() - PROPOSED NEW METHOD
+# =============================================================================
+# These tests document expected behavior for a new method that safely adds
+# videos while preventing duplicates.
+# Current implementation: Method does not exist (tests will fail with AttributeError).
+
+
+class TestLabelsAddVideo:
+    """Tests for Labels.add_video() method.
+
+    This method is needed to prevent duplicate video creation when adding
+    videos to Labels. The current pattern of `labels.videos.append(video)`
+    or `video not in labels.videos` fails to detect duplicates because
+    Video uses identity comparison (eq=False).
+
+    Background (from merge investigation):
+    The GUI uses `video not in context.labels.videos` to check for duplicates,
+    but this always returns True for new Video objects even if they point to
+    the same file. This leads to:
+    1. Duplicate videos in the Labels.videos list
+    2. Downstream deletion bugs (remove_video deletes frames from ALL matching videos)
+    3. Data corruption when merging predictions
+    """
+
+    def test_add_video_new_video(self):
+        """Adding a new video should append it to the list.
+
+        Basic case: Adding a video that doesn't exist in Labels should
+        add it and return the same video object.
+        """
+        labels = Labels()
+        video = Video(filename="/data/video.mp4", open_backend=False)
+
+        result = labels.add_video(video)
+
+        assert result is video
+        assert len(labels.videos) == 1
+        assert labels.videos[0] is video
+
+    def test_add_video_prevents_duplicate_same_path(self):
+        """Adding video with same path should return existing video.
+
+        Use case: User accidentally adds the same video twice via GUI.
+        Instead of creating a duplicate, add_video should recognize the
+        existing video and return it.
+        """
+        labels = Labels()
+        video1 = Video(filename="/data/video.mp4", open_backend=False)
+        labels.add_video(video1)
+
+        # Create a NEW Video object with the SAME path
+        video2 = Video(filename="/data/video.mp4", open_backend=False)
+        result = labels.add_video(video2)
+
+        # Should return the existing video, not add a duplicate
+        assert result is video1
+        assert len(labels.videos) == 1
+        assert labels.videos[0] is video1
+
+    def test_add_video_source_video_match(self):
+        """Adding embedded video should match external video with same source.
+
+        Use case (UC3): After loading predictions from PKG.SLP, the prediction
+        video has source_video pointing to the original. When iterating through
+        frames and adding videos, we should recognize the source_video match.
+        """
+        labels = Labels()
+        external = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        labels.add_video(external)
+
+        # Embedded video from PKG.SLP with source_video pointing to external
+        source = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        embedded = Video(
+            filename="predictions.pkg.slp",
+            source_video=source,
+            open_backend=False
+        )
+        result = labels.add_video(embedded)
+
+        # Should recognize as same file via source_video and return external
+        assert result is external
+        assert len(labels.videos) == 1
+
+    def test_add_video_different_videos(self):
+        """Adding different videos should add all of them."""
+        labels = Labels()
+        video1 = Video(filename="/data/video_a.mp4", open_backend=False)
+        video2 = Video(filename="/data/video_b.mp4", open_backend=False)
+
+        result1 = labels.add_video(video1)
+        result2 = labels.add_video(video2)
+
+        assert result1 is video1
+        assert result2 is video2
+        assert len(labels.videos) == 2
+
+    def test_add_video_same_basename_different_dir(self):
+        """Videos with same basename but different directories are different.
+
+        This tests that add_video doesn't incorrectly deduplicate videos
+        that happen to have the same filename but are in different directories.
+
+        Real-world example: Multiple experiments may have `fly.mp4` in
+        different directories (exp1/fly.mp4, exp2/fly.mp4).
+        """
+        labels = Labels()
+        video1 = Video(filename="/data/exp1/fly.mp4", open_backend=False)
+        video2 = Video(filename="/data/exp2/fly.mp4", open_backend=False)
+
+        labels.add_video(video1)
+        result = labels.add_video(video2)
+
+        assert result is video2
+        assert len(labels.videos) == 2
+
+    def test_add_video_imagevideo(self):
+        """Adding ImageVideo with same image list should detect duplicate."""
+        labels = Labels()
+        paths = ["/data/img_000.jpg", "/data/img_001.jpg", "/data/img_002.jpg"]
+        video1 = Video(filename=paths.copy(), open_backend=False)
+        labels.add_video(video1)
+
+        # Create a new ImageVideo with the same paths
+        video2 = Video(filename=paths.copy(), open_backend=False)
+        result = labels.add_video(video2)
+
+        assert result is video1
+        assert len(labels.videos) == 1
