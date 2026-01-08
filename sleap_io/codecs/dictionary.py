@@ -13,11 +13,14 @@ The dictionary codec is useful for:
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labels import Labels
 from sleap_io.model.video import Video
+
+if TYPE_CHECKING:
+    from sleap_io.io.slp_lazy import LazyDataStore
 
 
 def to_dict(
@@ -68,17 +71,14 @@ def to_dict(
         - The output is fully compatible with JSON, YAML, or any format that handles
           Python primitives
     """
-    # Filter video if specified
+    # Convert video parameter to index for fast path filtering
+    video_filter_idx: Optional[int] = None
     if video is not None:
         if isinstance(video, int):
+            video_filter_idx = video
             video = labels.videos[video]
-        labeled_frames = [lf for lf in labels.labeled_frames if lf.video == video]
-    else:
-        labeled_frames = labels.labeled_frames
-
-    # Skip empty frames if requested
-    if skip_empty_frames:
-        labeled_frames = [lf for lf in labeled_frames if len(lf.instances) > 0]
+        else:
+            video_filter_idx = labels.videos.index(video)
 
     # Build skeleton list
     skeletons_list = []
@@ -132,64 +132,83 @@ def to_dict(
     # Build track list
     tracks_list = [{"name": track.name} for track in labels.tracks]
 
-    # Build labeled frames list
-    labeled_frames_list = []
-    for lf in labeled_frames:
-        instances_list = []
+    # Build labeled frames list - use fast path for lazy Labels
+    if labels.is_lazy:
+        labeled_frames_list = _build_labeled_frames_lazy(
+            labels.labeled_frames._store,
+            video_filter=video_filter_idx,
+            skip_empty_frames=skip_empty_frames,
+        )
+    else:
+        # Eager path: filter labeled frames
+        if video is not None:
+            labeled_frames = [
+                lf for lf in labels.labeled_frames if lf.video == video
+            ]
+        else:
+            labeled_frames = labels.labeled_frames
 
-        for instance in lf.instances:
-            # Determine instance type
-            is_predicted = isinstance(instance, PredictedInstance)
+        # Skip empty frames if requested
+        if skip_empty_frames:
+            labeled_frames = [lf for lf in labeled_frames if len(lf.instances) > 0]
 
-            # Build points list
-            points_list = []
-            for point in instance.points:
-                point_dict = {
-                    "x": float(point["xy"][0]),
-                    "y": float(point["xy"][1]),
-                    "visible": bool(point["visible"]),
-                    "complete": bool(point["complete"]),
+        labeled_frames_list = []
+        for lf in labeled_frames:
+            instances_list = []
+
+            for instance in lf.instances:
+                # Determine instance type
+                is_predicted = isinstance(instance, PredictedInstance)
+
+                # Build points list
+                points_list = []
+                for point in instance.points:
+                    point_dict = {
+                        "x": float(point["xy"][0]),
+                        "y": float(point["xy"][1]),
+                        "visible": bool(point["visible"]),
+                        "complete": bool(point["complete"]),
+                    }
+                    points_list.append(point_dict)
+
+                # Build instance dict
+                instance_dict = {
+                    "type": "predicted_instance" if is_predicted else "instance",
+                    "skeleton_idx": labels.skeletons.index(instance.skeleton),
+                    "points": points_list,
                 }
-                points_list.append(point_dict)
 
-            # Build instance dict
-            instance_dict = {
-                "type": "predicted_instance" if is_predicted else "instance",
-                "skeleton_idx": labels.skeletons.index(instance.skeleton),
-                "points": points_list,
+                # Add track if present
+                if instance.track is not None:
+                    instance_dict["track_idx"] = labels.tracks.index(instance.track)
+
+                # Add tracking score if present
+                if (
+                    hasattr(instance, "tracking_score")
+                    and instance.tracking_score is not None
+                ):
+                    instance_dict["tracking_score"] = float(instance.tracking_score)
+
+                # Add score for predicted instances
+                if is_predicted:
+                    instance_dict["score"] = float(instance.score)
+
+                # Add from_predicted if present
+                if (
+                    hasattr(instance, "from_predicted")
+                    and instance.from_predicted is not None
+                ):
+                    # Note: We can't serialize the reference, just indicate it exists
+                    instance_dict["has_from_predicted"] = True
+
+                instances_list.append(instance_dict)
+
+            frame_dict = {
+                "frame_idx": int(lf.frame_idx),
+                "video_idx": labels.videos.index(lf.video),
+                "instances": instances_list,
             }
-
-            # Add track if present
-            if instance.track is not None:
-                instance_dict["track_idx"] = labels.tracks.index(instance.track)
-
-            # Add tracking score if present
-            if (
-                hasattr(instance, "tracking_score")
-                and instance.tracking_score is not None
-            ):
-                instance_dict["tracking_score"] = float(instance.tracking_score)
-
-            # Add score for predicted instances
-            if is_predicted:
-                instance_dict["score"] = float(instance.score)
-
-            # Add from_predicted if present
-            if (
-                hasattr(instance, "from_predicted")
-                and instance.from_predicted is not None
-            ):
-                # Note: We can't serialize the reference, just indicate it exists
-                instance_dict["has_from_predicted"] = True
-
-            instances_list.append(instance_dict)
-
-        frame_dict = {
-            "frame_idx": int(lf.frame_idx),
-            "video_idx": labels.videos.index(lf.video),
-            "instances": instances_list,
-        }
-        labeled_frames_list.append(frame_dict)
+            labeled_frames_list.append(frame_dict)
 
     # Build suggestions list (if filtering by video, also filter suggestions)
     if video is not None:
@@ -217,6 +236,124 @@ def to_dict(
     }
 
     return result
+
+
+def _build_labeled_frames_lazy(
+    store: "LazyDataStore",
+    *,
+    video_filter: Optional[int] = None,
+    skip_empty_frames: bool = False,
+) -> list[dict[str, Any]]:
+    """Build labeled frames list directly from LazyDataStore arrays.
+
+    This fast path builds the labeled_frames list without materializing
+    any LabeledFrame or Instance objects.
+
+    Args:
+        store: LazyDataStore containing raw arrays.
+        video_filter: Optional video index to filter frames by.
+        skip_empty_frames: If True, exclude frames with no instances.
+
+    Returns:
+        List of frame dictionaries in to_dict() format.
+    """
+    from sleap_io.io.slp import InstanceType
+
+    labeled_frames_list = []
+
+    # Determine coordinate adjustment for legacy format
+    coord_offset = 0.5 if store.format_id < 1.1 else 0.0
+
+    # Build instance lookup by frame_id for O(1) access
+    # Group instances by frame_id
+    frame_instances: dict[int, list[int]] = {}
+    for inst_idx, inst_row in enumerate(store.instances_data):
+        frame_id = int(inst_row["frame_id"])
+        if frame_id not in frame_instances:
+            frame_instances[frame_id] = []
+        frame_instances[frame_id].append(inst_idx)
+
+    # Iterate over frames
+    for frame_row in store.frames_data:
+        frame_id = int(frame_row["frame_id"])
+        video_id = int(frame_row["video"])
+        frame_idx = int(frame_row["frame_idx"])
+
+        # Filter by video if requested
+        if video_filter is not None and video_id != video_filter:
+            continue
+
+        # Get instances for this frame
+        inst_indices = frame_instances.get(frame_id, [])
+
+        # Skip empty frames if requested
+        if skip_empty_frames and len(inst_indices) == 0:
+            continue
+
+        # Build instances list
+        instances_list = []
+        for inst_idx in inst_indices:
+            inst_row = store.instances_data[inst_idx]
+            instance_type = int(inst_row["instance_type"])
+            is_predicted = instance_type == InstanceType.PREDICTED
+
+            # Get point data
+            point_start = int(inst_row["point_id_start"])
+            point_end = int(inst_row["point_id_end"])
+
+            if is_predicted:
+                pts_data = store.pred_points_data[point_start:point_end]
+            else:
+                pts_data = store.points_data[point_start:point_end]
+
+            # Build points list
+            points_list = []
+            for pt in pts_data:
+                point_dict = {
+                    "x": float(pt["x"]) - coord_offset,
+                    "y": float(pt["y"]) - coord_offset,
+                    "visible": bool(pt["visible"]),
+                    "complete": bool(pt["complete"]),
+                }
+                points_list.append(point_dict)
+
+            # Build instance dict
+            skeleton_id = int(inst_row["skeleton"])
+            instance_dict: dict[str, Any] = {
+                "type": "predicted_instance" if is_predicted else "instance",
+                "skeleton_idx": skeleton_id,
+                "points": points_list,
+            }
+
+            # Add track if present
+            track_id = int(inst_row["track"])
+            if track_id >= 0:
+                instance_dict["track_idx"] = track_id
+
+            # Add tracking score if present
+            tracking_score = float(inst_row["tracking_score"])
+            if tracking_score != 0.0:
+                instance_dict["tracking_score"] = tracking_score
+
+            # Add score for predicted instances
+            if is_predicted:
+                instance_dict["score"] = float(inst_row["score"])
+
+            # Check from_predicted
+            from_predicted = int(inst_row["from_predicted"])
+            if from_predicted >= 0:
+                instance_dict["has_from_predicted"] = True
+
+            instances_list.append(instance_dict)
+
+        frame_dict = {
+            "frame_idx": frame_idx,
+            "video_idx": video_id,
+            "instances": instances_list,
+        }
+        labeled_frames_list.append(frame_dict)
+
+    return labeled_frames_list
 
 
 def from_dict(data: dict[str, Any]) -> Labels:

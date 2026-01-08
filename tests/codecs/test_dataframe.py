@@ -3845,3 +3845,76 @@ def test_to_dataframe_iter_multi_index_polars_flatten():
     assert isinstance(chunks[0], pl.DataFrame)
     # Should have flattened column names
     assert any("." in str(col) for col in chunks[0].columns)
+
+
+# =============================================================================
+# Lazy Fast Path Tests
+# =============================================================================
+
+
+def test_to_dataframe_lazy_points_matches_eager(slp_typical):
+    """Test that lazy fast path produces same output as eager for points format."""
+    # Load eager
+    labels_eager = load_slp(slp_typical, lazy=False)
+    df_eager = to_dataframe(labels_eager, format="points")
+
+    # Load lazy
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    assert labels_lazy.is_lazy
+    df_lazy = to_dataframe(labels_lazy, format="points")
+
+    # Compare shapes
+    assert df_eager.shape == df_lazy.shape
+
+    # Sort both for comparison (order may differ)
+    df_eager_sorted = df_eager.sort_values(
+        ["frame_idx", "node"]
+    ).reset_index(drop=True)
+    df_lazy_sorted = df_lazy.sort_values(
+        ["frame_idx", "node"]
+    ).reset_index(drop=True)
+
+    # Compare values
+    for col in df_eager_sorted.columns:
+        eager_vals = df_eager_sorted[col]
+        lazy_vals = df_lazy_sorted[col]
+        if eager_vals.dtype == "float64" or lazy_vals.dtype == "float64":
+            # Numeric comparison with tolerance
+            np.testing.assert_allclose(
+                eager_vals.fillna(-999).values,
+                lazy_vals.fillna(-999).values,
+                rtol=1e-5,
+                err_msg=f"Column {col} mismatch",
+            )
+        else:
+            pd.testing.assert_series_equal(
+                eager_vals, lazy_vals, check_names=False, obj=f"Column {col}"
+            )
+
+
+def test_to_dataframe_lazy_instances_matches_eager(slp_typical):
+    """Test that lazy fast path produces same output as eager for instances format."""
+    # Load eager
+    labels_eager = load_slp(slp_typical, lazy=False)
+    df_eager = to_dataframe(labels_eager, format="instances")
+
+    # Load lazy
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    assert labels_lazy.is_lazy
+    df_lazy = to_dataframe(labels_lazy, format="instances")
+
+    # Compare shapes
+    assert df_eager.shape == df_lazy.shape
+
+
+def test_to_dataframe_lazy_with_video_filter(slp_typical):
+    """Test lazy fast path with video filtering."""
+    # Load lazy
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    labels_eager = load_slp(slp_typical, lazy=False)
+
+    # Filter by video
+    df_lazy = to_dataframe(labels_lazy, format="points", video=0)
+    df_eager = to_dataframe(labels_eager, format="points", video=0)
+
+    assert df_eager.shape == df_lazy.shape

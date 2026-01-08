@@ -810,3 +810,59 @@ def test_to_numpy_user_only_frame_without_user_instances():
     # Actually the array will be all NaN since no valid instances to include
     assert arr.shape[0] == 1  # 1 frame
     assert np.all(np.isnan(arr))  # All NaN since no user instances
+
+
+# =============================================================================
+# Lazy Fast Path Tests
+# =============================================================================
+
+
+def test_to_numpy_lazy_matches_eager(slp_typical):
+    """Test that lazy fast path produces same output as eager."""
+    # Load eager
+    labels_eager = load_slp(slp_typical, lazy=False)
+    arr_eager = to_numpy(labels_eager)
+
+    # Load lazy
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    assert labels_lazy.is_lazy
+    arr_lazy = to_numpy(labels_lazy)
+
+    # Compare shapes
+    assert arr_eager.shape == arr_lazy.shape
+
+    # Compare values (allowing for NaN)
+    np.testing.assert_allclose(
+        np.nan_to_num(arr_eager, nan=-999),
+        np.nan_to_num(arr_lazy, nan=-999),
+        rtol=1e-5,
+    )
+
+
+def test_to_numpy_lazy_with_video_filter(slp_typical):
+    """Test lazy fast path with video filtering."""
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    labels_eager = load_slp(slp_typical, lazy=False)
+
+    arr_lazy = to_numpy(labels_lazy, video=0)
+    arr_eager = to_numpy(labels_eager, video=0)
+
+    assert arr_eager.shape == arr_lazy.shape
+    np.testing.assert_allclose(
+        np.nan_to_num(arr_eager, nan=-999),
+        np.nan_to_num(arr_lazy, nan=-999),
+        rtol=1e-5,
+    )
+
+
+def test_to_numpy_lazy_with_confidence(slp_typical):
+    """Test lazy fast path with return_confidence."""
+    labels_lazy = load_slp(slp_typical, lazy=True)
+    labels_eager = load_slp(slp_typical, lazy=False)
+
+    arr_lazy = to_numpy(labels_lazy, return_confidence=True)
+    arr_eager = to_numpy(labels_eager, return_confidence=True)
+
+    # Should have 3 coordinates (x, y, score)
+    assert arr_lazy.shape[-1] == 3
+    assert arr_eager.shape == arr_lazy.shape
