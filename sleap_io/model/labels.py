@@ -101,6 +101,91 @@ class Labels:
                 f"    labels.{operation}(...)"
             )
 
+    @property
+    def n_user_instances(self) -> int:
+        """Total number of user-labeled instances across all frames.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Total count of user instances.
+        """
+        if self.is_lazy:
+            from sleap_io.io.slp import InstanceType
+
+            store = self.labeled_frames._store
+            mask = store.instances_data["instance_type"] == InstanceType.USER
+            return int(mask.sum())
+        return sum(len(lf.user_instances) for lf in self.labeled_frames)
+
+    @property
+    def n_pred_instances(self) -> int:
+        """Total number of predicted instances across all frames.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Total count of predicted instances.
+        """
+        if self.is_lazy:
+            from sleap_io.io.slp import InstanceType
+
+            store = self.labeled_frames._store
+            return int(
+                (store.instances_data["instance_type"] == InstanceType.PREDICTED).sum()
+            )
+        return sum(len(lf.predicted_instances) for lf in self.labeled_frames)
+
+    def n_frames_per_video(self) -> dict["Video", int]:
+        """Get the number of labeled frames for each video.
+
+        When lazy-loaded, this uses a fast path that queries the raw frame
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Dictionary mapping Video objects to their labeled frame counts.
+        """
+        if self.is_lazy:
+            store = self.labeled_frames._store
+            counts = np.bincount(
+                store.frames_data["video"], minlength=len(self.videos)
+            )
+            return {v: int(counts[i]) for i, v in enumerate(self.videos)}
+
+        counts: dict[Video, int] = {}
+        for lf in self.labeled_frames:
+            counts[lf.video] = counts.get(lf.video, 0) + 1
+        return counts
+
+    def n_instances_per_track(self) -> dict["Track", int]:
+        """Get the number of instances for each track.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame or Instance objects.
+
+        Returns:
+            Dictionary mapping Track objects to their instance counts.
+            Untracked instances are not included.
+        """
+        if self.is_lazy:
+            store = self.labeled_frames._store
+            track_ids = store.instances_data["track"]
+            # Filter out untracked instances (track == -1)
+            valid_mask = track_ids >= 0
+            if not np.any(valid_mask):
+                return {t: 0 for t in self.tracks}
+            counts = np.bincount(track_ids[valid_mask], minlength=len(self.tracks))
+            return {t: int(counts[i]) for i, t in enumerate(self.tracks)}
+
+        counts: dict[Track, int] = {t: 0 for t in self.tracks}
+        for lf in self.labeled_frames:
+            for inst in lf.instances:
+                if inst.track is not None and inst.track in counts:
+                    counts[inst.track] += 1
+        return counts
+
     def materialize(self) -> "Labels":
         """Create a fully materialized (non-lazy) copy.
 
