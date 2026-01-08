@@ -2020,11 +2020,23 @@ class Labels:
         Notes:
             This method modifies the Labels object in place. The merge is designed to
             handle common workflows like merging predictions back into a project.
+
+            Provenance tracking: Each merge operation appends a record to
+            ``self.provenance["merge_history"]`` containing:
+
+            - ``timestamp``: ISO format timestamp of the merge
+            - ``source_filename``: Path from source's provenance (``None`` if in-memory)
+            - ``target_filename``: Path from target's provenance (``None`` if in-memory)
+            - ``source_labels``: Statistics about the source Labels
+            - ``strategy``: The frame_strategy used
+            - ``sleap_io_version``: Version of sleap-io that performed the merge
+            - ``result``: Merge statistics (frames_merged, instances_added, conflicts)
         """
         self._check_not_lazy("merge")
         from datetime import datetime
         from pathlib import Path
 
+        import sleap_io
         from sleap_io.model.matching import (
             ConflictResolution,
             ErrorMode,
@@ -2061,6 +2073,8 @@ class Labels:
 
         merge_record = {
             "timestamp": datetime.now().isoformat(),
+            "source_filename": other.provenance.get("filename"),
+            "target_filename": self.provenance.get("filename"),
             "source_labels": {
                 "n_frames": len(other.labeled_frames),
                 "n_videos": len(other.videos),
@@ -2068,6 +2082,7 @@ class Labels:
                 "n_tracks": len(other.tracks),
             },
             "strategy": frame_strategy,
+            "sleap_io_version": sleap_io.__version__,
         }
 
         try:
