@@ -1795,9 +1795,9 @@ def filenames(
 @click.option(
     "--palette",
     type=str,
-    default="glasbey",
+    default="standard",
     show_default=True,
-    help="Color palette (glasbey, tableau10, distinct, rainbow, etc.).",
+    help="Color palette (standard, tableau10, distinct, glasbey, etc.).",
 )
 @click.option(
     "--marker-shape",

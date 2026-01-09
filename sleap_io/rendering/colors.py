@@ -176,8 +176,8 @@ def get_palette(
     """Get n colors from a named palette as RGB tuples.
 
     Args:
-        name: Palette name. Built-in options: 'distinct', 'rainbow', 'warm',
-            'cool', 'pastel', 'seaborn', 'tableau10', 'viridis'.
+        name: Palette name. Built-in options: 'standard', 'distinct', 'rainbow',
+            'warm', 'cool', 'pastel', 'seaborn', 'tableau10', 'viridis'.
             With colorcet installed: 'glasbey', 'glasbey_hv', 'glasbey_cool',
             'glasbey_warm'.
         n_colors: Number of colors needed.
@@ -416,7 +416,7 @@ def build_color_map(
     n_nodes: int,
     n_tracks: int,
     track_indices: Optional[list[int]] = None,
-    palette: Union[PaletteName, str] = "glasbey",
+    palette: Union[PaletteName, str] = "standard",
 ) -> dict[str, list[tuple[int, int, int]]]:
     """Build color mapping based on scheme.
 

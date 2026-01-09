@@ -292,7 +292,7 @@ def render_frame(
     *,
     # Appearance
     color_by: ColorScheme = "instance",
-    palette: Union[PaletteName, str] = "glasbey",
+    palette: Union[PaletteName, str] = "standard",
     marker_shape: MarkerShape = "circle",
     marker_size: float = 4.0,
     line_width: float = 2.0,
@@ -522,7 +522,7 @@ def render_image(
     crop: CropSpec = None,
     # Appearance
     color_by: ColorScheme = "auto",
-    palette: Union[PaletteName, str] = "glasbey",
+    palette: Union[PaletteName, str] = "standard",
     marker_shape: MarkerShape = "circle",
     marker_size: float = 4.0,
     line_width: float = 2.0,
@@ -835,7 +835,7 @@ def render_video(
     scale: float = 1.0,
     # Appearance
     color_by: ColorScheme = "auto",
-    palette: Union[PaletteName, str] = "glasbey",
+    palette: Union[PaletteName, str] = "standard",
     marker_shape: MarkerShape = "circle",
     marker_size: float = 4.0,
     line_width: float = 2.0,

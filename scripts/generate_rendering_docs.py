@@ -82,6 +82,7 @@ def main():
     print("\nBuilt-in palettes...")
 
     palettes = [
+        "standard",
         "distinct",
         "rainbow",
         "warm",
