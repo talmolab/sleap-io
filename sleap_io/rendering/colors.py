@@ -42,6 +42,16 @@ ColorSpec = Union[
 
 # Built-in color palettes as RGB tuples
 PALETTES: dict[str, list[tuple[int, int, int]]] = {
+    # MATLAB default colors
+    "standard": [
+        (0, 114, 189),  # Blue
+        (217, 83, 25),  # Orange
+        (237, 177, 32),  # Yellow/Gold
+        (126, 47, 142),  # Purple
+        (119, 172, 48),  # Green
+        (77, 190, 238),  # Light blue
+        (162, 20, 47),  # Dark red
+    ],
     # High-contrast distinct colors (good for instances/tracks)
     "distinct": [
         (255, 100, 100),  # Light red
@@ -140,6 +150,7 @@ PALETTES: dict[str, list[tuple[int, int, int]]] = {
 
 # Type alias for palette names
 PaletteName = Literal[
+    "standard",
     "distinct",
     "rainbow",
     "warm",
