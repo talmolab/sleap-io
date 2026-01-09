@@ -2814,7 +2814,7 @@ def test_labels_merge_basic():
 
     # Merge labels2 into labels1 with explicit video matcher to ensure no matching
     video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
 
     # Check result
     assert result.successful
@@ -2930,7 +2930,7 @@ def test_labels_merge_video_not_matched():
 
     # Merge with strict path matching to ensure videos are not matched
     video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
 
     assert result.successful
     assert len(labels1.videos) == 2
@@ -2979,7 +2979,7 @@ def test_labels_merge_track_matching():
 
     # Merge with track name matching
     track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
-    result = labels1.merge(labels2, track_matcher=track_matcher)
+    result = labels1.merge(labels2, track=track_matcher)
 
     assert result.successful
     assert len(labels1.tracks) == 1  # Tracks should be matched by name
@@ -3029,9 +3029,7 @@ def test_labels_merge_conflict_resolution():
     instance_matcher = InstanceMatcher(
         method=InstanceMatchMethod.SPATIAL, threshold=5.0
     )
-    result = labels1.merge(
-        labels2, instance_matcher=instance_matcher, frame_strategy="smart"
-    )
+    result = labels1.merge(labels2, instance=instance_matcher, frame="smart")
 
     assert result.successful
     assert result.frames_merged == 1
@@ -3068,7 +3066,7 @@ def test_labels_merge_frame_strategies():
 
     # Merge with keep_original
     original_instances = len(labels1.labeled_frames[0].instances)
-    result = labels1.merge(labels2, frame_strategy="keep_original")
+    result = labels1.merge(labels2, frame="keep_original")
 
     assert result.successful
     assert (
@@ -3244,9 +3242,9 @@ def test_labels_merge_custom_matchers():
     # Merge with custom matchers
     result = labels1.merge(
         labels2,
-        skeleton_matcher=skeleton_matcher,
-        video_matcher=video_matcher,
-        track_matcher=track_matcher,
+        skeleton=skeleton_matcher,
+        video=video_matcher,
+        track=track_matcher,
     )
 
     assert result.successful
@@ -3420,7 +3418,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
 
     # Test 1: Without fallback, videos don't match (different paths)
     video_matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result_no_match = loaded_a.merge(loaded_b, video_matcher=video_matcher_no_fallback)
+    result_no_match = loaded_a.merge(loaded_b, video=video_matcher_no_fallback)
     assert result_no_match.successful
     assert len(loaded_a.videos) == 2  # Both videos added (no match)
 
@@ -3432,7 +3430,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
     # The videos have same basename so they should match
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = loaded_a.merge(loaded_b, video_matcher=video_matcher)
+    result = loaded_a.merge(loaded_b, video=video_matcher)
     assert result.successful
     # Videos match because recording.mp4 exists in fallback directory
     assert len(loaded_a.videos) == 1  # Videos matched via fallback
@@ -3464,7 +3462,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
     labels_d.skeletons.append(skel)
     labels_d.videos.append(Video(filename=str(project_a / "videos" / "recording.mp4")))
 
-    result3 = labels_d.merge(labels_c, video_matcher=video_matcher)
+    result3 = labels_d.merge(labels_c, video=video_matcher)
     assert result3.successful
     assert len(labels_d.videos) == 2  # recording.mp4 matched, other.mp4 added
 
@@ -3528,7 +3526,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
     # BASENAME method does filename-based matching ignoring directory paths
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
     assert result.successful
     # Videos match because they have the same basename (experiment.mp4)
     assert len(labels1.videos) == 1  # Videos matched via base_path lookup
@@ -3555,7 +3553,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
 
         # The merge will attempt relative_to() which will raise ValueError
         # This tests the exception handling
-        result2 = labels3.merge(labels4, video_matcher=video_matcher2)
+        result2 = labels3.merge(labels4, video=video_matcher2)
         assert result2.successful
 
     # Test 3: Test when base_path contains the video file directly
@@ -3579,7 +3577,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
     labels6.skeletons.append(skel)
     labels6.videos.append(video1)  # Full path to subdir1/experiment.mp4
 
-    result3 = labels6.merge(labels5, video_matcher=video_matcher3)
+    result3 = labels6.merge(labels5, video=video_matcher3)
     assert result3.successful
     # Videos should match because experiment.mp4 exists in base_path
     assert len(labels6.videos) == 1  # Videos matched via base_path
@@ -3684,7 +3682,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     # Create a video matcher using BASENAME (filename-based matching)
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = loaded1.merge(loaded2, video_matcher=video_matcher)
+    result = loaded1.merge(loaded2, video=video_matcher)
 
     assert result.successful
     assert result.frames_merged == 2  # frame2 and frame3
@@ -3709,7 +3707,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     video3 = Video(filename="orphan.mp4")
     labels3.videos.append(video3)
 
-    result2 = loaded1.merge(labels3, video_matcher=video_matcher_bad)
+    result2 = loaded1.merge(labels3, video=video_matcher_bad)
     assert result2.successful  # Should not crash even with bad paths
 
     # Test 5: Test priority order - direct match should take precedence
@@ -3724,7 +3722,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     labels6.videos.append(video6)
 
     # Should match based on path even before trying resolve strategies
-    result4 = labels5.merge(labels6, video_matcher=video_matcher)
+    result4 = labels5.merge(labels6, video=video_matcher)
     assert result4.successful
     assert len(labels5.videos) == 1  # Should match and not duplicate
 
@@ -3960,7 +3958,7 @@ def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
     assert skeleton1.matches(skeleton2)
 
     # Merge labels2 into labels1
-    result = labels1.merge(labels2, frame_strategy="keep_both")
+    result = labels1.merge(labels2, frame="keep_both")
 
     assert result.successful
     assert len(labels1.skeletons) == 1  # Should reuse existing skeleton

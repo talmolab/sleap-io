@@ -867,7 +867,7 @@ class TestImageDeduplication:
         assert Path(deduped.filename[1]).name == "img5.jpg"
 
         # Test merging with deduplication
-        result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+        result = labels1.merge(labels2, video=IMAGE_DEDUP_VIDEO_MATCHER)
         assert result.successful
 
         # Should have original video plus deduplicated new images
@@ -926,7 +926,7 @@ class TestImageDeduplication:
         assert deduped is None  # All images were duplicates
 
         # Test merging - should map to existing video
-        result = labels1.merge(labels2, video_matcher=IMAGE_DEDUP_VIDEO_MATCHER)
+        result = labels1.merge(labels2, video=IMAGE_DEDUP_VIDEO_MATCHER)
         assert result.successful
         assert len(labels1.videos) == 1  # No new video added
 
@@ -1028,7 +1028,7 @@ class TestShapeBasedMerging:
         )
 
         # Test Labels merge with SHAPE matcher
-        result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
+        result = labels1.merge(labels2, video=SHAPE_VIDEO_MATCHER)
         assert result.successful
         assert len(labels1.videos) == 1  # Videos merged into one
         assert len(labels1.videos[0].filename) == 4  # All images combined
@@ -1104,7 +1104,7 @@ class TestShapeBasedMerging:
         assert not video2.matches_shape(video1)
 
         # Test merge - should keep separate videos
-        result = labels1.merge(labels2, video_matcher=SHAPE_VIDEO_MATCHER)
+        result = labels1.merge(labels2, video=SHAPE_VIDEO_MATCHER)
         assert result.successful
         assert len(labels1.videos) == 2  # Videos kept separate
 

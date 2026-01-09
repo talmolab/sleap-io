@@ -222,16 +222,16 @@ class LabeledFrame:
     def merge(
         self,
         other: "LabeledFrame",
-        instance_matcher: Optional["InstanceMatcher"] = None,
-        strategy: str = "smart",
+        instance: Optional["InstanceMatcher"] = None,
+        frame: str = "smart",
     ) -> tuple[list[Instance], list[tuple[Instance, Instance, str]]]:
         """Merge instances from another frame into this frame.
 
         Args:
             other: Another LabeledFrame to merge instances from.
-            instance_matcher: Matcher to use for finding duplicate instances.
+            instance: Matcher to use for finding duplicate instances.
                 If None, uses default spatial matching with 5px tolerance.
-            strategy: Merge strategy:
+            frame: Merge strategy:
                 - "smart": Keep user labels, update predictions only if no user label
                 - "keep_original": Keep all original instances, ignore new ones
                 - "keep_new": Replace with new instances
@@ -253,20 +253,22 @@ class LabeledFrame:
         """
         from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
 
-        if instance_matcher is None:
+        if instance is None:
             instance_matcher = InstanceMatcher(
                 method=InstanceMatchMethod.SPATIAL, threshold=5.0
             )
+        else:
+            instance_matcher = instance
 
         conflicts = []
 
-        if strategy == "keep_original":
+        if frame == "keep_original":
             return self.instances.copy(), conflicts
-        elif strategy == "keep_new":
+        elif frame == "keep_new":
             return other.instances.copy(), conflicts
-        elif strategy == "keep_both":
+        elif frame == "keep_both":
             return self.instances + other.instances, conflicts
-        elif strategy == "update_tracks":
+        elif frame == "update_tracks":
             # match instances and update .track and tracking score of the old instances
             matches = instance_matcher.find_matches(self.instances, other.instances)
             for self_idx, other_idx, score in matches:
@@ -275,7 +277,7 @@ class LabeledFrame:
                     other_idx
                 ].tracking_score
             return self.instances, conflicts
-        elif strategy == "replace_predictions":
+        elif frame == "replace_predictions":
             # Keep all user instances from original frame
             merged = [inst for inst in self.instances if type(inst) is Instance]
             # Add only predictions from incoming frame (not user instances)

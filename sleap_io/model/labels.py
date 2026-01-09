@@ -2008,11 +2008,11 @@ class Labels:
     def merge(
         self,
         other: "Labels",
-        instance_matcher: Optional["InstanceMatcher"] = None,
-        skeleton_matcher: Optional["SkeletonMatcher"] = None,
-        video_matcher: Optional["VideoMatcher"] = None,
-        track_matcher: Optional["TrackMatcher"] = None,
-        frame_strategy: str = "smart",
+        skeleton: Optional[Union[str, "SkeletonMatcher"]] = None,
+        video: Optional[Union[str, "VideoMatcher"]] = None,
+        track: Optional[Union[str, "TrackMatcher"]] = None,
+        frame: str = "smart",
+        instance: Optional[Union[str, "InstanceMatcher"]] = None,
         validate: bool = True,
         progress_callback: Optional[Callable] = None,
         error_mode: str = "continue",
@@ -2021,19 +2021,20 @@ class Labels:
 
         Args:
             other: Another Labels object to merge into this one.
-            instance_matcher: Matcher for comparing instances. If None, uses default
-                spatial matching with 5px tolerance.
-            skeleton_matcher: Matcher for comparing skeletons. If None, uses structure
-                matching.
-            video_matcher: Matcher for comparing videos. If None, uses auto matching.
-            track_matcher: Matcher for comparing tracks. If None, uses name matching.
-            frame_strategy: Strategy for merging frames:
-                - "smart": Keep user labels, update predictions
-                - "keep_original": Keep original frames
-                - "keep_new": Replace with new frames
-                - "keep_both": Keep all frames
-                - "update_tracks": Update track and score of the original instances
-                    from the new instances.
+            skeleton: Skeleton matching method. Can be a string ("structure",
+                "subset", "overlap", "exact") or a SkeletonMatcher object for
+                advanced configuration. Default is "structure".
+            video: Video matching method. Can be a string ("auto", "path",
+                "basename", "content", "shape", "image_dedup") or a VideoMatcher
+                object for advanced configuration. Default is "auto".
+            track: Track matching method. Can be a string ("name", "identity") or
+                a TrackMatcher object. Default is "name".
+            frame: Frame merge strategy. One of "smart", "keep_original",
+                "keep_new", "keep_both", "update_tracks", "replace_predictions".
+                Default is "smart".
+            instance: Instance matching method for spatial frame strategies. Can be
+                a string ("spatial", "identity", "iou") or an InstanceMatcher object.
+                Default is "spatial" with 5px tolerance.
             validate: If True, validate for conflicts before merging.
             progress_callback: Optional callback for progress updates.
                 Should accept (current, total, message) arguments.
@@ -2059,7 +2060,7 @@ class Labels:
             - ``source_filename``: Path from source's provenance (``None`` if in-memory)
             - ``target_filename``: Path from target's provenance (``None`` if in-memory)
             - ``source_labels``: Statistics about the source Labels
-            - ``strategy``: The frame_strategy used
+            - ``strategy``: The frame strategy used
             - ``sleap_io_version``: Version of sleap-io that performed the merge
             - ``result``: Merge statistics (frames_merged, instances_added, conflicts)
         """
@@ -2072,25 +2073,46 @@ class Labels:
             ConflictResolution,
             ErrorMode,
             InstanceMatcher,
+            InstanceMatchMethod,
             MergeError,
             MergeResult,
             SkeletonMatcher,
             SkeletonMatchMethod,
             SkeletonMismatchError,
             TrackMatcher,
+            TrackMatchMethod,
             VideoMatcher,
             VideoMatchMethod,
         )
 
-        # Initialize matchers with defaults if not provided
-        if instance_matcher is None:
-            instance_matcher = InstanceMatcher()
-        if skeleton_matcher is None:
+        # Coerce string arguments to Matcher objects
+        if skeleton is None:
             skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
-        if video_matcher is None:
+        elif isinstance(skeleton, str):
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod(skeleton))
+        else:
+            skeleton_matcher = skeleton
+
+        if video is None:
             video_matcher = VideoMatcher()
-        if track_matcher is None:
+        elif isinstance(video, str):
+            video_matcher = VideoMatcher(method=VideoMatchMethod(video))
+        else:
+            video_matcher = video
+
+        if track is None:
             track_matcher = TrackMatcher()
+        elif isinstance(track, str):
+            track_matcher = TrackMatcher(method=TrackMatchMethod(track))
+        else:
+            track_matcher = track
+
+        if instance is None:
+            instance_matcher = InstanceMatcher()
+        elif isinstance(instance, str):
+            instance_matcher = InstanceMatcher(method=InstanceMatchMethod(instance))
+        else:
+            instance_matcher = instance
 
         # Parse error mode
         error_mode_enum = ErrorMode(error_mode)
@@ -2112,7 +2134,7 @@ class Labels:
                 "n_skeletons": len(other.skeletons),
                 "n_tracks": len(other.tracks),
             },
-            "strategy": frame_strategy,
+            "strategy": frame,
             "sleap_io_version": sleap_io.__version__,
         }
 
@@ -2333,8 +2355,8 @@ class Labels:
                     # Merge instances using frame-level merge
                     merged_instances, conflicts = self_frame.merge(
                         other_frame,
-                        instance_matcher=instance_matcher,
-                        strategy=frame_strategy,
+                        instance=instance_matcher,
+                        frame=frame,
                     )
 
                     # Remap skeleton and track references for instances from other frame

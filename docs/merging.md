@@ -23,26 +23,24 @@ Merging proceeds in four steps:
 3. **Match tracks** — Map track identities by name
 4. **Merge frames** — For each frame in `other`:
    - If frame doesn't exist in `base`: add it
-   - If frame exists in both: apply the `frame_strategy`
+   - If frame exists in both: apply the `frame` strategy
 
 Two parameters control the key steps:
 
 | Parameter | Stage | Controls | Default |
 |-----------|-------|----------|---------|
-| `video_matcher` | Step 2 | How videos are matched between labels | `AUTO` |
-| `frame_strategy` | Step 4 | How overlapping frames are combined | `"smart"` |
+| `video` | Step 2 | How videos are matched between labels | `"auto"` |
+| `frame` | Step 4 | How overlapping frames are combined | `"smart"` |
 
 **Video matching is upstream of frame strategy.** If video matching fails (adds video as new), frame strategy is never applied—there are no overlapping frames to merge.
 
 ```python
-from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
+# Explicit control over both (simple string API)
+base.merge(predictions, video="path", frame="smart")
 
-# Explicit control over both
-base.merge(
-    predictions,
-    video_matcher=VideoMatcher(method=VideoMatchMethod.PATH),  # Step 2
-    frame_strategy="smart"  # Step 4
-)
+# Or with Matcher objects for advanced configuration
+from sleap_io.model.matching import VideoMatcher
+base.merge(predictions, video=VideoMatcher(method="path", strict=True))
 ```
 
 ## Video matching
@@ -178,25 +176,26 @@ video_b: (500, 480, 640, 3)   # different frame count
 While AUTO is recommended, explicit matchers are available:
 
 ```python
-from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
-
 # PATH: exact sanitized path match only
-matcher = VideoMatcher(method=VideoMatchMethod.PATH)
-base.merge(other, video_matcher=matcher)
+base.merge(other, video="path")
 
 # BASENAME: filename match only (ignores directory)
 # WARNING: Ambiguous with common filenames like "video.mp4"
-matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
-base.merge(other, video_matcher=matcher)
+base.merge(other, video="basename")
 
 # CONTENT: shape + backend type match
 # WARNING: Matches ANY videos with same resolution - use with caution
-matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
-base.merge(other, video_matcher=matcher)
+base.merge(other, video="content")
 
 # IMAGE_DEDUP: for ImageVideo sequences with overlapping frames
-matcher = VideoMatcher(method=VideoMatchMethod.IMAGE_DEDUP)
-base.merge(other, video_matcher=matcher)
+base.merge(other, video="image_dedup")
+```
+
+For advanced configuration (e.g., strict path matching), use Matcher objects:
+
+```python
+from sleap_io.model.matching import VideoMatcher
+base.merge(other, video=VideoMatcher(method="path", strict=True))
 ```
 
 ### Cross-platform paths
@@ -225,7 +224,7 @@ With the new AUTO algorithm, this is often unnecessary if basenames are unique�
 
 ## Frame strategies
 
-The `frame_strategy` parameter controls what happens when both datasets have the same frame (i.e., after video matching succeeds). Strategies fall into two categories:
+The `frame` parameter controls what happens when both datasets have the same frame (i.e., after video matching succeeds). Strategies fall into two categories:
 
 **Frame-level strategies** operate on whole frames without comparing individual instances:
 
@@ -276,7 +275,7 @@ Keep base unchanged. Ignore everything from other.
 # Other frame 0: [Pred C, Pred D]
 # Other frame 1: [Pred E]
 
-base.merge(other, frame_strategy="keep_original")
+base.merge(other, frame="keep_original")
 
 # Result:
 #   Frame 0: [User A, Pred B]  (unchanged)
@@ -298,7 +297,7 @@ Replace base with other. Discard base.
 # Base frame 1: [User C]
 # Other frame 0: [Pred D]
 
-base.merge(other, frame_strategy="keep_new")
+base.merge(other, frame="keep_new")
 
 # Result:
 #   Frame 0: [Pred D]          (replaced)
@@ -319,7 +318,7 @@ Concatenate all instances. No deduplication.
 # Base frame 0: [User A, Pred B]
 # Other frame 0: [Pred C, Pred D]
 
-base.merge(other, frame_strategy="keep_both")
+base.merge(other, frame="keep_both")
 
 # Result:
 #   Frame 0: [User A, Pred B, Pred C, Pred D]
@@ -346,7 +345,7 @@ Keep user instances (`Instance`) from base. Remove predictions (`PredictedInstan
 # Base frame 0: [User A, Pred B, Pred C]
 # Other frame 0: [User X, Pred D, Pred E]
 
-base.merge(other, frame_strategy="replace_predictions")
+base.merge(other, frame="replace_predictions")
 
 # Result:
 #   Frame 0: [User A, Pred D, Pred E]
@@ -392,7 +391,7 @@ Preserve user labels. Replace matched predictions. Add unmatched instances.
 #   Pred E at (52, 52)    <- matches Pred B
 #   Pred F at (200, 200)  <- no match
 
-base.merge(other, frame_strategy="smart")
+base.merge(other, frame="smart")
 
 # Result:
 #   User A at (10, 10)    <- kept (user beats prediction)
@@ -424,7 +423,7 @@ Update track assignments only. Do not modify poses. Do not add or remove instanc
 #   Pred X at (12, 12) with track=Track("animal_1")
 #   Pred Y at (52, 52) with track=Track("animal_2")
 
-base.merge(other, frame_strategy="update_tracks")
+base.merge(other, frame="update_tracks")
 
 # Result:
 #   Pred A at (10, 10) with track=Track("animal_1")
@@ -439,32 +438,45 @@ base.merge(other, frame_strategy="update_tracks")
 Configure how instances are paired for `smart` and `update_tracks` frame strategies:
 
 ```python
-from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
-
 # Spatial (default): match by average point distance
-matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=5.0)
+base.merge(other, instance="spatial")
 
 # Identity: match by track identity
-matcher = InstanceMatcher(method=InstanceMatchMethod.IDENTITY)
+base.merge(other, instance="identity")
 
 # IoU: match by bounding box overlap
-matcher = InstanceMatcher(method=InstanceMatchMethod.IOU, threshold=0.5)
+base.merge(other, instance="iou")
+```
 
-base.merge(other, instance_matcher=matcher)
+For advanced configuration (e.g., custom threshold), use Matcher objects:
+
+```python
+from sleap_io.model.matching import InstanceMatcher
+base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
+base.merge(other, instance=InstanceMatcher(method="iou", threshold=0.5))
 ```
 
 ### Skeleton matching
 
 ```python
-from sleap_io.model.matching import SkeletonMatcher, SkeletonMatchMethod
-
 # Structure (default): same nodes (any order)
-# Exact: same nodes in same order
-# Overlap: partial match by Jaccard similarity
-# Subset: one skeleton's nodes are subset of other
+base.merge(other, skeleton="structure")
 
-matcher = SkeletonMatcher(method=SkeletonMatchMethod.OVERLAP, threshold=0.7)
-base.merge(other, skeleton_matcher=matcher)
+# Exact: same nodes in same order
+base.merge(other, skeleton="exact")
+
+# Overlap: partial match by Jaccard similarity
+base.merge(other, skeleton="overlap")
+
+# Subset: one skeleton's nodes are subset of other
+base.merge(other, skeleton="subset")
+```
+
+For advanced configuration:
+
+```python
+from sleap_io.model.matching import SkeletonMatcher
+base.merge(other, skeleton=SkeletonMatcher(method="overlap", threshold=0.7))
 ```
 
 ## Troubleshooting
@@ -507,7 +519,7 @@ print("Videos after merge:", [v.filename for v in base.videos])
 If frames were merged to the wrong video, the source data may have ambiguous paths. For future merges:
 
 1. Use `replace_filenames` to ensure unique, correct paths before merging
-2. Consider using PATH matching for strict control: `VideoMatcher(method=VideoMatchMethod.PATH)`
+2. Consider using PATH matching for strict control: `video="path"`
 
 ### Duplicate instances
 
@@ -515,8 +527,7 @@ Use `smart` instead of `keep_both`, or tighten match threshold:
 
 ```python
 from sleap_io.model.matching import InstanceMatcher
-matcher = InstanceMatcher(method="spatial", threshold=2.0)
-base.merge(other, instance_matcher=matcher)
+base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
 ```
 
 ## API reference

@@ -106,6 +106,9 @@ class FrameStrategy(str, Enum):
         KEEP_ORIGINAL: Always keep instances from the original (base) frame.
         KEEP_NEW: Always keep instances from the new (incoming) frame.
         KEEP_BOTH: Keep all instances from both frames without filtering.
+        UPDATE_TRACKS: Update track assignments only without modifying poses.
+        REPLACE_PREDICTIONS: Keep user instances from base, remove base predictions,
+            add only predictions from incoming frame.
     """
 
     SMART = "smart"
@@ -113,6 +116,7 @@ class FrameStrategy(str, Enum):
     KEEP_NEW = "keep_new"
     KEEP_BOTH = "keep_both"
     UPDATE_TRACKS = "update_tracks"
+    REPLACE_PREDICTIONS = "replace_predictions"
 
 
 class ErrorMode(str, Enum):

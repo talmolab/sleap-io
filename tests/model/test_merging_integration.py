@@ -32,7 +32,7 @@ class TestLabeledFrameMerge:
         frame2.instances = [inst2]
 
         # Merge with keep_original strategy
-        merged, conflicts = frame1.merge(frame2, strategy="keep_original")
+        merged, conflicts = frame1.merge(frame2, frame="keep_original")
 
         assert len(merged) == 1
         assert merged[0] is inst1
@@ -53,7 +53,7 @@ class TestLabeledFrameMerge:
         frame2.instances = [inst2]
 
         # Merge with keep_new strategy
-        merged, conflicts = frame1.merge(frame2, strategy="keep_new")
+        merged, conflicts = frame1.merge(frame2, frame="keep_new")
 
         assert len(merged) == 1
         assert merged[0] is inst2
@@ -76,7 +76,7 @@ class TestLabeledFrameMerge:
         frame2.instances = [inst2]
 
         # Merge with keep_both strategy
-        merged, conflicts = frame1.merge(frame2, strategy="update_tracks")
+        merged, conflicts = frame1.merge(frame2, frame="update_tracks")
 
         assert len(merged) == 1
         assert inst1 in merged
@@ -100,7 +100,7 @@ class TestLabeledFrameMerge:
         frame2.instances = [inst2]
 
         # Merge with keep_both strategy
-        merged, conflicts = frame1.merge(frame2, strategy="keep_both")
+        merged, conflicts = frame1.merge(frame2, frame="keep_both")
 
         assert len(merged) == 2
         assert inst1 in merged
@@ -130,7 +130,7 @@ class TestLabeledFrameMerge:
         frame2.instances = [pred_inst]
 
         # Merge with smart strategy
-        merged, conflicts = frame1.merge(frame2, strategy="smart")
+        merged, conflicts = frame1.merge(frame2, frame="smart")
 
         # User instance should be kept, prediction ignored
         assert len(merged) == 1
@@ -161,7 +161,7 @@ class TestLabeledFrameMerge:
         frame2.instances = [user_inst]
 
         # Merge with smart strategy
-        merged, conflicts = frame2.merge(frame1, strategy="smart")
+        merged, conflicts = frame2.merge(frame1, frame="smart")
 
         # User instance should replace prediction
         assert len(merged) == 1
@@ -195,9 +195,7 @@ class TestLabeledFrameMerge:
 
         # Use identity matcher instead of spatial
         matcher = InstanceMatcher(method=InstanceMatchMethod.IDENTITY)
-        merged, conflicts = frame1.merge(
-            frame2, instance_matcher=matcher, strategy="smart"
-        )
+        merged, conflicts = frame1.merge(frame2, instance=matcher, frame="smart")
 
         # inst1 and inst2 should match by track, inst3 should be added
         assert len(merged) == 2  # inst1 (kept) and inst3 (added)
@@ -254,7 +252,7 @@ class TestLabelsMerge:
         labels2.append(frame2)
 
         # Merge with keep_both strategy
-        result = labels1.merge(labels2, frame_strategy="keep_both")
+        result = labels1.merge(labels2, frame="keep_both")
 
         assert result.successful
         assert result.frames_merged == 1
@@ -1066,7 +1064,7 @@ class TestMergeImageVideoIntegration:
         from sleap_io.model.matching import VideoMatcher
 
         result = base_labels.merge(
-            predictions, video_matcher=VideoMatcher(method=VideoMatchMethod.IMAGE_DEDUP)
+            predictions, video=VideoMatcher(method=VideoMatchMethod.IMAGE_DEDUP)
         )
 
         assert result.successful
