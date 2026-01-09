@@ -480,8 +480,12 @@ class TestEdgeCases:
         assert matcher.match(video1, video2)  # Same basename
         assert not matcher.match(video1, video3)  # Different basename
 
-    def test_video_matcher_auto_content_fallback(self):
-        """Test VideoMatcher AUTO method falling back to content matching."""
+    def test_video_matcher_auto_no_content_fallback(self):
+        """Test VideoMatcher AUTO does NOT fall back to content-only matching.
+
+        The safe AUTO algorithm uses shape for REJECTION only, not positive matching.
+        Two videos with same shape but different names should NOT match.
+        """
         video1 = Video(filename="video1.mp4", open_backend=False)
         video1.backend_metadata["shape"] = (100, 480, 640, 3)
 
@@ -492,10 +496,11 @@ class TestEdgeCases:
         video3.backend_metadata["shape"] = (50, 240, 320, 3)  # Different shape
 
         matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
-        # Should match by content since paths don't match
-        assert matcher.match(video1, video2)
+        # Should NOT match - different names, even with same shape
+        # Shape is for rejection only, not positive evidence
+        assert not matcher.match(video1, video2)
 
-        # Should not match - different paths and different content
+        # Should not match - different names and different shapes
         assert not matcher.match(video1, video3)
 
     def test_frame_matcher(self):
