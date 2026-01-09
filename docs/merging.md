@@ -26,7 +26,7 @@ Merging proceeds in five steps:
 
 ### Preset options {#preset-options}
 
-These options are controlled via parameters to `Labels.merge()`:
+These options are controlled via parameters to [`Labels.merge()`](#sleap_io.model.labels.Labels.merge):
 
 | Parameter | Controls | Options |
 |-----------|----------|---------|
@@ -73,7 +73,7 @@ base.merge(other, skeleton="exact")
 
 ### Object configuration
 
-For advanced control, use `SkeletonMatcher`:
+For advanced control, use [`SkeletonMatcher`](#sleap_io.model.matching.SkeletonMatcher):
 
 ```python
 from sleap_io.model.matching import SkeletonMatcher
@@ -160,7 +160,7 @@ base.merge(other, video="basename")
 
 ### Object configuration
 
-For advanced control, use `VideoMatcher`:
+For advanced control, use [`VideoMatcher`](#sleap_io.model.matching.VideoMatcher):
 
 ```python
 from sleap_io.model.matching import VideoMatcher
@@ -215,7 +215,7 @@ if video_a.exists() and video_b.exists():
     frame_b = video_b[0]
 ```
 
-**Step 3: Fix** — Use `replace_filenames` before merging:
+**Step 3: Fix** — Use [`replace_filenames`](#sleap_io.model.labels.Labels.replace_filenames) before merging:
 ```python
 # Reload and fix paths before merge
 base = sio.load_file("base.slp")
@@ -269,7 +269,7 @@ base.merge(other, track="identity")
 
 ### Object configuration
 
-For advanced control, use `TrackMatcher`:
+For advanced control, use [`TrackMatcher`](#sleap_io.model.matching.TrackMatcher):
 
 ```python
 from sleap_io.model.matching import TrackMatcher
@@ -369,7 +369,7 @@ base.merge(other, instance="iou")
 
 ### Object configuration
 
-For advanced control, use `InstanceMatcher`:
+For advanced control, use [`InstanceMatcher`](#sleap_io.model.matching.InstanceMatcher):
 
 ```python
 from sleap_io.model.matching import InstanceMatcher
