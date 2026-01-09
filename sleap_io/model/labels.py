@@ -2011,7 +2011,7 @@ class Labels:
         skeleton: Optional[Union[str, "SkeletonMatcher"]] = None,
         video: Optional[Union[str, "VideoMatcher"]] = None,
         track: Optional[Union[str, "TrackMatcher"]] = None,
-        frame: str = "smart",
+        frame: str = "auto",
         instance: Optional[Union[str, "InstanceMatcher"]] = None,
         validate: bool = True,
         progress_callback: Optional[Callable] = None,
@@ -2029,9 +2029,9 @@ class Labels:
                 object for advanced configuration. Default is "auto".
             track: Track matching method. Can be a string ("name", "identity") or
                 a TrackMatcher object. Default is "name".
-            frame: Frame merge strategy. One of "smart", "keep_original",
+            frame: Frame merge strategy. One of "auto", "keep_original",
                 "keep_new", "keep_both", "update_tracks", "replace_predictions".
-                Default is "smart".
+                Default is "auto".
             instance: Instance matching method for spatial frame strategies. Can be
                 a string ("spatial", "identity", "iou") or an InstanceMatcher object.
                 Default is "spatial" with 5px tolerance.

@@ -3029,7 +3029,7 @@ def test_labels_merge_conflict_resolution():
     instance_matcher = InstanceMatcher(
         method=InstanceMatchMethod.SPATIAL, threshold=5.0
     )
-    result = labels1.merge(labels2, instance=instance_matcher, frame="smart")
+    result = labels1.merge(labels2, instance=instance_matcher, frame="auto")
 
     assert result.successful
     assert result.frames_merged == 1
@@ -3131,7 +3131,7 @@ def test_labels_merge_provenance_tracking():
     assert merge_record["source_labels"]["n_frames"] == 3
     assert merge_record["source_labels"]["n_videos"] == 1
     assert merge_record["source_labels"]["n_skeletons"] == 1
-    assert merge_record["strategy"] == "smart"
+    assert merge_record["strategy"] == "auto"
     # Verify new provenance fields
     assert "source_filename" in merge_record
     assert "target_filename" in merge_record
@@ -3282,7 +3282,7 @@ def test_labels_merge_string_api():
         skeleton="structure",  # String instead of SkeletonMatcher
         video="basename",  # String instead of VideoMatcher
         track="name",  # String instead of TrackMatcher
-        frame="smart",  # String (already was string)
+        frame="auto",  # String (already was string)
         instance="spatial",  # String instead of InstanceMatcher
     )
 

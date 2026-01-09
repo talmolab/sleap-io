@@ -28,10 +28,10 @@ Two parameters control the key behavior:
 | Parameter | Controls | Default |
 |-----------|----------|---------|
 | `video` | How videos are matched | `"auto"` |
-| `frame` | How overlapping frames are combined | `"smart"` |
+| `frame` | How overlapping frames are combined | `"auto"` |
 
 ```python
-base.merge(predictions, video="auto", frame="smart")
+base.merge(predictions, video="auto", frame="auto")
 ```
 
 ## Video matching
@@ -168,7 +168,7 @@ base.merge(other, video="basename")  # Match by filename only
 
 The `frame` parameter controls what happens when both datasets have the same frame.
 
-### `smart` (default)
+### `auto` (default)
 
 The recommended strategy for human-in-the-loop workflows. Preserves user labels, updates predictions.
 
@@ -183,7 +183,7 @@ Unmatched instances from `other` are added.
 
 ```python
 # Typical HITL workflow: merge predictions into labeled project
-base.merge(predictions)  # Uses smart by default
+base.merge(predictions)  # Uses auto by default
 ```
 
 ### `replace_predictions`
@@ -213,7 +213,7 @@ base.merge(new_predictions, frame="replace_predictions")
 
 ### Instance matching
 
-For `smart` and `update_tracks` strategies, instances are paired by spatial proximity (default 5px threshold):
+For `auto` and `update_tracks` strategies, instances are paired by spatial proximity (default 5px threshold):
 
 ```python
 from sleap_io.model.matching import InstanceMatcher
@@ -266,7 +266,7 @@ This shouldn't happen with AUTO matching. If it does:
 
 ### Duplicate instances after merge
 
-Use `smart` instead of `keep_both`, or tighten the instance match threshold:
+Use `auto` instead of `keep_both`, or tighten the instance match threshold:
 
 ```python
 from sleap_io.model.matching import InstanceMatcher

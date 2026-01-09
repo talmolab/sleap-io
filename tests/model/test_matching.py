@@ -311,7 +311,7 @@ class TestEnums:
 
     def test_frame_strategy(self):
         """Test FrameStrategy enum."""
-        assert FrameStrategy.SMART == "smart"
+        assert FrameStrategy.AUTO == "auto"
         assert FrameStrategy.KEEP_ORIGINAL == "keep_original"
         assert FrameStrategy.KEEP_NEW == "keep_new"
         assert FrameStrategy.KEEP_BOTH == "keep_both"

@@ -223,7 +223,7 @@ class LabeledFrame:
         self,
         other: "LabeledFrame",
         instance: Optional["InstanceMatcher"] = None,
-        frame: str = "smart",
+        frame: str = "auto",
     ) -> tuple[list[Instance], list[tuple[Instance, Instance, str]]]:
         """Merge instances from another frame into this frame.
 
@@ -232,7 +232,7 @@ class LabeledFrame:
             instance: Matcher to use for finding duplicate instances.
                 If None, uses default spatial matching with 5px tolerance.
             frame: Merge strategy:
-                - "smart": Keep user labels, update predictions only if no user label
+                - "auto": Keep user labels, update predictions only if no user label
                 - "keep_original": Keep all original instances, ignore new ones
                 - "keep_new": Replace with new instances
                 - "keep_both": Keep all instances from both frames
@@ -287,7 +287,7 @@ class LabeledFrame:
             # No conflicts to report - this is a clean replacement
             return merged, []
 
-        # Smart merging strategy
+        # Auto merging strategy
         merged_instances = []
         used_indices = set()
 

@@ -280,7 +280,7 @@ def test_labeled_frame_merge_edge_cases():
 
     # Use identity matcher that will match based on tracks
     matcher = InstanceMatcher(method=InstanceMatchMethod.IDENTITY)
-    merged, conflicts = lf_self.merge(lf_other, instance=matcher, frame="smart")
+    merged, conflicts = lf_self.merge(lf_other, instance=matcher, frame="auto")
 
     # User instance should replace prediction
     assert len(merged) == 1
@@ -303,7 +303,7 @@ def test_labeled_frame_merge_edge_cases():
         video=Video(filename="test.mp4"), frame_idx=0, instances=[pred_inst2]
     )
 
-    merged2, conflicts2 = lf_pred1.merge(lf_pred2, instance=matcher, frame="smart")
+    merged2, conflicts2 = lf_pred1.merge(lf_pred2, instance=matcher, frame="auto")
 
     # Higher score prediction should be kept
     assert len(merged2) == 1
@@ -327,7 +327,7 @@ def test_labeled_frame_merge_edge_cases():
     )
 
     merged3, conflicts3 = lf_no_score1.merge(
-        lf_no_score2, instance=matcher, frame="smart"
+        lf_no_score2, instance=matcher, frame="auto"
     )
 
     # Should keep the instance from other frame when no scores
@@ -351,7 +351,7 @@ def test_labeled_frame_merge_edge_cases():
     )
 
     merged4, conflicts4 = lf_with_unmatched.merge(
-        lf_single, instance=matcher, frame="smart"
+        lf_single, instance=matcher, frame="auto"
     )
 
     # Should have both the replaced user instance and the unmatched prediction
@@ -378,7 +378,7 @@ def test_labeled_frame_merge_edge_cases():
     )
 
     merged5, conflicts5 = lf_complex1.merge(
-        lf_complex2, instance=matcher, frame="smart"
+        lf_complex2, instance=matcher, frame="auto"
     )
 
     # Should keep the latest one
@@ -410,7 +410,7 @@ def test_labeled_frame_merge_conflict_resolution_missing_score():
     frame2 = LabeledFrame(video=video, frame_idx=0, instances=[pred_with_score])
 
     matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=5.0)
-    merged, conflicts = frame1.merge(frame2, instance=matcher, frame="smart")
+    merged, conflicts = frame1.merge(frame2, instance=matcher, frame="auto")
 
     # When one doesn't have score, should keep the other instance (line 316)
     assert len(merged) == 1
@@ -432,7 +432,7 @@ def test_labeled_frame_merge_conflict_resolution_missing_score():
     frame3 = LabeledFrame(video=video, frame_idx=0, instances=[pred_no_score2])
     frame4 = LabeledFrame(video=video, frame_idx=0, instances=[pred_no_score3])
 
-    merged2, conflicts2 = frame3.merge(frame4, instance=matcher, frame="smart")
+    merged2, conflicts2 = frame3.merge(frame4, instance=matcher, frame="auto")
 
     # When neither has score, should keep the other instance (line 316)
     assert len(merged2) == 1
@@ -467,7 +467,7 @@ def test_labeled_frame_merge_keep_unmatched_predictions():
     frame2 = LabeledFrame(video=video, frame_idx=0, instances=[pred2])
 
     matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=5.0)
-    merged, conflicts = frame1.merge(frame2, instance=matcher, frame="smart")
+    merged, conflicts = frame1.merge(frame2, instance=matcher, frame="auto")
 
     # Should have user instance and the higher score prediction (pred2)
     assert len(merged) == 2
@@ -489,7 +489,7 @@ def test_labeled_frame_merge_keep_unmatched_predictions():
     frame3 = LabeledFrame(video=video, frame_idx=0, instances=[pred3, pred5])
     frame4 = LabeledFrame(video=video, frame_idx=0, instances=[pred4])
 
-    merged2, conflicts2 = frame3.merge(frame4, instance=matcher, frame="smart")
+    merged2, conflicts2 = frame3.merge(frame4, instance=matcher, frame="auto")
 
     # pred3 matches pred4, pred4 is kept
     # pred5 has no match, should be kept
@@ -542,7 +542,7 @@ def test_labeled_frame_merge_matched_prediction_removal():
 
     # Use spatial matcher with threshold that makes the intended matches
     matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=3.0)
-    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="smart")
+    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="auto")
 
     # Expected result:
     # - pred_other_1 replaces pred_self_1 (higher score)
@@ -581,7 +581,7 @@ def test_labeled_frame_merge_matched_prediction_removal():
     )
 
     merged2, conflicts2 = frame_self_2.merge(
-        frame_other_2, instance=matcher, frame="smart"
+        frame_other_2, instance=matcher, frame="auto"
     )
 
     # Both predictions from self should be replaced
@@ -642,7 +642,7 @@ def test_labeled_frame_merge_other_to_self_mapping_iteration():
     matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=2.0)
 
     # Perform the merge
-    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="smart")
+    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="auto")
 
     # Verify results:
     # - self[0] and self[2] should be kept (no matches)
@@ -702,7 +702,7 @@ def test_labeled_frame_merge_lines_329_330_coverage():
     matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=3.0)
 
     # Perform merge
-    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="smart")
+    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="auto")
 
     # Expected: user_self + pred_other
     assert len(merged) == 2
@@ -740,7 +740,7 @@ def test_labeled_frame_merge_lines_329_330_coverage():
     )
 
     merged2, conflicts2 = frame_self_2.merge(
-        frame_other_2, instance=matcher, frame="smart"
+        frame_other_2, instance=matcher, frame="auto"
     )
 
     # only pred_other instances would be kep if all are predictions
@@ -793,7 +793,7 @@ def test_labeled_frame_merge_multiple_matches_to_same_prediction():
     # This should create matches: (0,0) and (0,1) where 0 is pred_self index
     # But other_to_self will only keep the better match (likely to other_inst_2)
 
-    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="smart")
+    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="auto")
 
     # Both are predictions, so we keep the new one
 
@@ -822,7 +822,7 @@ def test_labeled_frame_merge_fixed_logic():
     frame_other = LabeledFrame(video=video, frame_idx=0, instances=[user_other])
 
     matcher = InstanceMatcher(method=InstanceMatchMethod.SPATIAL, threshold=3.0)
-    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="smart")
+    merged, conflicts = frame_self.merge(frame_other, instance=matcher, frame="auto")
 
     # Should keep original user instance and record conflict
     assert len(merged) == 1
@@ -839,7 +839,7 @@ def test_labeled_frame_merge_fixed_logic():
     frame_other_2 = LabeledFrame(video=video, frame_idx=0, instances=[pred_other])
 
     merged2, conflicts2 = frame_self_2.merge(
-        frame_other_2, instance=matcher, frame="smart"
+        frame_other_2, instance=matcher, frame="auto"
     )
 
     # Should keep user instance and record conflict

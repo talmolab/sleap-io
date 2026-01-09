@@ -101,7 +101,7 @@ class FrameStrategy(str, Enum):
     """Strategies for handling frame merging.
 
     Attributes:
-        SMART: Smart merging that preserves user labels over predictions when
+        AUTO: Automatic merging that preserves user labels over predictions when
             they overlap.
         KEEP_ORIGINAL: Always keep instances from the original (base) frame.
         KEEP_NEW: Always keep instances from the new (incoming) frame.
@@ -111,7 +111,7 @@ class FrameStrategy(str, Enum):
             add only predictions from incoming frame.
     """
 
-    SMART = "smart"
+    AUTO = "auto"
     KEEP_ORIGINAL = "keep_original"
     KEEP_NEW = "keep_new"
     KEEP_BOTH = "keep_both"

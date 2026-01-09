@@ -107,8 +107,8 @@ class TestLabeledFrameMerge:
         assert inst2 in merged
         assert len(conflicts) == 0
 
-    def test_merge_smart_user_vs_predicted(self):
-        """Test smart merge with user labels vs predictions."""
+    def test_merge_auto_user_vs_predicted(self):
+        """Test auto merge with user labels vs predictions."""
         skeleton = Skeleton(["head", "tail"])
         video = Video(filename="test.mp4", open_backend=False)
 
@@ -129,8 +129,8 @@ class TestLabeledFrameMerge:
         )
         frame2.instances = [pred_inst]
 
-        # Merge with smart strategy
-        merged, conflicts = frame1.merge(frame2, frame="smart")
+        # Merge with auto strategy
+        merged, conflicts = frame1.merge(frame2, frame="auto")
 
         # User instance should be kept, prediction ignored
         assert len(merged) == 1
@@ -138,8 +138,8 @@ class TestLabeledFrameMerge:
         assert len(conflicts) == 1
         assert conflicts[0][2] == "kept_user"
 
-    def test_merge_smart_replace_prediction(self):
-        """Test smart merge replacing prediction with user label."""
+    def test_merge_auto_replace_prediction(self):
+        """Test auto merge replacing prediction with user label."""
         skeleton = Skeleton(["head", "tail"])
         video = Video(filename="test.mp4", open_backend=False)
 
@@ -160,8 +160,8 @@ class TestLabeledFrameMerge:
         )
         frame2.instances = [user_inst]
 
-        # Merge with smart strategy
-        merged, conflicts = frame2.merge(frame1, frame="smart")
+        # Merge with auto strategy
+        merged, conflicts = frame2.merge(frame1, frame="auto")
 
         # User instance should replace prediction
         assert len(merged) == 1
@@ -195,7 +195,7 @@ class TestLabeledFrameMerge:
 
         # Use identity matcher instead of spatial
         matcher = InstanceMatcher(method=InstanceMatchMethod.IDENTITY)
-        merged, conflicts = frame1.merge(frame2, instance=matcher, frame="smart")
+        merged, conflicts = frame1.merge(frame2, instance=matcher, frame="auto")
 
         # inst1 and inst2 should match by track, inst3 should be added
         assert len(merged) == 2  # inst1 (kept) and inst3 (added)
