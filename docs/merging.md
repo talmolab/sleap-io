@@ -10,7 +10,7 @@ import sleap_io as sio
 base = sio.load_file("manual_annotations.slp")
 predictions = sio.load_file("predictions.slp")
 
-base.merge(predictions)  # default: smart strategy
+base.merge(predictions)
 base.save("merged.slp")
 ```
 
@@ -25,7 +25,207 @@ Merging proceeds in four steps:
    - If frame doesn't exist in `base`: add it
    - If frame exists in both: apply the `frame_strategy`
 
-The `frame_strategy` parameter controls what happens when both datasets have the same frame. Strategies fall into two categories:
+Two parameters control the key steps:
+
+| Parameter | Stage | Controls | Default |
+|-----------|-------|----------|---------|
+| `video_matcher` | Step 2 | How videos are matched between labels | `AUTO` |
+| `frame_strategy` | Step 4 | How overlapping frames are combined | `"smart"` |
+
+**Video matching is upstream of frame strategy.** If video matching fails (adds video as new), frame strategy is never applied—there are no overlapping frames to merge.
+
+```python
+from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
+
+# Explicit control over both
+base.merge(
+    predictions,
+    video_matcher=VideoMatcher(method=VideoMatchMethod.PATH),  # Step 2
+    frame_strategy="smart"  # Step 4
+)
+```
+
+## Video matching
+
+Videos must match for frames to merge. The default `AUTO` method uses a **safe matching cascade** designed to prevent data corruption.
+
+### Design philosophy
+
+The AUTO algorithm prioritizes **avoiding false positives** (matching wrong videos) over avoiding false negatives (failing to match correct videos):
+
+- **False positive** → Annotations merged to wrong video → **Data corruption** (often unrecoverable)
+- **False negative** → Video added as new → **Safe** (easily corrected manually)
+
+When uncertain, AUTO adds the video as new rather than risk a wrong match.
+
+### AUTO matching cascade
+
+For each incoming video, AUTO runs these checks in order:
+
+| Step | Check | Can yield | Description |
+|------|-------|-----------|-------------|
+| 1-2 | Shape rejection | NOT MATCH only | Different (frames, H, W) → reject |
+| 3 | Provenance conflict | NOT MATCH only | Different original videos → reject |
+| 4 | Physical file identity | MATCH | `os.path.samefile()` returns true |
+| 5 | Exact path string | MATCH | Sanitized paths match exactly |
+| 6 | Leaf uniqueness | MATCH or NOT MATCH | Minimal unique path suffixes match |
+| 7 | Fallback | Add as new | No match found, add video to target |
+
+**Shape is for rejection only.** Two videos with the same resolution are NOT automatically matched—they simply aren't rejected. This prevents matching unrelated videos that happen to have the same dimensions.
+
+### Examples
+
+**Example 1: Same file, different paths (symlink)**
+
+```
+Base:  /data/videos/fly.mp4
+Other: /projects/exp1/fly.mp4  (symlink to /data/videos/fly.mp4)
+```
+
+Result: **MATCH** — Step 4 (physical file identity) detects same file via OS.
+
+**Example 2: Cross-platform paths with unique basenames**
+
+```
+Base videos:
+  - C:/Users/alice/data/exp1/fly.mp4
+
+Other videos:
+  - /home/bob/data/exp1/fly.mp4
+```
+
+Result: **MATCH** — Step 6 (leaf uniqueness). Both "fly.mp4" are unique in their sets, and the basenames match.
+
+**Example 3: Ambiguous basenames, parent directory disambiguates**
+
+```
+Base videos:
+  - /data/exp1/fly.mp4
+  - /data/exp2/fly.mp4
+
+Other videos:
+  - /remote/exp2/fly.mp4
+```
+
+Result: **MATCH** to `/data/exp2/fly.mp4` — Step 6 builds unique leaves:
+- Base: "exp1/fly.mp4" and "exp2/fly.mp4" (need parent to disambiguate)
+- Other: "exp2/fly.mp4" (unique with parent)
+- "exp2/fly.mp4" matches "exp2/fly.mp4" → MATCH
+
+**Example 4: Ambiguous basenames, no distinguishing info**
+
+```
+Base videos:
+  - /data/exp1/fly.mp4
+  - /data/exp2/fly.mp4
+
+Other videos:
+  - /remote/fly.mp4  (no parent directory)
+```
+
+Result: **Add as new** — Cannot determine which base video to match. Step 6 can't find unique leaves, falls through to Step 7.
+
+**Example 5: Same basename, different resolution**
+
+```
+Base:  fly.mp4 (1000 frames, 640×480)
+Other: fly.mp4 (500 frames, 640×480)
+```
+
+Result: **NOT MATCH** — Step 1 (shape rejection). Different frame counts indicate different videos, despite same basename.
+
+**Example 6: PKG.SLP predictions merged to external video**
+
+```
+Base: project.slp
+  - video: /data/fly.mp4
+
+Other: predictions.slp (from training on project.pkg.slp)
+  - video: predictions.pkg.slp (embedded)
+    - original_video: /data/fly.mp4
+```
+
+Result: **MATCH** — The embedded video's `original_video` attribute points to the same external file. AUTO traverses provenance chains and matches via physical file identity.
+
+**Example 7: Two PKG.SLP files from different sources**
+
+```
+Base: project.pkg.slp
+  - video embedded, original_video: /lab1/fly.mp4
+
+Other: predictions.pkg.slp
+  - video embedded, original_video: /lab2/fly.mp4
+```
+
+Result: **NOT MATCH** — Step 3 (provenance conflict). Both have `original_video` set but pointing to different files. Even with identical shapes, different provenance → reject.
+
+### Shape comparison details
+
+Shape rejection compares `(frames, height, width)` only—**channels are excluded**. Grayscale detection is noisy (affected by compression, user settings) and unreliable as a matching signal.
+
+```python
+# These videos are shape-compatible (not rejected):
+video_a: (1000, 480, 640, 1)  # grayscale
+video_b: (1000, 480, 640, 3)  # color
+
+# These videos are shape-incompatible (rejected):
+video_a: (1000, 480, 640, 3)
+video_b: (500, 480, 640, 3)   # different frame count
+```
+
+### Other video matching methods
+
+While AUTO is recommended, explicit matchers are available:
+
+```python
+from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
+
+# PATH: exact sanitized path match only
+matcher = VideoMatcher(method=VideoMatchMethod.PATH)
+base.merge(other, video_matcher=matcher)
+
+# BASENAME: filename match only (ignores directory)
+# WARNING: Ambiguous with common filenames like "video.mp4"
+matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+base.merge(other, video_matcher=matcher)
+
+# CONTENT: shape + backend type match
+# WARNING: Matches ANY videos with same resolution - use with caution
+matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
+base.merge(other, video_matcher=matcher)
+
+# IMAGE_DEDUP: for ImageVideo sequences with overlapping frames
+matcher = VideoMatcher(method=VideoMatchMethod.IMAGE_DEDUP)
+base.merge(other, video_matcher=matcher)
+```
+
+### Cross-platform paths
+
+When merging labels created on different computers, use `replace_filenames` to normalize paths before merging:
+
+```python
+# Replace by prefix (useful for different mount points)
+other.replace_filenames(prefix_map={
+    "/home/bob/data": "C:/Users/alice/data"
+})
+base.merge(other)
+
+# Or replace specific files
+other.replace_filenames(filename_map={
+    "/home/bob/data/video.mp4": "C:/Users/alice/data/video.mp4"
+})
+base.merge(other)
+```
+
+With the new AUTO algorithm, this is often unnecessary if basenames are unique—AUTO will match via leaf uniqueness (Step 6). However, `replace_filenames` is still useful when:
+
+- You have multiple videos with the same basename in different directories
+- You want deterministic matching without relying on the cascade
+- You're using PATH matching mode explicitly
+
+## Frame strategies
+
+The `frame_strategy` parameter controls what happens when both datasets have the same frame (i.e., after video matching succeeds). Strategies fall into two categories:
 
 **Frame-level strategies** operate on whole frames without comparing individual instances:
 
@@ -48,8 +248,6 @@ Instance-level strategies use spatial matching to find corresponding instances b
 
 Unmatched instances (no corresponding instance within threshold) are handled according to the strategy.
 
-## Strategies
-
 | Strategy | Spatial matching | Use case |
 |----------|------------------|----------|
 | `smart` | Yes | HITL: add predictions, preserve labels |
@@ -59,7 +257,7 @@ Unmatched instances (no corresponding instance within threshold) are handled acc
 | `keep_both` | No | Combine multiple annotators |
 | `replace_predictions` | No | Re-run inference, replace old predictions |
 
-## Frame-level strategies
+### Frame-level strategies
 
 These strategies do NOT perform spatial matching. They operate on entire frames.
 
@@ -158,7 +356,7 @@ base.merge(other, frame_strategy="replace_predictions")
 #   - Pred D, E added (new predictions)
 ```
 
-## Instance-level strategies
+### Instance-level strategies
 
 These strategies perform spatial matching to pair instances, then decide per-pair.
 
@@ -234,77 +432,11 @@ base.merge(other, frame_strategy="update_tracks")
 #   (poses unchanged, only tracks updated)
 ```
 
-## Matching configuration
-
-### Video matching
-
-Videos must match for frames to merge. The default `AUTO` method tries multiple strategies in order:
-
-1. **Exact path** — Full resolved paths match exactly
-2. **Basename** — Filename matches (ignoring directory)
-3. **Content** — Same shape (frames, height, width, channels) and backend type
-
-```python
-from sleap_io.model.matching import VideoMatcher, VideoMatchMethod, BASENAME_VIDEO_MATCHER
-
-# AUTO (default): tries path → basename → content
-base.merge(other)
-
-# BASENAME: match by filename only
-base.merge(other, video_matcher=BASENAME_VIDEO_MATCHER)
-
-# CONTENT: match by video shape and backend type
-matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
-base.merge(other, video_matcher=matcher)
-```
-
-#### Cross-platform video paths
-
-When merging labels created on different computers, video paths won't match:
-
-```
-Windows: C:\Users\alice\data\video.mp4
-Linux:   /home/bob/data/video.mp4
-```
-
-**Option 1: Use basename matching** (if filenames are unique)
-
-```python
-from sleap_io.model.matching import BASENAME_VIDEO_MATCHER
-
-base.merge(other, video_matcher=BASENAME_VIDEO_MATCHER)
-```
-
-**Option 2: Fix paths before merging** with `replace_filenames`
-
-```python
-# Replace by prefix (useful for different mount points)
-other.replace_filenames(prefix_map={
-    "/home/bob/data": "C:/Users/alice/data"
-})
-base.merge(other)
-
-# Or replace specific files
-other.replace_filenames(filename_map={
-    "/home/bob/data/video.mp4": "C:/Users/alice/data/video.mp4"
-})
-base.merge(other)
-```
-
-**Option 3: Use content matching** (if videos have same dimensions)
-
-```python
-from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
-
-matcher = VideoMatcher(method=VideoMatchMethod.CONTENT)
-base.merge(other, video_matcher=matcher)
-```
-
-Content matching compares video shape `(frames, height, width, channels)` and backend type. It does NOT compare actual pixel data.
+## Other matchers
 
 ### Instance matching
 
-Configure how instances are paired for `smart` and `update_tracks`:
+Configure how instances are paired for `smart` and `update_tracks` frame strategies:
 
 ```python
 from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
@@ -337,17 +469,45 @@ base.merge(other, skeleton_matcher=matcher)
 
 ## Troubleshooting
 
-### No frames merged
+### No frames merged (video added as new)
 
-Videos don't match. Check paths and try basename matching:
+With AUTO matching, if videos aren't matched, they're added as new videos. This is the safe default—check if this was intentional:
 
 ```python
-print("Base videos:", [v.filename for v in base.videos])
-print("Other videos:", [v.filename for v in other.videos])
-
-from sleap_io.model.matching import BASENAME_VIDEO_MATCHER
-base.merge(other, video_matcher=BASENAME_VIDEO_MATCHER)
+# Check what videos exist after merge
+print("Videos after merge:", [v.filename for v in base.videos])
 ```
+
+**Common causes and solutions:**
+
+1. **Different shapes** — Videos have different frame counts or resolutions (correctly rejected)
+   ```python
+   # Check shapes
+   for v in base.videos:
+       print(f"{v.filename}: {v.shape}")
+   ```
+
+2. **Ambiguous basenames** — Multiple videos with same filename but different directories
+   ```python
+   # Use replace_filenames to make paths match
+   other.replace_filenames(prefix_map={
+       "/remote/data": "/local/data"
+   })
+   base.merge(other)
+   ```
+
+3. **Files don't exist** — Shape comparison requires accessible files
+   - Ensure video files exist at the paths stored in the labels
+   - Or use `replace_filenames` to update paths to accessible locations
+
+**Don't blindly use BASENAME matching** — it ignores directory structure and can match wrong videos when you have multiple files with the same name.
+
+### Video matched incorrectly
+
+If frames were merged to the wrong video, the source data may have ambiguous paths. For future merges:
+
+1. Use `replace_filenames` to ensure unique, correct paths before merging
+2. Consider using PATH matching for strict control: `VideoMatcher(method=VideoMatchMethod.PATH)`
 
 ### Duplicate instances
 
