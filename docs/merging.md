@@ -16,29 +16,76 @@ base.save("merged.slp")
 
 ## How merging works
 
-Merging proceeds in four steps:
+Merging proceeds in five steps:
 
-1. **Match skeletons** — Find corresponding skeletons by node names
-2. **Match videos** — Identify same videos across datasets
-3. **Match tracks** — Map track identities by name
-4. **Merge frames** — Combine frames based on the `frame` strategy
+1. **[Match skeletons](#skeleton-matching)** — Find corresponding skeletons by node structure
+2. **[Match videos](#video-matching)** — Identify same videos across datasets
+3. **[Match tracks](#track-matching)** — Map track identities between datasets
+4. **[Merge frames](#frame-strategies)** — Combine frames based on the `frame` strategy
+5. **[Match instances](#instance-matching)** — Pair instances within overlapping frames
 
-These are controlled via presets for each:
+### Preset options {#preset-options}
+
+These options are controlled via parameters to `Labels.merge()`:
 
 | Parameter | Controls | Options |
 |-----------|----------|---------|
-| `skeleton` | How skeletons are matched | [`"structure"`](#skeleton-matching) (default), `"subset"`, `"overlap"`, `"exact"` |
-| `video` | How videos are matched | [`"auto"`](#how-auto-matching-works) (default), [`"path"`, `"basename"`, `"content"`](#other-video-matching-methods), `"shape"`, `"image_dedup"` |
-| `track` | How tracks are matched | `"name"` (default), `"identity"` |
-| `frame` | How overlapping frames are combined | [`"auto"`](#auto-default) (default), [`"replace_predictions"`](#replace_predictions), [`"keep_original"`, `"keep_new"`, `"keep_both"`, `"update_tracks"`](#other-strategies) |
-| `instance` | How instances are paired within frames | [`"spatial"`](#instance-matching) (default), `"identity"`, `"iou"` |
+| `skeleton` | How skeletons are matched | [`"structure"`](#skeleton-matching) (default), [`"subset"`](#skeleton-matching), [`"overlap"`](#skeleton-matching), [`"exact"`](#skeleton-matching) |
+| `video` | How videos are matched | [`"auto"`](#how-auto-matching-works) (default), [`"path"`](#other-video-matching-methods), [`"basename"`](#other-video-matching-methods), [`"content"`](#other-video-matching-methods), [`"shape"`](#other-video-matching-methods), [`"image_dedup"`](#other-video-matching-methods) |
+| `track` | How tracks are matched | [`"name"`](#track-matching) (default), [`"identity"`](#track-matching) |
+| `frame` | How overlapping frames are combined | [`"auto"`](#auto-default) (default), [`"replace_predictions"`](#replace_predictions), [`"keep_original"`](#other-frame-strategies), [`"keep_new"`](#other-frame-strategies), [`"keep_both"`](#other-frame-strategies), [`"update_tracks"`](#other-frame-strategies) |
+| `instance` | How instances are paired within frames | [`"spatial"`](#instance-matching) (default), [`"identity"`](#instance-matching), [`"iou"`](#instance-matching) |
 
 ```python
 base.merge(predictions)  # All defaults
 base.merge(predictions, video="auto", frame="auto")  # Explicit defaults
 ```
 
-## Video matching
+---
+
+## Step 1: Skeleton matching {#skeleton-matching}
+
+Before merging can proceed, skeletons from both datasets must be matched. Each skeleton in the incoming dataset is compared against skeletons in the base dataset to find correspondence.
+
+### Matching methods
+
+| Method | Behavior | Use case |
+|--------|----------|----------|
+| `"structure"` | Match if same node names, regardless of order | **Default.** Most common case |
+| `"subset"` | Match if incoming skeleton nodes are a subset of base | Merging partial annotations |
+| `"overlap"` | Match if sufficient overlap between node sets | Flexible matching with threshold |
+| `"exact"` | Match only if nodes and edges are identical | Strict validation |
+
+If no match is found, the skeleton is added as new to the base dataset.
+
+### String configuration
+
+```python
+# Default: match by structure (same nodes, any order)
+base.merge(other, skeleton="structure")
+
+# Allow partial matches (incoming can have fewer nodes)
+base.merge(other, skeleton="subset")
+
+# Exact match required (nodes and edges must be identical)
+base.merge(other, skeleton="exact")
+```
+
+### Object configuration
+
+For advanced control, use `SkeletonMatcher`:
+
+```python
+from sleap_io.model.matching import SkeletonMatcher
+
+# Overlap matching with custom threshold (70% of nodes must match)
+matcher = SkeletonMatcher(method="overlap", threshold=0.7)
+base.merge(other, skeleton=matcher)
+```
+
+---
+
+## Step 2: Video matching {#video-matching}
 
 Videos must match for frames to merge. If video matching fails, the video is added as new—no frames merge because there's no overlap.
 
@@ -97,6 +144,42 @@ Base: project.slp with /data/fly.mp4
 Other: predictions.pkg.slp (embedded, original_video=/data/fly.mp4)
 Result: MATCH — provenance chain links to same file
 ```
+
+### String configuration
+
+```python
+# Default: safe AUTO cascade
+base.merge(other, video="auto")
+
+# Exact path match only
+base.merge(other, video="path")
+
+# Match by filename only (ignores directory)
+base.merge(other, video="basename")
+```
+
+### Object configuration
+
+For advanced control, use `VideoMatcher`:
+
+```python
+from sleap_io.model.matching import VideoMatcher
+
+# Strict path matching (paths must be identical, no normalization)
+matcher = VideoMatcher(method="path", strict=True)
+base.merge(other, video=matcher)
+```
+
+### Other video matching methods {#other-video-matching-methods}
+
+| Method | Behavior | Use case |
+|--------|----------|----------|
+| `"auto"` | Safe cascade (default) | Most situations |
+| `"path"` | Exact path match only | Strict control |
+| `"basename"` | Filename only, ignores directory | Cross-platform (use with caution) |
+| `"content"` | Shape + backend type | **Dangerous** — matches any same-resolution video |
+| `"shape"` | Match and merge by shape | Image list merging |
+| `"image_dedup"` | Deduplicate image lists | Remove duplicate images |
 
 ### Handling false negatives
 
@@ -159,20 +242,50 @@ print(f"Videos after fix: {len(base.videos)}")  # Should match original count
 base.merge(other, video="basename")  # Match by filename only
 ```
 
-### Other video matching methods
+---
+
+## Step 3: Track matching {#track-matching}
+
+Tracks represent identities (e.g., individual animals) that persist across frames. During merge, tracks from the incoming dataset are matched to tracks in the base dataset.
+
+### Matching methods
 
 | Method | Behavior | Use case |
 |--------|----------|----------|
-| `"auto"` | Safe cascade (default) | Most situations |
-| `"path"` | Exact path match only | Strict control |
-| `"basename"` | Filename only, ignores directory | Cross-platform (use with caution) |
-| `"content"` | Shape + backend type | **Dangerous** — matches any same-resolution video |
+| `"name"` | Match tracks with identical names | **Default.** Named individuals |
+| `"identity"` | Match by track object identity | Same `Track` object in memory |
 
-## Frame strategies
+If no match is found, the track is added as new to the base dataset.
 
-The `frame` parameter controls what happens when both datasets have the same frame.
+### String configuration
 
-### `auto` (default)
+```python
+# Default: match by track name
+base.merge(other, track="name")
+
+# Match by object identity (same Track instance)
+base.merge(other, track="identity")
+```
+
+### Object configuration
+
+For advanced control, use `TrackMatcher`:
+
+```python
+from sleap_io.model.matching import TrackMatcher
+
+# Explicit name matching
+matcher = TrackMatcher(method="name")
+base.merge(other, track=matcher)
+```
+
+---
+
+## Step 4: Frame strategies {#frame-strategies}
+
+The `frame` parameter controls what happens when both datasets have the same frame (same video and frame index).
+
+### `auto` (default) {#auto-default}
 
 The recommended strategy for human-in-the-loop workflows. Preserves user labels, updates predictions.
 
@@ -190,7 +303,7 @@ Unmatched instances from `other` are added.
 base.merge(predictions)  # Uses auto by default
 ```
 
-### `replace_predictions`
+### `replace_predictions` {#replace_predictions}
 
 Replace all predictions in base with predictions from other. User labels are preserved.
 
@@ -204,55 +317,73 @@ base.merge(new_predictions, frame="replace_predictions")
 | User label | **Keep** | Ignore |
 | Prediction | Remove | **Add** |
 
-### Other strategies
+### Other frame strategies {#other-frame-strategies}
 
-| Strategy | Behavior |
-|----------|----------|
-| `"keep_original"` | Ignore other entirely for overlapping frames |
-| `"keep_new"` | Replace base with other for overlapping frames |
-| `"keep_both"` | Concatenate all instances (creates duplicates) |
-| `"update_tracks"` | Copy track assignments only, don't modify poses |
+| Strategy | Behavior | Use case |
+|----------|----------|----------|
+| `"keep_original"` | Ignore other entirely for overlapping frames | Preserve base annotations |
+| `"keep_new"` | Replace base with other for overlapping frames | Overwrite with new annotations |
+| `"keep_both"` | Concatenate all instances (creates duplicates) | Manual deduplication later |
+| `"update_tracks"` | Copy track assignments only, don't modify poses | Update identity labels |
 
-## Advanced configuration
+```python
+# Keep only the original annotations
+base.merge(other, frame="keep_original")
 
-### Instance matching
+# Replace with new annotations
+base.merge(other, frame="keep_new")
 
-For `auto` and `update_tracks` strategies, instances are paired by spatial proximity (default 5px threshold):
+# Keep everything (may create duplicates)
+base.merge(other, frame="keep_both")
+
+# Update track assignments without changing poses
+base.merge(other, frame="update_tracks")
+```
+
+---
+
+## Step 5: Instance matching {#instance-matching}
+
+For frame strategies that need to pair instances (`auto`, `update_tracks`), instance matching determines how instances in the base frame correspond to instances in the incoming frame.
+
+### Matching methods
+
+| Method | Behavior | Use case |
+|--------|----------|----------|
+| `"spatial"` | Match by centroid distance | **Default.** Position-based matching |
+| `"identity"` | Match by track identity | Same track assignment |
+| `"iou"` | Match by bounding box IoU | Overlap-based matching |
+
+### String configuration
+
+```python
+# Default: spatial matching with 5px threshold
+base.merge(other, instance="spatial")
+
+# Match by track identity
+base.merge(other, instance="identity")
+
+# Match by bounding box overlap
+base.merge(other, instance="iou")
+```
+
+### Object configuration
+
+For advanced control, use `InstanceMatcher`:
 
 ```python
 from sleap_io.model.matching import InstanceMatcher
 
-# Tighter matching (2px)
-base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
+# Tighter spatial matching (2px threshold)
+matcher = InstanceMatcher(method="spatial", threshold=2.0)
+base.merge(other, instance=matcher)
 
-# Match by track identity instead of position
-base.merge(other, instance="identity")
-
-# Match by bounding box IoU
-base.merge(other, instance=InstanceMatcher(method="iou", threshold=0.5))
+# IoU matching with 50% overlap threshold
+matcher = InstanceMatcher(method="iou", threshold=0.5)
+base.merge(other, instance=matcher)
 ```
 
-### Skeleton matching
-
-```python
-# Default: match if same nodes (any order)
-base.merge(other, skeleton="structure")
-
-# Partial overlap allowed
-from sleap_io.model.matching import SkeletonMatcher
-base.merge(other, skeleton=SkeletonMatcher(method="overlap", threshold=0.7))
-```
-
-### Video matcher objects
-
-For advanced video matching configuration:
-
-```python
-from sleap_io.model.matching import VideoMatcher
-
-# Strict path matching (paths must be identical)
-base.merge(other, video=VideoMatcher(method="path", strict=True))
-```
+---
 
 ## Troubleshooting
 
@@ -277,7 +408,9 @@ from sleap_io.model.matching import InstanceMatcher
 base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
 ```
 
-## API reference
+---
+
+## Reference
 
 ### Labels.merge
 
@@ -300,6 +433,18 @@ base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
 ### VideoMatcher
 
 ::: sleap_io.model.matching.VideoMatcher
+    options:
+        heading_level: 4
+
+### SkeletonMatcher
+
+::: sleap_io.model.matching.SkeletonMatcher
+    options:
+        heading_level: 4
+
+### TrackMatcher
+
+::: sleap_io.model.matching.TrackMatcher
     options:
         heading_level: 4
 
