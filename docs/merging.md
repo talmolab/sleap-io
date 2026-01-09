@@ -25,13 +25,13 @@ Merging proceeds in four steps:
 
 These are controlled via presets for each:
 
-| Parameter | Controls | Options (default first) |
-|-----------|----------|-------------------------|
-| `skeleton` | How skeletons are matched | [`"structure"`](#skeleton-matching), `"subset"`, `"overlap"`, `"exact"` |
-| `video` | How videos are matched | [`"auto"`](#how-auto-matching-works), [`"path"`, `"basename"`, `"content"`](#other-video-matching-methods), `"shape"`, `"image_dedup"` |
-| `track` | How tracks are matched | `"name"`, `"identity"` |
-| `frame` | How overlapping frames are combined | [`"auto"`](#auto-default), [`"replace_predictions"`](#replace_predictions), [`"keep_original"`, `"keep_new"`, `"keep_both"`, `"update_tracks"`](#other-strategies) |
-| `instance` | How instances are paired within frames | [`"spatial"`, `"identity"`, `"iou"`](#instance-matching) |
+| Parameter | Controls | Options |
+|-----------|----------|---------|
+| `skeleton` | How skeletons are matched | [`"structure"`](#skeleton-matching) (default), `"subset"`, `"overlap"`, `"exact"` |
+| `video` | How videos are matched | [`"auto"`](#how-auto-matching-works) (default), [`"path"`, `"basename"`, `"content"`](#other-video-matching-methods), `"shape"`, `"image_dedup"` |
+| `track` | How tracks are matched | `"name"` (default), `"identity"` |
+| `frame` | How overlapping frames are combined | [`"auto"`](#auto-default) (default), [`"replace_predictions"`](#replace_predictions), [`"keep_original"`, `"keep_new"`, `"keep_both"`, `"update_tracks"`](#other-strategies) |
+| `instance` | How instances are paired within frames | [`"spatial"`](#instance-matching) (default), `"identity"`, `"iou"` |
 
 ```python
 base.merge(predictions)  # All defaults
