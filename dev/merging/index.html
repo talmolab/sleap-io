@@ -2324,11 +2324,11 @@
 <tr>
 <td><code>frame</code></td>
 <td>How overlapping frames are combined</td>
-<td><code>"smart"</code></td>
+<td><code>"auto"</code></td>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;smart&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="video-matching">Video matching<a class="headerlink" href="#video-matching" title="Permanent link">&para;</a></h2>
 <p>Videos must match for frames to merge. If video matching fails, the video is added as new—no frames merge because there's no overlap.</p>
@@ -2506,7 +2506,7 @@
 </table>
 <h2 id="frame-strategies">Frame strategies<a class="headerlink" href="#frame-strategies" title="Permanent link">&para;</a></h2>
 <p>The <code>frame</code> parameter controls what happens when both datasets have the same frame.</p>
-<h3 id="smart-default"><code>smart</code> (default)<a class="headerlink" href="#smart-default" title="Permanent link">&para;</a></h3>
+<h3 id="auto-default"><code>auto</code> (default)<a class="headerlink" href="#auto-default" title="Permanent link">&para;</a></h3>
 <p>The recommended strategy for human-in-the-loop workflows. Preserves user labels, updates predictions.</p>
 <table>
 <thead>
@@ -2541,7 +2541,7 @@
 </table>
 <p>Unmatched instances from <code>other</code> are added.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Typical HITL workflow: merge predictions into labeled project</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">)</span>  <span class="c1"># Uses smart by default</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">)</span>  <span class="c1"># Uses auto by default</span>
 </code></pre></div>
 <h3 id="replace_predictions"><code>replace_predictions</code><a class="headerlink" href="#replace_predictions" title="Permanent link">&para;</a></h3>
 <p>Replace all predictions in base with predictions from other. User labels are preserved.</p>
@@ -2598,7 +2598,7 @@
 </table>
 <h2 id="advanced-configuration">Advanced configuration<a class="headerlink" href="#advanced-configuration" title="Permanent link">&para;</a></h2>
 <h3 id="instance-matching">Instance matching<a class="headerlink" href="#instance-matching" title="Permanent link">&para;</a></h3>
-<p>For <code>smart</code> and <code>update_tracks</code> strategies, instances are paired by spatial proximity (default 5px threshold):</p>
+<p>For <code>auto</code> and <code>update_tracks</code> strategies, instances are paired by spatial proximity (default 5px threshold):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstanceMatcher</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Tighter matching (2px)</span>
@@ -2636,7 +2636,7 @@
 <li>Report as a bug—AUTO should be conservative</li>
 </ol>
 <h3 id="duplicate-instances-after-merge">Duplicate instances after merge<a class="headerlink" href="#duplicate-instances-after-merge" title="Permanent link">&para;</a></h3>
-<p>Use <code>smart</code> instead of <code>keep_both</code>, or tighten the instance match threshold:</p>
+<p>Use <code>auto</code> instead of <code>keep_both</code>, or tighten the instance match threshold:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstanceMatcher</span>
 <a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">InstanceMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;spatial&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2.0</span><span class="p">))</span>
 </code></pre></div>
@@ -2648,7 +2648,7 @@
 
 
 <h4 id="sleap_io.model.labels.Labels.merge" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">labels</span><span class="o">.</span><span class="n">Labels</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s1">&#39;smart&#39;</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">error_mode</span><span class="o">=</span><span class="s1">&#39;continue&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">labels</span><span class="o">.</span><span class="n">Labels</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">error_mode</span><span class="o">=</span><span class="s1">&#39;continue&#39;</span><span class="p">)</span></code>
 
 <a href="#sleap_io.model.labels.Labels.merge" class="headerlink" title="Permanent link">&para;</a></h4>
 
@@ -2747,13 +2747,13 @@ a TrackMatcher object. Default is "name".</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Frame merge strategy. One of "smart", "keep_original",
+                <p>Frame merge strategy. One of "auto", "keep_original",
 "keep_new", "keep_both", "update_tracks", "replace_predictions".
-Default is "smart".</p>
+Default is "auto".</p>
               </div>
             </td>
             <td>
-                  <code>&#39;smart&#39;</code>
+                  <code>&#39;auto&#39;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -2901,7 +2901,7 @@ handle common workflows like merging predictions back into a project.</p>
 <a id="__codelineno-0-2011" name="__codelineno-0-2011"></a><a href="#__codelineno-0-2011"><span class="linenos" data-linenos="2011 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;SkeletonMatcher&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-2012" name="__codelineno-0-2012"></a><a href="#__codelineno-0-2012"><span class="linenos" data-linenos="2012 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;VideoMatcher&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-2013" name="__codelineno-0-2013"></a><a href="#__codelineno-0-2013"><span class="linenos" data-linenos="2013 "></span></a>    <span class="n">track</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;TrackMatcher&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2014" name="__codelineno-0-2014"></a><a href="#__codelineno-0-2014"><span class="linenos" data-linenos="2014 "></span></a>    <span class="n">frame</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;smart&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2014" name="__codelineno-0-2014"></a><a href="#__codelineno-0-2014"><span class="linenos" data-linenos="2014 "></span></a>    <span class="n">frame</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-2015" name="__codelineno-0-2015"></a><a href="#__codelineno-0-2015"><span class="linenos" data-linenos="2015 "></span></a>    <span class="n">instance</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;InstanceMatcher&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-2016" name="__codelineno-0-2016"></a><a href="#__codelineno-0-2016"><span class="linenos" data-linenos="2016 "></span></a>    <span class="n">validate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-2017" name="__codelineno-0-2017"></a><a href="#__codelineno-0-2017"><span class="linenos" data-linenos="2017 "></span></a>    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2919,9 +2919,9 @@ handle common workflows like merging predictions back into a project.</p>
 <a id="__codelineno-0-2029" name="__codelineno-0-2029"></a><a href="#__codelineno-0-2029"><span class="linenos" data-linenos="2029 "></span></a><span class="sd">            object for advanced configuration. Default is &quot;auto&quot;.</span>
 <a id="__codelineno-0-2030" name="__codelineno-0-2030"></a><a href="#__codelineno-0-2030"><span class="linenos" data-linenos="2030 "></span></a><span class="sd">        track: Track matching method. Can be a string (&quot;name&quot;, &quot;identity&quot;) or</span>
 <a id="__codelineno-0-2031" name="__codelineno-0-2031"></a><a href="#__codelineno-0-2031"><span class="linenos" data-linenos="2031 "></span></a><span class="sd">            a TrackMatcher object. Default is &quot;name&quot;.</span>
-<a id="__codelineno-0-2032" name="__codelineno-0-2032"></a><a href="#__codelineno-0-2032"><span class="linenos" data-linenos="2032 "></span></a><span class="sd">        frame: Frame merge strategy. One of &quot;smart&quot;, &quot;keep_original&quot;,</span>
+<a id="__codelineno-0-2032" name="__codelineno-0-2032"></a><a href="#__codelineno-0-2032"><span class="linenos" data-linenos="2032 "></span></a><span class="sd">        frame: Frame merge strategy. One of &quot;auto&quot;, &quot;keep_original&quot;,</span>
 <a id="__codelineno-0-2033" name="__codelineno-0-2033"></a><a href="#__codelineno-0-2033"><span class="linenos" data-linenos="2033 "></span></a><span class="sd">            &quot;keep_new&quot;, &quot;keep_both&quot;, &quot;update_tracks&quot;, &quot;replace_predictions&quot;.</span>
-<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><a href="#__codelineno-0-2034"><span class="linenos" data-linenos="2034 "></span></a><span class="sd">            Default is &quot;smart&quot;.</span>
+<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><a href="#__codelineno-0-2034"><span class="linenos" data-linenos="2034 "></span></a><span class="sd">            Default is &quot;auto&quot;.</span>
 <a id="__codelineno-0-2035" name="__codelineno-0-2035"></a><a href="#__codelineno-0-2035"><span class="linenos" data-linenos="2035 "></span></a><span class="sd">        instance: Instance matching method for spatial frame strategies. Can be</span>
 <a id="__codelineno-0-2036" name="__codelineno-0-2036"></a><a href="#__codelineno-0-2036"><span class="linenos" data-linenos="2036 "></span></a><span class="sd">            a string (&quot;spatial&quot;, &quot;identity&quot;, &quot;iou&quot;) or an InstanceMatcher object.</span>
 <a id="__codelineno-0-2037" name="__codelineno-0-2037"></a><a href="#__codelineno-0-2037"><span class="linenos" data-linenos="2037 "></span></a><span class="sd">            Default is &quot;spatial&quot; with 5px tolerance.</span>
@@ -3616,16 +3616,16 @@ opened (useful for operations with costly file existence checks).</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;SMART&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;FrameStrategy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;SMART&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;smart&amp;#39;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;AUTO&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;FrameStrategy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;AUTO&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;auto&amp;#39;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
-  &lt;/span&gt; (&lt;code&gt;sleap_io.model.matching.FrameStrategy.SMART&lt;/code&gt;)" href="#sleap_io.model.matching.FrameStrategy.SMART">SMART</a></code></td>
+  &lt;/span&gt; (&lt;code&gt;sleap_io.model.matching.FrameStrategy.AUTO&lt;/code&gt;)" href="#sleap_io.model.matching.FrameStrategy.AUTO">AUTO</a></code></td>
             <td>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Smart merging that preserves user labels over predictions when
+                <p>Automatic merging that preserves user labels over predictions when
 they overlap.</p>
               </div>
             </td>
@@ -3722,7 +3722,7 @@ add only predictions from incoming frame.</p>
 <a id="__codelineno-0-101" name="__codelineno-0-101"></a><a href="#__codelineno-0-101"><span class="linenos" data-linenos="101 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Strategies for handling frame merging.</span>
 <a id="__codelineno-0-102" name="__codelineno-0-102"></a><a href="#__codelineno-0-102"><span class="linenos" data-linenos="102 "></span></a>
 <a id="__codelineno-0-103" name="__codelineno-0-103"></a><a href="#__codelineno-0-103"><span class="linenos" data-linenos="103 "></span></a><span class="sd">    Attributes:</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a><a href="#__codelineno-0-104"><span class="linenos" data-linenos="104 "></span></a><span class="sd">        SMART: Smart merging that preserves user labels over predictions when</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a><a href="#__codelineno-0-104"><span class="linenos" data-linenos="104 "></span></a><span class="sd">        AUTO: Automatic merging that preserves user labels over predictions when</span>
 <a id="__codelineno-0-105" name="__codelineno-0-105"></a><a href="#__codelineno-0-105"><span class="linenos" data-linenos="105 "></span></a><span class="sd">            they overlap.</span>
 <a id="__codelineno-0-106" name="__codelineno-0-106"></a><a href="#__codelineno-0-106"><span class="linenos" data-linenos="106 "></span></a><span class="sd">        KEEP_ORIGINAL: Always keep instances from the original (base) frame.</span>
 <a id="__codelineno-0-107" name="__codelineno-0-107"></a><a href="#__codelineno-0-107"><span class="linenos" data-linenos="107 "></span></a><span class="sd">        KEEP_NEW: Always keep instances from the new (incoming) frame.</span>
@@ -3732,7 +3732,7 @@ add only predictions from incoming frame.</p>
 <a id="__codelineno-0-111" name="__codelineno-0-111"></a><a href="#__codelineno-0-111"><span class="linenos" data-linenos="111 "></span></a><span class="sd">            add only predictions from incoming frame.</span>
 <a id="__codelineno-0-112" name="__codelineno-0-112"></a><a href="#__codelineno-0-112"><span class="linenos" data-linenos="112 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-113" name="__codelineno-0-113"></a><a href="#__codelineno-0-113"><span class="linenos" data-linenos="113 "></span></a>
-<a id="__codelineno-0-114" name="__codelineno-0-114"></a><a href="#__codelineno-0-114"><span class="linenos" data-linenos="114 "></span></a>    <span class="n">SMART</span> <span class="o">=</span> <span class="s2">&quot;smart&quot;</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114"></a><a href="#__codelineno-0-114"><span class="linenos" data-linenos="114 "></span></a>    <span class="n">AUTO</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span>
 <a id="__codelineno-0-115" name="__codelineno-0-115"></a><a href="#__codelineno-0-115"><span class="linenos" data-linenos="115 "></span></a>    <span class="n">KEEP_ORIGINAL</span> <span class="o">=</span> <span class="s2">&quot;keep_original&quot;</span>
 <a id="__codelineno-0-116" name="__codelineno-0-116"></a><a href="#__codelineno-0-116"><span class="linenos" data-linenos="116 "></span></a>    <span class="n">KEEP_NEW</span> <span class="o">=</span> <span class="s2">&quot;keep_new&quot;</span>
 <a id="__codelineno-0-117" name="__codelineno-0-117"></a><a href="#__codelineno-0-117"><span class="linenos" data-linenos="117 "></span></a>    <span class="n">KEEP_BOTH</span> <span class="o">=</span> <span class="s2">&quot;keep_both&quot;</span>
@@ -3750,6 +3750,104 @@ add only predictions from incoming frame.</p>
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="sleap_io.model.matching.FrameStrategy.AUTO" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">AUTO</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">FrameStrategy</span><span class="o">.</span><span class="n">AUTO</span><span class="p">:</span> <span class="s1">&#39;auto&#39;</span><span class="o">&gt;</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.matching.FrameStrategy.AUTO" class="headerlink" title="Permanent link">&para;</a></h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Strategies for handling frame merging.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.AUTO.AUTO">AUTO</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Automatic merging that preserves user labels over predictions when
+they overlap.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.AUTO.KEEP_ORIGINAL">KEEP_ORIGINAL</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Always keep instances from the original (base) frame.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.AUTO.KEEP_NEW">KEEP_NEW</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Always keep instances from the new (incoming) frame.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.AUTO.KEEP_BOTH">KEEP_BOTH</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Keep all instances from both frames without filtering.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.AUTO.UPDATE_TRACKS">UPDATE_TRACKS</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Update track assignments only without modifying poses.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.AUTO.REPLACE_PREDICTIONS">REPLACE_PREDICTIONS</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Keep user instances from base, remove base predictions,
+add only predictions from incoming frame.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-attribute">
 
@@ -3781,12 +3879,12 @@ add only predictions from incoming frame.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.KEEP_BOTH.SMART">SMART</span></code></td>
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.KEEP_BOTH.AUTO">AUTO</span></code></td>
             <td>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Smart merging that preserves user labels over predictions when
+                <p>Automatic merging that preserves user labels over predictions when
 they overlap.</p>
               </div>
             </td>
@@ -3879,12 +3977,12 @@ add only predictions from incoming frame.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.KEEP_NEW.SMART">SMART</span></code></td>
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.KEEP_NEW.AUTO">AUTO</span></code></td>
             <td>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Smart merging that preserves user labels over predictions when
+                <p>Automatic merging that preserves user labels over predictions when
 they overlap.</p>
               </div>
             </td>
@@ -3977,12 +4075,12 @@ add only predictions from incoming frame.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.KEEP_ORIGINAL.SMART">SMART</span></code></td>
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.KEEP_ORIGINAL.AUTO">AUTO</span></code></td>
             <td>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Smart merging that preserves user labels over predictions when
+                <p>Automatic merging that preserves user labels over predictions when
 they overlap.</p>
               </div>
             </td>
@@ -4075,12 +4173,12 @@ add only predictions from incoming frame.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.REPLACE_PREDICTIONS.SMART">SMART</span></code></td>
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.REPLACE_PREDICTIONS.AUTO">AUTO</span></code></td>
             <td>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Smart merging that preserves user labels over predictions when
+                <p>Automatic merging that preserves user labels over predictions when
 they overlap.</p>
               </div>
             </td>
@@ -4147,104 +4245,6 @@ add only predictions from incoming frame.</p>
 
 
 
-<h5 id="sleap_io.model.matching.FrameStrategy.SMART" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">SMART</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">FrameStrategy</span><span class="o">.</span><span class="n">SMART</span><span class="p">:</span> <span class="s1">&#39;smart&#39;</span><span class="o">&gt;</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-  </span>
-
-<a href="#sleap_io.model.matching.FrameStrategy.SMART" class="headerlink" title="Permanent link">&para;</a></h5>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Strategies for handling frame merging.</p>
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.SMART.SMART">SMART</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Smart merging that preserves user labels over predictions when
-they overlap.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.SMART.KEEP_ORIGINAL">KEEP_ORIGINAL</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Always keep instances from the original (base) frame.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.SMART.KEEP_NEW">KEEP_NEW</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Always keep instances from the new (incoming) frame.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.SMART.KEEP_BOTH">KEEP_BOTH</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Keep all instances from both frames without filtering.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.SMART.UPDATE_TRACKS">UPDATE_TRACKS</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Update track assignments only without modifying poses.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.SMART.REPLACE_PREDICTIONS">REPLACE_PREDICTIONS</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Keep user instances from base, remove base predictions,
-add only predictions from incoming frame.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
 <h5 id="sleap_io.model.matching.FrameStrategy.UPDATE_TRACKS" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">UPDATE_TRACKS</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">FrameStrategy</span><span class="o">.</span><span class="n">UPDATE_TRACKS</span><span class="p">:</span> <span class="s1">&#39;update_tracks&#39;</span><span class="o">&gt;</span></code>
 
@@ -4271,12 +4271,12 @@ add only predictions from incoming frame.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><span title="sleap_io.model.matching.FrameStrategy.UPDATE_TRACKS.SMART">SMART</span></code></td>
+            <td><code><span title="sleap_io.model.matching.FrameStrategy.UPDATE_TRACKS.AUTO">AUTO</span></code></td>
             <td>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Smart merging that preserves user labels over predictions when
+                <p>Automatic merging that preserves user labels over predictions when
 they overlap.</p>
               </div>
             </td>
@@ -4344,7 +4344,7 @@ add only predictions from incoming frame.</p>
 
 
 <h5 id="sleap_io.model.matching.FrameStrategy.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Strategies for handling frame merging.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        SMART: Smart merging that preserves user labels over predictions when</span><span class="se">\n</span><span class="s1">            they overlap.</span><span class="se">\n</span><span class="s1">        KEEP_ORIGINAL: Always keep instances from the original (base) frame.</span><span class="se">\n</span><span class="s1">        KEEP_NEW: Always keep instances from the new (incoming) frame.</span><span class="se">\n</span><span class="s1">        KEEP_BOTH: Keep all instances from both frames without filtering.</span><span class="se">\n</span><span class="s1">        UPDATE_TRACKS: Update track assignments only without modifying poses.</span><span class="se">\n</span><span class="s1">        REPLACE_PREDICTIONS: Keep user instances from base, remove base predictions,</span><span class="se">\n</span><span class="s1">            add only predictions from incoming frame.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Strategies for handling frame merging.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        AUTO: Automatic merging that preserves user labels over predictions when</span><span class="se">\n</span><span class="s1">            they overlap.</span><span class="se">\n</span><span class="s1">        KEEP_ORIGINAL: Always keep instances from the original (base) frame.</span><span class="se">\n</span><span class="s1">        KEEP_NEW: Always keep instances from the new (incoming) frame.</span><span class="se">\n</span><span class="s1">        KEEP_BOTH: Keep all instances from both frames without filtering.</span><span class="se">\n</span><span class="s1">        UPDATE_TRACKS: Update track assignments only without modifying poses.</span><span class="se">\n</span><span class="s1">        REPLACE_PREDICTIONS: Keep user instances from base, remove base predictions,</span><span class="se">\n</span><span class="s1">            add only predictions from incoming frame.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4802,7 +4802,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.VideoMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7ff7489d60c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fbf8e32e0c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -5846,7 +5846,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.InstanceMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7ff7489d60c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fbf8e32e0c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -6735,7 +6735,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.MergeResult.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7ff7489d60c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fbf8e32e0c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
