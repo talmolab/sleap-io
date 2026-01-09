@@ -3272,9 +3272,7 @@ def test_labels_merge_string_api():
     labels2.tracks.append(track2)
 
     # Add frame to labels2
-    inst = Instance.from_numpy(
-        np.array([[10, 10], [20, 20], [30, 30]]), skeleton=skel
-    )
+    inst = Instance.from_numpy(np.array([[10, 10], [20, 20], [30, 30]]), skeleton=skel)
     frame = LabeledFrame(video=video2, frame_idx=0, instances=[inst])
     labels2.append(frame)
 
@@ -3282,10 +3280,10 @@ def test_labels_merge_string_api():
     result = labels1.merge(
         labels2,
         skeleton="structure",  # String instead of SkeletonMatcher
-        video="basename",      # String instead of VideoMatcher
-        track="name",          # String instead of TrackMatcher
-        frame="smart",         # String (already was string)
-        instance="spatial",    # String instead of InstanceMatcher
+        video="basename",  # String instead of VideoMatcher
+        track="name",  # String instead of TrackMatcher
+        frame="smart",  # String (already was string)
+        instance="spatial",  # String instead of InstanceMatcher
     )
 
     assert result.successful
