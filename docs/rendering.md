@@ -67,7 +67,17 @@ img = sio.render_image(lf, color_by="node")
 
 ### Built-in palettes
 
-8 palettes are included with no additional dependencies.
+9 palettes are included with no additional dependencies.
+
+#### standard
+
+MATLAB default colors (default palette):
+
+```python
+img = sio.render_image(lf, color_by="node", palette="standard")
+```
+
+![palette standard](assets/rendering/palette_standard.png)
 
 #### distinct
 

@@ -42,6 +42,16 @@ ColorSpec = Union[
 
 # Built-in color palettes as RGB tuples
 PALETTES: dict[str, list[tuple[int, int, int]]] = {
+    # MATLAB default colors
+    "standard": [
+        (0, 114, 189),  # Blue
+        (217, 83, 25),  # Orange
+        (237, 177, 32),  # Yellow/Gold
+        (126, 47, 142),  # Purple
+        (119, 172, 48),  # Green
+        (77, 190, 238),  # Light blue
+        (162, 20, 47),  # Dark red
+    ],
     # High-contrast distinct colors (good for instances/tracks)
     "distinct": [
         (255, 100, 100),  # Light red
@@ -140,6 +150,7 @@ PALETTES: dict[str, list[tuple[int, int, int]]] = {
 
 # Type alias for palette names
 PaletteName = Literal[
+    "standard",
     "distinct",
     "rainbow",
     "warm",
@@ -165,8 +176,8 @@ def get_palette(
     """Get n colors from a named palette as RGB tuples.
 
     Args:
-        name: Palette name. Built-in options: 'distinct', 'rainbow', 'warm',
-            'cool', 'pastel', 'seaborn', 'tableau10', 'viridis'.
+        name: Palette name. Built-in options: 'standard', 'distinct', 'rainbow',
+            'warm', 'cool', 'pastel', 'seaborn', 'tableau10', 'viridis'.
             With colorcet installed: 'glasbey', 'glasbey_hv', 'glasbey_cool',
             'glasbey_warm'.
         n_colors: Number of colors needed.
@@ -405,7 +416,7 @@ def build_color_map(
     n_nodes: int,
     n_tracks: int,
     track_indices: Optional[list[int]] = None,
-    palette: Union[PaletteName, str] = "glasbey",
+    palette: Union[PaletteName, str] = "standard",
 ) -> dict[str, list[tuple[int, int, int]]]:
     """Build color mapping based on scheme.
 
