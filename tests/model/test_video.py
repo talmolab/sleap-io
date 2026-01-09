@@ -610,3 +610,180 @@ def test_video_matches_content_backend_edge_cases():
 
     assert not video5.matches_content(video7)  # MediaVideo vs ImageVideo
     assert not video6.matches_content(video7)  # HDF5Video vs ImageVideo
+
+
+# =============================================================================
+# Tests for is_same_file() - Function in matching module
+# =============================================================================
+# These tests document expected behavior for the is_same_file() function
+# that definitively checks if two Video objects reference the same underlying file.
+
+
+class TestVideoIsSameFile:
+    """Tests for is_same_file() function from sleap_io.model.matching.
+
+    This function is needed to prevent duplicate video creation and enable
+    correct video matching during merge operations. It differs from
+    Video.matches_path() in that it:
+
+    1. Uses os.path.samefile() when files are accessible (handles symlinks)
+    2. Resolves paths before comparison (handles relative vs absolute)
+    3. Checks source_video for embedded/PKG.SLP videos
+    4. Handles ImageVideo list comparison correctly
+
+    Background: The Video class uses eq=False for identity-based comparison,
+    but this causes duplicate video creation when the same file is added
+    multiple times as different Video objects. The is_same_file() function
+    provides definitive file identity checking.
+    """
+
+    def test_is_same_file_same_path_different_objects(self):
+        """Two Video objects with identical paths should be same file.
+
+        Use case: User accidentally adds the same video twice via GUI.
+        The GUI uses `video not in labels.videos` which fails because
+        Video uses identity comparison (eq=False). is_same_file() should
+        correctly identify these as the same file.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(filename="/data/video.mp4", open_backend=False)
+        video2 = Video(filename="/data/video.mp4", open_backend=False)
+
+        # Identity comparison fails (this is expected)
+        assert video1 is not video2
+
+        # is_same_file should recognize they're the same file
+        assert is_same_file(video1, video2)
+        assert is_same_file(video2, video1)  # Symmetric
+
+    def test_is_same_file_different_paths(self):
+        """Videos with different paths should not be same file."""
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(filename="/data/video_a.mp4", open_backend=False)
+        video2 = Video(filename="/data/video_b.mp4", open_backend=False)
+
+        assert not is_same_file(video1, video2)
+        assert not is_same_file(video2, video1)
+
+    def test_is_same_file_source_video_match(self):
+        """Embedded video with source_video pointing to external should match.
+
+        Use case (UC3): Merging predictions from PKG.SLP back into parent SLP.
+        The PKG.SLP has embedded frames with source_video pointing to the
+        original external video. The AUTO matcher should recognize these
+        as the same video by checking source_video.
+
+        This is a CRITICAL gap identified in the merge red-team investigation:
+        The current AUTO matcher does NOT check source_video, causing
+        predictions to be attributed to wrong videos or creating duplicates.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        # External video in base labels
+        external = Video(filename="/data/recordings/video.mp4", open_backend=False)
+
+        # Embedded video from PKG.SLP with source_video
+        source = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        embedded = Video(
+            filename="predictions.pkg.slp", source_video=source, open_backend=False
+        )
+
+        # is_same_file(embedded, external) should return True
+        # because embedded.source_video points to external
+        assert is_same_file(embedded, external)
+        assert is_same_file(external, embedded)
+
+    def test_is_same_file_nested_source_video(self):
+        """Provenance chain: embedded → intermediate → original.
+
+        Real-world example from Tiernon dataset: A PKG.SLP may have been
+        created from another PKG.SLP, creating a 3-level provenance chain.
+        is_same_file() should traverse the chain to find the original.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        # Original external video
+        original = Video(filename="/data/video.mp4", open_backend=False)
+
+        # First embedding (intermediate)
+        intermediate = Video(
+            filename="intermediate.pkg.slp", source_video=original, open_backend=False
+        )
+
+        # Second embedding (final)
+        final = Video(
+            filename="final.pkg.slp", source_video=intermediate, open_backend=False
+        )
+
+        # final should be recognized as same file as original
+        assert is_same_file(final, original)
+        assert is_same_file(original, final)
+
+    def test_is_same_file_imagevideo_same_images(self):
+        """ImageVideo with same image list should be same file.
+
+        ImageVideo uses a list of paths. Two ImageVideos with the same
+        image list should be recognized as the same file.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        paths = ["/data/img_000.jpg", "/data/img_001.jpg", "/data/img_002.jpg"]
+        video1 = Video(filename=paths.copy(), open_backend=False)
+        video2 = Video(filename=paths.copy(), open_backend=False)
+
+        assert is_same_file(video1, video2)
+
+    def test_is_same_file_imagevideo_different_order(self):
+        """ImageVideo with same images in different order - NOT same file.
+
+        Frame indices are tied to image order, so different ordering
+        means different frame indexing = different video.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(
+            filename=["/data/img_000.jpg", "/data/img_001.jpg"], open_backend=False
+        )
+        video2 = Video(
+            filename=["/data/img_001.jpg", "/data/img_000.jpg"], open_backend=False
+        )
+
+        assert not is_same_file(video1, video2)
+
+    def test_is_same_file_cross_platform_paths(self):
+        """Cross-platform paths with same basename should NOT auto-match.
+
+        is_same_file() should be conservative - different absolute paths
+        on different operating systems should NOT be considered the same
+        file unless we can verify they point to the same file (which
+        requires file access or explicit path mapping).
+
+        This differs from matches_path(strict=False) which only checks
+        basenames and can incorrectly match different files.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        windows_path = Video(filename=r"C:\data\video.mp4", open_backend=False)
+        linux_path = Video(filename="/home/user/data/video.mp4", open_backend=False)
+
+        # is_same_file should be conservative - can't verify across systems
+        assert not is_same_file(windows_path, linux_path)
+
+    def test_is_same_file_same_basename_different_dir(self):
+        """Same basename in different directories should NOT match.
+
+        This is a critical safety check: two files with the same name
+        but in different directories are different files.
+
+        Real-world example from Sky Shi dataset: Multiple experiments
+        may have `fly.mp4` in different directories. These should never
+        be confused.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(filename="/data/exp1/fly.mp4", open_backend=False)
+        video2 = Video(filename="/data/exp2/fly.mp4", open_backend=False)
+
+        assert not is_same_file(video1, video2)

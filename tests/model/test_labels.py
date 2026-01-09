@@ -2814,7 +2814,7 @@ def test_labels_merge_basic():
 
     # Merge labels2 into labels1 with explicit video matcher to ensure no matching
     video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
 
     # Check result
     assert result.successful
@@ -2930,7 +2930,7 @@ def test_labels_merge_video_not_matched():
 
     # Merge with strict path matching to ensure videos are not matched
     video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
 
     assert result.successful
     assert len(labels1.videos) == 2
@@ -2979,7 +2979,7 @@ def test_labels_merge_track_matching():
 
     # Merge with track name matching
     track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
-    result = labels1.merge(labels2, track_matcher=track_matcher)
+    result = labels1.merge(labels2, track=track_matcher)
 
     assert result.successful
     assert len(labels1.tracks) == 1  # Tracks should be matched by name
@@ -3029,9 +3029,7 @@ def test_labels_merge_conflict_resolution():
     instance_matcher = InstanceMatcher(
         method=InstanceMatchMethod.SPATIAL, threshold=5.0
     )
-    result = labels1.merge(
-        labels2, instance_matcher=instance_matcher, frame_strategy="smart"
-    )
+    result = labels1.merge(labels2, instance=instance_matcher, frame="auto")
 
     assert result.successful
     assert result.frames_merged == 1
@@ -3068,7 +3066,7 @@ def test_labels_merge_frame_strategies():
 
     # Merge with keep_original
     original_instances = len(labels1.labeled_frames[0].instances)
-    result = labels1.merge(labels2, frame_strategy="keep_original")
+    result = labels1.merge(labels2, frame="keep_original")
 
     assert result.successful
     assert (
@@ -3133,7 +3131,7 @@ def test_labels_merge_provenance_tracking():
     assert merge_record["source_labels"]["n_frames"] == 3
     assert merge_record["source_labels"]["n_videos"] == 1
     assert merge_record["source_labels"]["n_skeletons"] == 1
-    assert merge_record["strategy"] == "smart"
+    assert merge_record["strategy"] == "auto"
     # Verify new provenance fields
     assert "source_filename" in merge_record
     assert "target_filename" in merge_record
@@ -3244,14 +3242,54 @@ def test_labels_merge_custom_matchers():
     # Merge with custom matchers
     result = labels1.merge(
         labels2,
-        skeleton_matcher=skeleton_matcher,
-        video_matcher=video_matcher,
-        track_matcher=track_matcher,
+        skeleton=skeleton_matcher,
+        video=video_matcher,
+        track=track_matcher,
     )
 
     assert result.successful
     assert len(labels1.videos) == 1  # Videos matched by basename
     assert len(labels1.tracks) == 2  # Tracks not matched (identity matching)
+
+
+def test_labels_merge_string_api():
+    """Test merge with string arguments for matchers (no imports needed)."""
+    # Create labels
+    skel = Skeleton(nodes=["head", "thorax", "abdomen"])
+    video1 = Video(filename="/path/to/video.mp4")
+    video2 = Video(filename="/different/path/video.mp4")  # Same basename
+    track1 = Track(name="ant1")
+    track2 = Track(name="ant1")  # Same name
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video1)
+    labels1.tracks.append(track1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video2)
+    labels2.tracks.append(track2)
+
+    # Add frame to labels2
+    inst = Instance.from_numpy(np.array([[10, 10], [20, 20], [30, 30]]), skeleton=skel)
+    frame = LabeledFrame(video=video2, frame_idx=0, instances=[inst])
+    labels2.append(frame)
+
+    # Merge using STRING arguments instead of Matcher objects
+    result = labels1.merge(
+        labels2,
+        skeleton="structure",  # String instead of SkeletonMatcher
+        video="basename",  # String instead of VideoMatcher
+        track="name",  # String instead of TrackMatcher
+        frame="auto",  # String (already was string)
+        instance="spatial",  # String instead of InstanceMatcher
+    )
+
+    assert result.successful
+    assert len(labels1.videos) == 1  # Videos matched by basename
+    assert len(labels1.tracks) == 1  # Tracks matched by name
+    assert len(labels1.labeled_frames) == 1
 
 
 def test_labels_merge_empty():
@@ -3420,7 +3458,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
 
     # Test 1: Without fallback, videos don't match (different paths)
     video_matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result_no_match = loaded_a.merge(loaded_b, video_matcher=video_matcher_no_fallback)
+    result_no_match = loaded_a.merge(loaded_b, video=video_matcher_no_fallback)
     assert result_no_match.successful
     assert len(loaded_a.videos) == 2  # Both videos added (no match)
 
@@ -3432,7 +3470,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
     # The videos have same basename so they should match
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = loaded_a.merge(loaded_b, video_matcher=video_matcher)
+    result = loaded_a.merge(loaded_b, video=video_matcher)
     assert result.successful
     # Videos match because recording.mp4 exists in fallback directory
     assert len(loaded_a.videos) == 1  # Videos matched via fallback
@@ -3464,7 +3502,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
     labels_d.skeletons.append(skel)
     labels_d.videos.append(Video(filename=str(project_a / "videos" / "recording.mp4")))
 
-    result3 = labels_d.merge(labels_c, video_matcher=video_matcher)
+    result3 = labels_d.merge(labels_c, video=video_matcher)
     assert result3.successful
     assert len(labels_d.videos) == 2  # recording.mp4 matched, other.mp4 added
 
@@ -3528,7 +3566,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
     # BASENAME method does filename-based matching ignoring directory paths
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
     assert result.successful
     # Videos match because they have the same basename (experiment.mp4)
     assert len(labels1.videos) == 1  # Videos matched via base_path lookup
@@ -3555,7 +3593,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
 
         # The merge will attempt relative_to() which will raise ValueError
         # This tests the exception handling
-        result2 = labels3.merge(labels4, video_matcher=video_matcher2)
+        result2 = labels3.merge(labels4, video=video_matcher2)
         assert result2.successful
 
     # Test 3: Test when base_path contains the video file directly
@@ -3579,7 +3617,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
     labels6.skeletons.append(skel)
     labels6.videos.append(video1)  # Full path to subdir1/experiment.mp4
 
-    result3 = labels6.merge(labels5, video_matcher=video_matcher3)
+    result3 = labels6.merge(labels5, video=video_matcher3)
     assert result3.successful
     # Videos should match because experiment.mp4 exists in base_path
     assert len(labels6.videos) == 1  # Videos matched via base_path
@@ -3684,7 +3722,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     # Create a video matcher using BASENAME (filename-based matching)
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = loaded1.merge(loaded2, video_matcher=video_matcher)
+    result = loaded1.merge(loaded2, video=video_matcher)
 
     assert result.successful
     assert result.frames_merged == 2  # frame2 and frame3
@@ -3709,7 +3747,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     video3 = Video(filename="orphan.mp4")
     labels3.videos.append(video3)
 
-    result2 = loaded1.merge(labels3, video_matcher=video_matcher_bad)
+    result2 = loaded1.merge(labels3, video=video_matcher_bad)
     assert result2.successful  # Should not crash even with bad paths
 
     # Test 5: Test priority order - direct match should take precedence
@@ -3724,7 +3762,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     labels6.videos.append(video6)
 
     # Should match based on path even before trying resolve strategies
-    result4 = labels5.merge(labels6, video_matcher=video_matcher)
+    result4 = labels5.merge(labels6, video=video_matcher)
     assert result4.successful
     assert len(labels5.videos) == 1  # Should match and not duplicate
 
@@ -3960,7 +3998,7 @@ def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
     assert skeleton1.matches(skeleton2)
 
     # Merge labels2 into labels1
-    result = labels1.merge(labels2, frame_strategy="keep_both")
+    result = labels1.merge(labels2, frame="keep_both")
 
     assert result.successful
     assert len(labels1.skeletons) == 1  # Should reuse existing skeleton
@@ -4561,3 +4599,132 @@ def test_n_instances_per_track_lazy(centered_pair):
     for track in eager.tracks:
         lazy_track = lazy.tracks[eager.tracks.index(track)]
         assert lazy_counts[lazy_track] == eager_counts[track]
+
+
+# =============================================================================
+# Tests for Labels.add_video() - PROPOSED NEW METHOD
+# =============================================================================
+# These tests document expected behavior for a new method that safely adds
+# videos while preventing duplicates.
+# Current implementation: Method does not exist (tests will fail with AttributeError).
+
+
+class TestLabelsAddVideo:
+    """Tests for Labels.add_video() method.
+
+    This method is needed to prevent duplicate video creation when adding
+    videos to Labels. The current pattern of `labels.videos.append(video)`
+    or `video not in labels.videos` fails to detect duplicates because
+    Video uses identity comparison (eq=False).
+
+    Background (from merge investigation):
+    The GUI uses `video not in context.labels.videos` to check for duplicates,
+    but this always returns True for new Video objects even if they point to
+    the same file. This leads to:
+    1. Duplicate videos in the Labels.videos list
+    2. Downstream deletion bugs (remove_video deletes frames from ALL matching videos)
+    3. Data corruption when merging predictions
+    """
+
+    def test_add_video_new_video(self):
+        """Adding a new video should append it to the list.
+
+        Basic case: Adding a video that doesn't exist in Labels should
+        add it and return the same video object.
+        """
+        labels = Labels()
+        video = Video(filename="/data/video.mp4", open_backend=False)
+
+        result = labels.add_video(video)
+
+        assert result is video
+        assert len(labels.videos) == 1
+        assert labels.videos[0] is video
+
+    def test_add_video_prevents_duplicate_same_path(self):
+        """Adding video with same path should return existing video.
+
+        Use case: User accidentally adds the same video twice via GUI.
+        Instead of creating a duplicate, add_video should recognize the
+        existing video and return it.
+        """
+        labels = Labels()
+        video1 = Video(filename="/data/video.mp4", open_backend=False)
+        labels.add_video(video1)
+
+        # Create a NEW Video object with the SAME path
+        video2 = Video(filename="/data/video.mp4", open_backend=False)
+        result = labels.add_video(video2)
+
+        # Should return the existing video, not add a duplicate
+        assert result is video1
+        assert len(labels.videos) == 1
+        assert labels.videos[0] is video1
+
+    def test_add_video_source_video_match(self):
+        """Adding embedded video should match external video with same source.
+
+        Use case (UC3): After loading predictions from PKG.SLP, the prediction
+        video has source_video pointing to the original. When iterating through
+        frames and adding videos, we should recognize the source_video match.
+        """
+        labels = Labels()
+        external = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        labels.add_video(external)
+
+        # Embedded video from PKG.SLP with source_video pointing to external
+        source = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        embedded = Video(
+            filename="predictions.pkg.slp", source_video=source, open_backend=False
+        )
+        result = labels.add_video(embedded)
+
+        # Should recognize as same file via source_video and return external
+        assert result is external
+        assert len(labels.videos) == 1
+
+    def test_add_video_different_videos(self):
+        """Adding different videos should add all of them."""
+        labels = Labels()
+        video1 = Video(filename="/data/video_a.mp4", open_backend=False)
+        video2 = Video(filename="/data/video_b.mp4", open_backend=False)
+
+        result1 = labels.add_video(video1)
+        result2 = labels.add_video(video2)
+
+        assert result1 is video1
+        assert result2 is video2
+        assert len(labels.videos) == 2
+
+    def test_add_video_same_basename_different_dir(self):
+        """Videos with same basename but different directories are different.
+
+        This tests that add_video doesn't incorrectly deduplicate videos
+        that happen to have the same filename but are in different directories.
+
+        Real-world example: Multiple experiments may have `fly.mp4` in
+        different directories (exp1/fly.mp4, exp2/fly.mp4).
+        """
+        labels = Labels()
+        video1 = Video(filename="/data/exp1/fly.mp4", open_backend=False)
+        video2 = Video(filename="/data/exp2/fly.mp4", open_backend=False)
+
+        labels.add_video(video1)
+        result = labels.add_video(video2)
+
+        assert result is video2
+        assert len(labels.videos) == 2
+
+    def test_add_video_imagevideo(self):
+        """Adding ImageVideo with same image list should detect duplicate."""
+        labels = Labels()
+        paths = ["/data/img_000.jpg", "/data/img_001.jpg", "/data/img_002.jpg"]
+        video1 = Video(filename=paths.copy(), open_backend=False)
+        labels.add_video(video1)
+
+        # Create a new ImageVideo with the same paths
+        video2 = Video(filename=paths.copy(), open_backend=False)
+        result = labels.add_video(video2)
+
+        assert result is video1
+        assert len(labels.videos) == 1

@@ -1283,6 +1283,37 @@ class Labels:
         # Replace the skeleton in the labels.
         self.skeletons[self.skeletons.index(old_skeleton)] = new_skeleton
 
+    def add_video(self, video: Video) -> Video:
+        """Add a video to the labels, preventing duplicates.
+
+        This method provides safe video addition by checking if a video with
+        the same file identity already exists. Unlike direct list append, this
+        prevents duplicate videos even when different Video objects point to
+        the same underlying file.
+
+        Args:
+            video: The video to add.
+
+        Returns:
+            The video that should be used. If a duplicate was detected, returns
+            the existing video; otherwise returns the input video.
+
+        Notes:
+            This method uses is_same_file() for duplicate detection, which:
+            - Considers source_video for embedded videos (PKG.SLP)
+            - Uses strict path comparison (same basename in different dirs != same)
+            - Handles ImageVideo lists correctly
+
+            Use this instead of `labels.videos.append(video)` to prevent duplicates.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        for existing in self.videos:
+            if is_same_file(existing, video):
+                return existing
+        self.videos.append(video)
+        return video
+
     def replace_videos(
         self,
         old_videos: list[Video] | None = None,
@@ -1977,11 +2008,11 @@ class Labels:
     def merge(
         self,
         other: "Labels",
-        instance_matcher: Optional["InstanceMatcher"] = None,
-        skeleton_matcher: Optional["SkeletonMatcher"] = None,
-        video_matcher: Optional["VideoMatcher"] = None,
-        track_matcher: Optional["TrackMatcher"] = None,
-        frame_strategy: str = "smart",
+        skeleton: Optional[Union[str, "SkeletonMatcher"]] = None,
+        video: Optional[Union[str, "VideoMatcher"]] = None,
+        track: Optional[Union[str, "TrackMatcher"]] = None,
+        frame: str = "auto",
+        instance: Optional[Union[str, "InstanceMatcher"]] = None,
         validate: bool = True,
         progress_callback: Optional[Callable] = None,
         error_mode: str = "continue",
@@ -1990,19 +2021,20 @@ class Labels:
 
         Args:
             other: Another Labels object to merge into this one.
-            instance_matcher: Matcher for comparing instances. If None, uses default
-                spatial matching with 5px tolerance.
-            skeleton_matcher: Matcher for comparing skeletons. If None, uses structure
-                matching.
-            video_matcher: Matcher for comparing videos. If None, uses auto matching.
-            track_matcher: Matcher for comparing tracks. If None, uses name matching.
-            frame_strategy: Strategy for merging frames:
-                - "smart": Keep user labels, update predictions
-                - "keep_original": Keep original frames
-                - "keep_new": Replace with new frames
-                - "keep_both": Keep all frames
-                - "update_tracks": Update track and score of the original instances
-                    from the new instances.
+            skeleton: Skeleton matching method. Can be a string ("structure",
+                "subset", "overlap", "exact") or a SkeletonMatcher object for
+                advanced configuration. Default is "structure".
+            video: Video matching method. Can be a string ("auto", "path",
+                "basename", "content", "shape", "image_dedup") or a VideoMatcher
+                object for advanced configuration. Default is "auto".
+            track: Track matching method. Can be a string ("name", "identity") or
+                a TrackMatcher object. Default is "name".
+            frame: Frame merge strategy. One of "auto", "keep_original",
+                "keep_new", "keep_both", "update_tracks", "replace_predictions".
+                Default is "auto".
+            instance: Instance matching method for spatial frame strategies. Can be
+                a string ("spatial", "identity", "iou") or an InstanceMatcher object.
+                Default is "spatial" with 5px tolerance.
             validate: If True, validate for conflicts before merging.
             progress_callback: Optional callback for progress updates.
                 Should accept (current, total, message) arguments.
@@ -2028,7 +2060,7 @@ class Labels:
             - ``source_filename``: Path from source's provenance (``None`` if in-memory)
             - ``target_filename``: Path from target's provenance (``None`` if in-memory)
             - ``source_labels``: Statistics about the source Labels
-            - ``strategy``: The frame_strategy used
+            - ``strategy``: The frame strategy used
             - ``sleap_io_version``: Version of sleap-io that performed the merge
             - ``result``: Merge statistics (frames_merged, instances_added, conflicts)
         """
@@ -2041,25 +2073,46 @@ class Labels:
             ConflictResolution,
             ErrorMode,
             InstanceMatcher,
+            InstanceMatchMethod,
             MergeError,
             MergeResult,
             SkeletonMatcher,
             SkeletonMatchMethod,
             SkeletonMismatchError,
             TrackMatcher,
+            TrackMatchMethod,
             VideoMatcher,
             VideoMatchMethod,
         )
 
-        # Initialize matchers with defaults if not provided
-        if instance_matcher is None:
-            instance_matcher = InstanceMatcher()
-        if skeleton_matcher is None:
+        # Coerce string arguments to Matcher objects
+        if skeleton is None:
             skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
-        if video_matcher is None:
+        elif isinstance(skeleton, str):
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod(skeleton))
+        else:
+            skeleton_matcher = skeleton
+
+        if video is None:
             video_matcher = VideoMatcher()
-        if track_matcher is None:
+        elif isinstance(video, str):
+            video_matcher = VideoMatcher(method=VideoMatchMethod(video))
+        else:
+            video_matcher = video
+
+        if track is None:
             track_matcher = TrackMatcher()
+        elif isinstance(track, str):
+            track_matcher = TrackMatcher(method=TrackMatchMethod(track))
+        else:
+            track_matcher = track
+
+        if instance is None:
+            instance_matcher = InstanceMatcher()
+        elif isinstance(instance, str):
+            instance_matcher = InstanceMatcher(method=InstanceMatchMethod(instance))
+        else:
+            instance_matcher = instance
 
         # Parse error mode
         error_mode_enum = ErrorMode(error_mode)
@@ -2081,7 +2134,7 @@ class Labels:
                 "n_skeletons": len(other.skeletons),
                 "n_tracks": len(other.tracks),
             },
-            "strategy": frame_strategy,
+            "strategy": frame,
             "sleap_io_version": sleap_io.__version__,
         }
 
@@ -2117,42 +2170,14 @@ class Labels:
                 matched = False
                 matched_video = None
 
-                # Special handling for AUTO to prefer basename over content
-                if video_matcher.method == VideoMatchMethod.AUTO:
-                    # Collect all matches and categorize by match quality
-                    basename_matches = []
-                    content_only_matches = []
-
-                    for self_video in self.videos:
-                        # Check strict path match
-                        if self_video.matches_path(other_video, strict=True):
-                            # Exact path match - use immediately
-                            matched_video = self_video
-                            break
-                        # Check basename match
-                        if self_video.matches_path(other_video, strict=False):
-                            basename_matches.append(self_video)
-                        # Check content-only match (no path match)
-                        elif self_video.matches_content(other_video):
-                            content_only_matches.append(self_video)
-
-                    # Pick best match: prefer basename over content-only
-                    if matched_video is None:
-                        if basename_matches:
-                            matched_video = basename_matches[0]
-                        elif content_only_matches:
-                            matched_video = content_only_matches[0]
-
-                    if matched_video is not None:
-                        video_map[other_video] = matched_video
-                        matched = True
-
-                # For non-AUTO methods, use original first-match logic
-                if not matched:
+                # IMAGE_DEDUP and SHAPE need special post-match processing
+                if video_matcher.method in (
+                    VideoMatchMethod.IMAGE_DEDUP,
+                    VideoMatchMethod.SHAPE,
+                ):
                     for self_video in self.videos:
                         if video_matcher.match(self_video, other_video):
                             matched_video = self_video
-                            # Special handling for different match methods
                             if video_matcher.method == VideoMatchMethod.IMAGE_DEDUP:
                                 # Deduplicate images from other_video
                                 deduped_video = other_video.deduplicate_with(self_video)
@@ -2252,11 +2277,15 @@ class Labels:
                                                 merged_video,
                                                 new_idx,
                                             )
-                            else:
-                                # Regular matching, no special handling
-                                video_map[other_video] = self_video
                             matched = True
                             break
+
+                else:
+                    # All other methods: use find_match() for the full matching cascade
+                    matched_video = video_matcher.find_match(other_video, self.videos)
+                    if matched_video is not None:
+                        video_map[other_video] = matched_video
+                        matched = True
 
                 if not matched:
                     # Add new video if no match
@@ -2326,8 +2355,8 @@ class Labels:
                     # Merge instances using frame-level merge
                     merged_instances, conflicts = self_frame.merge(
                         other_frame,
-                        instance_matcher=instance_matcher,
-                        strategy=frame_strategy,
+                        instance=instance_matcher,
+                        frame=frame,
                     )
 
                     # Remap skeleton and track references for instances from other frame

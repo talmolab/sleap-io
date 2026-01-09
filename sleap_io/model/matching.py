@@ -101,18 +101,22 @@ class FrameStrategy(str, Enum):
     """Strategies for handling frame merging.
 
     Attributes:
-        SMART: Smart merging that preserves user labels over predictions when
+        AUTO: Automatic merging that preserves user labels over predictions when
             they overlap.
         KEEP_ORIGINAL: Always keep instances from the original (base) frame.
         KEEP_NEW: Always keep instances from the new (incoming) frame.
         KEEP_BOTH: Keep all instances from both frames without filtering.
+        UPDATE_TRACKS: Update track assignments only without modifying poses.
+        REPLACE_PREDICTIONS: Keep user instances from base, remove base predictions,
+            add only predictions from incoming frame.
     """
 
-    SMART = "smart"
+    AUTO = "auto"
     KEEP_ORIGINAL = "keep_original"
     KEEP_NEW = "keep_new"
     KEEP_BOTH = "keep_both"
     UPDATE_TRACKS = "update_tracks"
+    REPLACE_PREDICTIONS = "replace_predictions"
 
 
 class ErrorMode(str, Enum):
@@ -127,6 +131,209 @@ class ErrorMode(str, Enum):
     CONTINUE = "continue"
     STRICT = "strict"
     WARN = "warn"
+
+
+# =============================================================================
+# Video Matching Helper Functions
+# =============================================================================
+
+
+def _get_root_video(video: Video) -> Video:
+    """Traverse source_video/original_video chain to find the root video.
+
+    Args:
+        video: The video to find the root of.
+
+    Returns:
+        The root video in the provenance chain:
+        - If original_video is set, returns it (original_video IS the root)
+        - Otherwise, traverses source_video chain to find the root
+    """
+    # If original_video is explicitly set, it IS the root
+    if video.original_video is not None:
+        return video.original_video
+
+    # Otherwise traverse source_video chain
+    v = video
+    while v.source_video is not None:
+        v = v.source_video
+    return v
+
+
+def _is_same_file_direct(video1: Video, video2: Video) -> bool:
+    """Check if two videos (without chain traversal) refer to the same file.
+
+    This is the low-level comparison used by is_same_file() after resolving
+    any provenance chains.
+
+    Args:
+        video1: First video to compare.
+        video2: Second video to compare.
+
+    Returns:
+        True if both videos refer to the same underlying file.
+    """
+    from pathlib import Path
+
+    # Handle ImageVideo (list of filenames)
+    if isinstance(video1.filename, list) and isinstance(video2.filename, list):
+        # For ImageVideo, require exact same list (order matters for frame indices)
+        return video1.filename == video2.filename
+    elif isinstance(video1.filename, list) or isinstance(video2.filename, list):
+        # One is ImageVideo, other is single file - can't be same
+        return False
+
+    # Both are single file paths
+    path1 = Path(video1.filename)
+    path2 = Path(video2.filename)
+
+    # Try os.path.samefile first if both files exist (handles symlinks)
+    try:
+        if path1.exists() and path2.exists():
+            import os
+
+            return os.path.samefile(path1, path2)
+    except (OSError, ValueError):
+        # File access failed, fall through to path comparison
+        pass
+
+    # Compare resolved paths (handles relative vs absolute)
+    try:
+        if path1.resolve() == path2.resolve():
+            return True
+    except (OSError, ValueError):
+        # Resolution failed, fall through to string comparison
+        pass
+
+    # Final check: exact path string match (normalized)
+    return str(path1) == str(path2)
+
+
+def is_same_file(video1: Video, video2: Video) -> bool:
+    """Check if two videos refer to the same underlying file.
+
+    This provides definitive file identity checking by:
+    - Traversing source_video/original_video chains to find root videos
+    - Using os.path.samefile() when files exist (handles symlinks)
+    - Falling back to path resolution and string comparison
+
+    Args:
+        video1: First video to compare.
+        video2: Second video to compare.
+
+    Returns:
+        True if both videos refer to the same underlying file.
+
+    Notes:
+        This is stricter than matches_path(strict=False) - it only returns True
+        when files are verifiably the same, not just same basename.
+    """
+    root1 = _get_root_video(video1)
+    root2 = _get_root_video(video2)
+    return _is_same_file_direct(root1, root2)
+
+
+def _get_effective_shape(video: Video) -> tuple | None:
+    """Get the effective shape for comparison purposes.
+
+    For embedded videos with original_video, uses the original's shape
+    if available. Falls back to backend_metadata for videos without
+    loaded backends.
+
+    Args:
+        video: The video to get shape for.
+
+    Returns:
+        Shape tuple (frames, height, width, channels) or None if unavailable.
+    """
+    # For embedded videos, prefer original_video's shape
+    if video.original_video is not None:
+        original_shape = _get_effective_shape(video.original_video)
+        if original_shape is not None:
+            return original_shape
+
+    # Try backend_metadata first (for videos with open_backend=False)
+    if "shape" in video.backend_metadata:
+        return video.backend_metadata["shape"]
+
+    # Fall back to actual shape property
+    return video.shape
+
+
+def shapes_compatible(video1: Video, video2: Video) -> bool | None:
+    """Check if two videos have compatible shapes.
+
+    This is used for REJECTION only in video matching - incompatible shapes
+    mean the videos definitely don't match. Compatible shapes (or unknown)
+    do NOT imply the videos are the same.
+
+    Args:
+        video1: First video to compare.
+        video2: Second video to compare.
+
+    Returns:
+        False if shapes are definitely incompatible (different frames, H, or W).
+        True if shapes are compatible.
+        None if shape cannot be determined (missing metadata).
+
+    Notes:
+        Per algorithm design: Compare (frames, height, width) but NOT channels.
+        Channels are excluded because grayscale detection is noisy (affected
+        by compression) and user-configurable.
+    """
+    shape1 = _get_effective_shape(video1)
+    shape2 = _get_effective_shape(video2)
+
+    # If either shape is unknown, we can't determine compatibility
+    if shape1 is None or shape2 is None:
+        return None
+
+    # Compare frames, height, width (indices 0, 1, 2) - NOT channels (index 3)
+    return (
+        shape1[0] == shape2[0]  # frames
+        and shape1[1] == shape2[1]  # height
+        and shape1[2] == shape2[2]  # width
+    )
+
+
+def original_videos_conflict(video1: Video, video2: Video) -> bool:
+    """Check if two videos have conflicting original_video references.
+
+    This is used for REJECTION in video matching. If both videos have
+    provenance info but point to different root files, they definitely
+    don't match (even if shapes are identical).
+
+    Args:
+        video1: First video to compare.
+        video2: Second video to compare.
+
+    Returns:
+        True if both have provenance AND their roots point to different files.
+        False otherwise (including if either or both have no provenance).
+
+    Example:
+        Two videos with identical basenames and shapes but from different
+        directories would conflict if both have original_video set to their
+        respective source paths.
+    """
+    root1 = _get_root_video(video1)
+    root2 = _get_root_video(video2)
+
+    # Only conflict if BOTH have non-trivial chains (provenance info set)
+    # AND the roots are different
+    has_provenance1 = (
+        video1.original_video is not None or video1.source_video is not None
+    )
+    has_provenance2 = (
+        video2.original_video is not None or video2.source_video is not None
+    )
+
+    if not (has_provenance1 and has_provenance2):
+        # At least one has no provenance - no conflict
+        return False
+
+    # Both have provenance - check if roots are the same file
+    return not _is_same_file_direct(root1, root2)
 
 
 @attrs.define
@@ -286,6 +493,11 @@ class VideoMatcher:
             When True, paths must be exactly identical. When False, paths
             are normalized before comparison. Only used when method is PATH.
             Default is False.
+
+    Notes:
+        For AUTO method, use find_match() when matching against a list of
+        candidates. The match() method for AUTO uses a simplified pairwise
+        check that doesn't include the full leaf-uniqueness algorithm.
     """
 
     method: Union[VideoMatchMethod, str] = attrs.field(
@@ -295,18 +507,37 @@ class VideoMatcher:
     strict: bool = False
 
     def match(self, video1: Video, video2: Video) -> bool:
-        """Check if two videos match according to the configured method."""
+        """Check if two videos match according to the configured method.
+
+        For AUTO method, this performs pairwise checks (file identity, path match).
+        For full AUTO matching with leaf-uniqueness, use find_match() instead.
+        """
         if self.method == VideoMatchMethod.AUTO:
-            # Try different methods in order of specificity (most to least specific).
-            # This prioritizes exact path matches, then basename matches, and only
-            # falls back to content matching (shape + backend) as a last resort.
+            # Pairwise AUTO: rejection checks + definitive identity + path match
+            # (Leaf-uniqueness requires full candidate list - use find_match())
+
+            # Rejection: incompatible shapes
+            if shapes_compatible(video1, video2) is False:
+                return False
+
+            # Rejection: conflicting provenance
+            if original_videos_conflict(video1, video2):
+                return False
+
+            # Definitive: same file identity
+            if is_same_file(video1, video2):
+                return True
+
+            # String: strict path match
             if video1.matches_path(video2, strict=True):
                 return True
+
+            # String: basename match (for pairwise, this is the fallback)
             if video1.matches_path(video2, strict=False):
                 return True
-            if video1.matches_content(video2):
-                return True
+
             return False
+
         elif self.method == VideoMatchMethod.PATH:
             return video1.matches_path(video2, strict=self.strict)
         elif self.method == VideoMatchMethod.BASENAME:
@@ -321,6 +552,117 @@ class VideoMatcher:
             return video1.matches_shape(video2)
         else:
             raise ValueError(f"Unknown video match method: {self.method}")
+
+    def find_match(
+        self,
+        incoming: Video,
+        candidates: list[Video],
+    ) -> Video | None:
+        """Find a matching video from candidates using the configured method.
+
+        This is the preferred method for AUTO matching as it implements the
+        full safe matching cascade including leaf-uniqueness disambiguation.
+
+        Args:
+            incoming: The video to find a match for.
+            candidates: List of existing videos to search for matches.
+
+        Returns:
+            The matched video, or None if no match found.
+
+        Notes:
+            For AUTO method, implements the safe matching cascade:
+            1. Shape rejection (filter candidates)
+            2. original_video conflict rejection (filter candidates)
+            3. Definitive file identity (is_same_file)
+            4. Strict path match
+            5. Leaf uniqueness matching at increasing depths
+
+            Shape is for REJECTION only - compatible shapes don't imply a match.
+        """
+        from pathlib import Path
+
+        from sleap_io.io.utils import sanitize_filename
+
+        if self.method == VideoMatchMethod.AUTO:
+            # Build list of viable candidates (not rejected by shape/provenance)
+            viable = []
+            for candidate in candidates:
+                # REJECTION CHECK 1: Shape compatibility
+                shape_compat = shapes_compatible(candidate, incoming)
+                if shape_compat is False:
+                    # Definitely incompatible shapes - skip
+                    continue
+
+                # REJECTION CHECK 2: original_video conflict
+                if original_videos_conflict(candidate, incoming):
+                    # Both have provenance pointing to different files - skip
+                    continue
+
+                viable.append(candidate)
+
+            # DEFINITIVE CHECK: File identity (handles source_video chains)
+            for candidate in viable:
+                if is_same_file(candidate, incoming):
+                    return candidate
+
+            # STRING CHECK: Full path match
+            for candidate in viable:
+                if candidate.matches_path(incoming, strict=True):
+                    return candidate
+
+            # STRING CHECK: Leaf path uniqueness
+            # Match paths by comparing suffixes at increasing depths
+            if viable:
+
+                def get_path_parts(video: Video) -> tuple[str, ...]:
+                    """Get path parts for comparison."""
+                    fn = video.filename
+                    if isinstance(fn, list):
+                        fn = fn[0]  # Use first for ImageVideo
+                    return Path(sanitize_filename(fn)).parts
+
+                incoming_parts = get_path_parts(incoming)
+                candidate_parts = [(v, get_path_parts(v)) for v in viable]
+
+                # Also need all existing videos for uniqueness check
+                all_existing_parts = [(v, get_path_parts(v)) for v in candidates]
+
+                # Compare at increasing depths until we find a unique match
+                max_depth = max(
+                    len(incoming_parts),
+                    max((len(p) for _, p in all_existing_parts), default=0),
+                )
+
+                for depth in range(1, max_depth + 1):
+                    if len(incoming_parts) < depth:
+                        continue
+                    incoming_leaf = "/".join(incoming_parts[-depth:])
+
+                    # Find all viable candidates that match at this depth
+                    matches_at_depth = []
+                    for candidate, parts in candidate_parts:
+                        if len(parts) < depth:
+                            continue
+                        candidate_leaf = "/".join(parts[-depth:])
+                        if candidate_leaf == incoming_leaf:
+                            matches_at_depth.append(candidate)
+
+                    # If exactly one match at this depth, use it
+                    if len(matches_at_depth) == 1:
+                        return matches_at_depth[0]
+                    # If no matches, try deeper
+                    # If multiple matches, continue deeper to disambiguate
+
+            # No match found
+            return None
+
+        else:
+            # Non-AUTO methods: use pairwise match()
+            for candidate in candidates:
+                if self.match(candidate, incoming):
+                    return candidate
+            return None
 
 
 @attrs.define
