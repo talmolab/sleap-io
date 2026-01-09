@@ -3272,11 +3272,10 @@ def test_labels_merge_string_api():
     labels2.tracks.append(track2)
 
     # Add frame to labels2
-    frame = LabeledFrame(
-        video=video2,
-        frame_idx=0,
-        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20], [30, 30]]), skeleton=skel)],
+    inst = Instance.from_numpy(
+        np.array([[10, 10], [20, 20], [30, 30]]), skeleton=skel
     )
+    frame = LabeledFrame(video=video2, frame_idx=0, instances=[inst])
     labels2.append(frame)
 
     # Merge using STRING arguments instead of Matcher objects
