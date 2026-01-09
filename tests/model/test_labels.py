@@ -3252,6 +3252,49 @@ def test_labels_merge_custom_matchers():
     assert len(labels1.tracks) == 2  # Tracks not matched (identity matching)
 
 
+def test_labels_merge_string_api():
+    """Test merge with string arguments for matchers (no imports needed)."""
+    # Create labels
+    skel = Skeleton(nodes=["head", "thorax", "abdomen"])
+    video1 = Video(filename="/path/to/video.mp4")
+    video2 = Video(filename="/different/path/video.mp4")  # Same basename
+    track1 = Track(name="ant1")
+    track2 = Track(name="ant1")  # Same name
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video1)
+    labels1.tracks.append(track1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video2)
+    labels2.tracks.append(track2)
+
+    # Add frame to labels2
+    frame = LabeledFrame(
+        video=video2,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20], [30, 30]]), skeleton=skel)],
+    )
+    labels2.append(frame)
+
+    # Merge using STRING arguments instead of Matcher objects
+    result = labels1.merge(
+        labels2,
+        skeleton="structure",  # String instead of SkeletonMatcher
+        video="basename",      # String instead of VideoMatcher
+        track="name",          # String instead of TrackMatcher
+        frame="smart",         # String (already was string)
+        instance="spatial",    # String instead of InstanceMatcher
+    )
+
+    assert result.successful
+    assert len(labels1.videos) == 1  # Videos matched by basename
+    assert len(labels1.tracks) == 1  # Tracks matched by name
+    assert len(labels1.labeled_frames) == 1
+
+
 def test_labels_merge_empty():
     """Test merging empty Labels objects."""
     labels1 = Labels()
