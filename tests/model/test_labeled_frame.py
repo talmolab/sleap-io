@@ -377,9 +377,7 @@ def test_labeled_frame_merge_edge_cases():
         video=Video(filename="test.mp4"), frame_idx=0, instances=[pred_shared2]
     )
 
-    merged5, conflicts5 = lf_complex1.merge(
-        lf_complex2, instance=matcher, frame="auto"
-    )
+    merged5, conflicts5 = lf_complex1.merge(lf_complex2, instance=matcher, frame="auto")
 
     # Should keep the latest one
     assert len(merged5) == 1
