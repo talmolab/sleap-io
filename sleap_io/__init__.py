@@ -85,7 +85,10 @@ __all__ = ["__version__"] + __all__
 # - tests/conftest.py (for pytest)
 # - .github/workflows/docs.yml (for docs build)
 # This ensures griffe/mkdocstrings can find all documented symbols
-if os.getenv("EAGER_IMPORT"):
+#
+# Also auto-detect mkdocs runs (mkdocs imports griffe which imports us)
+_is_mkdocs = "mkdocs" in sys.modules or "griffe" in sys.modules
+if os.getenv("EAGER_IMPORT") or _is_mkdocs:
     # Trigger all lazy imports and add them to __dict__ for griffe/mkdocstrings
     _current_module = sys.modules[__name__]
     for _attr in list(__all__):
