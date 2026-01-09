@@ -682,9 +682,7 @@ class TestVideoIsSameFile:
         # Embedded video from PKG.SLP with source_video
         source = Video(filename="/data/recordings/video.mp4", open_backend=False)
         embedded = Video(
-            filename="predictions.pkg.slp",
-            source_video=source,
-            open_backend=False
+            filename="predictions.pkg.slp", source_video=source, open_backend=False
         )
 
         # embedded.is_same_file(external) should return True
@@ -704,16 +702,12 @@ class TestVideoIsSameFile:
 
         # First embedding (intermediate)
         intermediate = Video(
-            filename="intermediate.pkg.slp",
-            source_video=original,
-            open_backend=False
+            filename="intermediate.pkg.slp", source_video=original, open_backend=False
         )
 
         # Second embedding (final)
         final = Video(
-            filename="final.pkg.slp",
-            source_video=intermediate,
-            open_backend=False
+            filename="final.pkg.slp", source_video=intermediate, open_backend=False
         )
 
         # final should be recognized as same file as original
@@ -739,12 +733,10 @@ class TestVideoIsSameFile:
         means different frame indexing = different video.
         """
         video1 = Video(
-            filename=["/data/img_000.jpg", "/data/img_001.jpg"],
-            open_backend=False
+            filename=["/data/img_000.jpg", "/data/img_001.jpg"], open_backend=False
         )
         video2 = Video(
-            filename=["/data/img_001.jpg", "/data/img_000.jpg"],
-            open_backend=False
+            filename=["/data/img_001.jpg", "/data/img_000.jpg"], open_backend=False
         )
 
         assert not video1.is_same_file(video2)

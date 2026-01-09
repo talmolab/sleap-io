@@ -7,14 +7,15 @@ This module provides factory functions to create test data for:
 - ImageVideo merging
 - Multi-resolution video disambiguation
 
-These fixtures address critical coverage gaps identified in the merge safety investigation.
+These fixtures address critical coverage gaps identified in the merge safety
+investigation.
 All fixtures create synthetic in-memory objects that don't require external files.
 """
 
 import numpy as np
 
 from sleap_io import Labels, Skeleton, Video
-from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 
 
@@ -268,7 +269,9 @@ def make_overlapping_imagevideos(
     set1_paths = [f"/data/img_{i:03d}.jpg" for i in range(set1_size)]
 
     # Set 2: overlapping images + new images
-    overlap_paths = [f"/data/img_{i:03d}.jpg" for i in range(overlap_start, overlap_end)]
+    overlap_paths = [
+        f"/data/img_{i:03d}.jpg" for i in range(overlap_start, overlap_end)
+    ]
     new_paths = [
         f"/data/img_{i:03d}.jpg"
         for i in range(set1_size, set1_size + set2_size - len(overlap_paths))

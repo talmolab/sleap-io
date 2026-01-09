@@ -1283,6 +1283,35 @@ class Labels:
         # Replace the skeleton in the labels.
         self.skeletons[self.skeletons.index(old_skeleton)] = new_skeleton
 
+    def add_video(self, video: Video) -> Video:
+        """Add a video to the labels, preventing duplicates.
+
+        This method provides safe video addition by checking if a video with
+        the same file identity already exists. Unlike direct list append, this
+        prevents duplicate videos even when different Video objects point to
+        the same underlying file.
+
+        Args:
+            video: The video to add.
+
+        Returns:
+            The video that should be used. If a duplicate was detected, returns
+            the existing video; otherwise returns the input video.
+
+        Notes:
+            This method uses Video.is_same_file() for duplicate detection, which:
+            - Considers source_video for embedded videos (PKG.SLP)
+            - Uses strict path comparison (same basename in different dirs != same)
+            - Handles ImageVideo lists correctly
+
+            Use this instead of `labels.videos.append(video)` to prevent duplicates.
+        """
+        for existing in self.videos:
+            if existing.is_same_file(video):
+                return existing
+        self.videos.append(video)
+        return video
+
     def replace_videos(
         self,
         old_videos: list[Video] | None = None,
@@ -2117,38 +2146,90 @@ class Labels:
                 matched = False
                 matched_video = None
 
-                # Special handling for AUTO to prefer basename over content
+                # AUTO matching algorithm (per 07-AUTO-MATCHING-ALGORITHM.md)
+                # Decision cascade: Each step yields MATCH, NOT MATCH, or Continue
+                # Shape is for rejection only, not positive evidence
                 if video_matcher.method == VideoMatchMethod.AUTO:
-                    # Collect all matches and categorize by match quality
-                    basename_matches = []
-                    content_only_matches = []
-
+                    # Build list of candidates (videos not rejected by shape/original)
+                    candidates = []
                     for self_video in self.videos:
-                        # Check strict path match
-                        if self_video.matches_path(other_video, strict=True):
-                            # Exact path match - use immediately
+                        # REJECTION CHECK 1: Shape compatibility
+                        shape_compat = self_video.shapes_compatible(other_video)
+                        if shape_compat is False:
+                            # Definitely incompatible shapes - skip this candidate
+                            continue
+
+                        # REJECTION CHECK 2: original_video conflict
+                        if self_video.original_videos_conflict(other_video):
+                            # Both have original_video pointing to different files
+                            continue
+
+                        candidates.append(self_video)
+
+                    # DEFINITIVE CHECK: File identity (handles source_video chains)
+                    for self_video in candidates:
+                        if self_video.is_same_file(other_video):
                             matched_video = self_video
                             break
-                        # Check basename match
-                        if self_video.matches_path(other_video, strict=False):
-                            basename_matches.append(self_video)
-                        # Check content-only match (no path match)
-                        elif self_video.matches_content(other_video):
-                            content_only_matches.append(self_video)
 
-                    # Pick best match: prefer basename over content-only
+                    # STRING CHECK: Full path match (if no definitive match yet)
                     if matched_video is None:
-                        if basename_matches:
-                            matched_video = basename_matches[0]
-                        elif content_only_matches:
-                            matched_video = content_only_matches[0]
+                        for self_video in candidates:
+                            if self_video.matches_path(other_video, strict=True):
+                                matched_video = self_video
+                                break
+
+                    # STRING CHECK: Leaf path uniqueness
+                    # Match paths by comparing suffixes at various depths
+                    if matched_video is None and candidates:
+                        from sleap_io.io.utils import sanitize_filename
+
+                        def get_path_parts(video):
+                            """Get path parts for comparison."""
+                            fn = video.filename
+                            if isinstance(fn, list):
+                                fn = fn[0]  # Use first for ImageVideo
+                            return Path(sanitize_filename(fn)).parts
+
+                        incoming_parts = get_path_parts(other_video)
+                        existing_paths_parts = [
+                            (v, get_path_parts(v)) for v in self.videos
+                        ]
+
+                        # Compare at increasing depths until we find a unique match
+                        max_depth = max(
+                            len(incoming_parts),
+                            max(len(p) for _, p in existing_paths_parts),
+                        )
+
+                        for depth in range(1, max_depth + 1):
+                            incoming_leaf = "/".join(incoming_parts[-depth:])
+
+                            # Find all candidates that match at this depth
+                            matches_at_depth = []
+                            for self_video, self_parts in existing_paths_parts:
+                                if self_video not in candidates:
+                                    continue
+                                if len(self_parts) < depth:
+                                    continue
+                                self_leaf = "/".join(self_parts[-depth:])
+                                if self_leaf == incoming_leaf:
+                                    matches_at_depth.append(self_video)
+
+                            # If exactly one match at this depth, use it
+                            if len(matches_at_depth) == 1:
+                                matched_video = matches_at_depth[0]
+                                break
+                            # If no matches at this depth, try deeper
+                            # If multiple matches, continue to deeper to disambiguate
 
                     if matched_video is not None:
                         video_map[other_video] = matched_video
                         matched = True
 
                 # For non-AUTO methods, use original first-match logic
-                if not matched:
+                # (AUTO is fully handled above with safety constraints)
+                if not matched and video_matcher.method != VideoMatchMethod.AUTO:
                     for self_video in self.videos:
                         if video_matcher.match(self_video, other_video):
                             matched_video = self_video

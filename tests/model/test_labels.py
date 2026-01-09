@@ -4637,9 +4637,7 @@ class TestLabelsAddVideo:
         # Embedded video from PKG.SLP with source_video pointing to external
         source = Video(filename="/data/recordings/video.mp4", open_backend=False)
         embedded = Video(
-            filename="predictions.pkg.slp",
-            source_video=source,
-            open_backend=False
+            filename="predictions.pkg.slp", source_video=source, open_backend=False
         )
         result = labels.add_video(embedded)
 
