@@ -23,15 +23,19 @@ Merging proceeds in four steps:
 3. **Match tracks** — Map track identities by name
 4. **Merge frames** — Combine frames based on the `frame` strategy
 
-Two parameters control the key behavior:
+These are controlled via presets for each:
 
-| Parameter | Controls | Default |
-|-----------|----------|---------|
-| `video` | How videos are matched | `"auto"` |
-| `frame` | How overlapping frames are combined | `"auto"` |
+| Parameter | Controls | Options (default first) |
+|-----------|----------|-------------------------|
+| `skeleton` | How skeletons are matched | [`"structure"`](#skeleton-matching), `"subset"`, `"overlap"`, `"exact"` |
+| `video` | How videos are matched | [`"auto"`](#how-auto-matching-works), [`"path"`, `"basename"`, `"content"`](#other-video-matching-methods), `"shape"`, `"image_dedup"` |
+| `track` | How tracks are matched | `"name"`, `"identity"` |
+| `frame` | How overlapping frames are combined | [`"auto"`](#auto-default), [`"replace_predictions"`](#replace_predictions), [`"keep_original"`, `"keep_new"`, `"keep_both"`, `"update_tracks"`](#other-strategies) |
+| `instance` | How instances are paired within frames | [`"spatial"`, `"identity"`, `"iou"`](#instance-matching) |
 
 ```python
-base.merge(predictions, video="auto", frame="auto")
+base.merge(predictions)  # All defaults
+base.merge(predictions, video="auto", frame="auto")  # Explicit defaults
 ```
 
 ## Video matching
