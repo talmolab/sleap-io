@@ -1,15 +1,14 @@
 """Unified matcher system for comparing and matching data structures during merging.
 
 This module provides configurable matchers for comparing skeletons, instances, tracks,
-videos, and frames during merge operations. The matchers use various strategies to
-determine when data structures should be considered equivalent during merging.
+and videos during merge operations. The matchers use various strategies to determine
+when data structures should be considered equivalent during merging.
 
 Key features:
 - Skeleton matching: exact, structure-based, overlap, and subset matching
 - Instance matching: spatial proximity, track identity, and bounding box IoU
 - Track matching: by name or object identity
 - Video matching: path, basename, content, and auto matching
-- Frame matching with configurable video matching requirements
 
 Video matching supports path-based, filename-based, content-based, and
 automatic strategies.
@@ -665,22 +664,6 @@ class VideoMatcher:
             return None
 
 
-@attrs.define
-class FrameMatcher:
-    """Matcher for comparing and matching labeled frames.
-
-    Attributes:
-        video_must_match: Whether frames must belong to the same video to be
-            considered a match. Default is True.
-    """
-
-    video_must_match: bool = True
-
-    def match(self, frame1: LabeledFrame, frame2: LabeledFrame) -> bool:
-        """Check if two frames match."""
-        return frame1.matches(frame2, video_must_match=self.video_must_match)
-
-
 # Pre-configured matchers for common use cases
 STRUCTURE_SKELETON_MATCHER = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
 SUBSET_SKELETON_MATCHER = SkeletonMatcher(method=SkeletonMatchMethod.SUBSET)
@@ -696,7 +679,6 @@ NAME_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.NAME)
 IDENTITY_TRACK_MATCHER = TrackMatcher(method=TrackMatchMethod.IDENTITY)
 
 AUTO_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.AUTO)
-SOURCE_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.BASENAME)
 PATH_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
 BASENAME_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.BASENAME)
 IMAGE_DEDUP_VIDEO_MATCHER = VideoMatcher(method=VideoMatchMethod.IMAGE_DEDUP)
@@ -738,12 +720,6 @@ class MergeError(Exception):
 
 class SkeletonMismatchError(MergeError):
     """Raised when skeletons don't match during merge."""
-
-    pass
-
-
-class VideoNotFoundError(MergeError):
-    """Raised when a video file cannot be found during merge."""
 
     pass
 
