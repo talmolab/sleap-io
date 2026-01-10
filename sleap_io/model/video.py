@@ -108,6 +108,7 @@ class Video:
             backend=None,
             backend_metadata=self.backend_metadata.copy(),
             source_video=self.source_video,
+            original_video=self.original_video,
             open_backend=self.open_backend,
         )
 

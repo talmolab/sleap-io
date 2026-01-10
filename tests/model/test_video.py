@@ -1,5 +1,6 @@
 """Tests for methods in the sleap_io.model.video file."""
 
+import copy
 from pathlib import Path
 
 import numpy as np
@@ -610,6 +611,34 @@ def test_video_matches_content_backend_edge_cases():
 
     assert not video5.matches_content(video7)  # MediaVideo vs ImageVideo
     assert not video6.matches_content(video7)  # HDF5Video vs ImageVideo
+
+
+def test_video_deepcopy_preserves_original_video():
+    """Test that Video.__deepcopy__() preserves original_video attribute.
+
+    The original_video attribute is used for provenance tracking during merge
+    operations. If not preserved during deepcopy, the provenance chain breaks
+    and _get_root_video() in matching.py cannot correctly identify related videos.
+    """
+    # Create a chain: original -> source -> video with original_video
+    original = Video(filename="/data/original.mp4", open_backend=False)
+    source = Video(
+        filename="/embedded/source.slp", source_video=original, open_backend=False
+    )
+    video = Video(
+        filename="/current/video.mp4",
+        source_video=source,
+        original_video=original,
+        open_backend=False,
+    )
+
+    # Deepcopy should preserve all provenance attributes
+    video_copy = copy.deepcopy(video)
+
+    assert video_copy.filename == video.filename
+    assert video_copy.source_video is video.source_video
+    assert video_copy.original_video is video.original_video
+    assert video_copy.original_video is original
 
 
 # =============================================================================

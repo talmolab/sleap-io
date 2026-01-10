@@ -20,7 +20,6 @@ from sleap_io.model.matching import (
     TrackMatchMethod,
     VideoMatcher,
     VideoMatchMethod,
-    VideoNotFoundError,
 )
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
@@ -341,15 +340,6 @@ class TestMergeErrors:
         assert isinstance(error, MergeError)
         assert error.message == "Skeletons don't match"
 
-    def test_video_not_found_error(self):
-        """Test VideoNotFoundError class."""
-        error = VideoNotFoundError(
-            message="Video not found",
-            details={"path": "/missing/video.mp4"},
-        )
-        assert isinstance(error, MergeError)
-        assert error.message == "Video not found"
-
 
 class TestMergeProgressBar:
     """Test MergeProgressBar functionality."""
@@ -422,7 +412,6 @@ class TestPreConfiguredMatchers:
             NAME_TRACK_MATCHER,
             OVERLAP_SKELETON_MATCHER,
             PATH_VIDEO_MATCHER,
-            SOURCE_VIDEO_MATCHER,
             STRUCTURE_SKELETON_MATCHER,
             SUBSET_SKELETON_MATCHER,
         )
@@ -446,7 +435,6 @@ class TestPreConfiguredMatchers:
 
         # Test video matchers
         assert AUTO_VIDEO_MATCHER.method == VideoMatchMethod.AUTO
-        assert SOURCE_VIDEO_MATCHER.method == VideoMatchMethod.BASENAME
         assert PATH_VIDEO_MATCHER.method == VideoMatchMethod.PATH
         assert PATH_VIDEO_MATCHER.strict is True
         assert BASENAME_VIDEO_MATCHER.method == VideoMatchMethod.BASENAME
@@ -502,27 +490,6 @@ class TestEdgeCases:
 
         # Should not match - different names and different shapes
         assert not matcher.match(video1, video3)
-
-    def test_frame_matcher(self):
-        """Test FrameMatcher functionality."""
-        from sleap_io.model.matching import FrameMatcher
-
-        video1 = Video(filename="test1.mp4", open_backend=False)
-        video2 = Video(filename="test2.mp4", open_backend=False)
-
-        frame1 = LabeledFrame(video=video1, frame_idx=0)
-        frame2 = LabeledFrame(video=video1, frame_idx=0)
-        frame3 = LabeledFrame(video=video2, frame_idx=0)
-
-        # Test with video must match
-        matcher = FrameMatcher(video_must_match=True)
-        assert matcher.match(frame1, frame2)  # Same video
-        assert not matcher.match(frame1, frame3)  # Different videos
-
-        # Test without video must match
-        matcher = FrameMatcher(video_must_match=False)
-        assert matcher.match(frame1, frame2)
-        assert matcher.match(frame1, frame3)  # Videos don't need to match
 
     def test_instance_matcher_iou_with_overlap(self):
         """Test InstanceMatcher IoU calculation with actual overlapping boxes."""
