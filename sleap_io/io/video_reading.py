@@ -306,6 +306,9 @@ class VideoBackend:
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
+        fps: Frames per second of the video. For MediaVideo, this is read from container
+            metadata. For other backends (ImageVideo, HDF5Video, TiffVideo), this must
+            be set explicitly or will be None.
     """
 
     filename: str | Path | list[str] | list[Path]
@@ -313,6 +316,35 @@ class VideoBackend:
     keep_open: bool = True
     _cached_shape: Optional[Tuple[int, int, int, int]] = None
     _open_reader: Optional[object] = None
+    _fps: Optional[float] = None
+
+    @property
+    def fps(self) -> Optional[float]:
+        """Frames per second of the video.
+
+        Returns:
+            The FPS if known, or None if unavailable/unknown.
+
+        Notes:
+            For MediaVideo, this is read from container metadata.
+            For ImageVideo, HDF5Video, and TiffVideo, this must be set explicitly
+            or inherited from source_video.
+        """
+        return self._fps
+
+    @fps.setter
+    def fps(self, value: Optional[float]) -> None:
+        """Set the FPS.
+
+        Args:
+            value: Frames per second. Must be positive if not None.
+
+        Raises:
+            ValueError: If value is not positive.
+        """
+        if value is not None and value <= 0:
+            raise ValueError(f"FPS must be positive, got {value}")
+        self._fps = value
 
     @classmethod
     def from_filename(
@@ -708,6 +740,58 @@ class MediaVideo(VideoBackend):
                 n_frames = legacy_reader.count_frames()
             return n_frames
 
+    @property
+    def fps(self) -> Optional[float]:
+        """Frames per second from video container metadata.
+
+        Returns:
+            The FPS from the video container, or None if it cannot be determined.
+
+        Notes:
+            This reads the FPS from the video file metadata using the appropriate
+            method for the current plugin:
+            - OpenCV: cv2.CAP_PROP_FPS
+            - FFMPEG/pyav: imageio metadata
+        """
+        # Return cached/explicit value if set
+        if self._fps is not None:
+            return self._fps
+
+        # Read from container metadata
+        try:
+            if self.plugin == "opencv":
+                fps = self.reader.get(cv2.CAP_PROP_FPS)
+                return fps if fps > 0 else None
+            else:
+                # Use imageio v2 API to get metadata (v3 improps doesn't include fps)
+                import imageio.v2 as iio_v2
+
+                reader = iio_v2.get_reader(self.filename, format="FFMPEG")
+                meta = reader.get_meta_data()
+                reader.close()
+                fps = meta.get("fps")
+                return float(fps) if fps is not None else None
+        except Exception:
+            return None
+
+    @fps.setter
+    def fps(self, value: Optional[float]) -> None:
+        """Set an explicit FPS override.
+
+        Args:
+            value: Frames per second. Must be positive if not None.
+
+        Raises:
+            ValueError: If value is not positive.
+
+        Notes:
+            Setting FPS on MediaVideo overrides the value from container metadata.
+            This can be useful when the container metadata is incorrect or missing.
+        """
+        if value is not None and value <= 0:
+            raise ValueError(f"FPS must be positive, got {value}")
+        self._fps = value
+
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
 
@@ -931,6 +1015,12 @@ class HDF5Video(VideoBackend):
                 self.source_filename = json.loads(
                     ds.parent["source_video"].attrs["json"]
                 )["backend"]["filename"]
+
+            # Read FPS from attributes if present
+            if "fps" in ds.attrs:
+                self._fps = float(ds.attrs["fps"])
+            elif "fps" in ds.parent.attrs:
+                self._fps = float(ds.parent.attrs["fps"])
 
         f.close()
 

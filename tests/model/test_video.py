@@ -816,3 +816,128 @@ class TestVideoIsSameFile:
         video2 = Video(filename="/data/exp2/fly.mp4", open_backend=False)
 
         assert not is_same_file(video1, video2)
+
+
+def test_video_fps_from_mediavideo(centered_pair_low_quality_path):
+    """Test FPS property on Video with MediaVideo backend."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert isinstance(video.backend, MediaVideo)
+
+    # Should read FPS from video container
+    assert video.fps == 15.0
+
+
+def test_video_fps_explicit_set(centered_pair_low_quality_path):
+    """Test setting FPS explicitly on Video."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+
+    # Override FPS
+    video.fps = 30.0
+    assert video.fps == 30.0
+
+    # Reset to container value
+    video.fps = None
+    assert video.fps == 15.0
+
+
+def test_video_fps_backend_metadata(centered_pair_low_quality_path):
+    """Test FPS is cached in backend_metadata on close."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Close the backend
+    video.close()
+    assert video.backend is None
+
+    # FPS should still be available from backend_metadata
+    assert video.fps == 15.0
+    assert video.backend_metadata.get("fps") == 15.0
+
+
+def test_video_fps_imagevideo(centered_pair_frame_paths):
+    """Test FPS property on Video with ImageVideo backend."""
+    video = Video.from_filename(centered_pair_frame_paths)
+    assert isinstance(video.backend, ImageVideo)
+
+    # ImageVideo has no inherent FPS
+    assert video.fps is None
+
+    # Can set FPS explicitly
+    video.fps = 24.0
+    assert video.fps == 24.0
+    assert video.backend_metadata.get("fps") == 24.0
+
+
+def test_video_fps_validation():
+    """Test FPS setter validates input."""
+    video = Video(filename="test.mp4", open_backend=False)
+
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        video.fps = 0
+
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        video.fps = -5.0
+
+
+def test_video_frame_to_seconds(centered_pair_low_quality_path):
+    """Test frame_to_seconds conversion."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Test conversion
+    assert video.frame_to_seconds(0) == 0.0
+    assert video.frame_to_seconds(15) == 1.0
+    assert video.frame_to_seconds(30) == 2.0
+    assert video.frame_to_seconds(150) == 10.0
+
+    # Test with fractional results
+    assert abs(video.frame_to_seconds(1) - 1 / 15) < 1e-10
+
+
+def test_video_seconds_to_frame(centered_pair_low_quality_path):
+    """Test seconds_to_frame conversion."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Test conversion
+    assert video.seconds_to_frame(0.0) == 0
+    assert video.seconds_to_frame(1.0) == 15
+    assert video.seconds_to_frame(2.0) == 30
+    assert video.seconds_to_frame(10.0) == 150
+
+    # Test rounding down
+    assert video.seconds_to_frame(0.5) == 7  # 0.5 * 15 = 7.5 -> 7
+
+
+def test_video_timestamp_with_no_fps():
+    """Test timestamp conversion returns None when FPS is unknown."""
+    video = Video(filename="test.mp4", open_backend=False)
+    assert video.fps is None
+
+    assert video.frame_to_seconds(10) is None
+    assert video.seconds_to_frame(1.0) is None
+
+
+def test_video_save_preserves_fps(centered_pair_low_quality_path, tmp_path):
+    """Test that Video.save() preserves FPS from source video."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Save a subset of frames
+    output_path = tmp_path / "output.mp4"
+    new_video = video.save(output_path, frame_inds=[0, 1, 2])
+
+    # New video should have same FPS
+    assert new_video.fps == 15.0
+
+
+def test_video_save_custom_fps(centered_pair_low_quality_path, tmp_path):
+    """Test that Video.save() can use custom FPS."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+
+    # Save with custom FPS
+    output_path = tmp_path / "output.mp4"
+    new_video = video.save(output_path, frame_inds=[0, 1, 2], fps=30.0)
+
+    # New video should have custom FPS
+    assert new_video.fps == 30.0

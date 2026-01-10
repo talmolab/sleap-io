@@ -216,6 +216,72 @@ class Video:
 
         self.backend_metadata["grayscale"] = value
 
+    @property
+    def fps(self) -> Optional[float]:
+        """Return the frames per second of the video.
+
+        For MediaVideo backends, this reads FPS from the video container metadata.
+        For other backends (ImageVideo, HDF5Video, TiffVideo), this returns the
+        explicitly set value or None if not set.
+
+        Returns:
+            The FPS if known, or None if unavailable/unknown.
+        """
+        if self.backend is not None:
+            return self.backend.fps
+        return self.backend_metadata.get("fps")
+
+    @fps.setter
+    def fps(self, value: Optional[float]):
+        """Set the frames per second.
+
+        Args:
+            value: Frames per second. Must be positive if not None.
+
+        Raises:
+            ValueError: If value is not positive.
+
+        Notes:
+            For MediaVideo backends, setting FPS overrides the value from container
+            metadata. For other backends, this sets the FPS directly.
+        """
+        if value is not None and value <= 0:
+            raise ValueError(f"FPS must be positive, got {value}")
+
+        if self.backend is not None:
+            self.backend.fps = value
+        self.backend_metadata["fps"] = value
+
+    def frame_to_seconds(self, frame_idx: int) -> Optional[float]:
+        """Convert a frame index to timestamp in seconds.
+
+        Args:
+            frame_idx: Zero-indexed frame number.
+
+        Returns:
+            Time in seconds, or None if FPS is unknown.
+
+        Notes:
+            This assumes constant frame rate. For variable frame rate videos,
+            the returned timestamp may be approximate.
+        """
+        if self.fps is None or self.fps <= 0:
+            return None
+        return frame_idx / self.fps
+
+    def seconds_to_frame(self, seconds: float) -> Optional[int]:
+        """Convert a timestamp in seconds to frame index.
+
+        Args:
+            seconds: Time in seconds from video start.
+
+        Returns:
+            Zero-indexed frame number (rounded down), or None if FPS unknown.
+        """
+        if self.fps is None or self.fps <= 0:
+            return None
+        return int(seconds * self.fps)
+
     def __len__(self) -> int:
         """Return the length of the video as the number of frames."""
         shape = self.shape
@@ -408,6 +474,7 @@ class Video:
                     self.backend, "grayscale", None
                 )
                 self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
+                self.backend_metadata["fps"] = getattr(self.backend, "fps", None)
             except Exception:
                 pass
 
@@ -675,6 +742,7 @@ class Video:
         self,
         save_path: str | Path,
         frame_inds: list[int] | np.ndarray | None = None,
+        fps: Optional[float] = None,
         video_kwargs: dict[str, Any] | None = None,
     ) -> Video:
         """Save video frames to a new video file.
@@ -683,14 +751,22 @@ class Video:
             save_path: Path to the new video file. Should end in MP4.
             frame_inds: Frame indices to save. Can be specified as a list or array of
                 frame integers. If not specified, saves all video frames.
+            fps: Frames per second for the output video. If not specified, uses the
+                source video's FPS if available, otherwise defaults to 30.
             video_kwargs: A dictionary of keyword arguments to provide to
                 `sio.save_video` for video compression.
 
         Returns:
             A new `Video` object pointing to the new video file.
         """
-        video_kwargs = {} if video_kwargs is None else video_kwargs
+        video_kwargs = {} if video_kwargs is None else video_kwargs.copy()
         frame_inds = np.arange(len(self)) if frame_inds is None else frame_inds
+
+        # Use source video FPS if not explicitly specified
+        if fps is None:
+            fps = self.fps
+        if fps is not None and "fps" not in video_kwargs:
+            video_kwargs["fps"] = fps
 
         with VideoWriter(save_path, **video_kwargs) as vw:
             for frame_ind in frame_inds:
