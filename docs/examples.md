@@ -523,6 +523,48 @@ labels.save("labels.v001.pkg.slp", embed="user+suggestions")
 !!! note "See also"
     [`Labels.save`](model.md#sleap_io.Labels.save): Complete save options including embedding
 
+### Advanced embedding options
+
+**Progress callback for GUI integration:**
+
+```python title="embed_with_progress.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_file("labels.slp")
+
+def on_progress(current, total):
+    print(f"Embedding frame {current}/{total}")
+    return True  # Return False to cancel
+
+labels.save("labels.pkg.slp", embed="user", progress_callback=on_progress)
+```
+
+**Cancellation support:**
+
+```python title="embed_with_cancel.py" linenums="1"
+from sleap_io.io.slp import ExportCancelled
+
+cancelled = False
+
+def on_progress(current, total):
+    return not cancelled  # Return False to cancel
+
+try:
+    labels.save("output.pkg.slp", embed="user", progress_callback=on_progress)
+except ExportCancelled:
+    print("Export was cancelled")
+```
+
+**Control video embedding for videos without labels:**
+
+```python title="embed_control.py" linenums="1"
+# Default: all videos converted to embedded references (portable)
+labels.save("output.pkg.slp", embed="user")
+
+# Selective: only embed specific frames, keep other videos as external paths
+labels.save("output.pkg.slp", embed="user", embed_all_videos=False)
+```
+
 ### Trim labels and video
 
 Extract a subset of frames with corresponding labels.

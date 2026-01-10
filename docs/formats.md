@@ -103,6 +103,14 @@ Lazy loading excels at avoiding unnecessary work. If you need to iterate over al
 - `Labels.is_lazy` - `True` if lazy-loaded
 - `Labels.materialize()` - Convert to eager `Labels` (returns self if already eager)
 - `Labels.numpy()` - Uses fast path when lazy (no object creation)
+- `Labels.to_dataframe()` - Uses fast path when lazy (no object creation)
+
+**Fast statistics (O(1) for lazy-loaded Labels):**
+
+- `Labels.n_user_instances` - Total number of user-labeled instances
+- `Labels.n_pred_instances` - Total number of predicted instances
+- `Labels.n_frames_per_video()` - Dictionary mapping videos to frame counts
+- `Labels.n_instances_per_track()` - Dictionary mapping tracks to instance counts
 
 ### NWB Format (.nwb)
 
