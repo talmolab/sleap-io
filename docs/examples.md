@@ -4,14 +4,11 @@ This page provides practical examples for common tasks with sleap-io. Each examp
 
 !!! info "Prerequisites"
 
-    All examples assume you have sleap-io installed:
-    ```bash
-    pip install sleap-io
-    ```
+    All examples assume you have sleap-io installed. See the **[Installation Guide](install.md)** for options including `uv`, `pip`, and development setup.
 
-    Or run any example script directly with [`uv`](https://docs.astral.sh/uv/):
+    Quick start with [`uv`](https://docs.astral.sh/uv/) (recommended):
     ```bash
-    # Save any example to a file (e.g., example.py)
+    # Run any example script directly (no install needed)
     uv run --with sleap-io example.py
     ```
 
@@ -390,6 +387,44 @@ labels.save("labels.v002.slp")
 !!! note "See also"
     [`Labels.replace_filenames`](model.md#sleap_io.Labels.replace_filenames): Additional path manipulation options
 
+### Copy labels
+
+Create deep copies of labels with control over video backend behavior.
+
+```python title="copy_labels.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_file("labels.slp")
+
+# Default: preserves each video's current open_backend setting
+labels_copy = labels.copy()
+
+# Prevent file handles from being created (useful for batch processing)
+labels_copy = labels.copy(open_videos=False)
+
+# Force all videos to auto-open when frames are accessed
+labels_copy = labels.copy(open_videos=True)
+
+# Filtering done separately (cleaner separation of concerns)
+labels_copy = labels.copy()
+labels_copy.remove_predictions()
+labels_copy.suggestions = []
+```
+
+!!! tip "Non-mutating save"
+    By default, save operations don't mutate the original `Labels` object:
+    ```python
+    # Original labels are NOT modified (safer)
+    labels.save("output.pkg.slp", embed="user")
+    assert labels.videos[0].filename != "output.pkg.slp"  # Still points to original
+
+    # With embed_inplace=True: original labels ARE modified (faster)
+    labels.save("output.pkg.slp", embed="user", embed_inplace=True)
+    ```
+
+!!! note "See also"
+    [`Labels.copy`](model.md#sleap_io.Labels.copy): Full documentation of copy options
+
 ### Replace skeleton
 
 Change the skeleton structure while preserving existing annotations.
@@ -579,9 +614,6 @@ last_frame = video[-1]
 
     ```bash
     # imageio-ffmpeg is included by default
-    pip install sleap-io[opencv]  # OpenCV backend (fastest)
-    pip install sleap-io[pyav]     # PyAV backend (balanced)
-    pip install sleap-io[all]      # All optional backends
     ```
 
     To check which backends are available or get installation help:
@@ -642,9 +674,6 @@ print(sio.get_default_video_plugin())  # "FFMPEG"
     - ✅ Generally faster for frame reading
     - ❌ May have compatibility issues on some platforms
     - ❌ Frame seeking may be less accurate for some codecs
-    - 📦 Requires: `pip install sleap-io[opencv]` or `sleap-io[all]`
-
-    **imageio-ffmpeg** (`FFMPEG`) - *bundled by default*:
 
     - ✅ Works out of the box (bundled with sleap-io)
     - ✅ More reliable and cross-platform
@@ -655,9 +684,6 @@ print(sio.get_default_video_plugin())  # "FFMPEG"
     **PyAV** (`pyav`):
 
     - ✅ Alternative FFMPEG wrapper with different performance characteristics
-    - 📦 Requires: `pip install sleap-io[pyav]` or `sleap-io[all]`
-
-#### Image encoding backends for embedded frames
 
 Choose which backend to use when encoding frames in `.pkg.slp` files with `sio.save_slp()`.
 
@@ -689,9 +715,6 @@ print(sio.get_default_image_plugin())  # "opencv"
 
     - ✅ Generally faster encoding
     - Encodes in BGR channel order
-    - 📦 Requires: `pip install sleap-io[opencv]` or `sleap-io[all]`
-
-    **imageio** (`imageio`):
 
     - ✅ Always installed with sleap-io (default)
     - ✅ More reliable and cross-platform
