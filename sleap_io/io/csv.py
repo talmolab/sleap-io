@@ -572,7 +572,11 @@ def _write_metadata(labels: Labels, filename: Path) -> None:
 
     # Suggestions: video index + frame indices
     for suggestion in labels.suggestions:
-        video_idx = labels.videos.index(suggestion.video) if suggestion.video else None
+        # Check for None explicitly (not truthiness, as Video.__bool__ may be False)
+        if suggestion.video is not None:
+            video_idx = labels.videos.index(suggestion.video)
+        else:
+            video_idx = None
         metadata["suggestions"].append(
             {
                 "video_idx": video_idx,

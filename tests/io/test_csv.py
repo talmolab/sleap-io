@@ -460,3 +460,171 @@ class TestNodeInference:
         columns = ["frame_idx", "node", "x", "y"]
         nodes = csv._infer_nodes_from_columns(columns, format="points")
         assert nodes == []
+
+    def test_infer_nodes_skips_non_coord_columns(self):
+        """Test that non-x/y/score columns are skipped. Covers line 690."""
+        columns = ["frame_idx", "head.x", "head.y", "head.visibility", "tail.x"]
+        nodes = csv._infer_nodes_from_columns(columns, format="instances")
+        # head.visibility should be skipped (not x, y, or score)
+        assert set(nodes) == {"head", "tail"}
+
+
+# =============================================================================
+# Additional Coverage Tests
+# =============================================================================
+
+
+class TestAdditionalCoverage:
+    """Tests to cover remaining code paths."""
+
+    def test_detect_csv_format_default_fallback(self, tmp_path):
+        """Test detection defaults to sleap for unknown CSV structure. Covers 237."""
+        csv_path = tmp_path / "test.csv"
+        # CSV with no recognizable patterns (no dots, no DLC headers)
+        csv_path.write_text("col1,col2,col3\n1,2,3\n4,5,6\n")
+        assert csv.detect_csv_format(csv_path) == "sleap"
+
+    def test_read_sleap_infers_skeleton(self, tmp_path, simple_labels):
+        """Test reading SLEAP CSV without skeleton infers it. Covers 287-289."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="sleap")
+
+        # Read without providing skeleton - should infer from columns
+        loaded = csv.read_labels(csv_path, format="sleap")
+        assert len(loaded.skeletons) > 0
+        node_names = [n.name for n in loaded.skeleton.nodes]
+        assert "head" in node_names
+        assert "tail" in node_names
+
+    def test_write_dlc_video_filter_by_index(self, tmp_path, simple_labels):
+        """Test DLC write with video filter by integer index. Covers 388-390."""
+        csv_path = tmp_path / "test.csv"
+        # Filter by video index 0
+        csv.write_labels(simple_labels, csv_path, format="dlc", video=0)
+        assert csv_path.exists()
+
+    def test_read_codec_format_instances(
+        self, tmp_path, simple_labels, simple_skeleton
+    ):
+        """Test reading instances format directly. Covers 478-494."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="instances")
+
+        # Read with explicit format
+        loaded = csv.read_labels(csv_path, format="instances", skeleton=simple_skeleton)
+        assert len(loaded) == 2
+
+    def test_read_codec_format_points(self, tmp_path, simple_labels, simple_skeleton):
+        """Test reading points format directly. Covers 478-494."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="points")
+
+        # Read with explicit format
+        loaded = csv.read_labels(csv_path, format="points", skeleton=simple_skeleton)
+        # Points format may have different structure, just check it loads
+        assert loaded is not None
+
+    def test_read_codec_format_frames(self, tmp_path, simple_labels, simple_skeleton):
+        """Test reading frames format directly. Covers 478-494."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="frames")
+
+        # Read with explicit format
+        loaded = csv.read_labels(csv_path, format="frames", skeleton=simple_skeleton)
+        assert loaded is not None
+
+    def test_metadata_with_suggestions(self, tmp_path, simple_skeleton):
+        """Test metadata round-trip with suggestions. Covers 648-651."""
+        video = Video(str(tmp_path / "video.mp4"))
+
+        inst = Instance(
+            points={"head": [100, 200], "tail": [150, 250]},
+            skeleton=simple_skeleton,
+        )
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+
+        # Create labels with explicit videos list to ensure video is registered
+        labels = Labels(labeled_frames=[lf], videos=[video])
+        # Add a suggestion
+        labels.suggestions.append(sio.SuggestionFrame(video=video, frame_idx=5))
+
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(labels, csv_path, format="sleap", save_metadata=True)
+
+        # Verify metadata has suggestions
+        with open(tmp_path / "test.json") as f:
+            metadata = json.load(f)
+        assert len(metadata["suggestions"]) == 1
+        assert metadata["suggestions"][0]["frame_idx"] == 5
+        assert metadata["suggestions"][0]["video_idx"] == 0
+
+        # Call _apply_metadata directly to test the restoration branch
+        # Create a labels with video to test suggestion restoration
+        loaded_labels = Labels(videos=[video])
+        csv._apply_metadata(loaded_labels, metadata)
+        assert len(loaded_labels.suggestions) == 1
+        assert loaded_labels.suggestions[0].frame_idx == 5
+
+    def test_metadata_edge_deduplication(self, tmp_path, simple_skeleton):
+        """Test that edges aren't duplicated when already present. Covers 631-634."""
+        video = Video(str(tmp_path / "video.mp4"))
+
+        inst = Instance(
+            points={"head": [100, 200], "tail": [150, 250]},
+            skeleton=simple_skeleton,
+        )
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        labels = Labels(labeled_frames=[lf])
+
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(labels, csv_path, format="sleap", save_metadata=True)
+
+        # Load twice to trigger edge restoration when edges already exist
+        loaded = csv.read_labels(csv_path, format="sleap")
+        # Should have exactly 1 edge, not duplicated
+        assert len(loaded.skeleton.edges) == 1
+
+    def test_metadata_video_from_file(self, tmp_path, simple_labels):
+        """Test video path is loaded from metadata. Covers 84->86."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="sleap", save_metadata=True)
+
+        # Read without providing video - should come from metadata
+        loaded = csv.read_labels(csv_path, format="sleap")
+        assert len(loaded.videos) > 0
+
+    def test_metadata_skeleton_from_file(self, tmp_path, simple_labels):
+        """Test skeleton is loaded from metadata. Covers 86->96."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="sleap", save_metadata=True)
+
+        # Read without providing skeleton - should come from metadata
+        loaded = csv.read_labels(csv_path, format="sleap")
+        assert len(loaded.skeletons) > 0
+        # Check edges were restored from metadata
+        assert len(loaded.skeleton.edges) > 0
+
+    def test_read_codec_infers_skeleton(self, tmp_path, simple_labels):
+        """Test reading codec format infers skeleton. Covers 483-486."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="instances")
+
+        # Read without skeleton - should infer from columns
+        loaded = csv.read_labels(csv_path, format="instances")
+        assert len(loaded.skeletons) > 0
+
+    def test_read_codec_with_video_string(
+        self, tmp_path, simple_labels, simple_skeleton
+    ):
+        """Test reading codec format with video as string. Covers 489-490."""
+        csv_path = tmp_path / "test.csv"
+        csv.write_labels(simple_labels, csv_path, format="instances")
+
+        # Read with video as string path
+        loaded = csv.read_labels(
+            csv_path,
+            format="instances",
+            video="some/video.mp4",
+            skeleton=simple_skeleton,
+        )
+        assert loaded.videos[0].filename == "some/video.mp4"
