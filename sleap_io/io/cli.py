@@ -57,10 +57,11 @@ INPUT_FORMATS = [
     "alphatracker",
     "jabs",
     "dlc",
+    "csv",
     "ultralytics",
     "leap",
 ]
-OUTPUT_FORMATS = ["slp", "nwb", "coco", "labelstudio", "jabs", "ultralytics"]
+OUTPUT_FORMATS = ["slp", "nwb", "coco", "labelstudio", "jabs", "ultralytics", "csv"]
 
 # Extensions that require explicit --from format
 AMBIGUOUS_EXTENSIONS = {".json", ".h5"}
@@ -78,6 +79,7 @@ OUTPUT_EXTENSION_TO_FORMAT = {
     ".slp": "slp",
     ".nwb": "nwb",
     ".json": "labelstudio",  # Default JSON output to labelstudio
+    ".csv": "csv",
 }
 
 
@@ -1234,6 +1236,24 @@ def _infer_output_format(path: Path) -> Optional[str]:
     type=click.Choice(["user", "all", "suggestions", "source"]),
     help="Embed frames in output (SLP format only).",
 )
+@click.option(
+    "--csv-format",
+    "csv_format",
+    type=click.Choice(["sleap", "dlc", "points", "instances", "frames"]),
+    default="sleap",
+    help="CSV output format. Default: sleap.",
+)
+@click.option(
+    "--scorer",
+    default="sleap-io",
+    help="Scorer name for DLC CSV output.",
+)
+@click.option(
+    "--save-metadata/--no-metadata",
+    "save_metadata",
+    default=False,
+    help="Save JSON metadata file for round-trip support (CSV only).",
+)
 def convert(
     input_arg: Optional[Path],
     input_opt: Optional[Path],
@@ -1241,6 +1261,9 @@ def convert(
     input_format: Optional[str],
     output_format: Optional[str],
     embed: Optional[str],
+    csv_format: str,
+    scorer: str,
+    save_metadata: bool,
 ):
     """Convert between pose data formats.
 
@@ -1327,10 +1350,20 @@ def convert(
 
     # Save the output file
     try:
-        save_kwargs = {"format": resolved_output_format}
+        save_kwargs: dict = {"format": resolved_output_format}
         if embed is not None:
             save_kwargs["embed"] = embed
-        io_main.save_file(labels, str(output_path), **save_kwargs)
+        # Handle CSV-specific options
+        if resolved_output_format == "csv":
+            io_main.save_csv(
+                labels,
+                str(output_path),
+                format=csv_format,
+                scorer=scorer,
+                save_metadata=save_metadata,
+            )
+        else:
+            io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
@@ -1339,6 +1372,10 @@ def convert(
     click.echo(f"Format: {resolved_input_format} -> {resolved_output_format}")
     if embed:
         click.echo(f"Embedded frames: {embed}")
+    if resolved_output_format == "csv":
+        click.echo(f"CSV format: {csv_format}")
+        if save_metadata:
+            click.echo("Metadata saved: yes")
 
 
 @cli.command()

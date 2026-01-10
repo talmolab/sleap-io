@@ -289,6 +289,107 @@ Load predictions from [DeepLabCut](http://www.mackenziemathislab.org/deeplabcut)
 
 ::: sleap_io.io.main.load_dlc
 
+### CSV Format (.csv)
+
+sleap-io provides comprehensive CSV support for reading and writing pose tracking data, enabling interoperability with spreadsheet tools, custom pipelines, and other pose estimation frameworks.
+
+#### Supported CSV Formats
+
+| Format | Description | Use Case |
+|--------|-------------|----------|
+| `sleap` | SLEAP Analysis CSV (default) | Native SLEAP exports, one row per instance |
+| `dlc` | DeepLabCut format | DLC compatibility, multi-header structure |
+| `points` | One row per point | Most normalized, database-friendly |
+| `instances` | One row per instance | Compact, analysis-friendly |
+| `frames` | One row per frame | Wide format, all instances in columns |
+
+#### Basic Usage
+
+```python
+import sleap_io as sio
+
+# Load CSV (auto-detects format)
+labels = sio.load_csv("predictions.csv")
+
+# Save in SLEAP Analysis format (default)
+sio.save_csv(labels, "output.csv")
+
+# Save in DLC format
+sio.save_csv(labels, "dlc_output.csv", format="dlc", scorer="MyModel")
+
+# Save with metadata for full round-trip support
+sio.save_csv(labels, "output.csv", save_metadata=True)
+# Creates: output.csv + output.json (metadata)
+```
+
+#### Round-Trip with Metadata
+
+CSV files cannot store all Labels information (skeleton edges, symmetries, suggestions). To enable full round-trip reconstruction, use `save_metadata=True`:
+
+```python
+# Save with metadata sidecar file
+sio.save_csv(labels, "data.csv", save_metadata=True)
+# Creates: data.csv and data.json
+
+# Load back with full metadata
+labels = sio.load_csv("data.csv")
+# Automatically loads data.json if present
+```
+
+The metadata JSON file contains:
+
+- Video paths and backend metadata
+- Skeleton definitions (nodes, edges, symmetries)
+- Track names
+- Suggested frames
+- Provenance information
+
+#### Format-Specific Examples
+
+##### SLEAP Analysis Format
+
+The default format matches SLEAP's "Export Analysis CSV" output:
+
+```python
+# Write SLEAP format
+sio.save_csv(labels, "analysis.csv", format="sleap")
+```
+
+Output columns: `track, frame_idx, instance.score, {node}.x, {node}.y, {node}.score, ...`
+
+##### DeepLabCut Format
+
+For compatibility with DeepLabCut workflows:
+
+```python
+# Write DLC format with custom scorer name
+sio.save_csv(labels, "dlc_output.csv", format="dlc", scorer="MyNetwork")
+
+# Multi-animal DLC format (auto-detected from tracks)
+sio.save_csv(multi_animal_labels, "multi_dlc.csv", format="dlc")
+```
+
+DLC format uses multi-row headers (scorer, bodyparts, coords) and is compatible with DLC's analysis tools.
+
+##### DataFrame Codec Formats
+
+For custom analysis pipelines, use the normalized formats from the DataFrame codec:
+
+```python
+# Points format: most normalized (one row per point)
+sio.save_csv(labels, "points.csv", format="points")
+
+# Instances format: one row per instance
+sio.save_csv(labels, "instances.csv", format="instances")
+
+# Frames format: one row per frame (wide format)
+sio.save_csv(labels, "frames.csv", format="frames")
+```
+
+::: sleap_io.io.main.load_csv
+
+::: sleap_io.io.main.save_csv
+
 ### AlphaTracker Format
 
 Load predictions from [AlphaTracker](https://github.com/yinaanyachukwu/AlphaTracker), a tracking system for socially-housed animals.
@@ -399,14 +500,16 @@ Different formats have varying capabilities:
 | NWB (.nwb) | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ |
 | JABS (.h5) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Label Studio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| CSV (.csv) | ✅ | ✅ | ❌ | ✅** | ✅ | ✅ | ❌ |
 | DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
 | AlphaTracker | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
 | LEAP (.mat) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅** | ❌ | ✅ |
+| COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅*** | ❌ | ✅ |
 | Ultralytics | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
 
 *NWB can embed videos with `annotations_export` format
-**COCO tracks are stored via `attributes.object_id` (CVAT-compatible)
+**CSV skeleton edges/symmetries preserved via optional metadata JSON sidecar
+***COCO tracks are stored via `attributes.object_id` (CVAT-compatible)
 
 ## See Also
 
