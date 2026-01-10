@@ -3376,3 +3376,106 @@ def test_embed_inplace_via_save_slp(tmp_path, slp_real_data):
     assert base_labels.video.filename != original_video_filename
     assert base_labels.video.filename == labels_path
     assert type(base_labels.video.backend) is HDF5Video
+
+
+def test_fps_serialization_mediavideo(tmp_path, slp_real_data):
+    """Test FPS is serialized and restored for MediaVideo."""
+    labels = read_labels(slp_real_data)
+
+    # MediaVideo should have FPS from container
+    assert labels.video.fps == 15.0
+
+    # Save and reload
+    labels_path = str(tmp_path / "test_fps.slp")
+    save_slp(labels, labels_path)
+
+    # Reload and check FPS is preserved
+    reloaded = read_labels(labels_path)
+    assert reloaded.video.fps == 15.0
+
+
+def test_fps_serialization_imagevideo(tmp_path, centered_pair_frame_paths):
+    """Test FPS is serialized and restored for ImageVideo."""
+    # Create labels with ImageVideo
+    video = Video.from_filename(centered_pair_frame_paths)
+    labels = Labels(videos=[video])
+
+    # ImageVideo has no inherent FPS
+    assert video.fps is None
+
+    # Set FPS explicitly
+    video.fps = 25.0
+    assert video.fps == 25.0
+
+    # Save and reload
+    labels_path = str(tmp_path / "test_fps_img.slp")
+    save_slp(labels, labels_path)
+
+    reloaded = read_labels(labels_path)
+    assert reloaded.video.fps == 25.0
+
+
+def test_fps_embedded_video_inheritance(tmp_path, slp_real_data):
+    """Test FPS is preserved when embedding frames."""
+    labels = read_labels(slp_real_data)
+
+    # Original video should have FPS
+    assert labels.video.fps == 15.0
+
+    # Save as package with embedded frames
+    pkg_path = str(tmp_path / "test_fps.pkg.slp")
+    save_slp(labels, pkg_path, embed="user")
+
+    # Reload and check FPS is preserved in embedded video
+    reloaded = read_labels(pkg_path)
+    assert type(reloaded.video.backend) is HDF5Video
+    assert reloaded.video.fps == 15.0
+
+
+def test_fps_in_video_to_dict(slp_real_data):
+    """Test that video_to_dict includes FPS."""
+    from sleap_io.io.slp import video_to_dict
+
+    labels = read_labels(slp_real_data)
+    video = labels.video
+
+    video_dict = video_to_dict(video)
+    assert "fps" in video_dict["backend"]
+    assert video_dict["backend"]["fps"] == 15.0
+
+
+def test_fps_hdf5_attrs(tmp_path, slp_real_data):
+    """Test FPS is stored in HDF5 attributes for embedded videos."""
+    labels = read_labels(slp_real_data)
+    assert labels.video.fps == 15.0
+
+    # Save as package
+    pkg_path = str(tmp_path / "test_fps.pkg.slp")
+    save_slp(labels, pkg_path, embed="user")
+
+    # Check HDF5 attributes directly
+    with h5py.File(pkg_path, "r") as f:
+        # Find the video dataset
+        video_ds = f["video0/video"]
+        assert "fps" in video_ds.attrs
+        assert video_ds.attrs["fps"] == 15.0
+
+
+def test_fps_backward_compatibility(tmp_path, slp_real_data):
+    """Test that files without FPS field load correctly."""
+    labels = read_labels(slp_real_data)
+
+    # Save normally
+    labels_path = str(tmp_path / "test.slp")
+    save_slp(labels, labels_path)
+
+    # Remove FPS from the saved file to simulate old format
+    with h5py.File(labels_path, "r+") as f:
+        videos_data = json.loads(f["videos_json"][0])
+        del videos_data["backend"]["fps"]
+        del f["videos_json"]
+        f.create_dataset("videos_json", data=[json.dumps(videos_data)])
+
+    # Should still load - FPS comes from container for MediaVideo
+    reloaded = read_labels(labels_path)
+    assert reloaded.video.fps == 15.0  # Read from container

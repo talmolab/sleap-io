@@ -1154,3 +1154,119 @@ def test_no_image_backends_warning(centered_pair_frame_paths, monkeypatch):
         # Restore original state
         sio.set_default_image_plugin(original)
         video_reading._AVAILABLE_IMAGE_BACKENDS = original_backends
+
+
+def test_mediavideo_fps(centered_pair_low_quality_path):
+    """Test FPS property on MediaVideo backend."""
+    # Test with FFMPEG backend
+    backend = VideoBackend.from_filename(
+        centered_pair_low_quality_path, plugin="FFMPEG"
+    )
+    assert isinstance(backend, MediaVideo)
+    assert backend.fps == 15.0
+
+    # Test with OpenCV backend
+    backend = VideoBackend.from_filename(
+        centered_pair_low_quality_path, plugin="opencv"
+    )
+    assert isinstance(backend, MediaVideo)
+    assert backend.fps == 15.0
+
+    # Test that FPS can be overridden
+    backend.fps = 30.0
+    assert backend.fps == 30.0
+
+    # Test that None resets to reading from file
+    backend.fps = None
+    assert backend.fps == 15.0
+
+
+def test_fps_setter_validation():
+    """Test that FPS setter validates input."""
+    backend = ImageVideo.__new__(ImageVideo)
+    backend._fps = None
+
+    # Valid values
+    backend.fps = 30.0
+    assert backend.fps == 30.0
+
+    backend.fps = 0.5
+    assert backend.fps == 0.5
+
+    backend.fps = None
+    assert backend.fps is None
+
+    # Invalid values
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        backend.fps = 0
+
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        backend.fps = -10.0
+
+
+def test_imagevideo_fps(centered_pair_frame_paths):
+    """Test FPS property on ImageVideo backend."""
+    backend = VideoBackend.from_filename(centered_pair_frame_paths)
+    assert isinstance(backend, ImageVideo)
+
+    # ImageVideo has no inherent FPS
+    assert backend.fps is None
+
+    # Can set FPS explicitly
+    backend.fps = 25.0
+    assert backend.fps == 25.0
+
+
+def test_hdf5video_fps_from_attrs(tmp_path):
+    """Test FPS property on HDF5Video with fps attribute."""
+    # Create HDF5 file with fps attribute
+    h5_path = tmp_path / "test_fps.h5"
+    with h5py.File(h5_path, "w") as f:
+        grp = f.create_group("video0")
+        ds = grp.create_dataset("video", shape=(5, 100, 100, 3), dtype="uint8")
+        ds.attrs["format"] = "hdf5"
+        ds.attrs["fps"] = 24.0
+        ds.attrs["height"] = 100
+        ds.attrs["width"] = 100
+        ds.attrs["channels"] = 3
+
+    backend = VideoBackend.from_filename(h5_path, dataset="video0/video")
+    assert isinstance(backend, HDF5Video)
+    assert backend.fps == 24.0
+
+
+def test_hdf5video_fps_explicit(tmp_path, centered_pair_low_quality_path):
+    """Test explicit FPS setting on HDF5Video."""
+    # Create simple HDF5 video without fps attribute
+    source = VideoBackend.from_filename(centered_pair_low_quality_path)
+    imgs = source[:3]
+
+    h5_path = tmp_path / "test.h5"
+    with h5py.File(h5_path, "w") as f:
+        f.create_dataset("images", data=imgs)
+
+    backend = VideoBackend.from_filename(h5_path)
+    assert isinstance(backend, HDF5Video)
+    assert backend.fps is None
+
+    # Set FPS explicitly
+    backend.fps = 30.0
+    assert backend.fps == 30.0
+
+
+def test_tiffvideo_fps(tmp_path):
+    """Test FPS property on TiffVideo backend."""
+    # Create multi-page TIFF
+    tiff_path = tmp_path / "test.tif"
+    frames = np.random.randint(0, 255, (5, 100, 100), dtype=np.uint8)
+    iio.imwrite(tiff_path, frames)
+
+    backend = VideoBackend.from_filename(tiff_path)
+    assert isinstance(backend, TiffVideo)
+
+    # TiffVideo has no inherent FPS
+    assert backend.fps is None
+
+    # Can set FPS explicitly
+    backend.fps = 10.0
+    assert backend.fps == 10.0

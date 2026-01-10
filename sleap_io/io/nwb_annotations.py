@@ -319,7 +319,7 @@ def sleap_video_to_nwb_image_series(
     else:
         height, width = 0, 0
 
-    fps = getattr(sleap_video, "fps", 30.0)
+    fps = sleap_video.fps if sleap_video.fps is not None else 30.0
 
     starting_frame = list(range(len(filename)))  # needs to match length of filenames
 

@@ -196,6 +196,12 @@ def make_video(
                 input_format=backend_metadata.get("input_format", None),
                 format=backend_metadata.get("format", None),
             )
+
+            # Restore FPS from metadata for backends that don't read it from file
+            # (ImageVideo, HDF5Video, TiffVideo). MediaVideo reads from container.
+            fps = backend_metadata.get("fps")
+            if fps is not None and not isinstance(backend, MediaVideo):
+                backend._fps = fps
         except Exception:
             backend = None
 
@@ -267,6 +273,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "bgr": True,
             "dataset": "",
             "input_format": "",
+            "fps": video.fps,
         }
     elif type(video.backend) is HDF5Video:
         # Determine if we should use self-reference or external reference
@@ -286,6 +293,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "convert_range": False,
             "has_embedded_images": video.backend.has_embedded_images,
             "grayscale": video.grayscale,
+            "fps": video.fps,
         }
     elif type(video.backend) is ImageVideo:
         if video.shape is not None:
@@ -301,6 +309,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "width_": width,
             "channels_": channels,
             "grayscale": video.grayscale,
+            "fps": video.fps,
         }
     elif type(video.backend) is TiffVideo:
         result["backend"] = {
@@ -310,6 +319,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "grayscale": video.grayscale,
             "keep_open": video.backend.keep_open,
             "format": video.backend.format,
+            "fps": video.fps,
         }
 
     # Add source_video metadata if present
@@ -528,6 +538,10 @@ def process_and_embed_frames(
                 ds.attrs["channels"],
             ) = video_shape
 
+            # Store FPS if available (inherited from source video)
+            if video.fps is not None:
+                ds.attrs["fps"] = video.fps
+
             # Store frame indices
             f.create_dataset(f"{group}/frame_numbers", data=frame_inds)
 
@@ -604,6 +618,9 @@ def _create_empty_embedded_video(
             ds.attrs["height"] = video_shape[1]
             ds.attrs["width"] = video_shape[2]
             ds.attrs["channels"] = video_shape[3]
+            # Store FPS if available
+            if video.fps is not None:
+                ds.attrs["fps"] = video.fps
 
         # Store source video metadata for restoration
         source_grp = f.require_group(f"{group}/source_video")
