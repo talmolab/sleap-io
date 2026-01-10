@@ -863,6 +863,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sleap_io.io.main.load_csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_csv
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sleap_io.io.main.save_csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_csv
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sleap_io.io.main.load_alphatracker" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2652,6 +2674,28 @@
     <span class="md-ellipsis">
       
         load_dlc
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sleap_io.io.main.load_csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_csv
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sleap_io.io.main.save_csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_csv
       
     </span>
   </a>
@@ -5150,6 +5194,466 @@ the skeleton.</p>
             </details>
     </div>
 
+</div><h3 id="csv-format-csv">CSV Format (.csv)<a class="headerlink" href="#csv-format-csv" title="Permanent link">&para;</a></h3>
+<p>sleap-io provides comprehensive CSV support for reading and writing pose tracking data, enabling interoperability with spreadsheet tools, custom pipelines, and other pose estimation frameworks.</p>
+<h4 id="supported-csv-formats">Supported CSV Formats<a class="headerlink" href="#supported-csv-formats" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Description</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sleap</code></td>
+<td>SLEAP Analysis CSV (default)</td>
+<td>Native SLEAP exports, one row per instance</td>
+</tr>
+<tr>
+<td><code>dlc</code></td>
+<td>DeepLabCut format</td>
+<td>DLC compatibility, multi-header structure</td>
+</tr>
+<tr>
+<td><code>points</code></td>
+<td>One row per point</td>
+<td>Most normalized, database-friendly</td>
+</tr>
+<tr>
+<td><code>instances</code></td>
+<td>One row per instance</td>
+<td>Compact, analysis-friendly</td>
+</tr>
+<tr>
+<td><code>frames</code></td>
+<td>One row per frame</td>
+<td>Wide format, all instances in columns</td>
+</tr>
+</tbody>
+</table>
+<h4 id="basic-usage_1">Basic Usage<a class="headerlink" href="#basic-usage_1" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Load CSV (auto-detects format)</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_csv</span><span class="p">(</span><span class="s2">&quot;predictions.csv&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Save in SLEAP Analysis format (default)</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.csv&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Save in DLC format</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;dlc_output.csv&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;dlc&quot;</span><span class="p">,</span> <span class="n">scorer</span><span class="o">=</span><span class="s2">&quot;MyModel&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Save with metadata for full round-trip support</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;output.csv&quot;</span><span class="p">,</span> <span class="n">save_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># Creates: output.csv + output.json (metadata)</span>
+</code></pre></div>
+<h4 id="round-trip-with-metadata">Round-Trip with Metadata<a class="headerlink" href="#round-trip-with-metadata" title="Permanent link">&para;</a></h4>
+<p>CSV files cannot store all Labels information (skeleton edges, symmetries, suggestions). To enable full round-trip reconstruction, use <code>save_metadata=True</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Save with metadata sidecar file</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;data.csv&quot;</span><span class="p">,</span> <span class="n">save_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Creates: data.csv and data.json</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Load back with full metadata</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_csv</span><span class="p">(</span><span class="s2">&quot;data.csv&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Automatically loads data.json if present</span>
+</code></pre></div>
+<p>The metadata JSON file contains:</p>
+<ul>
+<li>Video paths and backend metadata</li>
+<li>Skeleton definitions (nodes, edges, symmetries)</li>
+<li>Track names</li>
+<li>Suggested frames</li>
+<li>Provenance information</li>
+</ul>
+<h4 id="format-specific-examples">Format-Specific Examples<a class="headerlink" href="#format-specific-examples" title="Permanent link">&para;</a></h4>
+<h5 id="sleap-analysis-format">SLEAP Analysis Format<a class="headerlink" href="#sleap-analysis-format" title="Permanent link">&para;</a></h5>
+<p>The default format matches SLEAP's "Export Analysis CSV" output:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Write SLEAP format</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;analysis.csv&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;sleap&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>Output columns: <code>track, frame_idx, instance.score, {node}.x, {node}.y, {node}.score, ...</code></p>
+<h5 id="deeplabcut-format">DeepLabCut Format<a class="headerlink" href="#deeplabcut-format" title="Permanent link">&para;</a></h5>
+<p>For compatibility with DeepLabCut workflows:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Write DLC format with custom scorer name</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;dlc_output.csv&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;dlc&quot;</span><span class="p">,</span> <span class="n">scorer</span><span class="o">=</span><span class="s2">&quot;MyNetwork&quot;</span><span class="p">)</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Multi-animal DLC format (auto-detected from tracks)</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">multi_animal_labels</span><span class="p">,</span> <span class="s2">&quot;multi_dlc.csv&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;dlc&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>DLC format uses multi-row headers (scorer, bodyparts, coords) and is compatible with DLC's analysis tools.</p>
+<h5 id="dataframe-codec-formats">DataFrame Codec Formats<a class="headerlink" href="#dataframe-codec-formats" title="Permanent link">&para;</a></h5>
+<p>For custom analysis pipelines, use the normalized formats from the DataFrame codec:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Points format: most normalized (one row per point)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;points.csv&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;points&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Instances format: one row per instance</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;instances.csv&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;instances&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Frames format: one row per frame (wide format)</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;frames.csv&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;frames&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="sleap_io.io.main.load_csv" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">load_csv</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.main.load_csv" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Load pose data from a CSV file.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>filename</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to CSV file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>format</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>CSV format. One of "auto", "sleap", "dlc", "points", "instances",
+"frames". Default "auto" detects format from file content.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;auto&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>video</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a>, <span title="str">str</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Video to associate with data. Can be Video object or path string.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>skeleton</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Skeleton to use. If None, inferred from columns or metadata.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../reference/sleap_io/model/labels/#sleap_io.model.labels.Labels">Labels</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Labels object.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>If a metadata JSON file exists alongside the CSV (same base name with
+.json extension), it will be automatically loaded to restore full
+Labels context including skeleton edges, symmetries, and provenance.</p>
+</details>
+
+<details class="see-also" open>
+  <summary>See Also</summary>
+  <p>save_csv: Save Labels to CSV file.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/io/main.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-417" name="__codelineno-0-417"></a><a href="#__codelineno-0-417"><span class="linenos" data-linenos="417 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_csv</span><span class="p">(</span>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><a href="#__codelineno-0-418"><span class="linenos" data-linenos="418 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><a href="#__codelineno-0-419"><span class="linenos" data-linenos="419 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><a href="#__codelineno-0-420"><span class="linenos" data-linenos="420 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Video&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><a href="#__codelineno-0-421"><span class="linenos" data-linenos="421 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;Skeleton&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><a href="#__codelineno-0-422"><span class="linenos" data-linenos="422 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Labels&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><a href="#__codelineno-0-423"><span class="linenos" data-linenos="423 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load pose data from a CSV file.</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a><a href="#__codelineno-0-424"><span class="linenos" data-linenos="424 "></span></a>
+<a id="__codelineno-0-425" name="__codelineno-0-425"></a><a href="#__codelineno-0-425"><span class="linenos" data-linenos="425 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-426" name="__codelineno-0-426"></a><a href="#__codelineno-0-426"><span class="linenos" data-linenos="426 "></span></a><span class="sd">        filename: Path to CSV file.</span>
+<a id="__codelineno-0-427" name="__codelineno-0-427"></a><a href="#__codelineno-0-427"><span class="linenos" data-linenos="427 "></span></a><span class="sd">        format: CSV format. One of &quot;auto&quot;, &quot;sleap&quot;, &quot;dlc&quot;, &quot;points&quot;, &quot;instances&quot;,</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><a href="#__codelineno-0-428"><span class="linenos" data-linenos="428 "></span></a><span class="sd">            &quot;frames&quot;. Default &quot;auto&quot; detects format from file content.</span>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a><a href="#__codelineno-0-429"><span class="linenos" data-linenos="429 "></span></a><span class="sd">        video: Video to associate with data. Can be Video object or path string.</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><a href="#__codelineno-0-430"><span class="linenos" data-linenos="430 "></span></a><span class="sd">        skeleton: Skeleton to use. If None, inferred from columns or metadata.</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a><a href="#__codelineno-0-431"><span class="linenos" data-linenos="431 "></span></a>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><a href="#__codelineno-0-432"><span class="linenos" data-linenos="432 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><a href="#__codelineno-0-433"><span class="linenos" data-linenos="433 "></span></a><span class="sd">        Labels object.</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><a href="#__codelineno-0-434"><span class="linenos" data-linenos="434 "></span></a>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><a href="#__codelineno-0-435"><span class="linenos" data-linenos="435 "></span></a><span class="sd">    Notes:</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a><a href="#__codelineno-0-436"><span class="linenos" data-linenos="436 "></span></a><span class="sd">        If a metadata JSON file exists alongside the CSV (same base name with</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><a href="#__codelineno-0-437"><span class="linenos" data-linenos="437 "></span></a><span class="sd">        .json extension), it will be automatically loaded to restore full</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><a href="#__codelineno-0-438"><span class="linenos" data-linenos="438 "></span></a><span class="sd">        Labels context including skeleton edges, symmetries, and provenance.</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a><a href="#__codelineno-0-439"><span class="linenos" data-linenos="439 "></span></a>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><a href="#__codelineno-0-440"><span class="linenos" data-linenos="440 "></span></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><a href="#__codelineno-0-441"><span class="linenos" data-linenos="441 "></span></a><span class="sd">        save_csv: Save Labels to CSV file.</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a><a href="#__codelineno-0-442"><span class="linenos" data-linenos="442 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a><a href="#__codelineno-0-443"><span class="linenos" data-linenos="443 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">csv</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a><a href="#__codelineno-0-444"><span class="linenos" data-linenos="444 "></span></a>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a><a href="#__codelineno-0-445"><span class="linenos" data-linenos="445 "></span></a>    <span class="k">return</span> <span class="n">csv</span><span class="o">.</span><span class="n">read_labels</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="n">skeleton</span><span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="sleap_io.io.main.save_csv" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sleap&#39;</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_score</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">scorer</span><span class="o">=</span><span class="s1">&#39;sleap-io&#39;</span><span class="p">,</span> <span class="n">save_metadata</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.main.save_csv" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Save pose data to a CSV file.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>labels</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../reference/sleap_io/model/labels/#sleap_io.model.labels.Labels">Labels</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Labels to save.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>filename</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Output path.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>format</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>CSV format. One of "sleap" (default), "dlc", "points",
+"instances", "frames".</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;sleap&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>video</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a>, <span title="int">int</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Video to filter to. Can be Video object or integer index.
+If None, includes all videos.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>include_score</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Include confidence scores in output. Default True.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>scorer</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Scorer name for DLC format. Default "sleap-io".</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;sleap-io&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>save_metadata</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Save JSON metadata file alongside CSV that enables
+full round-trip reconstruction. Default False.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="see-also" open>
+  <summary>See Also</summary>
+  <p>load_csv: Load Labels from CSV file.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/io/main.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-448" name="__codelineno-0-448"></a><a href="#__codelineno-0-448"><span class="linenos" data-linenos="448 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_csv</span><span class="p">(</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a><a href="#__codelineno-0-449"><span class="linenos" data-linenos="449 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="s2">&quot;Labels&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a><a href="#__codelineno-0-450"><span class="linenos" data-linenos="450 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a><a href="#__codelineno-0-451"><span class="linenos" data-linenos="451 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sleap&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a><a href="#__codelineno-0-452"><span class="linenos" data-linenos="452 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Video&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a><a href="#__codelineno-0-453"><span class="linenos" data-linenos="453 "></span></a>    <span class="n">include_score</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a><a href="#__codelineno-0-454"><span class="linenos" data-linenos="454 "></span></a>    <span class="n">scorer</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sleap-io&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a><a href="#__codelineno-0-455"><span class="linenos" data-linenos="455 "></span></a>    <span class="n">save_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a><a href="#__codelineno-0-456"><span class="linenos" data-linenos="456 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a><a href="#__codelineno-0-457"><span class="linenos" data-linenos="457 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save pose data to a CSV file.</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a><a href="#__codelineno-0-458"><span class="linenos" data-linenos="458 "></span></a>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a><a href="#__codelineno-0-459"><span class="linenos" data-linenos="459 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a><a href="#__codelineno-0-460"><span class="linenos" data-linenos="460 "></span></a><span class="sd">        labels: Labels to save.</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a><a href="#__codelineno-0-461"><span class="linenos" data-linenos="461 "></span></a><span class="sd">        filename: Output path.</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a><a href="#__codelineno-0-462"><span class="linenos" data-linenos="462 "></span></a><span class="sd">        format: CSV format. One of &quot;sleap&quot; (default), &quot;dlc&quot;, &quot;points&quot;,</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a><a href="#__codelineno-0-463"><span class="linenos" data-linenos="463 "></span></a><span class="sd">            &quot;instances&quot;, &quot;frames&quot;.</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a><a href="#__codelineno-0-464"><span class="linenos" data-linenos="464 "></span></a><span class="sd">        video: Video to filter to. Can be Video object or integer index.</span>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a><a href="#__codelineno-0-465"><span class="linenos" data-linenos="465 "></span></a><span class="sd">            If None, includes all videos.</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a><a href="#__codelineno-0-466"><span class="linenos" data-linenos="466 "></span></a><span class="sd">        include_score: Include confidence scores in output. Default True.</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a><a href="#__codelineno-0-467"><span class="linenos" data-linenos="467 "></span></a><span class="sd">        scorer: Scorer name for DLC format. Default &quot;sleap-io&quot;.</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a><a href="#__codelineno-0-468"><span class="linenos" data-linenos="468 "></span></a><span class="sd">        save_metadata: Save JSON metadata file alongside CSV that enables</span>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a><a href="#__codelineno-0-469"><span class="linenos" data-linenos="469 "></span></a><span class="sd">            full round-trip reconstruction. Default False.</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a><a href="#__codelineno-0-470"><span class="linenos" data-linenos="470 "></span></a>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><a href="#__codelineno-0-471"><span class="linenos" data-linenos="471 "></span></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a><a href="#__codelineno-0-472"><span class="linenos" data-linenos="472 "></span></a><span class="sd">        load_csv: Load Labels from CSV file.</span>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><a href="#__codelineno-0-473"><span class="linenos" data-linenos="473 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a><a href="#__codelineno-0-474"><span class="linenos" data-linenos="474 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">csv</span>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a><a href="#__codelineno-0-475"><span class="linenos" data-linenos="475 "></span></a>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a><a href="#__codelineno-0-476"><span class="linenos" data-linenos="476 "></span></a>    <span class="n">csv</span><span class="o">.</span><span class="n">write_labels</span><span class="p">(</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a><a href="#__codelineno-0-477"><span class="linenos" data-linenos="477 "></span></a>        <span class="n">labels</span><span class="p">,</span>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a><a href="#__codelineno-0-478"><span class="linenos" data-linenos="478 "></span></a>        <span class="n">filename</span><span class="p">,</span>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><a href="#__codelineno-0-479"><span class="linenos" data-linenos="479 "></span></a>        <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">,</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a><a href="#__codelineno-0-480"><span class="linenos" data-linenos="480 "></span></a>        <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><a href="#__codelineno-0-481"><span class="linenos" data-linenos="481 "></span></a>        <span class="n">include_score</span><span class="o">=</span><span class="n">include_score</span><span class="p">,</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><a href="#__codelineno-0-482"><span class="linenos" data-linenos="482 "></span></a>        <span class="n">scorer</span><span class="o">=</span><span class="n">scorer</span><span class="p">,</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><a href="#__codelineno-0-483"><span class="linenos" data-linenos="483 "></span></a>        <span class="n">save_metadata</span><span class="o">=</span><span class="n">save_metadata</span><span class="p">,</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a><a href="#__codelineno-0-484"><span class="linenos" data-linenos="484 "></span></a>    <span class="p">)</span>
+</code></pre></div>
+            </details>
+    </div>
+
 </div><h3 id="alphatracker-format">AlphaTracker Format<a class="headerlink" href="#alphatracker-format" title="Permanent link">&para;</a></h3>
 <p>Load predictions from <a href="https://github.com/yinaanyachukwu/AlphaTracker">AlphaTracker</a>, a tracking system for socially-housed animals.</p>
 
@@ -6436,40 +6940,40 @@ while YAML files use a simplified human-readable format.</p>
 </ol>
 <h2 id="format-conversion-examples">Format Conversion Examples<a class="headerlink" href="#format-conversion-examples" title="Permanent link">&para;</a></h2>
 <h3 id="convert-between-formats">Convert Between Formats<a class="headerlink" href="#convert-between-formats" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Load from any supported format</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;data.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Save to different formats</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;data.nwb&quot;</span><span class="p">)</span>  <span class="c1"># NWB format</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;data.labelstudio.json&quot;</span><span class="p">)</span>  <span class="c1"># Label Studio</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;data_yolo/&quot;</span><span class="p">)</span>  <span class="c1"># Ultralytics YOLO</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Load from any supported format</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;data.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Save to different formats</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;data.nwb&quot;</span><span class="p">)</span>  <span class="c1"># NWB format</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;data.labelstudio.json&quot;</span><span class="p">)</span>  <span class="c1"># Label Studio</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;data_yolo/&quot;</span><span class="p">)</span>  <span class="c1"># Ultralytics YOLO</span>
 </code></pre></div>
 <h3 id="batch-conversion">Batch Conversion<a class="headerlink" href="#batch-conversion" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Convert all SLEAP files to NWB</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">for</span> <span class="n">slp_file</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.slp&quot;</span><span class="p">):</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">slp_file</span><span class="p">)</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">nwb_file</span> <span class="o">=</span> <span class="n">slp_file</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s2">&quot;.nwb&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">nwb_file</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Convert all SLEAP files to NWB</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="k">for</span> <span class="n">slp_file</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.slp&quot;</span><span class="p">):</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">slp_file</span><span class="p">)</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">nwb_file</span> <span class="o">=</span> <span class="n">slp_file</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s2">&quot;.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>    <span class="n">labels</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">nwb_file</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="round-trip-preservation">Round-Trip Preservation<a class="headerlink" href="#round-trip-preservation" title="Permanent link">&para;</a></h3>
 <p>Most formats preserve data during round-trip conversion:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Load original</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">labels_original</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;data.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Save and reload</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">labels_original</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;temp.nwb&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">labels_reloaded</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;temp.nwb&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Data is preserved</span>
-<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels_original</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels_reloaded</span><span class="p">)</span>
-<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="k">assert</span> <span class="n">labels_original</span><span class="o">.</span><span class="n">skeleton</span> <span class="o">==</span> <span class="n">labels_reloaded</span><span class="o">.</span><span class="n">skeleton</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Load original</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">labels_original</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;data.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Save and reload</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">labels_original</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;temp.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="n">labels_reloaded</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;temp.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Data is preserved</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels_original</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels_reloaded</span><span class="p">)</span>
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="k">assert</span> <span class="n">labels_original</span><span class="o">.</span><span class="n">skeleton</span> <span class="o">==</span> <span class="n">labels_reloaded</span><span class="o">.</span><span class="n">skeleton</span>
 </code></pre></div>
 <h2 id="format-limitations">Format Limitations<a class="headerlink" href="#format-limitations" title="Permanent link">&para;</a></h2>
 <p>Different formats have varying capabilities:</p>
@@ -6528,6 +7032,16 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 </tr>
 <tr>
+<td>CSV (.csv)</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅**</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
 <td>DeepLabCut</td>
 <td>✅</td>
 <td>❌</td>
@@ -6563,7 +7077,7 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 <td>❌</td>
 <td>✅</td>
-<td>✅**</td>
+<td>✅***</td>
 <td>❌</td>
 <td>✅</td>
 </tr>
@@ -6580,7 +7094,8 @@ while YAML files use a simplified human-readable format.</p>
 </tbody>
 </table>
 <p>*NWB can embed videos with <code>annotations_export</code> format
-**COCO tracks are stored via <code>attributes.object_id</code> (CVAT-compatible)</p>
+**CSV skeleton edges/symmetries preserved via optional metadata JSON sidecar
+***COCO tracks are stored via <code>attributes.object_id</code> (CVAT-compatible)</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../model/">Data Model</a>: Understanding the core data structures</li>
