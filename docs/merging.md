@@ -418,6 +418,12 @@ base.merge(other, instance=InstanceMatcher(method="spatial", threshold=2.0))
     options:
         heading_level: 4
 
+### Labels.add_video
+
+::: sleap_io.model.labels.Labels.add_video
+    options:
+        heading_level: 4
+
 ### Labels.replace_filenames
 
 ::: sleap_io.model.labels.Labels.replace_filenames
