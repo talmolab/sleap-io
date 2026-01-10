@@ -414,6 +414,76 @@ def load_leap(
     return leap.read_labels(filename, skeleton=skeleton)
 
 
+def load_csv(
+    filename: str,
+    format: str = "auto",
+    video: Optional[Union["Video", str]] = None,
+    skeleton: Optional["Skeleton"] = None,
+) -> "Labels":
+    """Load pose data from a CSV file.
+
+    Args:
+        filename: Path to CSV file.
+        format: CSV format. One of "auto", "sleap", "dlc", "points", "instances",
+            "frames". Default "auto" detects format from file content.
+        video: Video to associate with data. Can be Video object or path string.
+        skeleton: Skeleton to use. If None, inferred from columns or metadata.
+
+    Returns:
+        Labels object.
+
+    Notes:
+        If a metadata JSON file exists alongside the CSV (same base name with
+        .json extension), it will be automatically loaded to restore full
+        Labels context including skeleton edges, symmetries, and provenance.
+
+    See Also:
+        save_csv: Save Labels to CSV file.
+    """
+    from sleap_io.io import csv
+
+    return csv.read_labels(filename, format=format, video=video, skeleton=skeleton)
+
+
+def save_csv(
+    labels: "Labels",
+    filename: str,
+    format: str = "sleap",
+    video: Optional[Union["Video", int]] = None,
+    include_score: bool = True,
+    scorer: str = "sleap-io",
+    save_metadata: bool = False,
+) -> None:
+    """Save pose data to a CSV file.
+
+    Args:
+        labels: Labels to save.
+        filename: Output path.
+        format: CSV format. One of "sleap" (default), "dlc", "points",
+            "instances", "frames".
+        video: Video to filter to. Can be Video object or integer index.
+            If None, includes all videos.
+        include_score: Include confidence scores in output. Default True.
+        scorer: Scorer name for DLC format. Default "sleap-io".
+        save_metadata: Save JSON metadata file alongside CSV that enables
+            full round-trip reconstruction. Default False.
+
+    See Also:
+        load_csv: Load Labels from CSV file.
+    """
+    from sleap_io.io import csv
+
+    csv.write_labels(
+        labels,
+        filename,
+        format=format,
+        video=video,
+        include_score=include_score,
+        scorer=scorer,
+        save_metadata=save_metadata,
+    )
+
+
 def load_coco(
     json_path: str,
     dataset_root: Optional[str] = None,
@@ -645,6 +715,8 @@ def load_file(
 
             if dlc.is_dlc_file(filename):
                 format = "dlc"
+            else:
+                format = "csv"
         else:
             for vid_ext in Video.EXTS:
                 if filename.lower().endswith(vid_ext.lower()):
@@ -670,6 +742,8 @@ def load_file(
         return load_jabs(filename, **kwargs)
     elif format == "dlc":
         return load_dlc(filename, **kwargs)
+    elif format == "csv":
+        return load_csv(filename, **kwargs)
     elif format == "ultralytics":
         return load_ultralytics(filename, **kwargs)
     elif format == "video":
@@ -755,6 +829,15 @@ def save_file(
         save_jabs(labels, pose_version=pose_version, root_folder=root_folder)
     elif format == "ultralytics":
         save_ultralytics(labels, filename, **kwargs)
+    elif format == "csv" or filename.lower().endswith(".csv"):
+        csv_format = kwargs.pop("csv_format", "sleap")
+        # Filter kwargs to only those accepted by save_csv
+        csv_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k in ("video", "include_score", "scorer", "save_metadata")
+        }
+        save_csv(labels, filename, format=csv_format, **csv_kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
 
