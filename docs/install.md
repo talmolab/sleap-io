@@ -285,13 +285,13 @@ For reproducible builds, pin to a specific version or commit:
 
 ```toml
 # Pin to version
-"sleap-io[all]==0.5.8"
+"sleap-io[all]==0.6.0"
 
 # Pin to specific commit
 "sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@abc1234"
 
 # Pin to tag
-"sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@v0.5.8"
+"sleap-io[all] @ git+https://github.com/talmolab/sleap-io.git@v0.6.0"
 ```
 
 ---
