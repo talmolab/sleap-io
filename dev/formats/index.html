@@ -4179,6 +4179,14 @@ progress bar is disabled in favor of the callback.</p>
 <li><code>Labels.is_lazy</code> - <code>True</code> if lazy-loaded</li>
 <li><code>Labels.materialize()</code> - Convert to eager <code>Labels</code> (returns self if already eager)</li>
 <li><code>Labels.numpy()</code> - Uses fast path when lazy (no object creation)</li>
+<li><code>Labels.to_dataframe()</code> - Uses fast path when lazy (no object creation)</li>
+</ul>
+<p><strong>Fast statistics (O(1) for lazy-loaded Labels):</strong></p>
+<ul>
+<li><code>Labels.n_user_instances</code> - Total number of user-labeled instances</li>
+<li><code>Labels.n_pred_instances</code> - Total number of predicted instances</li>
+<li><code>Labels.n_frames_per_video()</code> - Dictionary mapping videos to frame counts</li>
+<li><code>Labels.n_instances_per_track()</code> - Dictionary mapping tracks to instance counts</li>
 </ul>
 <h3 id="nwb-format-nwb">NWB Format (.nwb)<a class="headerlink" href="#nwb-format-nwb" title="Permanent link">&para;</a></h3>
 <p><a href="https://www.nwb.org/">Neurodata Without Borders (NWB)</a> is a standardized format for neurophysiology data. sleap-io provides comprehensive support for both reading and writing pose tracking data in NWB format.</p>
