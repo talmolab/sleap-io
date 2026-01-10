@@ -123,7 +123,7 @@ def test_show_file_not_found():
     result = runner.invoke(cli, ["show", "/nonexistent/path/to/file.slp"])
     assert result.exit_code != 0
     # Click validates file existence before our code runs
-    assert "Invalid value for 'PATH'" in result.output
+    assert "not exist" in result.output
 
 
 def test_show_skeleton_no_edges(tmp_path):
@@ -2980,3 +2980,197 @@ def test_render_help_short_flag():
     assert "--background" in result.output
     assert "--list-colors" in result.output
     assert "--list-palettes" in result.output
+
+
+# --- Tests for _resolve_input helper and positional/flag input patterns ---
+
+
+def test_resolve_input_positional_only():
+    """Test _resolve_input with only positional argument."""
+    from sleap_io.io.cli import _resolve_input
+
+    result = _resolve_input(Path("/a.slp"), None)
+    assert result == Path("/a.slp")
+
+
+def test_resolve_input_option_only():
+    """Test _resolve_input with only -i option."""
+    from sleap_io.io.cli import _resolve_input
+
+    result = _resolve_input(None, Path("/b.slp"))
+    assert result == Path("/b.slp")
+
+
+def test_resolve_input_both_raises_error():
+    """Test _resolve_input raises when both provided."""
+    import click
+
+    from sleap_io.io.cli import _resolve_input
+
+    with pytest.raises(click.ClickException, match="Cannot specify"):
+        _resolve_input(Path("/a.slp"), Path("/b.slp"))
+
+
+def test_resolve_input_neither_raises_error():
+    """Test _resolve_input raises when neither provided."""
+    import click
+
+    from sleap_io.io.cli import _resolve_input
+
+    with pytest.raises(click.ClickException, match="Missing"):
+        _resolve_input(None, None)
+
+
+def test_resolve_input_custom_name():
+    """Test _resolve_input uses custom name in error messages."""
+    import click
+
+    from sleap_io.io.cli import _resolve_input
+
+    with pytest.raises(click.ClickException, match="Missing custom thing"):
+        _resolve_input(None, None, "custom thing")
+
+
+def test_show_accepts_positional_input(slp_typical):
+    """Test show accepts positional input."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", slp_typical, "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    assert "typical.slp" in _strip_ansi(result.output)
+
+
+def test_show_accepts_flag_input(slp_typical):
+    """Test show accepts -i flag input."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show", "-i", slp_typical, "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    assert "typical.slp" in _strip_ansi(result.output)
+
+
+def test_show_rejects_both_inputs(slp_typical):
+    """Test show rejects both positional and -i."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["show", slp_typical, "-i", slp_typical, "--no-open-videos"]
+    )
+    assert result.exit_code != 0
+    assert "Cannot specify" in result.output
+
+
+def test_show_missing_input():
+    """Test show fails gracefully when no input provided."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["show"])
+    assert result.exit_code != 0
+    assert "Missing" in result.output
+
+
+def test_convert_accepts_positional_input(slp_typical, tmp_path):
+    """Test convert accepts positional input."""
+    runner = CliRunner()
+    output = tmp_path / "out.slp"
+    result = runner.invoke(cli, ["convert", slp_typical, "-o", str(output)])
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
+def test_convert_rejects_both_inputs(slp_typical, tmp_path):
+    """Test convert rejects both positional and -i."""
+    runner = CliRunner()
+    output = tmp_path / "out.slp"
+    result = runner.invoke(
+        cli, ["convert", slp_typical, "-i", slp_typical, "-o", str(output)]
+    )
+    assert result.exit_code != 0
+    assert "Cannot specify" in result.output
+
+
+def test_convert_missing_input(tmp_path):
+    """Test convert fails gracefully when no input provided."""
+    runner = CliRunner()
+    output = tmp_path / "out.slp"
+    result = runner.invoke(cli, ["convert", "-o", str(output)])
+    assert result.exit_code != 0
+    assert "Missing" in result.output
+
+
+def test_split_accepts_positional_input(slp_typical, tmp_path):
+    """Test split accepts positional input."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+    result = runner.invoke(cli, ["split", slp_typical, "-o", str(output_dir)])
+    assert result.exit_code == 0, result.output
+    assert (output_dir / "train.slp").exists()
+
+
+def test_split_rejects_both_inputs(slp_typical, tmp_path):
+    """Test split rejects both positional and -i."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+    result = runner.invoke(
+        cli, ["split", slp_typical, "-i", slp_typical, "-o", str(output_dir)]
+    )
+    assert result.exit_code != 0
+    assert "Cannot specify" in result.output
+
+
+def test_split_missing_input(tmp_path):
+    """Test split fails gracefully when no input provided."""
+    runner = CliRunner()
+    output_dir = tmp_path / "splits"
+    result = runner.invoke(cli, ["split", "-o", str(output_dir)])
+    assert result.exit_code != 0
+    assert "Missing" in result.output
+
+
+def test_filenames_accepts_positional_input(slp_typical):
+    """Test filenames accepts positional input."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["filenames", slp_typical])
+    assert result.exit_code == 0, result.output
+    assert "Video filenames" in result.output
+
+
+def test_filenames_accepts_flag_input(slp_typical):
+    """Test filenames accepts -i flag input."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["filenames", "-i", slp_typical])
+    assert result.exit_code == 0, result.output
+    assert "Video filenames" in result.output
+
+
+def test_filenames_rejects_both_inputs(slp_typical):
+    """Test filenames rejects both positional and -i."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["filenames", slp_typical, "-i", slp_typical])
+    assert result.exit_code != 0
+    assert "Cannot specify" in result.output
+
+
+def test_filenames_missing_input():
+    """Test filenames fails gracefully when no input provided."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["filenames"])
+    assert result.exit_code != 0
+    assert "Missing" in result.output
+
+
+def test_render_rejects_both_inputs(centered_pair, tmp_path):
+    """Test render rejects both positional and -i."""
+    runner = CliRunner()
+    output = tmp_path / "output.png"
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            centered_pair,
+            "-i",
+            centered_pair,
+            "--lf",
+            "0",
+            "-o",
+            str(output),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Cannot specify" in result.output
