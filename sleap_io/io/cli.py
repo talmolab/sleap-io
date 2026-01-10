@@ -81,6 +81,38 @@ OUTPUT_EXTENSION_TO_FORMAT = {
 }
 
 
+def _resolve_input(
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
+    name: str = "input file",
+) -> Path:
+    """Resolve input from positional argument or -i option.
+
+    Args:
+        input_arg: Positional argument value (may be None).
+        input_opt: -i/--input option value (may be None).
+        name: Human-readable name for error messages.
+
+    Returns:
+        The resolved input path.
+
+    Raises:
+        click.ClickException: If both provided or neither provided.
+    """
+    if input_arg is not None and input_opt is not None:
+        raise click.ClickException(
+            f"Cannot specify {name} both as positional argument and with -i/--input."
+        )
+
+    input_path = input_arg or input_opt
+    if input_path is None:
+        raise click.ClickException(
+            f"Missing {name}. Provide as positional argument or with -i/--input."
+        )
+
+    return input_path
+
+
 def _get_package_version(package: str) -> str:
     """Get version of a package, or 'not installed' if not available."""
     try:
@@ -932,7 +964,20 @@ def _print_provenance(labels: Labels) -> None:
 
 
 @cli.command()
-@click.argument("path", type=click.Path(exists=True, path_type=Path))
+@click.argument(
+    "path_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "path_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input file (.slp, .nwb, video). Can also be passed as positional argument.",
+)
 @click.option(
     "lazy",
     "--lazy/--no-lazy",
@@ -996,7 +1041,8 @@ def _print_provenance(labels: Labels) -> None:
     help="Print all available details.",
 )
 def show(
-    path: Path,
+    path_arg: Optional[Path],
+    path_opt: Optional[Path],
     lazy: bool,
     open_videos: Optional[bool],
     lf_index: Optional[int],
@@ -1017,10 +1063,14 @@ def show(
     [dim]Examples:[/]
 
         $ sio show labels.slp
+        $ sio show -i labels.slp
         $ sio show labels.slp --skeleton
         $ sio show labels.slp --lf 0
         $ sio show labels.slp --all
     """
+    # Resolve input from positional arg or -i option
+    path = _resolve_input(path_arg, path_opt, "input file")
+
     # --video-index implies --video
     if video_index is not None:
         video = True
@@ -1145,13 +1195,19 @@ def _infer_output_format(path: Path) -> Optional[str]:
 
 
 @cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
 @click.option(
     "-i",
     "--input",
-    "input_path",
-    required=True,
+    "input_opt",
+    default=None,
     type=click.Path(exists=True, path_type=Path),
-    help="Input file path.",
+    help="Input file path. Can also be passed as positional argument.",
 )
 @click.option(
     "-o",
@@ -1179,7 +1235,8 @@ def _infer_output_format(path: Path) -> Optional[str]:
     help="Embed frames in output (SLP format only).",
 )
 def convert(
-    input_path: Path,
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
     output_path: Path,
     input_format: Optional[str],
     output_format: Optional[str],
@@ -1199,11 +1256,15 @@ def convert(
 
     [dim]Examples:[/]
 
+        $ sio convert labels.slp -o labels.nwb
         $ sio convert -i labels.slp -o labels.nwb
-        $ sio convert -i annotations.json -o labels.slp --from coco
-        $ sio convert -i labels.slp -o labels.pkg.slp --embed user
-        $ sio convert -i labels.slp -o dataset/ --to ultralytics
+        $ sio convert annotations.json -o labels.slp --from coco
+        $ sio convert labels.slp -o labels.pkg.slp --embed user
+        $ sio convert labels.slp -o dataset/ --to ultralytics
     """
+    # Resolve input from positional arg or -i option
+    input_path = _resolve_input(input_arg, input_opt, "input file")
+
     # Resolve input format
     resolved_input_format = input_format
     if resolved_input_format is None:
@@ -1281,13 +1342,19 @@ def convert(
 
 
 @cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
 @click.option(
     "-i",
     "--input",
-    "input_path",
-    required=True,
+    "input_opt",
+    default=None,
     type=click.Path(exists=True, path_type=Path),
-    help="Input labels file path.",
+    help="Input labels file. Can also be passed as positional argument.",
 )
 @click.option(
     "-o",
@@ -1337,7 +1404,8 @@ def convert(
     help="Embed frames in output files.",
 )
 def split(
-    input_path: Path,
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
     output_dir: Path,
     train_fraction: float,
     val_fraction: Optional[float],
@@ -1357,11 +1425,15 @@ def split(
 
     [dim]Examples:[/]
 
+        $ sio split labels.slp -o splits/
         $ sio split -i labels.slp -o splits/
-        $ sio split -i labels.slp -o splits/ --train 0.7 --val 0.15 --test 0.15
-        $ sio split -i labels.slp -o splits/ --remove-predictions --seed 42
-        $ sio split -i labels.slp -o splits/ --embed user
+        $ sio split labels.slp -o splits/ --train 0.7 --val 0.15 --test 0.15
+        $ sio split labels.slp -o splits/ --remove-predictions --seed 42
+        $ sio split labels.slp -o splits/ --embed user
     """
+    # Resolve input from positional arg or -i option
+    input_path = _resolve_input(input_arg, input_opt, "input labels file")
+
     from copy import deepcopy
 
     import numpy as np
@@ -1531,13 +1603,19 @@ def split(
 
 
 @cli.command("filenames")
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
 @click.option(
     "-i",
     "--input",
-    "input_path",
-    required=True,
+    "input_opt",
+    default=None,
     type=click.Path(exists=True, path_type=Path),
-    help="Input labels file.",
+    help="Input labels file. Can also be passed as positional argument.",
 )
 @click.option(
     "-o",
@@ -1570,7 +1648,8 @@ def split(
     help="Replace OLD path prefix with NEW (prefix mode).",
 )
 def filenames(
-    input_path: Path,
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
     output_path: Optional[Path],
     new_filenames: tuple[str, ...],
     filename_map: tuple[tuple[str, str], ...],
@@ -1583,6 +1662,7 @@ def filenames(
 
     [bold]Inspection mode[/] (default):
 
+        $ sio filenames labels.slp
         $ sio filenames -i labels.slp
 
     [bold]Update modes[/] (require -o):
@@ -1598,10 +1678,13 @@ def filenames(
 
     [dim]Examples:[/]
 
-        $ sio filenames -i labels.slp
-        $ sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
-        $ sio filenames -i labels.slp -o out.slp --prefix "C:\\data" /mnt/data
+        $ sio filenames labels.slp
+        $ sio filenames labels.slp -o out.slp --filename /new/video.mp4
+        $ sio filenames labels.slp -o out.slp --prefix "C:\\data" /mnt/data
     """
+    # Resolve input from positional arg or -i option
+    input_path = _resolve_input(input_arg, input_opt, "input labels file")
+
     # Determine if any update flags are provided
     has_update_flags = (
         len(new_filenames) > 0 or len(filename_map) > 0 or len(prefix_map) > 0
@@ -1981,11 +2064,7 @@ def render(
         return
 
     # Resolve input path from positional arg or -i option
-    input_path: Optional[Path] = input_arg or input_opt
-    if input_path is None:
-        raise click.ClickException(
-            "Missing input file. Provide as positional arg or with -i/--input."
-        )
+    input_path = _resolve_input(input_arg, input_opt, "input file")
 
     # Load labels
     try:

@@ -13,7 +13,7 @@ Run CLI commands instantly using [`uvx`](https://docs.astral.sh/uv/) without ins
 uvx sleap-io show labels.slp
 
 # Convert between formats
-uvx sleap-io convert -i labels.slp -o labels.nwb
+uvx sleap-io convert labels.slp -o labels.nwb
 
 # Embed frames in output (video reading works out of the box)
 uvx sleap-io convert -i labels.slp -o labels.pkg.slp --embed user
@@ -38,7 +38,7 @@ uv tool install "sleap-io[all]"
 
 # Now use the short command
 sio show labels.slp
-sio convert -i labels.slp -o labels.nwb
+sio convert labels.slp -o labels.nwb
 ```
 
 !!! tip "The `sio` command"
@@ -81,30 +81,30 @@ sio show labels.slp --lf 0             # Labeled frame details
 sio show video.mp4                     # Video properties and metadata
 
 # Convert between formats
-sio convert -i labels.slp -o labels.nwb
-sio convert -i labels.slp -o labels.pkg.slp --embed user
-sio convert -i data.json -o labels.slp --from coco
-sio convert -i labels.slp -o dataset/ --to ultralytics
+sio convert labels.slp -o labels.nwb
+sio convert labels.slp -o labels.pkg.slp --embed user
+sio convert data.json -o labels.slp --from coco
+sio convert labels.slp -o dataset/ --to ultralytics
 
 # Split into train/val/test sets
-sio split -i labels.slp -o splits/                          # 80/20 train/val
-sio split -i labels.slp -o splits/ --train 0.7 --test 0.15  # 70/15/15 split
-sio split -i labels.slp -o splits/ --remove-predictions     # User labels only
-sio split -i labels.slp -o splits/ --seed 42                # Reproducible split
+sio split labels.slp -o splits/                          # 80/20 train/val
+sio split labels.slp -o splits/ --train 0.7 --test 0.15  # 70/15/15 split
+sio split labels.slp -o splits/ --remove-predictions     # User labels only
+sio split labels.slp -o splits/ --seed 42                # Reproducible split
 
 # Inspect and update video filenames
-sio filenames -i labels.slp                                   # List video paths
-sio filenames -i labels.slp -o out.slp --filename /new/video.mp4
-sio filenames -i labels.slp -o out.slp --map old.mp4 /new/video.mp4
-sio filenames -i labels.slp -o out.slp --prefix /old/path /new/path
+sio filenames labels.slp                                   # List video paths
+sio filenames labels.slp -o out.slp --filename /new/video.mp4
+sio filenames labels.slp -o out.slp --map old.mp4 /new/video.mp4
+sio filenames labels.slp -o out.slp --prefix /old/path /new/path
 
 # Render video with pose overlays
-sio render -i predictions.slp                                 # -> predictions.viz.mp4
-sio render -i predictions.slp --preset preview                # Fast 0.25x preview
-sio render -i predictions.slp --start 100 --end 200
-sio render -i predictions.slp --lf 0                          # Single frame -> PNG
-sio render -i predictions.slp --lf 0 --crop auto              # Auto-fit to instances
-sio render -i predictions.slp --color-by track --marker-shape diamond
+sio render predictions.slp                                 # -> predictions.viz.mp4
+sio render predictions.slp --preset preview                # Fast 0.25x preview
+sio render predictions.slp --start 100 --end 200
+sio render predictions.slp --lf 0                          # Single frame -> PNG
+sio render predictions.slp --lf 0 --crop auto              # Auto-fit to instances
+sio render predictions.slp --color-by track --marker-shape diamond
 ```
 
 ---
@@ -117,7 +117,13 @@ Display information about a SLEAP labels file or video file with rich formatted 
 
 ```bash
 sio show <path> [options]
+sio show -i <path> [options]
 ```
+
+!!! tip "Input as positional or flag"
+    All commands accept the input file as a positional argument or with `-i`/`--input`.
+    The positional form (e.g., `sio show labels.slp`) is simpler; the flag form
+    (e.g., `sio show -i labels.slp`) is more explicit.
 
 #### Basic Usage
 
@@ -168,6 +174,7 @@ The default view shows:
 
 | Option | Short | Description |
 |--------|-------|-------------|
+| `--input` | `-i` | Input file (can also pass as positional argument) |
 | `--skeleton` | `-s` | Show detailed skeleton tables (nodes, edges, symmetries) |
 | `--video` | `-v` | Show detailed video info (opens backends by default) |
 | `--video-index N` | `--vi N` | Show only video at index N (0-based). Implies --video |
@@ -368,6 +375,7 @@ This is useful for quickly checking video properties without needing a labels fi
 Convert pose data between different file formats.
 
 ```bash
+sio convert <input> -o <output> [options]
 sio convert -i <input> -o <output> [options]
 ```
 
@@ -375,20 +383,20 @@ sio convert -i <input> -o <output> [options]
 
 ```bash
 # Convert SLEAP to NWB
-sio convert -i labels.slp -o labels.nwb
+sio convert labels.slp -o labels.nwb
 
 # Convert SLEAP to COCO
-sio convert -i labels.slp -o annotations.json --to coco
+sio convert labels.slp -o annotations.json --to coco
 
 # Convert COCO to SLEAP
-sio convert -i annotations.json -o labels.slp --from coco
+sio convert annotations.json -o labels.slp --from coco
 ```
 
 #### Options
 
 | Option | Description |
 |--------|-------------|
-| `-i, --input` | Input file path (required) |
+| `-i, --input` | Input file path (can also pass as positional argument) |
 | `-o, --output` | Output file path (required) |
 | `--from` | Input format (required for `.json` and `.h5` files) |
 | `--to` | Output format (inferred from extension if not specified) |
@@ -431,13 +439,13 @@ Create self-contained package files with embedded video frames:
 
 ```bash
 # Embed only user-labeled frames
-sio convert -i labels.slp -o labels.pkg.slp --embed user
+sio convert labels.slp -o labels.pkg.slp --embed user
 
 # Embed all frames (including predictions)
-sio convert -i labels.slp -o labels.pkg.slp --embed all
+sio convert labels.slp -o labels.pkg.slp --embed all
 
 # Embed labeled frames plus suggestions
-sio convert -i labels.slp -o labels.pkg.slp --embed suggestions
+sio convert labels.slp -o labels.pkg.slp --embed suggestions
 ```
 
 !!! info "Embedding options"
@@ -451,7 +459,7 @@ sio convert -i labels.slp -o labels.pkg.slp --embed suggestions
 
 ```bash
 # Export to YOLO format directory
-sio convert -i labels.slp -o yolo_dataset/ --to ultralytics
+sio convert labels.slp -o yolo_dataset/ --to ultralytics
 ```
 
 This creates a directory structure compatible with Ultralytics YOLO training:
@@ -474,6 +482,7 @@ yolo_dataset/
 Split a labels file into train/validation/test sets for machine learning workflows.
 
 ```bash
+sio split <input> -o <output_dir> [options]
 sio split -i <input> -o <output_dir> [options]
 ```
 
@@ -481,13 +490,13 @@ sio split -i <input> -o <output_dir> [options]
 
 ```bash
 # Default 80/20 train/val split
-sio split -i labels.slp -o splits/
+sio split labels.slp -o splits/
 
 # Three-way 70/15/15 split
-sio split -i labels.slp -o splits/ --train 0.7 --test 0.15
+sio split labels.slp -o splits/ --train 0.7 --test 0.15
 
 # Reproducible split with seed
-sio split -i labels.slp -o splits/ --seed 42
+sio split labels.slp -o splits/ --seed 42
 ```
 
 **Example output:**
@@ -506,7 +515,7 @@ Random seed: 42
 
 | Option | Description |
 |--------|-------------|
-| `-i, --input` | Input labels file path (required) |
+| `-i, --input` | Input labels file (can also pass as positional argument) |
 | `-o, --output` | Output directory for split files (required) |
 | `--train` | Training set fraction, 0.0-1.0 (default: 0.8) |
 | `--val` | Validation set fraction (default: remainder after train and test) |
@@ -538,7 +547,7 @@ For training, you typically want only user-labeled (ground truth) data:
 
 ```bash
 # Keep only user-labeled instances, remove predictions
-sio split -i labels.slp -o splits/ --remove-predictions --seed 42
+sio split labels.slp -o splits/ --remove-predictions --seed 42
 ```
 
 This:
@@ -556,7 +565,7 @@ For portable training datasets with embedded frames:
 
 ```bash
 # Create package files with embedded user-labeled frames
-sio split -i labels.slp -o splits/ --embed user --seed 42
+sio split labels.slp -o splits/ --embed user --seed 42
 ```
 
 This creates `train.pkg.slp`, `val.pkg.slp`, and optionally `test.pkg.slp` with frames embedded directly in the files.
@@ -570,8 +579,8 @@ Always use `--seed` for reproducible experiments:
 
 ```bash
 # Same seed = same split every time
-sio split -i labels.slp -o run1/ --train 0.8 --test 0.1 --seed 42
-sio split -i labels.slp -o run2/ --train 0.8 --test 0.1 --seed 42
+sio split labels.slp -o run1/ --train 0.8 --test 0.1 --seed 42
+sio split labels.slp -o run2/ --train 0.8 --test 0.1 --seed 42
 # run1/ and run2/ will have identical splits
 ```
 
@@ -582,8 +591,8 @@ The seed is stored in each output file's provenance for traceability.
 
     ```bash
     # These will produce DIFFERENT splits even with the same seed:
-    sio split -i labels.slp -o run1/ --seed 42
-    sio split -i labels.slp -o run2/ --seed 42 --remove-predictions
+    sio split labels.slp -o run1/ --seed 42
+    sio split labels.slp -o run2/ --seed 42 --remove-predictions
     ```
 
     To ensure reproducibility, always use the same combination of options (especially `--remove-predictions`) with your seed.
@@ -598,10 +607,10 @@ Fractions must be between 0 and 1, and their sum cannot exceed 1.0:
 
 ```bash
 # Valid: 0.7 + 0.15 + 0.15 = 1.0
-sio split -i labels.slp -o splits/ --train 0.7 --val 0.15 --test 0.15
+sio split labels.slp -o splits/ --train 0.7 --val 0.15 --test 0.15
 
 # Error: 0.8 + 0.15 + 0.15 = 1.1 > 1.0
-sio split -i labels.slp -o splits/ --train 0.8 --val 0.15 --test 0.15
+sio split labels.slp -o splits/ --train 0.8 --val 0.15 --test 0.15
 ```
 
 ---
@@ -619,10 +628,11 @@ Useful for:
 
 ```bash
 # Inspection mode (default)
+sio filenames <input>
 sio filenames -i <input>
 
 # Update mode
-sio filenames -i <input> -o <output> [update options]
+sio filenames <input> -o <output> [update options]
 ```
 
 #### Inspection Mode
@@ -630,7 +640,7 @@ sio filenames -i <input> -o <output> [update options]
 By default, without any update flags, the command lists all video filenames:
 
 ```bash
-sio filenames -i labels.slp
+sio filenames labels.slp
 ```
 
 **Example output:**
@@ -666,7 +676,7 @@ You must specify exactly one update mode when updating.
 
 | Option | Description |
 |--------|-------------|
-| `-i, --input` | Input labels file path (required) |
+| `-i, --input` | Input labels file (can also pass as positional argument) |
 | `-o, --output` | Output labels file path (required for update mode) |
 | `--filename` | New filename (repeat for each video in list mode) |
 | `--map OLD NEW` | Replace OLD filename with NEW (repeat for multiple mappings) |
@@ -678,18 +688,18 @@ Replace all video filenames in order. You must provide exactly one `--filename` 
 
 ```bash
 # Single video file
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --filename /new/path/video.mp4
 
 # Multiple videos (must match video count in file)
-sio filenames -i multiview.slp -o fixed.slp \
+sio filenames multiview.slp -o fixed.slp \
     --filename /data/cam1.mp4 \
     --filename /data/cam2.mp4 \
     --filename /data/cam3.mp4
 ```
 
 !!! warning "Video count must match"
-    The number of `--filename` options must exactly match the number of videos in the labels file. Use `sio filenames -i labels.slp` to check the video count first.
+    The number of `--filename` options must exactly match the number of videos in the labels file. Use `sio filenames labels.slp` to check the video count first.
 
 #### Map Mode
 
@@ -697,11 +707,11 @@ Replace specific filenames using exact matching. Only videos whose paths match w
 
 ```bash
 # Replace a single video path
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --map video.mp4 /data/videos/video.mp4
 
 # Replace multiple specific paths
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --map recording1.mp4 /nas/project/recording1.mp4 \
     --map recording2.mp4 /nas/project/recording2.mp4
 ```
@@ -714,19 +724,19 @@ Replace path prefixes. This is the most flexible mode for relocating files:
 
 ```bash
 # Move from absolute to relative paths
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --prefix /home/user/data ./data
 
 # Cross-platform: Windows to Linux
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --prefix "C:\Users\lab\data" /mnt/data
 
 # Cross-platform: Linux to Windows
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --prefix /mnt/data "D:\project\data"
 
 # Multiple prefix replacements
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --prefix /old/videos /new/videos \
     --prefix /old/images /new/images
 ```
@@ -742,10 +752,10 @@ Your labels file references `/home/alice/project/videos/mouse.mp4`, but on the n
 
 ```bash
 # First, check current paths
-sio filenames -i labels.slp
+sio filenames labels.slp
 
 # Update with new prefix
-sio filenames -i labels.slp -o labels_new.slp \
+sio filenames labels.slp -o labels_new.slp \
     --prefix /home/alice/project /data/experiments
 ```
 
@@ -754,7 +764,7 @@ sio filenames -i labels.slp -o labels_new.slp \
 Make paths relative so the labels work from any base directory:
 
 ```bash
-sio filenames -i labels.slp -o labels_portable.slp \
+sio filenames labels.slp -o labels_portable.slp \
     --prefix /absolute/path/to/project .
 ```
 
@@ -763,7 +773,7 @@ sio filenames -i labels.slp -o labels_portable.slp \
 Labels created on Windows need to work on a Linux cluster:
 
 ```bash
-sio filenames -i labels.slp -o labels_linux.slp \
+sio filenames labels.slp -o labels_linux.slp \
     --prefix "C:\Users\lab\experiment" /home/lab/experiment
 ```
 
@@ -773,7 +783,7 @@ The command also works with image sequence videos (where `filename` is a list of
 
 ```bash
 # Update prefix for all images in the sequence
-sio filenames -i labels.slp -o fixed.slp \
+sio filenames labels.slp -o fixed.slp \
     --prefix /old/frames /new/frames
 ```
 
@@ -785,10 +795,11 @@ Create video files or single images with pose annotations overlaid on video fram
 
 ```bash
 # Video mode (default)
+sio render <input> [-o <output>] [options]
 sio render -i <input> [-o <output>] [options]
 
 # Image mode (single frame)
-sio render -i <input> --lf <index> [-o <output>] [options]
+sio render <input> --lf <index> [-o <output>] [options]
 ```
 
 #### Render Modes
@@ -801,19 +812,19 @@ sio render -i <input> --lf <index> [-o <output>] [options]
 
 ```bash
 # Render video with automatic output filename
-sio render -i predictions.slp                      # -> predictions.viz.mp4
+sio render predictions.slp                      # -> predictions.viz.mp4
 
 # Render with explicit output path
-sio render -i predictions.slp -o output.mp4
+sio render predictions.slp -o output.mp4
 
 # Fast preview (0.25x resolution)
-sio render -i predictions.slp --preset preview
+sio render predictions.slp --preset preview
 
 # Render a specific clip
-sio render -i predictions.slp --start 100 --end 200
+sio render predictions.slp --start 100 --end 200
 
 # Render a single frame to PNG
-sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
+sio render predictions.slp --lf 0               # -> predictions.lf=0.png
 ```
 
 #### Options Reference
@@ -822,7 +833,7 @@ sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `-i, --input` | (required) | Input labels file (.slp, .nwb, etc.) |
+| `-i, --input` | (required) | Input labels file (can also pass as positional argument) |
 | `-o, --output` | auto | Output path. Default: `{input}.viz.mp4` for video, `{input}.lf={N}.png` for image |
 
 ##### Frame Selection Options
@@ -872,15 +883,15 @@ Render individual frames to PNG files for figures, thumbnails, or quick inspecti
 
 ```bash
 # Render labeled frame by index (0-based)
-sio render -i predictions.slp --lf 0               # -> predictions.lf=0.png
-sio render -i predictions.slp --lf 42              # -> predictions.lf=42.png
+sio render predictions.slp --lf 0               # -> predictions.lf=0.png
+sio render predictions.slp --lf 42              # -> predictions.lf=42.png
 
 # Render specific video frame by index
-sio render -i predictions.slp --frame 100          # -> predictions.video=0.frame=100.png
-sio render -i predictions.slp --frame 100 --video 1
+sio render predictions.slp --frame 100          # -> predictions.video=0.frame=100.png
+sio render predictions.slp --frame 100 --video 1
 
 # Explicit output path
-sio render -i predictions.slp --lf 5 -o frame.png
+sio render predictions.slp --lf 5 -o frame.png
 ```
 
 !!! tip "Labeled frame vs frame index"
@@ -893,16 +904,16 @@ Crop the output image to focus on specific regions or automatically fit around d
 
 ```bash
 # Auto-fit: crop to bounding box of all instances with 20% padding (default)
-sio render -i predictions.slp --lf 0 --crop auto
+sio render predictions.slp --lf 0 --crop auto
 
 # Auto-fit with custom padding (30% of bounding box)
-sio render -i predictions.slp --lf 0 --crop auto --crop-padding 0.3
+sio render predictions.slp --lf 0 --crop auto --crop-padding 0.3
 
 # Pixel coordinates (x1, y1, x2, y2)
-sio render -i predictions.slp --lf 0 --crop 100,100,300,300
+sio render predictions.slp --lf 0 --crop 100,100,300,300
 
 # Normalized coordinates (center 50% of frame)
-sio render -i predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75
+sio render predictions.slp --lf 0 --crop 0.25,0.25,0.75,0.75
 ```
 
 The crop modes:
@@ -920,13 +931,13 @@ Render specific portions of the video:
 
 ```bash
 # Frames 100 to 200 (0-based, end is exclusive)
-sio render -i predictions.slp --start 100 --end 200
+sio render predictions.slp --start 100 --end 200
 
 # From frame 500 to end
-sio render -i predictions.slp --start 500
+sio render predictions.slp --start 500
 
 # First 100 frames
-sio render -i predictions.slp --end 100
+sio render predictions.slp --end 100
 ```
 
 #### Adjusting Playback Speed
@@ -935,13 +946,13 @@ Use `--fps` to control playback speed:
 
 ```bash
 # Slow motion (half speed if source is 30fps)
-sio render -i predictions.slp --fps 15
+sio render predictions.slp --fps 15
 
 # Speed up (double speed if source is 30fps)
-sio render -i predictions.slp --fps 60
+sio render predictions.slp --fps 60
 
 # Fixed frame rate output
-sio render -i predictions.slp --fps 24
+sio render predictions.slp --fps 24
 ```
 
 #### Quality Presets
@@ -950,16 +961,16 @@ Use presets for quick quality/speed trade-offs:
 
 ```bash
 # Fast preview for checking results (0.25x resolution)
-sio render -i predictions.slp --preset preview     # -> predictions.viz.mp4
+sio render predictions.slp --preset preview     # -> predictions.viz.mp4
 
 # Draft quality for review (0.5x resolution)
-sio render -i predictions.slp --preset draft
+sio render predictions.slp --preset draft
 
 # Full quality for publication (1.0x resolution)
-sio render -i predictions.slp --preset final
+sio render predictions.slp --preset final
 
 # Or specify exact scale
-sio render -i predictions.slp --scale 0.75
+sio render predictions.slp --scale 0.75
 ```
 
 #### Color Schemes
@@ -968,16 +979,16 @@ Control how poses are colored:
 
 ```bash
 # Auto-select based on data (default)
-sio render -i predictions.slp --color-by auto
+sio render predictions.slp --color-by auto
 
 # Color by track identity (consistent across frames)
-sio render -i predictions.slp --color-by track
+sio render predictions.slp --color-by track
 
 # Color by instance (each animal in frame gets different color)
-sio render -i predictions.slp --color-by instance
+sio render predictions.slp --color-by instance
 
 # Color by node type (each body part gets different color)
-sio render -i predictions.slp --color-by node
+sio render predictions.slp --color-by node
 ```
 
 The `auto` mode uses smart defaults:
@@ -992,13 +1003,13 @@ Choose from built-in or colorcet palettes:
 
 ```bash
 # Built-in palettes
-sio render -i predictions.slp --palette distinct
-sio render -i predictions.slp --palette rainbow
-sio render -i predictions.slp --palette tableau10
+sio render predictions.slp --palette distinct
+sio render predictions.slp --palette rainbow
+sio render predictions.slp --palette tableau10
 
 # Colorcet palettes
-sio render -i predictions.slp --palette glasbey  # 256 distinct colors
-sio render -i predictions.slp --palette glasbey_warm
+sio render predictions.slp --palette glasbey  # 256 distinct colors
+sio render predictions.slp --palette glasbey_warm
 ```
 
 Available built-in palettes: `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `seaborn`, `tableau10`, `viridis`
@@ -1009,23 +1020,23 @@ Customize the appearance of pose overlays:
 
 ```bash
 # Different marker shapes
-sio render -i predictions.slp --marker-shape circle
-sio render -i predictions.slp --marker-shape square
-sio render -i predictions.slp --marker-shape diamond
-sio render -i predictions.slp --marker-shape triangle
-sio render -i predictions.slp --marker-shape cross
+sio render predictions.slp --marker-shape circle
+sio render predictions.slp --marker-shape square
+sio render predictions.slp --marker-shape diamond
+sio render predictions.slp --marker-shape triangle
+sio render predictions.slp --marker-shape cross
 
 # Adjust sizes
-sio render -i predictions.slp --marker-size 6 --line-width 3
+sio render predictions.slp --marker-size 6 --line-width 3
 
 # Semi-transparent overlays
-sio render -i predictions.slp --alpha 0.7
+sio render predictions.slp --alpha 0.7
 
 # Show only edges (no node markers)
-sio render -i predictions.slp --no-nodes
+sio render predictions.slp --no-nodes
 
 # Show only nodes (no skeleton edges)
-sio render -i predictions.slp --no-edges
+sio render predictions.slp --no-edges
 ```
 
 #### Multi-Video Labels
@@ -1041,16 +1052,16 @@ sio render -i multiview.slp --video 1
 
 ```bash
 # 1. Quick preview to check predictions
-sio render -i predictions.slp --preset preview
+sio render predictions.slp --preset preview
 
 # 2. Check a specific section
-sio render -i predictions.slp --start 500 --end 600 --preset draft
+sio render predictions.slp --start 500 --end 600 --preset draft
 
 # 3. Render a single interesting frame
-sio render -i predictions.slp --lf 42 -o highlight.png
+sio render predictions.slp --lf 42 -o highlight.png
 
 # 4. Final render with custom styling
-sio render -i predictions.slp -o final.mp4 \
+sio render predictions.slp -o final.mp4 \
     --color-by track \
     --palette tableau10 \
     --marker-shape diamond \
@@ -1090,14 +1101,14 @@ If videos show `[not found]`, update the paths:
 
 ```bash
 # Check current video paths
-sio filenames -i labels.slp
+sio filenames labels.slp
 
 # Update with new location
-sio filenames -i labels.slp -o labels_fixed.slp \
+sio filenames labels.slp -o labels_fixed.slp \
     --prefix /old/location /new/location
 
 # Verify fix
-sio filenames -i labels_fixed.slp
+sio filenames labels_fixed.slp
 ```
 
 ### Extracting Skeleton Definition
@@ -1116,7 +1127,7 @@ Create a portable package with embedded frames:
 
 ```bash
 # Embed user-labeled frames for sharing training data
-sio convert -i project.slp -o project.pkg.slp --embed user
+sio convert project.slp -o project.pkg.slp --embed user
 ```
 
 ### Batch Conversion with Shell Scripts
@@ -1145,13 +1156,13 @@ Import pose data from other annotation and analysis tools:
 
 ```bash
 # From COCO format (e.g., mmpose, CVAT exports)
-sio convert -i annotations.json -o labels.slp --from coco
+sio convert annotations.json -o labels.slp --from coco
 
 # From Label Studio export
-sio convert -i annotations.json -o labels.slp --from labelstudio
+sio convert annotations.json -o labels.slp --from labelstudio
 
 # From DeepLabCut analysis (CSV format)
-sio convert -i video_DLC_results.csv -o labels.slp --from dlc
+sio convert video_DLC_results.csv -o labels.slp --from dlc
 ```
 
 ### Exporting for Training
@@ -1160,13 +1171,13 @@ Export to formats used by other frameworks:
 
 ```bash
 # For Ultralytics YOLO
-sio convert -i labels.slp -o yolo_data/ --to ultralytics
+sio convert labels.slp -o yolo_data/ --to ultralytics
 
 # For tools expecting COCO format
-sio convert -i labels.slp -o annotations.json --to coco
+sio convert labels.slp -o annotations.json --to coco
 
 # For NWB-based pipelines (auto-detects annotations vs predictions)
-sio convert -i labels.slp -o data.nwb --to nwb
+sio convert labels.slp -o data.nwb --to nwb
 ```
 
 ### Rendering Pose Videos
@@ -1175,10 +1186,10 @@ Create video visualizations of your pose predictions:
 
 ```bash
 # Quick preview to check predictions
-sio render -i predictions.slp -o preview.mp4 --preset preview
+sio render predictions.slp -o preview.mp4 --preset preview
 
 # Final render with custom styling for publication
-sio render -i predictions.slp -o final.mp4 \
+sio render predictions.slp -o final.mp4 \
     --color-by track \
     --palette tableau10 \
     --marker-shape diamond
@@ -1190,10 +1201,10 @@ Prepare datasets for machine learning with reproducible splits:
 
 ```bash
 # Standard 80/10/10 split for training
-sio split -i labels.slp -o experiment1/ --train 0.8 --test 0.1 --seed 42
+sio split labels.slp -o experiment1/ --train 0.8 --test 0.1 --seed 42
 
 # Remove predictions and embed frames for portable training data
-sio split -i labels.slp -o training_data/ --remove-predictions --embed user --seed 42
+sio split labels.slp -o training_data/ --remove-predictions --embed user --seed 42
 ```
 
 The `--seed` option ensures you can recreate the exact same split later, which is essential for reproducible experiments. Note that the seed is sensitive to `--remove-predictions` since it changes the frame count—use the same options consistently.
