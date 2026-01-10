@@ -401,12 +401,15 @@ sio convert annotations.json -o labels.slp --from coco
 | `--from` | Input format (required for `.json` and `.h5` files) |
 | `--to` | Output format (inferred from extension if not specified) |
 | `--embed` | Embed video frames in output (`user`, `all`, `suggestions`, `source`) |
+| `--csv-format` | CSV output format: `sleap`, `dlc`, `points`, `instances`, `frames` |
+| `--scorer` | Scorer name for DLC CSV output (default: `sleap-io`) |
+| `--save-metadata` | Save JSON metadata file for CSV round-trip support |
 
 #### Supported Formats
 
-**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `ultralytics`, `leap`
+**Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `ultralytics`, `leap`
 
-**Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`
+**Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`
 
 #### Format Detection
 
@@ -474,6 +477,38 @@ yolo_dataset/
     ├── images/
     └── labels/
 ```
+
+#### Export to CSV
+
+Export pose data to CSV format for use with spreadsheet tools or custom analysis pipelines:
+
+```bash
+# Export to SLEAP Analysis CSV (default)
+sio convert labels.slp -o output.csv
+
+# Export to DeepLabCut CSV format
+sio convert labels.slp -o output.csv --csv-format dlc --scorer MyModel
+
+# Export with metadata for round-trip support
+sio convert labels.slp -o output.csv --save-metadata
+# Creates: output.csv and output.json
+```
+
+##### CSV Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--csv-format` | `sleap` | CSV format: `sleap`, `dlc`, `points`, `instances`, `frames` |
+| `--scorer` | `sleap-io` | Scorer name for DLC format |
+| `--save-metadata` | off | Save JSON metadata file for round-trip support |
+
+##### CSV Formats
+
+- **`sleap`**: SLEAP Analysis CSV format (one row per instance)
+- **`dlc`**: DeepLabCut format (multi-header, one row per frame)
+- **`points`**: One row per point (most normalized)
+- **`instances`**: One row per instance with node coordinates as columns
+- **`frames`**: One row per frame with all instances multiplexed
 
 ---
 
