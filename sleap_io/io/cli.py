@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import rich_click as click
 from rich import box
@@ -2084,9 +2084,7 @@ def merge(
 
         if verbose:
             click.echo(f"  Strategy: {frame}")
-            click.echo(
-                f"  +{frames_added} frames, +{result.instances_added} instances"
-            )
+            click.echo(f"  +{frames_added} frames, +{result.instances_added} instances")
             if result.conflicts:
                 click.echo(f"  Conflicts: {len(result.conflicts)}")
         else:
@@ -2940,31 +2938,74 @@ def _analyze_skeletons(
     type=click.Path(path_type=Path),
     help="Output labels file. Default: {input}.fixed.slp",
 )
-# Fix options
+# Fix operations
 @click.option(
-    "--videos/--no-videos",
-    "fix_videos",
-    default=None,
-    help="Fix duplicate videos by merging them.",
-)
-@click.option(
-    "--skeletons/--no-skeletons",
-    "fix_skeletons",
-    default=None,
-    help="Fix skeleton issues (remove unused skeletons).",
-)
-@click.option(
-    "--predictions/--no-predictions",
-    "remove_predictions",
-    default=False,
-    help="Remove all predictions.",
-)
-@click.option(
-    "--clean/--no-clean",
-    "do_clean",
+    "--deduplicate-videos/--no-deduplicate-videos",
+    "deduplicate_videos",
     default=True,
     show_default=True,
-    help="Run cleanup (remove empty frames, unused tracks/skeletons).",
+    help="Merge duplicate video entries pointing to same file.",
+)
+# Skeleton handling
+@click.option(
+    "--remove-unused-skeletons/--no-remove-unused-skeletons",
+    "remove_unused_skeletons",
+    default=True,
+    show_default=True,
+    help="Remove skeletons with no instances or only predictions.",
+)
+@click.option(
+    "--consolidate-skeletons/--no-consolidate-skeletons",
+    "consolidate_skeletons",
+    default=False,
+    show_default=True,
+    help="Keep most frequent skeleton, DELETE instances using other skeletons.",
+)
+# Remove predictions
+@click.option(
+    "--remove-predictions/--no-remove-predictions",
+    "remove_predictions",
+    default=False,
+    show_default=True,
+    help="Remove ALL predicted instances.",
+)
+@click.option(
+    "--remove-untracked-predictions/--no-remove-untracked-predictions",
+    "remove_untracked_predictions",
+    default=False,
+    show_default=True,
+    help="Remove only predictions with no track assignment.",
+)
+# Remove unused metadata
+@click.option(
+    "--remove-unused-tracks/--no-remove-unused-tracks",
+    "remove_unused_tracks",
+    default=True,
+    show_default=True,
+    help="Remove tracks not used by any instance.",
+)
+# Remove empty data
+@click.option(
+    "--remove-empty-instances/--no-remove-empty-instances",
+    "remove_empty_instances",
+    default=False,
+    show_default=True,
+    help="Remove instances with no visible points.",
+)
+@click.option(
+    "--remove-empty-frames/--no-remove-empty-frames",
+    "remove_empty_frames",
+    default=True,
+    show_default=True,
+    help="Remove frames with no instances.",
+)
+# Remove videos
+@click.option(
+    "--remove-unlabeled-videos/--no-remove-unlabeled-videos",
+    "remove_unlabeled_videos",
+    default=False,
+    show_default=True,
+    help="Remove videos with no labeled frames.",
 )
 # Filename options (passthrough to replace_filenames)
 @click.option(
@@ -3003,10 +3044,15 @@ def fix(
     input_arg: Optional[Path],
     input_opt: Optional[Path],
     output_path: Optional[Path],
-    fix_videos: Optional[bool],
-    fix_skeletons: Optional[bool],
+    deduplicate_videos: bool,
+    remove_unused_skeletons: bool,
+    consolidate_skeletons: bool,
     remove_predictions: bool,
-    do_clean: bool,
+    remove_untracked_predictions: bool,
+    remove_unused_tracks: bool,
+    remove_empty_instances: bool,
+    remove_empty_frames: bool,
+    remove_unlabeled_videos: bool,
     prefix_map: tuple[tuple[str, str], ...],
     filename_map: tuple[tuple[str, str], ...],
     dry_run: bool,
@@ -3018,15 +3064,18 @@ def fix(
 
     • [bold]Duplicate videos[/]: Merges videos that point to the same file
     • [bold]Multiple skeletons[/]: Removes unused or prediction-only skeletons
-    • [bold]Predictions[/]: Optionally removes all predicted instances
+    • [bold]Predictions[/]: Optionally removes all or untracked predictions
     • [bold]Path fixes[/]: Updates video paths with --prefix or --map
+    • [bold]Cleanup[/]: Removes empty frames, unused tracks, etc.
 
     [dim]Examples:[/]
 
         $ sio fix labels.slp                         # Auto-detect and fix
         $ sio fix labels.slp --dry-run               # Preview without saving
         $ sio fix labels.slp -o fixed.slp            # Explicit output
-        $ sio fix labels.slp --predictions           # Also remove predictions
+        $ sio fix labels.slp --remove-predictions    # Remove all predictions
+        $ sio fix labels.slp --remove-untracked-predictions  # Surgical removal
+        $ sio fix labels.slp --consolidate-skeletons # Force single skeleton
         $ sio fix labels.slp --prefix "C:\\data" /mnt/data
     """
     # Resolve input
@@ -3038,9 +3087,6 @@ def fix(
 
     # Check for filename options
     has_filename_opts = len(prefix_map) > 0 or len(filename_map) > 0
-
-    # Auto-detect mode: if no explicit flags, enable auto-detection
-    auto_mode = fix_videos is None and fix_skeletons is None and not remove_predictions
 
     # Load the input file
     console.print(f"[bold]Loading:[/] {input_path}")
@@ -3081,13 +3127,25 @@ def fix(
     has_skeleton_issues = len(unused_skels) > 0 or len(pred_only_skels) > 0
     has_multi_user_skeletons = len(user_skels) > 1
 
-    # Count predictions
-    n_predictions = sum(
-        1
-        for lf in labels.labeled_frames
-        for inst in lf
-        if isinstance(inst, PredictedInstance)
-    )
+    # Find most frequent user skeleton for consolidation
+    most_frequent_skeleton: Optional[Skeleton] = None
+    other_user_skeletons: list[Skeleton] = []
+    if has_multi_user_skeletons:
+        # Sort by user count descending
+        user_skel_usage = [(s, u, p) for s, u, p in all_skel_usage if u > 0]
+        user_skel_usage.sort(key=lambda x: x[1], reverse=True)
+        most_frequent_skeleton = user_skel_usage[0][0]
+        other_user_skeletons = [s for s, _, _ in user_skel_usage[1:]]
+
+    # Count predictions and untracked predictions
+    n_predictions = 0
+    n_untracked_predictions = 0
+    for lf in labels.labeled_frames:
+        for inst in lf:
+            if isinstance(inst, PredictedInstance):
+                n_predictions += 1
+                if inst.track is None:
+                    n_untracked_predictions += 1
 
     # ==========================================================================
     # REPORT FINDINGS
@@ -3112,26 +3170,50 @@ def fix(
     if has_skeleton_issues or has_multi_user_skeletons:
         status = "[yellow]⚠" if has_skeleton_issues else "[blue]ℹ"
         console.print(f"{status} Skeletons:[/]")
-        if verbose or has_skeleton_issues:
+        if verbose or has_skeleton_issues or has_multi_user_skeletons:
             for skel, user_count, pred_count in all_skel_usage:
                 status_str = ""
                 if user_count == 0 and pred_count == 0:
                     status_str = " [yellow](unused)[/]"
                 elif user_count == 0 and pred_count > 0:
                     status_str = " [yellow](predictions only)[/]"
+                elif has_multi_user_skeletons and skel is most_frequent_skeleton:
+                    status_str = " [green](most frequent)[/]"
                 console.print(
                     f"  '{skel.name}': {user_count} user, {pred_count} pred{status_str}"
                 )
-        if has_multi_user_skeletons:
+
+        # Warning for multiple user skeletons
+        if has_multi_user_skeletons and not consolidate_skeletons:
+            console.print()
             console.print(
-                f"  [yellow]Warning: {len(user_skels)} skeletons have user labels[/]"
+                "[yellow]⚠  WARNING: Multiple skeletons have user instances![/]"
             )
+            if most_frequent_skeleton:
+                other_counts = [
+                    (s, u) for s, u, _ in all_skel_usage if s in other_user_skeletons
+                ]
+                total_other = sum(u for _, u in other_counts)
+                console.print(
+                    f"    Use --consolidate-skeletons to keep "
+                    f"'{most_frequent_skeleton.name}' and remove {total_other} "
+                    f"instances."
+                )
+                console.print(
+                    "    This is irreversible - review carefully before proceeding."
+                )
     else:
         console.print(f"[green]✓ Skeletons:[/] {n_skeletons} skeleton(s), all in use")
 
     # Predictions section
     if n_predictions > 0:
-        console.print(f"[blue]ℹ Predictions:[/] {n_predictions} predicted instances")
+        untracked_info = ""
+        if n_untracked_predictions > 0:
+            untracked_info = f" ({n_untracked_predictions} untracked)"
+        console.print(
+            f"[blue]ℹ Predictions:[/] {n_predictions} predicted "
+            f"instances{untracked_info}"
+        )
     else:
         console.print("[green]✓ Predictions:[/] None")
 
@@ -3139,30 +3221,51 @@ def fix(
     # DETERMINE ACTIONS
     # ==========================================================================
 
-    # Determine what to fix based on mode
-    will_fix_videos = (
-        fix_videos if fix_videos is not None else (auto_mode and has_duplicate_videos)
-    )
-    will_fix_skeletons = (
-        fix_skeletons
-        if fix_skeletons is not None
-        else (auto_mode and has_skeleton_issues)
-    )
-    will_remove_predictions = remove_predictions
-
     actions = []
-    if will_fix_videos and has_duplicate_videos:
+
+    # Video deduplication
+    if deduplicate_videos and has_duplicate_videos:
         actions.append(f"Merge {len(duplicate_groups)} duplicate video group(s)")
-    if will_fix_skeletons and unused_skels:
+
+    # Skeleton handling
+    if remove_unused_skeletons and unused_skels:
         actions.append(f"Remove {len(unused_skels)} unused skeleton(s)")
-    if will_fix_skeletons and pred_only_skels and will_remove_predictions:
-        actions.append(f"Remove {len(pred_only_skels)} prediction-only skeleton(s)")
-    if will_remove_predictions and n_predictions > 0:
+    if remove_unused_skeletons and pred_only_skels:
+        n_pred_instances = sum(p for s, u, p in all_skel_usage if s in pred_only_skels)
+        actions.append(
+            f"Remove {len(pred_only_skels)} prediction-only skeleton(s) "
+            f"and {n_pred_instances} prediction(s)"
+        )
+
+    # Skeleton consolidation
+    if consolidate_skeletons and has_multi_user_skeletons:
+        other_instance_count = sum(
+            u for s, u, _ in all_skel_usage if s in other_user_skeletons
+        )
+        actions.append(
+            f"[red]CONSOLIDATE: Keep '{most_frequent_skeleton.name}', "
+            f"DELETE {other_instance_count} instances from other skeletons[/]"
+        )
+
+    # Prediction removal
+    if remove_predictions and n_predictions > 0:
         actions.append(f"Remove {n_predictions} prediction(s)")
-    if do_clean:
-        actions.append("Clean up empty frames and unused tracks")
+    elif remove_untracked_predictions and n_untracked_predictions > 0:
+        actions.append(f"Remove {n_untracked_predictions} untracked prediction(s)")
+
+    # Filename changes
     if has_filename_opts:
         actions.append("Update video filenames")
+
+    # Cleanup actions (these happen after other modifications)
+    if remove_empty_instances:
+        actions.append("Remove empty instances")
+    if remove_unused_tracks:
+        actions.append("Remove unused tracks")
+    if remove_unlabeled_videos:
+        actions.append("Remove unlabeled videos")
+    if remove_empty_frames:
+        actions.append("Remove empty frames")
 
     # Print planned actions
     console.print()
@@ -3182,11 +3285,11 @@ def fix(
         return
 
     # ==========================================================================
-    # APPLY FIXES
+    # APPLY FIXES (order matters!)
     # ==========================================================================
 
-    # Fix duplicate videos
-    if will_fix_videos and has_duplicate_videos:
+    # 1. Fix duplicate videos (early - affects frame references)
+    if deduplicate_videos and has_duplicate_videos:
         for canonical, duplicates, _ in duplicate_groups:
             for dup in duplicates:
                 # Reassign frames
@@ -3196,21 +3299,61 @@ def fix(
                 # Remove duplicate video
                 labels.videos.remove(dup)
 
-    # Fix skeletons
-    if will_fix_skeletons:
+    # 2. Skeleton consolidation (before other skeleton operations)
+    if consolidate_skeletons and has_multi_user_skeletons:
+        console.print()
+        console.print("[red bold]CONSOLIDATING SKELETONS (destructive operation)[/]")
+        console.print(f"    Keeping: '{most_frequent_skeleton.name}'")
+
+        deleted_count = 0
+        frames_affected = 0
+        for lf in labels.labeled_frames:
+            instances_to_remove = [
+                inst for inst in lf.instances if inst.skeleton in other_user_skeletons
+            ]
+            if instances_to_remove:
+                frames_affected += 1
+                deleted_count += len(instances_to_remove)
+                for inst in instances_to_remove:
+                    lf.instances.remove(inst)
+
+        # Remove the other skeletons
+        for skel in other_user_skeletons:
+            if skel in labels.skeletons:
+                labels.skeletons.remove(skel)
+
+        console.print(
+            f"    Deleted {deleted_count} instances from {frames_affected} frames."
+        )
+
+    # 3. Remove unused skeletons (completely unused)
+    if remove_unused_skeletons:
         for skel in unused_skels:
             if skel in labels.skeletons:
                 labels.skeletons.remove(skel)
-        if will_remove_predictions:
-            for skel in pred_only_skels:
-                if skel in labels.skeletons:
-                    labels.skeletons.remove(skel)
 
-    # Remove predictions
-    if will_remove_predictions and n_predictions > 0:
+    # 4. Remove prediction-only skeletons and their predictions
+    if remove_unused_skeletons and pred_only_skels:
+        for lf in labels.labeled_frames:
+            lf.instances = [
+                inst for inst in lf.instances if inst.skeleton not in pred_only_skels
+            ]
+        for skel in pred_only_skels:
+            if skel in labels.skeletons:
+                labels.skeletons.remove(skel)
+
+    # 5. Remove predictions
+    if remove_predictions and n_predictions > 0:
         labels.remove_predictions(clean=False)
+    elif remove_untracked_predictions and n_untracked_predictions > 0:
+        for lf in labels.labeled_frames:
+            lf.instances = [
+                inst
+                for inst in lf.instances
+                if not (isinstance(inst, PredictedInstance) and inst.track is None)
+            ]
 
-    # Apply filename changes
+    # 6. Apply filename changes
     if has_filename_opts:
         try:
             if prefix_map:
@@ -3226,13 +3369,44 @@ def fix(
         except ValueError as e:
             raise click.ClickException(f"Failed to update filenames: {e}")
 
-    # Clean up
-    if do_clean:
+    # 7. Cleanup (order: empty instances -> tracks -> unlabeled videos -> frames)
+    # Empty instances first (may create empty frames)
+    if remove_empty_instances:
+        labels.clean(
+            frames=False,
+            empty_instances=True,
+            skeletons=False,
+            tracks=False,
+            videos=False,
+        )
+
+    # Unused tracks
+    if remove_unused_tracks:
+        labels.clean(
+            frames=False,
+            empty_instances=False,
+            skeletons=False,
+            tracks=True,
+            videos=False,
+        )
+
+    # Unlabeled videos
+    if remove_unlabeled_videos:
+        labels.clean(
+            frames=False,
+            empty_instances=False,
+            skeletons=False,
+            tracks=False,
+            videos=True,
+        )
+
+    # Empty frames LAST (depends on all other removals)
+    if remove_empty_frames:
         labels.clean(
             frames=True,
             empty_instances=False,
-            skeletons=True,
-            tracks=True,
+            skeletons=False,
+            tracks=False,
             videos=False,
         )
 
@@ -3278,35 +3452,50 @@ def fix(
     help="Output .pkg.slp file path.",
 )
 @click.option(
-    "--mode",
-    "embed_mode",
-    type=click.Choice(["user", "all", "suggestions", "user+suggestions"]),
-    default="user",
+    "--user/--no-user",
+    "include_user",
+    default=True,
     show_default=True,
-    help="Which frames to embed.",
+    help="Include user-labeled frames.",
+)
+@click.option(
+    "--predictions/--no-predictions",
+    "include_predictions",
+    default=False,
+    show_default=True,
+    help="Include prediction-only frames (no user labels).",
+)
+@click.option(
+    "--suggestions/--no-suggestions",
+    "include_suggestions",
+    default=False,
+    show_default=True,
+    help="Include suggested frames.",
 )
 def embed(
     input_arg: Optional[Path],
     input_opt: Optional[Path],
     output_path: Path,
-    embed_mode: str,
+    include_user: bool,
+    include_predictions: bool,
+    include_suggestions: bool,
 ):
     """Embed video frames into a labels file.
 
     Creates a portable .pkg.slp file with embedded images that can be shared
     without requiring the original video files.
 
-    [bold]Embedding modes:[/]
-    - user: Only user-labeled frames (default)
-    - all: All labeled and suggested frames
-    - suggestions: Only suggested frames
-    - user+suggestions: User-labeled and suggested frames
+    [bold]Frame selection:[/]
+    - --user: Frames with user-labeled instances (default: on)
+    - --predictions: Frames with only predicted instances (default: off)
+    - --suggestions: Suggested frames for labeling (default: off)
 
     [dim]Examples:[/]
 
         $ sio embed labels.slp -o labels.pkg.slp
-        $ sio embed labels.slp -o labels.pkg.slp --mode all
-        $ sio embed -i labels.slp -o portable.pkg.slp
+        $ sio embed labels.slp -o labels.pkg.slp --suggestions
+        $ sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
+        $ sio embed labels.slp -o labels.pkg.slp --no-user --suggestions
     """
     # Resolve input from positional arg or -i option
     input_path = _resolve_input(input_arg, input_opt, "input file")
@@ -3321,26 +3510,60 @@ def embed(
     except Exception as e:
         raise click.ClickException(f"Failed to load input file: {e}")
 
-    if not isinstance(labels, Labels):
+    # Check if at least one frame type is selected
+    if not include_user and not include_predictions and not include_suggestions:
         raise click.ClickException(
-            f"Input file is not a labels file (got {type(labels).__name__})."
+            "No frames to embed. Enable at least one of: --user, --predictions, "
+            "--suggestions"
         )
 
+    # Build list of frames to embed
+    frames_to_embed: list[tuple[Video, int]] = []
+    frame_counts: dict[str, int] = {}
+
+    # Get user-labeled frames
+    user_frame_set: set[tuple[Video, int]] = set()
+    if include_user:
+        user_frames = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
+        frames_to_embed.extend(user_frames)
+        user_frame_set = set(user_frames)
+        frame_counts["user"] = len(user_frames)
+
+    # Get prediction-only frames (frames with predictions but no user instances)
+    if include_predictions:
+        pred_frames = [
+            (lf.video, lf.frame_idx)
+            for lf in labels.labeled_frames
+            if not lf.has_user_instances
+        ]
+        frames_to_embed.extend(pred_frames)
+        frame_counts["predictions"] = len(pred_frames)
+
+    # Get suggested frames
+    if include_suggestions:
+        suggestion_frames = [(sf.video, sf.frame_idx) for sf in labels.suggestions]
+        # Don't double-count frames already in user set
+        new_suggestions = [f for f in suggestion_frames if f not in user_frame_set]
+        frames_to_embed.extend(new_suggestions)
+        frame_counts["suggestions"] = len(suggestion_frames)
+
     # Check if there are any frames to embed
-    if len(labels.labeled_frames) == 0 and len(labels.suggestions) == 0:
+    if not frames_to_embed:
         raise click.ClickException(
-            "No frames to embed. The labels file has no labeled or suggested frames."
+            "No frames to embed with the selected options. "
+            "Try different flags or check if the file has the expected frame types."
         )
 
     # Save with embedding
     try:
-        labels.save(str(output_path), embed=embed_mode)
+        labels.save(str(output_path), embed=frames_to_embed)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
     # Success message
     console.print(f"[bold green]Embedded:[/] {input_path} -> {output_path}")
-    console.print(f"[dim]Mode: {embed_mode}[/]")
+    frame_summary = ", ".join(f"{k}: {v}" for k, v in frame_counts.items())
+    console.print(f"[dim]Frames: {frame_summary}[/]")
 
 
 @cli.command()
@@ -3440,3 +3663,314 @@ def unembed(
     # Success message with video info
     console.print(f"[bold green]Unembedded:[/] {input_path} -> {output_path}")
     console.print(f"[dim]Restored {len(embedded_videos)} video(s) to source paths[/]")
+
+
+@cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input labels file or video. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Output path. Default: {input}.trim.slp (labels) or {input}.trim.mp4 (video).",
+)
+# Frame range options
+@click.option(
+    "--start",
+    "start_frame",
+    type=int,
+    default=None,
+    help="Start frame index (0-based, inclusive). Default: 0.",
+)
+@click.option(
+    "--end",
+    "end_frame",
+    type=int,
+    default=None,
+    help="End frame index (0-based, exclusive). Default: last frame + 1.",
+)
+# Video selection
+@click.option(
+    "--video",
+    "video_ind",
+    type=int,
+    default=None,
+    help="Video index for multi-video labels. Default: 0 if single video, required "
+    "otherwise.",
+)
+# Video encoding options
+@click.option(
+    "--fps",
+    type=float,
+    default=None,
+    help="Output video FPS. Default: source video FPS.",
+)
+@click.option(
+    "--crf",
+    type=int,
+    default=25,
+    show_default=True,
+    help="Video quality (2-32, lower=better quality, larger file).",
+)
+@click.option(
+    "--x264-preset",
+    "x264_preset",
+    type=click.Choice(
+        ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"]
+    ),
+    default="superfast",
+    show_default=True,
+    help="H.264 encoding speed/compression trade-off.",
+)
+def trim(
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
+    output_path: Optional[Path],
+    start_frame: Optional[int],
+    end_frame: Optional[int],
+    video_ind: Optional[int],
+    fps: Optional[float],
+    crf: int,
+    x264_preset: str,
+) -> None:
+    """Trim video and labels to a frame range.
+
+    Creates a trimmed video clip and adjusts frame indices in the labels file
+    accordingly. Can also trim standalone video files without labels.
+
+    [bold]Labels mode[/]: Trims both the labels file and associated video.
+
+    [bold]Video mode[/]: Trims a standalone video file (no labels).
+
+    [dim]Examples:[/]
+
+        [bold]Labels trimming:[/]
+
+        $ sio trim labels.slp --start 100 --end 1000           # -> labels.trim.slp
+
+        $ sio trim labels.slp --start 100 --end 1000 -o clip.slp
+
+        $ sio trim labels.slp --start 100 --end 1000 --video 0
+
+        $ sio trim labels.slp --start 100 --end 1000 --crf 18  # Higher quality
+
+        [bold]Video-only trimming:[/]
+
+        $ sio trim video.mp4 --start 100 --end 1000            # -> video.trim.mp4
+
+        $ sio trim video.mp4 --start 0 --end 500 -o clip.mp4
+
+        $ sio trim video.mp4 --start 100 --fps 15              # Change FPS
+    """
+    # Resolve input path from positional arg or -i option
+    input_path = _resolve_input(input_arg, input_opt, "input file")
+
+    # Try to load as labels first, then as video
+    labels: Optional[Labels] = None
+    video: Optional[Video] = None
+
+    try:
+        result = io_main.load_file(str(input_path), open_videos=True)
+        if isinstance(result, Labels):
+            labels = result
+        else:
+            # Must be Video per load_file's return type
+            video = result
+    except Exception as e:
+        # Try loading as video directly
+        try:
+            video = io_main.load_video(str(input_path))
+        except Exception:
+            raise click.ClickException(f"Failed to load input: {e}")
+
+    # Build video_kwargs from encoding options
+    video_kwargs: dict[str, Any] = {
+        "crf": crf,
+        "preset": x264_preset,
+    }
+    if fps is not None:
+        video_kwargs["fps"] = fps
+
+    if labels is not None:
+        # Labels mode: trim labels and video together
+        _trim_labels(
+            labels=labels,
+            input_path=input_path,
+            output_path=output_path,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            video_ind=video_ind,
+            video_kwargs=video_kwargs,
+        )
+    else:
+        # Video mode: trim video only (video is guaranteed non-None here)
+        assert video is not None  # For type checker
+        _trim_video(
+            video=video,
+            input_path=input_path,
+            output_path=output_path,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            video_kwargs=video_kwargs,
+        )
+
+
+def _trim_labels(
+    labels: Labels,
+    input_path: Path,
+    output_path: Optional[Path],
+    start_frame: Optional[int],
+    end_frame: Optional[int],
+    video_ind: Optional[int],
+    video_kwargs: dict[str, Any],
+) -> None:
+    """Trim labels and associated video to a frame range."""
+    import numpy as np
+
+    # Resolve video selection
+    if video_ind is None:
+        if len(labels.videos) == 1:
+            video_ind = 0
+        else:
+            raise click.ClickException(
+                f"Multiple videos found ({len(labels.videos)}). "
+                "Use --video to specify which video to trim."
+            )
+
+    if video_ind >= len(labels.videos):
+        raise click.ClickException(
+            f"Video index {video_ind} out of range. "
+            f"Labels has {len(labels.videos)} video(s) (0-{len(labels.videos) - 1})."
+        )
+
+    video = labels.videos[video_ind]
+
+    # Determine frame range
+    if start_frame is None:
+        start_frame = 0
+    if end_frame is None:
+        end_frame = len(video)
+
+    # Validate frame range
+    if start_frame < 0:
+        raise click.ClickException(f"Start frame must be >= 0 (got {start_frame}).")
+    if end_frame <= start_frame:
+        raise click.ClickException(
+            f"End frame ({end_frame}) must be greater than start frame ({start_frame})."
+        )
+    if end_frame > len(video):
+        console.print(
+            f"[yellow]Warning: End frame ({end_frame}) exceeds video length "
+            f"({len(video)}). Clamping to video length.[/]"
+        )
+        end_frame = len(video)
+
+    # Determine output path
+    if output_path is None:
+        output_path = input_path.with_name(f"{input_path.stem}.trim.slp")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build frame indices array
+    frame_inds = np.arange(start_frame, end_frame)
+
+    console.print(f"[bold]Trimming:[/] {input_path}")
+    console.print(f"[dim]  Video: {video.filename}[/]")
+    console.print(
+        f"[dim]  Frame range: {start_frame} to {end_frame} "
+        f"({len(frame_inds)} frames)[/]"
+    )
+
+    # Use Labels.trim() method
+    # Pass video index (int) instead of video object to avoid identity comparison issues
+    try:
+        trimmed_labels = labels.trim(
+            save_path=output_path,
+            frame_inds=frame_inds,
+            video=video_ind,
+            video_kwargs=video_kwargs,
+        )
+    except Exception as e:
+        raise click.ClickException(f"Failed to trim: {e}")
+
+    # Report success
+    video_path = output_path.with_suffix(".mp4")
+    console.print(f"[bold green]Saved:[/] {output_path}")
+    console.print(f"[bold green]Video:[/] {video_path}")
+    console.print(
+        f"[dim]  {len(trimmed_labels.labeled_frames)} labeled frames "
+        f"in trimmed output[/]"
+    )
+
+
+def _trim_video(
+    video: Video,
+    input_path: Path,
+    output_path: Optional[Path],
+    start_frame: Optional[int],
+    end_frame: Optional[int],
+    video_kwargs: dict[str, Any],
+) -> None:
+    """Trim a standalone video to a frame range."""
+    import numpy as np
+
+    # Determine frame range
+    if start_frame is None:
+        start_frame = 0
+    if end_frame is None:
+        end_frame = len(video)
+
+    # Validate frame range
+    if start_frame < 0:
+        raise click.ClickException(f"Start frame must be >= 0 (got {start_frame}).")
+    if end_frame <= start_frame:
+        raise click.ClickException(
+            f"End frame ({end_frame}) must be greater than start frame ({start_frame})."
+        )
+    if end_frame > len(video):
+        console.print(
+            f"[yellow]Warning: End frame ({end_frame}) exceeds video length "
+            f"({len(video)}). Clamping to video length.[/]"
+        )
+        end_frame = len(video)
+
+    # Determine output path
+    if output_path is None:
+        output_path = input_path.with_name(f"{input_path.stem}.trim.mp4")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build frame indices array
+    frame_inds = np.arange(start_frame, end_frame)
+
+    console.print(f"[bold]Trimming:[/] {input_path}")
+    console.print(
+        f"[dim]  Frame range: {start_frame} to {end_frame} "
+        f"({len(frame_inds)} frames)[/]"
+    )
+
+    # Use Video.save() method
+    try:
+        video.save(
+            save_path=output_path,
+            frame_inds=frame_inds,
+            video_kwargs=video_kwargs,
+        )
+    except Exception as e:
+        raise click.ClickException(f"Failed to trim video: {e}")
+
+    console.print(f"[bold green]Saved:[/] {output_path}")
