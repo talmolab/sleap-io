@@ -13,6 +13,7 @@ from click.testing import CliRunner
 
 from sleap_io import load_slp
 from sleap_io.io.cli import cli
+from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.version import __version__
@@ -3788,3 +3789,693 @@ def test_render_rejects_both_inputs(centered_pair, tmp_path):
     )
     assert result.exit_code != 0
     assert "Cannot specify" in result.output
+
+
+# ============================================================================
+# fix command tests
+# ============================================================================
+
+
+def test_fix_help():
+    """Test fix --help shows command documentation."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check key elements - new flag names
+    assert "Fix common issues" in output
+    assert "--deduplicate-videos" in output
+    assert "--remove-unused-skeletons" in output
+    assert "--consolidate-skeletons" in output
+    assert "--remove-predictions" in output
+    assert "--remove-untracked-predictions" in output
+    assert "--remove-unused-tracks" in output
+    assert "--remove-empty-frames" in output
+    assert "--remove-empty-instances" in output
+    assert "--remove-unlabeled-videos" in output
+    assert "--dry-run" in output
+    assert "--prefix" in output
+    assert "--map" in output
+
+
+def test_fix_in_command_list():
+    """Test fix appears in main help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check command is listed with description
+    assert "fix" in output
+    assert "Fix common issues" in output
+
+
+def test_fix_dry_run_no_issues(slp_typical, tmp_path):
+    """Test fix --dry-run with a clean file shows no issues."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "--dry-run"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should report no issues
+    assert "No duplicates found" in output or "Videos:" in output
+    assert "[DRY RUN" in output
+
+
+def test_fix_basic_clean(slp_typical, tmp_path):
+    """Test fix saves output with default name."""
+    import shutil
+
+    # Copy to tmp_path to control output location
+    src = Path(slp_typical)
+    input_path = tmp_path / "test.slp"
+    shutil.copy(src, input_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path)],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check default output path
+    expected_output = tmp_path / "test.fixed.slp"
+    assert expected_output.exists()
+    assert "Saved:" in output
+
+
+def test_fix_explicit_output(slp_typical, tmp_path):
+    """Test fix with explicit output path."""
+    runner = CliRunner()
+    output_path = tmp_path / "custom_output.slp"
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_fix_remove_predictions(centered_pair, tmp_path):
+    """Test fix --remove-predictions removes predicted instances."""
+    runner = CliRunner()
+    output_path = tmp_path / "no_preds.slp"
+
+    # centered_pair has predictions
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", centered_pair, "-o", str(output_path), "--remove-predictions"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention removing predictions
+    assert "prediction" in output.lower()
+
+    # Verify predictions removed
+    labels = load_slp(str(output_path), open_videos=False)
+    for lf in labels.labeled_frames:
+        for inst in lf:
+            assert not isinstance(inst, PredictedInstance)
+
+
+def _make_test_video(filename, shape=(100, 480, 640, 1)):
+    """Create a Video object with specified metadata for testing (Py3.8 compatible)."""
+    from sleap_io.model.video import Video
+
+    video = Video(filename=filename, open_backend=False)
+    video.backend_metadata["shape"] = shape
+    return video
+
+
+def test_fix_duplicate_videos(tmp_path):
+    """Test fix detects and merges duplicate videos (enabled by default)."""
+    # Create labels with duplicate videos
+    skeleton = Skeleton(["head", "tail"])
+    video1 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video2 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+
+    labels = Labels(skeletons=[skeleton], videos=[video1, video2])
+
+    # Add frames to both videos
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    for idx, video in enumerate([video1, video2]):
+        frame = LabeledFrame(video=video, frame_idx=idx * 10)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skeleton)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "duplicates.slp"
+    labels.save(str(input_path))
+    assert len(labels.videos) == 2
+
+    # Run fix (deduplication is enabled by default)
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "-o", str(output_path), "-v"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should detect duplicates
+    assert "duplicate" in output.lower()
+
+    # Verify duplicates merged
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.videos) == 1
+    assert len(fixed_labels.labeled_frames) == 2  # Both frames preserved
+
+
+def test_fix_unused_skeletons(tmp_path):
+    """Test fix removes unused skeletons (enabled by default)."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    # Create labels with unused skeleton
+    skel1 = Skeleton(["head", "tail"], name="used")
+    skel2 = Skeleton(["a", "b", "c"], name="unused")
+
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    labels = Labels(skeletons=[skel1, skel2], videos=[video])
+
+    # Add frame using only skel1
+    frame = LabeledFrame(video=video, frame_idx=0)
+    points = np.random.rand(2, 2) * 100
+    inst = Instance.from_numpy(points, skeleton=skel1)
+    frame.instances = [inst]
+    labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "unused_skel.slp"
+    labels.save(str(input_path))
+    assert len(labels.skeletons) == 2
+
+    # Run fix (remove-unused-skeletons is enabled by default)
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "-o", str(output_path), "-v"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should detect unused
+    assert "unused" in output.lower()
+
+    # Verify unused skeleton removed
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.skeletons) == 1
+    assert fixed_labels.skeletons[0].name == "used"
+
+
+def test_fix_prefix_mode(tmp_path):
+    """Test fix with --prefix updates video paths."""
+    from sleap_io.model.video import Video
+
+    labels = Labels(
+        videos=[Video.from_filename(r"C:\data\videos\test.mp4")],
+    )
+    input_path = tmp_path / "windows.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--prefix",
+            r"C:\data\videos",
+            "/mnt/data/videos",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify path updated
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert fixed_labels.videos[0].filename == "/mnt/data/videos/test.mp4"
+
+
+def test_fix_map_mode(tmp_path):
+    """Test fix with --map updates video paths."""
+    from sleap_io.model.video import Video
+
+    labels = Labels(
+        videos=[Video.from_filename("/old/path/video.mp4")],
+    )
+    input_path = tmp_path / "old_path.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--map",
+            "/old/path/video.mp4",
+            "/new/path/video.mp4",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify path updated
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert fixed_labels.videos[0].filename == "/new/path/video.mp4"
+
+
+def test_fix_no_empty_frames_removal(slp_typical, tmp_path):
+    """Test fix --no-remove-empty-frames skips frame cleanup."""
+    runner = CliRunner()
+    output_path = tmp_path / "no_frame_clean.slp"
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(output_path), "--no-remove-empty-frames"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should not mention removing empty frames
+    assert "Remove empty frames" not in output
+
+
+def test_fix_verbose(slp_typical, tmp_path):
+    """Test fix -v shows detailed analysis."""
+    runner = CliRunner()
+    output_path = tmp_path / "verbose.slp"
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(output_path), "-v"],
+    )
+    assert result.exit_code == 0, result.output
+    # Verbose output should be present (details vary by file content)
+    assert "Loading:" in result.output
+
+
+def test_fix_input_not_found():
+    """Test fix error when input file doesn't exist."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix", "-i", "nonexistent.slp"])
+    assert result.exit_code != 0
+    # Click validates path existence
+
+
+def test_fix_non_labels_input(tmp_path, centered_pair_low_quality_path):
+    """Test fix error when input is not a labels file."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", centered_pair_low_quality_path],
+    )
+    assert result.exit_code != 0
+    assert "not a labels file" in result.output
+
+
+def test_fix_load_failure(tmp_path):
+    """Test fix error when input file is corrupt."""
+    corrupt = tmp_path / "corrupt.slp"
+    corrupt.write_text("not valid")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix", "-i", str(corrupt)])
+    assert result.exit_code != 0
+    assert "Failed to load" in result.output
+
+
+def test_fix_save_failure(slp_typical, tmp_path):
+    """Test fix error when save fails."""
+    # Create directory where file is expected
+    bad_output = tmp_path / "output.slp"
+    bad_output.mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(bad_output)],
+    )
+    assert result.exit_code != 0
+    assert "Failed to save" in result.output
+
+
+def test_fix_accepts_positional_input(slp_typical, tmp_path):
+    """Test fix accepts positional input."""
+    runner = CliRunner()
+    output_path = tmp_path / "out.slp"
+    result = runner.invoke(cli, ["fix", slp_typical, "-o", str(output_path)])
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_fix_rejects_both_inputs(slp_typical, tmp_path):
+    """Test fix rejects both positional and -i."""
+    runner = CliRunner()
+    output_path = tmp_path / "out.slp"
+    result = runner.invoke(
+        cli, ["fix", slp_typical, "-i", slp_typical, "-o", str(output_path)]
+    )
+    assert result.exit_code != 0
+    assert "Cannot specify" in result.output
+
+
+def test_fix_missing_input():
+    """Test fix fails gracefully when no input provided."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix"])
+    assert result.exit_code != 0
+    assert "Missing" in result.output
+
+
+def test_fix_default_output_pkg_slp(tmp_path):
+    """Test fix generates correct default output for pkg.slp files."""
+    import shutil
+
+    # Create a pkg.slp file (just copy and rename for simplicity)
+    src = _data_path("slp/minimal_instance.pkg.slp")
+    input_path = tmp_path / "test.pkg.slp"
+    shutil.copy(src, input_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Check default output path for pkg.slp
+    expected_output = tmp_path / "test.fixed.pkg.slp"
+    assert expected_output.exists()
+
+
+def test_fix_consolidate_skeletons(tmp_path):
+    """Test fix --consolidate-skeletons keeps most frequent skeleton."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    # Create labels with two skeletons that both have user instances
+    skel1 = Skeleton(["head", "tail"], name="frequent")
+    skel2 = Skeleton(["a", "b"], name="rare")
+
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    labels = Labels(skeletons=[skel1, skel2], videos=[video])
+
+    # Add 5 instances using skel1 (frequent)
+    for i in range(5):
+        frame = LabeledFrame(video=video, frame_idx=i)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skel1)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Add 2 instances using skel2 (rare)
+    for i in range(5, 7):
+        frame = LabeledFrame(video=video, frame_idx=i)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skel2)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "multi_skel.slp"
+    labels.save(str(input_path))
+    assert len(labels.skeletons) == 2
+
+    # Run fix without consolidate - should warn but not change
+    runner = CliRunner()
+    dry_run_result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run"],
+    )
+    assert dry_run_result.exit_code == 0, dry_run_result.output
+    output = _strip_ansi(dry_run_result.output)
+    assert "WARNING: Multiple skeletons" in output
+    assert "--consolidate-skeletons" in output
+
+    # Run fix with consolidate
+    output_path = tmp_path / "consolidated.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--consolidate-skeletons",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention consolidation
+    assert "CONSOLIDATE" in output or "CONSOLIDATING" in output
+
+    # Verify only most frequent skeleton remains
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.skeletons) == 1
+    assert fixed_labels.skeletons[0].name == "frequent"
+    # Should have 5 frames (rare skeleton instances deleted, frames cleaned)
+    assert len(fixed_labels.labeled_frames) == 5
+
+
+def test_fix_remove_untracked_predictions(tmp_path):
+    """Test fix --remove-untracked-predictions removes only untracked predictions."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance, Track
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    track1 = Track(name="track1")
+    labels = Labels(skeletons=[skeleton], videos=[video], tracks=[track1])
+
+    # Add frame with one tracked and one untracked prediction
+    frame = LabeledFrame(video=video, frame_idx=0)
+
+    # Tracked prediction
+    tracked_pred = PredictedInstance.from_numpy(
+        np.random.rand(2, 2) * 100,
+        skeleton=skeleton,
+        score=0.9,
+    )
+    tracked_pred.track = track1
+
+    # Untracked prediction
+    untracked_pred = PredictedInstance.from_numpy(
+        np.random.rand(2, 2) * 100,
+        skeleton=skeleton,
+        score=0.8,
+    )
+    # track is None by default
+
+    # User instance
+    user_inst = Instance.from_numpy(np.random.rand(2, 2) * 100, skeleton=skeleton)
+
+    frame.instances = [tracked_pred, untracked_pred, user_inst]
+    labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "mixed_preds.slp"
+    labels.save(str(input_path))
+
+    # Run fix with --remove-untracked-predictions
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--remove-untracked-predictions",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention removing untracked predictions
+    assert "untracked" in output.lower()
+
+    # Verify only untracked prediction removed
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.labeled_frames) == 1
+    instances = fixed_labels.labeled_frames[0].instances
+    assert len(instances) == 2  # tracked pred + user instance
+
+    # Verify tracked prediction still there
+    preds = [i for i in instances if isinstance(i, PredictedInstance)]
+    assert len(preds) == 1
+    assert preds[0].track is not None
+
+
+def test_fix_prediction_only_skeleton_removal(tmp_path):
+    """Test fix removes skeletons used only by predictions."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    # Create labels with one skeleton for user, one for predictions only
+    skel_user = Skeleton(["head", "tail"], name="user_skel")
+    skel_pred = Skeleton(["a", "b", "c"], name="pred_only_skel")
+
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    labels = Labels(skeletons=[skel_user, skel_pred], videos=[video])
+
+    # Add user instance
+    frame1 = LabeledFrame(video=video, frame_idx=0)
+    user_inst = Instance.from_numpy(np.random.rand(2, 2) * 100, skeleton=skel_user)
+    frame1.instances = [user_inst]
+    labels.labeled_frames.append(frame1)
+
+    # Add prediction-only instance
+    frame2 = LabeledFrame(video=video, frame_idx=1)
+    pred_inst = PredictedInstance.from_numpy(
+        np.random.rand(3, 2) * 100,
+        skeleton=skel_pred,
+        score=0.9,
+    )
+    frame2.instances = [pred_inst]
+    labels.labeled_frames.append(frame2)
+
+    # Save input
+    input_path = tmp_path / "pred_only_skel.slp"
+    labels.save(str(input_path))
+    assert len(labels.skeletons) == 2
+
+    # Run fix (remove-unused-skeletons is enabled by default)
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "-o", str(output_path), "-v"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention prediction-only skeleton
+    assert "predictions only" in output.lower() or "prediction-only" in output.lower()
+
+    # Verify prediction-only skeleton and its instances removed
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.skeletons) == 1
+    assert fixed_labels.skeletons[0].name == "user_skel"
+    # Frame with prediction-only skeleton should be empty and removed
+    assert len(fixed_labels.labeled_frames) == 1
+
+
+def test_fix_remove_unlabeled_videos(tmp_path):
+    """Test fix --remove-unlabeled-videos removes videos with no frames."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    skeleton = Skeleton(["head", "tail"])
+    video1 = _make_test_video(filename="/data/video1.mp4", shape=(100, 480, 640, 1))
+    video2 = _make_test_video(filename="/data/video2.mp4", shape=(100, 480, 640, 1))
+
+    labels = Labels(skeletons=[skeleton], videos=[video1, video2])
+
+    # Add frame only to video1
+    frame = LabeledFrame(video=video1, frame_idx=0)
+    inst = Instance.from_numpy(np.random.rand(2, 2) * 100, skeleton=skeleton)
+    frame.instances = [inst]
+    labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "unlabeled_video.slp"
+    labels.save(str(input_path))
+    assert len(labels.videos) == 2
+
+    # Run fix with --remove-unlabeled-videos
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--remove-unlabeled-videos",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention removing unlabeled videos
+    assert "unlabeled videos" in output.lower()
+
+    # Verify unlabeled video removed
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.videos) == 1
+    assert fixed_labels.videos[0].filename == "/data/video1.mp4"
+
+
+def test_fix_no_deduplicate_videos(tmp_path):
+    """Test fix --no-deduplicate-videos skips video deduplication."""
+    # Create labels with duplicate videos
+    skeleton = Skeleton(["head", "tail"])
+    video1 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video2 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+
+    labels = Labels(skeletons=[skeleton], videos=[video1, video2])
+
+    # Save input
+    input_path = tmp_path / "duplicates.slp"
+    labels.save(str(input_path))
+    assert len(labels.videos) == 2
+
+    # Run fix with deduplication disabled
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--no-deduplicate-videos",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify duplicates NOT merged
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.videos) == 2

@@ -43,7 +43,8 @@ click.rich_click.ERRORS_EPILOGUE = ""
 click.rich_click.COMMAND_GROUPS = {
     "sio": [
         {"name": "Inspection", "commands": ["show", "filenames"]},
-        {"name": "Transformation", "commands": ["convert", "split"]},
+        {"name": "Transformation", "commands": ["convert", "split", "unsplit"]},
+        {"name": "Maintenance", "commands": ["fix"]},
         {"name": "Rendering", "commands": ["render"]},
     ]
 }
@@ -2569,3 +2570,613 @@ def render(
         raise click.ClickException(f"Failed to render: {e}")
 
     click.echo(f"Rendered: {input_path} -> {output_path}")
+
+
+# =============================================================================
+# FIX COMMAND
+# =============================================================================
+
+
+def _get_default_output_path(input_path: Path) -> Path:
+    """Generate default output path for fix command.
+
+    Examples:
+        labels.slp -> labels.fixed.slp
+        labels.pkg.slp -> labels.fixed.pkg.slp
+    """
+    name = input_path.name
+    if name.endswith(".pkg.slp"):
+        new_name = name[:-8] + ".fixed.pkg.slp"
+    elif name.endswith(".slp"):
+        new_name = name[:-4] + ".fixed.slp"
+    else:
+        new_name = name + ".fixed"
+    return input_path.parent / new_name
+
+
+def _analyze_duplicate_videos(labels: Labels) -> list[tuple[Video, list[Video], int]]:
+    """Find groups of duplicate videos using VideoMatcher.
+
+    Returns:
+        List of tuples: (canonical_video, [duplicates], frames_to_reassign)
+    """
+    from sleap_io.model.matching import VideoMatcher
+
+    matcher = VideoMatcher(method="auto")
+    video_groups: list[list[Video]] = []
+
+    for video in labels.videos:
+        matched_group = None
+        for group in video_groups:
+            if matcher.match(group[0], video):
+                matched_group = group
+                break
+        if matched_group:
+            matched_group.append(video)
+        else:
+            video_groups.append([video])
+
+    # Convert to result format
+    results = []
+    for group in video_groups:
+        if len(group) > 1:
+            canonical = group[0]
+            duplicates = group[1:]
+            frames_to_reassign = sum(
+                1 for lf in labels.labeled_frames if lf.video in duplicates
+            )
+            results.append((canonical, duplicates, frames_to_reassign))
+
+    return results
+
+
+def _analyze_skeletons(
+    labels: Labels,
+) -> tuple[
+    list[
+        tuple[Skeleton, int, int]
+    ],  # All skeletons with (skel, user_count, pred_count)
+    list[Skeleton],  # Unused
+    list[Skeleton],  # Pred-only
+    list[Skeleton],  # Has user labels
+]:
+    """Analyze skeleton usage.
+
+    Returns:
+        Tuple of (all_usage, unused, pred_only, user_skeletons)
+    """
+    from collections import defaultdict
+
+    usage: dict[Skeleton, dict[str, int]] = defaultdict(lambda: {"user": 0, "pred": 0})
+
+    # Initialize all skeletons
+    for skel in labels.skeletons:
+        _ = usage[skel]
+
+    # Count usage
+    for lf in labels.labeled_frames:
+        for inst in lf:
+            if isinstance(inst, PredictedInstance):
+                usage[inst.skeleton]["pred"] += 1
+            else:
+                usage[inst.skeleton]["user"] += 1
+
+    all_usage = [(s, u["user"], u["pred"]) for s, u in usage.items()]
+    unused = [s for s, u in usage.items() if u["user"] == 0 and u["pred"] == 0]
+    pred_only = [s for s, u in usage.items() if u["user"] == 0 and u["pred"] > 0]
+    user_skeletons = [s for s, u in usage.items() if u["user"] > 0]
+
+    return all_usage, unused, pred_only, user_skeletons
+
+
+@cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input labels file. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Output labels file. Default: {input}.fixed.slp",
+)
+# Fix operations
+@click.option(
+    "--deduplicate-videos/--no-deduplicate-videos",
+    "deduplicate_videos",
+    default=True,
+    show_default=True,
+    help="Merge duplicate video entries pointing to same file.",
+)
+# Skeleton handling
+@click.option(
+    "--remove-unused-skeletons/--no-remove-unused-skeletons",
+    "remove_unused_skeletons",
+    default=True,
+    show_default=True,
+    help="Remove skeletons with no instances or only predictions.",
+)
+@click.option(
+    "--consolidate-skeletons/--no-consolidate-skeletons",
+    "consolidate_skeletons",
+    default=False,
+    show_default=True,
+    help="Keep most frequent skeleton, DELETE instances using other skeletons.",
+)
+# Remove predictions
+@click.option(
+    "--remove-predictions/--no-remove-predictions",
+    "remove_predictions",
+    default=False,
+    show_default=True,
+    help="Remove ALL predicted instances.",
+)
+@click.option(
+    "--remove-untracked-predictions/--no-remove-untracked-predictions",
+    "remove_untracked_predictions",
+    default=False,
+    show_default=True,
+    help="Remove only predictions with no track assignment.",
+)
+# Remove unused metadata
+@click.option(
+    "--remove-unused-tracks/--no-remove-unused-tracks",
+    "remove_unused_tracks",
+    default=True,
+    show_default=True,
+    help="Remove tracks not used by any instance.",
+)
+# Remove empty data
+@click.option(
+    "--remove-empty-instances/--no-remove-empty-instances",
+    "remove_empty_instances",
+    default=False,
+    show_default=True,
+    help="Remove instances with no visible points.",
+)
+@click.option(
+    "--remove-empty-frames/--no-remove-empty-frames",
+    "remove_empty_frames",
+    default=True,
+    show_default=True,
+    help="Remove frames with no instances.",
+)
+# Remove videos
+@click.option(
+    "--remove-unlabeled-videos/--no-remove-unlabeled-videos",
+    "remove_unlabeled_videos",
+    default=False,
+    show_default=True,
+    help="Remove videos with no labeled frames.",
+)
+# Filename options (passthrough to replace_filenames)
+@click.option(
+    "--prefix",
+    "prefix_map",
+    nargs=2,
+    multiple=True,
+    metavar="OLD NEW",
+    help="Replace OLD path prefix with NEW.",
+)
+@click.option(
+    "--map",
+    "filename_map",
+    nargs=2,
+    multiple=True,
+    metavar="OLD NEW",
+    help="Replace OLD filename with NEW.",
+)
+# Mode options
+@click.option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    default=False,
+    help="Analyze without making changes.",
+)
+@click.option(
+    "-v",
+    "--verbose",
+    "verbose",
+    is_flag=True,
+    default=False,
+    help="Show detailed analysis.",
+)
+def fix(
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
+    output_path: Optional[Path],
+    deduplicate_videos: bool,
+    remove_unused_skeletons: bool,
+    consolidate_skeletons: bool,
+    remove_predictions: bool,
+    remove_untracked_predictions: bool,
+    remove_unused_tracks: bool,
+    remove_empty_instances: bool,
+    remove_empty_frames: bool,
+    remove_unlabeled_videos: bool,
+    prefix_map: tuple[tuple[str, str], ...],
+    filename_map: tuple[tuple[str, str], ...],
+    dry_run: bool,
+    verbose: bool,
+):
+    r"""Fix common issues in labels files.
+
+    Automatically detects and fixes common problems:
+
+    • [bold]Duplicate videos[/]: Merges videos that point to the same file
+    • [bold]Multiple skeletons[/]: Removes unused or prediction-only skeletons
+    • [bold]Predictions[/]: Optionally removes all or untracked predictions
+    • [bold]Path fixes[/]: Updates video paths with --prefix or --map
+    • [bold]Cleanup[/]: Removes empty frames, unused tracks, etc.
+
+    [dim]Examples:[/]
+
+        $ sio fix labels.slp                         # Auto-detect and fix
+        $ sio fix labels.slp --dry-run               # Preview without saving
+        $ sio fix labels.slp -o fixed.slp            # Explicit output
+        $ sio fix labels.slp --remove-predictions    # Remove all predictions
+        $ sio fix labels.slp --remove-untracked-predictions  # Surgical removal
+        $ sio fix labels.slp --consolidate-skeletons # Force single skeleton
+        $ sio fix labels.slp --prefix "C:\\data" /mnt/data
+    """
+    # Resolve input
+    input_path = _resolve_input(input_arg, input_opt, "input labels file")
+
+    # Determine default output path
+    if output_path is None:
+        output_path = _get_default_output_path(input_path)
+
+    # Check for filename options
+    has_filename_opts = len(prefix_map) > 0 or len(filename_map) > 0
+
+    # Load the input file
+    console.print(f"[bold]Loading:[/] {input_path}")
+    try:
+        labels = io_main.load_file(str(input_path), open_videos=False)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input file: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input file is not a labels file (got {type(labels).__name__})."
+        )
+
+    # Print initial stats
+    n_videos = len(labels.videos)
+    n_frames = len(labels.labeled_frames)
+    n_skeletons = len(labels.skeletons)
+    n_tracks = len(labels.tracks)
+    console.print(
+        f"[dim]  {n_videos} videos, {n_frames} frames, "
+        f"{n_skeletons} skeletons, {n_tracks} tracks[/]"
+    )
+
+    # ==========================================================================
+    # ANALYSIS PHASE
+    # ==========================================================================
+    console.print()
+    console.print("[bold]Analyzing...[/]")
+
+    # Analyze duplicate videos
+    duplicate_groups = _analyze_duplicate_videos(labels)
+    has_duplicate_videos = len(duplicate_groups) > 0
+
+    # Analyze skeletons
+    all_skel_usage, unused_skels, pred_only_skels, user_skels = _analyze_skeletons(
+        labels
+    )
+    has_skeleton_issues = len(unused_skels) > 0 or len(pred_only_skels) > 0
+    has_multi_user_skeletons = len(user_skels) > 1
+
+    # Find most frequent user skeleton for consolidation
+    most_frequent_skeleton: Optional[Skeleton] = None
+    other_user_skeletons: list[Skeleton] = []
+    if has_multi_user_skeletons:
+        # Sort by user count descending
+        user_skel_usage = [(s, u, p) for s, u, p in all_skel_usage if u > 0]
+        user_skel_usage.sort(key=lambda x: x[1], reverse=True)
+        most_frequent_skeleton = user_skel_usage[0][0]
+        other_user_skeletons = [s for s, _, _ in user_skel_usage[1:]]
+
+    # Count predictions and untracked predictions
+    n_predictions = 0
+    n_untracked_predictions = 0
+    for lf in labels.labeled_frames:
+        for inst in lf:
+            if isinstance(inst, PredictedInstance):
+                n_predictions += 1
+                if inst.track is None:
+                    n_untracked_predictions += 1
+
+    # ==========================================================================
+    # REPORT FINDINGS
+    # ==========================================================================
+
+    # Videos section
+    console.print()
+    if has_duplicate_videos:
+        console.print(
+            f"[yellow]⚠ Videos:[/] Found {len(duplicate_groups)} duplicate group(s)"
+        )
+        if verbose:
+            for canonical, duplicates, n_reassign in duplicate_groups:
+                console.print(f"  [dim]Canonical:[/] {canonical.filename}")
+                for dup in duplicates:
+                    console.print(f"  [dim]  Duplicate:[/] {dup.filename}")
+                console.print(f"  [dim]  Frames to reassign:[/] {n_reassign}")
+    else:
+        console.print("[green]✓ Videos:[/] No duplicates found")
+
+    # Skeletons section
+    if has_skeleton_issues or has_multi_user_skeletons:
+        status = "[yellow]⚠" if has_skeleton_issues else "[blue]ℹ"
+        console.print(f"{status} Skeletons:[/]")
+        if verbose or has_skeleton_issues or has_multi_user_skeletons:
+            for skel, user_count, pred_count in all_skel_usage:
+                status_str = ""
+                if user_count == 0 and pred_count == 0:
+                    status_str = " [yellow](unused)[/]"
+                elif user_count == 0 and pred_count > 0:
+                    status_str = " [yellow](predictions only)[/]"
+                elif has_multi_user_skeletons and skel is most_frequent_skeleton:
+                    status_str = " [green](most frequent)[/]"
+                console.print(
+                    f"  '{skel.name}': {user_count} user, {pred_count} pred{status_str}"
+                )
+
+        # Warning for multiple user skeletons
+        if has_multi_user_skeletons and not consolidate_skeletons:
+            console.print()
+            console.print(
+                "[yellow]⚠  WARNING: Multiple skeletons have user instances![/]"
+            )
+            if most_frequent_skeleton:
+                other_counts = [
+                    (s, u) for s, u, _ in all_skel_usage if s in other_user_skeletons
+                ]
+                total_other = sum(u for _, u in other_counts)
+                console.print(
+                    f"    Use --consolidate-skeletons to keep "
+                    f"'{most_frequent_skeleton.name}' and remove {total_other} "
+                    f"instances."
+                )
+                console.print(
+                    "    This is irreversible - review carefully before proceeding."
+                )
+    else:
+        console.print(f"[green]✓ Skeletons:[/] {n_skeletons} skeleton(s), all in use")
+
+    # Predictions section
+    if n_predictions > 0:
+        untracked_info = ""
+        if n_untracked_predictions > 0:
+            untracked_info = f" ({n_untracked_predictions} untracked)"
+        console.print(
+            f"[blue]ℹ Predictions:[/] {n_predictions} predicted "
+            f"instances{untracked_info}"
+        )
+    else:
+        console.print("[green]✓ Predictions:[/] None")
+
+    # ==========================================================================
+    # DETERMINE ACTIONS
+    # ==========================================================================
+
+    actions = []
+
+    # Video deduplication
+    if deduplicate_videos and has_duplicate_videos:
+        actions.append(f"Merge {len(duplicate_groups)} duplicate video group(s)")
+
+    # Skeleton handling
+    if remove_unused_skeletons and unused_skels:
+        actions.append(f"Remove {len(unused_skels)} unused skeleton(s)")
+    if remove_unused_skeletons and pred_only_skels:
+        n_pred_instances = sum(p for s, u, p in all_skel_usage if s in pred_only_skels)
+        actions.append(
+            f"Remove {len(pred_only_skels)} prediction-only skeleton(s) "
+            f"and {n_pred_instances} prediction(s)"
+        )
+
+    # Skeleton consolidation
+    if consolidate_skeletons and has_multi_user_skeletons:
+        other_instance_count = sum(
+            u for s, u, _ in all_skel_usage if s in other_user_skeletons
+        )
+        actions.append(
+            f"[red]CONSOLIDATE: Keep '{most_frequent_skeleton.name}', "
+            f"DELETE {other_instance_count} instances from other skeletons[/]"
+        )
+
+    # Prediction removal
+    if remove_predictions and n_predictions > 0:
+        actions.append(f"Remove {n_predictions} prediction(s)")
+    elif remove_untracked_predictions and n_untracked_predictions > 0:
+        actions.append(f"Remove {n_untracked_predictions} untracked prediction(s)")
+
+    # Filename changes
+    if has_filename_opts:
+        actions.append("Update video filenames")
+
+    # Cleanup actions (these happen after other modifications)
+    if remove_empty_instances:
+        actions.append("Remove empty instances")
+    if remove_unused_tracks:
+        actions.append("Remove unused tracks")
+    if remove_unlabeled_videos:
+        actions.append("Remove unlabeled videos")
+    if remove_empty_frames:
+        actions.append("Remove empty frames")
+
+    # Print planned actions
+    console.print()
+    if actions:
+        console.print("[bold]Actions:[/]")
+        for action in actions:
+            prefix = "[dim]→[/]" if dry_run else "[green]→[/]"
+            console.print(f"  {prefix} {action}")
+    else:
+        console.print("[green]No issues to fix.[/]")
+        if not dry_run:
+            console.print(f"[dim]No changes needed. Saving as: {output_path}[/]")
+
+    if dry_run:
+        console.print()
+        console.print("[yellow][DRY RUN - no changes made][/]")
+        return
+
+    # ==========================================================================
+    # APPLY FIXES (order matters!)
+    # ==========================================================================
+
+    # 1. Fix duplicate videos (early - affects frame references)
+    if deduplicate_videos and has_duplicate_videos:
+        for canonical, duplicates, _ in duplicate_groups:
+            for dup in duplicates:
+                # Reassign frames
+                for lf in labels.labeled_frames:
+                    if lf.video is dup:
+                        lf.video = canonical
+                # Remove duplicate video
+                labels.videos.remove(dup)
+
+    # 2. Skeleton consolidation (before other skeleton operations)
+    if consolidate_skeletons and has_multi_user_skeletons:
+        console.print()
+        console.print("[red bold]CONSOLIDATING SKELETONS (destructive operation)[/]")
+        console.print(f"    Keeping: '{most_frequent_skeleton.name}'")
+
+        deleted_count = 0
+        frames_affected = 0
+        for lf in labels.labeled_frames:
+            instances_to_remove = [
+                inst for inst in lf.instances if inst.skeleton in other_user_skeletons
+            ]
+            if instances_to_remove:
+                frames_affected += 1
+                deleted_count += len(instances_to_remove)
+                for inst in instances_to_remove:
+                    lf.instances.remove(inst)
+
+        # Remove the other skeletons
+        for skel in other_user_skeletons:
+            if skel in labels.skeletons:
+                labels.skeletons.remove(skel)
+
+        console.print(
+            f"    Deleted {deleted_count} instances from {frames_affected} frames."
+        )
+
+    # 3. Remove unused skeletons (completely unused)
+    if remove_unused_skeletons:
+        for skel in unused_skels:
+            if skel in labels.skeletons:
+                labels.skeletons.remove(skel)
+
+    # 4. Remove prediction-only skeletons and their predictions
+    if remove_unused_skeletons and pred_only_skels:
+        for lf in labels.labeled_frames:
+            lf.instances = [
+                inst for inst in lf.instances if inst.skeleton not in pred_only_skels
+            ]
+        for skel in pred_only_skels:
+            if skel in labels.skeletons:
+                labels.skeletons.remove(skel)
+
+    # 5. Remove predictions
+    if remove_predictions and n_predictions > 0:
+        labels.remove_predictions(clean=False)
+    elif remove_untracked_predictions and n_untracked_predictions > 0:
+        for lf in labels.labeled_frames:
+            lf.instances = [
+                inst
+                for inst in lf.instances
+                if not (isinstance(inst, PredictedInstance) and inst.track is None)
+            ]
+
+    # 6. Apply filename changes
+    if has_filename_opts:
+        try:
+            if prefix_map:
+                labels.replace_filenames(
+                    prefix_map=dict(prefix_map),
+                    open_videos=False,
+                )
+            elif filename_map:
+                labels.replace_filenames(
+                    filename_map=dict(filename_map),
+                    open_videos=False,
+                )
+        except ValueError as e:
+            raise click.ClickException(f"Failed to update filenames: {e}")
+
+    # 7. Cleanup (order: empty instances -> tracks -> unlabeled videos -> frames)
+    # Empty instances first (may create empty frames)
+    if remove_empty_instances:
+        labels.clean(
+            frames=False,
+            empty_instances=True,
+            skeletons=False,
+            tracks=False,
+            videos=False,
+        )
+
+    # Unused tracks
+    if remove_unused_tracks:
+        labels.clean(
+            frames=False,
+            empty_instances=False,
+            skeletons=False,
+            tracks=True,
+            videos=False,
+        )
+
+    # Unlabeled videos
+    if remove_unlabeled_videos:
+        labels.clean(
+            frames=False,
+            empty_instances=False,
+            skeletons=False,
+            tracks=False,
+            videos=True,
+        )
+
+    # Empty frames LAST (depends on all other removals)
+    if remove_empty_frames:
+        labels.clean(
+            frames=True,
+            empty_instances=False,
+            skeletons=False,
+            tracks=False,
+            videos=False,
+        )
+
+    # ==========================================================================
+    # SAVE OUTPUT
+    # ==========================================================================
+
+    try:
+        io_main.save_file(labels, str(output_path))
+    except Exception as e:
+        raise click.ClickException(f"Failed to save output file: {e}")
+
+    # Print final stats
+    console.print()
+    console.print(f"[bold green]Saved:[/] {output_path}")
+    console.print(
+        f"[dim]  {len(labels.videos)} videos, {len(labels.labeled_frames)} frames, "
+        f"{len(labels.skeletons)} skeletons, {len(labels.tracks)} tracks[/]"
+    )
