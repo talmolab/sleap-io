@@ -2385,6 +2385,7 @@
   
 
 
+<div class="md-source-file"><a href="../cli.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="command-line-interface">Command-Line Interface<a class="headerlink" href="#command-line-interface" title="Permanent link">&para;</a></h1>
 <p>sleap-io provides a command-line interface (CLI) for inspecting and converting pose tracking data without writing Python code. The CLI is designed for quick exploration, scripting, and integration into data pipelines.</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
@@ -4620,18 +4621,24 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <a id="__codelineno-104-7" name="__codelineno-104-7" href="#__codelineno-104-7"></a><span class="c1"># Preview what would be done</span>
 <a id="__codelineno-104-8" name="__codelineno-104-8" href="#__codelineno-104-8"></a>sio<span class="w"> </span>reencode<span class="w"> </span>project.slp<span class="w"> </span>-o<span class="w"> </span>project.reencoded.slp<span class="w"> </span>--dry-run
 </code></pre></div>
-<p>This creates:
-- A new SLP file with updated video paths
-- A <code>{output_name}.videos/</code> directory containing the reencoded videos</p>
-<p><strong>Behavior by video type:</strong>
-- <strong>MediaVideo</strong> (<code>.mp4</code>, <code>.avi</code>, <code>.mov</code>, etc.): Reencoded using ffmpeg (fast)
-- <strong>HDF5Video</strong> (embedded videos in <code>.slp</code> files): Reencoded using Python path
-- <strong>ImageVideo</strong> (image sequences): Skipped (cannot be reencoded to video)
-- <strong>TiffVideo</strong> (TIFF stacks): Skipped (cannot be reencoded to video)</p>
-<p>This is particularly useful for:
-- Fixing seeking issues in all videos before starting annotation
-- Standardizing video formats across a multi-video project
-- Extracting embedded videos from <code>.pkg.slp</code> files to standalone MP4s</p>
+<p>This creates:</p>
+<ul>
+<li>A new SLP file with updated video paths</li>
+<li>A <code>{output_name}.videos/</code> directory containing the reencoded videos</li>
+</ul>
+<p><strong>Behavior by video type:</strong></p>
+<ul>
+<li><strong>MediaVideo</strong> (<code>.mp4</code>, <code>.avi</code>, <code>.mov</code>, etc.): Reencoded using ffmpeg (fast)</li>
+<li><strong>HDF5Video</strong> (embedded videos in <code>.slp</code> files): Reencoded using Python path</li>
+<li><strong>ImageVideo</strong> (image sequences): Skipped (cannot be reencoded to video)</li>
+<li><strong>TiffVideo</strong> (TIFF stacks): Skipped (cannot be reencoded to video)</li>
+</ul>
+<p>This is particularly useful for:</p>
+<ul>
+<li>Fixing seeking issues in all videos before starting annotation</li>
+<li>Standardizing video formats across a multi-video project</li>
+<li>Extracting embedded videos from <code>.pkg.slp</code> files to standalone MP4s</li>
+</ul>
 <h4 id="options-reference_3">Options Reference<a class="headerlink" href="#options-reference_3" title="Permanent link">&para;</a></h4>
 <h5 id="inputoutput-options_2">Input/Output Options<a class="headerlink" href="#inputoutput-options_2" title="Permanent link">&para;</a></h5>
 <table>
