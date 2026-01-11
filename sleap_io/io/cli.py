@@ -3265,11 +3265,6 @@ def embed(
     except Exception as e:
         raise click.ClickException(f"Failed to load input file: {e}")
 
-    if not isinstance(labels, Labels):
-        raise click.ClickException(
-            f"Input file is not a labels file (got {type(labels).__name__})."
-        )
-
     # Check if at least one frame type is selected
     if not include_user and not include_predictions and not include_suggestions:
         raise click.ClickException(
@@ -3381,11 +3376,6 @@ def unembed(
         labels = io_main.load_file(str(input_path), format="slp", open_videos=True)
     except Exception as e:
         raise click.ClickException(f"Failed to load input file: {e}")
-
-    if not isinstance(labels, Labels):
-        raise click.ClickException(
-            f"Input file is not a labels file (got {type(labels).__name__})."
-        )
 
     # Check for embedded videos
     embedded_videos = []
