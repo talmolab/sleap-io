@@ -138,25 +138,26 @@ class ErrorMode(str, Enum):
 
 
 def _get_root_video(video: Video) -> Video:
-    """Traverse source_video/original_video chain to find the root video.
+    """Find the root video in the provenance chain.
 
     Args:
         video: The video to find the root of.
 
     Returns:
-        The root video in the provenance chain:
-        - If original_video is set, returns it (original_video IS the root)
-        - Otherwise, traverses source_video chain to find the root
+        The root video in the provenance chain. If the video has a source_video
+        chain, returns the computed original_video (the root of the chain).
+        Otherwise returns the video itself (it IS the root).
+
+    Note:
+        original_video is now a computed property that traverses the source_video
+        chain to find the root, so this function simply uses that property.
     """
-    # If original_video is explicitly set, it IS the root
+    # original_video is a computed property that traverses source_video chain
     if video.original_video is not None:
         return video.original_video
 
-    # Otherwise traverse source_video chain
-    v = video
-    while v.source_video is not None:
-        v = v.source_video
-    return v
+    # No chain - this video IS the root
+    return video
 
 
 def _is_same_file_direct(video1: Video, video2: Video) -> bool:

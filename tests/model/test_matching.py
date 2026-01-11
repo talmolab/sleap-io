@@ -1089,6 +1089,7 @@ class TestVideoMatcherCoverageGaps:
         """Test _get_effective_shape returns original_video's shape.
 
         Covers line 253: return original_shape from original_video chain.
+        Note: original_video is now a computed property from source_video chain.
         """
         from sleap_io.model.matching import _get_effective_shape
 
@@ -1096,10 +1097,14 @@ class TestVideoMatcherCoverageGaps:
         original = Video(filename="/data/original.mp4", open_backend=False)
         original.backend_metadata["shape"] = (100, 480, 640, 3)
 
-        # Create embedded video with original_video reference
+        # Create embedded video with source_video reference
+        # (original_video will be computed from source_video)
         embedded = Video(
-            filename="embedded.pkg.slp", original_video=original, open_backend=False
+            filename="embedded.pkg.slp", source_video=original, open_backend=False
         )
+
+        # Verify original_video is computed correctly
+        assert embedded.original_video is original
 
         # Should return original's shape
         shape = _get_effective_shape(embedded)
@@ -1109,8 +1114,9 @@ class TestVideoMatcherCoverageGaps:
         """Test AUTO pairwise rejects when provenance chains conflict.
 
         Covers line 525: return False for provenance conflict.
+        Note: original_video is now a computed property from source_video chain.
         """
-        # Create two videos with different original_video references
+        # Create two videos with different source_video references
         original1 = Video(filename="/data/video1.mp4", open_backend=False)
         original1.backend_metadata["shape"] = (100, 480, 640, 3)
 
@@ -1118,12 +1124,12 @@ class TestVideoMatcherCoverageGaps:
         original2.backend_metadata["shape"] = (100, 480, 640, 3)  # Same shape
 
         embedded1 = Video(
-            filename="embedded.pkg.slp", original_video=original1, open_backend=False
+            filename="embedded.pkg.slp", source_video=original1, open_backend=False
         )
         embedded1.backend_metadata["shape"] = (100, 480, 640, 3)
 
         embedded2 = Video(
-            filename="embedded2.pkg.slp", original_video=original2, open_backend=False
+            filename="embedded2.pkg.slp", source_video=original2, open_backend=False
         )
         embedded2.backend_metadata["shape"] = (100, 480, 640, 3)
 

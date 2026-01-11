@@ -117,12 +117,14 @@ def make_video(
     # Basic path resolution.
     video_path = Path(sanitize_filename(video_path))
 
-    original_video = None
     if is_embedded:
-        # Try to recover the source video and original video from HDF5 attrs.
+        # Try to recover the source video from HDF5 attrs.
         # Use provided file handle if available to avoid repeated file opens.
+        # Note: original_video is now a computed property derived from source_video,
+        # so we only load source_video. Legacy files with original_video but no
+        # source_video are handled by using original_video as source_video.
         def _read_embedded_video_metadata(f: h5py.File):
-            nonlocal source_video, original_video
+            nonlocal source_video
             dataset = backend_metadata["dataset"]
             if dataset.endswith("/video"):
                 dataset = dataset[:-6]
@@ -139,12 +141,13 @@ def make_video(
                     _hdf5_file=f,
                 )
 
-            # Load original_video metadata
-            if f"{dataset}/original_video" in f:
+            # Legacy compatibility: if original_video exists but source_video doesn't,
+            # use original_video as source_video (they're equivalent for single-level)
+            if source_video is None and f"{dataset}/original_video" in f:
                 original_video_json = json.loads(
                     f[f"{dataset}/original_video"].attrs["json"]
                 )
-                original_video = make_video(
+                source_video = make_video(
                     labels_path,
                     original_video_json,
                     open_backend=False,  # Original videos are often not available
@@ -165,8 +168,10 @@ def make_video(
                 open_backend=open_backend,
             )
 
-        if "original_video" in video_json:
-            original_video = make_video(
+        # Legacy compatibility: if original_video exists but source_video doesn't,
+        # use original_video as source_video
+        if source_video is None and "original_video" in video_json:
+            source_video = make_video(
                 labels_path,
                 video_json["original_video"],
                 open_backend=False,  # Original videos are often not available
@@ -236,7 +241,6 @@ def make_video(
         backend=backend,
         backend_metadata=backend_metadata,
         source_video=source_video,
-        original_video=original_video,
         open_backend=open_backend,
     )
 
@@ -351,9 +355,8 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
     if hasattr(video, "source_video") and video.source_video is not None:
         result["source_video"] = video_to_dict(video.source_video, labels_path)
 
-    # Add original_video metadata if present
-    if hasattr(video, "original_video") and video.original_video is not None:
-        result["original_video"] = video_to_dict(video.original_video, labels_path)
+    # Note: original_video is now a computed property derived from source_video,
+    # so we don't store it. Legacy files with original_video are handled on load.
 
     return result
 
@@ -906,80 +909,44 @@ def write_videos(
         if "videos_json" not in f:
             f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
 
-    # Save lineage metadata in a separate pass to ensure video groups exist
+    # Save source_video lineage metadata in a separate pass to ensure video groups exist
+    # Note: original_video is now a computed property derived from source_video chain,
+    # so we only need to store source_video (immediate parent).
     with h5py.File(labels_path, "a") as f:
         for video_ind, video in enumerate(videos):
             dataset = f"video{video_ind}"
 
             # If original_videos is provided (e.g., during embedding), use those
-            original_video = original_videos[video_ind] if original_videos else video
+            pre_embed_video = original_videos[video_ind] if original_videos else video
 
-            # Determine what metadata to save based on reference mode and video
-            # structure
-            original_to_save = None
+            # Determine source_video to save based on reference mode
             source_to_save = None
-
-            # Handle original_video metadata
-            if reference_mode != VideoReferenceMode.RESTORE_ORIGINAL:
-                if original_video.original_video:
-                    original_to_save = original_video.original_video
-                elif (
-                    original_video.source_video is not None
-                    and hasattr(original_video.source_video, "original_video")
-                    and original_video.source_video.original_video is not None
-                ):
-                    # If source_video has original_video, use that (it's the true
-                    # original)
-                    original_to_save = original_video.source_video.original_video
-                elif (
-                    original_video.source_video is not None
-                    and reference_mode == VideoReferenceMode.EMBED
-                ):
-                    # For embed mode, if we only have source_video, that becomes the
-                    # original
-                    original_to_save = original_video.source_video
-
-            # Handle source_video metadata
             if reference_mode != VideoReferenceMode.PRESERVE_SOURCE:
                 if reference_mode == VideoReferenceMode.EMBED and original_videos:
-                    # For embed mode, save the original video as source (it's the
-                    # .pkg.slp)
-                    source_to_save = original_video
-                elif original_video.source_video is not None:
-                    source_to_save = original_video.source_video
+                    # For embed mode, save the pre-embedding video as source
+                    source_to_save = pre_embed_video
+                elif pre_embed_video.source_video is not None:
+                    source_to_save = pre_embed_video.source_video
 
-            # Write metadata as datasets in the video group
-            if dataset in f:
+            # Write source_video metadata to the video group
+            if dataset in f and source_to_save is not None:
                 video_group = f[dataset]
 
-                if original_to_save is not None:
-                    # Store original_video metadata as a group (consistent with
-                    # source_video)
-                    original_grp = video_group.require_group("original_video")
-                    original_json = video_to_dict(original_to_save, labels_path)
-                    original_grp.attrs["json"] = json.dumps(
-                        original_json, separators=(",", ":")
+                # For EMBED mode with original_videos, we need to overwrite
+                # source_video because embed_videos saves the wrong metadata
+                if (
+                    reference_mode == VideoReferenceMode.EMBED
+                    and original_videos
+                    and "source_video" in video_group
+                ):
+                    del video_group["source_video"]
+
+                if "source_video" not in video_group:
+                    source_grp = video_group.require_group("source_video")
+                    source_json = video_to_dict(source_to_save, labels_path)
+                    source_grp.attrs["json"] = json.dumps(
+                        source_json, separators=(",", ":")
                     )
-
-                if source_to_save is not None:
-                    # For EMBED mode with original_videos, we need to overwrite
-                    # source_video
-                    # because embed_videos saves the wrong metadata
-                    if (
-                        reference_mode == VideoReferenceMode.EMBED
-                        and original_videos
-                        and "source_video" in video_group
-                    ):
-                        # Remove the existing source_video group
-                        del video_group["source_video"]
-
-                    if "source_video" not in video_group:
-                        # Create source_video group
-                        source_grp = video_group.require_group("source_video")
-                        source_json = video_to_dict(source_to_save, labels_path)
-                        source_grp.attrs["json"] = json.dumps(
-                            source_json, separators=(",", ":")
-                        )
 
 
 def read_tracks(labels_path: str) -> list[Track]:

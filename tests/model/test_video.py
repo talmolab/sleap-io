@@ -613,14 +613,17 @@ def test_video_matches_content_backend_edge_cases():
     assert not video6.matches_content(video7)  # HDF5Video vs ImageVideo
 
 
-def test_video_deepcopy_preserves_original_video():
-    """Test that Video.__deepcopy__() preserves original_video attribute.
+def test_video_deepcopy_preserves_source_video_chain():
+    """Test that Video.__deepcopy__() preserves source_video chain.
 
-    The original_video attribute is used for provenance tracking during merge
-    operations. If not preserved during deepcopy, the provenance chain breaks
-    and _get_root_video() in matching.py cannot correctly identify related videos.
+    The source_video attribute (and the computed original_video property) is used
+    for provenance tracking during merge operations. If source_video is not
+    preserved during deepcopy, the provenance chain breaks and _get_root_video()
+    in matching.py cannot correctly identify related videos.
+
+    Note: original_video is now a computed property that traverses source_video chain.
     """
-    # Create a chain: original -> source -> video with original_video
+    # Create a chain: original -> source -> video
     original = Video(filename="/data/original.mp4", open_backend=False)
     source = Video(
         filename="/embedded/source.slp", source_video=original, open_backend=False
@@ -628,15 +631,18 @@ def test_video_deepcopy_preserves_original_video():
     video = Video(
         filename="/current/video.mp4",
         source_video=source,
-        original_video=original,
         open_backend=False,
     )
 
-    # Deepcopy should preserve all provenance attributes
+    # Verify original_video is computed correctly from chain
+    assert video.original_video is original
+
+    # Deepcopy should preserve source_video chain
     video_copy = copy.deepcopy(video)
 
     assert video_copy.filename == video.filename
     assert video_copy.source_video is video.source_video
+    # original_video (computed) should give same result through the chain
     assert video_copy.original_video is video.original_video
     assert video_copy.original_video is original
 
