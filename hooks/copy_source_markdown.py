@@ -11,7 +11,6 @@ The hook runs during the build process to modify pages and copy source files.
 
 import shutil
 from pathlib import Path
-from urllib.parse import urljoin
 
 
 def on_page_content(html: str, page, config, files) -> str:  # noqa: ARG001
@@ -27,17 +26,24 @@ def on_page_content(html: str, page, config, files) -> str:  # noqa: ARG001
         Modified HTML with the source link injected.
     """
     # Get the source file path relative to docs_dir
-    src_path = page.file.src_path  # e.g., "formats/slp.md" or "index.md"
+    src_path = Path(page.file.src_path)  # e.g., "formats/slp.md" or "index.md"
 
-    # Calculate the URL to the markdown source
-    # The markdown files are copied to the same relative path in site_dir
-    # For a page at /formats/slp/, the source is at /formats/slp.md
-    # For a page at /formats/, the source is at /formats/index.md
-    site_url = config.get("site_url", "/")
-    if not site_url.endswith("/"):
-        site_url += "/"
-
-    md_url = urljoin(site_url, src_path)
+    # Calculate a relative URL to the markdown source
+    # MkDocs generates directory-style URLs:
+    #   - install.md -> /install/index.html
+    #   - formats/slp.md -> /formats/slp/index.html
+    #   - formats/index.md -> /formats/index.html
+    #   - index.md -> /index.html
+    # The markdown files are copied to the same relative path in site_dir:
+    #   - install.md -> /install.md
+    #   - formats/slp.md -> /formats/slp.md
+    # So we use relative paths that work from the page's URL:
+    if src_path.name == "index.md":
+        # index.md pages: source is in the same directory
+        md_url = "index.md"
+    else:
+        # Non-index pages: source is one level up (../filename.md)
+        md_url = f"../{src_path.name}"
 
     # Create a subtle link block at the top of the content
     # SVG is a document icon from Material Design Icons
