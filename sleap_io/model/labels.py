@@ -138,6 +138,20 @@ class Labels:
             )
         return sum(len(lf.predicted_instances) for lf in self.labeled_frames)
 
+    @property
+    def n_user_frames(self) -> int:
+        """Number of labeled frames containing at least one user instance.
+
+        When lazy-loaded, this uses a fast path that queries the raw data
+        directly without materializing LabeledFrame objects.
+
+        Returns:
+            Count of frames with user-labeled instances.
+        """
+        if self.is_lazy:
+            return len(self._lazy_store.get_user_frame_indices())
+        return sum(1 for lf in self.labeled_frames if lf.has_user_instances)
+
     def n_frames_per_video(self) -> dict["Video", int]:
         """Get the number of labeled frames for each video.
 

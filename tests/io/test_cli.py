@@ -384,15 +384,28 @@ def test_show_header_shows_file_size():
 
 
 def test_show_header_shows_instance_counts():
-    """Test that header shows labeled/predicted instance counts."""
+    """Test that header shows user/predicted instance counts."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
     result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # typical.slp has both user and predicted instances
-    assert "labeled" in out
+    assert "user instances" in out
     assert "predicted" in out
+
+
+def test_show_header_shows_user_frames_vs_total():
+    """Test that header shows user frames vs total when different."""
+    runner = CliRunner()
+    # This file has 5 user frames out of 10 total frames
+    path = _data_path("slp/labels.v002.rel_paths.slp")
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show "5 user frames (10 total)" format
+    assert "5 user frames" in out
+    assert "10 total" in out
 
 
 def test_show_header_shows_full_path():
@@ -499,15 +512,29 @@ def test_show_format_file_size_units():
 
 
 def test_show_provenance_with_list_and_dict():
-    """Test provenance display with list and dict values."""
+    """Test provenance display with list and dict values.
+
+    With --provenance flag, full JSON is shown (not truncated).
+    Without --provenance, compact mode shows "[N items]" or "{N keys}".
+    """
     runner = CliRunner()
     path = _data_path("slp/predictions_1.2.7_provenance_and_tracking.slp")
+
+    # Test full mode (--provenance): shows full JSON
     result = runner.invoke(cli, ["show", str(path), "--provenance", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    # This file has 'args' which is a dict
+    # This file has 'args' which is a dict - full mode shows actual JSON content
     assert "args:" in out
-    assert "keys" in out  # Shows "{...} (N keys)"
+    # Full JSON mode shows the actual keys from the dict
+    assert '"data_path"' in out or "data_path" in out
+
+    # Test compact mode (no --provenance): shows summary
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Compact mode shows "{N keys}" for dicts
+    assert "keys}" in out
 
 
 # =============================================================================
@@ -616,6 +643,213 @@ def test_show_video_unknown_shape(tmp_path):
     out = _strip_ansi(result.output)
     # Should show unknown for size
     assert "unknown" in out.lower()
+
+
+def test_show_video_summary_many_without_metadata(tmp_path):
+    """Test video summary with many videos without metadata shows condensed summary."""
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Create labels with 5 videos that have no shape (> 3 triggers summary mode)
+    videos = [
+        Video(
+            filename=f"/nonexistent/path/to/video_{i}.mp4",
+            open_backend=False,
+            backend_metadata={},  # No shape cached
+        )
+        for i in range(5)
+    ]
+    labels = Labels(videos=videos)
+
+    slp_path = tmp_path / "many_videos_no_metadata.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show condensed summary instead of 5 individual lines
+    assert "+5 videos without cached metadata" in out
+    # Should show status (found/not found)
+    assert "not found" in out
+
+
+def test_show_video_summary_mixed_exists(tmp_path):
+    """Test video summary when some videos without metadata exist and some don't."""
+    from pathlib import Path
+
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Get absolute paths to test videos that actually exist
+    existing_video_1 = str(
+        Path("tests/data/videos/centered_pair_low_quality.mp4").resolve()
+    )
+    existing_video_2 = str(Path("tests/data/videos/small_robot_3_frame.mp4").resolve())
+
+    # Create 5 videos: 2 that exist (no metadata), 3 that don't exist (no metadata)
+    videos = [
+        # These exist but have no cached shape
+        Video(
+            filename=existing_video_1,
+            open_backend=False,
+            backend_metadata={},  # No shape cached
+        ),
+        Video(
+            filename=existing_video_2,
+            open_backend=False,
+            backend_metadata={},  # No shape cached
+        ),
+        # These don't exist
+        Video(
+            filename="/nonexistent/path/video_1.mp4",
+            open_backend=False,
+            backend_metadata={},
+        ),
+        Video(
+            filename="/nonexistent/path/video_2.mp4",
+            open_backend=False,
+            backend_metadata={},
+        ),
+        Video(
+            filename="/nonexistent/path/video_3.mp4",
+            open_backend=False,
+            backend_metadata={},
+        ),
+    ]
+    labels = Labels(videos=videos)
+
+    slp_path = tmp_path / "mixed_exists.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show both "found" and "not found"
+    assert "+5 videos without cached metadata" in out
+    assert "2 found" in out
+    assert "3 not found" in out
+
+
+def test_show_video_with_metadata_not_found(tmp_path):
+    """Test video with cached metadata but file doesn't exist shows not found tag."""
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Video has shape cached but file doesn't exist
+    video = Video(
+        filename="/nonexistent/path/to/video.mp4",
+        open_backend=False,
+        backend_metadata={"shape": (100, 480, 640, 3)},  # Has cached shape
+    )
+    labels = Labels(videos=[video])
+
+    slp_path = tmp_path / "metadata_not_found.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show dimensions from metadata
+    assert "640" in out
+    assert "480" in out
+    # Should show not found tag
+    assert "not found" in out
+
+
+def test_show_video_image_sequence_with_metadata():
+    """Test video summary shows 'N images' for image sequences with cached metadata."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    import sleap_io.io.cli as cli_module
+    from sleap_io import Labels, Video
+    from sleap_io.io.cli import _print_video_summary
+
+    # Image sequence with cached shape
+    video = Video(
+        filename=[
+            "tests/data/videos/imgs/img.00.jpg",
+            "tests/data/videos/imgs/img.01.jpg",
+            "tests/data/videos/imgs/img.02.jpg",
+        ],
+        open_backend=False,
+        backend_metadata={"shape": (3, 100, 100, 3)},  # Has cached shape
+    )
+    labels = Labels(videos=[video])
+
+    # Capture output by patching console
+    original_console = cli_module.console
+    string_io = StringIO()
+    cli_module.console = Console(file=string_io, force_terminal=True)
+
+    try:
+        _print_video_summary(labels)
+        out = _strip_ansi(string_io.getvalue())
+        # Should show "3 images" for image sequence with metadata
+        assert "3 images" in out
+    finally:
+        cli_module.console = original_console
+
+
+def test_show_video_long_path_truncation(tmp_path):
+    """Test video paths are truncated from the left for long paths."""
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Create a video with a very long filename (> 80 chars)
+    long_path = (
+        "/very/long/path/that/exceeds/the/maximum/width/limit/"
+        "for/display/purposes/video_file_with_long_name.mp4"
+    )
+    video = Video(
+        filename=long_path,
+        open_backend=False,
+        backend_metadata={"shape": (100, 480, 640, 3)},
+    )
+    labels = Labels(videos=[video])
+
+    slp_path = tmp_path / "long_path.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show truncated path with ... prefix
+    assert "..." in out
+    # Should preserve the filename at the end
+    assert "video_file_with_long_name.mp4" in out
+
+
+def test_truncate_path_left_edge_cases():
+    """Test _truncate_path_left with edge cases."""
+    from sleap_io.io.cli import _truncate_path_left
+
+    # Short path - no truncation
+    assert _truncate_path_left("/short/path.mp4", 80) == "/short/path.mp4"
+
+    # Exactly at limit - no truncation
+    path = "x" * 80
+    assert _truncate_path_left(path, 80) == path
+
+    # Just over limit - truncation
+    path = "x" * 81
+    result = _truncate_path_left(path, 80)
+    assert result.startswith("...")
+    assert len(result) == 80
+
+    # Very small max_width (edge case: available <= 0)
+    path = "/some/path.mp4"
+    result = _truncate_path_left(path, 3)
+    assert len(result) == 3
+    assert result == "/so"  # Just takes first 3 chars
+
+    result = _truncate_path_left(path, 2)
+    assert len(result) == 2
 
 
 def test_show_video_image_sequence():
@@ -988,7 +1222,11 @@ def test_show_provenance_empty():
 
 
 def test_show_provenance_list_truncation(tmp_path):
-    """Test provenance with long list values gets truncated."""
+    """Test provenance with long list values in compact vs full mode.
+
+    Compact mode (default): shows "[N items]" summary
+    Full mode (--provenance): shows full JSON
+    """
     from sleap_io import Labels, save_file
 
     runner = CliRunner()
@@ -1000,13 +1238,22 @@ def test_show_provenance_list_truncation(tmp_path):
     slp_path = tmp_path / "long_list_provenance.slp"
     save_file(labels, slp_path)
 
+    # Compact mode (no --provenance) shows summary
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show "[10 items]" summary
+    assert "[10 items]" in out
+
+    # Full mode (--provenance) shows all items
     result = runner.invoke(
         cli, ["show", str(slp_path), "--provenance", "--no-open-videos"]
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    # Should show truncation
-    assert "10 total" in out
+    # Should show actual paths
+    assert "model_0" in out
+    assert "model_9" in out
 
 
 def test_show_lf_with_nan_points(tmp_path):

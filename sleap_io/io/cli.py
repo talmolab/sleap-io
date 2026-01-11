@@ -269,8 +269,12 @@ def _print_header(path: Path, labels: Labels) -> None:
     file_type = "Package (embedded)" if is_pkg else "Labels"
 
     # Count instances using fast stats (works for both eager and lazy)
-    n_user = labels.n_user_instances
-    n_pred = labels.n_pred_instances
+    n_user_inst = labels.n_user_instances
+    n_pred_inst = labels.n_pred_instances
+
+    # Count frames using fast stats
+    n_total_frames = len(labels.labeled_frames)
+    n_user_frames = labels.n_user_frames
 
     # Build header content (without full path - shown below to avoid truncation)
     header_lines = [
@@ -281,17 +285,27 @@ def _print_header(path: Path, labels: Labels) -> None:
         f"[dim]Size:[/]     {_format_file_size(file_size)}",
     ]
 
-    # Stats row
+    # Stats row - videos and frames
     stats_parts = [
         f"[bold]{len(labels.videos)}[/] video{'s' if len(labels.videos) != 1 else ''}",
-        f"[bold]{len(labels.labeled_frames)}[/] "
-        f"frame{'s' if len(labels.labeled_frames) != 1 else ''}",
     ]
 
-    if n_user > 0:
-        stats_parts.append(f"[bold]{n_user}[/] labeled")
-    if n_pred > 0:
-        stats_parts.append(f"[bold]{n_pred}[/] predicted")
+    # Frame counts - show user frames vs total if different
+    if n_user_frames > 0 and n_user_frames != n_total_frames:
+        stats_parts.append(
+            f"[bold]{n_user_frames}[/] user frames ([dim]{n_total_frames} total[/])"
+        )
+    else:
+        stats_parts.append(
+            f"[bold]{n_total_frames}[/] frame{'s' if n_total_frames != 1 else ''}"
+        )
+
+    # Instance counts - always clarify user vs predicted
+    if n_user_inst > 0:
+        stats_parts.append(f"[bold]{n_user_inst}[/] user instances")
+    if n_pred_inst > 0:
+        stats_parts.append(f"[bold]{n_pred_inst}[/] predicted")
+
     if labels.tracks:
         stats_parts.append(
             f"[bold]{len(labels.tracks)}[/] "
@@ -638,6 +652,31 @@ def _format_video_filename(vid: Video) -> str:
     return Path(vid.filename).name
 
 
+def _truncate_path_left(path_str: str, max_width: int) -> str:
+    """Truncate a path from the left to fit within max_width.
+
+    Preserves the basename and as much of the path as possible,
+    truncating from the left (root) side.
+
+    Args:
+        path_str: Full path string.
+        max_width: Maximum width in characters.
+
+    Returns:
+        Truncated path with "..." prefix if needed.
+    """
+    if len(path_str) <= max_width:
+        return path_str
+
+    # Reserve space for ellipsis
+    available = max_width - 3  # "..."
+    if available <= 0:
+        return path_str[:max_width]
+
+    # Take from the right (end) of the path
+    return "..." + path_str[-available:]
+
+
 def _build_status_line(vid: Video) -> str:
     """Build a status line describing video accessibility.
 
@@ -681,30 +720,83 @@ def _print_video_summary(labels: Labels) -> None:
     console.print(f"[bold]Videos[/] ({n_videos})")
     console.print()
 
+    # Count videos with and without metadata
+    videos_with_metadata = []
+    videos_without_metadata = []
+
     for i, vid in enumerate(labels.videos):
+        if vid.shape:
+            videos_with_metadata.append((i, vid))
+        else:
+            videos_without_metadata.append((i, vid))
+
+    # Print videos with metadata
+    for i, vid in videos_with_metadata:
         # Get video info using defensive helpers
-        fname = _format_video_filename(vid)
         is_embedded = _is_embedded(vid)
 
         # Shape info
-        if vid.shape:
-            n_frames, h, w, c = vid.shape
-            shape_str = f"{w}×{h}"
-            frames_str = f"{n_frames} frames"
-        else:
-            shape_str = "[dim]?×?[/]"
-            frames_str = "[dim]? frames[/]"
+        n_frames, h, w, c = vid.shape
+        shape_str = f"{w}×{h}"
+        frames_str = f"{n_frames} frames"
 
-        # Build status tag
+        # Build status tag (backslash escapes Rich markup brackets)
         tag = ""
         if is_embedded:
-            tag = " [cyan][embedded][/]"
+            tag = " [cyan]\\[embedded][/]"
         elif not vid.exists() and not isinstance(vid.filename, list):
-            tag = " [yellow][not found][/]"
+            tag = " [yellow]\\[not found][/]"
 
-        # Format: [idx] filename          WxH    N frames  [tag]
+        # Format path with smart left-truncation (80 chars max for path)
+        filenames = _get_image_filenames(vid)
+        if filenames is not None:
+            path_display = f"{len(filenames)} images"
+        else:
+            path_display = _truncate_path_left(str(vid.filename), 80)
+
         idx_str = f"[dim][{i}][/]"
-        console.print(f"  {idx_str} [cyan]{fname}[/]  {shape_str}  {frames_str}{tag}")
+        console.print(
+            f"  {idx_str} [cyan]{path_display}[/]  {shape_str}  {frames_str}{tag}"
+        )
+
+    # Summarize videos without metadata (don't spam)
+    if videos_without_metadata:
+        n_no_meta = len(videos_without_metadata)
+        if n_no_meta <= 3:
+            # Show individual videos if only a few
+            for i, vid in videos_without_metadata:
+                is_embedded = _is_embedded(vid)
+                filenames = _get_image_filenames(vid)
+                if filenames is not None:
+                    path_display = f"{len(filenames)} images"
+                else:
+                    path_display = _truncate_path_left(str(vid.filename), 80)
+
+                tag = ""
+                if not vid.exists() and not isinstance(vid.filename, list):
+                    tag = " [yellow]\\[not found][/]"
+
+                idx_str = f"[dim][{i}][/]"
+                console.print(
+                    f"  {idx_str} [cyan]{path_display}[/]  "
+                    f"[dim]?×?[/]  [dim]? frames[/]{tag}"
+                )
+        else:
+            # Show summary for many videos without metadata
+            # Count how many exist vs not found
+            n_exists = sum(1 for _, v in videos_without_metadata if v.exists())
+            n_not_found = n_no_meta - n_exists
+
+            status = []
+            if n_exists > 0:
+                status.append(f"{n_exists} found")
+            if n_not_found > 0:
+                status.append(f"[yellow]{n_not_found} not found[/]")
+
+            console.print(
+                f"  [dim]+{n_no_meta} videos without cached metadata[/] "
+                f"({', '.join(status)})"
+            )
 
 
 def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> None:
@@ -748,7 +840,7 @@ def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> N
         fname = _format_video_filename(vid)
         header = f"[bold cyan]Video {i}:[/] {fname}"
         if is_embedded:
-            header += " [cyan][embedded][/]"
+            header += " [cyan]\\[embedded][/]"
         console.print(header)
         console.print()
 
@@ -940,8 +1032,18 @@ def _print_labeled_frame(labels: Labels, frame_idx: int) -> None:
         console.print(f"    [green]points = {points_str}[/]")
 
 
-def _print_provenance(labels: Labels) -> None:
-    """Print provenance information."""
+def _print_provenance(labels: Labels, compact: bool = False) -> None:
+    """Print provenance information.
+
+    Args:
+        labels: Labels object to print provenance from.
+        compact: If True, use compact formatting (for default view).
+            If False, use expanded pretty printing (for --provenance flag).
+    """
+    import json
+
+    from rich.syntax import Syntax
+
     if not labels.provenance:
         console.print("[dim]No provenance information[/]")
         return
@@ -951,18 +1053,33 @@ def _print_provenance(labels: Labels) -> None:
     console.print()
 
     for key, value in labels.provenance.items():
-        if isinstance(value, list):
-            value_str = ", ".join(str(v) for v in value[:3])
-            if len(value) > 3:
-                value_str += f" ... ({len(value)} total)"
-        elif isinstance(value, dict):
-            value_str = f"{{...}} ({len(value)} keys)"
+        if isinstance(value, (dict, list)):
+            if compact:
+                # Compact mode: show summary
+                if isinstance(value, list):
+                    value_str = f"[{len(value)} items]"
+                else:
+                    value_str = f"{{{len(value)} keys}}"
+                console.print(f"  [dim]{key}:[/] {value_str}")
+            else:
+                # Full mode: pretty print JSON
+                console.print(f"  [dim]{key}:[/]")
+                try:
+                    json_str = json.dumps(value, indent=2, default=str)
+                    syntax = Syntax(
+                        json_str,
+                        "json",
+                        theme="ansi_dark",
+                        word_wrap=True,
+                        background_color="default",
+                    )
+                    console.print(syntax)
+                except (TypeError, ValueError):
+                    # Fallback for non-JSON-serializable values
+                    console.print(f"    {value}")
         else:
-            value_str = str(value)[:60]
-            if len(str(value)) > 60:
-                value_str += "..."
-
-        console.print(f"  [dim]{key}:[/] {value_str}")
+            # Simple scalar values - show in full
+            console.print(f"  [dim]{key}:[/] {value}")
 
 
 @cli.command()
@@ -1134,8 +1251,10 @@ def show(
                     raise click.ClickException("No labeled frames present in file.")
                 _print_labeled_frame(obj, lf_index)
 
-        if provenance:
-            _print_provenance(obj)
+        # Always show provenance if present
+        # Use compact mode by default, full mode when -p/--provenance is explicitly used
+        if obj.provenance:
+            _print_provenance(obj, compact=not provenance)
 
         console.print()
     elif isinstance(obj, Video):
