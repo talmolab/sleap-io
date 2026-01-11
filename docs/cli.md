@@ -61,6 +61,7 @@ sio --help
 sio show --help
 sio convert --help
 sio split --help
+sio unsplit --help
 sio filenames --help
 sio render --help
 
@@ -91,6 +92,10 @@ sio split labels.slp -o splits/                          # 80/20 train/val
 sio split labels.slp -o splits/ --train 0.7 --test 0.15  # 70/15/15 split
 sio split labels.slp -o splits/ --remove-predictions     # User labels only
 sio split labels.slp -o splits/ --seed 42                # Reproducible split
+
+# Merge split files back into one
+sio unsplit train.slp val.slp -o merged.slp              # Merge individual files
+sio unsplit splits/ -o merged.slp                        # Merge all .slp in directory
 
 # Inspect and update video filenames
 sio filenames labels.slp                                   # List video paths
@@ -647,6 +652,85 @@ sio split labels.slp -o splits/ --train 0.7 --val 0.15 --test 0.15
 # Error: 0.8 + 0.15 + 0.15 = 1.1 > 1.0
 sio split labels.slp -o splits/ --train 0.8 --val 0.15 --test 0.15
 ```
+
+---
+
+### `sio unsplit` - Merge Split Files
+
+Merge multiple split files back into a single labels file. This is the inverse of `sio split`.
+
+```bash
+sio unsplit <input_files...> -o <output> [options]
+sio unsplit <directory> -o <output> [options]
+```
+
+#### Basic Usage
+
+```bash
+# Merge individual split files
+sio unsplit train.slp val.slp -o merged.slp
+sio unsplit train.slp val.slp test.slp -o merged.slp
+
+# Merge all .slp files in a directory
+sio unsplit splits/ -o merged.slp
+
+# Merge embedded package files
+sio unsplit train.pkg.slp val.pkg.slp -o merged.slp
+```
+
+**Example output:**
+
+```
+Loading: train.slp
+  800 frames, 1 videos
+Merging: val.slp
+  +200 frames -> 1000 total
+
+Saving: merged.slp
+
+Merged 2 files:
+  1000 frames, 1 videos
+```
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output` | Output labels file (required) |
+| `--embed` | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
+
+#### Video Deduplication
+
+When merging split files created with `sio split --embed`, videos are automatically deduplicated using provenance metadata. The `original_video` chain ensures that embedded videos from the same source are merged back into a single video reference.
+
+**Modern files (with provenance):**
+```bash
+# Videos deduplicate automatically
+sio unsplit train.pkg.slp val.pkg.slp -o merged.slp
+# Result: 1 video (deduplicated via original_video)
+```
+
+**Legacy files (without provenance):**
+```bash
+# Videos may not deduplicate
+sio unsplit old_train.slp old_val.slp -o merged.slp
+# Result: May have multiple videos (safe behavior)
+```
+
+!!! note "Safe behavior for legacy files"
+    For split files created by older versions of SLEAP (without provenance metadata), videos may not deduplicate. This is intentional—the merge uses conservative matching to avoid data corruption. If needed, use `sio filenames` to fix video paths after merging.
+
+#### Directory Input
+
+When a directory is provided, all `.slp` files in that directory are merged (sorted alphabetically):
+
+```bash
+# These are equivalent:
+sio unsplit splits/ -o merged.slp
+sio unsplit splits/train.slp splits/val.slp -o merged.slp  # If only train.slp and val.slp exist
+```
+
+This is convenient for merging all splits created by `sio split`.
 
 ---
 
@@ -1273,6 +1357,26 @@ The `--seed` option ensures you can recreate the exact same split later, which i
     ```
 
     See [NWB Format](formats.md#nwb-format-nwb) for details.
+
+### Merging Training Splits
+
+After training experiments, you may want to recombine split files:
+
+```bash
+# Merge all splits back into a single file
+sio unsplit experiment1/ -o combined.slp
+
+# Or specify files explicitly
+sio unsplit train.slp val.slp test.slp -o combined.slp
+```
+
+This is useful for:
+
+- Combining results after separate processing of train/val/test sets
+- Reconstructing the original dataset from archived splits
+- Merging predictions made on different splits
+
+Videos are automatically deduplicated if the splits were created with `sio split --embed`.
 
 ### CI/CD Integration
 

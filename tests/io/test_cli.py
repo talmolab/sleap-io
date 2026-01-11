@@ -2478,6 +2478,115 @@ def test_unsplit_empty_directory(tmp_path):
     assert "No .slp files found" in output
 
 
+def test_unsplit_load_failure(tmp_path):
+    """Test error when input file is corrupt."""
+    runner = CliRunner()
+
+    # Create corrupt files
+    corrupt1 = tmp_path / "corrupt1.slp"
+    corrupt2 = tmp_path / "corrupt2.slp"
+    corrupt1.write_text("not a valid slp file")
+    corrupt2.write_text("also not valid")
+
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli, ["unsplit", str(corrupt1), str(corrupt2), "-o", str(merged_path)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to load" in output
+
+
+def test_unsplit_non_labels_input(tmp_path, centered_pair_low_quality_path):
+    """Test error when input is not a labels file (e.g., a video)."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Try to unsplit video files (not labels)
+    result = runner.invoke(
+        cli,
+        [
+            "unsplit",
+            centered_pair_low_quality_path,
+            centered_pair_low_quality_path,
+            "-o",
+            str(merged_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "not a labels file" in output
+
+
+def test_unsplit_second_file_corrupt(tmp_path, slp_typical):
+    """Test error when second input file is corrupt."""
+    runner = CliRunner()
+
+    # Create a corrupt second file
+    corrupt = tmp_path / "corrupt.slp"
+    corrupt.write_text("not a valid slp file")
+
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli, ["unsplit", slp_typical, str(corrupt), "-o", str(merged_path)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to load" in output
+
+
+def test_unsplit_second_file_not_labels(
+    tmp_path, slp_typical, centered_pair_low_quality_path
+):
+    """Test error when second input is not a labels file."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "unsplit",
+            slp_typical,
+            centered_pair_low_quality_path,
+            "-o",
+            str(merged_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "not a labels file" in output
+
+
+def test_unsplit_save_failure(tmp_path, clip_2nodes_slp):
+    """Test error when save fails."""
+    runner = CliRunner()
+
+    # First, split the labels
+    split_dir = tmp_path / "splits"
+    result = runner.invoke(
+        cli, ["split", "-i", clip_2nodes_slp, "-o", str(split_dir), "--seed", "42"]
+    )
+    assert result.exit_code == 0
+
+    # Create a directory where we expect a file, causing save to fail
+    merged_path = tmp_path / "merged.slp"
+    merged_path.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "unsplit",
+            str(split_dir / "train.slp"),
+            str(split_dir / "val.slp"),
+            "-o",
+            str(merged_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to save" in output
+
+
 # ============================================================================
 # filenames command tests
 # ============================================================================
