@@ -6342,3 +6342,240 @@ def test_reencode_with_gop_and_fps(tmp_path, centered_pair_low_quality_path):
         assert "-g" in output
     else:
         assert "Python path" in output
+
+
+# SLP batch processing tests
+
+
+def test_reencode_slp_dry_run(tmp_path, slp_real_data):
+    """Test SLP batch processing in dry-run mode."""
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli, ["reencode", slp_real_data, "-o", str(output_slp), "--dry-run"]
+    )
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Should show SLP-specific output
+    assert "Loading SLP" in result.output
+    assert "video(s)" in result.output
+    assert "Dry run" in result.output
+
+    # Output files should not be created
+    assert not output_slp.exists()
+
+
+def test_reencode_slp_default_output_path(tmp_path, slp_real_data):
+    """Test SLP default output path generation."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy SLP file to tmp_path so we can test default output
+    tmp_slp = tmp_path / "project.slp"
+    shutil.copy(slp_real_data, tmp_slp)
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "--dry-run"])
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Should mention the default output path
+    assert "project.reencoded.slp" in result.output
+
+
+def test_reencode_slp_same_input_output_error(tmp_path, slp_real_data):
+    """Test that using same input and output path raises error."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy SLP to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    shutil.copy(slp_real_data, tmp_slp)
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(tmp_slp)])
+
+    # Should fail with clear error
+    assert result.exit_code != 0
+    assert "same as input" in result.output.lower()
+
+
+def test_reencode_slp_output_exists_error(tmp_path, slp_real_data):
+    """Test that existing output SLP raises error without --overwrite."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy SLP and create existing output
+    tmp_slp = tmp_path / "project.slp"
+    output_slp = tmp_path / "output.slp"
+    shutil.copy(slp_real_data, tmp_slp)
+    output_slp.touch()  # Create existing file
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(output_slp)])
+
+    # Should fail with clear error
+    assert result.exit_code != 0
+    assert "already exists" in result.output.lower()
+
+
+def test_reencode_slp_quality_crf_mutually_exclusive(tmp_path, slp_real_data):
+    """Test that --quality and --crf are mutually exclusive for SLP."""
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            slp_real_data,
+            "-o",
+            str(output_slp),
+            "--quality",
+            "high",
+            "--crf",
+            "20",
+            "--dry-run",
+        ],
+    )
+
+    # Should fail
+    assert result.exit_code != 0
+    assert "both" in result.output.lower() or "quality" in result.output.lower()
+
+
+def test_reencode_slp_invalid_crf(tmp_path, slp_real_data):
+    """Test that invalid CRF values are rejected for SLP."""
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        ["reencode", slp_real_data, "-o", str(output_slp), "--crf", "60", "--dry-run"],
+    )
+
+    # Should fail with CRF error
+    assert result.exit_code != 0
+    assert "crf" in result.output.lower()
+
+
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_reencode_slp_basic(tmp_path, slp_real_data):
+    """Test basic SLP batch reencoding."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path to avoid modifying test data
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Load and fix video path to use tmp_path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(output_slp)])
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Output SLP should exist
+    assert output_slp.exists()
+
+    # Video directory should exist
+    video_dir = tmp_path / "output.videos"
+    assert video_dir.exists()
+
+    # Load output SLP and check videos
+    output_labels = sio.load_slp(str(output_slp))
+    assert len(output_labels.videos) == len(labels.videos)
+
+    # Check that video paths were updated
+    for video in output_labels.videos:
+        assert ".reencoded" in video.filename
+
+
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_reencode_slp_with_quality(tmp_path, slp_real_data):
+    """Test SLP batch reencoding with quality option."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Load and fix video path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_slp), "--quality", "high"]
+    )
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Output should mention CRF 18 (high quality)
+    assert "CRF 18" in result.output
+
+
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_reencode_slp_overwrite(tmp_path, slp_real_data):
+    """Test SLP batch reencoding with --overwrite flag."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Create existing output file
+    output_slp.touch()
+
+    # Load and fix video path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    # Without --overwrite should fail
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(output_slp)])
+    assert result.exit_code != 0
+
+    # With --overwrite should succeed
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_slp), "--overwrite"]
+    )
+    assert result.exit_code == 0, result.output

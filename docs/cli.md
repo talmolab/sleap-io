@@ -150,6 +150,7 @@ sio reencode video.mp4 -o output.mp4 --quality high        # Higher quality
 sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5  # Max reliability
 sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low  # Downsample
 sio reencode video.mp4 -o output.mp4 --dry-run             # Show ffmpeg command
+sio reencode project.slp -o project.reencoded.slp          # Batch reencode all videos in SLP
 ```
 
 ---
@@ -1914,14 +1915,44 @@ sio reencode video.mp4 -o output.mp4 --dry-run
 sio reencode video.mp4 -o output.mp4 --no-ffmpeg
 ```
 
+#### SLP Batch Processing
+
+When given an `.slp` file as input, the reencode command processes all videos in the SLEAP project:
+
+```bash
+# Reencode all videos in an SLP project
+sio reencode project.slp -o project.reencoded.slp
+
+# With quality option
+sio reencode project.slp -o project.reencoded.slp --quality high
+
+# Preview what would be done
+sio reencode project.slp -o project.reencoded.slp --dry-run
+```
+
+This creates:
+- A new SLP file with updated video paths
+- A `{output_name}.videos/` directory containing the reencoded videos
+
+**Behavior by video type:**
+- **MediaVideo** (`.mp4`, `.avi`, `.mov`, etc.): Reencoded using ffmpeg (fast)
+- **HDF5Video** (embedded videos in `.slp` files): Reencoded using Python path
+- **ImageVideo** (image sequences): Skipped (cannot be reencoded to video)
+- **TiffVideo** (TIFF stacks): Skipped (cannot be reencoded to video)
+
+This is particularly useful for:
+- Fixing seeking issues in all videos before starting annotation
+- Standardizing video formats across a multi-video project
+- Extracting embedded videos from `.pkg.slp` files to standalone MP4s
+
 #### Options Reference
 
 ##### Input/Output Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `-i, --input` | (required) | Input video file (can also pass as positional argument) |
-| `-o, --output` | `{input}.reencoded.mp4` | Output video path |
+| `-i, --input` | (required) | Input video or SLP file (can also pass as positional argument) |
+| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path |
 | `--overwrite` | False | Overwrite existing output file |
 | `--dry-run` | False | Show ffmpeg command without executing |
 

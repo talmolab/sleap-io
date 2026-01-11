@@ -4334,6 +4334,369 @@ def _reencode_python_path(
                 progress.update(task, advance=1)
 
 
+def _reencode_video_object(
+    video: "Video",
+    output_path: Path,
+    crf: int,
+    preset: str,
+    keyframe_interval: float,
+    output_fps: float | None = None,
+    use_ffmpeg: bool | None = None,
+    overwrite: bool = False,
+    dry_run: bool = False,
+) -> Path | None:
+    """Reencode a Video object to a new file.
+
+    This function handles both MediaVideo and HDF5Video backends, choosing the
+    appropriate encoding path (ffmpeg or Python) based on the backend type and
+    availability.
+
+    Args:
+        video: The Video object to reencode.
+        output_path: Path to the output video file.
+        crf: Constant rate factor (0-51, lower is better).
+        preset: x264 encoding preset.
+        keyframe_interval: Keyframe interval in seconds.
+        output_fps: Output frame rate. If None, preserves source FPS.
+        use_ffmpeg: Force ffmpeg path (True), Python path (False), or auto (None).
+        overwrite: Whether to overwrite existing output file.
+        dry_run: If True, show what would be done without executing.
+
+    Returns:
+        Path to the reencoded video file, or None if dry_run.
+
+    Raises:
+        click.ClickException: If reencoding fails or video type is unsupported.
+    """
+    from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo, TiffVideo
+
+    backend = video.backend
+    backend_type = type(backend).__name__
+
+    # Check backend type
+    if isinstance(backend, (ImageVideo, TiffVideo)):
+        console.print(
+            f"[yellow]Skipping {video.filename}: {backend_type} cannot be reencoded[/]"
+        )
+        return None
+
+    # Check if output already exists
+    if output_path.exists() and not overwrite:
+        raise click.ClickException(
+            f"Output file already exists: {output_path}\nUse --overwrite to replace it."
+        )
+
+    # Determine which path to use
+    ffmpeg_available = _is_ffmpeg_available()
+
+    # HDF5Video with embedded images must use Python path
+    if isinstance(backend, HDF5Video) and backend.has_embedded_images:
+        can_use_ffmpeg = False
+    elif isinstance(backend, MediaVideo):
+        can_use_ffmpeg = ffmpeg_available
+    elif isinstance(backend, HDF5Video):
+        # HDF5 without embedded images (rank-4 array) - use Python path
+        can_use_ffmpeg = False
+    else:
+        can_use_ffmpeg = False
+
+    # Resolve final path choice
+    if use_ffmpeg is True and not can_use_ffmpeg:
+        if isinstance(backend, HDF5Video):
+            raise click.ClickException(
+                f"Cannot use ffmpeg for HDF5 video: {video.filename}\n"
+                "HDF5 videos require the Python path (--no-ffmpeg)."
+            )
+        raise click.ClickException(
+            f"ffmpeg not available for {backend_type}: {video.filename}"
+        )
+
+    use_ffmpeg_path = can_use_ffmpeg if use_ffmpeg is None else use_ffmpeg
+
+    if use_ffmpeg_path:
+        # FFmpeg fast path (for MediaVideo)
+        input_path = Path(video.filename)
+
+        try:
+            metadata = _get_video_metadata(input_path)
+            input_fps = metadata["fps"]
+            total_frames = metadata["num_frames"]
+
+            # Resolve keyframe interval
+            effective_fps = output_fps if output_fps is not None else input_fps
+            resolved_keyframe_interval = keyframe_interval
+
+            # Build command
+            cmd = _build_ffmpeg_reencode_command(
+                input_path=input_path,
+                output_path=output_path,
+                fps=input_fps,
+                output_fps=output_fps,
+                crf=crf,
+                preset=preset,
+                keyframe_interval=resolved_keyframe_interval,
+                overwrite=overwrite,
+            )
+
+            if dry_run:
+                console.print(f"[dim]  Would run: {' '.join(cmd)}[/]")
+                return None
+
+            # Print info
+            console.print(f"[bold]Reencoding:[/] {input_path}")
+            console.print(f"[dim]  Output: {output_path}[/]")
+            console.print(
+                f"[dim]  Quality: CRF {crf}, "
+                f"Preset: {preset}, "
+                f"Keyframes: {resolved_keyframe_interval}s[/]"
+            )
+            if output_fps is not None:
+                console.print(f"[dim]  FPS: {input_fps} -> {output_fps}[/]")
+
+            # Run ffmpeg with progress
+            _run_ffmpeg_with_progress(cmd, total_frames)
+
+        except click.ClickException:
+            raise
+        except Exception as e:
+            raise click.ClickException(f"ffmpeg reencoding failed: {e}")
+
+    else:
+        # Python path (for HDF5Video or when ffmpeg unavailable)
+        from rich.progress import (
+            BarColumn,
+            MofNCompleteColumn,
+            Progress,
+            SpinnerColumn,
+            TextColumn,
+            TimeElapsedColumn,
+            TimeRemainingColumn,
+        )
+
+        from sleap_io.io.video_writing import VideoWriter
+
+        if dry_run:
+            console.print(f"[dim]  Would reencode via Python: {video.filename}[/]")
+            console.print(f"[dim]  Output: {output_path}[/]")
+            return None
+
+        console.print(f"[bold]Reencoding (Python):[/] {video.filename}")
+        console.print(f"[dim]  Output: {output_path}[/]")
+
+        # Get input FPS
+        input_fps = video.fps if video.fps is not None else 30.0
+        effective_fps = output_fps if output_fps is not None else input_fps
+
+        # Calculate GOP
+        gop_size = max(1, int(keyframe_interval * effective_fps))
+
+        # Build output params for keyframe control
+        output_params = [
+            "-g",
+            str(gop_size),
+            "-keyint_min",
+            str(gop_size),
+            "-bf",
+            "0",
+            "-x264opts",
+            "scenecut=0",
+        ]
+
+        # Create writer
+        writer = VideoWriter(
+            filename=output_path,
+            fps=effective_fps,
+            crf=crf,
+            preset=preset,
+            output_params=output_params,
+        )
+
+        # Write frames with progress
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            description = f"Reencoding {Path(video.filename).name}"
+            task = progress.add_task(description, total=len(video))
+
+            with writer:
+                for i in range(len(video)):
+                    frame = video[i]
+                    writer.write_frame(frame)
+                    progress.update(task, advance=1)
+
+    # Show file size comparison
+    if not dry_run:
+        input_size = Path(video.filename).stat().st_size
+        output_size = output_path.stat().st_size
+        size_change = (output_size - input_size) / input_size * 100
+
+        console.print(f"[bold green]Saved:[/] {output_path}")
+        console.print(
+            f"[dim]  Size: {_format_file_size(input_size)} -> "
+            f"{_format_file_size(output_size)} "
+            f"({size_change:+.1f}%)[/]"
+        )
+
+    return output_path
+
+
+def _reencode_slp(
+    input_path: Path,
+    output_path: Path,
+    crf: int,
+    preset: str,
+    keyframe_interval: float,
+    output_fps: float | None = None,
+    use_ffmpeg: bool | None = None,
+    overwrite: bool = False,
+    dry_run: bool = False,
+) -> None:
+    """Reencode all videos in an SLP file and create a new SLP with updated paths.
+
+    This function loads an SLP file, reencodes each video to improve seekability,
+    and saves a new SLP file with updated video paths.
+
+    Args:
+        input_path: Path to input SLP file.
+        output_path: Path to output SLP file.
+        crf: Constant rate factor (0-51, lower is better).
+        preset: x264 encoding preset.
+        keyframe_interval: Keyframe interval in seconds.
+        output_fps: Output frame rate. If None, preserves source FPS.
+        use_ffmpeg: Force ffmpeg path (True), Python path (False), or auto (None).
+        overwrite: Whether to overwrite existing files.
+        dry_run: If True, show what would be done without executing.
+
+    Raises:
+        click.ClickException: If processing fails.
+    """
+    from sleap_io.io.video_reading import ImageVideo, TiffVideo
+    from sleap_io.model.video import Video
+
+    # Check output SLP exists
+    if output_path.exists() and not overwrite:
+        raise click.ClickException(
+            f"Output SLP already exists: {output_path}\nUse --overwrite to replace it."
+        )
+
+    # Load SLP file
+    console.print(f"[bold]Loading SLP:[/] {input_path}")
+    labels = io_main.load_slp(str(input_path))
+
+    if not labels.videos:
+        console.print("[yellow]No videos found in SLP file.[/]")
+        return
+
+    console.print(f"[dim]  Found {len(labels.videos)} video(s)[/]")
+
+    # Create video output directory
+    video_dir = output_path.with_name(output_path.stem + ".videos")
+    if not dry_run:
+        video_dir.mkdir(parents=True, exist_ok=True)
+    console.print(f"[dim]  Video output directory: {video_dir}[/]")
+
+    # Track video replacements
+    video_map: dict[Video, Video] = {}
+    skipped_count = 0
+    reencoded_count = 0
+
+    # Process each video
+    for i, video in enumerate(labels.videos):
+        console.print(f"\n[bold]Video {i + 1}/{len(labels.videos)}:[/]")
+
+        backend = video.backend
+        backend_type = type(backend).__name__ if backend else "Unknown"
+
+        # Skip unsupported backends
+        if isinstance(backend, (ImageVideo, TiffVideo)):
+            console.print(
+                f"[yellow]  Skipping: {video.filename}[/]\n"
+                f"[dim]  Reason: {backend_type} cannot be reencoded[/]"
+            )
+            skipped_count += 1
+            continue
+
+        if backend is None:
+            console.print(
+                f"[yellow]  Skipping: {video.filename}[/]\n"
+                "[dim]  Reason: Video backend not loaded[/]"
+            )
+            skipped_count += 1
+            continue
+
+        # Determine output video path
+        original_name = Path(video.filename).stem
+        output_video_path = video_dir / f"{original_name}.reencoded.mp4"
+
+        # Check if output video exists
+        if output_video_path.exists() and not overwrite:
+            console.print(
+                f"[yellow]  Skipping: {video.filename}[/]\n"
+                f"[dim]  Reason: Output exists: {output_video_path}[/]"
+            )
+            skipped_count += 1
+            continue
+
+        try:
+            # Reencode the video
+            result_path = _reencode_video_object(
+                video=video,
+                output_path=output_video_path,
+                crf=crf,
+                preset=preset,
+                keyframe_interval=keyframe_interval,
+                output_fps=output_fps,
+                use_ffmpeg=use_ffmpeg,
+                overwrite=overwrite,
+                dry_run=dry_run,
+            )
+
+            if result_path is not None:
+                # Create new Video object with updated path
+                new_video = Video.from_filename(
+                    result_path.as_posix(), grayscale=video.grayscale
+                )
+                # Preserve source_video reference for provenance
+                new_video.source_video = video
+                video_map[video] = new_video
+                reencoded_count += 1
+            elif dry_run:
+                reencoded_count += 1  # Count for dry run reporting
+            else:
+                skipped_count += 1
+
+        except click.ClickException:
+            raise
+        except Exception as e:
+            console.print(f"[red]  Error reencoding {video.filename}: {e}[/]")
+            skipped_count += 1
+            continue
+
+    # Summary
+    console.print("\n[bold]Summary:[/]")
+    console.print(f"  Reencoded: {reencoded_count}")
+    console.print(f"  Skipped: {skipped_count}")
+
+    if dry_run:
+        console.print(f"\n[bold]Dry run - would save SLP to:[/] {output_path}")
+        return
+
+    # Update video references in labels
+    if video_map:
+        labels.replace_videos(video_map=video_map)
+
+    # Save the new SLP file
+    console.print(f"\n[bold]Saving SLP:[/] {output_path}")
+    labels.save(str(output_path))
+    console.print(f"[bold green]Saved:[/] {output_path}")
+
+
 @cli.command()
 @click.argument(
     "input_arg",
@@ -4347,7 +4710,7 @@ def _reencode_python_path(
     "input_opt",
     default=None,
     type=click.Path(exists=True, path_type=Path),
-    help="Input video file. Can also be passed as positional argument.",
+    help="Input video or SLP file. Can also be passed as positional argument.",
 )
 @click.option(
     "-o",
@@ -4454,6 +4817,14 @@ def reencode(
     By default, uses ffmpeg directly for fast reencoding. Falls back to Python
     frame-by-frame path when ffmpeg is unavailable or --no-ffmpeg is specified.
 
+    [bold]SLP batch mode:[/]
+    When given an SLP file as input, reencodes all videos in the project:
+    - Creates a video directory next to the output SLP
+    - Reencodes each MediaVideo using ffmpeg (fast)
+    - Reencodes HDF5 embedded videos using Python path
+    - Skips image sequences and TIFF stacks (cannot be reencoded)
+    - Saves a new SLP file with updated video paths
+
     [bold]Quality levels:[/]
     lossless: CRF 0 (mathematically identical, huge files)
     high: CRF 18 (visually lossless)
@@ -4473,11 +4844,69 @@ def reencode(
         $ sio reencode video.mp4 -o output.mp4 --dry-run
 
         $ sio reencode video.mp4 -o output.mp4 --no-ffmpeg
+
+    [dim]SLP batch examples:[/]
+
+        $ sio reencode project.slp -o project.reencoded.slp
+
+        $ sio reencode project.slp -o project.reencoded.slp --quality high
+
+        $ sio reencode project.slp -o output.slp --dry-run
     """
     # Resolve input path
-    input_path = _resolve_input(input_arg, input_opt, "input video")
+    input_path = _resolve_input(input_arg, input_opt, "input file")
 
-    # Resolve output path
+    # Check if input is an SLP file - route to batch processing
+    if input_path.suffix.lower() == ".slp":
+        # Resolve output path for SLP
+        if output_path is None:
+            output_path = input_path.with_name(input_path.stem + ".reencoded.slp")
+
+        # Ensure output has .slp extension
+        if output_path.suffix.lower() != ".slp":
+            output_path = output_path.with_suffix(".slp")
+
+        # Check for same file
+        if output_path.resolve() == input_path.resolve():
+            raise click.ClickException(
+                f"Output path cannot be the same as input: {input_path}\n"
+                "Use a different output path or rename the output file."
+            )
+
+        # Resolve quality/CRF for SLP batch
+        if crf is not None and quality is not None:
+            raise click.ClickException(
+                "Cannot use both --quality and --crf. Choose one."
+            )
+
+        if crf is not None:
+            resolved_crf = crf
+        elif quality is not None:
+            resolved_crf = _QUALITY_TO_CRF[quality]
+        else:
+            resolved_crf = _QUALITY_TO_CRF["medium"]
+
+        # Validate CRF
+        if not 0 <= resolved_crf <= 51:
+            raise click.ClickException(
+                f"CRF must be between 0 and 51, got {resolved_crf}"
+            )
+
+        # Call SLP batch processing
+        _reencode_slp(
+            input_path=input_path,
+            output_path=output_path,
+            crf=resolved_crf,
+            preset=preset,
+            keyframe_interval=keyframe_interval,
+            output_fps=output_fps,
+            use_ffmpeg=use_ffmpeg,
+            overwrite=overwrite,
+            dry_run=dry_run,
+        )
+        return
+
+    # Resolve output path for video files
     if output_path is None:
         # Use with_name for Python 3.8 compatibility (with_stem added in 3.9)
         output_path = input_path.with_name(
