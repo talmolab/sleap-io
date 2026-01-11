@@ -2589,6 +2589,248 @@ def test_unsplit_save_failure(tmp_path, clip_2nodes_slp):
 
 
 # ============================================================================
+# merge command tests
+# ============================================================================
+
+
+def test_merge_basic(tmp_path, slp_minimal, slp_typical):
+    """Test basic merge of two labels files."""
+    runner = CliRunner()
+
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_minimal,
+            slp_typical,
+            "-o",
+            str(merged_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check output messages
+    assert "Loading:" in output
+    assert "Merging:" in output
+    assert "Saving:" in output
+    assert "Merged 2 files:" in output
+
+    # Verify merged file exists and is valid
+    merged_labels = load_slp(str(merged_path))
+    assert len(merged_labels) > 0
+
+
+def test_merge_with_frame_strategy(tmp_path, slp_typical):
+    """Test merge with explicit frame strategy."""
+    runner = CliRunner()
+
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_typical,
+            slp_typical,  # Merge with itself
+            "-o",
+            str(merged_path),
+            "--frame",
+            "keep_both",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Merged 2 files:" in output
+
+
+def test_merge_verbose(tmp_path, slp_minimal, slp_typical):
+    """Test merge with verbose output."""
+    runner = CliRunner()
+
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_minimal,
+            slp_typical,
+            "-o",
+            str(merged_path),
+            "-v",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Verbose output includes strategy and instance counts
+    assert "Strategy:" in output
+    assert "instances" in output.lower()
+
+
+def test_merge_directory(tmp_path, clip_2nodes_slp):
+    """Test merge with directory input."""
+    runner = CliRunner()
+
+    # First, split the labels to create multiple files
+    split_dir = tmp_path / "splits"
+    result = runner.invoke(
+        cli, ["split", "-i", clip_2nodes_slp, "-o", str(split_dir), "--seed", "42"]
+    )
+    assert result.exit_code == 0, result.output
+
+    # Merge using directory input
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            str(split_dir),
+            "-o",
+            str(merged_path),
+            "--frame",
+            "keep_both",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Merged" in output
+
+
+def test_merge_requires_two_files(tmp_path, slp_typical):
+    """Test that merge requires at least 2 input files."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    result = runner.invoke(cli, ["merge", slp_typical, "-o", str(merged_path)])
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "At least 2 input files required" in output
+
+
+def test_merge_missing_output(slp_typical):
+    """Test that merge requires -o flag."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["merge", slp_typical, slp_typical])
+    assert result.exit_code != 0
+    # Click will report missing required option
+    assert "-o" in result.output or "output" in result.output.lower()
+
+
+def test_merge_help():
+    """Test that merge --help displays correctly."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["merge", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check key elements
+    assert "Merge multiple labels files" in output
+    assert "INPUT_FILES" in output
+    assert "--frame" in output
+    assert "--video" in output
+    assert "--skeleton" in output
+    assert "--track" in output
+    assert "--instance" in output
+
+
+def test_merge_all_options(tmp_path, slp_typical):
+    """Test merge with all matching options specified."""
+    runner = CliRunner()
+
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_typical,
+            slp_typical,
+            "-o",
+            str(merged_path),
+            "--skeleton",
+            "structure",
+            "--video",
+            "auto",
+            "--track",
+            "name",
+            "--frame",
+            "auto",
+            "--instance",
+            "spatial",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Merged 2 files:" in output
+
+
+def test_merge_frame_strategies(tmp_path, slp_typical):
+    """Test different frame strategies."""
+    runner = CliRunner()
+
+    strategies = [
+        "auto",
+        "keep_original",
+        "keep_new",
+        "keep_both",
+        "replace_predictions",
+    ]
+
+    for strategy in strategies:
+        merged_path = tmp_path / f"merged_{strategy}.slp"
+        result = runner.invoke(
+            cli,
+            [
+                "merge",
+                slp_typical,
+                slp_typical,
+                "-o",
+                str(merged_path),
+                "--frame",
+                strategy,
+            ],
+        )
+        assert result.exit_code == 0, f"Failed for strategy {strategy}: {result.output}"
+
+
+def test_merge_load_failure(tmp_path):
+    """Test error when first file fails to load."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Create empty file (invalid SLP)
+    invalid_file = tmp_path / "invalid.slp"
+    invalid_file.write_text("")
+
+    valid_file = _data_path("slp/typical.slp")
+
+    result = runner.invoke(
+        cli, ["merge", str(invalid_file), str(valid_file), "-o", str(merged_path)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to load" in output
+
+
+def test_merge_second_file_load_failure(tmp_path, slp_typical):
+    """Test error when second file fails to load."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Create empty file (invalid SLP)
+    invalid_file = tmp_path / "invalid.slp"
+    invalid_file.write_text("")
+
+    result = runner.invoke(
+        cli, ["merge", slp_typical, str(invalid_file), "-o", str(merged_path)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to load" in output
+
+
+# ============================================================================
 # filenames command tests
 # ============================================================================
 
