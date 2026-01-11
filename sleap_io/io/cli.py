@@ -3535,21 +3535,16 @@ def trim(
     input_path = _resolve_input(input_arg, input_opt, "input file")
 
     # Try to load as labels first, then as video
-    is_labels_input = False
     labels: Optional[Labels] = None
     video: Optional[Video] = None
 
     try:
         result = io_main.load_file(str(input_path), open_videos=True)
         if isinstance(result, Labels):
-            is_labels_input = True
             labels = result
-        elif isinstance(result, Video):
-            video = result
         else:
-            raise click.ClickException(
-                f"Input must be a labels file or video (got {type(result).__name__})"
-            )
+            # Must be Video per load_file's return type
+            video = result
     except Exception as e:
         # Try loading as video directly
         try:
@@ -3565,7 +3560,7 @@ def trim(
     if fps is not None:
         video_kwargs["fps"] = fps
 
-    if is_labels_input and labels is not None:
+    if labels is not None:
         # Labels mode: trim labels and video together
         _trim_labels(
             labels=labels,
@@ -3576,8 +3571,9 @@ def trim(
             video_ind=video_ind,
             video_kwargs=video_kwargs,
         )
-    elif video is not None:
-        # Video mode: trim video only
+    else:
+        # Video mode: trim video only (video is guaranteed non-None here)
+        assert video is not None  # For type checker
         _trim_video(
             video=video,
             input_path=input_path,
