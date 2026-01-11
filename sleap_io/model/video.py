@@ -78,10 +78,30 @@ class Video:
     backend: Optional[VideoBackend] = None
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
     source_video: Optional[Video] = None
-    original_video: Optional[Video] = None
     open_backend: bool = True
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
+
+    @property
+    def original_video(self) -> Optional["Video"]:
+        """The root video in the provenance chain.
+
+        For embedded videos, this returns the ultimate source video by
+        traversing the source_video chain. Returns None if this video
+        has no source_video (i.e., it IS an original).
+
+        This property is computed by following the source_video chain to find
+        the root. For a single-level embedding (A embeds from B), original_video
+        returns B. For multi-level embedding (A <- B <- C), it returns C.
+        """
+        if self.source_video is None:
+            return None  # This IS the original
+
+        # Traverse to root
+        v = self.source_video
+        while v.source_video is not None:
+            v = v.source_video
+        return v
 
     def __attrs_post_init__(self):
         """Post init syntactic sugar."""
@@ -108,7 +128,6 @@ class Video:
             backend=None,
             backend_metadata=self.backend_metadata.copy(),
             source_video=self.source_video,
-            original_video=self.original_video,
             open_backend=self.open_backend,
         )
 

@@ -1654,13 +1654,16 @@ class TestMergeOriginalVideoLogic:
     - (A.original_video matches B) OR
     - (A matches B.original_video) OR
     - (A.original_video matches B.original_video)
+
+    Note: original_video is now a computed property derived from source_video chain.
+    Tests use source_video= to set up the provenance chain.
     """
 
     def test_original_video_incoming_only(self):
         """Match via incoming video's original_video.
 
         Scenario: Base has external video. Prediction has embedded video
-        with original_video pointing to the base video.
+        with source_video (thus original_video) pointing to the base video.
         """
         skeleton = Skeleton(["head", "tail"])
 
@@ -1671,10 +1674,11 @@ class TestMergeOriginalVideoLogic:
         labels = Labels(skeletons=[skeleton])
         labels.videos = [base_video]
 
-        # Prediction: embedded with original_video pointing to base
+        # Prediction: embedded with source_video pointing to base
+        # (original_video will be computed as source_video since it has no parent)
         original = Video(filename="/data/video.mp4", open_backend=False)
         pred_video = Video(
-            filename="predictions.pkg.slp", original_video=original, open_backend=False
+            filename="predictions.pkg.slp", source_video=original, open_backend=False
         )
         pred_video.backend_metadata["shape"] = (100, 480, 640, 1)
 
@@ -1691,10 +1695,10 @@ class TestMergeOriginalVideoLogic:
         result = labels.merge(predictions)
 
         assert result.successful
-        # Should match via original_video
+        # Should match via original_video (computed from source_video)
         assert len(labels.videos) == 1, (
             "original_video should enable matching. "
-            f"pred.original_video.filename = {original.filename}, "
+            f"pred.original_video.filename = {pred_video.original_video.filename}, "
             f"base.filename = {base_video.filename}"
         )
         assert labels.labeled_frames[0].video is base_video
@@ -1702,15 +1706,15 @@ class TestMergeOriginalVideoLogic:
     def test_original_video_existing_only(self):
         """Match via existing video's original_video.
 
-        Scenario: Base has embedded video with original_video.
+        Scenario: Base has embedded video with source_video (thus original_video).
         Prediction has external video matching that original.
         """
         skeleton = Skeleton(["head", "tail"])
 
-        # Base: embedded video with original_video
+        # Base: embedded video with source_video
         original = Video(filename="/data/video.mp4", open_backend=False)
         base_video = Video(
-            filename="base.pkg.slp", original_video=original, open_backend=False
+            filename="base.pkg.slp", source_video=original, open_backend=False
         )
         base_video.backend_metadata["shape"] = (100, 480, 640, 1)
 
@@ -1734,10 +1738,10 @@ class TestMergeOriginalVideoLogic:
         result = labels.merge(predictions)
 
         assert result.successful
-        # Should match via base's original_video
+        # Should match via base's original_video (computed from source_video)
         assert len(labels.videos) == 1, (
             "base.original_video should enable matching. "
-            f"base.original_video.filename = {original.filename}, "
+            f"base.original_video.filename = {base_video.original_video.filename}, "
             f"pred.filename = {pred_video.filename}"
         )
         assert labels.labeled_frames[0].video is base_video
@@ -1749,21 +1753,21 @@ class TestMergeOriginalVideoLogic:
         """
         skeleton = Skeleton(["head", "tail"])
 
-        # Base: embedded with original_video
+        # Base: embedded with source_video
         base_original = Video(filename="/data/video.mp4", open_backend=False)
         base_video = Video(
-            filename="base.pkg.slp", original_video=base_original, open_backend=False
+            filename="base.pkg.slp", source_video=base_original, open_backend=False
         )
         base_video.backend_metadata["shape"] = (100, 480, 640, 1)
 
         labels = Labels(skeletons=[skeleton])
         labels.videos = [base_video]
 
-        # Prediction: embedded with original_video pointing to same file
+        # Prediction: embedded with source_video pointing to same file
         pred_original = Video(filename="/data/video.mp4", open_backend=False)
         pred_video = Video(
             filename="predictions.pkg.slp",
-            original_video=pred_original,
+            source_video=pred_original,
             open_backend=False,
         )
         pred_video.backend_metadata["shape"] = (100, 480, 640, 1)
@@ -1781,11 +1785,11 @@ class TestMergeOriginalVideoLogic:
         result = labels.merge(predictions)
 
         assert result.successful
-        # Should match via original_video comparison
+        # Should match via original_video comparison (computed from source_video)
         assert len(labels.videos) == 1, (
             "Both original_videos point to same file - should match. "
-            f"base.original_video = {base_original.filename}, "
-            f"pred.original_video = {pred_original.filename}"
+            f"base.original_video = {base_video.original_video.filename}, "
+            f"pred.original_video = {pred_video.original_video.filename}"
         )
 
     def test_original_video_both_different_targets(self):
@@ -1796,21 +1800,21 @@ class TestMergeOriginalVideoLogic:
         """
         skeleton = Skeleton(["head", "tail"])
 
-        # Base: embedded with original_video A
+        # Base: embedded with source_video A
         base_original = Video(filename="/data/video_a.mp4", open_backend=False)
         base_video = Video(
-            filename="base.pkg.slp", original_video=base_original, open_backend=False
+            filename="base.pkg.slp", source_video=base_original, open_backend=False
         )
         base_video.backend_metadata["shape"] = (100, 480, 640, 1)
 
         labels = Labels(skeletons=[skeleton])
         labels.videos = [base_video]
 
-        # Prediction: embedded with original_video B (different)
+        # Prediction: embedded with source_video B (different)
         pred_original = Video(filename="/data/video_b.mp4", open_backend=False)
         pred_video = Video(
             filename="predictions.pkg.slp",
-            original_video=pred_original,
+            source_video=pred_original,
             open_backend=False,
         )
         pred_video.backend_metadata["shape"] = (100, 480, 640, 1)  # Same shape!
@@ -1831,8 +1835,8 @@ class TestMergeOriginalVideoLogic:
         # Different original_videos → should NOT match even with same shape
         assert len(labels.videos) == 2, (
             "Different original_videos should NOT match. "
-            f"base.original_video = {base_original.filename}, "
-            f"pred.original_video = {pred_original.filename}"
+            f"base.original_video = {base_video.original_video.filename}, "
+            f"pred.original_video = {pred_video.original_video.filename}"
         )
 
     def test_source_video_chain_traversal(self):

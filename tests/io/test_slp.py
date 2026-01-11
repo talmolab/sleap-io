@@ -1822,26 +1822,27 @@ def test_video_metadata_preservation(tmp_path, slp_minimal_pkg):
     labels.save(output_embed, embed=True)
 
     with h5py.File(output_embed, "r") as f:
-        # Check that both original and source video metadata are stored
+        # Check that source_video metadata is stored
+        # Note: original_video is now a computed property derived from source_video,
+        # so we only store source_video in HDF5
         assert "video0" in f
-        # Since source_video IS the original, it should be stored as original_video
-        assert "original_video" in f["video0"]
         assert "source_video" in f["video0"]
 
-        # Verify original video metadata (should be the MediaVideo)
-        assert isinstance(f["video0/original_video"], h5py.Group)
-        original_json = json.loads(f["video0/original_video"].attrs["json"])
-        assert original_json["backend"]["type"] == "MediaVideo"
-        assert (
-            original_json["backend"]["filename"]
-            == original_backend_metadata["filename"]
-        )
-
-        # Verify source video metadata (should be the .pkg.slp file)
+        # Verify source video metadata (should be the pre-embed .pkg.slp file)
         assert isinstance(f["video0/source_video"], h5py.Group)
         source_json = json.loads(f["video0/source_video"].attrs["json"])
         assert source_json["backend"]["type"] == "HDF5Video"
         assert source_json["backend"]["filename"] == slp_minimal_pkg
+
+    # Verify that original_video is computed correctly when loading
+    labels_embedded = load_file(output_embed)
+    vid = labels_embedded.videos[0]
+    # source_video should be the .pkg.slp file
+    assert vid.source_video is not None
+    assert vid.source_video.filename == slp_minimal_pkg
+    # original_video (computed) should be the ultimate source MediaVideo
+    assert vid.original_video is not None
+    assert vid.original_video.filename == original_backend_metadata["filename"]
 
     # Test RESTORE_ORIGINAL mode (default)
     labels = load_file(slp_minimal_pkg)  # Fresh load
@@ -2240,18 +2241,100 @@ def test_tiffvideo_roundtrip(tmp_path, multipage_tiff_path):
 
 
 def test_video_original_video_field(slp_minimal_pkg):
-    """Test that Video objects have the new original_video field."""
+    """Test that Video objects have the original_video computed property."""
     labels = load_file(slp_minimal_pkg)
     video = labels.videos[0]
 
-    # Current implementation has source_video, not original_video
-    # This test will fail until we implement the field rename
+    # original_video is now a computed property that traverses source_video chain
     assert hasattr(video, "original_video")
-    assert video.original_video is None  # Not set for current files
 
-    # TODO: The source_video should become original_video when the field rename
-    # is complete
-    assert video.source_video is not None  # This is current behavior
+    # source_video points to the MediaVideo that frames were embedded from
+    assert video.source_video is not None
+
+    # original_video (computed) should be the root of the source_video chain
+    # Since source_video has no parent, original_video == source_video
+    assert video.original_video is not None
+    assert video.original_video is video.source_video
+
+
+def test_legacy_original_video_hdf5_compat(tmp_path, slp_minimal_pkg):
+    """Test loading legacy files that have original_video but no source_video in HDF5.
+
+    This covers the legacy compatibility path in make_video() for embedded videos
+    where original_video was stored but source_video wasn't.
+    """
+    # Load a pkg file and resave it
+    labels = load_file(slp_minimal_pkg)
+    original_source = labels.videos[0].source_video
+    output = tmp_path / "legacy_test.slp"
+    labels.save(output, embed=True)
+
+    # Manually modify the HDF5 to simulate a legacy file:
+    # Remove source_video and add original_video with the ORIGINAL mp4 reference
+    with h5py.File(output, "a") as f:
+        # Delete existing source_video if present
+        if "video0/source_video" in f:
+            del f["video0/source_video"]
+
+        # Create original_video pointing to the original mp4 (simulating legacy format)
+        original_grp = f["video0"].require_group("original_video")
+        original_json = {
+            "backend": {
+                "filename": original_source.filename,
+                "type": "MediaVideo",
+                "grayscale": False,
+            }
+        }
+        original_grp.attrs["json"] = json.dumps(original_json, separators=(",", ":"))
+
+    # Now load the "legacy" file - should use original_video as source_video
+    loaded = load_file(output)
+    video = loaded.videos[0]
+
+    # source_video should be populated from the legacy original_video
+    assert video.source_video is not None
+    assert video.source_video.filename == original_source.filename
+    # original_video (computed) should equal source_video (single level chain)
+    assert video.original_video is video.source_video
+
+
+def test_legacy_original_video_json_compat(tmp_path, slp_minimal_pkg):
+    """Test loading legacy files that have original_video but no source_video in JSON.
+
+    This covers the legacy compatibility path in make_video() for non-embedded videos
+    where original_video was stored in videos_json but source_video wasn't.
+    """
+    # Load a pkg file and save as non-embedded
+    labels = load_file(slp_minimal_pkg)
+    output = tmp_path / "legacy_json_test.slp"
+    labels.save(output, embed=False, restore_original_videos=False)
+
+    # Manually modify the HDF5 to simulate a legacy file:
+    # Rename source_video to original_video in videos_json
+    with h5py.File(output, "a") as f:
+        videos_json = [json.loads(v) for v in f["videos_json"][:]]
+
+        for vj in videos_json:
+            if "source_video" in vj:
+                # Move source_video to original_video (simulating legacy format)
+                vj["original_video"] = vj.pop("source_video")
+
+        # Rewrite videos_json
+        del f["videos_json"]
+        f.create_dataset(
+            "videos_json",
+            data=[np.bytes_(json.dumps(v, separators=(",", ":"))) for v in videos_json],
+            maxshape=(None,),
+        )
+
+    # Now load the "legacy" file - should use original_video as source_video
+    loaded = load_file(output)
+    video = loaded.videos[0]
+
+    # source_video should be populated from the legacy original_video
+    assert video.source_video is not None
+    # original_video (computed) should equal source_video
+    assert video.original_video is video.source_video
 
 
 def test_complex_workflow(tmp_path, slp_minimal_pkg):
@@ -2334,13 +2417,17 @@ def test_write_videos_backwards_compatibility():
 
 
 def test_video_lineage_edge_cases():
-    """Test edge cases in video lineage metadata handling."""
+    """Test edge cases in video lineage metadata handling.
+
+    Note: original_video is now a computed property derived from source_video chain.
+    This test verifies that source_video chains are correctly preserved.
+    """
     import tempfile
 
     from sleap_io.io.slp import VideoReferenceMode, write_videos
     from sleap_io.model.video import Video
 
-    # Test case 1: Video with original_video already set
+    # Test case 1: Video with single-level source_video chain
     original = Video(
         filename="original.mp4",
         backend_metadata={
@@ -2349,9 +2436,10 @@ def test_video_lineage_edge_cases():
             "filename": "original.mp4",
             "grayscale": True,
         },
+        open_backend=False,
     )
 
-    video_with_original = Video(
+    video_with_source = Video(
         filename="current.slp",
         backend_metadata={
             "type": "HDF5Video",
@@ -2361,12 +2449,15 @@ def test_video_lineage_edge_cases():
             "has_embedded_images": True,
             "grayscale": True,
         },
-        source_video=None,
-        original_video=original,  # This should be saved
+        source_video=original,  # source_video points to original
+        open_backend=False,
     )
 
-    # Test case 2: source_video has original_video
-    source_with_original = Video(
+    # Verify computed original_video
+    assert video_with_source.original_video is original
+
+    # Test case 2: Multi-level source_video chain
+    source_embedded = Video(
         filename="source.pkg.slp",
         backend_metadata={
             "type": "HDF5Video",
@@ -2376,10 +2467,11 @@ def test_video_lineage_edge_cases():
             "has_embedded_images": True,
             "grayscale": True,
         },
-        original_video=original,
+        source_video=original,  # source points to original MediaVideo
+        open_backend=False,
     )
 
-    video_with_source_original = Video(
+    video_with_chain = Video(
         filename="current2.slp",
         backend_metadata={
             "type": "HDF5Video",
@@ -2389,8 +2481,13 @@ def test_video_lineage_edge_cases():
             "has_embedded_images": True,
             "grayscale": True,
         },
-        source_video=source_with_original,
+        source_video=source_embedded,  # source points to intermediate embedded
+        open_backend=False,
     )
+
+    # Verify computed original_video traverses the full chain
+    assert video_with_chain.source_video is source_embedded
+    assert video_with_chain.original_video is original  # Should traverse to root
 
     with tempfile.TemporaryDirectory() as tmpdir:
         output = Path(tmpdir) / "test_lineage.slp"
@@ -2398,9 +2495,9 @@ def test_video_lineage_edge_cases():
         # Write videos with different lineage scenarios
         write_videos(
             str(output),
-            [video_with_original, video_with_source_original],
+            [video_with_source, video_with_chain],
             reference_mode=VideoReferenceMode.EMBED,
-            original_videos=[video_with_original, video_with_source_original],
+            original_videos=[video_with_source, video_with_chain],
         )
 
 
