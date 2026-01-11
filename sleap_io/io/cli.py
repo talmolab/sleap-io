@@ -3977,114 +3977,71 @@ def _trim_video(
 
 
 def _is_ffmpeg_available() -> bool:
-    """Check if ffmpeg is available in PATH.
+    """Check if ffmpeg is available via imageio-ffmpeg.
 
     Returns:
         True if ffmpeg is available and can be executed.
     """
-    import subprocess
-
     try:
-        result = subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+        import imageio_ffmpeg
+
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        return exe is not None and len(exe) > 0
+    except Exception:
         return False
 
 
 def _get_ffmpeg_version() -> str | None:
-    """Get ffmpeg version string.
+    """Get ffmpeg version string via imageio-ffmpeg.
 
     Returns:
-        Version string (e.g., "6.1.1") or None if not available.
+        Version string (e.g., "7.0.2-static") or None if not available.
     """
-    import subprocess
-
     try:
-        result = subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            # Parse first line: "ffmpeg version X.Y.Z ..."
-            first_line = result.stdout.split("\n")[0]
-            parts = first_line.split()
-            if len(parts) >= 3:
-                return parts[2]
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    return None
+        import imageio_ffmpeg
+
+        return imageio_ffmpeg.get_ffmpeg_version()
+    except Exception:
+        return None
 
 
 def _get_video_metadata(input_path: Path) -> dict:
-    """Get video metadata using ffprobe.
+    """Get video metadata using imageio.
 
     Args:
         input_path: Path to video file.
 
     Returns:
-        Dictionary with keys: fps, width, height, num_frames, duration.
+        Dictionary with keys: fps, width, height, num_frames, duration, codec.
 
     Raises:
-        click.ClickException: If ffprobe fails.
+        click.ClickException: If metadata extraction fails.
     """
-    import json
-    import subprocess
+    import imageio.v3 as iio
+    import imageio_ffmpeg
 
     try:
-        result = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "quiet",
-                "-print_format",
-                "json",
-                "-show_format",
-                "-show_streams",
-                "-select_streams",
-                "v:0",
-                str(input_path),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            raise click.ClickException(
-                f"ffprobe failed: {result.stderr or 'Unknown error'}"
-            )
+        # Get metadata using imageio's FFMPEG plugin
+        meta = iio.immeta(str(input_path), plugin="FFMPEG")
 
-        data = json.loads(result.stdout)
-        stream = data.get("streams", [{}])[0]
-        fmt = data.get("format", {})
+        fps = meta.get("fps", 30.0)
+        duration = meta.get("duration", 0.0)
+        size = meta.get("source_size", (0, 0))
+        codec = meta.get("codec", "unknown")
 
-        # Parse frame rate (can be "30/1" or "29.97")
-        fps_str = stream.get("r_frame_rate", "30/1")
-        if "/" in fps_str:
-            num, denom = fps_str.split("/")
-            fps = float(num) / float(denom)
-        else:
-            fps = float(fps_str)
+        # Get frame count using imageio_ffmpeg (more reliable than inf from immeta)
+        num_frames, _ = imageio_ffmpeg.count_frames_and_secs(str(input_path))
 
         return {
-            "fps": fps,
-            "width": int(stream.get("width", 0)),
-            "height": int(stream.get("height", 0)),
-            "num_frames": int(stream.get("nb_frames", 0)),
-            "duration": float(fmt.get("duration", 0)),
-            "codec": stream.get("codec_name", "unknown"),
+            "fps": float(fps),
+            "width": int(size[0]),
+            "height": int(size[1]),
+            "num_frames": int(num_frames),
+            "duration": float(duration),
+            "codec": codec,
         }
-    except json.JSONDecodeError as e:
-        raise click.ClickException(f"Failed to parse ffprobe output: {e}")
-    except subprocess.TimeoutExpired:
-        raise click.ClickException("ffprobe timed out")
-    except FileNotFoundError:
-        raise click.ClickException("ffprobe not found. Please install ffmpeg.")
+    except Exception as e:
+        raise click.ClickException(f"Failed to read video metadata: {e}")
 
 
 # Quality level to CRF mapping
@@ -4121,11 +4078,15 @@ def _build_ffmpeg_reencode_command(
     Returns:
         List of command arguments for ffmpeg.
     """
+    import imageio_ffmpeg
+
     # Calculate GOP size from keyframe interval
     effective_fps = output_fps if output_fps is not None else fps
     gop_size = max(1, int(keyframe_interval * effective_fps))
 
-    cmd = ["ffmpeg"]
+    # Get ffmpeg executable from imageio-ffmpeg
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    cmd = [ffmpeg_exe]
 
     # Overwrite flag
     if overwrite:
