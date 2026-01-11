@@ -100,9 +100,30 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install libglapi-mesa libegl-mesa0 libegl1 libopengl0 libgl1 libglx-mesa0
 
+      - name: Install ffmpeg (Ubuntu)
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        run: |
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Install ffmpeg (macOS)
+        if: ${{ startsWith(matrix.os, 'macos') }}
+        run: |
+          brew install ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Install ffmpeg (Windows)
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        run: |
+          choco install ffmpeg -y
+          ffmpeg -version
+          ffprobe -version
+
       - name: Test with pytest (with coverage)
         run: |
-          uv run pytest --cov=sleap_io --cov-report=xml --durations=-1 tests/
+          uv run pytest --cov=sleap_io --cov-branch --cov-report=xml --durations=-1 tests/
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
