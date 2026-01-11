@@ -12,7 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from sleap_io import load_slp
-from sleap_io.io.cli import cli
+from sleap_io.io.cli import _is_ffmpeg_available, cli
 from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
@@ -5805,7 +5805,7 @@ def test_reencode_in_command_list():
 
 
 def test_reencode_dry_run(tmp_path, centered_pair_low_quality_path):
-    """Test dry run mode shows ffmpeg command without executing."""
+    """Test dry run mode shows command without executing."""
     runner = CliRunner()
     output_path = tmp_path / "output.mp4"
 
@@ -5822,9 +5822,12 @@ def test_reencode_dry_run(tmp_path, centered_pair_low_quality_path):
     assert result.exit_code == 0, _strip_ansi(result.output)
     output = _strip_ansi(result.output)
 
-    # Should show ffmpeg command
-    assert "ffmpeg" in output
-    assert "libx264" in output
+    # Should show either ffmpeg command or Python path message
+    if _is_ffmpeg_available():
+        assert "ffmpeg" in output
+        assert "libx264" in output
+    else:
+        assert "Python path" in output
     # Output file should NOT exist (dry run)
     assert not output_path.exists()
 
@@ -6114,10 +6117,14 @@ def test_reencode_with_keyframe_interval(tmp_path, centered_pair_low_quality_pat
     assert result.exit_code == 0, _strip_ansi(result.output)
     output = _strip_ansi(result.output)
 
-    # In dry-run mode, check that ffmpeg command has a GOP setting
-    # The video is ~15fps, so 0.5s interval -> GOP of ~7
-    assert "-g" in output
-    assert "ffmpeg" in output
+    # Check for either ffmpeg GOP setting or Python path
+    if _is_ffmpeg_available():
+        # In dry-run mode, check that ffmpeg command has a GOP setting
+        # The video is ~15fps, so 0.5s interval -> GOP of ~7
+        assert "-g" in output
+        assert "ffmpeg" in output
+    else:
+        assert "Python path" in output
 
 
 def test_reencode_with_encoding_preset(tmp_path, centered_pair_low_quality_path):
