@@ -335,14 +335,45 @@ class TestWriteLabels:
                 "node",
                 "frame",
             ]
-            # For 2D arrays, track comes first in matlab preset
-            assert json.loads(f["track_occupancy"].attrs["dims"]) == ["track", "frame"]
+            # For 2D arrays, track comes first EXCEPT for track_occupancy.
+            # track_occupancy is stored as (frame, track) to match SLEAP's original
+            # behavior - this is a quirk in the original implementation that we
+            # preserve for MATLAB compatibility.
+            assert json.loads(f["track_occupancy"].attrs["dims"]) == ["frame", "track"]
             assert json.loads(f["point_scores"].attrs["dims"]) == [
                 "track",
                 "node",
                 "frame",
             ]
             assert json.loads(f["instance_scores"].attrs["dims"]) == ["track", "frame"]
+
+    def test_write_matlab_shapes_match_sleap(self, multi_animal_labels, tmp_path):
+        """Test that matlab preset produces shapes exactly matching SLEAP reference.
+
+        The SLEAP Analysis HDF5 format stores arrays in specific shapes for MATLAB
+        column-major compatibility. This test verifies our output matches SLEAP's
+        write_tracking_h5.py output exactly.
+
+        Reference shapes (from SLEAP's write_tracking_h5.py after transpose):
+        - tracks:           (tracks, 2, nodes, frames)
+        - track_occupancy:  (frames, tracks)  <- note: different from other 2D!
+        - point_scores:     (tracks, nodes, frames)
+        - instance_scores:  (tracks, frames)
+        - tracking_scores:  (tracks, frames)
+        """
+        h5_path = tmp_path / "sleap_compat.analysis.h5"
+        analysis_h5.write_labels(multi_animal_labels, h5_path, preset="matlab")
+
+        # Expected dimensions: 3 frames, 2 tracks, 2 nodes
+        n_frames, n_tracks, n_nodes = 3, 2, 2
+
+        with h5py.File(h5_path, "r") as f:
+            # Verify shapes match SLEAP reference exactly
+            assert f["tracks"].shape == (n_tracks, 2, n_nodes, n_frames)
+            assert f["track_occupancy"].shape == (n_frames, n_tracks)  # SLEAP quirk!
+            assert f["point_scores"].shape == (n_tracks, n_nodes, n_frames)
+            assert f["instance_scores"].shape == (n_tracks, n_frames)
+            assert f["tracking_scores"].shape == (n_tracks, n_frames)
 
     def test_write_dimension_attributes_standard(self, simple_labels, tmp_path):
         """Test dimension names for standard preset."""

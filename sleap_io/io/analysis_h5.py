@@ -42,14 +42,19 @@ which is optimized for MATLAB's column-major memory layout.
 
     tracks:           (n_tracks, 2, n_nodes, n_frames)
                       dims: ("track", "xy", "node", "frame")
-    track_occupancy:  (n_tracks, n_frames)
-                      dims: ("track", "frame")
+    track_occupancy:  (n_frames, n_tracks)
+                      dims: ("frame", "track")
     point_scores:     (n_tracks, n_nodes, n_frames)
                       dims: ("track", "node", "frame")
     instance_scores:  (n_tracks, n_frames)
                       dims: ("track", "frame")
     tracking_scores:  (n_tracks, n_frames)
                       dims: ("track", "frame")
+
+Note: ``track_occupancy`` has different axis ordering than other 2D arrays.
+This matches SLEAP's original behavior where ``track_occupancy`` was stored
+with frames first, while other arrays have tracks first. This quirk is
+preserved for exact MATLAB compatibility with SLEAP's analysis export.
 
 Note: The ``xy`` dimension always has size 2, representing (x, y) coordinates.
 
@@ -724,22 +729,33 @@ def write_labels(
     positions_2d = sorted(target_order_2d.values())
     target_order_2d = {k: positions_2d.index(v) for k, v in target_order_2d.items()}
 
+    # For matlab preset, track_occupancy has different ordering to match SLEAP's
+    # original behavior. SLEAP stores track_occupancy as (frame, track) while
+    # other 2D arrays are stored as (track, frame). This quirk is preserved for
+    # backwards compatibility with MATLAB users expecting SLEAP's exact format.
+    if preset_name == "matlab":
+        target_order_occupancy = {"frame": 0, "track": 1}  # Same as canonical
+    else:
+        target_order_occupancy = target_order_2d
+
     # Compute transpose axes
     axes_4d = _get_transpose_axes(canonical_order_4d, axis_order, 4)
     axes_3d = _get_transpose_axes(canonical_order_3d, target_order_3d, 3)
     axes_2d = _get_transpose_axes(canonical_order_2d, target_order_2d, 2)
+    axes_occupancy = _get_transpose_axes(canonical_order_2d, target_order_occupancy, 2)
 
     # Reorder arrays
     locations = np.transpose(locations, axes_4d)
     point_scores = np.transpose(point_scores, axes_3d)
     instance_scores = np.transpose(instance_scores, axes_2d)
     tracking_scores = np.transpose(tracking_scores, axes_2d)
-    occupancy = np.transpose(occupancy, axes_2d)
+    occupancy = np.transpose(occupancy, axes_occupancy)
 
     # Get dimension names for attributes
     dims_4d = _get_dims_tuple(axis_order, 4)
     dims_3d = _get_dims_tuple(target_order_3d, 3)
     dims_2d = _get_dims_tuple(target_order_2d, 2)
+    dims_occupancy = _get_dims_tuple(target_order_occupancy, 2)
 
     # Get skeleton info
     skeleton = labels.skeletons[0]
@@ -766,7 +782,7 @@ def write_labels(
 
         # Core data matrices
         write_dataset("tracks", locations, dim_names=dims_4d)
-        write_dataset("track_occupancy", occupancy, dim_names=dims_2d)
+        write_dataset("track_occupancy", occupancy, dim_names=dims_occupancy)
         write_dataset("point_scores", point_scores, dim_names=dims_3d)
         write_dataset("instance_scores", instance_scores, dim_names=dims_2d)
         write_dataset("tracking_scores", tracking_scores, dim_names=dims_2d)
