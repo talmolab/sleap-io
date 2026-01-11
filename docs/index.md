@@ -17,11 +17,11 @@ have any functionality related to labeling, training, or inference.
 ## Features
 
 The main purpose of this library is to provide utilities to load/save from different
-[formats](formats.md) for pose data and standardize them into our common [Data Model](model.md).
+[formats](formats/) for pose data and standardize them into our common [Data Model](model.md).
 
-- Read/write labels in [SLP](formats.md#sleap_io.load_slp), [NWB](formats.md#sleap_io.load_nwb), [AlphaTracker](formats.md#sleap_io.load_alphatracker), [DeepLabCut](formats.md#sleap_io.load_dlc), [JABS](formats.md#sleap_io.load_jabs), [LabelStudio](formats.md#sleap_io.load_labelstudio), [LEAP](formats.md#sleap_io.load_leap), [CSV](formats.md#csv-format-csv) and [Ultralytics YOLO](formats.md#sleap_io.load_ultralytics) formats.
+- Read/write labels in [SLP](formats/#sleap_io.load_slp), [NWB](formats/#sleap_io.load_nwb), [AlphaTracker](formats/#sleap_io.load_alphatracker), [DeepLabCut](formats/#sleap_io.load_dlc), [JABS](formats/#sleap_io.load_jabs), [LabelStudio](formats/#sleap_io.load_labelstudio), [LEAP](formats/#sleap_io.load_leap), [CSV](formats/#csv-format-csv) and [Ultralytics YOLO](formats/#sleap_io.load_ultralytics) formats.
 - Support for [LabelsSet](model.md#sleap_io.LabelsSet) to manage multiple dataset splits (train/val/test) and export to different formats.
-- [Read videos in any format](formats.md#sleap_io.load_video), work them in a [numpy-like interface](model.md#sleap_io.Video) whether the video files are accessible or not, and [easily save them out](formats.md#sleap_io.save_video).
+- [Read videos in any format](formats/#sleap_io.load_video), work them in a [numpy-like interface](model.md#sleap_io.Video) whether the video files are accessible or not, and [easily save them out](formats/#sleap_io.save_video).
 
 This enables ease-of-use through format-agnostic operations that make it easy to work
 with pose data, including utilities for common tasks. Some of these include:

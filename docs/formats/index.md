@@ -564,6 +564,6 @@ Different formats have varying capabilities:
 
 ## See Also
 
-- [Data Model](model.md): Understanding the core data structures
-- [Examples](examples.md): More usage examples and recipes
-- [Merging](merging.md): Combining data from multiple sources
+- [Data Model](../model.md): Understanding the core data structures
+- [Examples](../examples.md): More usage examples and recipes
+- [Merging](../merging.md): Combining data from multiple sources

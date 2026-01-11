@@ -547,5 +547,5 @@ uv pip install "sleap-io[all]"
 
 - [CLI Reference](cli.md): Complete command documentation
 - [Examples](examples.md): Python usage patterns
-- [Formats](formats.md): Supported file formats
+- [Formats](formats/): Supported file formats
 - [Changelog](changelog.md): Version history
