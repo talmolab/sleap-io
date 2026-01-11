@@ -6256,19 +6256,22 @@ def test_reencode_use_ffmpeg_without_ffmpeg():
     # This test demonstrates the --use-ffmpeg flag behavior
     # On systems without ffmpeg, it should fail with helpful message
     if not _is_ffmpeg_available():
-        result = runner.invoke(
-            cli,
-            [
-                "reencode",
-                "dummy.mp4",  # Won't be reached due to ffmpeg check
-                "-o",
-                "output.mp4",
-                "--use-ffmpeg",
-            ],
-        )
-        assert result.exit_code != 0
-        output = _strip_ansi(result.output)
-        assert "ffmpeg not found" in output
+        with runner.isolated_filesystem():
+            # Create a dummy input file to pass Click's exists validation
+            Path("dummy.mp4").touch()
+            result = runner.invoke(
+                cli,
+                [
+                    "reencode",
+                    "dummy.mp4",
+                    "-o",
+                    "output.mp4",
+                    "--use-ffmpeg",
+                ],
+            )
+            assert result.exit_code != 0
+            output = _strip_ansi(result.output)
+            assert "ffmpeg not found" in output
 
 
 def test_get_ffmpeg_version():
