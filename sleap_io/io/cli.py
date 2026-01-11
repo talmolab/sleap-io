@@ -45,7 +45,7 @@ click.rich_click.COMMAND_GROUPS = {
         {"name": "Inspection", "commands": ["show", "filenames"]},
         {
             "name": "Transformation",
-            "commands": ["convert", "split", "unsplit", "merge"],
+            "commands": ["convert", "split", "unsplit", "merge", "trim", "reencode"],
         },
         {"name": "Embedding", "commands": ["embed", "unembed"]},
         {"name": "Maintenance", "commands": ["fix"]},
@@ -3969,3 +3969,641 @@ def _trim_video(
         raise click.ClickException(f"Failed to trim video: {e}")
 
     console.print(f"[bold green]Saved:[/] {output_path}")
+
+
+# =============================================================================
+# Reencode command utilities
+# =============================================================================
+
+
+def _is_ffmpeg_available() -> bool:
+    """Check if ffmpeg is available in PATH.
+
+    Returns:
+        True if ffmpeg is available and can be executed.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _get_ffmpeg_version() -> str | None:
+    """Get ffmpeg version string.
+
+    Returns:
+        Version string (e.g., "6.1.1") or None if not available.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            # Parse first line: "ffmpeg version X.Y.Z ..."
+            first_line = result.stdout.split("\n")[0]
+            parts = first_line.split()
+            if len(parts) >= 3:
+                return parts[2]
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
+def _get_video_metadata(input_path: Path) -> dict:
+    """Get video metadata using ffprobe.
+
+    Args:
+        input_path: Path to video file.
+
+    Returns:
+        Dictionary with keys: fps, width, height, num_frames, duration.
+
+    Raises:
+        click.ClickException: If ffprobe fails.
+    """
+    import json
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_format",
+                "-show_streams",
+                "-select_streams",
+                "v:0",
+                str(input_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise click.ClickException(
+                f"ffprobe failed: {result.stderr or 'Unknown error'}"
+            )
+
+        data = json.loads(result.stdout)
+        stream = data.get("streams", [{}])[0]
+        fmt = data.get("format", {})
+
+        # Parse frame rate (can be "30/1" or "29.97")
+        fps_str = stream.get("r_frame_rate", "30/1")
+        if "/" in fps_str:
+            num, denom = fps_str.split("/")
+            fps = float(num) / float(denom)
+        else:
+            fps = float(fps_str)
+
+        return {
+            "fps": fps,
+            "width": int(stream.get("width", 0)),
+            "height": int(stream.get("height", 0)),
+            "num_frames": int(stream.get("nb_frames", 0)),
+            "duration": float(fmt.get("duration", 0)),
+            "codec": stream.get("codec_name", "unknown"),
+        }
+    except json.JSONDecodeError as e:
+        raise click.ClickException(f"Failed to parse ffprobe output: {e}")
+    except subprocess.TimeoutExpired:
+        raise click.ClickException("ffprobe timed out")
+    except FileNotFoundError:
+        raise click.ClickException("ffprobe not found. Please install ffmpeg.")
+
+
+# Quality level to CRF mapping
+_QUALITY_TO_CRF = {
+    "lossless": 0,
+    "high": 18,
+    "medium": 25,
+    "low": 32,
+}
+
+
+def _build_ffmpeg_reencode_command(
+    input_path: Path,
+    output_path: Path,
+    fps: float,
+    output_fps: float | None,
+    crf: int,
+    preset: str,
+    keyframe_interval: float,
+    overwrite: bool,
+) -> list[str]:
+    """Build ffmpeg command for reencoding.
+
+    Args:
+        input_path: Path to input video file.
+        output_path: Path to output video file.
+        fps: Input video frame rate.
+        output_fps: Output frame rate (None to preserve input).
+        crf: Constant rate factor (0-51).
+        preset: x264 encoding preset.
+        keyframe_interval: Keyframe interval in seconds.
+        overwrite: Whether to overwrite existing output file.
+
+    Returns:
+        List of command arguments for ffmpeg.
+    """
+    # Calculate GOP size from keyframe interval
+    effective_fps = output_fps if output_fps is not None else fps
+    gop_size = max(1, int(keyframe_interval * effective_fps))
+
+    cmd = ["ffmpeg"]
+
+    # Overwrite flag
+    if overwrite:
+        cmd.append("-y")
+    else:
+        cmd.append("-n")
+
+    # Input
+    cmd.extend(["-i", str(input_path)])
+
+    # Output frame rate (if changing)
+    if output_fps is not None:
+        cmd.extend(["-r", str(output_fps)])
+
+    # Video codec and encoding settings
+    cmd.extend(
+        [
+            "-c:v",
+            "libx264",
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
+            "-g",
+            str(gop_size),  # Keyframe interval
+            "-keyint_min",
+            str(gop_size),  # Minimum keyframe interval
+            "-bf",
+            "0",  # No B-frames for better seekability
+            "-x264opts",
+            "scenecut=0",  # Disable scene detection (fixed keyframes)
+            "-pix_fmt",
+            "yuv420p",  # Maximum compatibility
+        ]
+    )
+
+    # Handle odd dimensions (pad to even)
+    cmd.extend(["-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2"])
+
+    # Copy audio if present
+    cmd.extend(["-c:a", "copy"])
+
+    # Output path
+    cmd.append(str(output_path))
+
+    return cmd
+
+
+def _run_ffmpeg_with_progress(
+    cmd: list[str],
+    total_frames: int,
+    description: str = "Reencoding",
+) -> None:
+    """Run ffmpeg command with progress bar.
+
+    Args:
+        cmd: FFmpeg command as list of arguments.
+        total_frames: Total number of frames for progress tracking.
+        description: Description for progress bar.
+
+    Raises:
+        click.ClickException: If ffmpeg fails.
+    """
+    import re
+    import subprocess
+
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+        TimeRemainingColumn,
+    )
+
+    # Add progress flag to ffmpeg
+    cmd_with_progress = cmd.copy()
+    # Insert progress flags after 'ffmpeg'
+    progress_flags = ["-progress", "pipe:1", "-stats_period", "0.5"]
+    cmd_with_progress[1:1] = progress_flags
+
+    process = subprocess.Popen(
+        cmd_with_progress,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+
+    # Progress bar
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task(description, total=total_frames)
+
+        # Parse ffmpeg progress output
+        frame_pattern = re.compile(r"frame=(\d+)")
+
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+
+            match = frame_pattern.search(line)
+            if match:
+                current_frame = int(match.group(1))
+                progress.update(task, completed=current_frame)
+
+        progress.update(task, completed=total_frames)
+
+    # Check for errors
+    returncode = process.wait()
+    if returncode != 0:
+        stderr = process.stderr.read()
+        raise click.ClickException(f"ffmpeg failed (exit code {returncode}):\n{stderr}")
+
+
+def _reencode_python_path(
+    input_path: Path,
+    output_path: Path,
+    output_fps: float | None,
+    crf: int,
+    preset: str,
+    keyframe_interval: float,
+) -> None:
+    """Reencode video using Python frame-by-frame path.
+
+    Args:
+        input_path: Path to input video file.
+        output_path: Path to output video file.
+        output_fps: Output frame rate (None to preserve input).
+        crf: Constant rate factor.
+        preset: x264 encoding preset.
+        keyframe_interval: Keyframe interval in seconds.
+    """
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+        TimeRemainingColumn,
+    )
+
+    from sleap_io.io.video_writing import VideoWriter
+
+    # Load video
+    video = io_main.load_video(str(input_path))
+
+    # For Video objects, get fps from backend if available
+    if hasattr(video, "backend") and hasattr(video.backend, "fps"):
+        input_fps = video.backend.fps
+    else:
+        input_fps = 30.0  # Default fallback
+
+    effective_fps = output_fps if output_fps is not None else input_fps
+
+    # Calculate GOP
+    gop_size = max(1, int(keyframe_interval * effective_fps))
+
+    # Build output params for keyframe control
+    output_params = [
+        "-g",
+        str(gop_size),
+        "-keyint_min",
+        str(gop_size),
+        "-bf",
+        "0",
+        "-x264opts",
+        "scenecut=0",
+    ]
+
+    # Create writer
+    writer = VideoWriter(
+        filename=output_path,
+        fps=effective_fps,
+        crf=crf,
+        preset=preset,
+        output_params=output_params,
+    )
+
+    # Write frames with progress
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Reencoding (Python)", total=len(video))
+
+        with writer:
+            for i in range(len(video)):
+                frame = video[i]
+                writer.write_frame(frame)
+                progress.update(task, advance=1)
+
+
+@cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input video file. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Output video path. Default: {input}.reencoded.mp4.",
+)
+# Quality options (mutually exclusive group)
+@click.option(
+    "--quality",
+    type=click.Choice(["lossless", "high", "medium", "low"]),
+    default=None,
+    help="Quality level. Maps to CRF: lossless=0, high=18, medium=25, low=32.",
+)
+@click.option(
+    "--crf",
+    type=int,
+    default=None,
+    help="Constant rate factor (0-51, lower=better). Overrides --quality.",
+)
+# Keyframe options
+@click.option(
+    "--keyframe-interval",
+    type=float,
+    default=1.0,
+    show_default=True,
+    help="Keyframe interval in seconds. Lower = better seekability, larger files.",
+)
+@click.option(
+    "--gop",
+    type=int,
+    default=None,
+    help="GOP size in frames. Overrides --keyframe-interval.",
+)
+# Frame rate
+@click.option(
+    "--fps",
+    "output_fps",
+    type=float,
+    default=None,
+    help="Output frame rate. Default: preserve source FPS.",
+)
+# Encoding speed
+@click.option(
+    "--encoding",
+    "preset",
+    type=click.Choice(
+        [
+            "ultrafast",
+            "superfast",
+            "veryfast",
+            "faster",
+            "fast",
+            "medium",
+            "slow",
+            "slower",
+            "veryslow",
+        ]
+    ),
+    default="superfast",
+    show_default=True,
+    help="Encoding speed preset. Slower = better compression.",
+)
+# Execution control
+@click.option(
+    "--use-ffmpeg/--no-ffmpeg",
+    "use_ffmpeg",
+    default=None,
+    help="Force ffmpeg fast path or Python path.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show ffmpeg command without executing.",
+)
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    default=False,
+    help="Overwrite existing output file.",
+)
+def reencode(
+    input_arg: Path | None,
+    input_opt: Path | None,
+    output_path: Path | None,
+    quality: str | None,
+    crf: int | None,
+    keyframe_interval: float,
+    gop: int | None,
+    output_fps: float | None,
+    preset: str,
+    use_ffmpeg: bool | None,
+    dry_run: bool,
+    overwrite: bool,
+) -> None:
+    """Reencode video for improved seekability.
+
+    Creates a new video file with frequent keyframes for fast random access.
+    This is useful for videos that seek slowly during annotation or playback.
+
+    By default, uses ffmpeg directly for fast reencoding. Falls back to Python
+    frame-by-frame path when ffmpeg is unavailable or --no-ffmpeg is specified.
+
+    [bold]Quality levels:[/]
+    lossless: CRF 0 (mathematically identical, huge files)
+    high: CRF 18 (visually lossless)
+    medium: CRF 25 (good quality, reasonable size) [default]
+    low: CRF 32 (smaller files, some quality loss)
+
+    [dim]Examples:[/]
+
+        $ sio reencode video.mp4 -o video.seekable.mp4
+
+        $ sio reencode video.mp4 -o output.mp4 --quality high
+
+        $ sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5
+
+        $ sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low
+
+        $ sio reencode video.mp4 -o output.mp4 --dry-run
+
+        $ sio reencode video.mp4 -o output.mp4 --no-ffmpeg
+    """
+    # Resolve input path
+    input_path = _resolve_input(input_arg, input_opt, "input video")
+
+    # Resolve output path
+    if output_path is None:
+        output_path = input_path.with_stem(input_path.stem + ".reencoded")
+        if output_path.suffix.lower() not in {".mp4", ".mkv", ".avi", ".mov"}:
+            output_path = output_path.with_suffix(".mp4")
+
+    # Check for same file
+    if output_path.resolve() == input_path.resolve():
+        raise click.ClickException(
+            f"Output path cannot be the same as input: {input_path}\n"
+            "Use a different output path or rename the output file."
+        )
+
+    # Check output exists
+    if output_path.exists() and not overwrite:
+        raise click.ClickException(
+            f"Output file already exists: {output_path}\nUse --overwrite to replace it."
+        )
+
+    # Resolve quality/CRF
+    if crf is not None and quality is not None:
+        raise click.ClickException("Cannot use both --quality and --crf. Choose one.")
+
+    if crf is not None:
+        resolved_crf = crf
+    elif quality is not None:
+        resolved_crf = _QUALITY_TO_CRF[quality]
+    else:
+        resolved_crf = _QUALITY_TO_CRF["medium"]  # Default
+
+    # Validate CRF
+    if not 0 <= resolved_crf <= 51:
+        raise click.ClickException(f"CRF must be between 0 and 51, got {resolved_crf}")
+
+    # Check ffmpeg availability
+    ffmpeg_available = _is_ffmpeg_available()
+
+    if use_ffmpeg is True and not ffmpeg_available:
+        raise click.ClickException(
+            "ffmpeg not found but --use-ffmpeg was specified. "
+            "Please install ffmpeg or use --no-ffmpeg."
+        )
+
+    # Decide path to use
+    use_ffmpeg_path = ffmpeg_available if use_ffmpeg is None else use_ffmpeg
+
+    if use_ffmpeg_path:
+        # FFmpeg fast path
+        try:
+            metadata = _get_video_metadata(input_path)
+            input_fps = metadata["fps"]
+            total_frames = metadata["num_frames"]
+
+            # Resolve keyframe interval / GOP
+            if gop is not None:
+                # Convert GOP to interval for display
+                effective_fps = output_fps if output_fps is not None else input_fps
+                resolved_keyframe_interval = gop / effective_fps
+            else:
+                resolved_keyframe_interval = keyframe_interval
+
+            # Build command
+            cmd = _build_ffmpeg_reencode_command(
+                input_path=input_path,
+                output_path=output_path,
+                fps=input_fps,
+                output_fps=output_fps,
+                crf=resolved_crf,
+                preset=preset,
+                keyframe_interval=resolved_keyframe_interval,
+                overwrite=overwrite,
+            )
+
+            if dry_run:
+                console.print("[bold]Dry run - ffmpeg command:[/]")
+                console.print(" ".join(cmd))
+                return
+
+            # Print info
+            console.print(f"[bold]Reencoding:[/] {input_path}")
+            console.print(f"[dim]  Output: {output_path}[/]")
+            console.print(
+                f"[dim]  Quality: CRF {resolved_crf}, "
+                f"Preset: {preset}, "
+                f"Keyframes: {resolved_keyframe_interval}s[/]"
+            )
+            if output_fps is not None:
+                console.print(f"[dim]  FPS: {input_fps} -> {output_fps}[/]")
+
+            # Run ffmpeg with progress
+            _run_ffmpeg_with_progress(cmd, total_frames)
+
+        except click.ClickException:
+            raise
+        except Exception as e:
+            raise click.ClickException(f"ffmpeg reencoding failed: {e}")
+
+    else:
+        # Python fallback path
+        if dry_run:
+            console.print("[bold]Dry run - would use Python path[/]")
+            console.print(f"  Input: {input_path}")
+            console.print(f"  Output: {output_path}")
+            console.print(f"  CRF: {resolved_crf}, Preset: {preset}")
+            return
+
+        console.print(f"[bold]Reencoding (Python path):[/] {input_path}")
+        console.print(f"[dim]  Output: {output_path}[/]")
+
+        _reencode_python_path(
+            input_path=input_path,
+            output_path=output_path,
+            output_fps=output_fps,
+            crf=resolved_crf,
+            preset=preset,
+            keyframe_interval=keyframe_interval,
+        )
+
+    console.print(f"[bold green]Saved:[/] {output_path}")
+
+    # Show file size comparison
+    input_size = input_path.stat().st_size
+    output_size = output_path.stat().st_size
+    size_change = (output_size - input_size) / input_size * 100
+
+    console.print(
+        f"[dim]  Size: {_format_file_size(input_size)} -> "
+        f"{_format_file_size(output_size)} "
+        f"({size_change:+.1f}%)[/]"
+    )

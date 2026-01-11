@@ -5772,3 +5772,416 @@ def test_trim_video_write_failure(tmp_path, centered_pair_low_quality_path):
     finally:
         # Restore permissions for cleanup
         os.chmod(output_path, 0o755)
+
+
+# =============================================================================
+# Reencode command tests
+# =============================================================================
+
+
+def test_reencode_help():
+    """Test that reencode command help is displayed."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", "--help"])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check key options are documented
+    assert "reencode" in output.lower()
+    assert "--quality" in output
+    assert "--crf" in output
+    assert "--keyframe-interval" in output
+    assert "--encoding" in output
+    assert "--dry-run" in output
+
+
+def test_reencode_in_command_list():
+    """Test that reencode appears in the main CLI help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "reencode" in output
+
+
+def test_reencode_dry_run(tmp_path, centered_pair_low_quality_path):
+    """Test dry run mode shows ffmpeg command without executing."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Should show ffmpeg command
+    assert "ffmpeg" in output
+    assert "libx264" in output
+    # Output file should NOT exist (dry run)
+    assert not output_path.exists()
+
+
+def test_reencode_dry_run_python_path(tmp_path, centered_pair_low_quality_path):
+    """Test dry run mode with Python path."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+            "--no-ffmpeg",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Python path" in output
+    assert not output_path.exists()
+
+
+def test_reencode_quality_crf_mutually_exclusive(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test that --quality and --crf cannot be used together."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--quality",
+            "high",
+            "--crf",
+            "20",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Cannot use both --quality and --crf" in output
+
+
+def test_reencode_invalid_crf(tmp_path, centered_pair_low_quality_path):
+    """Test that invalid CRF values are rejected."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--crf",
+            "60",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "CRF must be between 0 and 51" in output
+
+
+def test_reencode_same_input_output_error(tmp_path, centered_pair_low_quality_path):
+    """Test that using same path for input and output is rejected."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            centered_pair_low_quality_path,
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "cannot be the same as input" in output.lower()
+
+
+def test_reencode_output_exists_error(tmp_path, centered_pair_low_quality_path):
+    """Test that existing output file is rejected without --overwrite."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+    output_path.touch()  # Create existing file
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "already exists" in output.lower()
+
+
+def test_reencode_input_not_found(tmp_path):
+    """Test error when input file does not exist."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            "/nonexistent/video.mp4",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+
+
+def test_reencode_accepts_positional_input(tmp_path, centered_pair_low_quality_path):
+    """Test that positional input argument works."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+
+def test_reencode_accepts_flag_input(tmp_path, centered_pair_low_quality_path):
+    """Test that -i/--input flag works."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            "-i",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+
+def test_reencode_rejects_both_inputs(tmp_path, centered_pair_low_quality_path):
+    """Test that providing both positional and flag input is rejected."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-i",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Cannot specify" in output
+
+
+def test_reencode_missing_input(tmp_path):
+    """Test that missing input is rejected."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Missing" in output
+
+
+def test_reencode_default_output_path(tmp_path, centered_pair_low_quality_path):
+    """Test that default output path is generated correctly."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Default should add .reencoded before extension
+    assert "centered_pair_low_quality.reencoded.mp4" in output
+
+
+def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
+    """Test basic reencoding with ffmpeg path."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Reencoding:" in output
+    assert "Saved:" in output
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
+
+
+def test_reencode_with_quality(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with quality option."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--quality",
+            "low",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "CRF 32" in output  # low quality = CRF 32
+    assert output_path.exists()
+
+
+def test_reencode_with_keyframe_interval(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with custom keyframe interval."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--keyframe-interval",
+            "0.5",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # In dry-run mode, check that ffmpeg command has a GOP setting
+    # The video is ~15fps, so 0.5s interval -> GOP of ~7
+    assert "-g" in output
+    assert "ffmpeg" in output
+
+
+def test_reencode_with_encoding_preset(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with encoding preset option."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--encoding",
+            "ultrafast",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "ultrafast" in output
+
+
+def test_reencode_python_path(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with Python fallback path."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--no-ffmpeg",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Python path" in output
+    assert output_path.exists()
+
+
+def test_reencode_overwrite(tmp_path, centered_pair_low_quality_path):
+    """Test that --overwrite allows replacing existing output."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+    output_path.write_bytes(b"existing content")  # Create existing file
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--overwrite",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert output_path.exists()
+    # File should be larger than original dummy content
+    assert output_path.stat().st_size > 20
