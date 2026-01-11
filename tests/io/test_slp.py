@@ -2257,6 +2257,86 @@ def test_video_original_video_field(slp_minimal_pkg):
     assert video.original_video is video.source_video
 
 
+def test_legacy_original_video_hdf5_compat(tmp_path, slp_minimal_pkg):
+    """Test loading legacy files that have original_video but no source_video in HDF5.
+
+    This covers the legacy compatibility path in make_video() for embedded videos
+    where original_video was stored but source_video wasn't.
+    """
+    # Load a pkg file and resave it
+    labels = load_file(slp_minimal_pkg)
+    original_source = labels.videos[0].source_video
+    output = tmp_path / "legacy_test.slp"
+    labels.save(output, embed=True)
+
+    # Manually modify the HDF5 to simulate a legacy file:
+    # Remove source_video and add original_video with the ORIGINAL mp4 reference
+    with h5py.File(output, "a") as f:
+        # Delete existing source_video if present
+        if "video0/source_video" in f:
+            del f["video0/source_video"]
+
+        # Create original_video pointing to the original mp4 (simulating legacy format)
+        original_grp = f["video0"].require_group("original_video")
+        original_json = {
+            "backend": {
+                "filename": original_source.filename,
+                "type": "MediaVideo",
+                "grayscale": False,
+            }
+        }
+        original_grp.attrs["json"] = json.dumps(original_json, separators=(",", ":"))
+
+    # Now load the "legacy" file - should use original_video as source_video
+    loaded = load_file(output)
+    video = loaded.videos[0]
+
+    # source_video should be populated from the legacy original_video
+    assert video.source_video is not None
+    assert video.source_video.filename == original_source.filename
+    # original_video (computed) should equal source_video (single level chain)
+    assert video.original_video is video.source_video
+
+
+def test_legacy_original_video_json_compat(tmp_path, slp_minimal_pkg):
+    """Test loading legacy files that have original_video but no source_video in JSON.
+
+    This covers the legacy compatibility path in make_video() for non-embedded videos
+    where original_video was stored in videos_json but source_video wasn't.
+    """
+    # Load a pkg file and save as non-embedded
+    labels = load_file(slp_minimal_pkg)
+    output = tmp_path / "legacy_json_test.slp"
+    labels.save(output, embed=False, restore_original_videos=False)
+
+    # Manually modify the HDF5 to simulate a legacy file:
+    # Rename source_video to original_video in videos_json
+    with h5py.File(output, "a") as f:
+        videos_json = [json.loads(v) for v in f["videos_json"][:]]
+
+        for vj in videos_json:
+            if "source_video" in vj:
+                # Move source_video to original_video (simulating legacy format)
+                vj["original_video"] = vj.pop("source_video")
+
+        # Rewrite videos_json
+        del f["videos_json"]
+        f.create_dataset(
+            "videos_json",
+            data=[np.bytes_(json.dumps(v, separators=(",", ":"))) for v in videos_json],
+            maxshape=(None,),
+        )
+
+    # Now load the "legacy" file - should use original_video as source_video
+    loaded = load_file(output)
+    video = loaded.videos[0]
+
+    # source_video should be populated from the legacy original_video
+    assert video.source_video is not None
+    # original_video (computed) should equal source_video
+    assert video.original_video is video.source_video
+
+
 def test_complex_workflow(tmp_path, slp_minimal_pkg):
     """Test a complex workflow with training and inference results."""
     # Load training data
