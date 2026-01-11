@@ -43,7 +43,10 @@ click.rich_click.ERRORS_EPILOGUE = ""
 click.rich_click.COMMAND_GROUPS = {
     "sio": [
         {"name": "Inspection", "commands": ["show", "filenames"]},
-        {"name": "Transformation", "commands": ["convert", "split", "unsplit", "merge"]},
+        {
+            "name": "Transformation",
+            "commands": ["convert", "split", "unsplit", "merge"],
+        },
         {"name": "Embedding", "commands": ["embed", "unembed"]},
         {"name": "Maintenance", "commands": ["fix"]},
         {"name": "Rendering", "commands": ["render"]},
