@@ -4102,6 +4102,9 @@ def _build_ffmpeg_reencode_command(
         cmd.extend(["-r", str(output_fps)])
 
     # Video codec and encoding settings
+    # Note: We set sc_threshold=0 via x264-params for compatibility with older ffmpeg
+    # versions (4.x) that don't support -x264opts. This disables scene detection
+    # to ensure fixed keyframe intervals for scientific video workflows.
     cmd.extend(
         [
             "-c:v",
@@ -4114,10 +4117,10 @@ def _build_ffmpeg_reencode_command(
             str(gop_size),  # Keyframe interval
             "-keyint_min",
             str(gop_size),  # Minimum keyframe interval
+            "-sc_threshold",
+            "0",  # Disable scene detection (compatible with ffmpeg 4.x+)
             "-bf",
             "0",  # No B-frames for better seekability
-            "-x264opts",
-            "scenecut=0",  # Disable scene detection (fixed keyframes)
             "-pix_fmt",
             "yuv420p",  # Maximum compatibility
         ]
