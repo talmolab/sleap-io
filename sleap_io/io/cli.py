@@ -44,6 +44,7 @@ click.rich_click.COMMAND_GROUPS = {
     "sio": [
         {"name": "Inspection", "commands": ["show", "filenames"]},
         {"name": "Transformation", "commands": ["convert", "split", "unsplit"]},
+        {"name": "Embedding", "commands": ["embed", "unembed"]},
         {"name": "Maintenance", "commands": ["fix"]},
         {"name": "Rendering", "commands": ["render"]},
     ]
@@ -3180,3 +3181,240 @@ def fix(
         f"[dim]  {len(labels.videos)} videos, {len(labels.labeled_frames)} frames, "
         f"{len(labels.skeletons)} skeletons, {len(labels.tracks)} tracks[/]"
     )
+
+
+@cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input SLP file path. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output .pkg.slp file path.",
+)
+@click.option(
+    "--user/--no-user",
+    "include_user",
+    default=True,
+    show_default=True,
+    help="Include user-labeled frames.",
+)
+@click.option(
+    "--predictions/--no-predictions",
+    "include_predictions",
+    default=False,
+    show_default=True,
+    help="Include prediction-only frames (no user labels).",
+)
+@click.option(
+    "--suggestions/--no-suggestions",
+    "include_suggestions",
+    default=False,
+    show_default=True,
+    help="Include suggested frames.",
+)
+def embed(
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
+    output_path: Path,
+    include_user: bool,
+    include_predictions: bool,
+    include_suggestions: bool,
+):
+    """Embed video frames into a labels file.
+
+    Creates a portable .pkg.slp file with embedded images that can be shared
+    without requiring the original video files.
+
+    [bold]Frame selection:[/]
+    - --user: Frames with user-labeled instances (default: on)
+    - --predictions: Frames with only predicted instances (default: off)
+    - --suggestions: Suggested frames for labeling (default: off)
+
+    [dim]Examples:[/]
+
+        $ sio embed labels.slp -o labels.pkg.slp
+        $ sio embed labels.slp -o labels.pkg.slp --suggestions
+        $ sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
+        $ sio embed labels.slp -o labels.pkg.slp --no-user --suggestions
+    """
+    # Resolve input from positional arg or -i option
+    input_path = _resolve_input(input_arg, input_opt, "input file")
+
+    # Validate input is SLP format
+    if not str(input_path).lower().endswith(".slp"):
+        raise click.ClickException("Input file must be a .slp file.")
+
+    # Load the input file with video access for embedding
+    try:
+        labels = io_main.load_file(str(input_path), format="slp", open_videos=True)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input file: {e}")
+
+    # Check if at least one frame type is selected
+    if not include_user and not include_predictions and not include_suggestions:
+        raise click.ClickException(
+            "No frames to embed. Enable at least one of: --user, --predictions, "
+            "--suggestions"
+        )
+
+    # Build list of frames to embed
+    frames_to_embed: list[tuple[Video, int]] = []
+    frame_counts: dict[str, int] = {}
+
+    # Get user-labeled frames
+    user_frame_set: set[tuple[Video, int]] = set()
+    if include_user:
+        user_frames = [(lf.video, lf.frame_idx) for lf in labels.user_labeled_frames]
+        frames_to_embed.extend(user_frames)
+        user_frame_set = set(user_frames)
+        frame_counts["user"] = len(user_frames)
+
+    # Get prediction-only frames (frames with predictions but no user instances)
+    if include_predictions:
+        pred_frames = [
+            (lf.video, lf.frame_idx)
+            for lf in labels.labeled_frames
+            if not lf.has_user_instances
+        ]
+        frames_to_embed.extend(pred_frames)
+        frame_counts["predictions"] = len(pred_frames)
+
+    # Get suggested frames
+    if include_suggestions:
+        suggestion_frames = [(sf.video, sf.frame_idx) for sf in labels.suggestions]
+        # Don't double-count frames already in user set
+        new_suggestions = [f for f in suggestion_frames if f not in user_frame_set]
+        frames_to_embed.extend(new_suggestions)
+        frame_counts["suggestions"] = len(suggestion_frames)
+
+    # Check if there are any frames to embed
+    if not frames_to_embed:
+        raise click.ClickException(
+            "No frames to embed with the selected options. "
+            "Try different flags or check if the file has the expected frame types."
+        )
+
+    # Save with embedding
+    try:
+        labels.save(str(output_path), embed=frames_to_embed)
+    except Exception as e:
+        raise click.ClickException(f"Failed to save output file: {e}")
+
+    # Success message
+    console.print(f"[bold green]Embedded:[/] {input_path} -> {output_path}")
+    frame_summary = ", ".join(f"{k}: {v}" for k, v in frame_counts.items())
+    console.print(f"[dim]Frames: {frame_summary}[/]")
+
+
+@cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input .pkg.slp file path. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output .slp file path.",
+)
+def unembed(
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
+    output_path: Path,
+):
+    """Remove embedded frames and restore video references.
+
+    Converts a .pkg.slp file back to a regular .slp file that references the
+    original video files. This requires that the original videos are accessible
+    and that the labels file contains source video metadata.
+
+    [bold]Notes:[/]
+    - Original video files must be accessible at their stored paths
+    - Legacy .pkg.slp files without source video metadata cannot be unembedded
+
+    [dim]Examples:[/]
+
+        $ sio unembed labels.pkg.slp -o labels.slp
+        $ sio unembed -i labels.pkg.slp -o labels.slp
+    """
+    # Resolve input from positional arg or -i option
+    input_path = _resolve_input(input_arg, input_opt, "input file")
+
+    # Validate input is SLP format
+    if not str(input_path).lower().endswith(".slp"):
+        raise click.ClickException("Input file must be a .slp file.")
+
+    # Load the input file
+    try:
+        labels = io_main.load_file(str(input_path), format="slp", open_videos=True)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input file: {e}")
+
+    # Check for embedded videos
+    embedded_videos = []
+    for video in labels.videos:
+        if _is_embedded(video):
+            embedded_videos.append(video)
+
+    if not embedded_videos:
+        raise click.ClickException(
+            "No embedded videos found. This file does not contain embedded frames.\n"
+            "Use 'sio show --video' to inspect video details."
+        )
+
+    # Check for source video metadata (required for unembedding)
+    videos_without_source = []
+    for video in embedded_videos:
+        source = object.__getattribute__(video, "source_video")
+        if source is None:
+            videos_without_source.append(video)
+
+    if videos_without_source:
+        # Build helpful error message
+        n_missing = len(videos_without_source)
+        n_total = len(embedded_videos)
+        raise click.ClickException(
+            f"Cannot unembed: {n_missing}/{n_total} embedded video(s) have no source "
+            f"video metadata.\n\n"
+            f"This typically happens with legacy .pkg.slp files created before "
+            f"source video tracking was added.\n\n"
+            f"To inspect video details, run:\n"
+            f"  sio show '{input_path}' --video"
+        )
+
+    # Save with source video restoration
+    try:
+        labels.save(str(output_path), embed=False, restore_original_videos=True)
+    except Exception as e:
+        raise click.ClickException(f"Failed to save output file: {e}")
+
+    # Success message with video info
+    console.print(f"[bold green]Unembedded:[/] {input_path} -> {output_path}")
+    console.print(f"[dim]Restored {len(embedded_videos)} video(s) to source paths[/]")
