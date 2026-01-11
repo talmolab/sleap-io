@@ -1931,16 +1931,19 @@ sio reencode project.slp -o project.reencoded.slp --dry-run
 ```
 
 This creates:
+
 - A new SLP file with updated video paths
 - A `{output_name}.videos/` directory containing the reencoded videos
 
 **Behavior by video type:**
+
 - **MediaVideo** (`.mp4`, `.avi`, `.mov`, etc.): Reencoded using ffmpeg (fast)
 - **HDF5Video** (embedded videos in `.slp` files): Reencoded using Python path
 - **ImageVideo** (image sequences): Skipped (cannot be reencoded to video)
 - **TiffVideo** (TIFF stacks): Skipped (cannot be reencoded to video)
 
 This is particularly useful for:
+
 - Fixing seeking issues in all videos before starting annotation
 - Standardizing video formats across a multi-video project
 - Extracting embedded videos from `.pkg.slp` files to standalone MP4s
