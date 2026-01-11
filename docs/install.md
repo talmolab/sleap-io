@@ -237,7 +237,7 @@ Add sleap-io to your project's dependencies for pose data I/O.
     ```toml
     [project]
     dependencies = [
-        "sleap-io[all]>=0.5.0",
+        "sleap-io[all]>=0.6.0",
     ]
     ```
 
@@ -245,7 +245,7 @@ Add sleap-io to your project's dependencies for pose data I/O.
 
     ```toml
     [project.optional-dependencies]
-    pose = ["sleap-io[all]>=0.5.0"]
+    pose = ["sleap-io[all]>=0.6.0"]
     ```
 
 #### From source (Git dependency)
