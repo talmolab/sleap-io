@@ -145,3 +145,7 @@ dmypy.json
 tmp/
 scratch/
 .obsidian/
+
+# Playwright
+.playwright/
+.playwright-mcp/
