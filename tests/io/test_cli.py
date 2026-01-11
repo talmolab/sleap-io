@@ -6052,7 +6052,7 @@ def test_reencode_default_output_path(tmp_path, centered_pair_low_quality_path):
 
 
 def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
-    """Test basic reencoding with ffmpeg path."""
+    """Test basic reencoding (ffmpeg or Python path)."""
     runner = CliRunner()
     output_path = tmp_path / "output.mp4"
 
@@ -6068,7 +6068,8 @@ def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
     assert result.exit_code == 0, _strip_ansi(result.output)
     output = _strip_ansi(result.output)
 
-    assert "Reencoding:" in output
+    # Check for either ffmpeg or Python path output
+    assert "Reencoding" in output
     assert "Saved:" in output
     assert output_path.exists()
     assert output_path.stat().st_size > 0
@@ -6093,7 +6094,9 @@ def test_reencode_with_quality(tmp_path, centered_pair_low_quality_path):
     assert result.exit_code == 0, _strip_ansi(result.output)
     output = _strip_ansi(result.output)
 
-    assert "CRF 32" in output  # low quality = CRF 32
+    # CRF is shown in ffmpeg path output, not in Python path
+    if _is_ffmpeg_available():
+        assert "CRF 32" in output  # low quality = CRF 32
     assert output_path.exists()
 
 
