@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import rich_click as click
 from rich import box
@@ -3418,3 +3418,318 @@ def unembed(
     # Success message with video info
     console.print(f"[bold green]Unembedded:[/] {input_path} -> {output_path}")
     console.print(f"[dim]Restored {len(embedded_videos)} video(s) to source paths[/]")
+
+
+@cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input labels file or video. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Output path. Default: {input}.trim.slp (labels) or {input}.trim.mp4 (video).",
+)
+# Frame range options
+@click.option(
+    "--start",
+    "start_frame",
+    type=int,
+    default=None,
+    help="Start frame index (0-based, inclusive). Default: 0.",
+)
+@click.option(
+    "--end",
+    "end_frame",
+    type=int,
+    default=None,
+    help="End frame index (0-based, exclusive). Default: last frame + 1.",
+)
+# Video selection
+@click.option(
+    "--video",
+    "video_ind",
+    type=int,
+    default=None,
+    help="Video index for multi-video labels. Default: 0 if single video, required "
+    "otherwise.",
+)
+# Video encoding options
+@click.option(
+    "--fps",
+    type=float,
+    default=None,
+    help="Output video FPS. Default: source video FPS.",
+)
+@click.option(
+    "--crf",
+    type=int,
+    default=25,
+    show_default=True,
+    help="Video quality (2-32, lower=better quality, larger file).",
+)
+@click.option(
+    "--x264-preset",
+    "x264_preset",
+    type=click.Choice(
+        ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"]
+    ),
+    default="superfast",
+    show_default=True,
+    help="H.264 encoding speed/compression trade-off.",
+)
+def trim(
+    input_arg: Optional[Path],
+    input_opt: Optional[Path],
+    output_path: Optional[Path],
+    start_frame: Optional[int],
+    end_frame: Optional[int],
+    video_ind: Optional[int],
+    fps: Optional[float],
+    crf: int,
+    x264_preset: str,
+) -> None:
+    """Trim video and labels to a frame range.
+
+    Creates a trimmed video clip and adjusts frame indices in the labels file
+    accordingly. Can also trim standalone video files without labels.
+
+    [bold]Labels mode[/]: Trims both the labels file and associated video.
+
+    [bold]Video mode[/]: Trims a standalone video file (no labels).
+
+    [dim]Examples:[/]
+
+        [bold]Labels trimming:[/]
+
+        $ sio trim labels.slp --start 100 --end 1000           # -> labels.trim.slp
+
+        $ sio trim labels.slp --start 100 --end 1000 -o clip.slp
+
+        $ sio trim labels.slp --start 100 --end 1000 --video 0
+
+        $ sio trim labels.slp --start 100 --end 1000 --crf 18  # Higher quality
+
+        [bold]Video-only trimming:[/]
+
+        $ sio trim video.mp4 --start 100 --end 1000            # -> video.trim.mp4
+
+        $ sio trim video.mp4 --start 0 --end 500 -o clip.mp4
+
+        $ sio trim video.mp4 --start 100 --fps 15              # Change FPS
+    """
+    # Resolve input path from positional arg or -i option
+    input_path = _resolve_input(input_arg, input_opt, "input file")
+
+    # Try to load as labels first, then as video
+    is_labels_input = False
+    labels: Optional[Labels] = None
+    video: Optional[Video] = None
+
+    try:
+        result = io_main.load_file(str(input_path), open_videos=True)
+        if isinstance(result, Labels):
+            is_labels_input = True
+            labels = result
+        elif isinstance(result, Video):
+            video = result
+        else:
+            raise click.ClickException(
+                f"Input must be a labels file or video (got {type(result).__name__})"
+            )
+    except Exception as e:
+        # Try loading as video directly
+        try:
+            video = io_main.load_video(str(input_path))
+        except Exception:
+            raise click.ClickException(f"Failed to load input: {e}")
+
+    # Build video_kwargs from encoding options
+    video_kwargs: dict[str, Any] = {
+        "crf": crf,
+        "preset": x264_preset,
+    }
+    if fps is not None:
+        video_kwargs["fps"] = fps
+
+    if is_labels_input and labels is not None:
+        # Labels mode: trim labels and video together
+        _trim_labels(
+            labels=labels,
+            input_path=input_path,
+            output_path=output_path,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            video_ind=video_ind,
+            video_kwargs=video_kwargs,
+        )
+    elif video is not None:
+        # Video mode: trim video only
+        _trim_video(
+            video=video,
+            input_path=input_path,
+            output_path=output_path,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            video_kwargs=video_kwargs,
+        )
+
+
+def _trim_labels(
+    labels: Labels,
+    input_path: Path,
+    output_path: Optional[Path],
+    start_frame: Optional[int],
+    end_frame: Optional[int],
+    video_ind: Optional[int],
+    video_kwargs: dict[str, Any],
+) -> None:
+    """Trim labels and associated video to a frame range."""
+    import numpy as np
+
+    # Resolve video selection
+    if video_ind is None:
+        if len(labels.videos) == 1:
+            video_ind = 0
+        else:
+            raise click.ClickException(
+                f"Multiple videos found ({len(labels.videos)}). "
+                "Use --video to specify which video to trim."
+            )
+
+    if video_ind >= len(labels.videos):
+        raise click.ClickException(
+            f"Video index {video_ind} out of range. "
+            f"Labels has {len(labels.videos)} video(s) (0-{len(labels.videos) - 1})."
+        )
+
+    video = labels.videos[video_ind]
+
+    # Determine frame range
+    if start_frame is None:
+        start_frame = 0
+    if end_frame is None:
+        end_frame = len(video)
+
+    # Validate frame range
+    if start_frame < 0:
+        raise click.ClickException(f"Start frame must be >= 0 (got {start_frame}).")
+    if end_frame <= start_frame:
+        raise click.ClickException(
+            f"End frame ({end_frame}) must be greater than start frame ({start_frame})."
+        )
+    if end_frame > len(video):
+        console.print(
+            f"[yellow]Warning: End frame ({end_frame}) exceeds video length "
+            f"({len(video)}). Clamping to video length.[/]"
+        )
+        end_frame = len(video)
+
+    # Determine output path
+    if output_path is None:
+        output_path = input_path.with_name(f"{input_path.stem}.trim.slp")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build frame indices array
+    frame_inds = np.arange(start_frame, end_frame)
+
+    console.print(f"[bold]Trimming:[/] {input_path}")
+    console.print(f"[dim]  Video: {video.filename}[/]")
+    console.print(
+        f"[dim]  Frame range: {start_frame} to {end_frame} "
+        f"({len(frame_inds)} frames)[/]"
+    )
+
+    # Use Labels.trim() method
+    # Pass video index (int) instead of video object to avoid identity comparison issues
+    try:
+        trimmed_labels = labels.trim(
+            save_path=output_path,
+            frame_inds=frame_inds,
+            video=video_ind,
+            video_kwargs=video_kwargs,
+        )
+    except Exception as e:
+        raise click.ClickException(f"Failed to trim: {e}")
+
+    # Report success
+    video_path = output_path.with_suffix(".mp4")
+    console.print(f"[bold green]Saved:[/] {output_path}")
+    console.print(f"[bold green]Video:[/] {video_path}")
+    console.print(
+        f"[dim]  {len(trimmed_labels.labeled_frames)} labeled frames "
+        f"in trimmed output[/]"
+    )
+
+
+def _trim_video(
+    video: Video,
+    input_path: Path,
+    output_path: Optional[Path],
+    start_frame: Optional[int],
+    end_frame: Optional[int],
+    video_kwargs: dict[str, Any],
+) -> None:
+    """Trim a standalone video to a frame range."""
+    import numpy as np
+
+    # Determine frame range
+    if start_frame is None:
+        start_frame = 0
+    if end_frame is None:
+        end_frame = len(video)
+
+    # Validate frame range
+    if start_frame < 0:
+        raise click.ClickException(f"Start frame must be >= 0 (got {start_frame}).")
+    if end_frame <= start_frame:
+        raise click.ClickException(
+            f"End frame ({end_frame}) must be greater than start frame ({start_frame})."
+        )
+    if end_frame > len(video):
+        console.print(
+            f"[yellow]Warning: End frame ({end_frame}) exceeds video length "
+            f"({len(video)}). Clamping to video length.[/]"
+        )
+        end_frame = len(video)
+
+    # Determine output path
+    if output_path is None:
+        output_path = input_path.with_name(f"{input_path.stem}.trim.mp4")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build frame indices array
+    frame_inds = np.arange(start_frame, end_frame)
+
+    console.print(f"[bold]Trimming:[/] {input_path}")
+    console.print(
+        f"[dim]  Frame range: {start_frame} to {end_frame} "
+        f"({len(frame_inds)} frames)[/]"
+    )
+
+    # Use Video.save() method
+    try:
+        video.save(
+            save_path=output_path,
+            frame_inds=frame_inds,
+            video_kwargs=video_kwargs,
+        )
+    except Exception as e:
+        raise click.ClickException(f"Failed to trim video: {e}")
+
+    console.print(f"[bold green]Saved:[/] {output_path}")
