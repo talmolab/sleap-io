@@ -384,14 +384,14 @@ def test_show_header_shows_file_size():
 
 
 def test_show_header_shows_instance_counts():
-    """Test that header shows labeled/predicted instance counts."""
+    """Test that header shows user/predicted instance counts."""
     runner = CliRunner()
     path = _data_path("slp/typical.slp")
     result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
     # typical.slp has both user and predicted instances
-    assert "labeled" in out
+    assert "user instances" in out
     assert "predicted" in out
 
 
@@ -499,15 +499,29 @@ def test_show_format_file_size_units():
 
 
 def test_show_provenance_with_list_and_dict():
-    """Test provenance display with list and dict values."""
+    """Test provenance display with list and dict values.
+
+    With --provenance flag, full JSON is shown (not truncated).
+    Without --provenance, compact mode shows "[N items]" or "{N keys}".
+    """
     runner = CliRunner()
     path = _data_path("slp/predictions_1.2.7_provenance_and_tracking.slp")
+
+    # Test full mode (--provenance): shows full JSON
     result = runner.invoke(cli, ["show", str(path), "--provenance", "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    # This file has 'args' which is a dict
+    # This file has 'args' which is a dict - full mode shows actual JSON content
     assert "args:" in out
-    assert "keys" in out  # Shows "{...} (N keys)"
+    # Full JSON mode shows the actual keys from the dict
+    assert '"data_path"' in out or "data_path" in out
+
+    # Test compact mode (no --provenance): shows summary
+    result = runner.invoke(cli, ["show", str(path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Compact mode shows "{N keys}" for dicts
+    assert "keys}" in out
 
 
 # =============================================================================
@@ -988,7 +1002,11 @@ def test_show_provenance_empty():
 
 
 def test_show_provenance_list_truncation(tmp_path):
-    """Test provenance with long list values gets truncated."""
+    """Test provenance with long list values in compact vs full mode.
+
+    Compact mode (default): shows "[N items]" summary
+    Full mode (--provenance): shows full JSON
+    """
     from sleap_io import Labels, save_file
 
     runner = CliRunner()
@@ -1000,13 +1018,22 @@ def test_show_provenance_list_truncation(tmp_path):
     slp_path = tmp_path / "long_list_provenance.slp"
     save_file(labels, slp_path)
 
+    # Compact mode (no --provenance) shows summary
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show "[10 items]" summary
+    assert "[10 items]" in out
+
+    # Full mode (--provenance) shows all items
     result = runner.invoke(
         cli, ["show", str(slp_path), "--provenance", "--no-open-videos"]
     )
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    # Should show truncation
-    assert "10 total" in out
+    # Should show actual paths
+    assert "model_0" in out
+    assert "model_9" in out
 
 
 def test_show_lf_with_nan_points(tmp_path):
