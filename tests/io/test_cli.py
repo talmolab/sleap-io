@@ -13,6 +13,7 @@ from click.testing import CliRunner
 
 from sleap_io import load_slp
 from sleap_io.io.cli import cli
+from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.version import __version__
@@ -3788,3 +3789,396 @@ def test_render_rejects_both_inputs(centered_pair, tmp_path):
     )
     assert result.exit_code != 0
     assert "Cannot specify" in result.output
+
+
+# ============================================================================
+# fix command tests
+# ============================================================================
+
+
+def test_fix_help():
+    """Test fix --help shows command documentation."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check key elements
+    assert "Fix common issues" in output
+    assert "--videos" in output
+    assert "--skeletons" in output
+    assert "--predictions" in output
+    assert "--clean" in output
+    assert "--dry-run" in output
+    assert "--prefix" in output
+    assert "--map" in output
+
+
+def test_fix_in_command_list():
+    """Test fix appears in main help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check command is listed with description
+    assert "fix" in output
+    assert "Fix common issues" in output
+
+
+def test_fix_dry_run_no_issues(slp_typical, tmp_path):
+    """Test fix --dry-run with a clean file shows no issues."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "--dry-run"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should report no issues
+    assert "No duplicates found" in output or "Videos:" in output
+    assert "[DRY RUN" in output
+
+
+def test_fix_basic_clean(slp_typical, tmp_path):
+    """Test fix saves output with default name."""
+    import shutil
+
+    # Copy to tmp_path to control output location
+    src = Path(slp_typical)
+    input_path = tmp_path / "test.slp"
+    shutil.copy(src, input_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path)],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check default output path
+    expected_output = tmp_path / "test.fixed.slp"
+    assert expected_output.exists()
+    assert "Saved:" in output
+
+
+def test_fix_explicit_output(slp_typical, tmp_path):
+    """Test fix with explicit output path."""
+    runner = CliRunner()
+    output_path = tmp_path / "custom_output.slp"
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_fix_remove_predictions(centered_pair, tmp_path):
+    """Test fix --predictions removes predicted instances."""
+    runner = CliRunner()
+    output_path = tmp_path / "no_preds.slp"
+
+    # centered_pair has predictions
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", centered_pair, "-o", str(output_path), "--predictions"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention removing predictions
+    assert "prediction" in output.lower()
+
+    # Verify predictions removed
+    labels = load_slp(str(output_path), open_videos=False)
+    for lf in labels.labeled_frames:
+        for inst in lf:
+            assert not isinstance(inst, PredictedInstance)
+
+
+def test_fix_duplicate_videos(tmp_path):
+    """Test fix detects and merges duplicate videos."""
+    from tests.fixtures.merge_fixtures import make_video
+
+    # Create labels with duplicate videos
+    skeleton = Skeleton(["head", "tail"])
+    video1 = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video2 = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+
+    labels = Labels(skeletons=[skeleton], videos=[video1, video2])
+
+    # Add frames to both videos
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    for idx, video in enumerate([video1, video2]):
+        frame = LabeledFrame(video=video, frame_idx=idx * 10)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skeleton)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "duplicates.slp"
+    labels.save(str(input_path))
+    assert len(labels.videos) == 2
+
+    # Run fix
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "-o", str(output_path), "--videos", "-v"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should detect duplicates
+    assert "duplicate" in output.lower()
+
+    # Verify duplicates merged
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.videos) == 1
+    assert len(fixed_labels.labeled_frames) == 2  # Both frames preserved
+
+
+def test_fix_unused_skeletons(tmp_path):
+    """Test fix removes unused skeletons."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    # Create labels with unused skeleton
+    skel1 = Skeleton(["head", "tail"], name="used")
+    skel2 = Skeleton(["a", "b", "c"], name="unused")
+
+    from tests.fixtures.merge_fixtures import make_video
+
+    video = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    labels = Labels(skeletons=[skel1, skel2], videos=[video])
+
+    # Add frame using only skel1
+    frame = LabeledFrame(video=video, frame_idx=0)
+    points = np.random.rand(2, 2) * 100
+    inst = Instance.from_numpy(points, skeleton=skel1)
+    frame.instances = [inst]
+    labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "unused_skel.slp"
+    labels.save(str(input_path))
+    assert len(labels.skeletons) == 2
+
+    # Run fix
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "-o", str(output_path), "--skeletons", "-v"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should detect unused
+    assert "unused" in output.lower()
+
+    # Verify unused skeleton removed
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.skeletons) == 1
+    assert fixed_labels.skeletons[0].name == "used"
+
+
+def test_fix_prefix_mode(tmp_path):
+    """Test fix with --prefix updates video paths."""
+    from sleap_io.model.video import Video
+
+    labels = Labels(
+        videos=[Video.from_filename(r"C:\data\videos\test.mp4")],
+    )
+    input_path = tmp_path / "windows.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--prefix",
+            r"C:\data\videos",
+            "/mnt/data/videos",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify path updated
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert fixed_labels.videos[0].filename == "/mnt/data/videos/test.mp4"
+
+
+def test_fix_map_mode(tmp_path):
+    """Test fix with --map updates video paths."""
+    from sleap_io.model.video import Video
+
+    labels = Labels(
+        videos=[Video.from_filename("/old/path/video.mp4")],
+    )
+    input_path = tmp_path / "old_path.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    output_path = tmp_path / "fixed.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--map",
+            "/old/path/video.mp4",
+            "/new/path/video.mp4",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify path updated
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert fixed_labels.videos[0].filename == "/new/path/video.mp4"
+
+
+def test_fix_no_clean(slp_typical, tmp_path):
+    """Test fix --no-clean skips cleanup step."""
+    runner = CliRunner()
+    output_path = tmp_path / "no_clean.slp"
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(output_path), "--no-clean"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should not mention cleanup
+    assert "Clean up" not in output
+
+
+def test_fix_verbose(slp_typical, tmp_path):
+    """Test fix -v shows detailed analysis."""
+    runner = CliRunner()
+    output_path = tmp_path / "verbose.slp"
+
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(output_path), "-v"],
+    )
+    assert result.exit_code == 0, result.output
+    # Verbose output should be present (details vary by file content)
+    assert "Loading:" in result.output
+
+
+def test_fix_input_not_found():
+    """Test fix error when input file doesn't exist."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix", "-i", "nonexistent.slp"])
+    assert result.exit_code != 0
+    # Click validates path existence
+
+
+def test_fix_non_labels_input(tmp_path, centered_pair_low_quality_path):
+    """Test fix error when input is not a labels file."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", centered_pair_low_quality_path],
+    )
+    assert result.exit_code != 0
+    assert "not a labels file" in result.output
+
+
+def test_fix_load_failure(tmp_path):
+    """Test fix error when input file is corrupt."""
+    corrupt = tmp_path / "corrupt.slp"
+    corrupt.write_text("not valid")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix", "-i", str(corrupt)])
+    assert result.exit_code != 0
+    assert "Failed to load" in result.output
+
+
+def test_fix_save_failure(slp_typical, tmp_path):
+    """Test fix error when save fails."""
+    # Create directory where file is expected
+    bad_output = tmp_path / "output.slp"
+    bad_output.mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", slp_typical, "-o", str(bad_output)],
+    )
+    assert result.exit_code != 0
+    assert "Failed to save" in result.output
+
+
+def test_fix_accepts_positional_input(slp_typical, tmp_path):
+    """Test fix accepts positional input."""
+    runner = CliRunner()
+    output_path = tmp_path / "out.slp"
+    result = runner.invoke(cli, ["fix", slp_typical, "-o", str(output_path)])
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
+def test_fix_rejects_both_inputs(slp_typical, tmp_path):
+    """Test fix rejects both positional and -i."""
+    runner = CliRunner()
+    output_path = tmp_path / "out.slp"
+    result = runner.invoke(
+        cli, ["fix", slp_typical, "-i", slp_typical, "-o", str(output_path)]
+    )
+    assert result.exit_code != 0
+    assert "Cannot specify" in result.output
+
+
+def test_fix_missing_input():
+    """Test fix fails gracefully when no input provided."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fix"])
+    assert result.exit_code != 0
+    assert "Missing" in result.output
+
+
+def test_fix_default_output_pkg_slp(tmp_path):
+    """Test fix generates correct default output for pkg.slp files."""
+    import shutil
+
+    # Create a pkg.slp file (just copy and rename for simplicity)
+    src = _data_path("slp/minimal_instance.pkg.slp")
+    input_path = tmp_path / "test.pkg.slp"
+    shutil.copy(src, input_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Check default output path for pkg.slp
+    expected_output = tmp_path / "test.fixed.pkg.slp"
+    assert expected_output.exists()
