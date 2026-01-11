@@ -67,6 +67,7 @@ sio unembed --help
 sio filenames --help
 sio fix --help
 sio render --help
+sio trim --help
 
 # Check version and installed plugins
 sio --version
@@ -129,6 +130,11 @@ sio render predictions.slp --start 100 --end 200
 sio render predictions.slp --lf 0                          # Single frame -> PNG
 sio render predictions.slp --lf 0 --crop auto              # Auto-fit to instances
 sio render predictions.slp --color-by track --marker-shape diamond
+
+# Trim video and labels to a frame range
+sio trim labels.slp --start 100 --end 1000                 # -> labels.trim.slp
+sio trim labels.slp --start 100 --end 1000 -o clip.slp
+sio trim video.mp4 --start 100 --end 500                   # Video-only mode
 ```
 
 ---
@@ -1575,6 +1581,88 @@ sio render predictions.slp -o final.mp4 \
     --marker-size 5 \
     --line-width 2.5
 ```
+
+### `sio trim` - Trim Video and Labels
+
+Trim a video and labels file to a specific frame range, adjusting frame indices accordingly.
+
+```bash
+# Labels mode: trim labels and video together
+sio trim <labels> [--start <frame>] [--end <frame>] [-o <output>] [options]
+
+# Video mode: trim standalone video
+sio trim <video> [--start <frame>] [--end <frame>] [-o <output>] [options]
+```
+
+!!! tip "Two modes"
+    **Labels mode**: Trims both the labels file and associated video, adjusting frame indices.
+
+    **Video mode**: Trims a standalone video file (no labels).
+
+#### Basic Usage
+
+```bash
+# Trim labels and video to frames 100-1000
+sio trim labels.slp --start 100 --end 1000              # -> labels.trim.slp + labels.trim.mp4
+
+# Explicit output path
+sio trim labels.slp --start 100 --end 1000 -o clip.slp
+
+# Trim just a video file
+sio trim video.mp4 --start 100 --end 500                # -> video.trim.mp4
+
+# Trim from start to frame 1000
+sio trim labels.slp --end 1000
+
+# Trim from frame 100 to end of video
+sio trim labels.slp --start 100
+```
+
+#### Options Reference
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-i, --input` | (required) | Input labels file or video (can also pass as positional arg) |
+| `-o, --output` | auto | Output path. Default: `{input}.trim.slp` (labels) or `{input}.trim.mp4` (video) |
+| `--start` | 0 | Start frame index (0-based, inclusive) |
+| `--end` | last frame + 1 | End frame index (0-based, exclusive) |
+| `--video` | auto | Video index for multi-video labels. Default: 0 if single video |
+| `--fps` | source FPS | Output video FPS. Change to adjust playback speed. |
+| `--crf` | 25 | Video quality (2-32, lower=better quality, larger file) |
+| `--x264-preset` | superfast | H.264 encoding speed trade-off (ultrafast to slow) |
+
+#### Video Encoding Options
+
+```bash
+# Higher quality output (larger file)
+sio trim labels.slp --start 100 --end 500 --crf 18
+
+# Slow motion (half speed)
+sio trim labels.slp --start 100 --end 500 --fps 15
+
+# Fast, lower compression
+sio trim labels.slp --start 100 --end 500 --x264-preset ultrafast
+```
+
+#### Multi-Video Labels
+
+For labels with multiple videos, select which video to trim:
+
+```bash
+# Trim the second video (0-indexed)
+sio trim multiview.slp --start 100 --end 500 --video 1
+```
+
+!!! warning "Multi-video requirement"
+    When trimming labels with multiple videos, you must specify `--video` to select which video to trim. The command will error if multiple videos are present and `--video` is not provided.
+
+#### Frame Index Adjustment
+
+When trimming labels, frame indices are automatically adjusted to match the new video:
+
+- Original frames 100-500 become frames 0-400 in the trimmed output
+- Labeled frames outside the trim range are removed
+- Suggestions are filtered and adjusted similarly
 
 ---
 

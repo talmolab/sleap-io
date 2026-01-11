@@ -1161,6 +1161,34 @@ def test_labels_trim(centered_pair, tmpdir):
     labels.trim(new_path, np.arange(100, 200), video=0)
 
 
+def test_labels_trim_with_suggestions(slp_real_data, tmp_path):
+    """Test that Labels.trim() correctly handles suggestions."""
+    labels = load_slp(slp_real_data)
+
+    # Check that we have suggestions
+    assert len(labels.suggestions) > 0, "Test requires labels with suggestions"
+
+    # Define frame range
+    start_frame = 200
+    end_frame = 800
+
+    # Trim to a range that should include some suggestions
+    new_path = tmp_path / "trimmed.slp"
+    trimmed_labels = labels.trim(new_path, np.arange(start_frame, end_frame))
+
+    # Verify trimmed labels saved successfully
+    assert new_path.exists()
+    assert new_path.with_suffix(".mp4").exists()
+
+    # Verify suggestions are filtered and adjusted
+    for sf in trimmed_labels.suggestions:
+        # All suggestions should reference the new video
+        assert sf.video == trimmed_labels.video
+        # Frame indices should be adjusted (original - start_frame)
+        assert sf.frame_idx >= 0
+        assert sf.frame_idx < (end_frame - start_frame)
+
+
 def test_labels_sessions():
     labels = Labels()
     assert labels.sessions == []

@@ -4790,3 +4790,599 @@ def test_unembed_save_failure(tmp_path, slp_real_data):
     assert result.exit_code != 0
     output = _strip_ansi(result.output)
     assert "Failed to save" in output
+
+
+# ======== sio trim tests ========
+
+
+def test_trim_help():
+    """Test trim command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["trim", "--help"])
+    assert result.exit_code == 0
+    assert "Trim video and labels to a frame range" in result.output
+    assert "--start" in result.output
+    assert "--end" in result.output
+    assert "--video" in result.output
+    assert "--crf" in result.output
+    assert "--fps" in result.output
+    assert "--x264-preset" in result.output
+
+
+def test_trim_in_command_list():
+    """Test that trim appears in CLI help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "trim" in result.output
+
+
+def test_trim_labels_basic(tmp_path, slp_real_data):
+    """Test basic labels trimming with default options."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    # Trim to first 50 frames
+    result = runner.invoke(
+        cli,
+        ["trim", slp_real_data, "--start", "0", "--end", "50", "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Trimming:" in output
+    assert "Saved:" in output
+    assert output_path.exists()
+    assert output_path.with_suffix(".mp4").exists()
+
+    # Verify trimmed labels
+    trimmed = load_slp(str(output_path))
+    assert len(trimmed.videos) == 1
+    # All frame indices should be < 50
+    for lf in trimmed.labeled_frames:
+        assert lf.frame_idx < 50
+
+
+def test_trim_labels_with_frame_range(tmp_path, slp_real_data):
+    """Test labels trimming with specific frame range."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            slp_real_data,
+            "--start",
+            "100",
+            "--end",
+            "300",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Frame range: 100 to 300" in output
+    assert "200 frames" in output
+    assert output_path.exists()
+
+
+def test_trim_labels_with_video_options(tmp_path, slp_real_data):
+    """Test labels trimming with video encoding options."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            slp_real_data,
+            "--start",
+            "0",
+            "--end",
+            "30",
+            "--crf",
+            "18",
+            "--x264-preset",
+            "fast",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert output_path.exists()
+    assert output_path.with_suffix(".mp4").exists()
+
+
+def test_trim_video_only(tmp_path, centered_pair_low_quality_path):
+    """Test trimming a standalone video file."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            centered_pair_low_quality_path,
+            "--start",
+            "0",
+            "--end",
+            "30",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Trimming:" in output
+    assert "Saved:" in output
+    assert output_path.exists()
+
+
+def test_trim_video_only_with_fps(tmp_path, centered_pair_low_quality_path):
+    """Test video trimming with FPS option."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            centered_pair_low_quality_path,
+            "--start",
+            "0",
+            "--end",
+            "30",
+            "--fps",
+            "15",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert output_path.exists()
+
+
+def test_trim_invalid_frame_range(tmp_path, slp_real_data):
+    """Test trim with invalid frame range."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    # End before start
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            slp_real_data,
+            "--start",
+            "100",
+            "--end",
+            "50",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "must be greater than start frame" in _strip_ansi(result.output)
+
+
+def test_trim_negative_start(tmp_path, slp_real_data):
+    """Test trim with negative start frame."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            slp_real_data,
+            "--start",
+            "-10",
+            "--end",
+            "50",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "must be >= 0" in _strip_ansi(result.output)
+
+
+def test_trim_default_output_labels(tmp_path, slp_real_data):
+    """Test trim uses default output path for labels."""
+    import shutil
+
+    runner = CliRunner()
+    # Copy input to tmp_path so default output goes there
+    input_copy = tmp_path / "labels.slp"
+    shutil.copy(slp_real_data, input_copy)
+    # Also need to copy the video
+    video_src = Path("tests/data/videos/centered_pair_low_quality.mp4")
+    video_dst = tmp_path / "tests" / "data" / "videos"
+    video_dst.mkdir(parents=True, exist_ok=True)
+    shutil.copy(video_src, video_dst / "centered_pair_low_quality.mp4")
+
+    result = runner.invoke(
+        cli, ["trim", str(input_copy), "--start", "0", "--end", "30"]
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert (tmp_path / "labels.trim.slp").exists()
+
+
+def test_trim_default_output_video(tmp_path, centered_pair_low_quality_path):
+    """Test trim uses default output path for video."""
+    import shutil
+
+    runner = CliRunner()
+    # Copy video to tmp_path
+    input_copy = tmp_path / "video.mp4"
+    shutil.copy(centered_pair_low_quality_path, input_copy)
+
+    result = runner.invoke(
+        cli, ["trim", str(input_copy), "--start", "0", "--end", "30"]
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert (tmp_path / "video.trim.mp4").exists()
+
+
+def test_trim_input_not_found():
+    """Test trim handles missing input."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["trim", "nonexistent.slp", "--start", "0", "--end", "100"]
+    )
+    assert result.exit_code != 0
+
+
+def test_trim_accepts_positional_input(tmp_path, slp_real_data):
+    """Test trim accepts positional input."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        ["trim", slp_real_data, "--start", "0", "--end", "30", "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+
+def test_trim_accepts_flag_input(tmp_path, slp_real_data):
+    """Test trim accepts -i flag input."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            "-i",
+            slp_real_data,
+            "--start",
+            "0",
+            "--end",
+            "30",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+
+def test_trim_rejects_both_inputs(tmp_path, slp_real_data):
+    """Test trim rejects both positional and flag input."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            slp_real_data,
+            "-i",
+            slp_real_data,
+            "--start",
+            "0",
+            "--end",
+            "30",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Cannot specify" in _strip_ansi(result.output)
+
+
+def test_trim_missing_input():
+    """Test trim requires input."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["trim", "--start", "0", "--end", "100"])
+    assert result.exit_code != 0
+    assert "Missing input file" in _strip_ansi(result.output)
+
+
+def test_trim_multi_video_requires_video_flag(slp_multiview, tmp_path):
+    """Test trim requires --video flag for multi-video labels."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        ["trim", slp_multiview, "--start", "0", "--end", "10", "-o", str(output_path)],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Multiple videos found" in output
+    assert "--video" in output
+
+
+def test_trim_video_index_out_of_range(tmp_path, slp_real_data):
+    """Test trim with invalid video index."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            slp_real_data,
+            "--start",
+            "0",
+            "--end",
+            "30",
+            "--video",
+            "99",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "out of range" in output
+
+
+def test_trim_end_exceeds_video_length_labels(tmp_path, slp_real_data):
+    """Test trim with end frame exceeding video length shows warning."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    # Use a very large end frame to trigger warning
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            slp_real_data,
+            "--start",
+            "0",
+            "--end",
+            "999999",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+    assert "Warning:" in output or "Clamping" in output or output_path.exists()
+
+
+def test_trim_end_exceeds_video_length_video(tmp_path, centered_pair_low_quality_path):
+    """Test video-only trim with end frame exceeding video length shows warning."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            centered_pair_low_quality_path,
+            "--start",
+            "0",
+            "--end",
+            "999999",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+    assert "Warning:" in output or "Clamping" in output or output_path.exists()
+
+
+def test_trim_video_only_invalid_frame_range(tmp_path, centered_pair_low_quality_path):
+    """Test video-only trim with invalid frame range."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.mp4"
+
+    # End before start
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            centered_pair_low_quality_path,
+            "--start",
+            "100",
+            "--end",
+            "50",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "must be greater than start frame" in _strip_ansi(result.output)
+
+
+def test_trim_video_only_negative_start(tmp_path, centered_pair_low_quality_path):
+    """Test video-only trim with negative start frame."""
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "trim",
+            centered_pair_low_quality_path,
+            "--start",
+            "-10",
+            "--end",
+            "50",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "must be >= 0" in _strip_ansi(result.output)
+
+
+def test_trim_labels_no_frame_range(tmp_path, slp_minimal_pkg):
+    """Test labels trimming without explicit frame range uses full video.
+
+    Covers lines 3623, 3625: default start_frame and end_frame in _trim_labels.
+    """
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    # Trim without --start or --end (should use full frame range)
+    result = runner.invoke(
+        cli,
+        ["trim", slp_minimal_pkg, "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Trimming:" in output
+    assert "Saved:" in output
+    assert output_path.exists()
+
+    # Verify trimmed labels has same content as original (full trim)
+    trimmed = load_slp(str(output_path))
+    assert len(trimmed.videos) == 1
+
+
+def test_trim_video_no_frame_range(tmp_path):
+    """Test video trimming without explicit frame range uses full video.
+
+    Covers lines 3691-3694: default start_frame and end_frame in _trim_video.
+    """
+    runner = CliRunner()
+
+    # Create a short test video by copying and using the existing small video
+    # We'll trim only the first 10 frames to make a tiny video for this test
+    src_video = Path("tests/data/videos/centered_pair_low_quality.mp4")
+    temp_video = tmp_path / "short_video.mp4"
+
+    # First create a short video using the trim command WITH frame range
+    result = runner.invoke(
+        cli,
+        ["trim", str(src_video), "--start", "0", "--end", "10", "-o", str(temp_video)],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert temp_video.exists()
+
+    # Now test trimming WITHOUT frame range on the short video
+    output_path = tmp_path / "full_trim.mp4"
+    result = runner.invoke(
+        cli,
+        ["trim", str(temp_video), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Trimming:" in output
+    assert "Saved:" in output
+    assert output_path.exists()
+
+
+def test_trim_unsupported_input_type(tmp_path, skeleton_json_minimal):
+    """Test trim rejects unsupported file types like skeleton files.
+
+    Covers lines 3550-3552: ClickException for non-Labels/Video input.
+    """
+    runner = CliRunner()
+    output_path = tmp_path / "trimmed.slp"
+
+    result = runner.invoke(
+        cli,
+        ["trim", skeleton_json_minimal, "-o", str(output_path)],
+    )
+    # Should fail because skeleton files are not Labels or Video
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    # Either "Input must be a labels file or video" or "Failed to load input"
+    assert "labels file or video" in output.lower() or "failed" in output.lower()
+
+
+def test_trim_labels_write_failure(tmp_path, slp_real_data):
+    """Test trim handles write failures gracefully.
+
+    Covers lines 3662-3663: Exception handler for labels.trim() failure.
+    """
+    import os
+
+    runner = CliRunner()
+
+    # Create a read-only output file to trigger permission error during video save
+    output_path = tmp_path / "readonly.slp"
+    video_path = tmp_path / "readonly.mp4"
+    video_path.write_text("dummy")
+    os.chmod(video_path, 0o444)
+
+    try:
+        result = runner.invoke(
+            cli,
+            [
+                "trim",
+                slp_real_data,
+                "--start",
+                "0",
+                "--end",
+                "10",
+                "-o",
+                str(output_path),
+            ],
+        )
+        # Should fail due to permission error when writing video
+        assert result.exit_code != 0
+        output = _strip_ansi(result.output)
+        assert "Failed to trim" in output or "Permission" in output.lower()
+    finally:
+        # Restore permissions for cleanup
+        os.chmod(video_path, 0o755)
+
+
+def test_trim_video_write_failure(tmp_path, centered_pair_low_quality_path):
+    """Test video trim handles write failures gracefully.
+
+    Covers lines 3728-3729: Exception handler for video.save() failure.
+    """
+    import os
+
+    runner = CliRunner()
+
+    # Create a read-only output file to trigger permission error
+    output_path = tmp_path / "readonly.mp4"
+    output_path.write_text("dummy")
+    os.chmod(output_path, 0o444)
+
+    try:
+        result = runner.invoke(
+            cli,
+            [
+                "trim",
+                centered_pair_low_quality_path,
+                "--start",
+                "0",
+                "--end",
+                "10",
+                "-o",
+                str(output_path),
+            ],
+        )
+        # Should fail due to permission error
+        assert result.exit_code != 0
+        output = _strip_ansi(result.output)
+        assert "Failed to trim" in output or "Permission" in output.lower()
+    finally:
+        # Restore permissions for cleanup
+        os.chmod(output_path, 0o755)

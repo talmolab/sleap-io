@@ -1777,10 +1777,21 @@ class Labels:
         trimmed_labels = self.extract(inds, copy=True)
 
         # Adjust video and frame indices.
+        # Convert fidx0 to Python int to avoid numpy int64 serialization issues.
+        fidx0 = int(fidx0)
         trimmed_labels.videos = [new_video]
         for lf in trimmed_labels:
             lf.video = new_video
             lf.frame_idx = lf.frame_idx - fidx0
+
+        # Adjust suggestions video references and frame indices.
+        updated_suggestions = []
+        for sf in trimmed_labels.suggestions:
+            if sf.frame_idx >= fidx0 and sf.frame_idx <= fidx1:
+                sf.video = new_video
+                sf.frame_idx = sf.frame_idx - fidx0
+                updated_suggestions.append(sf)
+        trimmed_labels.suggestions = updated_suggestions
 
         # Save.
         trimmed_labels.save(save_path)
