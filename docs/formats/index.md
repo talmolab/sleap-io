@@ -20,6 +20,9 @@ sleap-io provides a unified interface for reading and writing pose tracking data
 
 The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations.
 
+!!! tip "Detailed Format Specification"
+    For comprehensive documentation of the SLP file format including HDF5 layout, data structures, and version history, see the **[SLP File Format Reference](slp.md)**.
+
 ::: sleap_io.io.main.load_slp
 
 ::: sleap_io.io.main.save_slp

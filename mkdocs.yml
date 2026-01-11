@@ -146,6 +146,8 @@ nav:
     - Merging: merging.md
   - Reference:
     - Model: model.md
-    - Formats: formats.md
+    - Formats:
+      - formats/index.md
+      - SLP Format: formats/slp.md
     - CLI: cli.md
     - Full API: reference/
