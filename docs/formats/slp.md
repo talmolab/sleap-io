@@ -4,13 +4,13 @@ The `.slp` file format is SLEAP's native format for storing pose tracking data. 
 
 SLP files can contain:
 
-- **Video metadata** and references to source video files
+- **Video metadata** and references to source video files ([`Video`][sleap_io.Video])
 - **Embedded images** with configurable encoding (PNG, JPEG, or raw arrays)
-- **Skeleton definitions** with nodes, edges, and symmetries
-- **Labeled frames** with user annotations and model predictions
-- **Tracks** for identity tracking across frames
-- **Suggestions** for frames to label
-- **Recording sessions** for multi-camera setups
+- **Skeleton definitions** with nodes, edges, and symmetries ([`Skeleton`][sleap_io.Skeleton])
+- **Labeled frames** with user annotations and model predictions ([`LabeledFrame`][sleap_io.LabeledFrame])
+- **Tracks** for identity tracking across frames ([`Track`][sleap_io.Track])
+- **Suggestions** for frames to label ([`SuggestionFrame`][sleap_io.SuggestionFrame])
+- **Recording sessions** for multi-camera setups ([`RecordingSession`][sleap_io.RecordingSession])
 
 ## HDF5 Layout
 
@@ -150,9 +150,9 @@ This ensures correct color reproduction when reading embedded frames.
 
 ## Skeletons
 
-Skeleton definitions are stored in the `/metadata` group's `json` attribute. The metadata JSON contains both a global node list and skeleton definitions that reference nodes by index.
+[`Skeleton`][sleap_io.Skeleton] definitions are stored in the `/metadata` group's `json` attribute. The metadata JSON contains both a global node list and skeleton definitions that reference [`Node`][sleap_io.Node]s by index.
 
-### Metadata JSON Structure
+### JSON Format (SLP Files)
 
 ```json
 {
@@ -178,7 +178,7 @@ Skeleton definitions are stored in the `/metadata` group's `json` attribute. The
 
 ### Edge Types
 
-Edges are encoded with a type field using Python's pickle-style encoding:
+[`Edge`][sleap_io.Edge]s are encoded with a type field using Python's pickle-style encoding:
 
 | Type ID | Meaning | Description |
 |---------|---------|-------------|
@@ -189,7 +189,7 @@ The first occurrence of each type uses the full `py/reduce` encoding; subsequent
 
 ### Symmetries
 
-Symmetries define bilateral relationships (e.g., left/right body parts). They are stored as edges with type `2`:
+[`Symmetry`][sleap_io.Symmetry] relationships define bilateral pairings (e.g., left/right body parts). They are stored as edges with type `2`:
 
 ```json
 {
@@ -201,6 +201,74 @@ Symmetries define bilateral relationships (e.g., left/right body parts). They ar
 
 !!! note "Symmetry Deduplication"
     Legacy SLEAP files may store symmetries bidirectionally. The decoder automatically deduplicates them.
+
+### YAML Format
+
+In addition to the JSON format stored in SLP files, sleap-io supports a simplified YAML format for [`Skeleton`][sleap_io.Skeleton] definitions. This format is more human-readable and easier to edit manually.
+
+!!! info "Preferred Format"
+    The YAML format is the preferred format for skeleton definitions in sleap-nn and new tooling. The JSON format will be maintained for backwards compatibility with existing SLP files.
+
+#### Structure
+
+```yaml
+skeleton_name:
+  nodes:
+    - name: head
+    - name: thorax
+    - name: abdomen
+  edges:
+    - source:
+        name: head
+      destination:
+        name: thorax
+    - source:
+        name: thorax
+      destination:
+        name: abdomen
+  symmetries:
+    - - name: left_wing
+      - name: right_wing
+```
+
+#### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodes` | `list[dict]` | List of [`Node`][sleap_io.Node] definitions with `name` key |
+| `edges` | `list[dict]` | List of [`Edge`][sleap_io.Edge] definitions with `source` and `destination` |
+| `symmetries` | `list[list]` | List of [`Symmetry`][sleap_io.Symmetry] pairs, each as a list of two node references |
+
+#### Multiple Skeletons
+
+The YAML format supports multiple skeletons in a single file, with skeleton names as top-level keys:
+
+```yaml
+fly:
+  nodes:
+    - name: head
+    - name: thorax
+  edges:
+    - source: { name: head }
+      destination: { name: thorax }
+  symmetries: []
+
+mouse:
+  nodes:
+    - name: nose
+    - name: spine
+  edges:
+    - source: { name: nose }
+      destination: { name: spine }
+  symmetries: []
+```
+
+#### API Functions
+
+Use the following functions to work with YAML skeletons:
+
+- [`encode_yaml_skeleton`][sleap_io.io.skeleton.encode_yaml_skeleton] - Encode skeleton(s) to YAML string
+- [`decode_yaml_skeleton`][sleap_io.io.skeleton.decode_yaml_skeleton] - Decode skeleton(s) from YAML string or file
 
 ## Metadata
 
@@ -259,7 +327,7 @@ The `provenance` field tracks the origin and history of the labels file:
 
 ## Tracks
 
-Tracks enable identity tracking of individual animals across frames. Track metadata is stored in the `/tracks_json` dataset as an array of JSON strings.
+[`Track`][sleap_io.Track]s enable identity tracking of individual animals across frames. Track metadata is stored in the `/tracks_json` dataset as an array of JSON strings.
 
 ### JSON Structure
 
@@ -284,7 +352,7 @@ Each track is stored as a two-element JSON array:
 
 ### Instance Linking
 
-Instances reference tracks by index in the `/instances` dataset:
+[`Instance`][sleap_io.Instance]s reference tracks by index in the `/instances` dataset:
 
 - `track = 0` → First track in `/tracks_json`
 - `track = 1` → Second track in `/tracks_json`
@@ -397,7 +465,7 @@ The `/sessions_json` dataset is optional. Files without multi-camera sessions wi
 
 ## Instances
 
-Instances represent individual animals or objects in a frame. They are stored in the `/instances` dataset as a structured array.
+[`Instance`][sleap_io.Instance]s represent individual animals or objects in a frame. They are stored in the `/instances` dataset as a structured array.
 
 ### Instance Dtype
 
@@ -418,14 +486,14 @@ instance_dtype = np.dtype([
 
 ### Instance Types
 
-| Type | Value | Description |
-|------|-------|-------------|
-| `USER` | `0` | User-labeled annotation |
-| `PREDICTED` | `1` | Model prediction |
+| Type | Value | Data Model Class | Description |
+|------|-------|------------------|-------------|
+| `USER` | `0` | [`Instance`][sleap_io.Instance] | User-labeled annotation |
+| `PREDICTED` | `1` | [`PredictedInstance`][sleap_io.PredictedInstance] | Model prediction |
 
 ### Instance Linking
 
-The `from_predicted` field links user instances to their source predictions, enabling tracking of corrections made to model outputs.
+The `from_predicted` field links user [`Instance`][sleap_io.Instance]s to their source [`PredictedInstance`][sleap_io.PredictedInstance]s, enabling tracking of corrections made to model outputs.
 
 ## Points
 
@@ -468,7 +536,7 @@ When reading format < 1.1 files, the reader applies a -0.5 offset to convert coo
 
 ## Labeled Frames
 
-Labeled frames are stored in the `/frames` dataset, linking video frames to their instances.
+[`LabeledFrame`][sleap_io.LabeledFrame]s are stored in the `/frames` dataset, linking video frames to their instances.
 
 ### Frame Dtype
 
@@ -488,7 +556,7 @@ Modern SLP files use sequential video indices (0, 1, 2, ...), but legacy files m
 
 ## Lazy Loading
 
-For large SLP files with hundreds of thousands of frames, sleap-io provides a lazy loading mode that defers object creation until needed.
+For large SLP files with hundreds of thousands of frames, sleap-io provides a lazy loading mode that defers [`Labels`][sleap_io.Labels] object creation until needed.
 
 ### Architecture
 
