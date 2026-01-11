@@ -740,12 +740,12 @@ def _print_video_summary(labels: Labels) -> None:
         shape_str = f"{w}×{h}"
         frames_str = f"{n_frames} frames"
 
-        # Build status tag
+        # Build status tag (backslash escapes Rich markup brackets)
         tag = ""
         if is_embedded:
-            tag = " [cyan][embedded][/]"
+            tag = " [cyan]\\[embedded][/]"
         elif not vid.exists() and not isinstance(vid.filename, list):
-            tag = " [yellow][not found][/]"
+            tag = " [yellow]\\[not found][/]"
 
         # Format path with smart left-truncation (80 chars max for path)
         filenames = _get_image_filenames(vid)
@@ -773,10 +773,8 @@ def _print_video_summary(labels: Labels) -> None:
                     path_display = _truncate_path_left(str(vid.filename), 80)
 
                 tag = ""
-                if is_embedded:
-                    tag = " [cyan][embedded][/]"
-                elif not vid.exists() and not isinstance(vid.filename, list):
-                    tag = " [yellow][not found][/]"
+                if not vid.exists() and not isinstance(vid.filename, list):
+                    tag = " [yellow]\\[not found][/]"
 
                 idx_str = f"[dim][{i}][/]"
                 console.print(
@@ -842,7 +840,7 @@ def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> N
         fname = _format_video_filename(vid)
         header = f"[bold cyan]Video {i}:[/] {fname}"
         if is_embedded:
-            header += " [cyan][embedded][/]"
+            header += " [cyan]\\[embedded][/]"
         console.print(header)
         console.print()
 
