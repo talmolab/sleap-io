@@ -63,6 +63,7 @@ sio convert --help
 sio split --help
 sio unsplit --help
 sio filenames --help
+sio fix --help
 sio render --help
 
 # Check version and installed plugins
@@ -102,6 +103,14 @@ sio filenames labels.slp                                   # List video paths
 sio filenames labels.slp -o out.slp --filename /new/video.mp4
 sio filenames labels.slp -o out.slp --map old.mp4 /new/video.mp4
 sio filenames labels.slp -o out.slp --prefix /old/path /new/path
+
+# Fix common issues in labels files
+sio fix labels.slp                                         # Auto-fix with defaults
+sio fix labels.slp --dry-run                               # Preview without changes
+sio fix labels.slp --remove-predictions                    # Also remove predictions
+sio fix labels.slp --remove-untracked-predictions          # Surgical pred removal
+sio fix labels.slp --consolidate-skeletons                 # Force single skeleton
+sio fix labels.slp --prefix "C:\data" /mnt/data            # Fix cross-platform paths
 
 # Render video with pose overlays
 sio render predictions.slp                                 # -> predictions.viz.mp4
@@ -904,6 +913,201 @@ The command also works with image sequence videos (where `filename` is a list of
 # Update prefix for all images in the sequence
 sio filenames labels.slp -o fixed.slp \
     --prefix /old/frames /new/frames
+```
+
+---
+
+### `sio fix` - Fix Common Issues in Labels Files
+
+Automatically detect and fix common problems in SLEAP labels files, including duplicate videos, unused skeletons, and predictions.
+
+```bash
+sio fix <input> [-o <output>] [options]
+sio fix -i <input> [-o <output>] [options]
+```
+
+#### Basic Usage
+
+```bash
+# Auto-detect and fix with safe defaults
+sio fix labels.slp
+
+# Preview changes without modifying
+sio fix labels.slp --dry-run
+
+# Explicit output path
+sio fix labels.slp -o fixed.slp
+
+# Verbose output showing details
+sio fix labels.slp -v
+```
+
+**Example output:**
+
+```
+Loading: labels.slp
+  26 videos, 715 frames, 2 skeletons, 27 tracks
+
+Analyzing...
+
+⚠ Videos: Found 2 duplicate group(s)
+⚠ Skeletons:
+  'fly_13pt': 1245 user, 500 pred (most frequent)
+  'fly_copy': 0 user, 0 pred (unused)
+ℹ Predictions: 2274 predicted instances (150 untracked)
+
+Actions:
+  → Merge 2 duplicate video group(s)
+  → Remove 1 unused skeleton(s)
+  → Remove unused tracks
+  → Remove empty frames
+
+Saved: labels.fixed.slp
+  25 videos, 715 frames, 1 skeleton, 27 tracks
+```
+
+#### What Gets Fixed by Default
+
+With default options, `sio fix` automatically:
+
+1. **Merges duplicate videos**: Videos pointing to the same file are consolidated
+2. **Removes unused skeletons**: Skeletons with no instances are removed
+3. **Removes prediction-only skeletons**: Skeletons used only by predictions (not user labels) are removed along with their predictions
+4. **Cleans up metadata**: Unused tracks are removed
+5. **Removes empty frames**: Frames with no instances are removed
+
+#### Options Reference
+
+##### Input/Output Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-i, --input` | (required) | Input labels file (can also pass as positional argument) |
+| `-o, --output` | `{input}.fixed.slp` | Output file. For `.pkg.slp` files: `{input}.fixed.pkg.slp` |
+| `--dry-run` | False | Analyze and show what would be done without making changes |
+| `-v, --verbose` | False | Show detailed analysis with per-video and per-skeleton breakdowns |
+
+##### Video Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--deduplicate-videos` | True | Merge duplicate video entries pointing to the same file |
+| `--no-deduplicate-videos` | | Skip video deduplication |
+
+##### Skeleton Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--remove-unused-skeletons` | True | Remove skeletons with no instances, or only predictions |
+| `--no-remove-unused-skeletons` | | Keep all skeletons |
+| `--consolidate-skeletons` | False | **DESTRUCTIVE**: Keep most frequent skeleton, delete instances from other skeletons |
+
+!!! warning "Skeleton consolidation is destructive"
+    The `--consolidate-skeletons` flag will permanently delete user-labeled instances that use non-primary skeletons. Use `--dry-run` first to review what will be deleted.
+
+##### Prediction Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--remove-predictions` | False | Remove ALL predicted instances |
+| `--remove-untracked-predictions` | False | Remove only predictions with no track assignment |
+
+##### Cleanup Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--remove-unused-tracks` | True | Remove tracks not used by any instance |
+| `--remove-empty-frames` | True | Remove frames with no instances |
+| `--remove-empty-instances` | False | Remove instances with no visible points |
+| `--remove-unlabeled-videos` | False | Remove videos with no labeled frames |
+
+##### Path Fixing Options
+
+| Option | Description |
+|--------|-------------|
+| `--prefix OLD NEW` | Replace OLD path prefix with NEW (repeatable) |
+| `--map OLD NEW` | Replace exact filename OLD with NEW (repeatable) |
+
+#### Common Scenarios
+
+**Scenario: Fixing duplicate video entries**
+
+SLEAP can sometimes create duplicate video entries pointing to the same file. This causes issues when trying to delete labels:
+
+```bash
+# Fix automatically (enabled by default)
+sio fix labels.slp
+
+# Skip if you want to preserve duplicates
+sio fix labels.slp --no-deduplicate-videos
+```
+
+**Scenario: Removing all predictions**
+
+After manual review, remove all predictions to keep only user labels:
+
+```bash
+sio fix labels.slp --remove-predictions
+```
+
+**Scenario: Surgical prediction cleanup**
+
+Remove only untracked predictions (keeping tracked predictions intact):
+
+```bash
+sio fix labels.slp --remove-untracked-predictions
+```
+
+**Scenario: Multiple skeletons with user labels**
+
+When a file has multiple skeletons that both have user-labeled instances, `sio fix` will warn you:
+
+```
+⚠  WARNING: Multiple skeletons have user instances!
+    Use --consolidate-skeletons to keep 'fly_13pt' and remove 23 instances.
+    This is irreversible - review carefully before proceeding.
+```
+
+To force consolidation (keeping the most frequently used skeleton):
+
+```bash
+# Preview first!
+sio fix labels.slp --consolidate-skeletons --dry-run
+
+# Then apply
+sio fix labels.slp --consolidate-skeletons
+```
+
+**Scenario: Cross-platform path fixing**
+
+Fix Windows paths for use on Linux:
+
+```bash
+sio fix labels.slp --prefix "C:\data\videos" /mnt/data/videos
+```
+
+**Scenario: Aggressive cleanup**
+
+Remove everything not essential (predictions, unlabeled videos, empty instances):
+
+```bash
+sio fix labels.slp \
+    --remove-predictions \
+    --remove-unlabeled-videos \
+    --remove-empty-instances
+```
+
+**Scenario: Minimal cleanup (disable defaults)**
+
+Only fix paths without any other cleanup:
+
+```bash
+sio fix labels.slp \
+    --no-deduplicate-videos \
+    --no-remove-unused-skeletons \
+    --no-remove-unused-tracks \
+    --no-remove-empty-frames \
+    --prefix /old/path /new/path
 ```
 
 ---
