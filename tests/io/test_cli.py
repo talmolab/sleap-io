@@ -632,6 +632,35 @@ def test_show_video_unknown_shape(tmp_path):
     assert "unknown" in out.lower()
 
 
+def test_show_video_summary_many_without_metadata(tmp_path):
+    """Test video summary with many videos without metadata shows condensed summary."""
+    from sleap_io import Labels, Video, save_file
+
+    runner = CliRunner()
+
+    # Create labels with 5 videos that have no shape (> 3 triggers summary mode)
+    videos = [
+        Video(
+            filename=f"/nonexistent/path/to/video_{i}.mp4",
+            open_backend=False,
+            backend_metadata={},  # No shape cached
+        )
+        for i in range(5)
+    ]
+    labels = Labels(videos=videos)
+
+    slp_path = tmp_path / "many_videos_no_metadata.slp"
+    save_file(labels, slp_path)
+
+    result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+    # Should show condensed summary instead of 5 individual lines
+    assert "+5 videos without cached metadata" in out
+    # Should show status (found/not found)
+    assert "not found" in out
+
+
 def test_show_video_image_sequence():
     """Test video display functions for image sequence."""
     from io import StringIO
