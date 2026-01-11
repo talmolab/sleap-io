@@ -2233,6 +2233,252 @@ def test_split_with_embed(tmp_path, slp_real_data):
 
 
 # ============================================================================
+# unsplit command tests
+# ============================================================================
+
+
+def test_unsplit_basic(tmp_path, clip_2nodes_slp):
+    """Test basic 2-way unsplit (train + val -> merged)."""
+    runner = CliRunner()
+
+    # First, split the labels
+    split_dir = tmp_path / "splits"
+    result = runner.invoke(
+        cli, ["split", "-i", clip_2nodes_slp, "-o", str(split_dir), "--seed", "42"]
+    )
+    assert result.exit_code == 0, result.output
+
+    # Count frames in splits
+    train_labels = load_slp(str(split_dir / "train.slp"))
+    val_labels = load_slp(str(split_dir / "val.slp"))
+    expected_total = len(train_labels) + len(val_labels)
+
+    # Now unsplit
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "unsplit",
+            str(split_dir / "train.slp"),
+            str(split_dir / "val.slp"),
+            "-o",
+            str(merged_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check output messages
+    assert "Loading:" in output
+    assert "Merging:" in output
+    assert "Saving:" in output
+    assert "Merged 2 files:" in output
+
+    # Verify merged file
+    merged_labels = load_slp(str(merged_path))
+    assert len(merged_labels) == expected_total
+    assert len(merged_labels.videos) == 1  # Should deduplicate to 1 video
+
+
+def test_unsplit_three_way(tmp_path, clip_2nodes_slp):
+    """Test 3-way unsplit (train + val + test -> merged)."""
+    runner = CliRunner()
+
+    # First, split into 3 parts
+    split_dir = tmp_path / "splits"
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            clip_2nodes_slp,
+            "-o",
+            str(split_dir),
+            "--train",
+            "0.7",
+            "--test",
+            "0.15",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Count frames in splits
+    train_labels = load_slp(str(split_dir / "train.slp"))
+    val_labels = load_slp(str(split_dir / "val.slp"))
+    test_labels = load_slp(str(split_dir / "test.slp"))
+    expected_total = len(train_labels) + len(val_labels) + len(test_labels)
+
+    # Now unsplit
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "unsplit",
+            str(split_dir / "train.slp"),
+            str(split_dir / "val.slp"),
+            str(split_dir / "test.slp"),
+            "-o",
+            str(merged_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check output messages
+    assert "Merged 3 files:" in output
+
+    # Verify merged file
+    merged_labels = load_slp(str(merged_path))
+    assert len(merged_labels) == expected_total
+    assert len(merged_labels.videos) == 1
+
+
+def test_unsplit_requires_two_files(tmp_path, slp_typical):
+    """Test that unsplit requires at least 2 input files."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    result = runner.invoke(cli, ["unsplit", slp_typical, "-o", str(merged_path)])
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "At least 2 input files required" in output
+
+
+def test_unsplit_missing_output(slp_typical):
+    """Test that unsplit requires -o flag."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["unsplit", slp_typical, slp_typical])
+    assert result.exit_code != 0
+    # Click will report missing required option
+    assert "-o" in result.output or "output" in result.output.lower()
+
+
+def test_unsplit_input_not_found(tmp_path):
+    """Test error when input file doesn't exist."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    result = runner.invoke(
+        cli, ["unsplit", "nonexistent1.slp", "nonexistent2.slp", "-o", str(merged_path)]
+    )
+    assert result.exit_code != 0
+
+
+def test_unsplit_help():
+    """Test that unsplit --help displays correctly."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["unsplit", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    # Check key elements
+    assert "Merge split files" in output
+    assert "INPUT_FILES" in output
+    assert "-o" in output or "--output" in output
+    assert "--embed" in output
+
+
+def test_unsplit_with_embed(tmp_path, slp_real_data):
+    """Test unsplit with embedded split files."""
+    runner = CliRunner()
+
+    # First, split with embedding
+    split_dir = tmp_path / "splits"
+    result = runner.invoke(
+        cli,
+        [
+            "split",
+            "-i",
+            slp_real_data,
+            "-o",
+            str(split_dir),
+            "--embed",
+            "user",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Count frames in splits
+    train_labels = load_slp(str(split_dir / "train.pkg.slp"))
+    val_labels = load_slp(str(split_dir / "val.pkg.slp"))
+    expected_total = len(train_labels) + len(val_labels)
+
+    # Verify they have source_video (from embedding)
+    assert train_labels.videos[0].source_video is not None
+
+    # Now unsplit (without embedding to avoid frame index issues)
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "unsplit",
+            str(split_dir / "train.pkg.slp"),
+            str(split_dir / "val.pkg.slp"),
+            "-o",
+            str(merged_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify merged file
+    merged_labels = load_slp(str(merged_path))
+    assert len(merged_labels) == expected_total
+    # Videos should deduplicate via original_video provenance
+    assert len(merged_labels.videos) == 1
+
+
+def test_unsplit_with_directory(tmp_path, clip_2nodes_slp):
+    """Test unsplit accepts a directory and expands to .slp files."""
+    runner = CliRunner()
+
+    # First, split the labels
+    split_dir = tmp_path / "splits"
+    result = runner.invoke(
+        cli, ["split", "-i", clip_2nodes_slp, "-o", str(split_dir), "--seed", "42"]
+    )
+    assert result.exit_code == 0, result.output
+
+    # Count frames in splits
+    train_labels = load_slp(str(split_dir / "train.slp"))
+    val_labels = load_slp(str(split_dir / "val.slp"))
+    expected_total = len(train_labels) + len(val_labels)
+
+    # Unsplit using directory path
+    merged_path = tmp_path / "merged.slp"
+    result = runner.invoke(
+        cli,
+        ["unsplit", str(split_dir), "-o", str(merged_path)],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check output messages
+    assert "Merged 2 files:" in output
+
+    # Verify merged file
+    merged_labels = load_slp(str(merged_path))
+    assert len(merged_labels) == expected_total
+
+
+def test_unsplit_empty_directory(tmp_path):
+    """Test unsplit fails gracefully on empty directory."""
+    runner = CliRunner()
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    merged_path = tmp_path / "merged.slp"
+
+    result = runner.invoke(cli, ["unsplit", str(empty_dir), "-o", str(merged_path)])
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "No .slp files found" in output
+
+
+# ============================================================================
 # filenames command tests
 # ============================================================================
 

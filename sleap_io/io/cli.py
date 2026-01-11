@@ -1747,6 +1747,137 @@ def split(
         click.echo(f"Embedded frames: {embed}")
 
 
+@cli.command()
+@click.argument(
+    "input_files",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output labels file.",
+)
+@click.option(
+    "--embed",
+    type=click.Choice(["user", "all", "suggestions", "source"]),
+    help="Embed frames in output file.",
+)
+def unsplit(
+    input_files: tuple[Path, ...],
+    output_path: Path,
+    embed: Optional[str],
+):
+    """Merge split files back into a single labels file.
+
+    This is the inverse of the split command. Takes multiple split files
+    (e.g., train.slp, val.slp, test.slp) and merges them back into one.
+
+    [bold]Input:[/]
+    Pass individual files or a directory containing .slp files.
+
+    [bold]Video Deduplication:[/]
+    Videos are automatically deduplicated if they have proper provenance
+    metadata (from sio split --embed). For legacy split files without
+    provenance, videos may not deduplicate - this is safe behavior.
+
+    [dim]Examples:[/]
+
+        $ sio unsplit train.slp val.slp -o merged.slp
+        $ sio unsplit splits/ -o merged.slp
+        $ sio unsplit train.pkg.slp val.pkg.slp test.pkg.slp -o merged.slp
+    """
+    # Expand directories to .slp files
+    expanded_files: list[Path] = []
+    for path in input_files:
+        if path.is_dir():
+            # Find all .slp files in directory (including .pkg.slp)
+            slp_files = sorted(path.glob("*.slp"))
+            if not slp_files:
+                raise click.ClickException(f"No .slp files found in directory: {path}")
+            expanded_files.extend(slp_files)
+        else:
+            expanded_files.append(path)
+
+    # Require at least 2 input files
+    if len(expanded_files) < 2:
+        raise click.ClickException("At least 2 input files required.")
+
+    # Load the first file
+    first_file = expanded_files[0]
+    click.echo(f"Loading: {first_file.name}")
+
+    try:
+        labels = io_main.load_file(str(first_file), open_videos=embed is not None)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load {first_file}: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input file is not a labels file (got {type(labels).__name__})."
+        )
+
+    click.echo(f"  {len(labels)} frames, {len(labels.videos)} videos")
+    initial_video_count = len(labels.videos)
+
+    # Merge remaining files
+    for input_file in expanded_files[1:]:
+        click.echo(f"Merging: {input_file.name}")
+
+        try:
+            other = io_main.load_file(str(input_file), open_videos=embed is not None)
+        except Exception as e:
+            raise click.ClickException(f"Failed to load {input_file}: {e}")
+
+        if not isinstance(other, Labels):
+            raise click.ClickException(
+                f"Input file is not a labels file (got {type(other).__name__})."
+            )
+
+        frames_before = len(labels)
+
+        # Merge with automatic video matching (uses original_video provenance)
+        # and keep_both frame strategy (splits have no overlapping frames)
+        labels.merge(other, video="auto", frame="keep_both")
+
+        frames_added = len(labels) - frames_before
+        click.echo(f"  +{frames_added} frames -> {len(labels)} total")
+
+    # Check for video deduplication issues
+    final_video_count = len(labels.videos)
+    if final_video_count > initial_video_count:
+        click.echo("")
+        click.echo(
+            f"Note: Video count increased from {initial_video_count} to "
+            f"{final_video_count}. This may indicate legacy split files without "
+            "provenance metadata. Videos were added as new (safe behavior)."
+        )
+
+    # Clean up split-specific provenance keys
+    for key in ["split", "split_seed", "source_labels"]:
+        labels.provenance.pop(key, None)
+
+    # Save output
+    click.echo("")
+    click.echo(f"Saving: {output_path}")
+
+    try:
+        save_kwargs: dict = {}
+        if embed is not None:
+            save_kwargs["embed"] = embed
+        io_main.save_file(labels, str(output_path), **save_kwargs)
+    except Exception as e:
+        raise click.ClickException(f"Failed to save output file: {e}")
+
+    click.echo("")
+    click.echo(f"Merged {len(expanded_files)} files:")
+    click.echo(f"  {len(labels)} frames, {len(labels.videos)} videos")
+
+
 @cli.command("filenames")
 @click.argument(
     "input_arg",
