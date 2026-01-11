@@ -2013,7 +2013,7 @@ The `--seed` option ensures you can recreate the exact same split later, which i
     sio.save_nwb(labels, "training.nwb", nwb_format="annotations")
     ```
 
-    See [NWB Format](formats.md#nwb-format-nwb) for details.
+    See [NWB Format](formats/#nwb-format-nwb) for details.
 
 ### Merging Training Splits
 
@@ -2090,6 +2090,6 @@ Optional:
 
 ## See Also
 
-- [Formats](formats.md): Detailed format specifications and Python API
+- [Formats](formats/): Detailed format specifications and Python API
 - [Examples](examples.md): Python code examples for common tasks
 - [Model](model.md): Data model documentation

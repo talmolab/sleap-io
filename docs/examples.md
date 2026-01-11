@@ -121,7 +121,7 @@ labels.save("predictions.nwb")
 
 !!! note "See also"
     - [`Labels.save`](model.md#sleap_io.Labels.save): Save method with format options
-    - [Formats](formats.md): Complete list of supported formats
+    - [Formats](formats/): Complete list of supported formats
 
 ### Working with NWB files
 
@@ -274,9 +274,9 @@ nwb_labels.save("converted.slp")
     - Video metadata (when using `annotations_export`)
 
 !!! note "See also"
-    - [NWB Format Documentation](formats.md#nwb-format-nwb): Complete NWB format reference
-    - [`load_nwb`](formats.md#sleap_io.load_nwb): NWB loading function
-    - [`save_nwb`](formats.md#sleap_io.save_nwb): NWB saving function with format options
+    - [NWB Format Documentation](formats/#nwb-format-nwb): Complete NWB format reference
+    - [`load_nwb`](formats/#sleap_io.load_nwb): NWB loading function
+    - [`save_nwb`](formats/#sleap_io.save_nwb): NWB saving function with format options
 
 ### Convert to Ultralytics YOLO format
 
@@ -306,7 +306,7 @@ labels_set.save("yolo_dataset/", format="ultralytics")
 
 !!! note "See also"
     - [`LabelsSet`](model.md#sleap_io.LabelsSet): LabelsSet class documentation
-    - [`load_labels_set`](formats.md#sleap_io.load_labels_set): Loading function for label sets
+    - [`load_labels_set`](formats/#sleap_io.load_labels_set): Loading function for label sets
 
 ### Export to COCO format
 
@@ -352,9 +352,9 @@ sio.save_coco(
     - Integration with COCO-compatible evaluation tools
 
 !!! note "See also"
-    - [`save_coco`](formats.md#sleap_io.save_coco): Full COCO export documentation
-    - [`load_coco`](formats.md#sleap_io.load_coco): COCO import documentation
-    - [COCO Format](formats.md#coco-format-json): COCO format details
+    - [`save_coco`](formats/#sleap_io.save_coco): Full COCO export documentation
+    - [`load_coco`](formats/#sleap_io.load_coco): COCO import documentation
+    - [COCO Format](formats/#coco-format-json): COCO format details
 
 ## Editing labels data
 
@@ -667,7 +667,7 @@ last_frame = video[-1]
     ```
 
 !!! note "See also"
-    - [`sio.load_video`](formats.md#sleap_io.load_video): Video loading function
+    - [`sio.load_video`](formats/#sleap_io.load_video): Video loading function
     - [`Video`](model.md#sleap_io.Video): Video class documentation
 
 ### Re-encode video
@@ -684,7 +684,7 @@ sio.save_video(sio.load_video("input.mp4"), "output.mp4")
     Some video formats are not readily seekable at frame-level accuracy. Re-encoding with default settings ensures reliable seeking with minimal quality loss.
 
 !!! note "See also"
-    [`save_video`](formats.md#sleap_io.save_video): Video saving options and codec settings
+    [`save_video`](formats/#sleap_io.save_video): Video saving options and codec settings
 
 ### Switch video and image backends
 
@@ -768,10 +768,10 @@ print(sio.get_default_image_plugin())  # "opencv"
     - Both can be set via `set_default_*_plugin()` functions
 
 !!! note "See also"
-    - [`set_default_video_plugin`](formats.md#sleap_io.set_default_video_plugin): Set video reading backend
-    - [`set_default_image_plugin`](formats.md#sleap_io.set_default_image_plugin): Set image encoding backend
-    - [`get_default_video_plugin`](formats.md#sleap_io.get_default_video_plugin): Get current video backend
-    - [`get_default_image_plugin`](formats.md#sleap_io.get_default_image_plugin): Get current image backend
+    - [`set_default_video_plugin`](formats/#sleap_io.set_default_video_plugin): Set video reading backend
+    - [`set_default_image_plugin`](formats/#sleap_io.set_default_image_plugin): Set image encoding backend
+    - [`get_default_video_plugin`](formats/#sleap_io.get_default_video_plugin): Get current video backend
+    - [`get_default_image_plugin`](formats/#sleap_io.get_default_image_plugin): Get current image backend
 
 ## Rendering
 

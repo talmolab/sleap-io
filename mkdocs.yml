@@ -68,6 +68,7 @@ plugins:
           options:
             summary: true
             show_root_heading: true
+            show_root_toc_entry: true
             docstring_options:
               returns_multiple_items: false
             docstring_section_style: table  # table, list, spacy
@@ -146,6 +147,8 @@ nav:
     - Merging: merging.md
   - Reference:
     - Model: model.md
-    - Formats: formats.md
+    - Formats:
+      - formats/index.md
+      - SLP Format: formats/slp.md
     - CLI: cli.md
     - Full API: reference/
