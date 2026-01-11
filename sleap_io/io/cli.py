@@ -43,7 +43,10 @@ click.rich_click.ERRORS_EPILOGUE = ""
 click.rich_click.COMMAND_GROUPS = {
     "sio": [
         {"name": "Inspection", "commands": ["show", "filenames"]},
-        {"name": "Transformation", "commands": ["convert", "split", "unsplit"]},
+        {
+            "name": "Transformation",
+            "commands": ["convert", "split", "unsplit", "merge"],
+        },
         {"name": "Embedding", "commands": ["embed", "unembed"]},
         {"name": "Maintenance", "commands": ["fix"]},
         {"name": "Rendering", "commands": ["render"]},
@@ -1878,6 +1881,243 @@ def unsplit(
     click.echo("")
     click.echo(f"Merged {len(expanded_files)} files:")
     click.echo(f"  {len(labels)} frames, {len(labels.videos)} videos")
+
+
+@cli.command()
+@click.argument(
+    "input_files",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output labels file.",
+)
+@click.option(
+    "--skeleton",
+    type=click.Choice(["structure", "subset", "overlap", "exact"]),
+    default="structure",
+    show_default=True,
+    help="Skeleton matching method.",
+)
+@click.option(
+    "--video",
+    type=click.Choice(["auto", "path", "basename", "content", "shape", "image_dedup"]),
+    default="auto",
+    show_default=True,
+    help="Video matching method.",
+)
+@click.option(
+    "--track",
+    type=click.Choice(["name", "identity"]),
+    default="name",
+    show_default=True,
+    help="Track matching method.",
+)
+@click.option(
+    "--frame",
+    type=click.Choice(
+        [
+            "auto",
+            "keep_original",
+            "keep_new",
+            "keep_both",
+            "update_tracks",
+            "replace_predictions",
+        ]
+    ),
+    default="auto",
+    show_default=True,
+    help="Frame merge strategy for overlapping frames.",
+)
+@click.option(
+    "--instance",
+    type=click.Choice(["spatial", "identity", "iou"]),
+    default="spatial",
+    show_default=True,
+    help="Instance matching method for overlapping frames.",
+)
+@click.option(
+    "--embed",
+    type=click.Choice(["user", "all", "suggestions", "source"]),
+    help="Embed frames in output file.",
+)
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    help="Show detailed merge information.",
+)
+def merge(
+    input_files: tuple[Path, ...],
+    output_path: Path,
+    skeleton: str,
+    video: str,
+    track: str,
+    frame: str,
+    instance: str,
+    embed: Optional[str],
+    verbose: bool,
+):
+    """Merge multiple labels files into one.
+
+    A flexible merge command that combines annotations from multiple sources.
+    Supports various matching strategies for skeletons, videos, tracks, and
+    instance pairing.
+
+    [bold]Common use cases:[/]
+
+    - Merge predictions into a labeled project (default: frame=auto)
+    - Combine annotation projects from different annotators
+    - Update predictions with new model output (frame=replace_predictions)
+    - Consolidate cross-platform/cross-machine projects
+
+    [bold]Input:[/]
+    Pass individual files or a directory containing .slp files.
+
+    [bold]Matching strategies:[/]
+
+    [dim]Skeleton:[/] How to match skeletons between files
+      • structure: Same node names (any order) [default]
+      • subset: Incoming nodes are subset of base
+      • overlap: Sufficient overlap between node sets
+      • exact: Nodes and edges must be identical
+
+    [dim]Video:[/] How to identify same videos across files
+      • auto: Safe cascade (path, basename, provenance) [default]
+      • path: Exact path match only
+      • basename: Match by filename (ignores directory)
+      • content/shape/image_dedup: Special modes for image lists
+
+    [dim]Frame:[/] How to handle overlapping frames
+      • auto: Smart merge (preserve user labels, update predictions) [default]
+      • keep_original: Ignore incoming for overlapping frames
+      • keep_new: Replace with incoming for overlapping frames
+      • keep_both: Keep all instances (may create duplicates)
+      • replace_predictions: Replace predictions, keep user labels
+      • update_tracks: Copy track assignments only
+
+    [dim]Instance:[/] How to pair instances within frames
+      • spatial: Match by centroid distance [default]
+      • identity: Match by track identity
+      • iou: Match by bounding box overlap
+
+    [dim]Examples:[/]
+
+        $ sio merge project.slp predictions.slp -o merged.slp
+        $ sio merge base.slp new.slp -o merged.slp --frame replace_predictions
+        $ sio merge file1.slp file2.slp file3.slp -o combined.slp --frame keep_both
+        $ sio merge results/ -o combined.slp
+        $ sio merge local.slp remote.slp -o merged.slp --video basename
+    """
+    # Expand directories to .slp files
+    expanded_files: list[Path] = []
+    for path in input_files:
+        if path.is_dir():
+            # Find all .slp files in directory (including .pkg.slp)
+            slp_files = sorted(path.glob("*.slp"))
+            if not slp_files:
+                raise click.ClickException(f"No .slp files found in directory: {path}")
+            expanded_files.extend(slp_files)
+        else:
+            expanded_files.append(path)
+
+    # Require at least 2 input files
+    if len(expanded_files) < 2:
+        raise click.ClickException("At least 2 input files required.")
+
+    # Load the first file
+    first_file = expanded_files[0]
+    click.echo(f"Loading: {first_file.name}")
+
+    try:
+        labels = io_main.load_file(str(first_file), open_videos=embed is not None)
+    except Exception as e:
+        raise click.ClickException(f"Failed to load {first_file}: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input file is not a labels file (got {type(labels).__name__})."
+        )
+
+    initial_frames = len(labels)
+    initial_videos = len(labels.videos)
+    total_instances_added = 0
+    total_conflicts = 0
+
+    click.echo(f"  {initial_frames} frames, {initial_videos} videos")
+
+    # Merge remaining files
+    for input_file in expanded_files[1:]:
+        click.echo(f"Merging: {input_file.name}")
+
+        try:
+            other = io_main.load_file(str(input_file), open_videos=embed is not None)
+        except Exception as e:
+            raise click.ClickException(f"Failed to load {input_file}: {e}")
+
+        if not isinstance(other, Labels):
+            raise click.ClickException(
+                f"Input file is not a labels file (got {type(other).__name__})."
+            )
+
+        frames_before = len(labels)
+
+        # Merge with user-specified strategies
+        result = labels.merge(
+            other,
+            skeleton=skeleton,
+            video=video,
+            track=track,
+            frame=frame,
+            instance=instance,
+        )
+
+        frames_added = len(labels) - frames_before
+        total_instances_added += result.instances_added
+        total_conflicts += len(result.conflicts)
+
+        if verbose:
+            click.echo(f"  Strategy: {frame}")
+            click.echo(f"  +{frames_added} frames, +{result.instances_added} instances")
+            if result.conflicts:
+                click.echo(f"  Conflicts: {len(result.conflicts)}")
+        else:
+            click.echo(f"  +{frames_added} frames -> {len(labels)} total")
+
+    # Report video changes (merging can only add videos, never remove)
+    final_videos = len(labels.videos)
+    if verbose and final_videos > initial_videos:
+        click.echo("")
+        click.echo(
+            f"Note: Video count increased from {initial_videos} to "
+            f"{final_videos}. Videos from other files were added as new."
+        )
+
+    # Save output
+    click.echo("")
+    click.echo(f"Saving: {output_path}")
+
+    try:
+        save_kwargs: dict = {}
+        if embed is not None:
+            save_kwargs["embed"] = embed
+        io_main.save_file(labels, str(output_path), **save_kwargs)
+    except Exception as e:
+        raise click.ClickException(f"Failed to save output file: {e}")
+
+    click.echo("")
+    click.echo(f"Merged {len(expanded_files)} files:")
+    click.echo(f"  {len(labels)} frames, {final_videos} videos")
+    if verbose:
+        click.echo(f"  {total_instances_added} instances added")
+        if total_conflicts:
+            click.echo(f"  {total_conflicts} conflicts resolved")
 
 
 @cli.command("filenames")

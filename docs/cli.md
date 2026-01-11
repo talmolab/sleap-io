@@ -62,6 +62,7 @@ sio show --help
 sio convert --help
 sio split --help
 sio unsplit --help
+sio merge --help
 sio embed --help
 sio unembed --help
 sio filenames --help
@@ -100,6 +101,12 @@ sio split labels.slp -o splits/ --seed 42                # Reproducible split
 # Merge split files back into one
 sio unsplit train.slp val.slp -o merged.slp              # Merge individual files
 sio unsplit splits/ -o merged.slp                        # Merge all .slp in directory
+
+# Merge labels files with flexible options
+sio merge project.slp predictions.slp -o merged.slp      # Merge predictions into project
+sio merge base.slp new.slp -o merged.slp --frame replace_predictions
+sio merge results/ -o combined.slp --frame keep_both     # All .slp in directory
+sio merge local.slp remote.slp -o merged.slp --video basename
 
 # Embed video frames into a portable package
 sio embed labels.slp -o labels.pkg.slp                   # User-labeled frames only
@@ -756,6 +763,193 @@ sio unsplit splits/train.slp splits/val.slp -o merged.slp  # If only train.slp a
 ```
 
 This is convenient for merging all splits created by `sio split`.
+
+---
+
+### `sio merge` - Merge Labels Files
+
+A flexible merge command for combining annotations from multiple sources with full control over matching strategies. While `sio unsplit` is optimized for reunifying train/val/test splits, `sio merge` handles general-purpose merging scenarios.
+
+```bash
+sio merge <input_files...> -o <output> [options]
+sio merge <directory> -o <output> [options]
+```
+
+#### Basic Usage
+
+```bash
+# Merge predictions into a labeled project (most common)
+sio merge project.slp predictions.slp -o merged.slp
+
+# Merge with explicit frame strategy
+sio merge base.slp new.slp -o merged.slp --frame replace_predictions
+
+# Merge multiple files
+sio merge file1.slp file2.slp file3.slp -o combined.slp
+
+# Merge all .slp files in directory
+sio merge results/ -o combined.slp
+
+# Verbose output with detailed statistics
+sio merge project.slp predictions.slp -o merged.slp -v
+```
+
+**Example output:**
+
+```
+Loading: project.slp
+  500 frames, 1 videos
+Merging: predictions.slp
+  Strategy: auto
+  +1000 frames, +2500 instances
+
+Saving: merged.slp
+
+Merged 2 files:
+  1500 frames, 1 videos
+  2500 instances added
+```
+
+#### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-o, --output` | (required) | Output labels file |
+| `--skeleton` | `structure` | Skeleton matching method |
+| `--video` | `auto` | Video matching method |
+| `--track` | `name` | Track matching method |
+| `--frame` | `auto` | Frame merge strategy |
+| `--instance` | `spatial` | Instance matching method |
+| `--embed` | (none) | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
+| `-v, --verbose` | off | Show detailed merge information |
+
+#### Matching Strategies
+
+##### Skeleton Matching (`--skeleton`)
+
+How to match skeletons between files:
+
+| Method | Behavior |
+|--------|----------|
+| `structure` | Same node names, any order (default) |
+| `subset` | Incoming nodes are subset of base |
+| `overlap` | Sufficient overlap between node sets |
+| `exact` | Nodes and edges must be identical |
+
+```bash
+# Allow partial skeleton matches
+sio merge base.slp partial.slp -o merged.slp --skeleton subset
+```
+
+##### Video Matching (`--video`)
+
+How to identify same videos across files:
+
+| Method | Behavior |
+|--------|----------|
+| `auto` | Safe cascade: path, basename, provenance (default) |
+| `path` | Exact path match only |
+| `basename` | Match by filename (ignores directory) |
+| `content` | Shape + backend type |
+| `shape` | Match and merge by shape (image lists) |
+| `image_dedup` | Deduplicate image lists |
+
+```bash
+# Cross-platform merging (different paths, same filename)
+sio merge local.slp remote.slp -o merged.slp --video basename
+```
+
+##### Track Matching (`--track`)
+
+How to match track identities:
+
+| Method | Behavior |
+|--------|----------|
+| `name` | Match tracks with identical names (default) |
+| `identity` | Match by track object identity |
+
+##### Frame Strategy (`--frame`)
+
+How to handle overlapping frames (same video and frame index in both files):
+
+| Strategy | Behavior | Use case |
+|----------|----------|----------|
+| `auto` | Smart merge: preserve user labels, update predictions (default) | Human-in-the-loop workflows |
+| `keep_original` | Ignore incoming for overlapping frames | Preserve base annotations |
+| `keep_new` | Replace base with incoming for overlapping frames | Overwrite with new annotations |
+| `keep_both` | Keep all instances (may create duplicates) | Manual deduplication later |
+| `replace_predictions` | Replace predictions, keep user labels | Re-running inference |
+| `update_tracks` | Copy track assignments only, don't modify poses | Update identity labels |
+
+```bash
+# Update predictions from new model, keep user labels
+sio merge project.slp new_predictions.slp -o merged.slp --frame replace_predictions
+
+# Keep everything (for manual deduplication)
+sio merge annotator1.slp annotator2.slp -o combined.slp --frame keep_both
+```
+
+##### Instance Matching (`--instance`)
+
+For frame strategies that pair instances (`auto`, `update_tracks`), how to match instances within a frame:
+
+| Method | Behavior |
+|--------|----------|
+| `spatial` | Match by centroid distance (default) |
+| `identity` | Match by track identity |
+| `iou` | Match by bounding box overlap |
+
+```bash
+# Use IoU for instance matching
+sio merge base.slp other.slp -o merged.slp --instance iou
+```
+
+#### Common Scenarios
+
+**Merging predictions into a labeled project:**
+
+```bash
+# Default auto strategy handles this well
+sio merge project.slp predictions.slp -o merged.slp
+
+# What happens:
+# - User labels are preserved
+# - Predictions are updated if newer
+# - New frames from predictions are added
+```
+
+**Combining annotations from multiple annotators:**
+
+```bash
+# Keep all instances for later review
+sio merge annotator1.slp annotator2.slp -o combined.slp --frame keep_both
+```
+
+**Updating predictions with a new model:**
+
+```bash
+# Replace all predictions, keep user labels
+sio merge project.slp new_model_output.slp -o updated.slp --frame replace_predictions
+```
+
+**Cross-platform project consolidation:**
+
+```bash
+# Match videos by basename when paths differ
+sio merge local_project.slp remote_project.slp -o consolidated.slp --video basename
+```
+
+#### Differences from `sio unsplit`
+
+| Aspect | `sio unsplit` | `sio merge` |
+|--------|---------------|-------------|
+| Purpose | Reunify train/val/test splits | General-purpose merging |
+| Frame strategy | Fixed `keep_both` | Configurable (default `auto`) |
+| Video matching | Fixed `auto` | Configurable (default `auto`) |
+| Provenance | Removes split-specific keys | Preserves all provenance |
+| Use case | After `sio split` | Any merge scenario |
+
+Use `sio unsplit` when merging files created by `sio split`. Use `sio merge` for all other merging scenarios.
 
 ---
 
