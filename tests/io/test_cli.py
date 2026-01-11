@@ -3906,14 +3906,21 @@ def test_fix_remove_predictions(centered_pair, tmp_path):
             assert not isinstance(inst, PredictedInstance)
 
 
+def _make_test_video(filename, shape=(100, 480, 640, 1)):
+    """Create a Video object with specified metadata for testing (Py3.8 compatible)."""
+    from sleap_io.model.video import Video
+
+    video = Video(filename=filename, open_backend=False)
+    video.backend_metadata["shape"] = shape
+    return video
+
+
 def test_fix_duplicate_videos(tmp_path):
     """Test fix detects and merges duplicate videos (enabled by default)."""
-    from tests.fixtures.merge_fixtures import make_video
-
     # Create labels with duplicate videos
     skeleton = Skeleton(["head", "tail"])
-    video1 = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
-    video2 = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video1 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video2 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
 
     labels = Labels(skeletons=[skeleton], videos=[video1, video2])
 
@@ -3965,9 +3972,7 @@ def test_fix_unused_skeletons(tmp_path):
     skel1 = Skeleton(["head", "tail"], name="used")
     skel2 = Skeleton(["a", "b", "c"], name="unused")
 
-    from tests.fixtures.merge_fixtures import make_video
-
-    video = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
     labels = Labels(skeletons=[skel1, skel2], videos=[video])
 
     # Add frame using only skel1
@@ -4195,13 +4200,12 @@ def test_fix_consolidate_skeletons(tmp_path):
 
     from sleap_io.model.instance import Instance
     from sleap_io.model.labeled_frame import LabeledFrame
-    from tests.fixtures.merge_fixtures import make_video
 
     # Create labels with two skeletons that both have user instances
     skel1 = Skeleton(["head", "tail"], name="frequent")
     skel2 = Skeleton(["a", "b"], name="rare")
 
-    video = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
     labels = Labels(skeletons=[skel1, skel2], videos=[video])
 
     # Add 5 instances using skel1 (frequent)
@@ -4269,10 +4273,9 @@ def test_fix_remove_untracked_predictions(tmp_path):
 
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.labeled_frame import LabeledFrame
-    from tests.fixtures.merge_fixtures import make_video
 
     skeleton = Skeleton(["head", "tail"])
-    video = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
     track1 = Track(name="track1")
     labels = Labels(skeletons=[skeleton], videos=[video], tracks=[track1])
 
@@ -4343,13 +4346,12 @@ def test_fix_prediction_only_skeleton_removal(tmp_path):
 
     from sleap_io.model.instance import Instance
     from sleap_io.model.labeled_frame import LabeledFrame
-    from tests.fixtures.merge_fixtures import make_video
 
     # Create labels with one skeleton for user, one for predictions only
     skel_user = Skeleton(["head", "tail"], name="user_skel")
     skel_pred = Skeleton(["a", "b", "c"], name="pred_only_skel")
 
-    video = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
     labels = Labels(skeletons=[skel_user, skel_pred], videos=[video])
 
     # Add user instance
@@ -4400,11 +4402,10 @@ def test_fix_remove_unlabeled_videos(tmp_path):
 
     from sleap_io.model.instance import Instance
     from sleap_io.model.labeled_frame import LabeledFrame
-    from tests.fixtures.merge_fixtures import make_video
 
     skeleton = Skeleton(["head", "tail"])
-    video1 = make_video(filename="/data/video1.mp4", shape=(100, 480, 640, 1))
-    video2 = make_video(filename="/data/video2.mp4", shape=(100, 480, 640, 1))
+    video1 = _make_test_video(filename="/data/video1.mp4", shape=(100, 480, 640, 1))
+    video2 = _make_test_video(filename="/data/video2.mp4", shape=(100, 480, 640, 1))
 
     labels = Labels(skeletons=[skeleton], videos=[video1, video2])
 
@@ -4447,12 +4448,10 @@ def test_fix_remove_unlabeled_videos(tmp_path):
 
 def test_fix_no_deduplicate_videos(tmp_path):
     """Test fix --no-deduplicate-videos skips video deduplication."""
-    from tests.fixtures.merge_fixtures import make_video
-
     # Create labels with duplicate videos
     skeleton = Skeleton(["head", "tail"])
-    video1 = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
-    video2 = make_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video1 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video2 = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
 
     labels = Labels(skeletons=[skeleton], videos=[video1, video2])
 
