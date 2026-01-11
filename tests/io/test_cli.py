@@ -12,7 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from sleap_io import load_slp
-from sleap_io.io.cli import _is_ffmpeg_available, cli
+from sleap_io.io.cli import _get_ffmpeg_version, _is_ffmpeg_available, cli
 from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
@@ -6195,3 +6195,147 @@ def test_reencode_overwrite(tmp_path, centered_pair_low_quality_path):
     assert output_path.exists()
     # File should be larger than original dummy content
     assert output_path.stat().st_size > 20
+
+
+def test_reencode_with_gop_option(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with explicit --gop option."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--gop",
+            "15",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # GOP of 15 frames should appear in ffmpeg command or Python path info
+    if _is_ffmpeg_available():
+        assert "-g" in output
+        assert "15" in output
+    else:
+        assert "Python path" in output
+
+
+def test_reencode_with_fps_python_path(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with --fps option using Python path."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--fps",
+            "15",
+            "--no-ffmpeg",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Python path" in output
+    assert output_path.exists()
+
+
+def test_reencode_use_ffmpeg_without_ffmpeg():
+    """Test --use-ffmpeg flag when ffmpeg might not be available."""
+    runner = CliRunner()
+
+    # This test demonstrates the --use-ffmpeg flag behavior
+    # On systems without ffmpeg, it should fail with helpful message
+    if not _is_ffmpeg_available():
+        result = runner.invoke(
+            cli,
+            [
+                "reencode",
+                "dummy.mp4",  # Won't be reached due to ffmpeg check
+                "-o",
+                "output.mp4",
+                "--use-ffmpeg",
+            ],
+        )
+        assert result.exit_code != 0
+        output = _strip_ansi(result.output)
+        assert "ffmpeg not found" in output
+
+
+def test_get_ffmpeg_version():
+    """Test _get_ffmpeg_version helper function."""
+    version = _get_ffmpeg_version()
+
+    if _is_ffmpeg_available():
+        # If ffmpeg is available, we should get a version string
+        assert version is not None
+        # Version should look like a version number (contains digits and dots)
+        assert any(c.isdigit() for c in version)
+    else:
+        # If ffmpeg is not available, version should be None
+        assert version is None
+
+
+def test_reencode_with_fps_ffmpeg_path(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with --fps option using ffmpeg path (if available)."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    if _is_ffmpeg_available():
+        result = runner.invoke(
+            cli,
+            [
+                "reencode",
+                centered_pair_low_quality_path,
+                "-o",
+                str(output_path),
+                "--fps",
+                "15",
+            ],
+        )
+        assert result.exit_code == 0, _strip_ansi(result.output)
+        output = _strip_ansi(result.output)
+
+        # Should show FPS change message
+        assert "FPS:" in output or "Reencoding" in output
+        assert output_path.exists()
+
+
+def test_reencode_with_gop_and_fps(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with both --gop and --fps options."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--gop",
+            "10",
+            "--fps",
+            "15",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Should show either ffmpeg command or Python path
+    if _is_ffmpeg_available():
+        assert "ffmpeg" in output
+        # GOP should be in command
+        assert "-g" in output
+    else:
+        assert "Python path" in output
