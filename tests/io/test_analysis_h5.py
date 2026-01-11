@@ -8,7 +8,7 @@ import pytest
 
 import sleap_io as sio
 from sleap_io.io import analysis_h5
-from sleap_io.model.instance import PredictedInstance
+from sleap_io.model.instance import Instance, PredictedInstance
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
@@ -784,6 +784,130 @@ class TestEdgeCases:
 
         with h5py.File(h5_path, "r") as f:
             assert "video2.mp4" in f["video_path"][()].decode()
+
+    def test_invalid_preset(self, simple_labels, tmp_path):
+        """Test that invalid preset raises ValueError."""
+        h5_path = tmp_path / "invalid_preset.analysis.h5"
+
+        with pytest.raises(ValueError, match="Unknown preset"):
+            analysis_h5.write_labels(simple_labels, h5_path, preset="invalid")
+
+    def test_legacy_file_without_dims(self, simple_skeleton, tmp_path):
+        """Test reading legacy file without dims attributes (transpose=True)."""
+        h5_path = tmp_path / "legacy.analysis.h5"
+
+        # Create a legacy-style HDF5 file (without dims attributes)
+        video = Video(str(tmp_path / "video.mp4"))
+        track = sio.Track("animal1")
+        inst = PredictedInstance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]),
+            simple_skeleton,
+            np.array([0.9, 0.85]),
+            0.95,
+            track=track,
+        )
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        labels = Labels(labeled_frames=[lf], tracks=[track])
+
+        # Write using current method
+        analysis_h5.write_labels(labels, h5_path)
+
+        # Remove dims attributes to simulate legacy file
+        with h5py.File(h5_path, "r+") as f:
+            for ds_name in [
+                "tracks",
+                "track_occupancy",
+                "point_scores",
+                "instance_scores",
+                "tracking_scores",
+            ]:
+                if "dims" in f[ds_name].attrs:
+                    del f[ds_name].attrs["dims"]
+            # Set legacy transpose attribute instead of preset
+            del f.attrs["preset"]
+            f.attrs["transpose"] = True
+
+        # Should still be able to read
+        loaded = analysis_h5.read_labels(h5_path)
+        assert len(loaded) == 1
+
+    def test_legacy_file_transpose_false(self, simple_skeleton, tmp_path):
+        """Test reading legacy file with transpose=False."""
+        h5_path = tmp_path / "legacy_notranspose.analysis.h5"
+
+        # Create legacy file with transpose=False format
+        # Legacy shape was (frame, node, xy, track) for tracks
+        with h5py.File(h5_path, "w") as f:
+            # Store in legacy shape (frame, node, xy, track)
+            tracks_data = np.array([[[[100.0], [150.0]], [[200.0], [250.0]]]])
+            # Shape: (1, 2, 2, 1) = (frames, nodes, xy, tracks)
+            f.create_dataset("tracks", data=tracks_data, compression="gzip")
+            f.create_dataset("track_occupancy", data=np.array([[1]]))
+            f.create_dataset("point_scores", data=np.array([[[0.9], [0.85]]]))
+            f.create_dataset("instance_scores", data=np.array([[0.95]]))
+            f.create_dataset("tracking_scores", data=np.array([[np.nan]]))
+            f.create_dataset("track_names", data=[b"animal1"])
+            f.create_dataset("node_names", data=[b"head", b"tail"])
+            f.create_dataset("edge_names", data=[(b"head", b"tail")])
+            f.create_dataset("edge_inds", data=[[0, 1]])
+            f.create_dataset("video_path", data=str(tmp_path / "video.mp4"))
+            f.create_dataset("provenance", data="{}")
+            f.attrs["transpose"] = False
+            f.attrs["format"] = "analysis"
+
+        loaded = analysis_h5.read_labels(h5_path)
+        assert len(loaded) == 1
+
+    def test_user_instances(self, simple_skeleton, tmp_path):
+        """Test handling of user (non-predicted) instances."""
+        video = Video(str(tmp_path / "video.mp4"))
+        track = sio.Track("animal1")
+
+        # Create user instance (not PredictedInstance)
+        user_inst = Instance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]),
+            simple_skeleton,
+            track=track,
+        )
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[user_inst])
+        labels = Labels(labeled_frames=[lf], tracks=[track])
+
+        h5_path = tmp_path / "user_instances.analysis.h5"
+        analysis_h5.write_labels(labels, h5_path)
+
+        loaded = analysis_h5.read_labels(h5_path)
+        assert len(loaded) == 1
+        # Points should be preserved
+        np.testing.assert_allclose(
+            loaded[0].instances[0].numpy()[:, :2],  # x, y only
+            user_inst.numpy()[:, :2],
+        )
+
+    def test_untracked_labels(self, simple_skeleton, tmp_path):
+        """Test labels without tracks (single instance case)."""
+        video = Video(str(tmp_path / "video.mp4"))
+
+        # Create instance without track
+        inst = PredictedInstance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]),
+            simple_skeleton,
+            np.array([0.9, 0.85]),
+            0.95,
+            track=None,
+        )
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        labels = Labels(labeled_frames=[lf], tracks=[])
+
+        h5_path = tmp_path / "untracked.analysis.h5"
+        analysis_h5.write_labels(labels, h5_path)
+
+        loaded = analysis_h5.read_labels(h5_path)
+        assert len(loaded) == 1
+        # Points should be preserved even for untracked instances
+        np.testing.assert_allclose(
+            loaded[0].instances[0].numpy(),
+            inst.numpy(),
+        )
 
 
 # =============================================================================
