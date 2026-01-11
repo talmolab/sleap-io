@@ -144,10 +144,10 @@ sio trim labels.slp --start 100 --end 1000                 # -> labels.trim.slp
 sio trim labels.slp --start 100 --end 1000 -o clip.slp
 sio trim video.mp4 --start 100 --end 500                   # Video-only mode
 
-# Reencode video for fast seeking
-sio reencode video.mp4 -o video.seekable.mp4               # Default settings
+# Reencode video for reliable seeking (critical for annotation)
+sio reencode video.mp4 -o video.seekable.mp4               # Fix seeking issues
 sio reencode video.mp4 -o output.mp4 --quality high        # Higher quality
-sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5  # More keyframes
+sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5  # Max reliability
 sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low  # Downsample
 sio reencode video.mp4 -o output.mp4 --dry-run             # Show ffmpeg command
 ```
@@ -1868,9 +1868,24 @@ When trimming labels, frame indices are automatically adjusted to match the new 
 
 ---
 
-### `sio reencode` - Reencode Video for Fast Seeking
+### `sio reencode` - Reencode Video for Reliable Seeking
 
-Reencode videos with frequent keyframes for improved random access during annotation and playback. This addresses the common issue where videos with sparse keyframes cause extremely slow seeking when jumping between frames.
+Reencode videos with frequent keyframes for **reliable and fast** random access during annotation and playback. This command addresses two critical issues that can cause problems in annotation and computer vision workflows:
+
+1. **Unreliable seeking**: Some video formats, codecs, or encoding settings cause frame-inaccurate seeking, where requesting frame N returns frame N-1 or N+1. This leads to misaligned annotations that don't match the actual image content.
+
+2. **Slow seeking**: Videos with sparse keyframes require decoding many intermediate frames to reach a target frame, causing sluggish navigation during annotation.
+
+!!! warning "Why seeking reliability matters"
+    In pose estimation and annotation workflows, even single-frame seeking errors can corrupt your dataset. If you label "frame 100" but your video library actually returns frame 99, your ground truth annotations will be permanently misaligned with the images used during training. This is especially problematic because the errors are often inconsistent and hard to detect.
+
+    **Common sources of unreliable seeking:**
+
+    - Variable frame rate (VFR) videos from screen recordings or phones
+    - Videos with B-frames and complex GOP structures
+    - AVI files with missing or corrupt index
+    - Some MP4s encoded with certain camera firmware
+    - Seeking behavior differences between OpenCV, PyAV, and imageio-ffmpeg
 
 ```bash
 sio reencode <input> [-o <output>] [options]
@@ -1934,9 +1949,13 @@ sio reencode video.mp4 -o output.mp4 --no-ffmpeg
 | `--gop` | (from interval) | GOP size in frames. Overrides `--keyframe-interval` |
 
 !!! tip "Choosing keyframe interval"
-    - **0.5 seconds**: 2 keyframes/second - fastest seeking, ~50% larger files
+    More frequent keyframes improve both seeking speed and reliability:
+
+    - **0.5 seconds**: 2 keyframes/second - most reliable, fastest seeking, ~50% larger files
     - **1.0 second**: 1 keyframe/second - good balance (default)
     - **2.0 seconds**: Smaller files, slightly slower seeking
+
+    For maximum reliability in annotation workflows, prefer shorter intervals (0.5-1.0s).
 
 ##### Frame Rate Options
 
@@ -1957,7 +1976,30 @@ Available encoding presets (fastest to slowest): `ultrafast`, `superfast`, `very
     - **FFmpeg path** (default): ~10x faster, uses direct ffmpeg subprocess
     - **Python path** (`--no-ffmpeg`): Frame-by-frame processing, works with any video source including HDF5-embedded videos
 
+#### How Reencoding Improves Seeking
+
+The reencoded video has several properties that ensure reliable, frame-accurate seeking:
+
+- **Regular keyframe intervals**: Keyframes (I-frames) can be decoded independently. With keyframes every 1 second at 30fps, the decoder never needs to process more than 30 frames to reach any target.
+- **No B-frames**: The output uses only I-frames and P-frames, eliminating bidirectional dependencies that can confuse some decoders.
+- **Constant frame rate**: Variable frame rate is converted to constant, ensuring frame indices map predictably to timestamps.
+- **Clean GOP structure**: Each group of pictures has a consistent, predictable structure.
+- **Standard H.264 encoding**: Widely supported codec with consistent behavior across video libraries.
+
 #### Common Scenarios
+
+**Fixing unreliable seeking for annotation:**
+
+```bash
+# Videos from phones/screen recordings often have VFR issues
+sio reencode phone_recording.mp4 -o reliable.mp4
+
+# Camera videos with seeking problems
+sio reencode problematic_camera.avi -o reliable.mp4
+
+# Maximum reliability for critical annotation projects
+sio reencode raw.mp4 -o reliable.mp4 --keyframe-interval 0.5 --quality high
+```
 
 **Fixing slow-seeking videos:**
 
@@ -1967,6 +2009,14 @@ sio reencode slow_video.mp4 -o fast_video.mp4
 
 # Maximum seekability (keyframe every 0.5 seconds)
 sio reencode slow_video.mp4 -o fast_video.mp4 --keyframe-interval 0.5
+```
+
+**Standardizing video format before annotation:**
+
+```bash
+# Convert and normalize any video before starting annotation
+# This prevents seeking issues from corrupting your labels later
+sio reencode experiment_video.mov -o experiment_video.mp4
 ```
 
 **Creating preview videos from high-speed recordings:**
@@ -2003,8 +2053,8 @@ Saved: video.seekable.mp4
   Size: 45.2 MB -> 52.1 MB (+15.3%)
 ```
 
-!!! info "File size changes"
-    More frequent keyframes typically increase file size by 10-50% depending on video content. This trade-off is worthwhile for improved seeking performance during annotation.
+!!! info "File size vs reliability trade-off"
+    More frequent keyframes typically increase file size by 10-50% depending on video content. This trade-off is almost always worthwhile for annotation workflows—the cost of misaligned annotations due to seeking errors far exceeds the cost of additional storage.
 
 ---
 
