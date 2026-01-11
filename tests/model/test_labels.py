@@ -4601,6 +4601,90 @@ def test_n_instances_per_track_lazy(centered_pair):
         assert lazy_counts[lazy_track] == eager_counts[track]
 
 
+def test_n_user_frames_basic():
+    """Test n_user_frames returns correct count for eager-loaded Labels."""
+    video = Video(filename="test")
+    skeleton = Skeleton(["A", "B"])
+
+    # Create a mix of user and predicted frames
+    user_inst = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]]),
+        skeleton=skeleton,
+    )
+    pred_inst = PredictedInstance.from_numpy(
+        np.array([[10, 20], [30, 40]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.8]),
+        score=0.85,
+    )
+
+    labels = Labels(
+        [
+            # Frame 0: user instance only
+            LabeledFrame(video=video, frame_idx=0, instances=[user_inst]),
+            # Frame 1: predicted instance only
+            LabeledFrame(video=video, frame_idx=1, instances=[pred_inst]),
+            # Frame 2: user instance only
+            LabeledFrame(video=video, frame_idx=2, instances=[user_inst]),
+            # Frame 3: both user and predicted
+            LabeledFrame(video=video, frame_idx=3, instances=[user_inst, pred_inst]),
+        ]
+    )
+
+    # Frames 0, 2, and 3 have user instances
+    assert labels.n_user_frames == 3
+    # Total frames is 4
+    assert len(labels.labeled_frames) == 4
+
+
+def test_n_user_frames_empty():
+    """Test n_user_frames returns 0 for empty Labels."""
+    labels = Labels()
+    assert labels.n_user_frames == 0
+
+
+def test_n_user_frames_no_user_instances():
+    """Test n_user_frames returns 0 when only predicted instances exist."""
+    video = Video(filename="test")
+    skeleton = Skeleton(["A", "B"])
+    pred_inst = PredictedInstance.from_numpy(
+        np.array([[10, 20], [30, 40]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.8]),
+        score=0.85,
+    )
+
+    labels = Labels(
+        [
+            LabeledFrame(video=video, frame_idx=0, instances=[pred_inst]),
+            LabeledFrame(video=video, frame_idx=1, instances=[pred_inst]),
+        ]
+    )
+
+    assert labels.n_user_frames == 0
+
+
+def test_n_user_frames_lazy(centered_pair):
+    """Test n_user_frames with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    assert lazy.n_user_frames == eager.n_user_frames
+    # centered_pair has 0 user instances, so 0 user frames
+    assert lazy.n_user_frames == 0
+
+
+def test_n_user_frames_lazy_with_user_instances(slp_real_data):
+    """Test n_user_frames with lazy-loaded Labels that has user instances."""
+    lazy = load_slp(slp_real_data, lazy=True)
+    eager = load_slp(slp_real_data, lazy=False)
+
+    # Should match eager
+    assert lazy.n_user_frames == eager.n_user_frames
+    # slp_real_data has user instances
+    assert lazy.n_user_frames > 0
+
+
 # =============================================================================
 # Tests for Labels.add_video() - PROPOSED NEW METHOD
 # =============================================================================
