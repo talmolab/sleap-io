@@ -402,41 +402,79 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 ### High-Level Functions
 
 ::: sleap_io.io.main.load_slp
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ::: sleap_io.io.main.save_slp
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ### Core Module
 
 ::: sleap_io.io.slp.read_labels
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ::: sleap_io.io.slp.write_labels
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ### Video I/O
 
 ::: sleap_io.io.slp.read_videos
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ::: sleap_io.io.slp.write_videos
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ::: sleap_io.io.slp.embed_videos
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ### Skeleton I/O
 
 ::: sleap_io.io.slp.read_skeletons
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ::: sleap_io.io.slp.serialize_skeletons
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ### Instance I/O
 
 ::: sleap_io.io.slp.read_instances
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ::: sleap_io.io.slp.read_points
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ::: sleap_io.io.slp.read_pred_points
+    options:
+      heading_level: 4
+      show_root_toc_entry: false
 
 ### Lazy Loading
 
 ::: sleap_io.io.slp_lazy.LazyDataStore
     options:
+      heading_level: 4
+      show_root_toc_entry: false
       show_source: false
       members:
         - materialize_frame
@@ -446,4 +484,6 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 
 ::: sleap_io.io.slp_lazy.LazyFrameList
     options:
+      heading_level: 4
+      show_root_toc_entry: false
       show_source: false
