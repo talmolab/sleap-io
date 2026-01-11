@@ -84,6 +84,7 @@ def make_video(
     labels_path: str,
     video_json: dict,
     open_backend: bool = True,
+    _hdf5_file: Optional[h5py.File] = None,
 ) -> Video:
     """Create a `Video` object from a JSON dictionary.
 
@@ -93,6 +94,8 @@ def make_video(
         open_backend: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
+        _hdf5_file: Optional already-open HDF5 file handle. For internal use to avoid
+            repeatedly opening the same file when loading many embedded videos.
     """
     backend_metadata = video_json["backend"]
 
@@ -117,7 +120,9 @@ def make_video(
     original_video = None
     if is_embedded:
         # Try to recover the source video and original video from HDF5 attrs.
-        with h5py.File(labels_path, "r") as f:
+        # Use provided file handle if available to avoid repeated file opens.
+        def _read_embedded_video_metadata(f: h5py.File):
+            nonlocal source_video, original_video
             dataset = backend_metadata["dataset"]
             if dataset.endswith("/video"):
                 dataset = dataset[:-6]
@@ -131,6 +136,7 @@ def make_video(
                     labels_path,
                     source_video_json,
                     open_backend=open_backend,
+                    _hdf5_file=f,
                 )
 
             # Load original_video metadata
@@ -142,7 +148,14 @@ def make_video(
                     labels_path,
                     original_video_json,
                     open_backend=False,  # Original videos are often not available
+                    _hdf5_file=f,
                 )
+
+        if _hdf5_file is not None:
+            _read_embedded_video_metadata(_hdf5_file)
+        else:
+            with h5py.File(labels_path, "r") as f:
+                _read_embedded_video_metadata(f)
     else:
         # For non-embedded videos, check if metadata is in videos_json
         if "source_video" in video_json:
@@ -234,11 +247,16 @@ def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
         A list of `Video` objects.
     """
     videos = []
-    videos_metadata = read_hdf5_dataset(labels_path, "videos_json")
-    for video_data in videos_metadata:
-        video_json = json.loads(video_data)
-        video = make_video(labels_path, video_json, open_backend=open_backend)
-        videos.append(video)
+    # Open file once and pass handle to make_video to avoid repeated opens
+    # for embedded videos (which would otherwise open the file per video).
+    with h5py.File(labels_path, "r") as f:
+        videos_metadata = f["videos_json"][:]
+        for video_data in videos_metadata:
+            video_json = json.loads(video_data)
+            video = make_video(
+                labels_path, video_json, open_backend=open_backend, _hdf5_file=f
+            )
+            videos.append(video)
     return videos
 
 
