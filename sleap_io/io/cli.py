@@ -762,41 +762,30 @@ def _print_video_summary(labels: Labels) -> None:
     # Summarize videos without metadata (don't spam)
     if videos_without_metadata:
         n_no_meta = len(videos_without_metadata)
-        if n_no_meta <= 3:
-            # Show individual videos if only a few
-            for i, vid in videos_without_metadata:
-                is_embedded = _is_embedded(vid)
-                filenames = _get_image_filenames(vid)
-                if filenames is not None:
-                    path_display = f"{len(filenames)} images"
-                else:
-                    path_display = _truncate_path_left(str(vid.filename), 80)
+        n_to_show = min(3, n_no_meta)
 
-                tag = ""
-                if not vid.exists() and not isinstance(vid.filename, list):
-                    tag = " [yellow]\\[not found][/]"
+        # Show first 3 videos without metadata
+        for i, vid in videos_without_metadata[:n_to_show]:
+            filenames = _get_image_filenames(vid)
+            if filenames is not None:
+                path_display = f"{len(filenames)} images"
+            else:
+                path_display = _truncate_path_left(str(vid.filename), 80)
 
-                idx_str = f"[dim][{i}][/]"
-                console.print(
-                    f"  {idx_str} [cyan]{path_display}[/]  "
-                    f"[dim]?×?[/]  [dim]? frames[/]{tag}"
-                )
-        else:
-            # Show summary for many videos without metadata
-            # Count how many exist vs not found
-            n_exists = sum(1 for _, v in videos_without_metadata if v.exists())
-            n_not_found = n_no_meta - n_exists
+            tag = ""
+            if not vid.exists() and not isinstance(vid.filename, list):
+                tag = " [yellow]\\[not found][/]"
 
-            status = []
-            if n_exists > 0:
-                status.append(f"{n_exists} found")
-            if n_not_found > 0:
-                status.append(f"[yellow]{n_not_found} not found[/]")
-
+            idx_str = f"[dim][{i}][/]"
             console.print(
-                f"  [dim]+{n_no_meta} videos without cached metadata[/] "
-                f"({', '.join(status)})"
+                f"  {idx_str} [cyan]{path_display}[/]  "
+                f"[dim]?×?[/]  [dim]? frames[/]{tag}"
             )
+
+        # Show truncation message if there are more
+        if n_no_meta > 3:
+            n_remaining = n_no_meta - 3
+            console.print(f"  [dim]... +{n_remaining} more without cached metadata[/]")
 
 
 def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> None:
@@ -1803,6 +1792,27 @@ def split(
     metavar="OLD NEW",
     help="Replace OLD path prefix with NEW (prefix mode).",
 )
+@click.option(
+    "--source",
+    "show_source",
+    is_flag=True,
+    default=False,
+    help="Show source video filenames for embedded videos.",
+)
+@click.option(
+    "--original",
+    "show_original",
+    is_flag=True,
+    default=False,
+    help="Show original video filenames (root of provenance chain).",
+)
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    default=False,
+    help="Show all details: full image lists, source videos, original videos.",
+)
 def filenames(
     input_arg: Optional[Path],
     input_opt: Optional[Path],
@@ -1810,6 +1820,9 @@ def filenames(
     new_filenames: tuple[str, ...],
     filename_map: tuple[tuple[str, str], ...],
     prefix_map: tuple[tuple[str, str], ...],
+    show_source: bool,
+    show_original: bool,
+    show_all: bool,
 ):
     r"""List or update video filenames in a labels file.
 
@@ -1859,13 +1872,34 @@ def filenames(
 
     # Inspection mode: just list filenames
     if not has_update_flags:
+        # Determine effective flags
+        show_source_effective = show_source or show_all
+        show_original_effective = show_original or show_all
+        show_all_images = show_all
+
         click.echo(f"Video filenames in {input_path.name}:")
         for i, vid in enumerate(labels.videos):
             fn = vid.filename
+
+            # Display filename(s)
             if isinstance(fn, list):
-                click.echo(f"  [{i}] {fn[0]} ... ({len(fn)} images)")
+                if show_all_images:
+                    click.echo(f"  [{i}] ({len(fn)} images)")
+                    for img in fn:
+                        click.echo(f"        {img}")
+                else:
+                    click.echo(f"  [{i}] {fn[0]} ... ({len(fn)} images)")
             else:
                 click.echo(f"  [{i}] {fn}")
+
+            # Display source video
+            if show_source_effective and vid.source_video is not None:
+                click.echo(f"      Source: {vid.source_video.filename}")
+
+            # Display original video
+            if show_original_effective and vid.original_video is not None:
+                click.echo(f"      Original: {vid.original_video.filename}")
+
         return
 
     # Update mode: require -o
@@ -1887,6 +1921,9 @@ def filenames(
             "Only one mode allowed: --filename, --map, or --prefix (not multiple)"
         )
 
+    # Capture old filenames for comparison
+    old_filenames = [v.filename for v in labels.videos]
+
     # Apply replacement (no video access needed)
     try:
         if new_filenames:
@@ -1907,16 +1944,39 @@ def filenames(
     except ValueError as e:
         raise click.ClickException(str(e))
 
+    # Capture new filenames and compare
+    new_filenames_result = [v.filename for v in labels.videos]
+
+    changed = []
+    unchanged = []
+    for i, (old, new) in enumerate(zip(old_filenames, new_filenames_result)):
+        if old != new:
+            changed.append((i, old, new))
+        else:
+            unchanged.append((i, old))
+
     # Save the output file
     try:
         io_main.save_file(labels, str(output_path))
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
-    # Success message
+    # Report changes
     n_videos = len(labels.videos)
-    mode_name = "list" if new_filenames else "map" if filename_map else "prefix"
-    click.echo(f"Replaced filenames in {n_videos} video(s) using {mode_name} mode")
+    if changed:
+        click.echo(f"Replaced ({len(changed)}/{n_videos}):")
+        for i, old, new in changed:
+            # For image sequences, show first filename only
+            old_display = old[0] if isinstance(old, list) else old
+            new_display = new[0] if isinstance(new, list) else new
+            click.echo(f"  [{i}] {old_display} -> {new_display}")
+
+    if unchanged:
+        click.echo(f"Unchanged ({len(unchanged)}/{n_videos}):")
+        for i, old in unchanged:
+            old_display = old[0] if isinstance(old, list) else old
+            click.echo(f"  [{i}] {old_display}")
+
     click.echo(f"Saved: {output_path}")
 
 

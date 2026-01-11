@@ -172,10 +172,19 @@ def make_video(
                 open_backend=False,  # Original videos are often not available
             )
 
+    # Handle ImageVideo filenames - always expand to full list regardless of
+    # open_backend. This ensures Video.filename is consistently a list for image
+    # sequences.
+    if "filenames" in backend_metadata:
+        # This is an ImageVideo.
+        # TODO: Path resolution.
+        video_path = backend_metadata["filenames"]
+        video_path = [Path(sanitize_filename(p)) for p in video_path]
+
     backend = None
     if open_backend:
         try:
-            if not is_file_accessible(video_path):
+            if not isinstance(video_path, list) and not is_file_accessible(video_path):
                 # Check for the same filename in the same directory as the labels file.
                 candidate_video_path = Path(labels_path).parent / video_path.name
                 if is_file_accessible(candidate_video_path):
@@ -187,14 +196,9 @@ def make_video(
         except (OSError, PermissionError, FileNotFoundError):
             pass
 
-        # Convert video path to string.
-        video_path = video_path.as_posix()
-
-        if "filenames" in backend_metadata:
-            # This is an ImageVideo.
-            # TODO: Path resolution.
-            video_path = backend_metadata["filenames"]
-            video_path = [Path(sanitize_filename(p)) for p in video_path]
+        # Convert video path to string (only if not already a list for ImageVideo).
+        if isinstance(video_path, Path):
+            video_path = video_path.as_posix()
 
         try:
             grayscale = None
@@ -218,11 +222,14 @@ def make_video(
         except Exception:
             backend = None
 
-    # Ensure video_path is a string (not Path) when creating the Video object
-    # If open_backend was True, it's already been converted at line 172
-    # If open_backend was False, it's still a Path object, so convert it
+    # Ensure video_path is a string or list of strings (not Path) for the Video object
     if isinstance(video_path, Path):
         video_path = sanitize_filename(video_path)
+    elif isinstance(video_path, list):
+        # ImageVideo: convert list of Paths to list of strings
+        video_path = [
+            sanitize_filename(p) if isinstance(p, Path) else p for p in video_path
+        ]
 
     return Video(
         filename=video_path,

@@ -646,12 +646,12 @@ def test_show_video_unknown_shape(tmp_path):
 
 
 def test_show_video_summary_many_without_metadata(tmp_path):
-    """Test video summary with many videos without metadata shows condensed summary."""
+    """Test video summary with many videos shows first 3 + truncation."""
     from sleap_io import Labels, Video, save_file
 
     runner = CliRunner()
 
-    # Create labels with 5 videos that have no shape (> 3 triggers summary mode)
+    # Create labels with 5 videos that have no shape (> 3 triggers truncation)
     videos = [
         Video(
             filename=f"/nonexistent/path/to/video_{i}.mp4",
@@ -668,8 +668,12 @@ def test_show_video_summary_many_without_metadata(tmp_path):
     result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    # Should show condensed summary instead of 5 individual lines
-    assert "+5 videos without cached metadata" in out
+    # Should show first 3 videos individually
+    assert "[0]" in out
+    assert "[1]" in out
+    assert "[2]" in out
+    # Should show truncation message for remaining 2
+    assert "+2 more without cached metadata" in out
     # Should show status (found/not found)
     assert "not found" in out
 
@@ -726,10 +730,15 @@ def test_show_video_summary_mixed_exists(tmp_path):
     result = runner.invoke(cli, ["show", str(slp_path), "--no-open-videos"])
     assert result.exit_code == 0, result.output
     out = _strip_ansi(result.output)
-    # Should show both "found" and "not found"
-    assert "+5 videos without cached metadata" in out
-    assert "2 found" in out
-    assert "3 not found" in out
+    # Should show first 3 videos individually
+    assert "[0]" in out
+    assert "[1]" in out
+    assert "[2]" in out
+    # Should show truncation message for remaining 2
+    assert "+2 more without cached metadata" in out
+    # First 2 videos exist, so first 2 don't have "[not found]"
+    # Third video doesn't exist, so it should show "[not found]"
+    assert "not found" in out
 
 
 def test_show_video_with_metadata_not_found(tmp_path):
@@ -2279,7 +2288,8 @@ def test_filenames_list_mode(tmp_path, slp_typical):
     )
     assert result.exit_code == 0, result.output
     output = _strip_ansi(result.output)
-    assert "Replaced filenames in 1 video(s) using list mode" in output
+    assert "Replaced (1/1):" in output
+    assert "/new/path/video.mp4" in output
     assert "Saved:" in output
 
     # Verify the output file has the new filename
@@ -2306,7 +2316,7 @@ def test_filenames_list_mode_multiple(tmp_path):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0, result.output
     output = _strip_ansi(result.output)
-    assert f"Replaced filenames in {n_videos} video(s) using list mode" in output
+    assert f"Replaced ({n_videos}/{n_videos}):" in output
 
     # Verify filenames were replaced
     labels = load_slp(str(output_path), open_videos=False)
@@ -2338,7 +2348,8 @@ def test_filenames_map_mode(tmp_path, slp_typical):
     )
     assert result.exit_code == 0, result.output
     output = _strip_ansi(result.output)
-    assert "using map mode" in output
+    assert "Replaced (1/1):" in output
+    assert "/mapped/video.mp4" in output
 
     # Verify the filename was mapped
     labels = load_slp(str(output_path), open_videos=False)
@@ -2406,7 +2417,8 @@ def test_filenames_prefix_mode(tmp_path, slp_typical):
     )
     assert result.exit_code == 0, result.output
     output = _strip_ansi(result.output)
-    assert "using prefix mode" in output
+    assert "Replaced (1/1):" in output
+    assert "/new/prefix" in output
 
     # Verify prefix was replaced
     labels = load_slp(str(output_path), open_videos=False)
