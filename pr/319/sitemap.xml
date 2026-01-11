@@ -21,10 +21,6 @@
          <lastmod>2026-01-11</lastmod>
     </url>
     <url>
-         <loc>https://io.sleap.ai/formats/</loc>
-         <lastmod>2026-01-11</lastmod>
-    </url>
-    <url>
          <loc>https://io.sleap.ai/install/</loc>
          <lastmod>2026-01-11</lastmod>
     </url>
@@ -38,6 +34,14 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/rendering/</loc>
+         <lastmod>2026-01-11</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/formats/</loc>
+         <lastmod>2026-01-11</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/formats/slp/</loc>
          <lastmod>2026-01-11</lastmod>
     </url>
     <url>
