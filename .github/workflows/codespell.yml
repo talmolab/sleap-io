@@ -24,4 +24,4 @@ jobs:
       - name: Codespell
         uses: codespell-project/actions-codespell@v2
         with:
-          ignore_words_list: 'THW,HWT,THWC,CHWT,thw,hwt,thwc,chwt'
+          ignore_words_list: 'THW,HWT,THWC,CHWT,thw,hwt,thwc,chwt,reencode'
