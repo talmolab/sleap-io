@@ -713,9 +713,23 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="formats/" class="md-nav__link">
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="formats/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -729,7 +743,57 @@
   
   
 
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Formats
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="formats/slp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLP Format
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -2287,11 +2351,11 @@ data structures and file formats with minimal dependencies. This package <em>doe
 have any functionality related to labeling, training, or inference.</p>
 <h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
 <p>The main purpose of this library is to provide utilities to load/save from different
-<a href="formats/">formats</a> for pose data and standardize them into our common <a href="model/">Data Model</a>.</p>
+<a href="formats.md">formats</a> for pose data and standardize them into our common <a href="model/">Data Model</a>.</p>
 <ul>
-<li>Read/write labels in <a href="formats/#sleap_io.load_slp">SLP</a>, <a href="formats/#sleap_io.load_nwb">NWB</a>, <a href="formats/#sleap_io.load_alphatracker">AlphaTracker</a>, <a href="formats/#sleap_io.load_dlc">DeepLabCut</a>, <a href="formats/#sleap_io.load_jabs">JABS</a>, <a href="formats/#sleap_io.load_labelstudio">LabelStudio</a>, <a href="formats/#sleap_io.load_leap">LEAP</a>, <a href="formats/#csv-format-csv">CSV</a> and <a href="formats/#sleap_io.load_ultralytics">Ultralytics YOLO</a> formats.</li>
+<li>Read/write labels in <a href="formats.md#sleap_io.load_slp">SLP</a>, <a href="formats.md#sleap_io.load_nwb">NWB</a>, <a href="formats.md#sleap_io.load_alphatracker">AlphaTracker</a>, <a href="formats.md#sleap_io.load_dlc">DeepLabCut</a>, <a href="formats.md#sleap_io.load_jabs">JABS</a>, <a href="formats.md#sleap_io.load_labelstudio">LabelStudio</a>, <a href="formats.md#sleap_io.load_leap">LEAP</a>, <a href="formats.md#csv-format-csv">CSV</a> and <a href="formats.md#sleap_io.load_ultralytics">Ultralytics YOLO</a> formats.</li>
 <li>Support for <a href="model/#sleap_io.LabelsSet">LabelsSet</a> to manage multiple dataset splits (train/val/test) and export to different formats.</li>
-<li><a href="formats/#sleap_io.load_video">Read videos in any format</a>, work them in a <a href="model/#sleap_io.Video">numpy-like interface</a> whether the video files are accessible or not, and <a href="formats/#sleap_io.save_video">easily save them out</a>.</li>
+<li><a href="formats.md#sleap_io.load_video">Read videos in any format</a>, work them in a <a href="model/#sleap_io.Video">numpy-like interface</a> whether the video files are accessible or not, and <a href="formats.md#sleap_io.save_video">easily save them out</a>.</li>
 </ul>
 <p>This enables ease-of-use through format-agnostic operations that make it easy to work
 with pose data, including utilities for common tasks. Some of these include:</p>

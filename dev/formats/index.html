@@ -14,7 +14,7 @@
         <link rel="prev" href="../model/">
       
       
-        <link rel="next" href="../cli/">
+        <link rel="next" href="slp/">
       
       
         
@@ -628,16 +628,23 @@
   
   
   
-    <li class="md-nav__item md-nav__item--active">
+    
+    
+    
+    
       
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" checked>
+        
           
+          <div class="md-nav__link md-nav__container">
+            <a href="./" class="md-nav__link md-nav__link--active">
+              
   
   
   <span class="md-ellipsis">
@@ -651,17 +658,41 @@
   
   
 
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+            </a>
+            
+              
+              <label class="md-nav__link md-nav__link--active" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Formats
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="slp/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Formats
+    SLP Format
   
 
     
@@ -670,410 +701,13 @@
   
 
       </a>
-      
-        
+    </li>
+  
 
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#universal-io-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Universal I/O Functions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_file" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_file
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_file" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_file
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#video-io" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Video I/O
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_video" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_video
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_video" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_video
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#format-specific-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Format-Specific Functions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_slp" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_slp
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_slp" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_slp
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_nwb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_nwb
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_nwb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_nwb
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_jabs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_jabs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_jabs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_jabs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_analysis_h5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_analysis_h5
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_analysis_h5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_analysis_h5
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_labelstudio" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_labelstudio
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_labelstudio" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_labelstudio
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_dlc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_dlc
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_csv" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_csv
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_csv" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_csv
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_alphatracker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_alphatracker
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_leap" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_leap
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_coco" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_coco
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_coco" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_coco
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_ultralytics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_ultralytics
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_ultralytics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_ultralytics
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#working-with-multiple-datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Working with Multiple Datasets
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_labels_set" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_labels_set
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#skeleton-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Skeleton Files
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.load_skeleton" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_skeleton
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sleap_io.io.main.save_skeleton" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        save_skeleton
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#format-detection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Format Detection
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#format-conversion-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Format Conversion Examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#format-limitations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Format Limitations
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
+              
+            
+          </ul>
+        </nav>
       
     </li>
   
@@ -3914,6 +3548,10 @@ strings corresponding to command line arguments for FFMPEG and libx264. Use
 </div><h2 id="format-specific-functions">Format-Specific Functions<a class="headerlink" href="#format-specific-functions" title="Permanent link">&para;</a></h2>
 <h3 id="sleap-native-format-slp">SLEAP Native Format (.slp)<a class="headerlink" href="#sleap-native-format-slp" title="Permanent link">&para;</a></h3>
 <p>The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations.</p>
+<div class="admonition tip">
+<p class="admonition-title">Detailed Format Specification</p>
+<p>For comprehensive documentation of the SLP file format including HDF5 layout, data structures, and version history, see the <strong><a href="slp/">SLP File Format Reference</a></strong>.</p>
+</div>
 
 
 <div class="doc doc-object doc-function">
@@ -7711,9 +7349,9 @@ while YAML files use a simplified human-readable format.</p>
 ***COCO tracks are stored via <code>attributes.object_id</code> (CVAT-compatible)</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../model/">Data Model</a>: Understanding the core data structures</li>
-<li><a href="../examples/">Examples</a>: More usage examples and recipes</li>
-<li><a href="../merging/">Merging</a>: Combining data from multiple sources</li>
+<li><a href="model.md">Data Model</a>: Understanding the core data structures</li>
+<li><a href="examples.md">Examples</a>: More usage examples and recipes</li>
+<li><a href="merging.md">Merging</a>: Combining data from multiple sources</li>
 </ul>
 
 
