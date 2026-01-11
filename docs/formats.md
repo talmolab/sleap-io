@@ -275,6 +275,53 @@ The NWB format requires certain metadata fields. sleap-io provides sensible defa
 
 ::: sleap_io.io.main.save_jabs
 
+### SLEAP Analysis HDF5 Format (.h5)
+
+The SLEAP Analysis HDF5 format is a portable format for exporting pose tracking predictions as dense numpy arrays. This is the format produced by SLEAP's "Export Analysis HDF5" feature, designed for easy loading in MATLAB and Python analysis pipelines.
+
+::: sleap_io.io.main.load_analysis_h5
+
+::: sleap_io.io.main.save_analysis_h5
+
+#### Axis Ordering Presets
+
+The format supports configurable axis ordering via presets:
+
+| Preset | Description | tracks shape |
+|--------|-------------|--------------|
+| `matlab` (default) | SLEAP-compatible, optimized for MATLAB | `(tracks, 2, nodes, frames)` |
+| `standard` | Python-native, intuitive indexing | `(frames, tracks, nodes, 2)` |
+
+```python
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# Default (MATLAB-compatible) - matches SLEAP's export
+sio.save_analysis_h5(labels, "output.h5")
+
+# Python-native ordering for easier numpy indexing
+sio.save_analysis_h5(labels, "output.h5", preset="standard")
+
+# Filter tracks with <50% occupancy
+sio.save_analysis_h5(labels, "output.h5", min_occupancy=0.5)
+
+# Load back
+loaded = sio.load_analysis_h5("output.h5")
+```
+
+#### Self-Documenting Format
+
+Each dataset stores its dimension names in the `dims` HDF5 attribute, making files self-documenting:
+
+```python
+import h5py
+
+with h5py.File("output.h5", "r") as f:
+    print(f["tracks"].attrs["dims"])  # e.g., '["track", "xy", "node", "frame"]'
+    print(f.attrs["preset"])  # "matlab", "standard", or "custom"
+```
+
 ### Label Studio Format (.json)
 
 [Label Studio](https://labelstud.io/) is a multi-modal annotation platform. Export annotations from Label Studio and load them into SLEAP.
@@ -499,6 +546,7 @@ Different formats have varying capabilities:
 | SLEAP (.slp) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | NWB (.nwb) | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ |
 | JABS (.h5) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Analysis HDF5 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
 | Label Studio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
 | CSV (.csv) | ✅ | ✅ | ❌ | ✅** | ✅ | ✅ | ❌ |
 | DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |

@@ -16,6 +16,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         # I/O functions from sleap_io.io.main
         "io.main": [
             "load_alphatracker",
+            "load_analysis_h5",
             "load_coco",
             "load_csv",
             "load_dlc",
@@ -29,6 +30,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "load_slp",
             "load_ultralytics",
             "load_video",
+            "save_analysis_h5",
             "save_coco",
             "save_csv",
             "save_file",

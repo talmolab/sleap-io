@@ -215,6 +215,95 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
     return jabs.read_labels(filename, skeleton=skeleton)
 
 
+def load_analysis_h5(
+    filename: str,
+    video: Optional[Union["Video", str]] = None,
+) -> Labels:
+    """Load SLEAP Analysis HDF5 file.
+
+    Args:
+        filename: Path to Analysis HDF5 file.
+        video: Video to associate with data. If None, uses video_path stored
+            in the file. Can be a Video object or path string.
+
+    Returns:
+        Labels object with loaded pose data.
+
+    Notes:
+        If the file contains extended metadata (skeleton symmetries, video
+        backend metadata, etc.), it will be used to reconstruct the full
+        Labels context.
+
+    See Also:
+        save_analysis_h5: Save Labels to Analysis HDF5 file.
+    """
+    from sleap_io.io import analysis_h5
+
+    return analysis_h5.read_labels(filename, video=video)
+
+
+def save_analysis_h5(
+    labels: Labels,
+    filename: str,
+    *,
+    video: Optional[Union["Video", int]] = None,
+    labels_path: Optional[str] = None,
+    all_frames: bool = True,
+    min_occupancy: float = 0.0,
+    preset: Optional[str] = None,
+    frame_dim: Optional[int] = None,
+    track_dim: Optional[int] = None,
+    node_dim: Optional[int] = None,
+    xy_dim: Optional[int] = None,
+    save_metadata: bool = True,
+) -> None:
+    """Save Labels to SLEAP Analysis HDF5 file.
+
+    Args:
+        labels: Labels to export.
+        filename: Output file path.
+        video: Video to export. If None, uses first video. Can be a Video
+            object or an integer index.
+        labels_path: Source labels path (stored as metadata).
+        all_frames: Include all frames from 0 to last labeled frame.
+            Default True.
+        min_occupancy: Minimum track occupancy ratio (0-1) to keep.
+            0 = keep all non-empty tracks (SLEAP default).
+            0.5 = keep tracks with >50% occupancy.
+        preset: Axis ordering preset. Options:
+            - "matlab" (default): SLEAP-compatible ordering for MATLAB.
+              tracks shape: (n_tracks, 2, n_nodes, n_frames)
+            - "standard": Intuitive Python ordering.
+              tracks shape: (n_frames, n_tracks, n_nodes, 2)
+            Mutually exclusive with explicit dimension parameters.
+        frame_dim: Position of the frame dimension (0-3).
+        track_dim: Position of the track dimension (0-3).
+        node_dim: Position of the node dimension (0-3).
+        xy_dim: Position of the xy dimension (0-3).
+        save_metadata: Store extended metadata for full round-trip.
+            Default True.
+
+    See Also:
+        load_analysis_h5: Load Labels from Analysis HDF5 file.
+    """
+    from sleap_io.io import analysis_h5
+
+    analysis_h5.write_labels(
+        labels,
+        filename,
+        video=video,
+        labels_path=labels_path,
+        all_frames=all_frames,
+        min_occupancy=min_occupancy,
+        preset=preset,
+        frame_dim=frame_dim,
+        track_dim=track_dim,
+        node_dim=node_dim,
+        xy_dim=xy_dim,
+        save_metadata=save_metadata,
+    )
+
+
 def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = None):
     """Save a SLEAP dataset to JABS pose file format.
 
@@ -663,7 +752,8 @@ def load_file(
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "alphatracker",
-            "labelstudio", "coco", "jabs", "dlc", "ultralytics", "leap", and "video".
+            "labelstudio", "coco", "jabs", "analysis_h5", "dlc", "ultralytics", "leap",
+            and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
@@ -678,6 +768,8 @@ def load_file(
               If False, load as RGB (3 channels). Default is False.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
+            - For "analysis_h5" format: video (Optional[Video | str]): Video to
+              associate with data. If None, uses video_path stored in the file.
             - For "dlc" format: video_search_paths (Optional[List[str]]): Paths to
               search for video files.
             - For "ultralytics" format: See `load_ultralytics` for supported arguments.
@@ -705,7 +797,13 @@ def load_file(
             else:
                 format = "json"
         elif filename.lower().endswith(".h5"):
-            format = "jabs"
+            # Check if this is Analysis HDF5 or JABS
+            from sleap_io.io import analysis_h5
+
+            if analysis_h5.is_analysis_h5_file(filename):
+                format = "analysis_h5"
+            else:
+                format = "jabs"
         elif filename.endswith("data.yaml") or (
             Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
         ):
@@ -739,7 +837,10 @@ def load_file(
         else:
             return load_labelstudio(filename, **kwargs)
     elif filename.lower().endswith(".h5"):
-        return load_jabs(filename, **kwargs)
+        if format == "analysis_h5":
+            return load_analysis_h5(filename, **kwargs)
+        else:
+            return load_jabs(filename, **kwargs)
     elif format == "dlc":
         return load_dlc(filename, **kwargs)
     elif format == "csv":
@@ -765,7 +866,7 @@ def save_file(
         filename: Path to save labels to.
         format: Optional format to save as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "labelstudio", "coco",
-            "jabs", and "ultralytics".
+            "jabs", "analysis_h5", and "ultralytics".
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
         progress_callback: Optional callback function called during frame embedding
@@ -788,6 +889,7 @@ def save_file(
               "ternary" (default).
             - For "jabs" format: pose_version (int): JABS pose format version (1-6).
               root_folder (Optional[str]): Root folder for JABS project structure.
+            - For "analysis_h5" format: See `save_analysis_h5` for supported arguments.
             - For "ultralytics" format: See `save_ultralytics` for supported arguments.
     """
     if isinstance(filename, Path):
@@ -804,6 +906,17 @@ def save_file(
                 format = "coco"
             else:
                 format = "labelstudio"
+        elif filename.lower().endswith(".h5") or filename.lower().endswith(
+            ".analysis.h5"
+        ):
+            # Analysis HDF5 can be detected by extension pattern or kwargs
+            if "min_occupancy" in kwargs or filename.lower().endswith(".analysis.h5"):
+                format = "analysis_h5"
+            elif "pose_version" in kwargs:
+                format = "jabs"
+            else:
+                # Default to analysis_h5 for .h5 extension without specific jabs kwargs
+                format = "analysis_h5"
         elif "pose_version" in kwargs:
             format = "jabs"
         elif "split_ratios" in kwargs or Path(filename).is_dir():
@@ -827,6 +940,26 @@ def save_file(
         pose_version = kwargs.pop("pose_version", 5)
         root_folder = kwargs.pop("root_folder", filename)
         save_jabs(labels, pose_version=pose_version, root_folder=root_folder)
+    elif format == "analysis_h5":
+        # Filter kwargs to those accepted by save_analysis_h5
+        analysis_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k
+            in (
+                "video",
+                "labels_path",
+                "all_frames",
+                "min_occupancy",
+                "preset",
+                "frame_dim",
+                "track_dim",
+                "node_dim",
+                "xy_dim",
+                "save_metadata",
+            )
+        }
+        save_analysis_h5(labels, filename, **analysis_kwargs)
     elif format == "ultralytics":
         save_ultralytics(labels, filename, **kwargs)
     elif format == "csv" or filename.lower().endswith(".csv"):
