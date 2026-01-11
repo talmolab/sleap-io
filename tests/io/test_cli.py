@@ -4479,3 +4479,174 @@ def test_fix_no_deduplicate_videos(tmp_path):
     # Verify duplicates NOT merged
     fixed_labels = load_slp(str(output_path), open_videos=False)
     assert len(fixed_labels.videos) == 2
+
+
+# ============================================================================
+# embed command tests
+# ============================================================================
+
+
+def test_embed_help():
+    """Test embed --help shows command documentation."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["embed", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    assert "Embed video frames" in output
+    assert "--user" in output
+    assert "--predictions" in output
+    assert "--suggestions" in output
+
+
+def test_embed_basic(tmp_path, slp_real_data):
+    """Test basic embed command with default mode (user only)."""
+    runner = CliRunner()
+    output_path = tmp_path / "embedded.pkg.slp"
+
+    result = runner.invoke(cli, ["embed", slp_real_data, "-o", str(output_path)])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Embedded:" in output
+    assert "user:" in output
+    assert output_path.exists()
+
+
+def test_embed_with_predictions(tmp_path, slp_real_data):
+    """Test embed command with --predictions flag."""
+    runner = CliRunner()
+    output_path = tmp_path / "embedded.pkg.slp"
+
+    result = runner.invoke(
+        cli, ["embed", slp_real_data, "-o", str(output_path), "--predictions"]
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "predictions:" in output
+
+
+def test_embed_with_suggestions(tmp_path, slp_real_data):
+    """Test embed command with --suggestions flag."""
+    runner = CliRunner()
+    output_path = tmp_path / "embedded.pkg.slp"
+
+    result = runner.invoke(
+        cli, ["embed", slp_real_data, "-o", str(output_path), "--suggestions"]
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "suggestions:" in output
+
+
+def test_embed_missing_output():
+    """Test embed command requires output path."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["embed", "input.slp"])
+    assert result.exit_code != 0
+
+
+def test_embed_non_slp_input(tmp_path):
+    """Test embed command rejects non-SLP input."""
+    runner = CliRunner()
+    input_path = tmp_path / "test.json"
+    input_path.write_text("{}")
+    output_path = tmp_path / "output.pkg.slp"
+
+    result = runner.invoke(cli, ["embed", str(input_path), "-o", str(output_path)])
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "must be a .slp file" in output
+
+
+def test_embed_input_option(tmp_path, slp_real_data):
+    """Test embed with -i option."""
+    runner = CliRunner()
+    output_path = tmp_path / "embedded.pkg.slp"
+
+    result = runner.invoke(cli, ["embed", "-i", slp_real_data, "-o", str(output_path)])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert output_path.exists()
+
+
+# ============================================================================
+# unembed command tests
+# ============================================================================
+
+
+def test_unembed_help():
+    """Test unembed --help shows command documentation."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["unembed", "--help"])
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+
+    assert "Remove embedded frames" in output
+    assert "restore video references" in output
+
+
+def test_unembed_roundtrip(tmp_path, slp_real_data):
+    """Test embed -> unembed roundtrip preserves labels."""
+    runner = CliRunner()
+    embedded_path = tmp_path / "embedded.pkg.slp"
+    unembedded_path = tmp_path / "unembedded.slp"
+
+    # First embed
+    result = runner.invoke(cli, ["embed", slp_real_data, "-o", str(embedded_path)])
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+    # Then unembed
+    result = runner.invoke(
+        cli, ["unembed", str(embedded_path), "-o", str(unembedded_path)]
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Unembedded:" in output
+    assert "Restored 1 video(s)" in output
+    assert unembedded_path.exists()
+
+    # Verify the unembedded file references the original video
+    labels = load_slp(str(unembedded_path), open_videos=False)
+    assert len(labels.videos) == 1
+    # Should reference the original video, not the pkg file
+    assert not labels.videos[0].filename.endswith(".pkg.slp")
+
+
+def test_unembed_non_embedded_file(tmp_path, slp_real_data):
+    """Test unembed on non-embedded file gives helpful error."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(cli, ["unembed", slp_real_data, "-o", str(output_path)])
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+
+    assert "No embedded videos found" in output
+    assert "sio show" in output
+
+
+def test_unembed_missing_output():
+    """Test unembed command requires output path."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["unembed", "input.pkg.slp"])
+    assert result.exit_code != 0
+
+
+def test_unembed_input_option(tmp_path, slp_real_data):
+    """Test unembed with -i option."""
+    runner = CliRunner()
+    embedded_path = tmp_path / "embedded.pkg.slp"
+    unembedded_path = tmp_path / "unembedded.slp"
+
+    # First embed
+    runner.invoke(cli, ["embed", slp_real_data, "-o", str(embedded_path)])
+
+    # Then unembed with -i
+    result = runner.invoke(
+        cli, ["unembed", "-i", str(embedded_path), "-o", str(unembedded_path)]
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert unembedded_path.exists()

@@ -62,6 +62,8 @@ sio show --help
 sio convert --help
 sio split --help
 sio unsplit --help
+sio embed --help
+sio unembed --help
 sio filenames --help
 sio fix --help
 sio render --help
@@ -97,6 +99,14 @@ sio split labels.slp -o splits/ --seed 42                # Reproducible split
 # Merge split files back into one
 sio unsplit train.slp val.slp -o merged.slp              # Merge individual files
 sio unsplit splits/ -o merged.slp                        # Merge all .slp in directory
+
+# Embed video frames into a portable package
+sio embed labels.slp -o labels.pkg.slp                   # User-labeled frames only
+sio embed labels.slp -o labels.pkg.slp --predictions     # Include prediction frames
+sio embed labels.slp -o labels.pkg.slp --suggestions     # Include suggested frames
+
+# Remove embedded frames and restore video references
+sio unembed labels.pkg.slp -o labels.slp                 # Restore original video paths
 
 # Inspect and update video filenames
 sio filenames labels.slp                                   # List video paths
@@ -740,6 +750,161 @@ sio unsplit splits/train.slp splits/val.slp -o merged.slp  # If only train.slp a
 ```
 
 This is convenient for merging all splits created by `sio split`.
+
+---
+
+### `sio embed` - Embed Video Frames
+
+Create portable `.pkg.slp` files with video frames embedded directly in the file. This allows sharing labels without requiring access to the original video files.
+
+```bash
+sio embed <input> -o <output> [options]
+sio embed -i <input> -o <output> [options]
+```
+
+#### Basic Usage
+
+```bash
+# Embed user-labeled frames only (default)
+sio embed labels.slp -o labels.pkg.slp
+
+# Include prediction-only frames
+sio embed labels.slp -o labels.pkg.slp --predictions
+
+# Include suggested frames
+sio embed labels.slp -o labels.pkg.slp --suggestions
+
+# Combine flags for all frame types
+sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
+
+# Embed only suggestions (skip user frames)
+sio embed labels.slp -o labels.pkg.slp --no-user --suggestions
+```
+
+**Example output:**
+
+```
+Embedded: labels.slp -> labels.pkg.slp
+Frames: user: 100, predictions: 50, suggestions: 25
+```
+
+#### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-i, --input` | (required) | Input SLP file (can also pass as positional argument) |
+| `-o, --output` | (required) | Output .pkg.slp file path |
+| `--user/--no-user` | on | Include frames with user-labeled instances |
+| `--predictions/--no-predictions` | off | Include frames with only predicted instances |
+| `--suggestions/--no-suggestions` | off | Include suggested frames for labeling |
+
+#### Frame Types
+
+- **User frames**: Frames containing at least one user-labeled (non-predicted) instance. These are your ground truth annotations.
+- **Prediction frames**: Frames containing only predicted instances (no user labels). Useful for sharing inference results.
+- **Suggestions**: Frames marked for labeling in the suggestions list. May or may not have instances.
+
+!!! tip "Choosing what to embed"
+    - **For sharing training data**: Use default (`--user` only) for smallest file size
+    - **For sharing predictions**: Add `--predictions` to include inference results
+    - **For active learning**: Add `--suggestions` to include frames needing annotation
+
+#### When to Use `sio embed` vs `sio convert --embed`
+
+Both commands can embed frames, but they serve different purposes:
+
+- **`sio embed`**: Granular control over which frame types to include. Best for creating packages.
+- **`sio convert --embed`**: Part of format conversion workflow. Uses simpler mode-based embedding.
+
+```bash
+# Equivalent commands:
+sio embed labels.slp -o labels.pkg.slp
+sio convert labels.slp -o labels.pkg.slp --embed user
+
+# But sio embed allows more control:
+sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
+```
+
+---
+
+### `sio unembed` - Restore Video References
+
+Convert an embedded `.pkg.slp` file back to a regular `.slp` file that references the original video files. This reverses the embedding process.
+
+```bash
+sio unembed <input> -o <output>
+sio unembed -i <input> -o <output>
+```
+
+#### Basic Usage
+
+```bash
+# Restore original video references
+sio unembed labels.pkg.slp -o labels.slp
+```
+
+**Example output:**
+
+```
+Unembedded: labels.pkg.slp -> labels.slp
+Restored 1 video(s) to source paths
+```
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `-i, --input` | Input .pkg.slp file (can also pass as positional argument) |
+| `-o, --output` | Output .slp file path (required) |
+
+#### Requirements
+
+The `unembed` command requires:
+
+1. **Embedded videos**: The input file must contain embedded video frames
+2. **Source video metadata**: The file must have provenance information about the original videos
+
+If either requirement is not met, you'll get a helpful error message:
+
+```
+# No embedded videos
+Error: No embedded videos found. This file does not contain embedded frames.
+Use 'sio show --video' to inspect video details.
+
+# Missing source metadata (legacy files)
+Error: Cannot unembed: 1/1 embedded video(s) have no source video metadata.
+
+This typically happens with legacy .pkg.slp files created before
+source video tracking was added.
+
+To inspect video details, run:
+  sio show 'labels.pkg.slp' --video
+```
+
+!!! note "Original videos don't need to exist"
+    The `unembed` command only updates the file references—it doesn't verify that the original video files exist. You can unembed even if the original videos are on a different machine, then use `sio filenames` to update the paths.
+
+#### Embed/Unembed Roundtrip
+
+The embed and unembed operations are lossless inverses:
+
+```bash
+# Original file
+sio show labels.slp
+# -> 1 video, 100 frames
+
+# Embed frames
+sio embed labels.slp -o labels.pkg.slp
+
+# Unembed back to original format
+sio unembed labels.pkg.slp -o labels_restored.slp
+
+# Verify: identical annotations
+sio show labels_restored.slp
+# -> 1 video, 100 frames (same as original)
+```
+
+All annotations, skeletons, tracks, and metadata are preserved exactly.
 
 ---
 
@@ -1469,7 +1634,13 @@ Create a portable package with embedded frames:
 
 ```bash
 # Embed user-labeled frames for sharing training data
-sio convert project.slp -o project.pkg.slp --embed user
+sio embed project.slp -o project.pkg.slp
+
+# Include predictions and suggestions for complete sharing
+sio embed project.slp -o project.pkg.slp --predictions --suggestions
+
+# Later, restore to reference original videos
+sio unembed project.pkg.slp -o project_restored.slp
 ```
 
 ### Batch Conversion with Shell Scripts
