@@ -5,7 +5,6 @@
 [![Release](https://img.shields.io/github/v/release/talmolab/sleap-io?label=Latest)](https://github.com/talmolab/sleap-io/releases/)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/sleap-io)
 [![PyPI](https://img.shields.io/pypi/v/sleap-io?label=PyPI)](https://pypi.org/project/sleap-io)
-[![conda-forge](https://img.shields.io/conda/vn/conda-forge/sleap-io.svg)](https://anaconda.org/conda-forge/sleap-io/)
 
 Standalone utilities for working with animal pose tracking data.
 
