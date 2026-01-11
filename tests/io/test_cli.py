@@ -2830,6 +2830,150 @@ def test_merge_second_file_load_failure(tmp_path, slp_typical):
     assert "Failed to load" in output
 
 
+def test_merge_empty_directory(tmp_path):
+    """Test error when directory contains no .slp files."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Create empty directory
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    result = runner.invoke(cli, ["merge", str(empty_dir), "-o", str(merged_path)])
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "No .slp files found" in output
+
+
+def test_merge_non_labels_file(tmp_path):
+    """Test error when first input file is not a labels file (e.g., video)."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Use a video file - load_file will return Video, not Labels
+    video_file = _data_path("videos/centered_pair_low_quality.mp4")
+    valid_file = _data_path("slp/typical.slp")
+
+    result = runner.invoke(
+        cli, ["merge", str(video_file), str(valid_file), "-o", str(merged_path)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "not a labels file" in output
+
+
+def test_merge_second_non_labels_file(tmp_path, slp_typical):
+    """Test error when second input file is not a labels file."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Use a video file - load_file will return Video, not Labels
+    video_file = _data_path("videos/centered_pair_low_quality.mp4")
+
+    result = runner.invoke(
+        cli, ["merge", slp_typical, str(video_file), "-o", str(merged_path)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "not a labels file" in output
+
+
+def test_merge_verbose_video_count_increase(tmp_path, slp_minimal, slp_multiview):
+    """Test verbose output when video count increases during merge."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # slp_minimal has 1 video, slp_multiview has 8 videos with different paths
+    # Merging should increase video count, triggering the verbose message
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_minimal,
+            slp_multiview,
+            "-o",
+            str(merged_path),
+            "-v",
+            "--video",
+            "path",  # Force path-based matching to add new videos
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Verbose output should show strategy and instance info
+    assert "Strategy:" in output
+    assert "instances" in output.lower()
+    # Video count should increase from 1 to 9, triggering the verbose message
+    assert "Video count increased" in output
+
+
+def test_merge_with_embed_option(tmp_path, slp_minimal_pkg):
+    """Test merge with embed option using embedded package file."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Use pkg.slp files that have embedded images
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_minimal_pkg,
+            slp_minimal_pkg,
+            "-o",
+            str(merged_path),
+            "--embed",
+            "source",  # Preserve existing embedded frames
+            "--frame",
+            "keep_both",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Merged 2 files:" in output
+
+
+def test_merge_save_failure(tmp_path, slp_typical):
+    """Test error when save fails (e.g., invalid path)."""
+    runner = CliRunner()
+
+    # Try to save to a path that doesn't exist (directory doesn't exist)
+    nonexistent_dir = tmp_path / "nonexistent" / "subdir" / "merged.slp"
+
+    result = runner.invoke(
+        cli, ["merge", slp_typical, slp_typical, "-o", str(nonexistent_dir)]
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Failed to save" in output
+
+
+def test_merge_verbose_with_conflicts(tmp_path, slp_typical):
+    """Test verbose merge showing conflict resolution."""
+    runner = CliRunner()
+    merged_path = tmp_path / "merged.slp"
+
+    # Merge file with itself using keep_both - this will create conflicts
+    result = runner.invoke(
+        cli,
+        [
+            "merge",
+            slp_typical,
+            slp_typical,
+            "-o",
+            str(merged_path),
+            "-v",
+            "--frame",
+            "keep_both",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should have verbose output
+    assert "Strategy:" in output
+
+
 # ============================================================================
 # filenames command tests
 # ============================================================================

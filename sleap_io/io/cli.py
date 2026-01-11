@@ -2090,19 +2090,14 @@ def merge(
         else:
             click.echo(f"  +{frames_added} frames -> {len(labels)} total")
 
-    # Report video changes
+    # Report video changes (merging can only add videos, never remove)
     final_videos = len(labels.videos)
-    if verbose and final_videos != initial_videos:
+    if verbose and final_videos > initial_videos:
         click.echo("")
-        if final_videos > initial_videos:
-            click.echo(
-                f"Note: Video count increased from {initial_videos} to "
-                f"{final_videos}. Videos from other files were added as new."
-            )
-        else:
-            click.echo(
-                f"Note: Video count changed from {initial_videos} to {final_videos}."
-            )
+        click.echo(
+            f"Note: Video count increased from {initial_videos} to "
+            f"{final_videos}. Videos from other files were added as new."
+        )
 
     # Save output
     click.echo("")
