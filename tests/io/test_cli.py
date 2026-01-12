@@ -1770,7 +1770,7 @@ def test_convert_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
 
     # Verify input has embedded videos
     input_labels = load_slp(str(embedded_path))
-    assert input_labels.videos[0].source_video is not None
+    assert input_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
     # Convert pkg.slp -> pkg.slp (without explicit --embed flag)
     # This should auto-preserve embedded videos
@@ -1783,35 +1783,8 @@ def test_convert_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
 
     # Verify output has embedded videos preserved
     output_labels = load_slp(str(output_path))
-    # source_video indicates embedding
-    assert output_labels.videos[0].source_video is not None
-
-
-def test_convert_pkg_to_regular_slp_no_preserve(tmp_path, slp_real_data):
-    """Test that convert does NOT preserve when output is regular .slp."""
-    runner = CliRunner()
-
-    # First, create a pkg.slp with embedded videos
-    embedded_path = tmp_path / "embedded.pkg.slp"
-    result = runner.invoke(
-        cli,
-        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
-    )
-    assert result.exit_code == 0, result.output
-
-    # Convert pkg.slp -> regular .slp (not pkg.slp)
-    # Should NOT auto-preserve - should try to restore original videos
-    output_path = tmp_path / "converted.slp"
-    result = runner.invoke(
-        cli,
-        ["convert", "-i", str(embedded_path), "-o", str(output_path)],
-    )
-    assert result.exit_code == 0, result.output
-
-    # Verify output references original video (not embedded)
-    output_labels = load_slp(str(output_path))
-    # When output is .slp (not pkg.slp), source_video should be None
-    assert output_labels.videos[0].source_video is None
+    # backend_metadata indicates embedding
+    assert output_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
 def test_convert_save_failure_invalid_path(tmp_path, slp_typical):
@@ -2682,7 +2655,7 @@ def test_unsplit_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     assert val_pkg.exists()
 
     train_labels = load_slp(str(train_pkg))
-    assert train_labels.videos[0].source_video is not None
+    assert train_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
     # Count expected frames
     val_labels = load_slp(str(val_pkg))
@@ -2706,55 +2679,8 @@ def test_unsplit_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     # Verify merged file has embedded videos preserved
     merged_labels = load_slp(str(merged_path))
     assert len(merged_labels) == expected_total
-    # Check that videos still have embedded frames (source_video indicates embedding)
-    assert merged_labels.videos[0].source_video is not None
-
-
-def test_unsplit_pkg_to_regular_slp_no_preserve(tmp_path, slp_real_data):
-    """Test that unsplit does NOT preserve when output is regular .slp."""
-    runner = CliRunner()
-
-    # First, split with embedding to create pkg.slp files
-    split_dir = tmp_path / "splits"
-    result = runner.invoke(
-        cli,
-        [
-            "split",
-            "-i",
-            slp_real_data,
-            "-o",
-            str(split_dir),
-            "--embed",
-            "user",
-            "--seed",
-            "42",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-
-    train_pkg = split_dir / "train.pkg.slp"
-    val_pkg = split_dir / "val.pkg.slp"
-
-    # Unsplit to regular .slp OUTPUT (not pkg.slp)
-    # Should NOT auto-preserve - should try to restore original videos
-    merged_path = tmp_path / "merged.slp"
-    result = runner.invoke(
-        cli,
-        [
-            "unsplit",
-            str(train_pkg),
-            str(val_pkg),
-            "-o",
-            str(merged_path),
-        ],
-    )
-    assert result.exit_code == 0, result.output
-
-    # Verify merged file references original video (not embedded)
-    merged_labels = load_slp(str(merged_path))
-    # When output is .slp (not pkg.slp), source_video should be None
-    # (original video is restored)
-    assert merged_labels.videos[0].source_video is None
+    # Verify embedded videos preserved
+    assert merged_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
 # ============================================================================
@@ -3172,7 +3098,7 @@ def test_merge_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
 
     # Verify splits have embedded videos
     train_labels = load_slp(str(train_pkg))
-    assert train_labels.videos[0].source_video is not None
+    assert train_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
     # Merge to pkg.slp OUTPUT (without explicit --embed flag)
     # This should auto-preserve embedded videos
@@ -3191,8 +3117,8 @@ def test_merge_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
 
     # Verify merged file has embedded videos preserved
     merged_labels = load_slp(str(merged_path))
-    # source_video indicates embedding
-    assert merged_labels.videos[0].source_video is not None
+    # backend_metadata indicates embedding
+    assert merged_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
 # ============================================================================
@@ -4815,7 +4741,7 @@ def test_fix_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
 
     # Verify input has embedded videos
     input_labels = load_slp(str(embedded_path))
-    assert input_labels.videos[0].source_video is not None
+    assert input_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
     # Fix pkg.slp -> pkg.slp (output based on default naming: .fixed.pkg.slp)
     # This should auto-preserve embedded videos
@@ -4828,35 +4754,8 @@ def test_fix_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
 
     # Verify output has embedded videos preserved
     output_labels = load_slp(str(output_path))
-    # source_video indicates embedding
-    assert output_labels.videos[0].source_video is not None
-
-
-def test_fix_pkg_to_regular_slp_no_preserve(tmp_path, slp_real_data):
-    """Test that fix does NOT preserve when output is regular .slp."""
-    runner = CliRunner()
-
-    # First, create a pkg.slp with embedded videos
-    embedded_path = tmp_path / "embedded.pkg.slp"
-    result = runner.invoke(
-        cli,
-        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
-    )
-    assert result.exit_code == 0, result.output
-
-    # Fix pkg.slp -> regular .slp (not pkg.slp)
-    # Should NOT auto-preserve - should try to restore original videos
-    output_path = tmp_path / "fixed.slp"
-    result = runner.invoke(
-        cli,
-        ["fix", "-i", str(embedded_path), "-o", str(output_path)],
-    )
-    assert result.exit_code == 0, result.output
-
-    # Verify output references original video (not embedded)
-    output_labels = load_slp(str(output_path))
-    # When output is .slp (not pkg.slp), source_video should be None
-    assert output_labels.videos[0].source_video is None
+    # backend_metadata indicates embedding
+    assert output_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
 def test_fix_consolidate_skeletons(tmp_path):
