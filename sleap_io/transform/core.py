@@ -1,0 +1,367 @@
+"""Core Transform class for composable geometric transformations.
+
+This module defines the Transform dataclass which represents a composable
+geometric transformation that can be applied to both video frames and
+landmark coordinates.
+"""
+
+from __future__ import annotations
+
+import attrs
+import numpy as np
+
+
+@attrs.define
+class Transform:
+    """Composable geometric transformation for video frames and coordinates.
+
+    Transforms are applied in a fixed pipeline order: crop -> scale -> rotate -> pad.
+    This ensures consistent and predictable behavior when combining transforms.
+
+    Attributes:
+        crop: Crop region as (x1, y1, x2, y2) pixel coordinates. The region from
+            (x1, y1) to (x2, y2) is extracted, where (x2, y2) is exclusive.
+        scale: Scale factors as (scale_x, scale_y). Use (0.5, 0.5) for 50% size.
+            Can also be specified as a single float for uniform scaling.
+        rotate: Rotation angle in degrees. Positive values rotate clockwise.
+        pad: Padding as (top, right, bottom, left) in pixels.
+        quality: Interpolation quality for frame transforms. One of "nearest",
+            "bilinear", or "bicubic".
+        fill: Fill value for out-of-bounds regions. Can be a single int for
+            grayscale or (R, G, B) tuple for color.
+    """
+
+    crop: tuple[int, int, int, int] | None = None
+    scale: tuple[float, float] | None = None
+    rotate: float | None = None
+    pad: tuple[int, int, int, int] | None = None
+    quality: str = "bilinear"
+    fill: tuple[int, ...] | int = 0
+
+    def output_size(self, input_size: tuple[int, int]) -> tuple[int, int]:
+        """Compute output dimensions after applying the transformation.
+
+        Args:
+            input_size: Input (width, height) in pixels.
+
+        Returns:
+            Output (width, height) in pixels.
+        """
+        width, height = input_size
+
+        # Apply crop
+        if self.crop is not None:
+            x1, y1, x2, y2 = self.crop
+            width = x2 - x1
+            height = y2 - y1
+
+        # Apply scale
+        if self.scale is not None:
+            scale_x, scale_y = self.scale
+            width = int(round(width * scale_x))
+            height = int(round(height * scale_y))
+
+        # Rotation does not change canvas size (clips to original)
+
+        # Apply pad
+        if self.pad is not None:
+            top, right, bottom, left = self.pad
+            width = width + left + right
+            height = height + top + bottom
+
+        return (width, height)
+
+    def to_matrix(self, input_size: tuple[int, int]) -> np.ndarray:
+        """Compute combined 3x3 affine transformation matrix.
+
+        The transformation matrix can be used to transform homogeneous coordinates:
+            [new_x]   [a  b  tx] [old_x]
+            [new_y] = [c  d  ty] [old_y]
+            [  1  ]   [0  0   1] [  1  ]
+
+        Args:
+            input_size: Input (width, height) in pixels.
+
+        Returns:
+            3x3 affine transformation matrix as numpy array.
+        """
+        # Start with identity matrix
+        matrix = np.eye(3, dtype=np.float64)
+
+        width, height = input_size
+
+        # Apply crop (translate by negative crop origin)
+        if self.crop is not None:
+            x1, y1, x2, y2 = self.crop
+            crop_matrix = np.array(
+                [[1, 0, -x1], [0, 1, -y1], [0, 0, 1]], dtype=np.float64
+            )
+            matrix = crop_matrix @ matrix
+            width = x2 - x1
+            height = y2 - y1
+
+        # Apply scale
+        if self.scale is not None:
+            scale_x, scale_y = self.scale
+            scale_matrix = np.array(
+                [[scale_x, 0, 0], [0, scale_y, 0], [0, 0, 1]], dtype=np.float64
+            )
+            matrix = scale_matrix @ matrix
+            width = int(round(width * scale_x))
+            height = int(round(height * scale_y))
+
+        # Apply rotation (about center of current frame)
+        if self.rotate is not None and self.rotate != 0:
+            angle_rad = np.radians(self.rotate)
+            cos_a = np.cos(angle_rad)
+            sin_a = np.sin(angle_rad)
+            cx, cy = width / 2, height / 2
+
+            # Translate to origin, rotate, translate back
+            # Combined: R' = T(cx,cy) @ R @ T(-cx,-cy)
+            rotate_matrix = np.array(
+                [
+                    [cos_a, sin_a, cx - cos_a * cx - sin_a * cy],
+                    [-sin_a, cos_a, cy + sin_a * cx - cos_a * cy],
+                    [0, 0, 1],
+                ],
+                dtype=np.float64,
+            )
+            matrix = rotate_matrix @ matrix
+
+        # Apply pad (translate by padding offset)
+        if self.pad is not None:
+            top, right, bottom, left = self.pad
+            pad_matrix = np.array(
+                [[1, 0, left], [0, 1, top], [0, 0, 1]], dtype=np.float64
+            )
+            matrix = pad_matrix @ matrix
+
+        return matrix
+
+    def apply_to_points(
+        self, points: np.ndarray, input_size: tuple[int, int]
+    ) -> np.ndarray:
+        """Transform landmark coordinates.
+
+        Args:
+            points: Coordinate array of shape (n_points, 2) or (n_points, D) where
+                the first two columns are (x, y) coordinates. NaN values are preserved.
+            input_size: Input (width, height) in pixels.
+
+        Returns:
+            Transformed coordinates with same shape as input.
+        """
+        if points.size == 0:
+            return points.copy()
+
+        # Handle both (n, 2) and (n, D) arrays
+        xy = points[..., :2].copy()
+        result = points.copy()
+
+        # Get transformation matrix
+        matrix = self.to_matrix(input_size)
+
+        # Create mask for valid (non-NaN) points
+        valid_mask = ~np.isnan(xy).any(axis=-1)
+
+        if valid_mask.any():
+            # Convert to homogeneous coordinates
+            valid_xy = xy[valid_mask]
+            ones = np.ones((valid_xy.shape[0], 1), dtype=np.float64)
+            homogeneous = np.hstack([valid_xy, ones])
+
+            # Apply transformation
+            transformed = (matrix @ homogeneous.T).T
+
+            # Extract x, y from homogeneous coordinates
+            result[valid_mask, 0] = transformed[:, 0]
+            result[valid_mask, 1] = transformed[:, 1]
+
+        return result
+
+    def apply_to_frame(self, frame: np.ndarray) -> np.ndarray:
+        """Transform a video frame.
+
+        Args:
+            frame: Input frame as numpy array with shape (H, W) or (H, W, C).
+
+        Returns:
+            Transformed frame as numpy array.
+        """
+        from sleap_io.transform.frame import transform_frame
+
+        return transform_frame(
+            frame,
+            crop=self.crop,
+            scale=self.scale,
+            rotate=self.rotate,
+            pad=self.pad,
+            quality=self.quality,
+            fill=self.fill,
+        )
+
+    def __bool__(self) -> bool:
+        """Return True if any transformation is defined."""
+        return any(
+            [
+                self.crop is not None,
+                self.scale is not None,
+                self.rotate is not None and self.rotate != 0,
+                self.pad is not None and any(p != 0 for p in self.pad),
+            ]
+        )
+
+
+def parse_scale(value: str) -> tuple[float, float]:
+    """Parse scale value from CLI string.
+
+    Args:
+        value: Scale string in one of these formats:
+            - "0.5" -> uniform 50% scale
+            - "640" -> width=640, height auto (aspect preserved)
+            - "640,-1" -> width=640, height auto
+            - "-1,480" -> height=480, width auto
+            - "640,480" -> exact dimensions
+            - "0.5,0.75" -> different ratios per axis
+
+    Returns:
+        Tuple of (scale_x, scale_y) factors. Returns None for auto-compute
+        dimensions which must be resolved with input frame size.
+
+    Raises:
+        ValueError: If the value cannot be parsed.
+    """
+    parts = value.split(",")
+
+    if len(parts) == 1:
+        # Single value: ratio or target width
+        val = float(parts[0])
+        if "." in parts[0] or val < 1:
+            # Ratio
+            return (val, val)
+        else:
+            # Target width (will need input size to compute ratio)
+            # Return as negative to indicate pixel mode
+            return (-val, -1.0)
+
+    elif len(parts) == 2:
+        val1 = float(parts[0])
+        val2 = float(parts[1])
+
+        # Check if both are ratios
+        if ("." in parts[0] or val1 < 1) and ("." in parts[1] or val2 < 1 or val2 < 0):
+            if val1 < 0:
+                val1 = -1.0  # auto
+            if val2 < 0:
+                val2 = -1.0  # auto
+            return (val1, val2)
+        else:
+            # Pixel dimensions (negative indicates pixel mode)
+            return (-val1 if val1 > 0 else val1, -val2 if val2 > 0 else val2)
+    else:
+        raise ValueError(f"Invalid scale format: {value}")
+
+
+def resolve_scale(
+    scale: tuple[float, float], input_size: tuple[int, int]
+) -> tuple[float, float]:
+    """Resolve scale factors from parsed scale value.
+
+    Args:
+        scale: Scale tuple from parse_scale(). Negative values indicate pixel
+            dimensions, -1 indicates auto-compute.
+        input_size: Input (width, height) in pixels.
+
+    Returns:
+        Tuple of (scale_x, scale_y) as positive float ratios.
+    """
+    scale_x, scale_y = scale
+    width, height = input_size
+
+    # Both are positive ratios - return as-is
+    if scale_x > 0 and scale_y > 0:
+        return (scale_x, scale_y)
+
+    # Convert negative pixel values to ratios
+    target_w = -scale_x if scale_x < 0 and scale_x != -1 else None
+    target_h = -scale_y if scale_y < 0 and scale_y != -1 else None
+
+    if target_w is not None and target_h is not None:
+        # Both dimensions specified
+        return (target_w / width, target_h / height)
+    elif target_w is not None:
+        # Width specified, auto height
+        ratio = target_w / width
+        return (ratio, ratio)
+    elif target_h is not None:
+        # Height specified, auto width
+        ratio = target_h / height
+        return (ratio, ratio)
+    else:
+        # Both auto - this shouldn't happen in valid input
+        return (1.0, 1.0)
+
+
+def parse_crop(value: str, input_size: tuple[int, int] | None = None) -> tuple[int, ...]:
+    """Parse crop value from CLI string.
+
+    Args:
+        value: Crop string in format "x1,y1,x2,y2". Values can be:
+            - Integers: pixel coordinates
+            - Floats in [0.0, 1.0]: normalized coordinates
+        input_size: Input (width, height) for resolving normalized coordinates.
+            Required if using normalized values.
+
+    Returns:
+        Tuple of (x1, y1, x2, y2) as integer pixel coordinates.
+
+    Raises:
+        ValueError: If the value cannot be parsed or normalized coords used
+            without input_size.
+    """
+    parts = value.split(",")
+    if len(parts) != 4:
+        raise ValueError(f"Crop must have 4 values (x1,y1,x2,y2), got: {value}")
+
+    values = [float(p) for p in parts]
+
+    # Check if normalized (all floats in [0, 1])
+    is_normalized = all("." in p for p in parts) and all(0 <= v <= 1 for v in values)
+
+    if is_normalized:
+        if input_size is None:
+            raise ValueError("input_size required for normalized crop coordinates")
+        width, height = input_size
+        x1 = int(round(values[0] * width))
+        y1 = int(round(values[1] * height))
+        x2 = int(round(values[2] * width))
+        y2 = int(round(values[3] * height))
+    else:
+        x1, y1, x2, y2 = [int(v) for v in values]
+
+    return (x1, y1, x2, y2)
+
+
+def parse_pad(value: str) -> tuple[int, int, int, int]:
+    """Parse padding value from CLI string.
+
+    Args:
+        value: Padding string in format "top,right,bottom,left" or single value
+            for uniform padding.
+
+    Returns:
+        Tuple of (top, right, bottom, left) as integers.
+
+    Raises:
+        ValueError: If the value cannot be parsed.
+    """
+    parts = value.split(",")
+
+    if len(parts) == 1:
+        val = int(parts[0])
+        return (val, val, val, val)
+    elif len(parts) == 4:
+        return tuple(int(p) for p in parts)  # type: ignore
+    else:
+        raise ValueError(f"Padding must have 1 or 4 values, got: {value}")
