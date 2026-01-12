@@ -315,6 +315,44 @@ class TestFrameTransformsGrayscale:
         # After clockwise 90 degree rotation, top-left becomes top-right
         assert result[0:10, 90:100].mean() > 200
 
+    def test_rotate_frame_tuple_fill(self):
+        """Test rotate_frame with tuple fill color."""
+        # RGB frame
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        frame[40:60, 40:60] = [255, 255, 255]
+
+        # Use tuple fill instead of int
+        result = rotate_frame(frame, 45, fill=(128, 128, 128))
+
+        assert result.shape == (100, 100, 3)
+        # Corners should have fill color
+        assert result[0, 0, 0] == 128
+
+    def test_crop_frame_oob_3d(self):
+        """Test crop_frame with out-of-bounds region for 3D array."""
+        frame = np.ones((100, 100, 3), dtype=np.uint8) * 255
+
+        # Crop extending beyond frame bounds (need padding)
+        result = crop_frame(frame, (-10, -10, 50, 50), fill=0)
+
+        # Should create padded output with shape (60, 60, 3)
+        assert result.shape == (60, 60, 3)
+        # Top-left corner should be filled (was out of bounds)
+        assert result[0, 0, 0] == 0
+        # Some interior should have original values
+        assert result[15, 15, 0] == 255
+
+    def test_pad_frame_with_tuple_fill(self):
+        """Test pad_frame with tuple fill color."""
+        frame = np.zeros((50, 50, 3), dtype=np.uint8)
+        result = pad_frame(frame, (10, 10, 10, 10), fill=(128, 128, 128))
+
+        assert result.shape == (70, 70, 3)
+        # Padded regions should have fill color
+        assert result[0, 0, 0] == 128
+        assert result[0, 0, 1] == 128
+        assert result[0, 0, 2] == 128
+
 
 # ============================================================================
 # Points Transform Tests
@@ -400,6 +438,19 @@ class TestPointTransforms:
         bounds = (0, 0, 100, 100)
         assert count_out_of_bounds(points, bounds) == 1
 
+    def test_transform_points_empty(self):
+        """Test transform_points with empty array."""
+        points = np.array([]).reshape(0, 2)
+        matrix = np.eye(3)
+        result = transform_points(points, matrix)
+        assert result.shape == (0, 2)
+
+    def test_count_out_of_bounds_all_nan(self):
+        """Test count_out_of_bounds when all points are NaN."""
+        points = np.array([[np.nan, np.nan], [np.nan, np.nan]])
+        count = count_out_of_bounds(points, (0, 0, 100, 100))
+        assert count == 0
+
 
 # ============================================================================
 # CLI Parsing Tests
@@ -463,6 +514,24 @@ class TestParsing:
         """Test resolving scale with only height specified."""
         result = resolve_scale((-1.0, -240), (640, 480))
         assert result == (0.5, 0.5)
+
+    def test_parse_scale_invalid_format(self):
+        """Test that invalid scale format raises error."""
+        with pytest.raises(ValueError, match="Invalid scale format"):
+            parse_scale("1,2,3")
+
+    def test_parse_scale_auto_both_axes(self):
+        """Test parsing auto for both axes."""
+        result = parse_scale("-1,-1")
+        # Both are auto (negative)
+        assert result[0] < 0
+        assert result[1] < 0
+
+    def test_resolve_scale_both_auto(self):
+        """Test resolving scale when both dimensions are auto."""
+        # This is an edge case that returns (1.0, 1.0)
+        result = resolve_scale((-1.0, -1.0), (640, 480))
+        assert result == (1.0, 1.0)
 
     def test_parse_crop_pixels(self):
         """Test parsing pixel coordinates."""
@@ -665,3 +734,233 @@ class TestVideoTransforms:
         assert len(result.labeled_frames) > 0
         # In dry-run, video dir should not be created
         assert not video_output_dir.exists()
+
+    def test_transform_labels_default_video_dir(self, tmp_path, slp_real_data):
+        """Test transform_labels with default video output directory."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.slp"
+        # Don't specify video_output_dir - should default
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=output_path,
+            video_output_dir=None,  # Use default
+            crf=35,
+        )
+
+        # Default dir should be created with name based on output_path
+        expected_dir = output_path.with_name("output.videos")
+        assert expected_dir.exists()
+
+    def test_transform_labels_per_video_transforms(self, tmp_path, slp_real_data):
+        """Test transform_labels with per-video transforms dict."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Use dict instead of single Transform
+        transforms_dict = {0: Transform(scale=(0.5, 0.5))}
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transforms_dict,
+            output_path=tmp_path / "output.slp",
+            video_output_dir=tmp_path / "videos",
+            crf=35,
+        )
+
+        assert result is not None
+        assert len(result.labeled_frames) > 0
+
+    def test_transform_labels_skip_no_transform(self, tmp_path, slp_real_data):
+        """Test that videos without transform are skipped."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Use an index that doesn't exist - video 0 should be skipped
+        transforms_dict = {99: Transform(scale=(0.5, 0.5))}
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transforms_dict,
+            output_path=tmp_path / "output.slp",
+            video_output_dir=tmp_path / "videos",
+            dry_run=True,
+        )
+
+        # Should return without processing (no transform for video 0)
+        assert result is not None
+
+    def test_compute_transform_summary_single_transform(self, slp_real_data):
+        """Test compute_transform_summary with a single Transform."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        transform = Transform(scale=(0.5, 0.5))
+        summary = compute_transform_summary(labels, transform)
+
+        assert "videos" in summary
+        assert "total_frames" in summary
+        assert "total_instances" in summary
+        assert "warnings" in summary
+        assert len(summary["videos"]) == len(labels.videos)
+
+        # Check video info
+        video_info = summary["videos"][0]
+        assert video_info["index"] == 0
+        assert video_info["has_transform"] is True
+        assert video_info["input_size"] is not None
+        assert video_info["output_size"] is not None
+        assert "transform" in video_info
+
+    def test_compute_transform_summary_with_dict(self, slp_real_data):
+        """Test compute_transform_summary with dict of transforms."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Use dict with transform only for video 0
+        transforms_dict = {0: Transform(scale=(0.5, 0.5))}
+        summary = compute_transform_summary(labels, transforms_dict)
+
+        assert len(summary["videos"]) == len(labels.videos)
+        assert summary["videos"][0]["has_transform"] is True
+
+    def test_compute_transform_summary_small_output_warning(self, slp_real_data):
+        """Test that compute_transform_summary warns about very small output."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Scale down so much that output is very small
+        transform = Transform(scale=(0.01, 0.01))
+        summary = compute_transform_summary(labels, transform)
+
+        # Should have a warning about small output size
+        assert len(summary["warnings"]) > 0
+        assert "small" in summary["warnings"][0].lower()
+
+    def test_compute_transform_summary_no_transform(self, slp_real_data):
+        """Test compute_transform_summary when video has no transform."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Empty transforms dict - no video gets a transform
+        transforms_dict: dict[int, Transform] = {}
+        summary = compute_transform_summary(labels, transforms_dict)
+
+        # Video should show no transform
+        assert summary["videos"][0]["has_transform"] is False
+
+    def test_transform_labels_with_progress_callback(self, tmp_path, slp_real_data):
+        """Test transform_labels with progress callback."""
+        import sleap_io as sio
+
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+
+        transform = Transform(scale=(0.5, 0.5))
+        progress_calls = []
+
+        def progress_callback(video_name: str, current: int, total: int) -> None:
+            progress_calls.append((video_name, current, total))
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=tmp_path / "output.slp",
+            video_output_dir=tmp_path / "videos",
+            progress_callback=progress_callback,
+            crf=35,
+        )
+
+        # Progress callback should have been called
+        assert len(progress_calls) > 0
+        # Each call should have video name and frame counts
+        assert all(isinstance(call[0], str) for call in progress_calls)
+        assert all(call[1] <= call[2] for call in progress_calls)
+
+    def test_transform_labels_multiview(self, tmp_path, slp_real_data):
+        """Test transform_labels with multiple videos exercises skip path."""
+        import sleap_io as sio
+
+        from sleap_io.model.instance import Instance, PredictedInstance
+        from sleap_io.model.labeled_frame import LabeledFrame
+        from sleap_io.model.video import Video
+        from sleap_io.transform.video import transform_labels
+
+        # Load base labels
+        labels = sio.load_slp(slp_real_data)
+        original_video = labels.videos[0]
+
+        # Create a second synthetic video (dummy - won't be processed)
+        dummy_video = Video(
+            filename="dummy.mp4", backend_metadata={"shape": (10, 100, 100, 3)}
+        )
+        labels.videos.append(dummy_video)
+
+        # Add a labeled frame for the second video
+        dummy_frame = LabeledFrame(video=dummy_video, frame_idx=0)
+        labels.labeled_frames.append(dummy_frame)
+
+        # Transform only video 0 - video 1's frames should be skipped
+        transforms_dict = {0: Transform(scale=(0.5, 0.5))}
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transforms_dict,
+            output_path=tmp_path / "output.slp",
+            video_output_dir=tmp_path / "videos",
+            dry_run=True,  # Dry run to skip video processing
+        )
+
+        assert result is not None
+        # Both videos should be in result
+        assert len(result.videos) == 2
+
+    def test_compute_transform_summary_video_no_shape(self, slp_real_data):
+        """Test compute_transform_summary when video has no shape info."""
+        import sleap_io as sio
+
+        from sleap_io.model.video import Video
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Add a video without shape info (no backend, no metadata)
+        no_shape_video = Video(filename="nonexistent.mp4", open_backend=False)
+        labels.videos.append(no_shape_video)
+
+        transform = Transform(scale=(0.5, 0.5))
+        summary = compute_transform_summary(labels, transform)
+
+        # Should have info for both videos
+        assert len(summary["videos"]) == 2
+        # First video should have shape info
+        assert summary["videos"][0]["input_size"] is not None
+        # Second video (no shape) should have None for input_size and n_frames
+        assert summary["videos"][1]["input_size"] is None
+        assert summary["videos"][1]["n_frames"] is None
