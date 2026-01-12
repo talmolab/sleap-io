@@ -137,8 +137,11 @@ extra:
 extra_css:
   - css/mkdocstrings.css
 
+extra_javascript:
+  - js/toc-code-style.js
+
 copyright: >
-  Copyright &copy; 2022 - 2025 Talmo Lab
+  Copyright &copy; 2022 - 2026 Talmo Lab
 
 nav:
   - Overview: index.md
