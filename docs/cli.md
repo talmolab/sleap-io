@@ -70,6 +70,7 @@ sio fix --help
 sio render --help
 sio trim --help
 sio reencode --help
+sio transform --help
 
 # Check version and installed plugins
 sio --version
@@ -151,6 +152,15 @@ sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5  # Max reliability
 sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low  # Downsample
 sio reencode video.mp4 -o output.mp4 --dry-run             # Show ffmpeg command
 sio reencode project.slp -o project.reencoded.slp          # Batch reencode all videos in SLP
+
+# Transform video and adjust landmark coordinates
+sio transform labels.slp --scale 0.5 -o scaled.slp         # Scale down 50%
+sio transform labels.slp --crop 100,100,500,500 -o crop.slp  # Crop to region
+sio transform labels.slp --rotate 90 -o rotated.slp        # Rotate 90 degrees
+sio transform labels.slp --crop 100,100,500,500 --scale 2.0 -o zoomed.slp
+sio transform multi_cam.slp --crop 0:100,100,500,500 -o cropped.slp  # Per-video
+sio transform labels.slp --scale 0.5 --dry-run             # Preview transforms
+sio transform video.mp4 --scale 0.5 -o video_scaled.mp4    # Transform raw video
 ```
 
 ---
@@ -2087,6 +2097,304 @@ Saved: video.seekable.mp4
 
 !!! info "File size vs reliability trade-off"
     More frequent keyframes typically increase file size by 10-50% depending on video content. This trade-off is almost always worthwhile for annotation workflows—the cost of misaligned annotations due to seeking errors far exceeds the cost of additional storage.
+
+---
+
+## `sio transform`
+
+Apply geometric transformations (crop, scale, rotate, pad) to videos while automatically adjusting all landmark coordinates to maintain alignment. This is useful for resizing datasets, extracting regions of interest, or standardizing video dimensions across multi-camera setups.
+
+```bash
+sio transform <input> [OPTIONS] -o <output>
+sio transform -i <input> [OPTIONS] -o <output>
+```
+
+### Basic Usage
+
+```bash
+# Scale down 50%
+sio transform labels.slp --scale 0.5 -o scaled.slp
+
+# Crop to region (x1,y1,x2,y2)
+sio transform labels.slp --crop 100,100,500,500 -o cropped.slp
+
+# Rotate 90 degrees clockwise
+sio transform labels.slp --rotate 90 -o rotated.slp
+
+# Add 50px padding on all sides
+sio transform labels.slp --pad 50,50,50,50 -o padded.slp
+
+# Combined transforms (applied in order: crop -> scale -> rotate -> pad)
+sio transform labels.slp --crop 100,100,500,500 --scale 2.0 -o zoomed.slp
+
+# Preview transforms without processing
+sio transform labels.slp --scale 0.5 --dry-run
+```
+
+**Example output:**
+
+```
+Loading SLP: labels.slp
+  Found 1 video(s)
+
+Transform Summary:
+
+  Video 0: video.mp4
+    Size: 1920x1080 -> 960x540
+    Scale: (0.5, 0.5)
+
+Saving SLP: scaled.slp
+Saved: scaled.slp
+```
+
+### Transform Pipeline
+
+Transforms are always applied in a fixed order: **crop → scale → rotate → pad**
+
+This order ensures predictable results:
+
+1. **Crop** extracts a region of interest from the original frame
+2. **Scale** resizes the cropped region
+3. **Rotate** rotates around the frame center
+4. **Pad** adds borders to the final result
+
+All landmark coordinates are automatically transformed using the corresponding affine matrix to maintain alignment with the video.
+
+### Options Reference
+
+#### Input/Output Options
+
+| Option | Description |
+|--------|-------------|
+| `-i, --input` | Input SLP file or video (can also pass as positional argument) |
+| `-o, --output` | Output path. Default: `{input}.transformed.slp` or `.mp4` |
+| `--overwrite, -y` | Overwrite existing output files |
+
+#### Transform Options
+
+| Option | Format | Description |
+|--------|--------|-------------|
+| `--crop` | `[idx:]x1,y1,x2,y2` | Crop region (pixels or normalized 0.0-1.0) |
+| `--scale` | `[idx:]value` or `[idx:]w,h` | Scale factor(s) or target dimensions |
+| `--rotate` | `[idx:]degrees` | Rotation angle (clockwise positive) |
+| `--pad` | `[idx:]top,right,bottom,left` | Padding in pixels (or single value for uniform) |
+
+#### Quality & Encoding Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--quality` | `bilinear` | Interpolation: `nearest`, `bilinear`, `bicubic` |
+| `--fill` | `0` | Fill value for out-of-bounds regions (0-255) |
+| `--crf` | `25` | Video quality (0-51, lower = better) |
+| `--preset` | `superfast` | Encoding speed: `ultrafast` to `slow` |
+| `--fps` | (source) | Output frame rate |
+
+#### Execution Options
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Preview transforms without executing |
+
+### Scale Option
+
+The `--scale` option supports multiple formats:
+
+```bash
+# Uniform scaling (preserve aspect ratio)
+--scale 0.5           # 50% size
+--scale 2.0           # 200% size (use decimal for ratios)
+
+# Target width (auto-compute height to preserve aspect ratio)
+--scale 640           # Width = 640px, height auto
+--scale 640,-1        # Same as above (-1 = auto)
+
+# Target height (auto-compute width)
+--scale -1,480        # Height = 480px, width auto
+
+# Exact dimensions (may change aspect ratio)
+--scale 640,480       # Exact 640x480
+
+# Different ratios per axis
+--scale 0.5,0.75      # 50% width, 75% height
+```
+
+**Type detection:**
+
+- Values with decimal point → ratios (e.g., `0.5` = 50%)
+- Integer values → pixels (e.g., `640` = 640px)
+- `-1` → auto-compute to preserve aspect ratio
+
+### Crop Option
+
+The `--crop` option specifies a rectangular region:
+
+```bash
+# Pixel coordinates (x1, y1, x2, y2)
+--crop 100,100,500,500       # Extract 400x400 region
+
+# Normalized coordinates (0.0-1.0)
+--crop 0.25,0.25,0.75,0.75   # Center 50% of frame
+```
+
+**Type detection:**
+
+- All values have decimals AND in [0.0, 1.0] → normalized
+- Otherwise → pixel coordinates
+
+**Coordinate convention:**
+
+- Origin at top-left (0, 0)
+- (x2, y2) is exclusive (Python slicing style)
+
+### Per-Video Parameters
+
+For multi-video SLP files, you can apply different transforms to each video using the `idx:` prefix:
+
+```bash
+# Same transform for all videos
+sio transform multi_cam.slp --scale 0.5 -o scaled.slp
+
+# Different crops per camera
+sio transform multi_cam.slp \
+    --crop 0:100,100,500,500 \
+    --crop 1:200,200,600,600 \
+    --crop 2:150,150,550,550 \
+    -o cropped.slp
+
+# Mix uniform and per-video parameters
+sio transform multi_cam.slp \
+    --scale 0.5 \
+    --crop 0:100,100,500,500 \
+    --crop 1:200,200,600,600 \
+    -o processed.slp
+```
+
+**Precedence:** Indexed parameters (`0:...`) override uniform parameters for that video.
+
+### Raw Video Mode
+
+The transform command can also process standalone video files (without labels):
+
+```bash
+# Transform video file directly
+sio transform video.avi --scale 0.5 -o video_scaled.mp4
+
+# Multiple transforms
+sio transform video.mp4 \
+    --crop 100,100,500,500 \
+    --rotate 90 \
+    -o video_transformed.mp4
+```
+
+When transforming raw video:
+
+- Output is always MP4 format
+- No coordinate transformations (no landmarks to adjust)
+- Same transform options available
+
+### Output Structure
+
+#### SLP Input
+
+```
+input.slp
+↓
+output.transformed.slp
+output.transformed.videos/
+├── video1.transformed.mp4
+├── video2.transformed.mp4
+└── ...
+```
+
+The output SLP file references the newly created videos in the `.videos/` directory.
+
+#### Raw Video Input
+
+```
+input.avi → output.transformed.mp4
+```
+
+### Common Scenarios
+
+**Scaling down large videos for faster training:**
+
+```bash
+sio transform labels.slp --scale 0.5 -o labels_half.slp
+```
+
+**Extracting a region of interest:**
+
+```bash
+# Crop to arena or enclosure
+sio transform labels.slp --crop 200,150,800,650 -o arena.slp
+
+# Zoom into cropped region
+sio transform labels.slp --crop 200,150,800,650 --scale 2.0 -o zoomed.slp
+```
+
+**Standardizing multi-camera dimensions:**
+
+```bash
+# Resize all cameras to 640x480
+sio transform multi_view.slp --scale 640,480 -o standardized.slp
+
+# Different crops per camera to align FOVs
+sio transform multi_view.slp \
+    --crop 0:100,50,740,530 \
+    --crop 1:80,60,720,540 \
+    --scale 640,480 \
+    -o aligned.slp
+```
+
+**Rotating videos:**
+
+```bash
+# Rotate 90 degrees clockwise
+sio transform labels.slp --rotate 90 -o rotated.slp
+
+# Rotate 180 degrees (flip)
+sio transform labels.slp --rotate 180 -o flipped.slp
+
+# Rotate counter-clockwise
+sio transform labels.slp --rotate -90 -o rotated_ccw.slp
+```
+
+**Adding padding for augmentation:**
+
+```bash
+# Add 50px black border on all sides
+sio transform labels.slp --pad 50 -o padded.slp
+
+# Asymmetric padding
+sio transform labels.slp --pad 100,50,100,50 -o padded.slp
+```
+
+**Preview before processing:**
+
+```bash
+# Check what will happen without writing files
+sio transform labels.slp \
+    --crop 100,100,500,500 \
+    --scale 2.0 \
+    --dry-run
+```
+
+### Coordinate Transformation
+
+All landmark coordinates are automatically transformed using an affine matrix that combines all operations:
+
+| Transform | Coordinate Adjustment |
+|-----------|----------------------|
+| **Crop** | `new = old - offset` |
+| **Scale** | `new = old * factor` |
+| **Rotate** | Affine rotation around center |
+| **Pad** | `new = old + padding` |
+
+The combined transformation ensures that:
+
+- Landmarks remain aligned with the animal in the transformed video
+- Point coordinates may become negative or exceed frame bounds if animals move outside the crop region (coordinates are preserved, not clipped)
+- Sub-pixel coordinates are preserved for accurate representation
 
 ---
 
