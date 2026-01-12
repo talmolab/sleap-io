@@ -4576,7 +4576,7 @@ def _reencode_slp(
         console.print(f"\n[bold]Video {i + 1}/{len(labels.videos)}:[/]")
 
         backend = video.backend
-        backend_type = type(backend).__name__ if backend else "Unknown"
+        backend_type = type(backend).__name__ if backend is not None else "Unknown"
 
         # Skip unsupported backends
         if isinstance(backend, (ImageVideo, TiffVideo)):
