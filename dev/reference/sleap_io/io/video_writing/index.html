@@ -2345,7 +2345,7 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_writing.cpython-312.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_writing.cpython-313.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-module-attribute&quot;&gt;&lt;code&gt;module-attribute&lt;/code&gt;&lt;/small&gt;
@@ -2432,7 +2432,7 @@
 
 
 <h3 id="sleap_io.io.video_writing.__cached__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_writing.cpython-312.pyc&#39;</span></code>
+            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_writing.cpython-313.pyc&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -2450,7 +2450,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2480,7 +2480,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2510,7 +2510,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2540,7 +2540,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2570,7 +2570,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2708,6 +2708,14 @@ to ensure reliable random access.</p>
             </tr>
             <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fps&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;30&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;quality&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;output_params&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;NOTHING&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;writer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;frame_index&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_writing.MJPEGFrameWriter.__init__&lt;/code&gt;)" href="#sleap_io.io.video_writing.MJPEGFrameWriter.__init__">__init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class MJPEGFrameWriter.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_writing.MJPEGFrameWriter.__replace__&lt;/code&gt;)" href="#sleap_io.io.video_writing.MJPEGFrameWriter.__replace__">__replace__</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Method generated by attrs for class MJPEGFrameWriter.</p>
@@ -2944,8 +2952,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -2958,7 +2965,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.video_writing.MJPEGFrameWriter.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -3182,7 +3189,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.video_writing.MJPEGFrameWriter.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video writer for MJPEG format optimized for seekable frame containers.</span><span class="se">\n\n</span><span class="s1">    This writer is designed for scientific/archival use where frames from arbitrary</span><span class="se">\n</span><span class="s1">    indices need to be independently seekable. Each frame is intra-coded (I-frame only)</span><span class="se">\n</span><span class="s1">    to ensure reliable random access.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: Path to output MJPEG video file.</span><span class="se">\n</span><span class="s1">        fps: Nominal frames per second. Defaults to 30.</span><span class="se">\n</span><span class="s1">        quality: MJPEG quality level (2-31, lower is better). Defaults to 2.</span><span class="se">\n\n</span><span class="s1">        output_params: Additional output parameters for FFMPEG.</span><span class="se">\n\n</span><span class="s1">    Notes:</span><span class="se">\n</span><span class="s1">        This class can be used as a context manager:</span><span class="se">\n\n</span><span class="s1">        ```python</span><span class="se">\n</span><span class="s1">        with MJPEGFrameWriter(&quot;output.avi&quot;) as writer:</span><span class="se">\n</span><span class="s1">            for frame in frames:</span><span class="se">\n</span><span class="s1">                writer.write_frame(frame)</span><span class="se">\n</span><span class="s1">        ```</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video writer for MJPEG format optimized for seekable frame containers.</span><span class="se">\n\n</span><span class="s1">This writer is designed for scientific/archival use where frames from arbitrary</span><span class="se">\n</span><span class="s1">indices need to be independently seekable. Each frame is intra-coded (I-frame only)</span><span class="se">\n</span><span class="s1">to ensure reliable random access.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: Path to output MJPEG video file.</span><span class="se">\n</span><span class="s1">    fps: Nominal frames per second. Defaults to 30.</span><span class="se">\n</span><span class="s1">    quality: MJPEG quality level (2-31, lower is better). Defaults to 2.</span><span class="se">\n\n</span><span class="s1">    output_params: Additional output parameters for FFMPEG.</span><span class="se">\n\n</span><span class="s1">Notes:</span><span class="se">\n</span><span class="s1">    This class can be used as a context manager:</span><span class="se">\n\n</span><span class="s1">    ```python</span><span class="se">\n</span><span class="s1">    with MJPEGFrameWriter(&quot;output.avi&quot;) as writer:</span><span class="se">\n</span><span class="s1">        for frame in frames:</span><span class="se">\n</span><span class="s1">            writer.write_frame(frame)</span><span class="se">\n</span><span class="s1">    ```</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -3200,8 +3207,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_writing.MJPEGFrameWriter.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">124</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_writing.MJPEGFrameWriter.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -3255,7 +3301,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -3274,6 +3320,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.video_writing.MJPEGFrameWriter.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_writing.MJPEGFrameWriter.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_frame_index&#39;</span><span class="p">,</span> <span class="s1">&#39;_writer&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_writing.MJPEGFrameWriter.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -3429,6 +3500,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-36" name="__codelineno-0-36"></a><a href="#__codelineno-0-36"><span class="linenos" data-linenos="36 "></span></a>    <span class="n">closed</span> <span class="n">after</span> <span class="n">writing</span><span class="o">.</span> <span class="n">For</span> <span class="n">example</span><span class="p">:</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.video_writing.MJPEGFrameWriter.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.video_writing.MJPEGFrameWriter.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class MJPEGFrameWriter.</p>
+
+
     </div>
 
 </div>
@@ -3904,6 +3993,14 @@ closed after writing. For example:</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_writing.VideoWriter.__replace__&lt;/code&gt;)" href="#sleap_io.io.video_writing.VideoWriter.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class VideoWriter.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_writing.VideoWriter.__repr__&lt;/code&gt;)" href="#sleap_io.io.video_writing.VideoWriter.__repr__">__repr__</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -4124,8 +4221,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -4138,7 +4234,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.video_writing.VideoWriter.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4362,7 +4458,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.video_writing.VideoWriter.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Simple video writer using imageio and FFMPEG.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: Path to output video file.</span><span class="se">\n</span><span class="s1">        fps: Frames per second. Defaults to 30.</span><span class="se">\n</span><span class="s1">        pixelformat: Pixel format for video. Defaults to &quot;yuv420p&quot;.</span><span class="se">\n</span><span class="s1">        codec: Codec to use for encoding. Defaults to &quot;libx264&quot;.</span><span class="se">\n</span><span class="s1">        crf: Constant rate factor to control lossiness of video. Values go from 2 to 32,</span><span class="se">\n</span><span class="s1">            with numbers in the 18 to 30 range being most common. Lower values mean less</span><span class="se">\n</span><span class="s1">            compressed/higher quality. Defaults to 25. No effect if codec is not</span><span class="se">\n</span><span class="s1">            &quot;libx264&quot;.</span><span class="se">\n</span><span class="s1">        preset: H264 encoding preset. Defaults to &quot;superfast&quot;. No effect if codec is not</span><span class="se">\n</span><span class="s1">            &quot;libx264&quot;.</span><span class="se">\n</span><span class="s1">        output_params: Additional output parameters for FFMPEG. This should be a list of</span><span class="se">\n</span><span class="s1">            strings corresponding to command line arguments for FFMPEG and libx264. Use</span><span class="se">\n</span><span class="s1">            `ffmpeg -h encoder=libx264` to see all options for libx264 output_params.</span><span class="se">\n\n</span><span class="s1">    Notes:</span><span class="se">\n</span><span class="s1">        This class can be used as a context manager to ensure the video is properly</span><span class="se">\n</span><span class="s1">        closed after writing. For example:</span><span class="se">\n\n</span><span class="s1">        ```python</span><span class="se">\n</span><span class="s1">        with VideoWriter(&quot;output.mp4&quot;) as writer:</span><span class="se">\n</span><span class="s1">            for frame in frames:</span><span class="se">\n</span><span class="s1">                writer(frame)</span><span class="se">\n</span><span class="s1">        ```</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Simple video writer using imageio and FFMPEG.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: Path to output video file.</span><span class="se">\n</span><span class="s1">    fps: Frames per second. Defaults to 30.</span><span class="se">\n</span><span class="s1">    pixelformat: Pixel format for video. Defaults to &quot;yuv420p&quot;.</span><span class="se">\n</span><span class="s1">    codec: Codec to use for encoding. Defaults to &quot;libx264&quot;.</span><span class="se">\n</span><span class="s1">    crf: Constant rate factor to control lossiness of video. Values go from 2 to 32,</span><span class="se">\n</span><span class="s1">        with numbers in the 18 to 30 range being most common. Lower values mean less</span><span class="se">\n</span><span class="s1">        compressed/higher quality. Defaults to 25. No effect if codec is not</span><span class="se">\n</span><span class="s1">        &quot;libx264&quot;.</span><span class="se">\n</span><span class="s1">    preset: H264 encoding preset. Defaults to &quot;superfast&quot;. No effect if codec is not</span><span class="se">\n</span><span class="s1">        &quot;libx264&quot;.</span><span class="se">\n</span><span class="s1">    output_params: Additional output parameters for FFMPEG. This should be a list of</span><span class="se">\n</span><span class="s1">        strings corresponding to command line arguments for FFMPEG and libx264. Use</span><span class="se">\n</span><span class="s1">        `ffmpeg -h encoder=libx264` to see all options for libx264 output_params.</span><span class="se">\n\n</span><span class="s1">Notes:</span><span class="se">\n</span><span class="s1">    This class can be used as a context manager to ensure the video is properly</span><span class="se">\n</span><span class="s1">    closed after writing. For example:</span><span class="se">\n\n</span><span class="s1">    ```python</span><span class="se">\n</span><span class="s1">    with VideoWriter(&quot;output.mp4&quot;) as writer:</span><span class="se">\n</span><span class="s1">        for frame in frames:</span><span class="se">\n</span><span class="s1">            writer(frame)</span><span class="se">\n</span><span class="s1">    ```</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4380,8 +4476,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_writing.VideoWriter.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">15</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_writing.VideoWriter.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -4435,7 +4570,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -4454,6 +4589,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.video_writing.VideoWriter.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_writing.VideoWriter.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_writer&#39;</span><span class="p">,)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_writing.VideoWriter.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -4676,6 +4836,24 @@ dimensions (height, width) or (height, width, channels).</p>
 <a id="__codelineno-0-41" name="__codelineno-0-41"></a><a href="#__codelineno-0-41"><span class="linenos" data-linenos="41 "></span></a>            <span class="n">writer</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.video_writing.VideoWriter.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.video_writing.VideoWriter.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class VideoWriter.</p>
+
+
     </div>
 
 </div>

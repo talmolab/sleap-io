@@ -2414,7 +2414,7 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/model/__pycache__/camera.cpython-312.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/model/__pycache__/camera.cpython-313.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-module-attribute&quot;&gt;&lt;code&gt;module-attribute&lt;/code&gt;&lt;/small&gt;
@@ -2501,7 +2501,7 @@
 
 
 <h3 id="sleap_io.model.camera.__cached__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/model/__pycache__/camera.cpython-312.pyc&#39;</span></code>
+            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/model/__pycache__/camera.cpython-313.pyc&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -2519,7 +2519,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2549,7 +2549,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2579,7 +2579,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2609,7 +2609,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2639,7 +2639,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2803,6 +2803,14 @@ type float64.</p>
             </tr>
             <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;matrix&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;([[&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;1.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;1.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]]),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dist&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;([&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rvec&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;([&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tvec&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;([&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;0.&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;metadata&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;NOTHING&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.Camera.__init__&lt;/code&gt;)" href="#sleap_io.model.camera.Camera.__init__">__init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class Camera.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.Camera.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.Camera.__replace__">__replace__</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Method generated by attrs for class Camera.</p>
@@ -3084,8 +3092,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -3098,7 +3105,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.Camera.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -3322,7 +3329,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.Camera.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;A camera used to record in a multi-view `RecordingSession`.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span><span class="se">\n</span><span class="s1">        dist: Radial-tangential distortion coefficients [k_1, k_2, p_1, p_2, k_3] of</span><span class="se">\n</span><span class="s1">            size (5,) and type float64.</span><span class="se">\n</span><span class="s1">        size: Image size (width, height) of camera in pixels of size (2,) and type int.</span><span class="se">\n</span><span class="s1">        rvec: Rotation vector in unnormalized axis-angle representation of size (3,) and</span><span class="se">\n</span><span class="s1">            type float64.</span><span class="se">\n</span><span class="s1">        tvec: Translation vector of size (3,) and type float64.</span><span class="se">\n</span><span class="s1">        extrinsic_matrix: Extrinsic matrix of camera of size (4, 4) and type float64.</span><span class="se">\n</span><span class="s1">        name: Camera name.</span><span class="se">\n</span><span class="s1">        metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;A camera used to record in a multi-view `RecordingSession`.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    matrix: Intrinsic camera matrix of size (3, 3) and type float64.</span><span class="se">\n</span><span class="s1">    dist: Radial-tangential distortion coefficients [k_1, k_2, p_1, p_2, k_3] of</span><span class="se">\n</span><span class="s1">        size (5,) and type float64.</span><span class="se">\n</span><span class="s1">    size: Image size (width, height) of camera in pixels of size (2,) and type int.</span><span class="se">\n</span><span class="s1">    rvec: Rotation vector in unnormalized axis-angle representation of size (3,) and</span><span class="se">\n</span><span class="s1">        type float64.</span><span class="se">\n</span><span class="s1">    tvec: Translation vector of size (3,) and type float64.</span><span class="se">\n</span><span class="s1">    extrinsic_matrix: Extrinsic matrix of camera of size (4, 4) and type float64.</span><span class="se">\n</span><span class="s1">    name: Camera name.</span><span class="se">\n</span><span class="s1">    metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -3340,8 +3347,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.Camera.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">255</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.Camera.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -3395,7 +3441,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -3414,6 +3460,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.Camera.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.Camera.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_extrinsic_matrix&#39;</span><span class="p">,</span> <span class="s1">&#39;_rvec&#39;</span><span class="p">,</span> <span class="s1">&#39;_tvec&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.Camera.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -3649,6 +3720,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-20" name="__codelineno-0-20"></a><a href="#__codelineno-0-20"><span class="linenos" data-linenos="20 "></span></a><span class="s2">    2. A 3x3 rotation matrix to a 3D rotation vector</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.Camera.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.Camera.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class Camera.</p>
+
+
     </div>
 
 </div>
@@ -3903,6 +3992,14 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.CameraGroup.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.CameraGroup.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class CameraGroup.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.CameraGroup.__repr__&lt;/code&gt;)" href="#sleap_io.model.camera.CameraGroup.__repr__">__repr__</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -4000,8 +4097,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -4014,7 +4110,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.CameraGroup.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4238,7 +4334,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.CameraGroup.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;A group of cameras used to record a multi-view `RecordingSession`.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        cameras: List of `Camera` objects in the group.</span><span class="se">\n</span><span class="s1">        metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;A group of cameras used to record a multi-view `RecordingSession`.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    cameras: List of `Camera` objects in the group.</span><span class="se">\n</span><span class="s1">    metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4256,8 +4352,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.CameraGroup.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">110</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.CameraGroup.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -4311,7 +4446,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -4330,6 +4465,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.CameraGroup.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.CameraGroup.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.CameraGroup.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -4428,6 +4588,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-20" name="__codelineno-0-20"></a><a href="#__codelineno-0-20"><span class="linenos" data-linenos="20 "></span></a><span class="s2">    2. A 3x3 rotation matrix to a 3D rotation vector</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.CameraGroup.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.CameraGroup.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class CameraGroup.</p>
+
+
     </div>
 
 </div>
@@ -4606,6 +4784,14 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.FrameGroup.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.FrameGroup.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class FrameGroup.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.FrameGroup.__repr__&lt;/code&gt;)" href="#sleap_io.model.camera.FrameGroup.__repr__">__repr__</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -4752,8 +4938,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -4766,7 +4951,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.FrameGroup.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4990,7 +5175,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.FrameGroup.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Defines a group of `InstanceGroups` across views at the same frame index.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        frame_idx: Frame index for the `FrameGroup`.</span><span class="se">\n</span><span class="s1">        instance_groups: List of `InstanceGroup`s in the `FrameGroup`.</span><span class="se">\n</span><span class="s1">        cameras: List of `Camera` objects linked to `LabeledFrame`s in the `FrameGroup`.</span><span class="se">\n</span><span class="s1">        labeled_frames: List of `LabeledFrame`s in the `FrameGroup`.</span><span class="se">\n</span><span class="s1">        metadata: Metadata for the `FrameGroup` that is provided but not deserialized.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Defines a group of `InstanceGroups` across views at the same frame index.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    frame_idx: Frame index for the `FrameGroup`.</span><span class="se">\n</span><span class="s1">    instance_groups: List of `InstanceGroup`s in the `FrameGroup`.</span><span class="se">\n</span><span class="s1">    cameras: List of `Camera` objects linked to `LabeledFrame`s in the `FrameGroup`.</span><span class="se">\n</span><span class="s1">    labeled_frames: List of `LabeledFrame`s in the `FrameGroup`.</span><span class="se">\n</span><span class="s1">    metadata: Metadata for the `FrameGroup` that is provided but not deserialized.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -5008,8 +5193,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.FrameGroup.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">511</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.FrameGroup.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -5063,7 +5287,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -5082,6 +5306,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.FrameGroup.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.FrameGroup.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.FrameGroup.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -5223,6 +5472,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-19" name="__codelineno-0-19"></a><a href="#__codelineno-0-19"><span class="linenos" data-linenos="19 "></span></a><span class="s2">    1. A 3D rotation vector (axis-angle representation) to a 3x3 rotation matrix</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.FrameGroup.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.FrameGroup.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class FrameGroup.</p>
+
+
     </div>
 
 </div>
@@ -5514,6 +5781,14 @@ initialized from. This is used with human-in-the-loop workflows.</p>
               <td>
                 <div class="doc-md-description">
                   <p>Return the number of points in the instance.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.Instance.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.Instance.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class Instance.</p>
                 </div>
               </td>
             </tr>
@@ -6109,8 +6384,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -6123,7 +6397,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.Instance.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -6347,7 +6621,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.Instance.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;This class represents a ground truth instance such as an animal.</span><span class="se">\n\n</span><span class="s1">    An `Instance` has a set of landmarks (points) that correspond to a `Skeleton`. Each</span><span class="se">\n</span><span class="s1">    point is associated with a `Node` in the skeleton. The points are stored in a</span><span class="se">\n</span><span class="s1">    structured numpy array with columns for x, y, visible, complete and name.</span><span class="se">\n\n</span><span class="s1">    The `Instance` may also be associated with a `Track` which links multiple instances</span><span class="se">\n</span><span class="s1">    together across frames or videos.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        points: A numpy structured array with columns for xy, visible and complete. The</span><span class="se">\n</span><span class="s1">            array should have shape `(n_nodes,)`. This representation is useful for</span><span class="se">\n</span><span class="s1">            performance efficiency when working with large datasets.</span><span class="se">\n</span><span class="s1">        skeleton: The `Skeleton` that describes the `Node`s and `Edge`s associated with</span><span class="se">\n</span><span class="s1">            this instance.</span><span class="se">\n</span><span class="s1">        track: An optional `Track` associated with a unique animal/object across frames</span><span class="se">\n</span><span class="s1">            or videos.</span><span class="se">\n</span><span class="s1">        tracking_score: The score associated with the `Track` assignment. This is</span><span class="se">\n</span><span class="s1">            typically the value from the score matrix used in an identity assignment.</span><span class="se">\n</span><span class="s1">            This is `None` if the instance is not associated with a track or if the</span><span class="se">\n</span><span class="s1">            track was assigned manually.</span><span class="se">\n</span><span class="s1">        from_predicted: The `PredictedInstance` (if any) that this instance was</span><span class="se">\n</span><span class="s1">            initialized from. This is used with human-in-the-loop workflows.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;This class represents a ground truth instance such as an animal.</span><span class="se">\n\n</span><span class="s1">An `Instance` has a set of landmarks (points) that correspond to a `Skeleton`. Each</span><span class="se">\n</span><span class="s1">point is associated with a `Node` in the skeleton. The points are stored in a</span><span class="se">\n</span><span class="s1">structured numpy array with columns for x, y, visible, complete and name.</span><span class="se">\n\n</span><span class="s1">The `Instance` may also be associated with a `Track` which links multiple instances</span><span class="se">\n</span><span class="s1">together across frames or videos.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    points: A numpy structured array with columns for xy, visible and complete. The</span><span class="se">\n</span><span class="s1">        array should have shape `(n_nodes,)`. This representation is useful for</span><span class="se">\n</span><span class="s1">        performance efficiency when working with large datasets.</span><span class="se">\n</span><span class="s1">    skeleton: The `Skeleton` that describes the `Node`s and `Edge`s associated with</span><span class="se">\n</span><span class="s1">        this instance.</span><span class="se">\n</span><span class="s1">    track: An optional `Track` associated with a unique animal/object across frames</span><span class="se">\n</span><span class="s1">        or videos.</span><span class="se">\n</span><span class="s1">    tracking_score: The score associated with the `Track` assignment. This is</span><span class="se">\n</span><span class="s1">        typically the value from the score matrix used in an identity assignment.</span><span class="se">\n</span><span class="s1">        This is `None` if the instance is not associated with a track or if the</span><span class="se">\n</span><span class="s1">        track was assigned manually.</span><span class="se">\n</span><span class="s1">    from_predicted: The `PredictedInstance` (if any) that this instance was</span><span class="se">\n</span><span class="s1">        initialized from. This is used with human-in-the-loop workflows.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -6365,8 +6639,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.Instance.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">388</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.Instance.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -6420,7 +6733,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -6439,6 +6752,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.Instance.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.Instance.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;points&#39;</span><span class="p">,</span> <span class="s1">&#39;skeleton&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.Instance.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -6629,6 +6967,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-585" name="__codelineno-0-585"></a><a href="#__codelineno-0-585"><span class="linenos" data-linenos="585 "></span></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">points</span><span class="p">)</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.Instance.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.Instance.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class Instance.</p>
+
+
     </div>
 
 </div>
@@ -8057,6 +8413,14 @@ score for <code>instances</code> will not be updated upon initialization.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.InstanceGroup.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.InstanceGroup.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class InstanceGroup.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.InstanceGroup.__repr__&lt;/code&gt;)" href="#sleap_io.model.camera.InstanceGroup.__repr__">__repr__</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -8213,8 +8577,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -8227,7 +8590,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.InstanceGroup.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -8451,7 +8814,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.InstanceGroup.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Defines a group of instances across the same frame index.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        instances_by_camera: Dictionary of `Instance` objects by `Camera`.</span><span class="se">\n</span><span class="s1">        instances: List of `Instance` objects in the group.</span><span class="se">\n</span><span class="s1">        cameras: List of `Camera` objects that have an `Instance` associated.</span><span class="se">\n</span><span class="s1">        score: Optional score for the `InstanceGroup`. Setting the score will also</span><span class="se">\n</span><span class="s1">            update the score for all `instances` already in the `InstanceGroup`. The</span><span class="se">\n</span><span class="s1">            score for `instances` will not be updated upon initialization.</span><span class="se">\n</span><span class="s1">        points: Optional 3D points for the `InstanceGroup`.</span><span class="se">\n</span><span class="s1">        metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Defines a group of instances across the same frame index.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    instances_by_camera: Dictionary of `Instance` objects by `Camera`.</span><span class="se">\n</span><span class="s1">    instances: List of `Instance` objects in the group.</span><span class="se">\n</span><span class="s1">    cameras: List of `Camera` objects that have an `Instance` associated.</span><span class="se">\n</span><span class="s1">    score: Optional score for the `InstanceGroup`. Setting the score will also</span><span class="se">\n</span><span class="s1">        update the score for all `instances` already in the `InstanceGroup`. The</span><span class="se">\n</span><span class="s1">        score for `instances` will not be updated upon initialization.</span><span class="se">\n</span><span class="s1">    points: Optional 3D points for the `InstanceGroup`.</span><span class="se">\n</span><span class="s1">    metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -8469,8 +8832,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.InstanceGroup.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">442</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.InstanceGroup.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -8524,7 +8926,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -8543,6 +8945,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.InstanceGroup.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.InstanceGroup.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.InstanceGroup.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -8724,6 +9151,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-15" name="__codelineno-0-15"></a><a href="#__codelineno-0-15"><span class="linenos" data-linenos="15 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">rodrigues_transformation</span><span class="p">(</span><span class="n">input_matrix</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.InstanceGroup.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.InstanceGroup.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class InstanceGroup.</p>
+
+
     </div>
 
 </div>
@@ -8983,6 +9428,14 @@ equal in a set or dict.</p>
               <td>
                 <div class="doc-md-description">
                   <p>Return the number of instances in the frame.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.LabeledFrame.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.LabeledFrame.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class LabeledFrame.</p>
                 </div>
               </td>
             </tr>
@@ -9455,8 +9908,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -9469,7 +9921,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.LabeledFrame.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9693,7 +10145,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.LabeledFrame.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Labeled data for a single frame of a video.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        video: The `Video` associated with this `LabeledFrame`.</span><span class="se">\n</span><span class="s1">        frame_idx: The index of the `LabeledFrame` in the `Video`.</span><span class="se">\n</span><span class="s1">        instances: List of `Instance` objects associated with this `LabeledFrame`.</span><span class="se">\n\n</span><span class="s1">    Notes:</span><span class="se">\n</span><span class="s1">        Instances of this class are hashed by identity, not by value. This means that</span><span class="se">\n</span><span class="s1">        two `LabeledFrame` instances with the same attributes will NOT be considered</span><span class="se">\n</span><span class="s1">        equal in a set or dict.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Labeled data for a single frame of a video.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    video: The `Video` associated with this `LabeledFrame`.</span><span class="se">\n</span><span class="s1">    frame_idx: The index of the `LabeledFrame` in the `Video`.</span><span class="se">\n</span><span class="s1">    instances: List of `Instance` objects associated with this `LabeledFrame`.</span><span class="se">\n\n</span><span class="s1">Notes:</span><span class="se">\n</span><span class="s1">    Instances of this class are hashed by identity, not by value. This means that</span><span class="se">\n</span><span class="s1">    two `LabeledFrame` instances with the same attributes will NOT be considered</span><span class="se">\n</span><span class="s1">    equal in a set or dict.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9711,8 +10163,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.LabeledFrame.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">21</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.LabeledFrame.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -9766,7 +10257,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -9785,6 +10276,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.LabeledFrame.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.LabeledFrame.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;instances&#39;</span><span class="p">,)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.LabeledFrame.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -10057,6 +10573,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-42" name="__codelineno-0-42"></a><a href="#__codelineno-0-42"><span class="linenos" data-linenos="42 "></span></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instances</span><span class="p">)</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.LabeledFrame.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.LabeledFrame.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class LabeledFrame.</p>
+
+
     </div>
 
 </div>
@@ -10877,6 +11411,14 @@ instance list which can be assigned back if desired.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.RecordingSession.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.RecordingSession.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class RecordingSession.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.RecordingSession.__repr__&lt;/code&gt;)" href="#sleap_io.model.camera.RecordingSession.__repr__">__repr__</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -11115,8 +11657,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -11129,7 +11670,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.RecordingSession.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -11353,7 +11894,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.RecordingSession.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;A recording session with multiple cameras.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        camera_group: `CameraGroup` object containing cameras in the session.</span><span class="se">\n</span><span class="s1">        frame_groups: Dictionary mapping frame index to `FrameGroup`.</span><span class="se">\n</span><span class="s1">        videos: List of `Video` objects linked to `Camera`s in the session.</span><span class="se">\n</span><span class="s1">        cameras: List of `Camera` objects linked to `Video`s in the session.</span><span class="se">\n</span><span class="s1">        metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;A recording session with multiple cameras.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    camera_group: `CameraGroup` object containing cameras in the session.</span><span class="se">\n</span><span class="s1">    frame_groups: Dictionary mapping frame index to `FrameGroup`.</span><span class="se">\n</span><span class="s1">    videos: List of `Video` objects linked to `Camera`s in the session.</span><span class="se">\n</span><span class="s1">    cameras: List of `Camera` objects linked to `Video`s in the session.</span><span class="se">\n</span><span class="s1">    metadata: Dictionary of metadata.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -11371,8 +11912,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.RecordingSession.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">128</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.RecordingSession.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -11426,7 +12006,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -11445,6 +12025,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.RecordingSession.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.RecordingSession.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.RecordingSession.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -11661,6 +12266,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-28" name="__codelineno-0-28"></a><a href="#__codelineno-0-28"><span class="linenos" data-linenos="28 "></span></a><span class="s2">    Raises:</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.RecordingSession.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.RecordingSession.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class RecordingSession.</p>
+
+
     </div>
 
 </div>
@@ -12295,6 +12918,14 @@ sleap_io.get_default_video_plugin: Get current default plugin.</p>
               <td>
                 <div class="doc-md-description">
                   <p>Return the length of the video as the number of frames.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.model.camera.Video.__replace__&lt;/code&gt;)" href="#sleap_io.model.camera.Video.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class Video.</p>
                 </div>
               </td>
             </tr>
@@ -13337,8 +13968,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -13351,7 +13981,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.model.camera.Video.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -13575,7 +14205,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.model.camera.Video.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;`Video` class used by sleap to represent videos and data associated with them.</span><span class="se">\n\n</span><span class="s1">    This class is used to store information regarding a video and its components.</span><span class="se">\n</span><span class="s1">    It is used to store the video</span><span class="se">\&#39;</span><span class="s1">s `filename`, `shape`, and the video</span><span class="se">\&#39;</span><span class="s1">s `backend`.</span><span class="se">\n\n</span><span class="s1">    To create a `Video` object, use the `from_filename` method which will select the</span><span class="se">\n</span><span class="s1">    backend appropriately.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: The filename(s) of the video. Supported extensions: &quot;mp4&quot;, &quot;avi&quot;,</span><span class="se">\n</span><span class="s1">            &quot;mov&quot;, &quot;mj2&quot;, &quot;mkv&quot;, &quot;h5&quot;, &quot;hdf5&quot;, &quot;slp&quot;, &quot;png&quot;, &quot;jpg&quot;, &quot;jpeg&quot;, &quot;tif&quot;,</span><span class="se">\n</span><span class="s1">            &quot;tiff&quot;, &quot;bmp&quot;. If the filename is a list, a list of image filenames are</span><span class="se">\n</span><span class="s1">            expected. If filename is a folder, it will be searched for images.</span><span class="se">\n</span><span class="s1">        backend: An object that implements the basic methods for reading and</span><span class="se">\n</span><span class="s1">            manipulating frames of a specific video type.</span><span class="se">\n</span><span class="s1">        backend_metadata: A dictionary of metadata specific to the backend. This is</span><span class="se">\n</span><span class="s1">            useful for storing metadata that requires an open backend (e.g., shape</span><span class="se">\n</span><span class="s1">            information) without having access to the video file itself.</span><span class="se">\n</span><span class="s1">        source_video: The source video object if this is a proxy video. This is present</span><span class="se">\n</span><span class="s1">            when the video contains an embedded subset of frames from another video.</span><span class="se">\n</span><span class="s1">        open_backend: Whether to open the backend when the video is available. If `True`</span><span class="se">\n</span><span class="s1">            (the default), the backend will be automatically opened if the video exists.</span><span class="se">\n</span><span class="s1">            Set this to `False` when you want to manually open the backend, or when the</span><span class="se">\n</span><span class="s1">            you know the video file does not exist and you want to avoid trying to open</span><span class="se">\n</span><span class="s1">            the file.</span><span class="se">\n\n</span><span class="s1">    Notes:</span><span class="se">\n</span><span class="s1">        Instances of this class are hashed by identity, not by value. This means that</span><span class="se">\n</span><span class="s1">        two `Video` instances with the same attributes will NOT be considered equal in a</span><span class="se">\n</span><span class="s1">        set or dict.</span><span class="se">\n\n</span><span class="s1">    Media Video Plugin Support:</span><span class="se">\n</span><span class="s1">        For media files (mp4, avi, etc.), the following plugins are supported:</span><span class="se">\n</span><span class="s1">        - &quot;opencv&quot;: Uses OpenCV (cv2) for video reading</span><span class="se">\n</span><span class="s1">        - &quot;FFMPEG&quot;: Uses imageio-ffmpeg for video reading</span><span class="se">\n</span><span class="s1">        - &quot;pyav&quot;: Uses PyAV for video reading</span><span class="se">\n\n</span><span class="s1">        Plugin aliases (case-insensitive):</span><span class="se">\n</span><span class="s1">        - opencv: &quot;opencv&quot;, &quot;cv&quot;, &quot;cv2&quot;, &quot;ocv&quot;</span><span class="se">\n</span><span class="s1">        - FFMPEG: &quot;FFMPEG&quot;, &quot;ffmpeg&quot;, &quot;imageio-ffmpeg&quot;, &quot;imageio_ffmpeg&quot;</span><span class="se">\n</span><span class="s1">        - pyav: &quot;pyav&quot;, &quot;av&quot;</span><span class="se">\n\n</span><span class="s1">        Plugin selection priority:</span><span class="se">\n</span><span class="s1">        1. Explicitly specified plugin parameter</span><span class="se">\n</span><span class="s1">        2. Backend metadata plugin value</span><span class="se">\n</span><span class="s1">        3. Global default (set via sio.set_default_video_plugin)</span><span class="se">\n</span><span class="s1">        4. Auto-detection based on available packages</span><span class="se">\n\n</span><span class="s1">    See Also:</span><span class="se">\n</span><span class="s1">        VideoBackend: The backend interface for reading video data.</span><span class="se">\n</span><span class="s1">        sleap_io.set_default_video_plugin: Set global default plugin.</span><span class="se">\n</span><span class="s1">        sleap_io.get_default_video_plugin: Get current default plugin.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;`Video` class used by sleap to represent videos and data associated with them.</span><span class="se">\n\n</span><span class="s1">This class is used to store information regarding a video and its components.</span><span class="se">\n</span><span class="s1">It is used to store the video</span><span class="se">\&#39;</span><span class="s1">s `filename`, `shape`, and the video</span><span class="se">\&#39;</span><span class="s1">s `backend`.</span><span class="se">\n\n</span><span class="s1">To create a `Video` object, use the `from_filename` method which will select the</span><span class="se">\n</span><span class="s1">backend appropriately.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: The filename(s) of the video. Supported extensions: &quot;mp4&quot;, &quot;avi&quot;,</span><span class="se">\n</span><span class="s1">        &quot;mov&quot;, &quot;mj2&quot;, &quot;mkv&quot;, &quot;h5&quot;, &quot;hdf5&quot;, &quot;slp&quot;, &quot;png&quot;, &quot;jpg&quot;, &quot;jpeg&quot;, &quot;tif&quot;,</span><span class="se">\n</span><span class="s1">        &quot;tiff&quot;, &quot;bmp&quot;. If the filename is a list, a list of image filenames are</span><span class="se">\n</span><span class="s1">        expected. If filename is a folder, it will be searched for images.</span><span class="se">\n</span><span class="s1">    backend: An object that implements the basic methods for reading and</span><span class="se">\n</span><span class="s1">        manipulating frames of a specific video type.</span><span class="se">\n</span><span class="s1">    backend_metadata: A dictionary of metadata specific to the backend. This is</span><span class="se">\n</span><span class="s1">        useful for storing metadata that requires an open backend (e.g., shape</span><span class="se">\n</span><span class="s1">        information) without having access to the video file itself.</span><span class="se">\n</span><span class="s1">    source_video: The source video object if this is a proxy video. This is present</span><span class="se">\n</span><span class="s1">        when the video contains an embedded subset of frames from another video.</span><span class="se">\n</span><span class="s1">    open_backend: Whether to open the backend when the video is available. If `True`</span><span class="se">\n</span><span class="s1">        (the default), the backend will be automatically opened if the video exists.</span><span class="se">\n</span><span class="s1">        Set this to `False` when you want to manually open the backend, or when the</span><span class="se">\n</span><span class="s1">        you know the video file does not exist and you want to avoid trying to open</span><span class="se">\n</span><span class="s1">        the file.</span><span class="se">\n\n</span><span class="s1">Notes:</span><span class="se">\n</span><span class="s1">    Instances of this class are hashed by identity, not by value. This means that</span><span class="se">\n</span><span class="s1">    two `Video` instances with the same attributes will NOT be considered equal in a</span><span class="se">\n</span><span class="s1">    set or dict.</span><span class="se">\n\n</span><span class="s1">Media Video Plugin Support:</span><span class="se">\n</span><span class="s1">    For media files (mp4, avi, etc.), the following plugins are supported:</span><span class="se">\n</span><span class="s1">    - &quot;opencv&quot;: Uses OpenCV (cv2) for video reading</span><span class="se">\n</span><span class="s1">    - &quot;FFMPEG&quot;: Uses imageio-ffmpeg for video reading</span><span class="se">\n</span><span class="s1">    - &quot;pyav&quot;: Uses PyAV for video reading</span><span class="se">\n\n</span><span class="s1">    Plugin aliases (case-insensitive):</span><span class="se">\n</span><span class="s1">    - opencv: &quot;opencv&quot;, &quot;cv&quot;, &quot;cv2&quot;, &quot;ocv&quot;</span><span class="se">\n</span><span class="s1">    - FFMPEG: &quot;FFMPEG&quot;, &quot;ffmpeg&quot;, &quot;imageio-ffmpeg&quot;, &quot;imageio_ffmpeg&quot;</span><span class="se">\n</span><span class="s1">    - pyav: &quot;pyav&quot;, &quot;av&quot;</span><span class="se">\n\n</span><span class="s1">    Plugin selection priority:</span><span class="se">\n</span><span class="s1">    1. Explicitly specified plugin parameter</span><span class="se">\n</span><span class="s1">    2. Backend metadata plugin value</span><span class="se">\n</span><span class="s1">    3. Global default (set via sio.set_default_video_plugin)</span><span class="se">\n</span><span class="s1">    4. Auto-detection based on available packages</span><span class="se">\n\n</span><span class="s1">See Also:</span><span class="se">\n</span><span class="s1">    VideoBackend: The backend interface for reading video data.</span><span class="se">\n</span><span class="s1">    sleap_io.set_default_video_plugin: Set global default plugin.</span><span class="se">\n</span><span class="s1">    sleap_io.get_default_video_plugin: Get current default plugin.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -13593,8 +14223,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.Video.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">21</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.Video.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -13648,7 +14317,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -13667,6 +14336,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.model.camera.Video.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.model.camera.Video.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;backend&#39;</span><span class="p">,</span> <span class="s1">&#39;filename&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.model.camera.Video.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -14082,6 +14776,24 @@ of indices is provided.</p>
 <a id="__codelineno-0-307" name="__codelineno-0-307"></a><a href="#__codelineno-0-307"><span class="linenos" data-linenos="307 "></span></a>    <span class="k">return</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.model.camera.Video.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.model.camera.Video.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class Video.</p>
+
+
     </div>
 
 </div>
@@ -15676,7 +16388,7 @@ specified.</p>
                 <code>new_filename</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | <span title="list">list</span>[<span title="str">str</span>] | <span title="list">list</span>[<span title="pathlib.Path">Path</span>]</code>
+                  <code><span title="str">str</span> | <span title="pathlib._local.Path">Path</span> | <span title="list">list</span>[<span title="str">str</span>] | <span title="list">list</span>[<span title="pathlib._local.Path">Path</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -15772,7 +16484,7 @@ the new filename does not exist, no error is raised.</p>
                 <code>save_path</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>
+                  <code><span title="str">str</span> | <span title="pathlib._local.Path">Path</span></code>
             </td>
             <td>
               <div class="doc-md-description">

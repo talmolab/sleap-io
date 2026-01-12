@@ -2393,7 +2393,7 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/utils.cpython-312.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/utils.cpython-313.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-module-attribute&quot;&gt;&lt;code&gt;module-attribute&lt;/code&gt;&lt;/small&gt;
@@ -2480,7 +2480,7 @@
 
 
 <h3 id="sleap_io.io.utils.__cached__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/utils.cpython-312.pyc&#39;</span></code>
+            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/utils.cpython-313.pyc&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -2498,7 +2498,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2528,7 +2528,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2558,7 +2558,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2588,7 +2588,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2618,7 +2618,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2658,7 +2658,7 @@ errors defaults to 'strict'.</p>
                 <code>filename</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>
+                  <code><span title="str">str</span> | <span title="pathlib._local.Path">Path</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3113,7 +3113,7 @@ corresponding to the datasets as arrays.</p>
                 <code>filename</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | <span title="list">list</span>[<span title="str">str</span>] | <span title="list">list</span>[<span title="pathlib.Path">Path</span>]</code>
+                  <code><span title="str">str</span> | <span title="pathlib._local.Path">Path</span> | <span title="list">list</span>[<span title="str">str</span>] | <span title="list">list</span>[<span title="pathlib._local.Path">Path</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">

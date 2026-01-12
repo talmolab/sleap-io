@@ -2468,7 +2468,7 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_reading.cpython-312.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_reading.cpython-313.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-module-attribute&quot;&gt;&lt;code&gt;module-attribute&lt;/code&gt;&lt;/small&gt;
@@ -2585,7 +2585,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
 
 <h3 id="sleap_io.io.video_reading.__cached__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_reading.cpython-312.pyc&#39;</span></code>
+            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/video_reading.cpython-313.pyc&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -2603,7 +2603,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2633,7 +2633,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2663,7 +2663,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2693,7 +2693,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2723,7 +2723,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2947,6 +2947,14 @@ since PyAV doesn't support image decoding.</p>
             </tr>
             <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;grayscale&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;keep_open&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;cached_shape&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;open_reader&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fps&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dataset&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;input_format&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;channels_last&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;source_filename&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;source_inds&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;image_format&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;hdf5&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;channel_order&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;RGB&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;plugin&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.HDF5Video.__init__&lt;/code&gt;)" href="#sleap_io.io.video_reading.HDF5Video.__init__">__init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class HDF5Video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.HDF5Video.__replace__&lt;/code&gt;)" href="#sleap_io.io.video_reading.HDF5Video.__replace__">__replace__</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Method generated by attrs for class HDF5Video.</p>
@@ -3418,8 +3426,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -3432,7 +3439,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.video_reading.HDF5Video.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -3656,7 +3663,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.video_reading.HDF5Video.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading videos stored in HDF5 files.</span><span class="se">\n\n</span><span class="s1">    This backend supports reading videos stored in HDF5 files, both in rank-4 datasets</span><span class="se">\n</span><span class="s1">    as well as in datasets with lists of binary-encoded images.</span><span class="se">\n\n</span><span class="s1">    Embedded image datasets are used in SLEAP when exporting package files (`.pkg.slp`)</span><span class="se">\n</span><span class="s1">    with videos embedded in them. This is useful for bundling training or inference data</span><span class="se">\n</span><span class="s1">    without having to worry about the videos (or frame images) being moved or deleted.</span><span class="se">\n</span><span class="s1">    It is expected that these types of datasets will be in a `Group` with a `int8`</span><span class="se">\n</span><span class="s1">    variable length dataset called `&quot;video&quot;`. This dataset must also contain an</span><span class="se">\n</span><span class="s1">    attribute called &quot;format&quot; with a string describing the image format (e.g., &quot;png&quot; or</span><span class="se">\n</span><span class="s1">    &quot;jpg&quot;) which will be used to decode it appropriately.</span><span class="se">\n\n</span><span class="s1">    If a `frame_numbers` dataset is present in the group, it will be used to map from</span><span class="se">\n</span><span class="s1">    source video frames to the frames in the dataset. This is useful to preserve frame</span><span class="se">\n</span><span class="s1">    indexing when exporting a subset of frames in the video. It will also be used to</span><span class="se">\n</span><span class="s1">    populate `frame_map` and `source_inds` attributes.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: Path to HDF5 file (.h5, .hdf5 or .slp).</span><span class="se">\n</span><span class="s1">        grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">        keep_open: Whether to keep the video reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">            If False, will close the reader after each call. If True (the default), it</span><span class="se">\n</span><span class="s1">            will keep the reader open and cache it for subsequent calls which may</span><span class="se">\n</span><span class="s1">            enhance the performance of reading multiple frames.</span><span class="se">\n</span><span class="s1">        dataset: Name of dataset to read from. If `None`, will try to find a rank-4</span><span class="se">\n</span><span class="s1">            dataset by iterating through datasets in the file. If specifying an embedded</span><span class="se">\n</span><span class="s1">            dataset, this can be the group containing a &quot;video&quot; dataset or the dataset</span><span class="se">\n</span><span class="s1">            itself (e.g., &quot;video0&quot; or &quot;video0/video&quot;).</span><span class="se">\n</span><span class="s1">        input_format: Format of the data in the dataset. One of &quot;channels_last&quot; (the</span><span class="se">\n</span><span class="s1">            default) in `(frames, height, width, channels)` order or &quot;channels_first&quot; in</span><span class="se">\n</span><span class="s1">            `(frames, channels, width, height)` order. Embedded datasets should use the</span><span class="se">\n</span><span class="s1">            &quot;channels_last&quot; format.</span><span class="se">\n</span><span class="s1">        frame_map: Mapping from frame indices to indices in the dataset. This is used to</span><span class="se">\n</span><span class="s1">            translate between the frame indices of the images within their source video</span><span class="se">\n</span><span class="s1">            and the indices of the images in the dataset. This is only used when reading</span><span class="se">\n</span><span class="s1">            embedded image datasets.</span><span class="se">\n</span><span class="s1">        source_filename: Path to the source video file. This is metadata and only used</span><span class="se">\n</span><span class="s1">            when reading embedded image datasets.</span><span class="se">\n</span><span class="s1">        source_inds: Indices of the frames in the source video file. This is metadata</span><span class="se">\n</span><span class="s1">            and only used when reading embedded image datasets.</span><span class="se">\n</span><span class="s1">        image_format: Format of the images in the embedded dataset. This is metadata and</span><span class="se">\n</span><span class="s1">            only used when reading embedded image datasets.</span><span class="se">\n</span><span class="s1">        channel_order: Channel order of embedded images, either &quot;RGB&quot; or &quot;BGR&quot;. This is</span><span class="se">\n</span><span class="s1">            used to ensure consistent color channel ordering when decoding embedded</span><span class="se">\n</span><span class="s1">            images. If the encoding and decoding plugins have different channel orders,</span><span class="se">\n</span><span class="s1">            the channels will be automatically flipped during decoding.</span><span class="se">\n</span><span class="s1">        plugin: Plugin to use for decoding embedded images. One of &quot;opencv&quot; or</span><span class="se">\n</span><span class="s1">            &quot;FFMPEG&quot;. If None, uses the global default or auto-detects based on</span><span class="se">\n</span><span class="s1">            available packages. Note that &quot;pyav&quot; is automatically mapped to &quot;FFMPEG&quot;</span><span class="se">\n</span><span class="s1">            since PyAV doesn</span><span class="se">\&#39;</span><span class="s1">t support image decoding.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading videos stored in HDF5 files.</span><span class="se">\n\n</span><span class="s1">This backend supports reading videos stored in HDF5 files, both in rank-4 datasets</span><span class="se">\n</span><span class="s1">as well as in datasets with lists of binary-encoded images.</span><span class="se">\n\n</span><span class="s1">Embedded image datasets are used in SLEAP when exporting package files (`.pkg.slp`)</span><span class="se">\n</span><span class="s1">with videos embedded in them. This is useful for bundling training or inference data</span><span class="se">\n</span><span class="s1">without having to worry about the videos (or frame images) being moved or deleted.</span><span class="se">\n</span><span class="s1">It is expected that these types of datasets will be in a `Group` with a `int8`</span><span class="se">\n</span><span class="s1">variable length dataset called `&quot;video&quot;`. This dataset must also contain an</span><span class="se">\n</span><span class="s1">attribute called &quot;format&quot; with a string describing the image format (e.g., &quot;png&quot; or</span><span class="se">\n</span><span class="s1">&quot;jpg&quot;) which will be used to decode it appropriately.</span><span class="se">\n\n</span><span class="s1">If a `frame_numbers` dataset is present in the group, it will be used to map from</span><span class="se">\n</span><span class="s1">source video frames to the frames in the dataset. This is useful to preserve frame</span><span class="se">\n</span><span class="s1">indexing when exporting a subset of frames in the video. It will also be used to</span><span class="se">\n</span><span class="s1">populate `frame_map` and `source_inds` attributes.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: Path to HDF5 file (.h5, .hdf5 or .slp).</span><span class="se">\n</span><span class="s1">    grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">    keep_open: Whether to keep the video reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">        If False, will close the reader after each call. If True (the default), it</span><span class="se">\n</span><span class="s1">        will keep the reader open and cache it for subsequent calls which may</span><span class="se">\n</span><span class="s1">        enhance the performance of reading multiple frames.</span><span class="se">\n</span><span class="s1">    dataset: Name of dataset to read from. If `None`, will try to find a rank-4</span><span class="se">\n</span><span class="s1">        dataset by iterating through datasets in the file. If specifying an embedded</span><span class="se">\n</span><span class="s1">        dataset, this can be the group containing a &quot;video&quot; dataset or the dataset</span><span class="se">\n</span><span class="s1">        itself (e.g., &quot;video0&quot; or &quot;video0/video&quot;).</span><span class="se">\n</span><span class="s1">    input_format: Format of the data in the dataset. One of &quot;channels_last&quot; (the</span><span class="se">\n</span><span class="s1">        default) in `(frames, height, width, channels)` order or &quot;channels_first&quot; in</span><span class="se">\n</span><span class="s1">        `(frames, channels, width, height)` order. Embedded datasets should use the</span><span class="se">\n</span><span class="s1">        &quot;channels_last&quot; format.</span><span class="se">\n</span><span class="s1">    frame_map: Mapping from frame indices to indices in the dataset. This is used to</span><span class="se">\n</span><span class="s1">        translate between the frame indices of the images within their source video</span><span class="se">\n</span><span class="s1">        and the indices of the images in the dataset. This is only used when reading</span><span class="se">\n</span><span class="s1">        embedded image datasets.</span><span class="se">\n</span><span class="s1">    source_filename: Path to the source video file. This is metadata and only used</span><span class="se">\n</span><span class="s1">        when reading embedded image datasets.</span><span class="se">\n</span><span class="s1">    source_inds: Indices of the frames in the source video file. This is metadata</span><span class="se">\n</span><span class="s1">        and only used when reading embedded image datasets.</span><span class="se">\n</span><span class="s1">    image_format: Format of the images in the embedded dataset. This is metadata and</span><span class="se">\n</span><span class="s1">        only used when reading embedded image datasets.</span><span class="se">\n</span><span class="s1">    channel_order: Channel order of embedded images, either &quot;RGB&quot; or &quot;BGR&quot;. This is</span><span class="se">\n</span><span class="s1">        used to ensure consistent color channel ordering when decoding embedded</span><span class="se">\n</span><span class="s1">        images. If the encoding and decoding plugins have different channel orders,</span><span class="se">\n</span><span class="s1">        the channels will be automatically flipped during decoding.</span><span class="se">\n</span><span class="s1">    plugin: Plugin to use for decoding embedded images. One of &quot;opencv&quot; or</span><span class="se">\n</span><span class="s1">        &quot;FFMPEG&quot;. If None, uses the global default or auto-detects based on</span><span class="se">\n</span><span class="s1">        available packages. Note that &quot;pyav&quot; is automatically mapped to &quot;FFMPEG&quot;</span><span class="se">\n</span><span class="s1">        since PyAV doesn</span><span class="se">\&#39;</span><span class="s1">t support image decoding.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -3674,8 +3681,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.HDF5Video.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">884</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.HDF5Video.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -3729,7 +3775,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -3748,6 +3794,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.video_reading.HDF5Video.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.HDF5Video.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_fps&#39;</span><span class="p">,</span> <span class="s1">&#39;_open_reader&#39;</span><span class="p">,</span> <span class="s1">&#39;channel_order&#39;</span><span class="p">,</span> <span class="s1">&#39;dataset&#39;</span><span class="p">,</span> <span class="s1">&#39;frame_map&#39;</span><span class="p">,</span> <span class="s1">&#39;image_format&#39;</span><span class="p">,</span> <span class="s1">&#39;plugin&#39;</span><span class="p">,</span> <span class="s1">&#39;source_filename&#39;</span><span class="p">,</span> <span class="s1">&#39;source_inds&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.HDF5Video.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -4036,6 +4107,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-53" name="__codelineno-0-53"></a><a href="#__codelineno-0-53"><span class="linenos" data-linenos="53 "></span></a><span class="s2">        plugin: Plugin name or alias (case-insensitive).</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.video_reading.HDF5Video.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.video_reading.HDF5Video.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class HDF5Video.</p>
+
+
     </div>
 
 </div>
@@ -4449,6 +4538,14 @@ auto-detects.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.ImageVideo.__replace__&lt;/code&gt;)" href="#sleap_io.io.video_reading.ImageVideo.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class ImageVideo.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.ImageVideo.__repr__&lt;/code&gt;)" href="#sleap_io.io.video_reading.ImageVideo.__repr__">__repr__</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -4665,8 +4762,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -4679,7 +4775,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.video_reading.ImageVideo.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4903,7 +4999,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.video_reading.ImageVideo.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading videos stored as image files.</span><span class="se">\n\n</span><span class="s1">    This backend supports reading videos stored as a list of images.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: Path to image files.</span><span class="se">\n</span><span class="s1">        grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">        plugin: Image plugin to use for reading. One of &quot;opencv&quot; or &quot;imageio&quot;.</span><span class="se">\n</span><span class="s1">            If None, uses global default from get_default_image_plugin(), or</span><span class="se">\n</span><span class="s1">            auto-detects.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading videos stored as image files.</span><span class="se">\n\n</span><span class="s1">This backend supports reading videos stored as a list of images.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: Path to image files.</span><span class="se">\n</span><span class="s1">    grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">    plugin: Image plugin to use for reading. One of &quot;opencv&quot; or &quot;imageio&quot;.</span><span class="se">\n</span><span class="s1">        If None, uses global default from get_default_image_plugin(), or</span><span class="se">\n</span><span class="s1">        auto-detects.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4921,8 +5017,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.ImageVideo.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">1220</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.ImageVideo.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -4976,7 +5111,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -4995,6 +5130,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.video_reading.ImageVideo.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.ImageVideo.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.ImageVideo.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -5099,6 +5259,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-41" name="__codelineno-0-41"></a><a href="#__codelineno-0-41"><span class="linenos" data-linenos="41 "></span></a>    <span class="s2">&quot;imageio&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>  <span class="c1"># Always available (core dependency)</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.video_reading.ImageVideo.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.video_reading.ImageVideo.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class ImageVideo.</p>
+
+
     </div>
 
 </div>
@@ -5339,6 +5517,14 @@ will use the first available plugin in the order listed above.</p>
             </tr>
             <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;grayscale&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;keep_open&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;cached_shape&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;open_reader&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fps&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;plugin&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;NOTHING&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.MediaVideo.__init__&lt;/code&gt;)" href="#sleap_io.io.video_reading.MediaVideo.__init__">__init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class MediaVideo.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.MediaVideo.__replace__&lt;/code&gt;)" href="#sleap_io.io.video_reading.MediaVideo.__replace__">__replace__</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Method generated by attrs for class MediaVideo.</p>
@@ -5712,8 +5898,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -5726,7 +5911,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.video_reading.MediaVideo.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -5950,7 +6135,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.video_reading.MediaVideo.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading videos stored as common media files.</span><span class="se">\n\n</span><span class="s1">    This backend supports reading through FFMPEG (the default), pyav, or OpenCV. Here</span><span class="se">\n</span><span class="s1">    are their trade-offs:</span><span class="se">\n\n</span><span class="s1">        - &quot;opencv&quot;: Fastest video reader, but only supports a limited number of codecs</span><span class="se">\n</span><span class="s1">            and may not be able to read some videos. It requires `opencv-python` to be</span><span class="se">\n</span><span class="s1">            installed. It is the fastest because it uses the OpenCV C++ library to read</span><span class="se">\n</span><span class="s1">            videos, but is limited by the version of FFMPEG that was linked into it at</span><span class="se">\n</span><span class="s1">            build time as well as the OpenCV version used.</span><span class="se">\n</span><span class="s1">        - &quot;FFMPEG&quot;: Slowest, but most reliable. This is the default backend. It requires</span><span class="se">\n</span><span class="s1">            `imageio-ffmpeg` and a `ffmpeg` executable on the system path (which can be</span><span class="se">\n</span><span class="s1">            installed via conda). The `imageio` plugin for FFMPEG reads frames into raw</span><span class="se">\n</span><span class="s1">            bytes which are communicated to Python through STDOUT on a subprocess pipe,</span><span class="se">\n</span><span class="s1">            which can be slow. However, it is the most reliable and feature-complete. If</span><span class="se">\n</span><span class="s1">            you install the conda-forge version of ffmpeg, it will be compiled with</span><span class="se">\n</span><span class="s1">            support for many codecs, including GPU-accelerated codecs like NVDEC for</span><span class="se">\n</span><span class="s1">            H264 and others.</span><span class="se">\n</span><span class="s1">        - &quot;pyav&quot;: Supports most codecs that FFMPEG does, but not as complete or reliable</span><span class="se">\n</span><span class="s1">            of an implementation in `imageio` as FFMPEG for some video types. It is</span><span class="se">\n</span><span class="s1">            faster than FFMPEG because it uses the `av` package to read frames directly</span><span class="se">\n</span><span class="s1">            into numpy arrays in memory without the need for a subprocess pipe. These</span><span class="se">\n</span><span class="s1">            are Python bindings for the C library libav, which is the same library that</span><span class="se">\n</span><span class="s1">            FFMPEG uses under the hood.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: Path to video file.</span><span class="se">\n</span><span class="s1">        grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">        keep_open: Whether to keep the video reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">            If False, will close the reader after each call. If True (the default), it</span><span class="se">\n</span><span class="s1">            will keep the reader open and cache it for subsequent calls which may</span><span class="se">\n</span><span class="s1">            enhance the performance of reading multiple frames.</span><span class="se">\n</span><span class="s1">        plugin: Video plugin to use. One of &quot;opencv&quot;, &quot;FFMPEG&quot;, or &quot;pyav&quot;. If `None`,</span><span class="se">\n</span><span class="s1">            will use the first available plugin in the order listed above.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading videos stored as common media files.</span><span class="se">\n\n</span><span class="s1">This backend supports reading through FFMPEG (the default), pyav, or OpenCV. Here</span><span class="se">\n</span><span class="s1">are their trade-offs:</span><span class="se">\n\n</span><span class="s1">    - &quot;opencv&quot;: Fastest video reader, but only supports a limited number of codecs</span><span class="se">\n</span><span class="s1">        and may not be able to read some videos. It requires `opencv-python` to be</span><span class="se">\n</span><span class="s1">        installed. It is the fastest because it uses the OpenCV C++ library to read</span><span class="se">\n</span><span class="s1">        videos, but is limited by the version of FFMPEG that was linked into it at</span><span class="se">\n</span><span class="s1">        build time as well as the OpenCV version used.</span><span class="se">\n</span><span class="s1">    - &quot;FFMPEG&quot;: Slowest, but most reliable. This is the default backend. It requires</span><span class="se">\n</span><span class="s1">        `imageio-ffmpeg` and a `ffmpeg` executable on the system path (which can be</span><span class="se">\n</span><span class="s1">        installed via conda). The `imageio` plugin for FFMPEG reads frames into raw</span><span class="se">\n</span><span class="s1">        bytes which are communicated to Python through STDOUT on a subprocess pipe,</span><span class="se">\n</span><span class="s1">        which can be slow. However, it is the most reliable and feature-complete. If</span><span class="se">\n</span><span class="s1">        you install the conda-forge version of ffmpeg, it will be compiled with</span><span class="se">\n</span><span class="s1">        support for many codecs, including GPU-accelerated codecs like NVDEC for</span><span class="se">\n</span><span class="s1">        H264 and others.</span><span class="se">\n</span><span class="s1">    - &quot;pyav&quot;: Supports most codecs that FFMPEG does, but not as complete or reliable</span><span class="se">\n</span><span class="s1">        of an implementation in `imageio` as FFMPEG for some video types. It is</span><span class="se">\n</span><span class="s1">        faster than FFMPEG because it uses the `av` package to read frames directly</span><span class="se">\n</span><span class="s1">        into numpy arrays in memory without the need for a subprocess pipe. These</span><span class="se">\n</span><span class="s1">        are Python bindings for the C library libav, which is the same library that</span><span class="se">\n</span><span class="s1">        FFMPEG uses under the hood.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: Path to video file.</span><span class="se">\n</span><span class="s1">    grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">    keep_open: Whether to keep the video reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">        If False, will close the reader after each call. If True (the default), it</span><span class="se">\n</span><span class="s1">        will keep the reader open and cache it for subsequent calls which may</span><span class="se">\n</span><span class="s1">        enhance the performance of reading multiple frames.</span><span class="se">\n</span><span class="s1">    plugin: Video plugin to use. One of &quot;opencv&quot;, &quot;FFMPEG&quot;, or &quot;pyav&quot;. If `None`,</span><span class="se">\n</span><span class="s1">        will use the first available plugin in the order listed above.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -5968,8 +6153,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.MediaVideo.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">622</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.MediaVideo.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -6023,7 +6247,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -6042,6 +6266,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.video_reading.MediaVideo.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.MediaVideo.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_fps&#39;</span><span class="p">,</span> <span class="s1">&#39;_open_reader&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.MediaVideo.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -6220,6 +6469,24 @@ method for the current plugin:
 <a id="__codelineno-0-41" name="__codelineno-0-41"></a><a href="#__codelineno-0-41"><span class="linenos" data-linenos="41 "></span></a>    <span class="s2">&quot;imageio&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>  <span class="c1"># Always available (core dependency)</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.video_reading.MediaVideo.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.video_reading.MediaVideo.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class MediaVideo.</p>
+
+
     </div>
 
 </div>
@@ -6411,6 +6678,14 @@ Each page in the TIFF is treated as a frame.</p>
             </tr>
             <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;grayscale&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;keep_open&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;cached_shape&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;open_reader&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fps&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;format&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.TiffVideo.__init__&lt;/code&gt;)" href="#sleap_io.io.video_reading.TiffVideo.__init__">__init__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class TiffVideo.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.TiffVideo.__replace__&lt;/code&gt;)" href="#sleap_io.io.video_reading.TiffVideo.__replace__">__replace__</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Method generated by attrs for class TiffVideo.</p>
@@ -6813,8 +7088,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -6827,7 +7101,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.video_reading.TiffVideo.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -7051,7 +7325,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.video_reading.TiffVideo.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading multi-page TIFF stacks.</span><span class="se">\n\n</span><span class="s1">    This backend supports reading multi-page TIFF files as video sequences.</span><span class="se">\n</span><span class="s1">    Each page in the TIFF is treated as a frame.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: Path to the multi-page TIFF file.</span><span class="se">\n</span><span class="s1">        grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">        keep_open: Whether to keep the reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">        format: Format of the TIFF file (&quot;multi_page&quot;, &quot;THW&quot;, &quot;HWT&quot;, &quot;THWC&quot;, &quot;CHWT&quot;).</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Video backend for reading multi-page TIFF stacks.</span><span class="se">\n\n</span><span class="s1">This backend supports reading multi-page TIFF files as video sequences.</span><span class="se">\n</span><span class="s1">Each page in the TIFF is treated as a frame.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: Path to the multi-page TIFF file.</span><span class="se">\n</span><span class="s1">    grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">    keep_open: Whether to keep the reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">    format: Format of the TIFF file (&quot;multi_page&quot;, &quot;THW&quot;, &quot;HWT&quot;, &quot;THWC&quot;, &quot;CHWT&quot;).</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -7069,8 +7343,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.TiffVideo.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">1320</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.TiffVideo.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -7124,7 +7437,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -7143,6 +7456,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.video_reading.TiffVideo.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.TiffVideo.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;format&#39;</span><span class="p">,)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.TiffVideo.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -7275,6 +7613,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-36" name="__codelineno-0-36"></a><a href="#__codelineno-0-36"><span class="linenos" data-linenos="36 "></span></a>    <span class="s2">&quot;pyav&quot;</span><span class="p">:</span> <span class="s2">&quot;av&quot;</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">,</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.video_reading.TiffVideo.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.video_reading.TiffVideo.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class TiffVideo.</p>
+
+
     </div>
 
 </div>
@@ -7673,6 +8029,14 @@ be set explicitly or will be None.</p>
               <td>
                 <div class="doc-md-description">
                   <p>Return number of frames in the video.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.video_reading.VideoBackend.__replace__&lt;/code&gt;)" href="#sleap_io.io.video_reading.VideoBackend.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class VideoBackend.</p>
                 </div>
               </td>
             </tr>
@@ -8127,8 +8491,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -8141,7 +8504,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.video_reading.VideoBackend.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fab215760c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fba553f0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -8365,7 +8728,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.video_reading.VideoBackend.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Base class for video backends.</span><span class="se">\n\n</span><span class="s1">    This class is not meant to be used directly. Instead, use the `from_filename`</span><span class="se">\n</span><span class="s1">    constructor to create a backend instance.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        filename: Path to video file(s).</span><span class="se">\n</span><span class="s1">        grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">        keep_open: Whether to keep the video reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">            If False, will close the reader after each call. If True (the default), it</span><span class="se">\n</span><span class="s1">            will keep the reader open and cache it for subsequent calls which may</span><span class="se">\n</span><span class="s1">            enhance the performance of reading multiple frames.</span><span class="se">\n</span><span class="s1">        fps: Frames per second of the video. For MediaVideo, this is read from container</span><span class="se">\n</span><span class="s1">            metadata. For other backends (ImageVideo, HDF5Video, TiffVideo), this must</span><span class="se">\n</span><span class="s1">            be set explicitly or will be None.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Base class for video backends.</span><span class="se">\n\n</span><span class="s1">This class is not meant to be used directly. Instead, use the `from_filename`</span><span class="se">\n</span><span class="s1">constructor to create a backend instance.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    filename: Path to video file(s).</span><span class="se">\n</span><span class="s1">    grayscale: Whether to force grayscale. If None, autodetect on first frame load.</span><span class="se">\n</span><span class="s1">    keep_open: Whether to keep the video reader open between calls to read frames.</span><span class="se">\n</span><span class="s1">        If False, will close the reader after each call. If True (the default), it</span><span class="se">\n</span><span class="s1">        will keep the reader open and cache it for subsequent calls which may</span><span class="se">\n</span><span class="s1">        enhance the performance of reading multiple frames.</span><span class="se">\n</span><span class="s1">    fps: Frames per second of the video. For MediaVideo, this is read from container</span><span class="se">\n</span><span class="s1">        metadata. For other backends (ImageVideo, HDF5Video, TiffVideo), this must</span><span class="se">\n</span><span class="s1">        be set explicitly or will be None.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -8383,8 +8746,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.VideoBackend.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">295</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.VideoBackend.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -8438,7 +8840,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -8457,6 +8859,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.video_reading.VideoBackend.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.video_reading.VideoBackend.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_cached_shape&#39;</span><span class="p">,</span> <span class="s1">&#39;_fps&#39;</span><span class="p">,</span> <span class="s1">&#39;grayscale&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.video_reading.VideoBackend.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -8823,6 +9250,24 @@ of indices is provided.</p>
 <a id="__codelineno-0-519" name="__codelineno-0-519"></a><a href="#__codelineno-0-519"><span class="linenos" data-linenos="519 "></span></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.video_reading.VideoBackend.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.video_reading.VideoBackend.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class VideoBackend.</p>
+
+
     </div>
 
 </div>
