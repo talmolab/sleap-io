@@ -1509,7 +1509,14 @@ def convert(
     # Save the output file
     try:
         save_kwargs: dict = {"format": resolved_output_format}
-        if embed is not None:
+        # Check for pkg.slp to pkg.slp preservation
+        if (
+            resolved_output_format == "slp"
+            and _should_preserve_embedded(input_path, output_path, embed)
+        ):
+            # Preserve existing embedded videos from pkg.slp input
+            save_kwargs["embed"] = None
+        elif embed is not None:
             save_kwargs["embed"] = embed
         # Handle CSV-specific options
         if resolved_output_format == "csv":
