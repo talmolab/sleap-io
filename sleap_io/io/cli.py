@@ -2153,7 +2153,10 @@ def merge(
 
     try:
         save_kwargs: dict = {}
-        if embed is not None:
+        if _should_preserve_embedded(expanded_files, output_path, embed):
+            # Preserve existing embedded videos from pkg.slp inputs
+            save_kwargs["embed"] = None
+        elif embed is not None:
             save_kwargs["embed"] = embed
         io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
