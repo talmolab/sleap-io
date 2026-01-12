@@ -2366,12 +2366,12 @@ SLP files with lazy=True.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>bool(x) -&gt; bool</p>
+                <p>Returns True when the argument is true, False otherwise.</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/slp_lazy.cpython-312.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__cached__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/slp_lazy.cpython-313.pyc&amp;#39;&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-module-attribute&quot;&gt;&lt;code&gt;module-attribute&lt;/code&gt;&lt;/small&gt;
@@ -2469,8 +2469,7 @@ SLP files with lazy=True.</p>
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -2483,7 +2482,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h3 id="sleap_io.io.slp_lazy.__cached__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/slp_lazy.cpython-312.pyc&#39;</span></code>
+            <code class="highlight language-python"><span class="n">__cached__</span> <span class="o">=</span> <span class="s1">&#39;/home/runner/work/sleap-io/sleap-io/sleap_io/io/__pycache__/slp_lazy.cpython-313.pyc&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -2501,7 +2500,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2531,7 +2530,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2561,7 +2560,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2591,7 +2590,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2621,7 +2620,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2843,7 +2842,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -2873,7 +2872,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -3089,6 +3088,14 @@ Fields: x, y, visible, complete.</p>
               <td>
                 <div class="doc-md-description">
                   <p>Return number of frames.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__replace__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;changes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.io.slp_lazy.LazyDataStore.__replace__&lt;/code&gt;)" href="#sleap_io.io.slp_lazy.LazyDataStore.__replace__">__replace__</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Method generated by attrs for class LazyDataStore.</p>
                 </div>
               </td>
             </tr>
@@ -3840,8 +3847,7 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
 
     <div class="doc doc-contents ">
 
-        <p>bool(x) -&gt; bool</p>
-<p>Returns True when the argument x is true, False otherwise.
+        <p>Returns True when the argument is true, False otherwise.
 The builtins True and False are the only two instances of the class bool.
 The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
@@ -3854,7 +3860,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h4 id="sleap_io.io.slp_lazy.LazyDataStore.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f0c456e85e0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f7801176c00</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4078,7 +4084,7 @@ fields.</p>
 
 
 <h4 id="sleap_io.io.slp_lazy.LazyDataStore.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Holds raw HDF5 data and provides lazy access methods.</span><span class="se">\n\n</span><span class="s1">    Attributes:</span><span class="se">\n</span><span class="s1">        frames_data: Structured array from /frames HDF5 dataset.</span><span class="se">\n</span><span class="s1">            Fields: frame_id, video_id, frame_idx, instance_id_start, instance_id_end.</span><span class="se">\n</span><span class="s1">        instances_data: Structured array from /instances HDF5 dataset.</span><span class="se">\n</span><span class="s1">            Fields vary by format_id but include: instance_id, instance_type, frame_id,</span><span class="se">\n</span><span class="s1">            skeleton_id, track_id, from_predicted, instance_score, point_id_start,</span><span class="se">\n</span><span class="s1">            point_id_end, and optionally tracking_score.</span><span class="se">\n</span><span class="s1">        pred_points_data: Structured array from /pred_points HDF5 dataset.</span><span class="se">\n</span><span class="s1">            Fields: x, y, visible, complete, score.</span><span class="se">\n</span><span class="s1">        points_data: Structured array from /points HDF5 dataset.</span><span class="se">\n</span><span class="s1">            Fields: x, y, visible, complete.</span><span class="se">\n</span><span class="s1">        videos: List of eagerly loaded Video objects.</span><span class="se">\n</span><span class="s1">        skeletons: List of eagerly loaded Skeleton objects.</span><span class="se">\n</span><span class="s1">        tracks: List of eagerly loaded Track objects.</span><span class="se">\n</span><span class="s1">        format_id: SLP format version.</span><span class="se">\n</span><span class="s1">        _source_path: Path to source SLP file (for debugging).</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;Holds raw HDF5 data and provides lazy access methods.</span><span class="se">\n\n</span><span class="s1">Attributes:</span><span class="se">\n</span><span class="s1">    frames_data: Structured array from /frames HDF5 dataset.</span><span class="se">\n</span><span class="s1">        Fields: frame_id, video_id, frame_idx, instance_id_start, instance_id_end.</span><span class="se">\n</span><span class="s1">    instances_data: Structured array from /instances HDF5 dataset.</span><span class="se">\n</span><span class="s1">        Fields vary by format_id but include: instance_id, instance_type, frame_id,</span><span class="se">\n</span><span class="s1">        skeleton_id, track_id, from_predicted, instance_score, point_id_start,</span><span class="se">\n</span><span class="s1">        point_id_end, and optionally tracking_score.</span><span class="se">\n</span><span class="s1">    pred_points_data: Structured array from /pred_points HDF5 dataset.</span><span class="se">\n</span><span class="s1">        Fields: x, y, visible, complete, score.</span><span class="se">\n</span><span class="s1">    points_data: Structured array from /points HDF5 dataset.</span><span class="se">\n</span><span class="s1">        Fields: x, y, visible, complete.</span><span class="se">\n</span><span class="s1">    videos: List of eagerly loaded Video objects.</span><span class="se">\n</span><span class="s1">    skeletons: List of eagerly loaded Skeleton objects.</span><span class="se">\n</span><span class="s1">    tracks: List of eagerly loaded Track objects.</span><span class="se">\n</span><span class="s1">    format_id: SLP format version.</span><span class="se">\n</span><span class="s1">    _source_path: Path to source SLP file (for debugging).</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4096,8 +4102,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.slp_lazy.LazyDataStore.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">26</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.slp_lazy.LazyDataStore.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -4151,7 +4196,7 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
 
     </div>
@@ -4170,6 +4215,31 @@ errors defaults to 'strict'.</p>
   </span>
 
 <a href="#sleap_io.io.slp_lazy.LazyDataStore.__slots__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.slp_lazy.LazyDataStore.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.slp_lazy.LazyDataStore.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -4321,6 +4391,24 @@ If iterable is specified the tuple is initialized from iterable's items.</p>
 <a id="__codelineno-0-115" name="__codelineno-0-115"></a><a href="#__codelineno-0-115"><span class="linenos" data-linenos="115 "></span></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">frames_data</span><span class="p">)</span>
 </code></pre></div>
             </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="sleap_io.io.slp_lazy.LazyDataStore.__replace__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__replace__</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></code>
+
+<a href="#sleap_io.io.slp_lazy.LazyDataStore.__replace__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Method generated by attrs for class LazyDataStore.</p>
+
+
     </div>
 
 </div>
@@ -5133,7 +5221,21 @@ labels.materialize() first.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__doc__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;    This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;    labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;    accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;    Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;    labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;    &amp;#39;&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__dict__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mappingproxy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;__module__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;sleap_io.io.slp_lazy&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__firstlineno__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;654&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__doc__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__init__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4f9c60&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__len__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__len__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4f9d00&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__getitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__getitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4fa200&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__iter__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__iter__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4faa20&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__repr__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4faac0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_mutation_error&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;_mutation_error&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4fab60&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4fac00&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;extend&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;extend&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4faca0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;insert&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;insert&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4fad40&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__setitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__setitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4fade0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__delitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__delitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f77bf4fae80&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__static_attributes__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,),&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;&lt;/code&gt;
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt; (&lt;code&gt;sleap_io.io.slp_lazy.LazyFrameList.__dict__&lt;/code&gt;)" href="../../../../formats/slp/#sleap_io.io.slp_lazy.LazyFrameList.__dict__">__dict__</a></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Read-only proxy of a mapping.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__doc__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
@@ -5143,6 +5245,20 @@ labels.materialize() first.</p>
             <td>
               <div class="doc-md-description">
                 <p>str(object='') -&gt; str</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__firstlineno__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;654&lt;/span&gt;&lt;/code&gt;
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt; (&lt;code&gt;sleap_io.io.slp_lazy.LazyFrameList.__firstlineno__&lt;/code&gt;)" href="../../../../formats/slp/#sleap_io.io.slp_lazy.LazyFrameList.__firstlineno__">__firstlineno__</a></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>int([x]) -&gt; integer</p>
               </div>
             </td>
           </tr>
@@ -5157,6 +5273,20 @@ labels.materialize() first.</p>
             <td>
               <div class="doc-md-description">
                 <p>str(object='') -&gt; str</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;__static_attributes__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,)&lt;/span&gt;&lt;/code&gt;
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt; (&lt;code&gt;sleap_io.io.slp_lazy.LazyFrameList.__static_attributes__&lt;/code&gt;)" href="../../../../formats/slp/#sleap_io.io.slp_lazy.LazyFrameList.__static_attributes__">__static_attributes__</a></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Built-in immutable sequence.</p>
               </div>
             </td>
           </tr>
@@ -5315,8 +5445,30 @@ labels.materialize() first.</p>
 
 
 
+<h4 id="sleap_io.io.slp_lazy.LazyFrameList.__dict__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="vm">__dict__</span> <span class="o">=</span> <span class="n">mappingproxy</span><span class="p">({</span><span class="s1">&#39;__module__&#39;</span><span class="p">:</span> <span class="s1">&#39;sleap_io.io.slp_lazy&#39;</span><span class="p">,</span> <span class="s1">&#39;__firstlineno__&#39;</span><span class="p">:</span> <span class="mi">654</span><span class="p">,</span> <span class="s1">&#39;__doc__&#39;</span><span class="p">:</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;__init__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__init__</span> <span class="n">at</span> <span class="mh">0x7f77bf4f9c60</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__len__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__len__</span> <span class="n">at</span> <span class="mh">0x7f77bf4f9d00</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__getitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__getitem__</span> <span class="n">at</span> <span class="mh">0x7f77bf4fa200</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__iter__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__iter__</span> <span class="n">at</span> <span class="mh">0x7f77bf4faa20</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__repr__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__repr__</span> <span class="n">at</span> <span class="mh">0x7f77bf4faac0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;_mutation_error&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">_mutation_error</span> <span class="n">at</span> <span class="mh">0x7f77bf4fab60</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">append</span> <span class="n">at</span> <span class="mh">0x7f77bf4fac00</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">extend</span> <span class="n">at</span> <span class="mh">0x7f77bf4faca0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;insert&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">insert</span> <span class="n">at</span> <span class="mh">0x7f77bf4fad40</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__setitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__setitem__</span> <span class="n">at</span> <span class="mh">0x7f77bf4fade0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__delitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__delitem__</span> <span class="n">at</span> <span class="mh">0x7f77bf4fae80</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__static_attributes__&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,),</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__dict__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__weakref__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">})</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.slp_lazy.LazyFrameList.__dict__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Read-only proxy of a mapping.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
 <h4 id="sleap_io.io.slp_lazy.LazyFrameList.__doc__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">    This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">    labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">    accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">    Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">    labels.materialize() first.</span><span class="se">\n</span><span class="s1">    &#39;</span></code>
+            <code class="highlight language-python"><span class="vm">__doc__</span> <span class="o">=</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -5334,8 +5486,47 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.slp_lazy.LazyFrameList.__firstlineno__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__firstlineno__</span> <span class="o">=</span> <span class="mi">654</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.slp_lazy.LazyFrameList.__firstlineno__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>int([x]) -&gt; integer
+int(x, base=10) -&gt; integer</p>
+<p>Convert a number or string to an integer, or return 0 if no arguments
+are given.  If x is a number, return x.<strong>int</strong>().  For floating-point
+numbers, this truncates towards zero.</p>
+<p>If x is not a number or if base is given, then x must be a string,
+bytes, or bytearray instance representing an integer literal in the
+given base.  The literal can be preceded by '+' or '-' and be surrounded
+by whitespace.  The base defaults to 10.  Valid bases are 0 and 2-36.
+Base 0 means to interpret the base from the string as an integer literal.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>int('0b100', base=0)
+4</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
     </div>
 
@@ -5364,8 +5555,33 @@ errors is specified, then the object must expose a data buffer
 that will be decoded using the given encoding and error handler.
 Otherwise, returns the result of object.<strong>str</strong>() (if defined)
 or repr(object).
-encoding defaults to sys.getdefaultencoding().
+encoding defaults to 'utf-8'.
 errors defaults to 'strict'.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="sleap_io.io.slp_lazy.LazyFrameList.__static_attributes__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">__static_attributes__</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+  </span>
+
+<a href="#sleap_io.io.slp_lazy.LazyFrameList.__static_attributes__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Built-in immutable sequence.</p>
+<p>If no argument is given, the constructor returns an empty tuple.
+If iterable is specified the tuple is initialized from iterable's items.</p>
+<p>If the argument is a tuple, the return value is the same object.</p>
 
     </div>
 
