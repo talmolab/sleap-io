@@ -6,6 +6,7 @@ Covers summary output, labeled frame details, skeleton printing, and format conv
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,12 @@ from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.version import __version__
+
+# Skip marker for tests that are extremely slow on Windows CI due to video encoding
+skip_slow_video_on_windows = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Video encoding tests are extremely slow on Windows CI (~1 min per test)",
+)
 
 
 def _strip_ansi(text: str) -> str:
@@ -5282,6 +5289,7 @@ def test_trim_labels_with_video_options(tmp_path, slp_real_data):
     assert output_path.with_suffix(".mp4").exists()
 
 
+@skip_slow_video_on_windows
 def test_trim_video_only(tmp_path, centered_pair_low_quality_path):
     """Test trimming a standalone video file."""
     runner = CliRunner()
@@ -5308,6 +5316,7 @@ def test_trim_video_only(tmp_path, centered_pair_low_quality_path):
     assert output_path.exists()
 
 
+@skip_slow_video_on_windows
 def test_trim_video_only_with_fps(tmp_path, centered_pair_low_quality_path):
     """Test video trimming with FPS option."""
     runner = CliRunner()
@@ -6051,6 +6060,7 @@ def test_reencode_default_output_path(tmp_path, centered_pair_low_quality_path):
     assert "centered_pair_low_quality.reencoded.mp4" in output
 
 
+@skip_slow_video_on_windows
 def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
     """Test basic reencoding (ffmpeg or Python path)."""
     runner = CliRunner()
@@ -6075,6 +6085,7 @@ def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
     assert output_path.stat().st_size > 0
 
 
+@skip_slow_video_on_windows
 def test_reencode_with_quality(tmp_path, centered_pair_low_quality_path):
     """Test reencoding with quality option."""
     runner = CliRunner()
@@ -6153,6 +6164,7 @@ def test_reencode_with_encoding_preset(tmp_path, centered_pair_low_quality_path)
     assert "ultrafast" in output
 
 
+@skip_slow_video_on_windows
 def test_reencode_python_path(tmp_path, centered_pair_low_quality_path):
     """Test reencoding with Python fallback path."""
     runner = CliRunner()
@@ -6175,6 +6187,7 @@ def test_reencode_python_path(tmp_path, centered_pair_low_quality_path):
     assert output_path.exists()
 
 
+@skip_slow_video_on_windows
 def test_reencode_overwrite(tmp_path, centered_pair_low_quality_path):
     """Test that --overwrite allows replacing existing output."""
     runner = CliRunner()
@@ -6225,6 +6238,7 @@ def test_reencode_with_gop_option(tmp_path, centered_pair_low_quality_path):
         assert "Python path" in output
 
 
+@skip_slow_video_on_windows
 def test_reencode_with_fps_python_path(tmp_path, centered_pair_low_quality_path):
     """Test reencoding with --fps option using Python path."""
     runner = CliRunner()
@@ -6288,6 +6302,7 @@ def test_get_ffmpeg_version():
         assert version is None
 
 
+@skip_slow_video_on_windows
 def test_reencode_with_fps_ffmpeg_path(tmp_path, centered_pair_low_quality_path):
     """Test reencoding with --fps option using ffmpeg path (if available)."""
     runner = CliRunner()
@@ -6463,6 +6478,7 @@ def test_reencode_slp_invalid_crf(tmp_path, slp_real_data):
     assert "crf" in result.output.lower()
 
 
+@skip_slow_video_on_windows
 @pytest.mark.skipif(
     not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
 )
@@ -6508,6 +6524,7 @@ def test_reencode_slp_basic(tmp_path, slp_real_data):
         assert ".reencoded" in video.filename
 
 
+@skip_slow_video_on_windows
 @pytest.mark.skipif(
     not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
 )
@@ -6543,6 +6560,7 @@ def test_reencode_slp_with_quality(tmp_path, slp_real_data):
     assert "CRF 18" in result.output
 
 
+@skip_slow_video_on_windows
 @pytest.mark.skipif(
     not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
 )
