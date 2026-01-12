@@ -194,11 +194,14 @@ def transform_labels(
                 output_video_path.as_posix(), grayscale=video.grayscale
             )
             new_video.source_video = video
-            video_map[video] = new_video
+            # Map the copied video to the new transformed video for replacement
+            video_map[new_labels.videos[video_idx]] = new_video
 
         # Update coordinates for this video's labeled frames
+        # Note: new_labels is a copy so we must compare with the copied video object
+        copied_video = new_labels.videos[video_idx]
         for lf in new_labels.labeled_frames:
-            if lf.video is not video:
+            if lf.video is not copied_video:
                 continue
 
             for instance in lf.instances:
