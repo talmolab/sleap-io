@@ -155,7 +155,7 @@ sio reencode project.slp -o project.reencoded.slp          # Batch reencode all 
 
 ---
 
-## `sio show`
+## <code>sio show</code>
 
 Display information about a SLEAP labels file or video file with rich formatted output.
 
@@ -414,7 +414,7 @@ This is useful for quickly checking video properties without needing a labels fi
 
 ---
 
-## `sio convert`
+## <code>sio convert</code>
 
 Convert pose data between different file formats.
 
@@ -556,7 +556,7 @@ sio convert labels.slp -o output.csv --save-metadata
 
 ---
 
-## `sio split`
+## <code>sio split</code>
 
 Split a labels file into train/validation/test sets for machine learning workflows.
 
@@ -694,7 +694,7 @@ sio split labels.slp -o splits/ --train 0.8 --val 0.15 --test 0.15
 
 ---
 
-## `sio unsplit`
+## <code>sio unsplit</code>
 
 Merge multiple split files back into a single labels file. This is the inverse of `sio split`.
 
@@ -773,7 +773,7 @@ This is convenient for merging all splits created by `sio split`.
 
 ---
 
-## `sio merge`
+## <code>sio merge</code>
 
 A flexible merge command for combining annotations from multiple sources with full control over matching strategies. While `sio unsplit` is optimized for reunifying train/val/test splits, `sio merge` handles general-purpose merging scenarios.
 
@@ -960,7 +960,7 @@ Use `sio unsplit` when merging files created by `sio split`. Use `sio merge` for
 
 ---
 
-## `sio embed`
+## <code>sio embed</code>
 
 Create portable `.pkg.slp` files with video frames embedded directly in the file. This allows sharing labels without requiring access to the original video files.
 
@@ -1034,7 +1034,7 @@ sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
 
 ---
 
-## `sio unembed`
+## <code>sio unembed</code>
 
 Convert an embedded `.pkg.slp` file back to a regular `.slp` file that references the original video files. This reverses the embedding process.
 
@@ -1115,7 +1115,7 @@ All annotations, skeletons, tracks, and metadata are preserved exactly.
 
 ---
 
-## `sio filenames`
+## <code>sio filenames</code>
 
 List or update video file paths in a labels file. By default, lists all video filenames for quick inspection. With update options, replaces paths and saves to a new file.
 
@@ -1289,7 +1289,7 @@ sio filenames labels.slp -o fixed.slp \
 
 ---
 
-## `sio fix`
+## <code>sio fix</code>
 
 Automatically detect and fix common problems in SLEAP labels files, including duplicate videos, unused skeletons, and predictions.
 
@@ -1484,7 +1484,7 @@ sio fix labels.slp \
 
 ---
 
-## `sio render`
+## <code>sio render</code>
 
 Create video files or single images with pose annotations overlaid on video frames.
 
@@ -1783,7 +1783,7 @@ sio render predictions.slp -o final.mp4 \
     --line-width 2.5
 ```
 
-## `sio trim`
+## <code>sio trim</code>
 
 Trim a video and labels file to a specific frame range, adjusting frame indices accordingly.
 
@@ -1867,7 +1867,7 @@ When trimming labels, frame indices are automatically adjusted to match the new 
 
 ---
 
-## `sio reencode`
+## <code>sio reencode</code>
 
 Reencode videos with frequent keyframes for **reliable and fast** random access during annotation and playback. This command addresses two critical issues that can cause problems in annotation and computer vision workflows:
 
