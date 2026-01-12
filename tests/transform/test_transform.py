@@ -1159,3 +1159,36 @@ class TestVideoTransforms:
                     original_points
                 )
                 assert abs(scale_factor - 0.5) < 0.1  # Allow some tolerance
+
+    def test_update_videos_json(self, tmp_path, slp_minimal_pkg):
+        """Test _update_videos_json helper function updates HDF5 videos_json."""
+        import json
+
+        import h5py
+
+        import sleap_io as sio
+        from sleap_io.transform.video import _update_videos_json
+
+        # Load embedded labels and create a copy
+        labels = sio.load_slp(slp_minimal_pkg)
+
+        # Save to create a new file with videos_json
+        output_path = tmp_path / "test.pkg.slp"
+        labels.save(str(output_path))
+
+        # Verify original videos_json exists
+        with h5py.File(output_path, "r") as f:
+            assert "videos_json" in f
+
+        # Update videos_json with the same videos
+        _update_videos_json(output_path, labels.videos)
+
+        # Verify the update worked
+        with h5py.File(output_path, "r") as f:
+            videos_json = list(f["videos_json"][:])
+            assert len(videos_json) == len(labels.videos)
+
+            # First video should have embedded video reference
+            video0_data = json.loads(videos_json[0])
+            assert "backend" in video0_data
+            assert "filename" in video0_data["backend"]
