@@ -488,7 +488,8 @@ class TestIntegration:
 
         # Define points at corners of the square
         points = np.array(
-            [[40, 40], [60, 40], [60, 60], [40, 60]], dtype=np.float64  # TL  # TR
+            [[40, 40], [60, 40], [60, 60], [40, 60]],
+            dtype=np.float64,  # TL  # TR
         )  # BR  # BL
 
         # Create transform
