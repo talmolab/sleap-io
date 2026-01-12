@@ -17,6 +17,37 @@ QUALITY_TO_RESAMPLE = {
 }
 
 
+def _to_pil_compatible(frame: np.ndarray) -> tuple[np.ndarray, bool]:
+    """Convert frame to PIL-compatible format.
+
+    PIL requires grayscale images to have shape (H, W), not (H, W, 1).
+
+    Args:
+        frame: Input frame array.
+
+    Returns:
+        Tuple of (pil_compatible_array, was_squeezed).
+    """
+    if frame.ndim == 3 and frame.shape[2] == 1:
+        return np.squeeze(frame, axis=2), True
+    return frame, False
+
+
+def _from_pil_result(result: np.ndarray, was_squeezed: bool) -> np.ndarray:
+    """Convert PIL result back to original format.
+
+    Args:
+        result: Array from PIL conversion.
+        was_squeezed: Whether the original had a squeezed channel.
+
+    Returns:
+        Array with original channel format restored.
+    """
+    if was_squeezed and result.ndim == 2:
+        return np.expand_dims(result, axis=2)
+    return result
+
+
 def crop_frame(
     frame: np.ndarray,
     crop: tuple[int, int, int, int],
@@ -99,9 +130,12 @@ def scale_frame(
 
     resample = QUALITY_TO_RESAMPLE.get(quality, Image.Resampling.BILINEAR)
 
-    pil_img = Image.fromarray(frame)
+    # Handle grayscale images with shape (H, W, 1)
+    pil_frame, was_squeezed = _to_pil_compatible(frame)
+    pil_img = Image.fromarray(pil_frame)
     pil_img = pil_img.resize((new_w, new_h), resample)
-    return np.array(pil_img)
+    result = np.array(pil_img)
+    return _from_pil_result(result, was_squeezed)
 
 
 def rotate_frame(
@@ -138,13 +172,16 @@ def rotate_frame(
     else:
         fill_color = fill
 
-    pil_img = Image.fromarray(frame)
+    # Handle grayscale images with shape (H, W, 1)
+    pil_frame, was_squeezed = _to_pil_compatible(frame)
+    pil_img = Image.fromarray(pil_frame)
     # PIL rotates counter-clockwise, so negate angle for clockwise
     # expand=False keeps the same canvas size (clips corners)
     pil_img = pil_img.rotate(
         -angle, resample=resample, expand=False, fillcolor=fill_color
     )
-    return np.array(pil_img)
+    result = np.array(pil_img)
+    return _from_pil_result(result, was_squeezed)
 
 
 def pad_frame(
