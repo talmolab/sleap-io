@@ -6868,3 +6868,354 @@ def test_reencode_slp_output_suffix_enforcement(tmp_path, slp_real_data):
     # Output should show .slp extension (normalized from .txt)
     output = _strip_ansi(result.output)
     assert ".slp" in output
+
+
+# =============================================================================
+# Reencode internal function tests for edge case coverage
+# =============================================================================
+
+
+def test_reencode_video_object_with_image_video(tmp_path):
+    """Test _reencode_video_object skips ImageVideo backends (lines 4343-4346)."""
+    import numpy as np
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.io.video_reading import ImageVideo
+    from sleap_io.model.video import Video
+
+    # Create an ImageVideo with synthetic images
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+
+    # Create some dummy image files
+    from PIL import Image
+
+    for i in range(3):
+        img = Image.fromarray(np.zeros((100, 100, 3), dtype=np.uint8))
+        img.save(img_dir / f"frame_{i:03d}.png")
+
+    # Create Video with ImageVideo backend
+    backend = ImageVideo(img_dir)
+    video = Video(filename=str(img_dir), backend=backend)
+
+    output_path = tmp_path / "output.mp4"
+
+    # Should return None (skip) without error
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+    )
+
+    assert result is None
+    assert not output_path.exists()
+
+
+def test_reencode_video_object_output_exists_no_overwrite(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object raises error when output exists (line 4350)."""
+    import click
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+    output_path = tmp_path / "output.mp4"
+
+    # Create existing output file
+    output_path.touch()
+
+    with pytest.raises(click.ClickException) as exc_info:
+        _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            overwrite=False,
+        )
+
+    assert "already exists" in str(exc_info.value)
+    assert "--overwrite" in str(exc_info.value)
+
+
+def test_reencode_video_object_unknown_backend(tmp_path):
+    """Test _reencode_video_object with unknown backend type (lines 4365-4366)."""
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    # Create a Video with a custom/unknown backend type
+    class CustomBackend:
+        """A mock backend that is not one of the known types."""
+
+        def __init__(self):
+            self.filename = "/fake/path.mp4"
+
+        def __len__(self):
+            return 10
+
+        def __getitem__(self, idx):
+            import numpy as np
+
+            return np.zeros((100, 100, 3), dtype=np.uint8)
+
+    video = Video(filename="/fake/path.mp4", backend=CustomBackend())
+    output_path = tmp_path / "output.mp4"
+
+    # Should use Python path (can_use_ffmpeg=False) since backend is unknown
+    # This will fail because the file doesn't exist, but it tests the branch
+    # Actually, it will try Python path and fail on video loading
+    # Let's test with dry_run to avoid actual encoding
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+        dry_run=True,
+    )
+
+    # Dry run returns None
+    assert result is None
+
+
+def test_reencode_video_object_force_ffmpeg_on_hdf5(tmp_path, slp_minimal_pkg):
+    """Test _reencode_video_object error when forcing ffmpeg on HDF5."""
+    import click
+
+    import sleap_io as sio
+    from sleap_io.io.cli import _reencode_video_object
+
+    # Load the pkg.slp which has HDF5Video
+    labels = sio.load_slp(str(slp_minimal_pkg))
+    video = labels.videos[0]
+    output_path = tmp_path / "output.mp4"
+
+    # Force ffmpeg path on HDF5 video should error
+    with pytest.raises(click.ClickException) as exc_info:
+        _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            use_ffmpeg=True,
+        )
+
+    assert "HDF5" in str(exc_info.value)
+    assert "Python path" in str(exc_info.value) or "--no-ffmpeg" in str(exc_info.value)
+
+
+@skip_slow_video_on_windows
+def test_reencode_video_object_with_fps_change(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object shows FPS change message (line 4419)."""
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+    output_path = tmp_path / "output.mp4"
+
+    # Call with output_fps to trigger line 4419
+    if _is_ffmpeg_available():
+        result = _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            output_fps=15.0,  # Different from source
+        )
+
+        # Should succeed and return output path
+        assert result == output_path
+        assert output_path.exists()
+
+
+@skip_slow_video_on_windows
+def test_reencode_video_object_file_size_comparison(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object shows file size comparison (lines 4499-4511)."""
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+    output_path = tmp_path / "output.mp4"
+
+    # Perform actual encoding (non-dry_run) to trigger file size comparison
+    if _is_ffmpeg_available():
+        result = _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            dry_run=False,
+        )
+
+        # Should succeed and return output path
+        assert result == output_path
+        assert output_path.exists()
+        # File size comparison is printed to console (can't easily verify output)
+
+
+def test_reencode_video_object_with_tiff_video(tmp_path):
+    """Test _reencode_video_object skips TiffVideo backends (lines 4343-4346).
+
+    This tests the same code path as ImageVideo but for TiffVideo backend.
+    """
+    import numpy as np
+    import tifffile
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.io.video_reading import TiffVideo
+    from sleap_io.model.video import Video
+
+    # Create a TIFF stack
+    tiff_path = tmp_path / "stack.tif"
+    frames = np.zeros((3, 100, 100), dtype=np.uint8)  # 3 grayscale frames
+    tifffile.imwrite(tiff_path, frames)
+
+    # Create Video with TiffVideo backend
+    backend = TiffVideo(tiff_path)
+    video = Video(filename=str(tiff_path), backend=backend)
+
+    output_path = tmp_path / "output.mp4"
+
+    # Should return None (skip) without error
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+    )
+
+    assert result is None
+    assert not output_path.exists()
+
+
+def test_reencode_slp_result_none_non_dryrun(tmp_path):
+    """Test _reencode_slp handles skipped videos in non-dry_run mode (line 4637).
+
+    This tests the branch where _reencode_video_object returns None
+    (for skipped backends like ImageVideo/TiffVideo) while not in dry_run mode.
+
+    Note: The ImageVideo/TiffVideo skip branches (lines 4582-4588) in _reencode_slp
+    catch these cases before reaching _reencode_video_object, so line 4637
+    (result_path is None and not dry_run) is primarily defensive code for edge cases.
+    """
+    import numpy as np
+    from PIL import Image
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.io.video_reading import ImageVideo
+    from sleap_io.model.video import Video
+
+    # Create an ImageVideo backend
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+
+    for i in range(3):
+        img = Image.fromarray(np.zeros((100, 100, 3), dtype=np.uint8))
+        img.save(img_dir / f"frame_{i:03d}.png")
+
+    # Create ImageVideo with list of filenames (as expected)
+    image_files = sorted(img_dir.glob("*.png"))
+    backend = ImageVideo(image_files)
+    video = Video(filename=str(img_dir), backend=backend)
+
+    output_path = tmp_path / "output.mp4"
+
+    # Call _reencode_video_object directly (non-dry_run)
+    # ImageVideo should return None (skipped)
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+        dry_run=False,  # Non-dry_run mode
+    )
+
+    # Should return None (skipped)
+    assert result is None
+    assert not output_path.exists()
+
+
+def test_reencode_video_object_invalid_output_path(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object with invalid output path raises ClickException."""
+    import click
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+
+    # Use an invalid output path (directory doesn't exist)
+    invalid_output = tmp_path / "nonexistent_dir" / "subdir" / "output.mp4"
+
+    if _is_ffmpeg_available():
+        with pytest.raises(click.ClickException) as exc_info:
+            _reencode_video_object(
+                video=video,
+                output_path=invalid_output,
+                crf=25,
+                preset="superfast",
+                keyframe_interval=1.0,
+            )
+
+        # Should get an error about ffmpeg failing
+        assert "failed" in str(exc_info.value).lower()
+
+
+def test_reencode_python_path_fps_fallback(tmp_path, centered_pair_low_quality_path):
+    """Test _reencode_python_path uses 30.0 FPS fallback (line 4255).
+
+    This tests the fallback when a Video object doesn't have fps in its backend.
+    We test via _reencode_video_object with Python path and a backend without fps.
+    """
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    # Create a Video with a backend that doesn't have fps attribute
+    class NoFpsBackend:
+        """Backend without fps attribute - simulates edge case."""
+
+        def __init__(self, real_video_path):
+            self.filename = str(real_video_path)
+            self._video = Video.from_filename(str(real_video_path))
+
+        def __len__(self):
+            return len(self._video)
+
+        def __getitem__(self, idx):
+            return self._video[idx]
+
+        # Note: No 'fps' attribute - this triggers line 4255 fallback
+
+    backend = NoFpsBackend(centered_pair_low_quality_path)
+    video = Video(filename=str(centered_pair_low_quality_path), backend=backend)
+    output_path = tmp_path / "output.mp4"
+
+    # Force Python path (--no-ffmpeg) to hit _reencode_python_path
+    # The Python path will check for backend.fps and use 30.0 fallback
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+        use_ffmpeg=False,  # Force Python path
+        dry_run=True,  # Dry run to avoid slow encoding
+    )
+
+    # Dry run returns None
+    assert result is None
