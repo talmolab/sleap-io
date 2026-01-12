@@ -15,7 +15,8 @@ import numpy as np
 class Transform:
     """Composable geometric transformation for video frames and coordinates.
 
-    Transforms are applied in a fixed pipeline order: crop -> scale -> rotate -> pad.
+    Transforms are applied in a fixed pipeline order:
+    crop -> scale -> rotate -> pad -> flip.
     This ensures consistent and predictable behavior when combining transforms.
 
     Attributes:
@@ -29,6 +30,10 @@ class Transform:
             "bilinear", or "bicubic".
         fill: Fill value for out-of-bounds regions. Can be a single int for
             grayscale or (R, G, B) tuple for color.
+        clip_rotation: If True, rotation clips to original dimensions. If False
+            (default), canvas expands to fit the entire rotated image.
+        flip_h: If True, flip horizontally (mirror left-right).
+        flip_v: If True, flip vertically (mirror top-bottom).
     """
 
     crop: tuple[int, int, int, int] | None = None
@@ -37,6 +42,39 @@ class Transform:
     pad: tuple[int, int, int, int] | None = None
     quality: str = "bilinear"
     fill: tuple[int, ...] | int = 0
+    clip_rotation: bool = False
+    flip_h: bool = False
+    flip_v: bool = False
+
+    def _rotation_output_size(
+        self, width: int, height: int
+    ) -> tuple[int, int, float, float]:
+        """Compute output size and center offset for rotation.
+
+        Args:
+            width: Pre-rotation width.
+            height: Pre-rotation height.
+
+        Returns:
+            Tuple of (new_width, new_height, offset_x, offset_y) where offsets
+            are the translation needed to center the rotated content.
+        """
+        if self.rotate is None or self.rotate == 0 or self.clip_rotation:
+            return (width, height, 0.0, 0.0)
+
+        angle_rad = np.radians(abs(self.rotate))
+        cos_a = abs(np.cos(angle_rad))
+        sin_a = abs(np.sin(angle_rad))
+
+        # New bounding box dimensions
+        new_width = int(np.ceil(width * cos_a + height * sin_a))
+        new_height = int(np.ceil(width * sin_a + height * cos_a))
+
+        # Offset to center the rotated image in the new canvas
+        offset_x = (new_width - width) / 2
+        offset_y = (new_height - height) / 2
+
+        return (new_width, new_height, offset_x, offset_y)
 
     def output_size(self, input_size: tuple[int, int]) -> tuple[int, int]:
         """Compute output dimensions after applying the transformation.
@@ -61,7 +99,9 @@ class Transform:
             width = int(round(width * scale_x))
             height = int(round(height * scale_y))
 
-        # Rotation does not change canvas size (clips to original)
+        # Apply rotation (may expand canvas if not clipping)
+        if self.rotate is not None and self.rotate != 0:
+            width, height, _, _ = self._rotation_output_size(width, height)
 
         # Apply pad
         if self.pad is not None:
@@ -117,17 +157,26 @@ class Transform:
             sin_a = np.sin(angle_rad)
             cx, cy = width / 2, height / 2
 
-            # Translate to origin, rotate, translate back
-            # Combined: R' = T(cx,cy) @ R @ T(-cx,-cy)
+            # Get rotation output size (may expand if not clipping)
+            new_width, new_height, offset_x, offset_y = self._rotation_output_size(
+                width, height
+            )
+
+            # Rotation about center, then translate to new center if expanded
+            # Combined: T(new_cx, new_cy) @ R @ T(-cx, -cy)
+            new_cx = new_width / 2
+            new_cy = new_height / 2
+
             rotate_matrix = np.array(
                 [
-                    [cos_a, sin_a, cx - cos_a * cx - sin_a * cy],
-                    [-sin_a, cos_a, cy + sin_a * cx - cos_a * cy],
+                    [cos_a, sin_a, new_cx - cos_a * cx - sin_a * cy],
+                    [-sin_a, cos_a, new_cy + sin_a * cx - cos_a * cy],
                     [0, 0, 1],
                 ],
                 dtype=np.float64,
             )
             matrix = rotate_matrix @ matrix
+            width, height = new_width, new_height
 
         # Apply pad (translate by padding offset)
         if self.pad is not None:
@@ -136,6 +185,22 @@ class Transform:
                 [[1, 0, left], [0, 1, top], [0, 0, 1]], dtype=np.float64
             )
             matrix = pad_matrix @ matrix
+            width = width + left + right
+            height = height + top + bottom
+
+        # Apply horizontal flip (x -> width - x)
+        if self.flip_h:
+            flip_h_matrix = np.array(
+                [[-1, 0, width], [0, 1, 0], [0, 0, 1]], dtype=np.float64
+            )
+            matrix = flip_h_matrix @ matrix
+
+        # Apply vertical flip (y -> height - y)
+        if self.flip_v:
+            flip_v_matrix = np.array(
+                [[1, 0, 0], [0, -1, height], [0, 0, 1]], dtype=np.float64
+            )
+            matrix = flip_v_matrix @ matrix
 
         return matrix
 
@@ -199,6 +264,9 @@ class Transform:
             pad=self.pad,
             quality=self.quality,
             fill=self.fill,
+            expand_rotation=not self.clip_rotation,
+            flip_h=self.flip_h,
+            flip_v=self.flip_v,
         )
 
     def __bool__(self) -> bool:
@@ -209,6 +277,8 @@ class Transform:
                 self.scale is not None,
                 self.rotate is not None and self.rotate != 0,
                 self.pad is not None and any(p != 0 for p in self.pad),
+                self.flip_h,
+                self.flip_v,
             ]
         )
 

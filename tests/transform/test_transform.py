@@ -316,13 +316,13 @@ class TestFrameTransformsGrayscale:
         assert result[0:10, 90:100].mean() > 200
 
     def test_rotate_frame_tuple_fill(self):
-        """Test rotate_frame with tuple fill color."""
+        """Test rotate_frame with tuple fill color and clipping."""
         # RGB frame
         frame = np.zeros((100, 100, 3), dtype=np.uint8)
         frame[40:60, 40:60] = [255, 255, 255]
 
-        # Use tuple fill instead of int
-        result = rotate_frame(frame, 45, fill=(128, 128, 128))
+        # Use tuple fill, expand=False to keep original dimensions (clipping)
+        result = rotate_frame(frame, 45, fill=(128, 128, 128), expand=False)
 
         assert result.shape == (100, 100, 3)
         # Corners should have fill color
@@ -352,6 +352,70 @@ class TestFrameTransformsGrayscale:
         assert result[0, 0, 0] == 128
         assert result[0, 0, 1] == 128
         assert result[0, 0, 2] == 128
+
+    def test_flip_h_frame(self):
+        """Test horizontal flip of a frame."""
+        from sleap_io.transform.frame import flip_h_frame
+
+        # Create asymmetric test frame
+        frame = np.zeros((100, 100), dtype=np.uint8)
+        frame[:, :50] = 255  # Left half white
+
+        result = flip_h_frame(frame)
+
+        # After horizontal flip, right half should be white
+        assert result.shape == (100, 100)
+        assert result[0, 99] == 255  # Top-right should be white
+        assert result[0, 0] == 0  # Top-left should be black
+
+    def test_flip_v_frame(self):
+        """Test vertical flip of a frame."""
+        from sleap_io.transform.frame import flip_v_frame
+
+        # Create asymmetric test frame
+        frame = np.zeros((100, 100), dtype=np.uint8)
+        frame[:50, :] = 255  # Top half white
+
+        result = flip_v_frame(frame)
+
+        # After vertical flip, bottom half should be white
+        assert result.shape == (100, 100)
+        assert result[99, 0] == 255  # Bottom-left should be white
+        assert result[0, 0] == 0  # Top-left should be black
+
+    def test_flip_transform_frame_and_points(self):
+        """Test that flip transforms frame and points consistently."""
+        # Test frame
+        frame = np.zeros((100, 100), dtype=np.uint8)
+        frame[10:20, 10:20] = 255  # White square at (10-20, 10-20)
+
+        # Test point at center of square
+        points = np.array([[15, 15]], dtype=np.float64)
+        input_size = (100, 100)
+
+        # Test horizontal flip
+        transform_h = Transform(flip_h=True)
+        transformed_frame_h = transform_h.apply_to_frame(frame)
+        transformed_points_h = transform_h.apply_to_points(points, input_size)
+
+        # Point at x=15 should become x=85 (100-15)
+        np.testing.assert_array_almost_equal(transformed_points_h, [[85, 15]])
+        # White square should now be at x=80-90
+        assert transformed_frame_h[15, 85] == 255
+
+        # Test vertical flip
+        transform_v = Transform(flip_v=True)
+        transformed_points_v = transform_v.apply_to_points(points, input_size)
+
+        # Point at y=15 should become y=85 (100-15)
+        np.testing.assert_array_almost_equal(transformed_points_v, [[15, 85]])
+
+        # Test both flips
+        transform_hv = Transform(flip_h=True, flip_v=True)
+        transformed_points_hv = transform_hv.apply_to_points(points, input_size)
+
+        # Point at (15, 15) should become (85, 85)
+        np.testing.assert_array_almost_equal(transformed_points_hv, [[85, 85]])
 
 
 # ============================================================================
@@ -609,9 +673,9 @@ class TestIntegration:
         assert transformed_frame.shape == (30, 30)
 
     def test_rotation_point_consistency(self):
-        """Test that rotation transforms points correctly."""
-        # Test 180 degree rotation
-        transform = Transform(rotate=180)
+        """Test that rotation transforms points correctly with clip_rotation."""
+        # Test 180 degree rotation with clipping (original dimensions preserved)
+        transform = Transform(rotate=180, clip_rotation=True)
 
         # Points at (10, 10), center is (50, 50)
         points = np.array([[10, 10]], dtype=np.float64)
@@ -620,6 +684,21 @@ class TestIntegration:
         # (10, 10) -> (90, 90)
         transformed = transform.apply_to_points(points, (100, 100))
         np.testing.assert_array_almost_equal(transformed, [[90, 90]])
+
+    def test_rotation_point_consistency_expanded(self):
+        """Test that rotation transforms points correctly with expanded canvas."""
+        # Test 45 degree rotation with expansion (default)
+        transform = Transform(rotate=45)
+
+        # For a 100x100 frame rotated 45 degrees:
+        # new_width = 100*cos(45) + 100*sin(45) = 100*0.707 + 100*0.707 = 141.4 -> 142
+        # offset = (142 - 100) / 2 = 21
+
+        # Point at center should stay at center
+        points = np.array([[50, 50]], dtype=np.float64)
+        transformed = transform.apply_to_points(points, (100, 100))
+        # Center of expanded frame is (71, 71)
+        np.testing.assert_array_almost_equal(transformed, [[71, 71]], decimal=0)
 
 
 # ============================================================================
@@ -952,3 +1031,130 @@ class TestVideoTransforms:
         # Second video (no shape) should have None for input_size and n_frames
         assert summary["videos"][1]["input_size"] is None
         assert summary["videos"][1]["n_frames"] is None
+
+    def test_is_embedded_video(self, slp_minimal_pkg, slp_real_data):
+        """Test _is_embedded_video helper function."""
+        import sleap_io as sio
+        from sleap_io.transform.video import _is_embedded_video
+
+        # Test embedded video
+        embedded_labels = sio.load_slp(slp_minimal_pkg)
+        assert _is_embedded_video(embedded_labels.videos[0]) is True
+
+        # Test regular video
+        regular_labels = sio.load_slp(slp_real_data)
+        assert _is_embedded_video(regular_labels.videos[0]) is False
+
+    def test_get_frame_indices_embedded(self, slp_minimal_pkg):
+        """Test _get_frame_indices for embedded video."""
+        import sleap_io as sio
+        from sleap_io.transform.video import _get_frame_indices
+
+        labels = sio.load_slp(slp_minimal_pkg)
+        video = labels.videos[0]
+
+        frame_inds = _get_frame_indices(video)
+
+        # Should return the embedded frame indices, not sequential
+        assert frame_inds == video.backend.embedded_frame_inds
+
+    def test_get_frame_indices_regular(self, slp_real_data):
+        """Test _get_frame_indices for regular video."""
+        import sleap_io as sio
+        from sleap_io.transform.video import _get_frame_indices
+
+        labels = sio.load_slp(slp_real_data)
+        video = labels.videos[0]
+
+        frame_inds = _get_frame_indices(video)
+
+        # Should return sequential indices
+        expected = list(range(video.shape[0]))
+        assert frame_inds == expected
+
+    def test_transform_embedded_video(self, tmp_path, slp_minimal_pkg):
+        """Test transform_embedded_video function."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_embedded_video
+
+        labels = sio.load_slp(slp_minimal_pkg)
+        video = labels.videos[0]
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.pkg.slp"
+
+        # Save empty labels file first (creates HDF5 structure)
+        labels.save(str(output_path))
+
+        result = transform_embedded_video(
+            video=video,
+            output_path=output_path,
+            video_idx=0,
+            transform=transform,
+        )
+
+        # Check result is a Video object
+        assert result is not None
+        assert result.filename == str(output_path)
+
+        # Check output dimensions are scaled
+        original_h, original_w = video.shape[1:3]
+        expected_h = int(original_h * 0.5)
+        expected_w = int(original_w * 0.5)
+
+        assert result.shape[1] == expected_h
+        assert result.shape[2] == expected_w
+
+    def test_transform_labels_embedded(self, tmp_path, slp_minimal_pkg):
+        """Test transform_labels with embedded video."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_minimal_pkg)
+
+        # Verify input has embedded video
+        assert labels.videos[0].backend.__class__.__name__ == "HDF5Video"
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.pkg.slp"
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=output_path,
+        )
+
+        # Check result
+        assert result is not None
+        assert len(result.videos) == 1
+        assert len(result.labeled_frames) == len(labels.labeled_frames)
+
+        # Output should exist
+        assert output_path.exists()
+
+        # Output video should have scaled dimensions
+        original_h, original_w = labels.videos[0].shape[1:3]
+        expected_h = int(original_h * 0.5)
+        expected_w = int(original_w * 0.5)
+
+        assert result.videos[0].shape[1] == expected_h
+        assert result.videos[0].shape[2] == expected_w
+
+        # Coordinates should be transformed
+        original_lf = labels.labeled_frames[0]
+        transformed_lf = result.labeled_frames[0]
+
+        if len(original_lf.instances) > 0 and len(transformed_lf.instances) > 0:
+            original_points = original_lf.instances[0].numpy()
+            transformed_points = transformed_lf.instances[0].numpy()
+            # Points should be scaled by 0.5
+            # Note: points might have NaN values, so use nanmean for comparison
+            import numpy as np
+            if not np.all(np.isnan(original_points)) and not np.all(
+                np.isnan(transformed_points)
+            ):
+                # Check that transformed points are approximately half the original
+                scale_factor = np.nanmean(transformed_points) / np.nanmean(
+                    original_points
+                )
+                assert abs(scale_factor - 0.5) < 0.1  # Allow some tolerance

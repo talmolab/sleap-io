@@ -143,20 +143,23 @@ def rotate_frame(
     angle: float,
     quality: str = "bilinear",
     fill: tuple[int, ...] | int = 0,
+    expand: bool = True,
 ) -> np.ndarray:
     """Rotate a frame by the given angle.
 
     The frame is rotated about its center. Positive angles rotate clockwise.
-    Corners that rotate outside the frame bounds are clipped.
 
     Args:
         frame: Input frame as numpy array with shape (H, W) or (H, W, C).
         angle: Rotation angle in degrees. Positive is clockwise.
         quality: Interpolation quality. One of "nearest", "bilinear", "bicubic".
         fill: Fill value for areas outside the rotated image.
+        expand: If True (default), expand canvas to fit entire rotated image.
+            If False, keep original dimensions (clips corners).
 
     Returns:
-        Rotated frame as numpy array with same dimensions as input.
+        Rotated frame as numpy array. If expand=True, dimensions may change.
+        If expand=False, dimensions match input.
     """
     if angle == 0:
         return frame
@@ -176,12 +179,35 @@ def rotate_frame(
     pil_frame, was_squeezed = _to_pil_compatible(frame)
     pil_img = Image.fromarray(pil_frame)
     # PIL rotates counter-clockwise, so negate angle for clockwise
-    # expand=False keeps the same canvas size (clips corners)
     pil_img = pil_img.rotate(
-        -angle, resample=resample, expand=False, fillcolor=fill_color
+        -angle, resample=resample, expand=expand, fillcolor=fill_color
     )
     result = np.array(pil_img)
     return _from_pil_result(result, was_squeezed)
+
+
+def flip_h_frame(frame: np.ndarray) -> np.ndarray:
+    """Flip a frame horizontally (mirror left-right).
+
+    Args:
+        frame: Input frame as numpy array with shape (H, W) or (H, W, C).
+
+    Returns:
+        Horizontally flipped frame as numpy array with same dimensions.
+    """
+    return np.fliplr(frame).copy()
+
+
+def flip_v_frame(frame: np.ndarray) -> np.ndarray:
+    """Flip a frame vertically (mirror top-bottom).
+
+    Args:
+        frame: Input frame as numpy array with shape (H, W) or (H, W, C).
+
+    Returns:
+        Vertically flipped frame as numpy array with same dimensions.
+    """
+    return np.flipud(frame).copy()
 
 
 def pad_frame(
@@ -227,10 +253,13 @@ def transform_frame(
     pad: tuple[int, int, int, int] | None = None,
     quality: str = "bilinear",
     fill: tuple[int, ...] | int = 0,
+    expand_rotation: bool = True,
+    flip_h: bool = False,
+    flip_v: bool = False,
 ) -> np.ndarray:
     """Apply a sequence of transformations to a frame.
 
-    Transforms are applied in order: crop -> scale -> rotate -> pad.
+    Transforms are applied in order: crop -> scale -> rotate -> pad -> flip.
 
     Args:
         frame: Input frame as numpy array with shape (H, W) or (H, W, C).
@@ -240,6 +269,10 @@ def transform_frame(
         pad: Padding as (top, right, bottom, left) in pixels.
         quality: Interpolation quality. One of "nearest", "bilinear", "bicubic".
         fill: Fill value for out-of-bounds and padded regions.
+        expand_rotation: If True (default), expand canvas to fit rotated image.
+            If False, keep original dimensions (clips corners).
+        flip_h: If True, flip horizontally (mirror left-right).
+        flip_v: If True, flip vertically (mirror top-bottom).
 
     Returns:
         Transformed frame as numpy array.
@@ -253,9 +286,17 @@ def transform_frame(
         result = scale_frame(result, scale, quality=quality)
 
     if rotate is not None and rotate != 0:
-        result = rotate_frame(result, rotate, quality=quality, fill=fill)
+        result = rotate_frame(
+            result, rotate, quality=quality, fill=fill, expand=expand_rotation
+        )
 
     if pad is not None:
         result = pad_frame(result, pad, fill=fill)
+
+    if flip_h:
+        result = flip_h_frame(result)
+
+    if flip_v:
+        result = flip_v_frame(result)
 
     return result
