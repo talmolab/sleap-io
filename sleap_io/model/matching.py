@@ -171,7 +171,7 @@ def _is_same_file_direct(video1: Video, video2: Video) -> bool:
         video2: Second video to compare.
 
     Returns:
-        True if both videos refer to the same underlying file.
+        True if both videos refer to the same underlying file (and dataset for HDF5).
     """
     from pathlib import Path
 
@@ -187,26 +187,47 @@ def _is_same_file_direct(video1: Video, video2: Video) -> bool:
     path1 = Path(video1.filename)
     path2 = Path(video2.filename)
 
+    # Check if files are the same
+    files_match = False
+
     # Try os.path.samefile first if both files exist (handles symlinks)
     try:
         if path1.exists() and path2.exists():
             import os
 
-            return os.path.samefile(path1, path2)
+            files_match = os.path.samefile(path1, path2)
     except (OSError, ValueError):
         # File access failed, fall through to path comparison
         pass
 
-    # Compare resolved paths (handles relative vs absolute)
-    try:
-        if path1.resolve() == path2.resolve():
-            return True
-    except (OSError, ValueError):
-        # Resolution failed, fall through to string comparison
-        pass
+    if not files_match:
+        # Compare resolved paths (handles relative vs absolute)
+        try:
+            if path1.resolve() == path2.resolve():
+                files_match = True
+        except (OSError, ValueError):
+            # Resolution failed, fall through to string comparison
+            pass
 
-    # Final check: exact path string match (normalized)
-    return str(path1) == str(path2)
+    if not files_match:
+        # Final check: exact path string match (normalized)
+        files_match = str(path1) == str(path2)
+
+    if not files_match:
+        return False
+
+    # Files match - now check HDF5 datasets if applicable
+    # For HDF5 videos within the same file, different datasets are different videos
+    backend1 = video1.backend
+    backend2 = video2.backend
+    if backend1 is not None and backend2 is not None:
+        dataset1 = getattr(backend1, "dataset", None)
+        dataset2 = getattr(backend2, "dataset", None)
+        if dataset1 is not None and dataset2 is not None:
+            # Both have datasets - they must match
+            return dataset1 == dataset2
+
+    return True
 
 
 def is_same_file(video1: Video, video2: Video) -> bool:
