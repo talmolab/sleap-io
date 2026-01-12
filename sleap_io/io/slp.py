@@ -410,6 +410,42 @@ def prepare_frames_to_embed(
     return frames_metadata
 
 
+def can_use_fast_path(video: Video, frame_idx: int, target_format: str) -> bool:
+    """Check if fast path copy is possible for a frame.
+
+    The fast path allows copying raw encoded bytes directly from an embedded
+    HDF5 video without decoding and re-encoding, which is faster and avoids
+    quality degradation for lossy formats like JPEG.
+
+    Args:
+        video: Video object to check.
+        frame_idx: Frame index to check.
+        target_format: Target image format ("png", "jpg", etc.)
+
+    Returns:
+        True if the frame can be copied directly without decode/encode cycle.
+    """
+    from sleap_io.io.video_reading import HDF5Video
+
+    # Must have an HDF5Video backend
+    if video.backend is None or not isinstance(video.backend, HDF5Video):
+        return False
+
+    # Must have embedded images
+    if not video.backend.has_embedded_images:
+        return False
+
+    # Format must match
+    if video.backend.image_format != target_format:
+        return False
+
+    # Frame must be available
+    if not video.backend.has_frame(frame_idx):
+        return False
+
+    return True
+
+
 def process_and_embed_frames(
     labels_path: str,
     frames_metadata: list[dict],
@@ -485,7 +521,24 @@ def process_and_embed_frames(
                 "channel_order": None,  # Track channel order: "RGB" or "BGR"
             }
 
-        # Load the frame
+        # Fast path: Copy raw bytes directly if formats match (avoids decode/encode)
+        # This is faster and prevents quality degradation for lossy formats like JPEG
+        if can_use_fast_path(video, frame_idx, image_format):
+            raw_bytes = video.backend.get_frame_raw_bytes(frame_idx)
+            if raw_bytes is not None:
+                data_by_group[group]["imgs_data"].append(raw_bytes)
+                data_by_group[group]["frame_inds"].append(frame_idx)
+                # Preserve original channel order from source
+                if data_by_group[group]["channel_order"] is None:
+                    data_by_group[group]["channel_order"] = video.backend.channel_order
+
+                # Report progress via callback
+                if progress_callback is not None:
+                    if not progress_callback(i + 1, total_frames):
+                        raise ExportCancelled("Export cancelled by user")
+                continue
+
+        # Slow path: Load and encode the frame
         frame = video[frame_idx]
 
         # Encode the frame

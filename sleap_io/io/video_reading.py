@@ -1138,6 +1138,66 @@ class HDF5Video(VideoBackend):
         else:
             return frame_idx < len(self)
 
+    def get_frame_raw_bytes(self, frame_idx: int) -> np.ndarray | None:
+        """Get raw encoded bytes for a frame without decoding.
+
+        This method reads the raw compressed image data (PNG/JPEG bytes) directly
+        from the HDF5 dataset without decoding it. This is useful for fast copying
+        of embedded images when the target format matches the source format.
+
+        Args:
+            frame_idx: Index of the frame to read.
+
+        Returns:
+            Raw encoded bytes as int8 numpy array, or None if:
+            - The backend doesn't have embedded images
+            - The image format is "hdf5" (raw numpy arrays, no encoding)
+            - The frame index is not available
+
+        Notes:
+            For variable-length datasets, returns the raw bytes directly.
+            For fixed-length datasets, returns bytes with trailing zeros stripped.
+        """
+        if not self.has_embedded_images:
+            return None
+
+        if self.image_format == "hdf5":
+            # Raw numpy arrays, not encoded - no fast path possible
+            return None
+
+        if not self.has_frame(frame_idx):
+            return None
+
+        # Get the internal index (handle frame_map)
+        internal_idx = (
+            self.frame_map.get(frame_idx, frame_idx) if self.frame_map else frame_idx
+        )
+
+        # Read directly from dataset
+        if self.keep_open:
+            if self._open_reader is None:
+                self._open_reader = h5py.File(self.filename, "r")
+            f = self._open_reader
+        else:
+            f = h5py.File(self.filename, "r")
+
+        ds = f[self.dataset]
+        raw_bytes = ds[internal_idx]
+
+        # Handle fixed-length padding (strip trailing zeros)
+        is_vlen = h5py.check_vlen_dtype(ds.dtype) is not None
+        if not is_vlen:
+            # Find last non-zero byte
+            non_zero_mask = raw_bytes != 0
+            if non_zero_mask.any():
+                last_non_zero = np.where(non_zero_mask)[0][-1]
+                raw_bytes = raw_bytes[: last_non_zero + 1]
+
+        if not self.keep_open:
+            f.close()
+
+        return raw_bytes
+
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
 

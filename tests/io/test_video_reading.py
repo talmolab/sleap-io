@@ -168,6 +168,62 @@ def test_hdf5video_embedded(slp_minimal_pkg):
     assert backend.has_embedded_images
 
 
+def test_hdf5video_get_frame_raw_bytes(slp_minimal_pkg):
+    """Test get_frame_raw_bytes() method of HDF5Video for fast path copying."""
+    backend = VideoBackend.from_filename(slp_minimal_pkg)
+    assert type(backend) is HDF5Video
+    assert backend.has_embedded_images
+
+    # Get raw bytes for frame 0
+    raw_bytes = backend.get_frame_raw_bytes(0)
+
+    # Should return int8 numpy array with PNG bytes
+    assert raw_bytes is not None
+    assert isinstance(raw_bytes, np.ndarray)
+    assert raw_bytes.dtype == np.int8
+
+    # Verify PNG magic bytes (137, 80, 78, 71 = \x89PNG)
+    # These are stored as int8, so 137 becomes -119
+    png_magic = raw_bytes[:4].view(np.uint8)
+    assert list(png_magic) == [137, 80, 78, 71]
+
+    # Raw bytes should decode to the same image as normal read
+    decoded_via_backend = backend[0]
+    import cv2
+
+    decoded_from_raw = cv2.imdecode(raw_bytes.view(np.uint8), cv2.IMREAD_UNCHANGED)
+    if decoded_from_raw.ndim == 2:
+        decoded_from_raw = np.expand_dims(decoded_from_raw, axis=-1)
+    assert decoded_via_backend.shape == decoded_from_raw.shape
+    np.testing.assert_array_equal(decoded_via_backend, decoded_from_raw)
+
+
+def test_hdf5video_get_frame_raw_bytes_unavailable_frame(slp_minimal_pkg):
+    """Test get_frame_raw_bytes() returns None for unavailable frames."""
+    backend = VideoBackend.from_filename(slp_minimal_pkg)
+    assert type(backend) is HDF5Video
+
+    # Frame 999 doesn't exist (only frame 0 is embedded)
+    raw_bytes = backend.get_frame_raw_bytes(999)
+    assert raw_bytes is None
+
+
+def test_hdf5video_get_frame_raw_bytes_non_embedded(tmpdir):
+    """Test get_frame_raw_bytes() returns None for non-embedded HDF5 videos."""
+    # Create an HDF5 file with raw image data (not encoded)
+    h5_path = str(tmpdir / "raw_video.h5")
+    with h5py.File(h5_path, "w") as f:
+        ds = f.create_dataset("video", data=np.zeros((5, 64, 64, 1), dtype=np.uint8))
+        ds.attrs["format"] = "hdf5"  # Raw format, not encoded
+
+    backend = HDF5Video(filename=h5_path, dataset="video")
+    assert not backend.has_embedded_images
+
+    # Should return None because images are not encoded
+    raw_bytes = backend.get_frame_raw_bytes(0)
+    assert raw_bytes is None
+
+
 def test_imagevideo(centered_pair_frame_paths):
     backend = VideoBackend.from_filename(centered_pair_frame_paths)
     assert type(backend) is ImageVideo
