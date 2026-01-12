@@ -164,13 +164,16 @@ class Transform:
 
             # Rotation about center, then translate to new center if expanded
             # Combined: T(new_cx, new_cy) @ R @ T(-cx, -cy)
+            # Note: Image coordinates use y-down, so clockwise rotation matrix is:
+            #   [cos, -sin]
+            #   [sin,  cos]
             new_cx = new_width / 2
             new_cy = new_height / 2
 
             rotate_matrix = np.array(
                 [
-                    [cos_a, sin_a, new_cx - cos_a * cx - sin_a * cy],
-                    [-sin_a, cos_a, new_cy + sin_a * cx - cos_a * cy],
+                    [cos_a, -sin_a, new_cx - cos_a * cx + sin_a * cy],
+                    [sin_a, cos_a, new_cy - sin_a * cx - cos_a * cy],
                     [0, 0, 1],
                 ],
                 dtype=np.float64,
