@@ -953,8 +953,8 @@ def test_show_standalone_video_no_backend():
         cli_module.console = original_console
 
 
-def test_show_standalone_video_with_backend_metadata():
-    """Test standalone video display with backend_metadata grayscale field."""
+def test_show_standalone_video_with_encoding_info():
+    """Test standalone video display shows encoding info when ffmpeg available."""
     from io import StringIO
 
     from rich.console import Console
@@ -966,9 +966,8 @@ def test_show_standalone_video_with_backend_metadata():
     if not path.exists():
         return
 
-    # Load video and set backend_metadata
+    # Load video
     video = Video.from_filename(str(path))
-    video.backend_metadata = {"grayscale": True}
 
     import sleap_io.io.cli as cli_module
 
@@ -979,9 +978,13 @@ def test_show_standalone_video_with_backend_metadata():
     try:
         _print_video_standalone(path, video)
         out = _strip_ansi(string_io.getvalue())
-        # Should show grayscale info from backend_metadata
-        assert "Grayscale" in out
-        assert "yes" in out
+        # Should show basic video info regardless of ffmpeg
+        assert "Full" in out
+        assert "centered_pair_low_quality.mp4" in out
+        # If ffmpeg is available, should show encoding info
+        if _is_ffmpeg_available():
+            assert "Codec" in out
+            assert "h264" in out.lower()
     finally:
         cli_module.console = original_console
 
