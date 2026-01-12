@@ -8014,6 +8014,35 @@ def test_transform_video_file_actual(tmp_path, centered_pair_low_quality_path):
 
 
 @skip_slow_video_on_windows
+def test_transform_video_file_default_output(tmp_path, centered_pair_low_quality_path):
+    """Test video transformation with default output path (no -o flag)."""
+    import shutil
+
+    # Copy video to tmp_path so default output goes there
+    video_path = tmp_path / "test_video.mp4"
+    shutil.copy(centered_pair_low_quality_path, video_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(video_path),
+            "--scale",
+            "0.25",
+            "--crf",
+            "35",
+            # No -o flag - should use default output path
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Default output should be test_video.transformed.mp4
+    expected_output = tmp_path / "test_video.transformed.mp4"
+    assert expected_output.exists()
+
+
+@skip_slow_video_on_windows
 def test_transform_slp_actual(tmp_path, slp_real_data):
     """Test actual SLP transformation (not dry-run)."""
     import sleap_io as sio
@@ -8040,3 +8069,56 @@ def test_transform_slp_actual(tmp_path, slp_real_data):
     # Verify output
     labels = sio.load_slp(str(output_path))
     assert len(labels.videos) == 1
+
+
+@skip_slow_video_on_windows
+def test_transform_slp_default_output(tmp_path, slp_real_data):
+    """Test SLP transformation with default output path (no -o flag)."""
+    import shutil
+
+    # Copy slp to tmp_path so default output goes there
+    slp_path = tmp_path / "test_labels.slp"
+    shutil.copy(slp_real_data, slp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_path),
+            "--scale",
+            "0.25",
+            "--crf",
+            "35",
+            # No -o flag - should use default output path
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Default output should be test_labels.transformed.slp
+    expected_output = tmp_path / "test_labels.transformed.slp"
+    assert expected_output.exists()
+
+
+def test_transform_video_file_rotate_and_pad(tmp_path, centered_pair_low_quality_path):
+    """Test video transformation with rotate and pad parameters."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--rotate",
+            "45",
+            "--pad",
+            "10,10,10,10",
+            "-o",
+            str(output_path),
+            "--dry-run",  # Use dry-run for faster test
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Rotate: 45" in result.output
+    assert "Pad: (10, 10, 10, 10)" in result.output
