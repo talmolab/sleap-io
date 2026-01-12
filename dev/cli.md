@@ -155,9 +155,7 @@ sio reencode project.slp -o project.reencoded.slp          # Batch reencode all 
 
 ---
 
-## Commands
-
-### `sio show` - Inspect Labels and Video Files
+## `sio show`
 
 Display information about a SLEAP labels file or video file with rich formatted output.
 
@@ -171,7 +169,7 @@ sio show -i <path> [options]
     The positional form (e.g., `sio show labels.slp`) is simpler; the flag form
     (e.g., `sio show -i labels.slp`) is more explicit.
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # View file summary with skeleton and video info
@@ -216,7 +214,7 @@ The default view shows:
 - **Videos**: Quick summary of video files and dimensions
 - **Tracks**: List of track names
 
-#### Options
+### Options
 
 | Option | Short | Description |
 |--------|-------|-------------|
@@ -234,7 +232,7 @@ The default view shows:
 !!! tip "Viewing a specific video"
     Use `--video-index N` (or `--vi N`) to show only a specific video by its index. For example, `sio show labels.slp --vi 0` shows only the first video, while `sio show labels.slp -v` shows all videos.
 
-#### Detailed Skeleton View
+### Detailed Skeleton View
 
 ```bash
 sio show labels.slp --skeleton
@@ -272,7 +270,7 @@ Symmetries:
    ...
 ```
 
-#### Detailed Video View
+### Detailed Video View
 
 ```bash
 sio show labels.slp --video
@@ -321,7 +319,7 @@ Video 0: video.mp4 [embedded]
     Size    1920 × 1080 (RGB)
 ```
 
-#### Track Details
+### Track Details
 
 ```bash
 sio show labels.slp --tracks
@@ -338,7 +336,7 @@ Tracks
    1 | mouse_2  | 1823
 ```
 
-#### Labeled Frame Details
+### Labeled Frame Details
 
 ```bash
 sio show labels.slp --lf 0
@@ -362,7 +360,7 @@ Labeled Frame 0
 
 The `points` list is copyable Python code matching the skeleton node order.
 
-#### Provenance Information
+### Provenance Information
 
 ```bash
 sio show labels.slp --provenance
@@ -378,7 +376,7 @@ Provenance
   created_at: 2024-01-15T14:30:00
 ```
 
-#### Show Everything
+### Show Everything
 
 ```bash
 sio show labels.slp --all
@@ -386,7 +384,7 @@ sio show labels.slp --all
 
 Combines `--skeleton`, `--video`, `--tracks`, and `--provenance` for a complete view.
 
-#### Standalone Video Files
+### Standalone Video Files
 
 You can also use `sio show` to inspect video files directly:
 
@@ -416,7 +414,7 @@ This is useful for quickly checking video properties without needing a labels fi
 
 ---
 
-### `sio convert` - Convert Between Formats
+## `sio convert`
 
 Convert pose data between different file formats.
 
@@ -425,7 +423,7 @@ sio convert <input> -o <output> [options]
 sio convert -i <input> -o <output> [options]
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Convert SLEAP to NWB
@@ -438,7 +436,7 @@ sio convert labels.slp -o annotations.json --to coco
 sio convert annotations.json -o labels.slp --from coco
 ```
 
-#### Options
+### Options
 
 | Option | Description |
 |--------|-------------|
@@ -451,13 +449,13 @@ sio convert annotations.json -o labels.slp --from coco
 | `--scorer` | Scorer name for DLC CSV output (default: `sleap-io`) |
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
 
-#### Supported Formats
+### Supported Formats
 
 **Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `ultralytics`, `leap`
 
 **Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`
 
-#### Format Detection
+### Format Detection
 
 The CLI automatically detects formats from file extensions:
 
@@ -482,7 +480,7 @@ sio convert -i data.h5 -o labels.slp --from jabs
 sio convert -i data.h5 -o labels.slp --from dlc
 ```
 
-#### Embedding Frames
+### Embedding Frames
 
 Create self-contained package files with embedded video frames:
 
@@ -504,7 +502,7 @@ sio convert labels.slp -o labels.pkg.slp --embed suggestions
     - **`all`**: All frames with any labels including predictions
     - **`source`**: Re-embed from an already embedded source
 
-#### Export to Ultralytics YOLO
+### Export to Ultralytics YOLO
 
 ```bash
 # Export to YOLO format directory
@@ -524,7 +522,7 @@ yolo_dataset/
     └── labels/
 ```
 
-#### Export to CSV
+### Export to CSV
 
 Export pose data to CSV format for use with spreadsheet tools or custom analysis pipelines:
 
@@ -540,7 +538,7 @@ sio convert labels.slp -o output.csv --save-metadata
 # Creates: output.csv and output.json
 ```
 
-##### CSV Options
+#### CSV Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -548,7 +546,7 @@ sio convert labels.slp -o output.csv --save-metadata
 | `--scorer` | `sleap-io` | Scorer name for DLC format |
 | `--save-metadata` | off | Save JSON metadata file for round-trip support |
 
-##### CSV Formats
+#### CSV Formats
 
 - **`sleap`**: SLEAP Analysis CSV format (one row per instance)
 - **`dlc`**: DeepLabCut format (multi-header, one row per frame)
@@ -558,7 +556,7 @@ sio convert labels.slp -o output.csv --save-metadata
 
 ---
 
-### `sio split` - Create Train/Val/Test Splits
+## `sio split`
 
 Split a labels file into train/validation/test sets for machine learning workflows.
 
@@ -567,7 +565,7 @@ sio split <input> -o <output_dir> [options]
 sio split -i <input> -o <output_dir> [options]
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Default 80/20 train/val split
@@ -592,7 +590,7 @@ Output directory: splits/
 Random seed: 42
 ```
 
-#### Options
+### Options
 
 | Option | Description |
 |--------|-------------|
@@ -605,7 +603,7 @@ Random seed: 42
 | `--seed` | Random seed for reproducible splits |
 | `--embed` | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
 
-#### Output Files
+### Output Files
 
 The command creates split files in the output directory:
 
@@ -622,7 +620,7 @@ Each output file includes provenance metadata:
 - `split`: Split name (`train`, `val`, or `test`)
 - `split_seed`: Random seed used (if specified)
 
-#### Removing Predictions
+### Removing Predictions
 
 For training, you typically want only user-labeled (ground truth) data:
 
@@ -640,7 +638,7 @@ This:
 !!! warning "Predictions-only files"
     If your file contains only predictions (no user labels), `--remove-predictions` will result in an empty dataset and the command will fail with an error.
 
-#### Creating Embedded Packages
+### Creating Embedded Packages
 
 For portable training datasets with embedded frames:
 
@@ -654,7 +652,7 @@ This creates `train.pkg.slp`, `val.pkg.slp`, and optionally `test.pkg.slp` with 
 !!! info "Video access required"
     Embedding frames requires video file access. Video reading works out of the box via the bundled imageio-ffmpeg.
 
-#### Reproducibility
+### Reproducibility
 
 Always use `--seed` for reproducible experiments:
 
@@ -678,7 +676,7 @@ The seed is stored in each output file's provenance for traceability.
 
     To ensure reproducibility, always use the same combination of options (especially `--remove-predictions`) with your seed.
 
-#### Fraction Behavior
+### Fraction Behavior
 
 - **Default (no `--val` or `--test`)**: 80% train, 20% validation
 - **With `--test` only**: Train gets `--train`, test gets `--test`, val gets remainder
@@ -696,7 +694,7 @@ sio split labels.slp -o splits/ --train 0.8 --val 0.15 --test 0.15
 
 ---
 
-### `sio unsplit` - Merge Split Files
+## `sio unsplit`
 
 Merge multiple split files back into a single labels file. This is the inverse of `sio split`.
 
@@ -705,7 +703,7 @@ sio unsplit <input_files...> -o <output> [options]
 sio unsplit <directory> -o <output> [options]
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Merge individual split files
@@ -733,14 +731,14 @@ Merged 2 files:
   1000 frames, 1 videos
 ```
 
-#### Options
+### Options
 
 | Option | Description |
 |--------|-------------|
 | `-o, --output` | Output labels file (required) |
 | `--embed` | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
 
-#### Video Deduplication
+### Video Deduplication
 
 When merging split files created with `sio split --embed`, videos are automatically deduplicated using provenance metadata. The `original_video` chain ensures that embedded videos from the same source are merged back into a single video reference.
 
@@ -761,7 +759,7 @@ sio unsplit old_train.slp old_val.slp -o merged.slp
 !!! note "Safe behavior for legacy files"
     For split files created by older versions of SLEAP (without provenance metadata), videos may not deduplicate. This is intentional—the merge uses conservative matching to avoid data corruption. If needed, use `sio filenames` to fix video paths after merging.
 
-#### Directory Input
+### Directory Input
 
 When a directory is provided, all `.slp` files in that directory are merged (sorted alphabetically):
 
@@ -775,7 +773,7 @@ This is convenient for merging all splits created by `sio split`.
 
 ---
 
-### `sio merge` - Merge Labels Files
+## `sio merge`
 
 A flexible merge command for combining annotations from multiple sources with full control over matching strategies. While `sio unsplit` is optimized for reunifying train/val/test splits, `sio merge` handles general-purpose merging scenarios.
 
@@ -784,7 +782,7 @@ sio merge <input_files...> -o <output> [options]
 sio merge <directory> -o <output> [options]
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Merge predictions into a labeled project (most common)
@@ -819,7 +817,7 @@ Merged 2 files:
   2500 instances added
 ```
 
-#### Options
+### Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -832,9 +830,9 @@ Merged 2 files:
 | `--embed` | (none) | Embed frames in output (`user`, `all`, `suggestions`, `source`) |
 | `-v, --verbose` | off | Show detailed merge information |
 
-#### Matching Strategies
+### Matching Strategies
 
-##### Skeleton Matching (`--skeleton`)
+#### Skeleton Matching (`--skeleton`)
 
 How to match skeletons between files:
 
@@ -850,7 +848,7 @@ How to match skeletons between files:
 sio merge base.slp partial.slp -o merged.slp --skeleton subset
 ```
 
-##### Video Matching (`--video`)
+#### Video Matching (`--video`)
 
 How to identify same videos across files:
 
@@ -868,7 +866,7 @@ How to identify same videos across files:
 sio merge local.slp remote.slp -o merged.slp --video basename
 ```
 
-##### Track Matching (`--track`)
+#### Track Matching (`--track`)
 
 How to match track identities:
 
@@ -877,7 +875,7 @@ How to match track identities:
 | `name` | Match tracks with identical names (default) |
 | `identity` | Match by track object identity |
 
-##### Frame Strategy (`--frame`)
+#### Frame Strategy (`--frame`)
 
 How to handle overlapping frames (same video and frame index in both files):
 
@@ -898,7 +896,7 @@ sio merge project.slp new_predictions.slp -o merged.slp --frame replace_predicti
 sio merge annotator1.slp annotator2.slp -o combined.slp --frame keep_both
 ```
 
-##### Instance Matching (`--instance`)
+#### Instance Matching (`--instance`)
 
 For frame strategies that pair instances (`auto`, `update_tracks`), how to match instances within a frame:
 
@@ -913,7 +911,7 @@ For frame strategies that pair instances (`auto`, `update_tracks`), how to match
 sio merge base.slp other.slp -o merged.slp --instance iou
 ```
 
-#### Common Scenarios
+### Common Scenarios
 
 **Merging predictions into a labeled project:**
 
@@ -948,7 +946,7 @@ sio merge project.slp new_model_output.slp -o updated.slp --frame replace_predic
 sio merge local_project.slp remote_project.slp -o consolidated.slp --video basename
 ```
 
-#### Differences from `sio unsplit`
+### Differences from `sio unsplit`
 
 | Aspect | `sio unsplit` | `sio merge` |
 |--------|---------------|-------------|
@@ -962,7 +960,7 @@ Use `sio unsplit` when merging files created by `sio split`. Use `sio merge` for
 
 ---
 
-### `sio embed` - Embed Video Frames
+## `sio embed`
 
 Create portable `.pkg.slp` files with video frames embedded directly in the file. This allows sharing labels without requiring access to the original video files.
 
@@ -971,7 +969,7 @@ sio embed <input> -o <output> [options]
 sio embed -i <input> -o <output> [options]
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Embed user-labeled frames only (default)
@@ -997,7 +995,7 @@ Embedded: labels.slp -> labels.pkg.slp
 Frames: user: 100, predictions: 50, suggestions: 25
 ```
 
-#### Options
+### Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1007,7 +1005,7 @@ Frames: user: 100, predictions: 50, suggestions: 25
 | `--predictions/--no-predictions` | off | Include frames with only predicted instances |
 | `--suggestions/--no-suggestions` | off | Include suggested frames for labeling |
 
-#### Frame Types
+### Frame Types
 
 - **User frames**: Frames containing at least one user-labeled (non-predicted) instance. These are your ground truth annotations.
 - **Prediction frames**: Frames containing only predicted instances (no user labels). Useful for sharing inference results.
@@ -1018,7 +1016,7 @@ Frames: user: 100, predictions: 50, suggestions: 25
     - **For sharing predictions**: Add `--predictions` to include inference results
     - **For active learning**: Add `--suggestions` to include frames needing annotation
 
-#### When to Use `sio embed` vs `sio convert --embed`
+### When to Use `sio embed` vs `sio convert --embed`
 
 Both commands can embed frames, but they serve different purposes:
 
@@ -1036,7 +1034,7 @@ sio embed labels.slp -o labels.pkg.slp --predictions --suggestions
 
 ---
 
-### `sio unembed` - Restore Video References
+## `sio unembed`
 
 Convert an embedded `.pkg.slp` file back to a regular `.slp` file that references the original video files. This reverses the embedding process.
 
@@ -1045,7 +1043,7 @@ sio unembed <input> -o <output>
 sio unembed -i <input> -o <output>
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Restore original video references
@@ -1059,14 +1057,14 @@ Unembedded: labels.pkg.slp -> labels.slp
 Restored 1 video(s) to source paths
 ```
 
-#### Options
+### Options
 
 | Option | Description |
 |--------|-------------|
 | `-i, --input` | Input .pkg.slp file (can also pass as positional argument) |
 | `-o, --output` | Output .slp file path (required) |
 
-#### Requirements
+### Requirements
 
 The `unembed` command requires:
 
@@ -1093,7 +1091,7 @@ To inspect video details, run:
 !!! note "Original videos don't need to exist"
     The `unembed` command only updates the file references—it doesn't verify that the original video files exist. You can unembed even if the original videos are on a different machine, then use `sio filenames` to update the paths.
 
-#### Embed/Unembed Roundtrip
+### Embed/Unembed Roundtrip
 
 The embed and unembed operations are lossless inverses:
 
@@ -1117,7 +1115,7 @@ All annotations, skeletons, tracks, and metadata are preserved exactly.
 
 ---
 
-### `sio filenames` - Inspect and Update Video Paths
+## `sio filenames`
 
 List or update video file paths in a labels file. By default, lists all video filenames for quick inspection. With update options, replaces paths and saves to a new file.
 
@@ -1137,7 +1135,7 @@ sio filenames -i <input>
 sio filenames <input> -o <output> [update options]
 ```
 
-#### Inspection Mode
+### Inspection Mode
 
 By default, without any update flags, the command lists all video filenames:
 
@@ -1162,7 +1160,7 @@ Video filenames in labels.slp:
 
 This is a quick way to check video paths before deciding how to update them.
 
-#### Update Modes
+### Update Modes
 
 When you provide `-o` and one of the update flags, the command updates paths and saves:
 
@@ -1174,7 +1172,7 @@ When you provide `-o` and one of the update flags, the command updates paths and
 
 You must specify exactly one update mode when updating.
 
-#### Options
+### Options
 
 | Option | Description |
 |--------|-------------|
@@ -1184,7 +1182,7 @@ You must specify exactly one update mode when updating.
 | `--map OLD NEW` | Replace OLD filename with NEW (repeat for multiple mappings) |
 | `--prefix OLD NEW` | Replace OLD prefix with NEW (repeat for multiple prefixes) |
 
-#### List Mode
+### List Mode
 
 Replace all video filenames in order. You must provide exactly one `--filename` for each video in the labels file:
 
@@ -1203,7 +1201,7 @@ sio filenames multiview.slp -o fixed.slp \
 !!! warning "Video count must match"
     The number of `--filename` options must exactly match the number of videos in the labels file. Use `sio filenames labels.slp` to check the video count first.
 
-#### Map Mode
+### Map Mode
 
 Replace specific filenames using exact matching. Only videos whose paths match will be updated:
 
@@ -1220,7 +1218,7 @@ sio filenames labels.slp -o fixed.slp \
 
 Map mode is useful when you only need to update some videos or when you have the exact old and new paths.
 
-#### Prefix Mode
+### Prefix Mode
 
 Replace path prefixes. This is the most flexible mode for relocating files:
 
@@ -1246,7 +1244,7 @@ sio filenames labels.slp -o fixed.slp \
 !!! tip "Cross-platform path handling"
     Prefix mode automatically normalizes path separators. You can match Windows paths (`C:\data`) with Linux-style prefixes (`C:/data`) and vice versa.
 
-#### Examples
+### Examples
 
 **Scenario: Moving to a new machine**
 
@@ -1291,7 +1289,7 @@ sio filenames labels.slp -o fixed.slp \
 
 ---
 
-### `sio fix` - Fix Common Issues in Labels Files
+## `sio fix`
 
 Automatically detect and fix common problems in SLEAP labels files, including duplicate videos, unused skeletons, and predictions.
 
@@ -1300,7 +1298,7 @@ sio fix <input> [-o <output>] [options]
 sio fix -i <input> [-o <output>] [options]
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Auto-detect and fix with safe defaults
@@ -1340,7 +1338,7 @@ Saved: labels.fixed.slp
   25 videos, 715 frames, 1 skeleton, 27 tracks
 ```
 
-#### What Gets Fixed by Default
+### What Gets Fixed by Default
 
 With default options, `sio fix` automatically:
 
@@ -1350,9 +1348,9 @@ With default options, `sio fix` automatically:
 4. **Cleans up metadata**: Unused tracks are removed
 5. **Removes empty frames**: Frames with no instances are removed
 
-#### Options Reference
+### Options Reference
 
-##### Input/Output Options
+#### Input/Output Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1361,14 +1359,14 @@ With default options, `sio fix` automatically:
 | `--dry-run` | False | Analyze and show what would be done without making changes |
 | `-v, --verbose` | False | Show detailed analysis with per-video and per-skeleton breakdowns |
 
-##### Video Options
+#### Video Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--deduplicate-videos` | True | Merge duplicate video entries pointing to the same file |
 | `--no-deduplicate-videos` | | Skip video deduplication |
 
-##### Skeleton Options
+#### Skeleton Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1379,14 +1377,14 @@ With default options, `sio fix` automatically:
 !!! warning "Skeleton consolidation is destructive"
     The `--consolidate-skeletons` flag will permanently delete user-labeled instances that use non-primary skeletons. Use `--dry-run` first to review what will be deleted.
 
-##### Prediction Options
+#### Prediction Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--remove-predictions` | False | Remove ALL predicted instances |
 | `--remove-untracked-predictions` | False | Remove only predictions with no track assignment |
 
-##### Cleanup Options
+#### Cleanup Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1395,14 +1393,14 @@ With default options, `sio fix` automatically:
 | `--remove-empty-instances` | False | Remove instances with no visible points |
 | `--remove-unlabeled-videos` | False | Remove videos with no labeled frames |
 
-##### Path Fixing Options
+#### Path Fixing Options
 
 | Option | Description |
 |--------|-------------|
 | `--prefix OLD NEW` | Replace OLD path prefix with NEW (repeatable) |
 | `--map OLD NEW` | Replace exact filename OLD with NEW (repeatable) |
 
-#### Common Scenarios
+### Common Scenarios
 
 **Scenario: Fixing duplicate video entries**
 
@@ -1486,7 +1484,7 @@ sio fix labels.slp \
 
 ---
 
-### `sio render` - Render Pose Videos and Images
+## `sio render`
 
 Create video files or single images with pose annotations overlaid on video frames.
 
@@ -1506,13 +1504,13 @@ sio render <input> --lf <index> [-o <output>] [options]
     sio render -i predictions.slp        # Explicit flag (also works)
     ```
 
-#### Render Modes
+### Render Modes
 
 **Video mode** (default): Renders all labeled frames to a video file.
 
 **Image mode**: Renders a single frame to a PNG image. Use `--lf` or `--frame`.
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Render video with automatic output filename
@@ -1535,9 +1533,9 @@ sio render predictions.slp --background black
 sio render predictions.slp --background "#333"
 ```
 
-#### Options Reference
+### Options Reference
 
-##### Input/Output Options
+#### Input/Output Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1545,7 +1543,7 @@ sio render predictions.slp --background "#333"
 | `-o, --output` | auto | Output path. Default: `{input}.viz.mp4` for video, `{input}.lf={N}.png` for image |
 | `--background` | video | Background mode: `video` (load frames) or a color (e.g., `black`, `#333`) |
 
-##### Frame Selection Options
+#### Frame Selection Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1556,7 +1554,7 @@ sio render predictions.slp --background "#333"
 | `--video` | 0 | Video index for multi-video labels |
 | `--all-frames` / `--labeled-only` | auto | Render all frames or only labeled. Default: `--all-frames` for single-video files. |
 
-##### Quality Options
+#### Quality Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1566,7 +1564,7 @@ sio render predictions.slp --background "#333"
 | `--crf` | 25 | Video quality (2-32, lower=better quality, larger file) |
 | `--x264-preset` | superfast | H.264 encoding speed trade-off (ultrafast to slow) |
 
-##### Appearance Options
+#### Appearance Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1579,14 +1577,14 @@ sio render predictions.slp --background "#333"
 | `--no-nodes` | false | Hide node markers |
 | `--no-edges` | false | Hide skeleton edges |
 
-##### Crop Options (Single Image Only)
+#### Crop Options (Single Image Only)
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--crop` | none | Crop region: `auto` or `x1,y1,x2,y2` (pixels or normalized 0.0-1.0) |
 | `--crop-padding` | 0.2 | Padding for auto-crop as fraction of bounding box |
 
-#### Single Image Rendering
+### Single Image Rendering
 
 Render individual frames to PNG files for figures, thumbnails, or quick inspection:
 
@@ -1607,7 +1605,7 @@ sio render predictions.slp --lf 5 -o frame.png
     - `--lf N` renders the Nth labeled frame in the file (regardless of video frame number)
     - `--frame N` renders video frame N (must have predictions at that frame)
 
-#### Cropping (Single Image Only)
+### Cropping (Single Image Only)
 
 Crop the output image to focus on specific regions or automatically fit around detected instances:
 
@@ -1634,7 +1632,7 @@ The crop modes:
 !!! note "Video mode limitation"
     Cropping is currently only supported for single image mode (`--lf` or `--frame`). Video cropping is not yet implemented.
 
-#### Video Frame Ranges
+### Video Frame Ranges
 
 Render specific portions of the video:
 
@@ -1649,7 +1647,7 @@ sio render predictions.slp --start 500
 sio render predictions.slp --end 100
 ```
 
-#### Adjusting Playback Speed
+### Adjusting Playback Speed
 
 Use `--fps` to control playback speed:
 
@@ -1664,7 +1662,7 @@ sio render predictions.slp --fps 60
 sio render predictions.slp --fps 24
 ```
 
-#### Quality Presets
+### Quality Presets
 
 Use presets for quick quality/speed trade-offs:
 
@@ -1682,7 +1680,7 @@ sio render predictions.slp --preset final
 sio render predictions.slp --scale 0.75
 ```
 
-#### Color Schemes
+### Color Schemes
 
 Control how poses are colored:
 
@@ -1706,7 +1704,7 @@ The `auto` mode uses smart defaults:
 - If single frame → color by instance
 - If video (multiple frames) → color by node
 
-#### Color Palettes
+### Color Palettes
 
 Choose from built-in or colorcet palettes:
 
@@ -1730,7 +1728,7 @@ Available built-in palettes: `distinct`, `rainbow`, `warm`, `cool`, `pastel`, `s
     sio render --list-palettes  # Show all available palettes
     ```
 
-#### Marker Shapes and Styles
+### Marker Shapes and Styles
 
 Customize the appearance of pose overlays:
 
@@ -1755,7 +1753,7 @@ sio render predictions.slp --no-nodes
 sio render predictions.slp --no-edges
 ```
 
-#### Multi-Video Labels
+### Multi-Video Labels
 
 For labels with multiple videos, select which video to render:
 
@@ -1764,7 +1762,7 @@ For labels with multiple videos, select which video to render:
 sio render -i multiview.slp --video 1
 ```
 
-#### Example Workflow
+### Example Workflow
 
 ```bash
 # 1. Quick preview to check predictions
@@ -1785,7 +1783,7 @@ sio render predictions.slp -o final.mp4 \
     --line-width 2.5
 ```
 
-### `sio trim` - Trim Video and Labels
+## `sio trim`
 
 Trim a video and labels file to a specific frame range, adjusting frame indices accordingly.
 
@@ -1802,7 +1800,7 @@ sio trim <video> [--start <frame>] [--end <frame>] [-o <output>] [options]
 
     **Video mode**: Trims a standalone video file (no labels).
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Trim labels and video to frames 100-1000
@@ -1821,7 +1819,7 @@ sio trim labels.slp --end 1000
 sio trim labels.slp --start 100
 ```
 
-#### Options Reference
+### Options Reference
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1834,7 +1832,7 @@ sio trim labels.slp --start 100
 | `--crf` | 25 | Video quality (2-32, lower=better quality, larger file) |
 | `--x264-preset` | superfast | H.264 encoding speed trade-off (ultrafast to slow) |
 
-#### Video Encoding Options
+### Video Encoding Options
 
 ```bash
 # Higher quality output (larger file)
@@ -1847,7 +1845,7 @@ sio trim labels.slp --start 100 --end 500 --fps 15
 sio trim labels.slp --start 100 --end 500 --x264-preset ultrafast
 ```
 
-#### Multi-Video Labels
+### Multi-Video Labels
 
 For labels with multiple videos, select which video to trim:
 
@@ -1859,7 +1857,7 @@ sio trim multiview.slp --start 100 --end 500 --video 1
 !!! warning "Multi-video requirement"
     When trimming labels with multiple videos, you must specify `--video` to select which video to trim. The command will error if multiple videos are present and `--video` is not provided.
 
-#### Frame Index Adjustment
+### Frame Index Adjustment
 
 When trimming labels, frame indices are automatically adjusted to match the new video:
 
@@ -1869,7 +1867,7 @@ When trimming labels, frame indices are automatically adjusted to match the new 
 
 ---
 
-### `sio reencode` - Reencode Video for Reliable Seeking
+## `sio reencode`
 
 Reencode videos with frequent keyframes for **reliable and fast** random access during annotation and playback. This command addresses two critical issues that can cause problems in annotation and computer vision workflows:
 
@@ -1893,7 +1891,7 @@ sio reencode <input> [-o <output>] [options]
 sio reencode -i <input> [-o <output>] [options]
 ```
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Reencode with default settings (medium quality, 1 keyframe/second)
@@ -1915,7 +1913,7 @@ sio reencode video.mp4 -o output.mp4 --dry-run
 sio reencode video.mp4 -o output.mp4 --no-ffmpeg
 ```
 
-#### SLP Batch Processing
+### SLP Batch Processing
 
 When given an `.slp` file as input, the reencode command processes all videos in the SLEAP project:
 
@@ -1948,9 +1946,9 @@ This is particularly useful for:
 - Standardizing video formats across a multi-video project
 - Extracting embedded videos from `.pkg.slp` files to standalone MP4s
 
-#### Options Reference
+### Options Reference
 
-##### Input/Output Options
+#### Input/Output Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1959,7 +1957,7 @@ This is particularly useful for:
 | `--overwrite` | False | Overwrite existing output file |
 | `--dry-run` | False | Show ffmpeg command without executing |
 
-##### Quality Options
+#### Quality Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1975,7 +1973,7 @@ This is particularly useful for:
 | `medium` | 25 | Good quality, reasonable size (default) |
 | `low` | 32 | Smaller files, some quality loss |
 
-##### Keyframe Options
+#### Keyframe Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -1991,13 +1989,13 @@ This is particularly useful for:
 
     For maximum reliability in annotation workflows, prefer shorter intervals (0.5-1.0s).
 
-##### Frame Rate Options
+#### Frame Rate Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--fps` | source FPS | Output frame rate. Useful for downsampling high-speed video |
 
-##### Encoding Options
+#### Encoding Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -2010,7 +2008,7 @@ Available encoding presets (fastest to slowest): `ultrafast`, `superfast`, `very
     - **FFmpeg path** (default): ~10x faster, uses direct ffmpeg subprocess
     - **Python path** (`--no-ffmpeg`): Frame-by-frame processing, works with any video source including HDF5-embedded videos
 
-#### How Reencoding Improves Seeking
+### How Reencoding Improves Seeking
 
 The reencoded video has several properties that ensure reliable, frame-accurate seeking:
 
@@ -2020,7 +2018,7 @@ The reencoded video has several properties that ensure reliable, frame-accurate 
 - **Clean GOP structure**: Each group of pictures has a consistent, predictable structure.
 - **Standard H.264 encoding**: Widely supported codec with consistent behavior across video libraries.
 
-#### Common Scenarios
+### Common Scenarios
 
 **Fixing unreliable seeking for annotation:**
 
@@ -2074,7 +2072,7 @@ sio reencode raw.mp4 -o archival.mp4 --quality high --encoding slow
 sio reencode embedded_video.h5 -o extracted.mp4 --no-ffmpeg
 ```
 
-#### Output
+### Output
 
 The command displays progress and file size comparison:
 
