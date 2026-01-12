@@ -4873,10 +4873,7 @@ def reencode(
 
     # Resolve output path for video files
     if output_path is None:
-        # Use with_name for Python 3.8 compatibility (with_stem added in 3.9)
-        output_path = input_path.with_name(
-            input_path.stem + ".reencoded" + input_path.suffix
-        )
+        output_path = input_path.with_stem(f"{input_path.stem}.reencoded")
         if output_path.suffix.lower() not in {".mp4", ".mkv", ".avi", ".mov"}:
             output_path = output_path.with_suffix(".mp4")
 
