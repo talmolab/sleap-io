@@ -1393,7 +1393,6 @@ class TestVideoMatcherCoverageGaps:
         # The exact match depends on path resolution behavior
         assert result is candidate or result is None
 
-
     def test_is_same_file_hdf5_different_datasets(self):
         """Test that HDF5 videos with same filename but different datasets.
 
