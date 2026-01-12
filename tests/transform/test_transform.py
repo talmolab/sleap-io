@@ -961,17 +961,13 @@ class TestVideoTransforms:
 
         # Check coordinates were transformed (shifted by crop offset)
         # Point (50, 50) -> (20, 20) after crop offset
-        np.testing.assert_array_almost_equal(
-            result_inst.points["xy"][0], [20.0, 20.0]
-        )
+        np.testing.assert_array_almost_equal(result_inst.points["xy"][0], [20.0, 20.0])
         # Point (10, 10) -> (-20, -20) after crop offset (OOB)
         np.testing.assert_array_almost_equal(
             result_inst.points["xy"][1], [-20.0, -20.0]
         )
         # Point (90, 90) -> (60, 60) after crop offset (OOB, since output is 40x40)
-        np.testing.assert_array_almost_equal(
-            result_inst.points["xy"][2], [60.0, 60.0]
-        )
+        np.testing.assert_array_almost_equal(result_inst.points["xy"][2], [60.0, 60.0])
 
         # Check visibility: only center point should be visible
         # Point 0 (20, 20): in bounds (0 <= x < 40, 0 <= y < 40) - VISIBLE
