@@ -1150,6 +1150,7 @@ class TestVideoTransforms:
             # Points should be scaled by 0.5
             # Note: points might have NaN values, so use nanmean for comparison
             import numpy as np
+
             if not np.all(np.isnan(original_points)) and not np.all(
                 np.isnan(transformed_points)
             ):
