@@ -2499,6 +2499,22 @@ scaling, rotating, and padding video frames.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;flip_h_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.transform.frame.flip_h_frame&lt;/code&gt;)" href="#sleap_io.transform.frame.flip_h_frame">flip_h_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Flip a frame horizontally (mirror left-right).</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;flip_v_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.transform.frame.flip_v_frame&lt;/code&gt;)" href="#sleap_io.transform.frame.flip_v_frame">flip_v_frame</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Flip a frame vertically (mirror top-bottom).</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;pad_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;padding&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fill&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.transform.frame.pad_frame&lt;/code&gt;)" href="#sleap_io.transform.frame.pad_frame">pad_frame</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -2507,7 +2523,7 @@ scaling, rotating, and padding video frames.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;rotate_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;angle&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;quality&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;bilinear&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fill&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.transform.frame.rotate_frame&lt;/code&gt;)" href="#sleap_io.transform.frame.rotate_frame">rotate_frame</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;rotate_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;angle&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;quality&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;bilinear&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fill&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;expand&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.transform.frame.rotate_frame&lt;/code&gt;)" href="#sleap_io.transform.frame.rotate_frame">rotate_frame</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Rotate a frame by the given angle.</p>
@@ -2523,7 +2539,7 @@ scaling, rotating, and padding video frames.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;transform_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;crop&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;scale&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rotate&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pad&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;quality&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;bilinear&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fill&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.transform.frame.transform_frame&lt;/code&gt;)" href="#sleap_io.transform.frame.transform_frame">transform_frame</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;transform_frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frame&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;crop&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;scale&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rotate&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pad&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;None&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;quality&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;bilinear&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fill&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;expand_rotation&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;flip_h&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;flip_v&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt; (&lt;code&gt;sleap_io.transform.frame.transform_frame&lt;/code&gt;)" href="#sleap_io.transform.frame.transform_frame">transform_frame</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Apply a sequence of transformations to a frame.</p>
@@ -2990,6 +3006,178 @@ is filled with the fill value.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="sleap_io.transform.frame.flip_h_frame" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">flip_h_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span></code>
+
+<a href="#sleap_io.transform.frame.flip_h_frame" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Flip a frame horizontally (mirror left-right).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>frame</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Input frame as numpy array with shape (H, W) or (H, W, C).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Horizontally flipped frame as numpy array with same dimensions.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/transform/frame.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-189" name="__codelineno-0-189"></a><a href="#__codelineno-0-189"><span class="linenos" data-linenos="189 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">flip_h_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a><a href="#__codelineno-0-190"><span class="linenos" data-linenos="190 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Flip a frame horizontally (mirror left-right).</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a><a href="#__codelineno-0-191"><span class="linenos" data-linenos="191 "></span></a>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a><a href="#__codelineno-0-192"><span class="linenos" data-linenos="192 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><a href="#__codelineno-0-193"><span class="linenos" data-linenos="193 "></span></a><span class="sd">        frame: Input frame as numpy array with shape (H, W) or (H, W, C).</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a><a href="#__codelineno-0-194"><span class="linenos" data-linenos="194 "></span></a>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><a href="#__codelineno-0-195"><span class="linenos" data-linenos="195 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><a href="#__codelineno-0-196"><span class="linenos" data-linenos="196 "></span></a><span class="sd">        Horizontally flipped frame as numpy array with same dimensions.</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><a href="#__codelineno-0-197"><span class="linenos" data-linenos="197 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><a href="#__codelineno-0-198"><span class="linenos" data-linenos="198 "></span></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">fliplr</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="sleap_io.transform.frame.flip_v_frame" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">flip_v_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span></code>
+
+<a href="#sleap_io.transform.frame.flip_v_frame" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Flip a frame vertically (mirror top-bottom).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>frame</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Input frame as numpy array with shape (H, W) or (H, W, C).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Vertically flipped frame as numpy array with same dimensions.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>sleap_io/transform/frame.py</code></summary>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-201" name="__codelineno-0-201"></a><a href="#__codelineno-0-201"><span class="linenos" data-linenos="201 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">flip_v_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a><a href="#__codelineno-0-202"><span class="linenos" data-linenos="202 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Flip a frame vertically (mirror top-bottom).</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><a href="#__codelineno-0-203"><span class="linenos" data-linenos="203 "></span></a>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><a href="#__codelineno-0-204"><span class="linenos" data-linenos="204 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><a href="#__codelineno-0-205"><span class="linenos" data-linenos="205 "></span></a><span class="sd">        frame: Input frame as numpy array with shape (H, W) or (H, W, C).</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><a href="#__codelineno-0-206"><span class="linenos" data-linenos="206 "></span></a>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><a href="#__codelineno-0-207"><span class="linenos" data-linenos="207 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><a href="#__codelineno-0-208"><span class="linenos" data-linenos="208 "></span></a><span class="sd">        Vertically flipped frame as numpy array with same dimensions.</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a><a href="#__codelineno-0-209"><span class="linenos" data-linenos="209 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a><a href="#__codelineno-0-210"><span class="linenos" data-linenos="210 "></span></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">flipud</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</code></pre></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="sleap_io.transform.frame.pad_frame" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">pad_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">padding</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
 
@@ -3089,39 +3277,39 @@ is filled with the fill value.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/transform/frame.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-187" name="__codelineno-0-187"></a><a href="#__codelineno-0-187"><span class="linenos" data-linenos="187 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">pad_frame</span><span class="p">(</span>
-<a id="__codelineno-0-188" name="__codelineno-0-188"></a><a href="#__codelineno-0-188"><span class="linenos" data-linenos="188 "></span></a>    <span class="n">frame</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-<a id="__codelineno-0-189" name="__codelineno-0-189"></a><a href="#__codelineno-0-189"><span class="linenos" data-linenos="189 "></span></a>    <span class="n">padding</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
-<a id="__codelineno-0-190" name="__codelineno-0-190"></a><a href="#__codelineno-0-190"><span class="linenos" data-linenos="190 "></span></a>    <span class="n">fill</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-0-191" name="__codelineno-0-191"></a><a href="#__codelineno-0-191"><span class="linenos" data-linenos="191 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<a id="__codelineno-0-192" name="__codelineno-0-192"></a><a href="#__codelineno-0-192"><span class="linenos" data-linenos="192 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add padding around a frame.</span>
-<a id="__codelineno-0-193" name="__codelineno-0-193"></a><a href="#__codelineno-0-193"><span class="linenos" data-linenos="193 "></span></a>
-<a id="__codelineno-0-194" name="__codelineno-0-194"></a><a href="#__codelineno-0-194"><span class="linenos" data-linenos="194 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-195" name="__codelineno-0-195"></a><a href="#__codelineno-0-195"><span class="linenos" data-linenos="195 "></span></a><span class="sd">        frame: Input frame as numpy array with shape (H, W) or (H, W, C).</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a><a href="#__codelineno-0-196"><span class="linenos" data-linenos="196 "></span></a><span class="sd">        padding: Padding as (top, right, bottom, left) in pixels.</span>
-<a id="__codelineno-0-197" name="__codelineno-0-197"></a><a href="#__codelineno-0-197"><span class="linenos" data-linenos="197 "></span></a><span class="sd">        fill: Fill value for padded regions.</span>
-<a id="__codelineno-0-198" name="__codelineno-0-198"></a><a href="#__codelineno-0-198"><span class="linenos" data-linenos="198 "></span></a>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a><a href="#__codelineno-0-199"><span class="linenos" data-linenos="199 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-200" name="__codelineno-0-200"></a><a href="#__codelineno-0-200"><span class="linenos" data-linenos="200 "></span></a><span class="sd">        Padded frame as numpy array.</span>
-<a id="__codelineno-0-201" name="__codelineno-0-201"></a><a href="#__codelineno-0-201"><span class="linenos" data-linenos="201 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-202" name="__codelineno-0-202"></a><a href="#__codelineno-0-202"><span class="linenos" data-linenos="202 "></span></a>    <span class="n">top</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">left</span> <span class="o">=</span> <span class="n">padding</span>
-<a id="__codelineno-0-203" name="__codelineno-0-203"></a><a href="#__codelineno-0-203"><span class="linenos" data-linenos="203 "></span></a>
-<a id="__codelineno-0-204" name="__codelineno-0-204"></a><a href="#__codelineno-0-204"><span class="linenos" data-linenos="204 "></span></a>    <span class="k">if</span> <span class="n">top</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">right</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">bottom</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">left</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-0-205" name="__codelineno-0-205"></a><a href="#__codelineno-0-205"><span class="linenos" data-linenos="205 "></span></a>        <span class="k">return</span> <span class="n">frame</span>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><a href="#__codelineno-0-206"><span class="linenos" data-linenos="206 "></span></a>
-<a id="__codelineno-0-207" name="__codelineno-0-207"></a><a href="#__codelineno-0-207"><span class="linenos" data-linenos="207 "></span></a>    <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
-<a id="__codelineno-0-208" name="__codelineno-0-208"></a><a href="#__codelineno-0-208"><span class="linenos" data-linenos="208 "></span></a>    <span class="n">new_h</span> <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="n">top</span> <span class="o">+</span> <span class="n">bottom</span>
-<a id="__codelineno-0-209" name="__codelineno-0-209"></a><a href="#__codelineno-0-209"><span class="linenos" data-linenos="209 "></span></a>    <span class="n">new_w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">+</span> <span class="n">left</span> <span class="o">+</span> <span class="n">right</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a><a href="#__codelineno-0-210"><span class="linenos" data-linenos="210 "></span></a>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a><a href="#__codelineno-0-211"><span class="linenos" data-linenos="211 "></span></a>    <span class="k">if</span> <span class="n">frame</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-<a id="__codelineno-0-212" name="__codelineno-0-212"></a><a href="#__codelineno-0-212"><span class="linenos" data-linenos="212 "></span></a>        <span class="n">output_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_h</span><span class="p">,</span> <span class="n">new_w</span><span class="p">,</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-<a id="__codelineno-0-213" name="__codelineno-0-213"></a><a href="#__codelineno-0-213"><span class="linenos" data-linenos="213 "></span></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a><a href="#__codelineno-0-214"><span class="linenos" data-linenos="214 "></span></a>        <span class="n">output_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_h</span><span class="p">,</span> <span class="n">new_w</span><span class="p">)</span>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a><a href="#__codelineno-0-215"><span class="linenos" data-linenos="215 "></span></a>
-<a id="__codelineno-0-216" name="__codelineno-0-216"></a><a href="#__codelineno-0-216"><span class="linenos" data-linenos="216 "></span></a>    <span class="n">output</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">output_shape</span><span class="p">,</span> <span class="n">fill</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">frame</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-<a id="__codelineno-0-217" name="__codelineno-0-217"></a><a href="#__codelineno-0-217"><span class="linenos" data-linenos="217 "></span></a>    <span class="n">output</span><span class="p">[</span><span class="n">top</span> <span class="p">:</span> <span class="n">top</span> <span class="o">+</span> <span class="n">h</span><span class="p">,</span> <span class="n">left</span> <span class="p">:</span> <span class="n">left</span> <span class="o">+</span> <span class="n">w</span><span class="p">]</span> <span class="o">=</span> <span class="n">frame</span>
-<a id="__codelineno-0-218" name="__codelineno-0-218"></a><a href="#__codelineno-0-218"><span class="linenos" data-linenos="218 "></span></a>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a><a href="#__codelineno-0-219"><span class="linenos" data-linenos="219 "></span></a>    <span class="k">return</span> <span class="n">output</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-213" name="__codelineno-0-213"></a><a href="#__codelineno-0-213"><span class="linenos" data-linenos="213 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">pad_frame</span><span class="p">(</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a><a href="#__codelineno-0-214"><span class="linenos" data-linenos="214 "></span></a>    <span class="n">frame</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><a href="#__codelineno-0-215"><span class="linenos" data-linenos="215 "></span></a>    <span class="n">padding</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a><a href="#__codelineno-0-216"><span class="linenos" data-linenos="216 "></span></a>    <span class="n">fill</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a><a href="#__codelineno-0-217"><span class="linenos" data-linenos="217 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a><a href="#__codelineno-0-218"><span class="linenos" data-linenos="218 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add padding around a frame.</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><a href="#__codelineno-0-219"><span class="linenos" data-linenos="219 "></span></a>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><a href="#__codelineno-0-220"><span class="linenos" data-linenos="220 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a><a href="#__codelineno-0-221"><span class="linenos" data-linenos="221 "></span></a><span class="sd">        frame: Input frame as numpy array with shape (H, W) or (H, W, C).</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a><a href="#__codelineno-0-222"><span class="linenos" data-linenos="222 "></span></a><span class="sd">        padding: Padding as (top, right, bottom, left) in pixels.</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a><a href="#__codelineno-0-223"><span class="linenos" data-linenos="223 "></span></a><span class="sd">        fill: Fill value for padded regions.</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><a href="#__codelineno-0-224"><span class="linenos" data-linenos="224 "></span></a>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a><a href="#__codelineno-0-225"><span class="linenos" data-linenos="225 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a><a href="#__codelineno-0-226"><span class="linenos" data-linenos="226 "></span></a><span class="sd">        Padded frame as numpy array.</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a><a href="#__codelineno-0-227"><span class="linenos" data-linenos="227 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a><a href="#__codelineno-0-228"><span class="linenos" data-linenos="228 "></span></a>    <span class="n">top</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">left</span> <span class="o">=</span> <span class="n">padding</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a><a href="#__codelineno-0-229"><span class="linenos" data-linenos="229 "></span></a>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a><a href="#__codelineno-0-230"><span class="linenos" data-linenos="230 "></span></a>    <span class="k">if</span> <span class="n">top</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">right</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">bottom</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">left</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><a href="#__codelineno-0-231"><span class="linenos" data-linenos="231 "></span></a>        <span class="k">return</span> <span class="n">frame</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a><a href="#__codelineno-0-232"><span class="linenos" data-linenos="232 "></span></a>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><a href="#__codelineno-0-233"><span class="linenos" data-linenos="233 "></span></a>    <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><a href="#__codelineno-0-234"><span class="linenos" data-linenos="234 "></span></a>    <span class="n">new_h</span> <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="n">top</span> <span class="o">+</span> <span class="n">bottom</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><a href="#__codelineno-0-235"><span class="linenos" data-linenos="235 "></span></a>    <span class="n">new_w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">+</span> <span class="n">left</span> <span class="o">+</span> <span class="n">right</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a><a href="#__codelineno-0-236"><span class="linenos" data-linenos="236 "></span></a>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a><a href="#__codelineno-0-237"><span class="linenos" data-linenos="237 "></span></a>    <span class="k">if</span> <span class="n">frame</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a><a href="#__codelineno-0-238"><span class="linenos" data-linenos="238 "></span></a>        <span class="n">output_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_h</span><span class="p">,</span> <span class="n">new_w</span><span class="p">,</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a><a href="#__codelineno-0-239"><span class="linenos" data-linenos="239 "></span></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><a href="#__codelineno-0-240"><span class="linenos" data-linenos="240 "></span></a>        <span class="n">output_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_h</span><span class="p">,</span> <span class="n">new_w</span><span class="p">)</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a><a href="#__codelineno-0-241"><span class="linenos" data-linenos="241 "></span></a>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a><a href="#__codelineno-0-242"><span class="linenos" data-linenos="242 "></span></a>    <span class="n">output</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">output_shape</span><span class="p">,</span> <span class="n">fill</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">frame</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><a href="#__codelineno-0-243"><span class="linenos" data-linenos="243 "></span></a>    <span class="n">output</span><span class="p">[</span><span class="n">top</span> <span class="p">:</span> <span class="n">top</span> <span class="o">+</span> <span class="n">h</span><span class="p">,</span> <span class="n">left</span> <span class="p">:</span> <span class="n">left</span> <span class="o">+</span> <span class="n">w</span><span class="p">]</span> <span class="o">=</span> <span class="n">frame</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a><a href="#__codelineno-0-244"><span class="linenos" data-linenos="244 "></span></a>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><a href="#__codelineno-0-245"><span class="linenos" data-linenos="245 "></span></a>    <span class="k">return</span> <span class="n">output</span>
 </code></pre></div>
             </details>
     </div>
@@ -3132,7 +3320,7 @@ is filled with the fill value.</p>
 
 
 <h3 id="sleap_io.transform.frame.rotate_frame" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">rotate_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">angle</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">rotate_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">angle</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 <a href="#sleap_io.transform.frame.rotate_frame" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3140,8 +3328,7 @@ is filled with the fill value.</p>
     <div class="doc doc-contents ">
 
         <p>Rotate a frame by the given angle.</p>
-<p>The frame is rotated about its center. Positive angles rotate clockwise.
-Corners that rotate outside the frame bounds are clipped.</p>
+<p>The frame is rotated about its center. Positive angles rotate clockwise.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3219,6 +3406,23 @@ Corners that rotate outside the frame bounds are clipped.</p>
                   <code>0</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>expand</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True (default), expand canvas to fit entire rotated image.
+If False, keep original dimensions (clips corners).</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -3238,7 +3442,8 @@ Corners that rotate outside the frame bounds are clipped.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Rotated frame as numpy array with same dimensions as input.</p>
+                <p>Rotated frame as numpy array. If expand=True, dimensions may change.
+If expand=False, dimensions match input.</p>
               </div>
             </td>
           </tr>
@@ -3253,45 +3458,47 @@ Corners that rotate outside the frame bounds are clipped.</p>
 <a id="__codelineno-0-143" name="__codelineno-0-143"></a><a href="#__codelineno-0-143"><span class="linenos" data-linenos="143 "></span></a>    <span class="n">angle</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
 <a id="__codelineno-0-144" name="__codelineno-0-144"></a><a href="#__codelineno-0-144"><span class="linenos" data-linenos="144 "></span></a>    <span class="n">quality</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bilinear&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-145" name="__codelineno-0-145"></a><a href="#__codelineno-0-145"><span class="linenos" data-linenos="145 "></span></a>    <span class="n">fill</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-0-146" name="__codelineno-0-146"></a><a href="#__codelineno-0-146"><span class="linenos" data-linenos="146 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<a id="__codelineno-0-147" name="__codelineno-0-147"></a><a href="#__codelineno-0-147"><span class="linenos" data-linenos="147 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rotate a frame by the given angle.</span>
-<a id="__codelineno-0-148" name="__codelineno-0-148"></a><a href="#__codelineno-0-148"><span class="linenos" data-linenos="148 "></span></a>
-<a id="__codelineno-0-149" name="__codelineno-0-149"></a><a href="#__codelineno-0-149"><span class="linenos" data-linenos="149 "></span></a><span class="sd">    The frame is rotated about its center. Positive angles rotate clockwise.</span>
-<a id="__codelineno-0-150" name="__codelineno-0-150"></a><a href="#__codelineno-0-150"><span class="linenos" data-linenos="150 "></span></a><span class="sd">    Corners that rotate outside the frame bounds are clipped.</span>
+<a id="__codelineno-0-146" name="__codelineno-0-146"></a><a href="#__codelineno-0-146"><span class="linenos" data-linenos="146 "></span></a>    <span class="n">expand</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-147" name="__codelineno-0-147"></a><a href="#__codelineno-0-147"><span class="linenos" data-linenos="147 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a><a href="#__codelineno-0-148"><span class="linenos" data-linenos="148 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rotate a frame by the given angle.</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a><a href="#__codelineno-0-149"><span class="linenos" data-linenos="149 "></span></a>
+<a id="__codelineno-0-150" name="__codelineno-0-150"></a><a href="#__codelineno-0-150"><span class="linenos" data-linenos="150 "></span></a><span class="sd">    The frame is rotated about its center. Positive angles rotate clockwise.</span>
 <a id="__codelineno-0-151" name="__codelineno-0-151"></a><a href="#__codelineno-0-151"><span class="linenos" data-linenos="151 "></span></a>
 <a id="__codelineno-0-152" name="__codelineno-0-152"></a><a href="#__codelineno-0-152"><span class="linenos" data-linenos="152 "></span></a><span class="sd">    Args:</span>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a><a href="#__codelineno-0-153"><span class="linenos" data-linenos="153 "></span></a><span class="sd">        frame: Input frame as numpy array with shape (H, W) or (H, W, C).</span>
 <a id="__codelineno-0-154" name="__codelineno-0-154"></a><a href="#__codelineno-0-154"><span class="linenos" data-linenos="154 "></span></a><span class="sd">        angle: Rotation angle in degrees. Positive is clockwise.</span>
 <a id="__codelineno-0-155" name="__codelineno-0-155"></a><a href="#__codelineno-0-155"><span class="linenos" data-linenos="155 "></span></a><span class="sd">        quality: Interpolation quality. One of &quot;nearest&quot;, &quot;bilinear&quot;, &quot;bicubic&quot;.</span>
 <a id="__codelineno-0-156" name="__codelineno-0-156"></a><a href="#__codelineno-0-156"><span class="linenos" data-linenos="156 "></span></a><span class="sd">        fill: Fill value for areas outside the rotated image.</span>
-<a id="__codelineno-0-157" name="__codelineno-0-157"></a><a href="#__codelineno-0-157"><span class="linenos" data-linenos="157 "></span></a>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><a href="#__codelineno-0-158"><span class="linenos" data-linenos="158 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-159" name="__codelineno-0-159"></a><a href="#__codelineno-0-159"><span class="linenos" data-linenos="159 "></span></a><span class="sd">        Rotated frame as numpy array with same dimensions as input.</span>
-<a id="__codelineno-0-160" name="__codelineno-0-160"></a><a href="#__codelineno-0-160"><span class="linenos" data-linenos="160 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-161" name="__codelineno-0-161"></a><a href="#__codelineno-0-161"><span class="linenos" data-linenos="161 "></span></a>    <span class="k">if</span> <span class="n">angle</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-0-162" name="__codelineno-0-162"></a><a href="#__codelineno-0-162"><span class="linenos" data-linenos="162 "></span></a>        <span class="k">return</span> <span class="n">frame</span>
-<a id="__codelineno-0-163" name="__codelineno-0-163"></a><a href="#__codelineno-0-163"><span class="linenos" data-linenos="163 "></span></a>
-<a id="__codelineno-0-164" name="__codelineno-0-164"></a><a href="#__codelineno-0-164"><span class="linenos" data-linenos="164 "></span></a>    <span class="n">resample</span> <span class="o">=</span> <span class="n">QUALITY_TO_RESAMPLE</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">quality</span><span class="p">,</span> <span class="n">Image</span><span class="o">.</span><span class="n">Resampling</span><span class="o">.</span><span class="n">BILINEAR</span><span class="p">)</span>
-<a id="__codelineno-0-165" name="__codelineno-0-165"></a><a href="#__codelineno-0-165"><span class="linenos" data-linenos="165 "></span></a>
-<a id="__codelineno-0-166" name="__codelineno-0-166"></a><a href="#__codelineno-0-166"><span class="linenos" data-linenos="166 "></span></a>    <span class="c1"># Convert fill to tuple if needed</span>
-<a id="__codelineno-0-167" name="__codelineno-0-167"></a><a href="#__codelineno-0-167"><span class="linenos" data-linenos="167 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fill</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
-<a id="__codelineno-0-168" name="__codelineno-0-168"></a><a href="#__codelineno-0-168"><span class="linenos" data-linenos="168 "></span></a>        <span class="k">if</span> <span class="n">frame</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-<a id="__codelineno-0-169" name="__codelineno-0-169"></a><a href="#__codelineno-0-169"><span class="linenos" data-linenos="169 "></span></a>            <span class="n">fill_color</span> <span class="o">=</span> <span class="p">(</span><span class="n">fill</span><span class="p">,)</span> <span class="o">*</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-<a id="__codelineno-0-170" name="__codelineno-0-170"></a><a href="#__codelineno-0-170"><span class="linenos" data-linenos="170 "></span></a>        <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-171" name="__codelineno-0-171"></a><a href="#__codelineno-0-171"><span class="linenos" data-linenos="171 "></span></a>            <span class="n">fill_color</span> <span class="o">=</span> <span class="n">fill</span>
-<a id="__codelineno-0-172" name="__codelineno-0-172"></a><a href="#__codelineno-0-172"><span class="linenos" data-linenos="172 "></span></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-173" name="__codelineno-0-173"></a><a href="#__codelineno-0-173"><span class="linenos" data-linenos="173 "></span></a>        <span class="n">fill_color</span> <span class="o">=</span> <span class="n">fill</span>
-<a id="__codelineno-0-174" name="__codelineno-0-174"></a><a href="#__codelineno-0-174"><span class="linenos" data-linenos="174 "></span></a>
-<a id="__codelineno-0-175" name="__codelineno-0-175"></a><a href="#__codelineno-0-175"><span class="linenos" data-linenos="175 "></span></a>    <span class="c1"># Handle grayscale images with shape (H, W, 1)</span>
-<a id="__codelineno-0-176" name="__codelineno-0-176"></a><a href="#__codelineno-0-176"><span class="linenos" data-linenos="176 "></span></a>    <span class="n">pil_frame</span><span class="p">,</span> <span class="n">was_squeezed</span> <span class="o">=</span> <span class="n">_to_pil_compatible</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
-<a id="__codelineno-0-177" name="__codelineno-0-177"></a><a href="#__codelineno-0-177"><span class="linenos" data-linenos="177 "></span></a>    <span class="n">pil_img</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">pil_frame</span><span class="p">)</span>
-<a id="__codelineno-0-178" name="__codelineno-0-178"></a><a href="#__codelineno-0-178"><span class="linenos" data-linenos="178 "></span></a>    <span class="c1"># PIL rotates counter-clockwise, so negate angle for clockwise</span>
-<a id="__codelineno-0-179" name="__codelineno-0-179"></a><a href="#__codelineno-0-179"><span class="linenos" data-linenos="179 "></span></a>    <span class="c1"># expand=False keeps the same canvas size (clips corners)</span>
-<a id="__codelineno-0-180" name="__codelineno-0-180"></a><a href="#__codelineno-0-180"><span class="linenos" data-linenos="180 "></span></a>    <span class="n">pil_img</span> <span class="o">=</span> <span class="n">pil_img</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span>
-<a id="__codelineno-0-181" name="__codelineno-0-181"></a><a href="#__codelineno-0-181"><span class="linenos" data-linenos="181 "></span></a>        <span class="o">-</span><span class="n">angle</span><span class="p">,</span> <span class="n">resample</span><span class="o">=</span><span class="n">resample</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fillcolor</span><span class="o">=</span><span class="n">fill_color</span>
-<a id="__codelineno-0-182" name="__codelineno-0-182"></a><a href="#__codelineno-0-182"><span class="linenos" data-linenos="182 "></span></a>    <span class="p">)</span>
-<a id="__codelineno-0-183" name="__codelineno-0-183"></a><a href="#__codelineno-0-183"><span class="linenos" data-linenos="183 "></span></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pil_img</span><span class="p">)</span>
-<a id="__codelineno-0-184" name="__codelineno-0-184"></a><a href="#__codelineno-0-184"><span class="linenos" data-linenos="184 "></span></a>    <span class="k">return</span> <span class="n">_from_pil_result</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">was_squeezed</span><span class="p">)</span>
+<a id="__codelineno-0-157" name="__codelineno-0-157"></a><a href="#__codelineno-0-157"><span class="linenos" data-linenos="157 "></span></a><span class="sd">        expand: If True (default), expand canvas to fit entire rotated image.</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><a href="#__codelineno-0-158"><span class="linenos" data-linenos="158 "></span></a><span class="sd">            If False, keep original dimensions (clips corners).</span>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a><a href="#__codelineno-0-159"><span class="linenos" data-linenos="159 "></span></a>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a><a href="#__codelineno-0-160"><span class="linenos" data-linenos="160 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a><a href="#__codelineno-0-161"><span class="linenos" data-linenos="161 "></span></a><span class="sd">        Rotated frame as numpy array. If expand=True, dimensions may change.</span>
+<a id="__codelineno-0-162" name="__codelineno-0-162"></a><a href="#__codelineno-0-162"><span class="linenos" data-linenos="162 "></span></a><span class="sd">        If expand=False, dimensions match input.</span>
+<a id="__codelineno-0-163" name="__codelineno-0-163"></a><a href="#__codelineno-0-163"><span class="linenos" data-linenos="163 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-164" name="__codelineno-0-164"></a><a href="#__codelineno-0-164"><span class="linenos" data-linenos="164 "></span></a>    <span class="k">if</span> <span class="n">angle</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a><a href="#__codelineno-0-165"><span class="linenos" data-linenos="165 "></span></a>        <span class="k">return</span> <span class="n">frame</span>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a><a href="#__codelineno-0-166"><span class="linenos" data-linenos="166 "></span></a>
+<a id="__codelineno-0-167" name="__codelineno-0-167"></a><a href="#__codelineno-0-167"><span class="linenos" data-linenos="167 "></span></a>    <span class="n">resample</span> <span class="o">=</span> <span class="n">QUALITY_TO_RESAMPLE</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">quality</span><span class="p">,</span> <span class="n">Image</span><span class="o">.</span><span class="n">Resampling</span><span class="o">.</span><span class="n">BILINEAR</span><span class="p">)</span>
+<a id="__codelineno-0-168" name="__codelineno-0-168"></a><a href="#__codelineno-0-168"><span class="linenos" data-linenos="168 "></span></a>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a><a href="#__codelineno-0-169"><span class="linenos" data-linenos="169 "></span></a>    <span class="c1"># Convert fill to tuple if needed</span>
+<a id="__codelineno-0-170" name="__codelineno-0-170"></a><a href="#__codelineno-0-170"><span class="linenos" data-linenos="170 "></span></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fill</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+<a id="__codelineno-0-171" name="__codelineno-0-171"></a><a href="#__codelineno-0-171"><span class="linenos" data-linenos="171 "></span></a>        <span class="k">if</span> <span class="n">frame</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+<a id="__codelineno-0-172" name="__codelineno-0-172"></a><a href="#__codelineno-0-172"><span class="linenos" data-linenos="172 "></span></a>            <span class="n">fill_color</span> <span class="o">=</span> <span class="p">(</span><span class="n">fill</span><span class="p">,)</span> <span class="o">*</span> <span class="n">frame</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a><a href="#__codelineno-0-173"><span class="linenos" data-linenos="173 "></span></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a><a href="#__codelineno-0-174"><span class="linenos" data-linenos="174 "></span></a>            <span class="n">fill_color</span> <span class="o">=</span> <span class="n">fill</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a><a href="#__codelineno-0-175"><span class="linenos" data-linenos="175 "></span></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a><a href="#__codelineno-0-176"><span class="linenos" data-linenos="176 "></span></a>        <span class="n">fill_color</span> <span class="o">=</span> <span class="n">fill</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a><a href="#__codelineno-0-177"><span class="linenos" data-linenos="177 "></span></a>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a><a href="#__codelineno-0-178"><span class="linenos" data-linenos="178 "></span></a>    <span class="c1"># Handle grayscale images with shape (H, W, 1)</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a><a href="#__codelineno-0-179"><span class="linenos" data-linenos="179 "></span></a>    <span class="n">pil_frame</span><span class="p">,</span> <span class="n">was_squeezed</span> <span class="o">=</span> <span class="n">_to_pil_compatible</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a><a href="#__codelineno-0-180"><span class="linenos" data-linenos="180 "></span></a>    <span class="n">pil_img</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">pil_frame</span><span class="p">)</span>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a><a href="#__codelineno-0-181"><span class="linenos" data-linenos="181 "></span></a>    <span class="c1"># PIL rotates counter-clockwise, so negate angle for clockwise</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a><a href="#__codelineno-0-182"><span class="linenos" data-linenos="182 "></span></a>    <span class="n">pil_img</span> <span class="o">=</span> <span class="n">pil_img</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a><a href="#__codelineno-0-183"><span class="linenos" data-linenos="183 "></span></a>        <span class="o">-</span><span class="n">angle</span><span class="p">,</span> <span class="n">resample</span><span class="o">=</span><span class="n">resample</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="n">expand</span><span class="p">,</span> <span class="n">fillcolor</span><span class="o">=</span><span class="n">fill_color</span>
+<a id="__codelineno-0-184" name="__codelineno-0-184"></a><a href="#__codelineno-0-184"><span class="linenos" data-linenos="184 "></span></a>    <span class="p">)</span>
+<a id="__codelineno-0-185" name="__codelineno-0-185"></a><a href="#__codelineno-0-185"><span class="linenos" data-linenos="185 "></span></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pil_img</span><span class="p">)</span>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><a href="#__codelineno-0-186"><span class="linenos" data-linenos="186 "></span></a>    <span class="k">return</span> <span class="n">_from_pil_result</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">was_squeezed</span><span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
@@ -3445,7 +3652,7 @@ Corners that rotate outside the frame bounds are clipped.</p>
 
 
 <h3 id="sleap_io.transform.frame.transform_frame" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">transform_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rotate</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">transform_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rotate</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">expand_rotation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">flip_h</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">flip_v</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 <a href="#sleap_io.transform.frame.transform_frame" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3453,7 +3660,7 @@ Corners that rotate outside the frame bounds are clipped.</p>
     <div class="doc doc-contents ">
 
         <p>Apply a sequence of transformations to a frame.</p>
-<p>Transforms are applied in order: crop -&gt; scale -&gt; rotate -&gt; pad.</p>
+<p>Transforms are applied in order: crop -&gt; scale -&gt; rotate -&gt; pad -&gt; flip.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3579,6 +3786,55 @@ Corners that rotate outside the frame bounds are clipped.</p>
                   <code>0</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>expand_rotation</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True (default), expand canvas to fit rotated image.
+If False, keep original dimensions (clips corners).</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>flip_h</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, flip horizontally (mirror left-right).</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>flip_v</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, flip vertically (mirror top-bottom).</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -3608,46 +3864,61 @@ Corners that rotate outside the frame bounds are clipped.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/transform/frame.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-222" name="__codelineno-0-222"></a><a href="#__codelineno-0-222"><span class="linenos" data-linenos="222 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">transform_frame</span><span class="p">(</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a><a href="#__codelineno-0-223"><span class="linenos" data-linenos="223 "></span></a>    <span class="n">frame</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a><a href="#__codelineno-0-224"><span class="linenos" data-linenos="224 "></span></a>    <span class="n">crop</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a><a href="#__codelineno-0-225"><span class="linenos" data-linenos="225 "></span></a>    <span class="n">scale</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a><a href="#__codelineno-0-226"><span class="linenos" data-linenos="226 "></span></a>    <span class="n">rotate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a><a href="#__codelineno-0-227"><span class="linenos" data-linenos="227 "></span></a>    <span class="n">pad</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a><a href="#__codelineno-0-228"><span class="linenos" data-linenos="228 "></span></a>    <span class="n">quality</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bilinear&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a><a href="#__codelineno-0-229"><span class="linenos" data-linenos="229 "></span></a>    <span class="n">fill</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-0-230" name="__codelineno-0-230"></a><a href="#__codelineno-0-230"><span class="linenos" data-linenos="230 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<a id="__codelineno-0-231" name="__codelineno-0-231"></a><a href="#__codelineno-0-231"><span class="linenos" data-linenos="231 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply a sequence of transformations to a frame.</span>
-<a id="__codelineno-0-232" name="__codelineno-0-232"></a><a href="#__codelineno-0-232"><span class="linenos" data-linenos="232 "></span></a>
-<a id="__codelineno-0-233" name="__codelineno-0-233"></a><a href="#__codelineno-0-233"><span class="linenos" data-linenos="233 "></span></a><span class="sd">    Transforms are applied in order: crop -&gt; scale -&gt; rotate -&gt; pad.</span>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a><a href="#__codelineno-0-234"><span class="linenos" data-linenos="234 "></span></a>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><a href="#__codelineno-0-235"><span class="linenos" data-linenos="235 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a><a href="#__codelineno-0-236"><span class="linenos" data-linenos="236 "></span></a><span class="sd">        frame: Input frame as numpy array with shape (H, W) or (H, W, C).</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><a href="#__codelineno-0-237"><span class="linenos" data-linenos="237 "></span></a><span class="sd">        crop: Crop region as (x1, y1, x2, y2) pixel coordinates.</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a><a href="#__codelineno-0-238"><span class="linenos" data-linenos="238 "></span></a><span class="sd">        scale: Scale factors as (scale_x, scale_y).</span>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a><a href="#__codelineno-0-239"><span class="linenos" data-linenos="239 "></span></a><span class="sd">        rotate: Rotation angle in degrees. Positive is clockwise.</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><a href="#__codelineno-0-240"><span class="linenos" data-linenos="240 "></span></a><span class="sd">        pad: Padding as (top, right, bottom, left) in pixels.</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><a href="#__codelineno-0-241"><span class="linenos" data-linenos="241 "></span></a><span class="sd">        quality: Interpolation quality. One of &quot;nearest&quot;, &quot;bilinear&quot;, &quot;bicubic&quot;.</span>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a><a href="#__codelineno-0-242"><span class="linenos" data-linenos="242 "></span></a><span class="sd">        fill: Fill value for out-of-bounds and padded regions.</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a><a href="#__codelineno-0-243"><span class="linenos" data-linenos="243 "></span></a>
-<a id="__codelineno-0-244" name="__codelineno-0-244"></a><a href="#__codelineno-0-244"><span class="linenos" data-linenos="244 "></span></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-245" name="__codelineno-0-245"></a><a href="#__codelineno-0-245"><span class="linenos" data-linenos="245 "></span></a><span class="sd">        Transformed frame as numpy array.</span>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a><a href="#__codelineno-0-246"><span class="linenos" data-linenos="246 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a><a href="#__codelineno-0-247"><span class="linenos" data-linenos="247 "></span></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">frame</span>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a><a href="#__codelineno-0-248"><span class="linenos" data-linenos="248 "></span></a>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a>    <span class="k">if</span> <span class="n">crop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">crop_frame</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">crop</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">fill</span><span class="p">)</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a><a href="#__codelineno-0-251"><span class="linenos" data-linenos="251 "></span></a>
-<a id="__codelineno-0-252" name="__codelineno-0-252"></a><a href="#__codelineno-0-252"><span class="linenos" data-linenos="252 "></span></a>    <span class="k">if</span> <span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">scale_frame</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="n">quality</span><span class="p">)</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a><a href="#__codelineno-0-254"><span class="linenos" data-linenos="254 "></span></a>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a><a href="#__codelineno-0-255"><span class="linenos" data-linenos="255 "></span></a>    <span class="k">if</span> <span class="n">rotate</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">rotate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a><a href="#__codelineno-0-256"><span class="linenos" data-linenos="256 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">rotate_frame</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">rotate</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="n">quality</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">fill</span><span class="p">)</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a><a href="#__codelineno-0-257"><span class="linenos" data-linenos="257 "></span></a>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a><a href="#__codelineno-0-258"><span class="linenos" data-linenos="258 "></span></a>    <span class="k">if</span> <span class="n">pad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a><a href="#__codelineno-0-259"><span class="linenos" data-linenos="259 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">pad_frame</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pad</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">fill</span><span class="p">)</span>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a><a href="#__codelineno-0-260"><span class="linenos" data-linenos="260 "></span></a>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a><a href="#__codelineno-0-261"><span class="linenos" data-linenos="261 "></span></a>    <span class="k">return</span> <span class="n">result</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-248" name="__codelineno-0-248"></a><a href="#__codelineno-0-248"><span class="linenos" data-linenos="248 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">transform_frame</span><span class="p">(</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a>    <span class="n">frame</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a>    <span class="n">crop</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a><a href="#__codelineno-0-251"><span class="linenos" data-linenos="251 "></span></a>    <span class="n">scale</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a><a href="#__codelineno-0-252"><span class="linenos" data-linenos="252 "></span></a>    <span class="n">rotate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a>    <span class="n">pad</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><a href="#__codelineno-0-254"><span class="linenos" data-linenos="254 "></span></a>    <span class="n">quality</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bilinear&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><a href="#__codelineno-0-255"><span class="linenos" data-linenos="255 "></span></a>    <span class="n">fill</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><a href="#__codelineno-0-256"><span class="linenos" data-linenos="256 "></span></a>    <span class="n">expand_rotation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><a href="#__codelineno-0-257"><span class="linenos" data-linenos="257 "></span></a>    <span class="n">flip_h</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a><a href="#__codelineno-0-258"><span class="linenos" data-linenos="258 "></span></a>    <span class="n">flip_v</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a><a href="#__codelineno-0-259"><span class="linenos" data-linenos="259 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a><a href="#__codelineno-0-260"><span class="linenos" data-linenos="260 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply a sequence of transformations to a frame.</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a><a href="#__codelineno-0-261"><span class="linenos" data-linenos="261 "></span></a>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><a href="#__codelineno-0-262"><span class="linenos" data-linenos="262 "></span></a><span class="sd">    Transforms are applied in order: crop -&gt; scale -&gt; rotate -&gt; pad -&gt; flip.</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><a href="#__codelineno-0-263"><span class="linenos" data-linenos="263 "></span></a>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a><a href="#__codelineno-0-264"><span class="linenos" data-linenos="264 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><a href="#__codelineno-0-265"><span class="linenos" data-linenos="265 "></span></a><span class="sd">        frame: Input frame as numpy array with shape (H, W) or (H, W, C).</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><a href="#__codelineno-0-266"><span class="linenos" data-linenos="266 "></span></a><span class="sd">        crop: Crop region as (x1, y1, x2, y2) pixel coordinates.</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><a href="#__codelineno-0-267"><span class="linenos" data-linenos="267 "></span></a><span class="sd">        scale: Scale factors as (scale_x, scale_y).</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><a href="#__codelineno-0-268"><span class="linenos" data-linenos="268 "></span></a><span class="sd">        rotate: Rotation angle in degrees. Positive is clockwise.</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a><a href="#__codelineno-0-269"><span class="linenos" data-linenos="269 "></span></a><span class="sd">        pad: Padding as (top, right, bottom, left) in pixels.</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><a href="#__codelineno-0-270"><span class="linenos" data-linenos="270 "></span></a><span class="sd">        quality: Interpolation quality. One of &quot;nearest&quot;, &quot;bilinear&quot;, &quot;bicubic&quot;.</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a><a href="#__codelineno-0-271"><span class="linenos" data-linenos="271 "></span></a><span class="sd">        fill: Fill value for out-of-bounds and padded regions.</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><a href="#__codelineno-0-272"><span class="linenos" data-linenos="272 "></span></a><span class="sd">        expand_rotation: If True (default), expand canvas to fit rotated image.</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><a href="#__codelineno-0-273"><span class="linenos" data-linenos="273 "></span></a><span class="sd">            If False, keep original dimensions (clips corners).</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><a href="#__codelineno-0-274"><span class="linenos" data-linenos="274 "></span></a><span class="sd">        flip_h: If True, flip horizontally (mirror left-right).</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a><a href="#__codelineno-0-275"><span class="linenos" data-linenos="275 "></span></a><span class="sd">        flip_v: If True, flip vertically (mirror top-bottom).</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><a href="#__codelineno-0-276"><span class="linenos" data-linenos="276 "></span></a>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><a href="#__codelineno-0-277"><span class="linenos" data-linenos="277 "></span></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a><a href="#__codelineno-0-278"><span class="linenos" data-linenos="278 "></span></a><span class="sd">        Transformed frame as numpy array.</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><a href="#__codelineno-0-279"><span class="linenos" data-linenos="279 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><a href="#__codelineno-0-280"><span class="linenos" data-linenos="280 "></span></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">frame</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a><a href="#__codelineno-0-281"><span class="linenos" data-linenos="281 "></span></a>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a><a href="#__codelineno-0-282"><span class="linenos" data-linenos="282 "></span></a>    <span class="k">if</span> <span class="n">crop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a><a href="#__codelineno-0-283"><span class="linenos" data-linenos="283 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">crop_frame</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">crop</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">fill</span><span class="p">)</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a><a href="#__codelineno-0-284"><span class="linenos" data-linenos="284 "></span></a>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a><a href="#__codelineno-0-285"><span class="linenos" data-linenos="285 "></span></a>    <span class="k">if</span> <span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a><a href="#__codelineno-0-286"><span class="linenos" data-linenos="286 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">scale_frame</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="n">quality</span><span class="p">)</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a><a href="#__codelineno-0-287"><span class="linenos" data-linenos="287 "></span></a>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a><a href="#__codelineno-0-288"><span class="linenos" data-linenos="288 "></span></a>    <span class="k">if</span> <span class="n">rotate</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">rotate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a><a href="#__codelineno-0-289"><span class="linenos" data-linenos="289 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">rotate_frame</span><span class="p">(</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a><a href="#__codelineno-0-290"><span class="linenos" data-linenos="290 "></span></a>            <span class="n">result</span><span class="p">,</span> <span class="n">rotate</span><span class="p">,</span> <span class="n">quality</span><span class="o">=</span><span class="n">quality</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">fill</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="n">expand_rotation</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a><a href="#__codelineno-0-291"><span class="linenos" data-linenos="291 "></span></a>        <span class="p">)</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a><a href="#__codelineno-0-292"><span class="linenos" data-linenos="292 "></span></a>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a><a href="#__codelineno-0-293"><span class="linenos" data-linenos="293 "></span></a>    <span class="k">if</span> <span class="n">pad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a><a href="#__codelineno-0-294"><span class="linenos" data-linenos="294 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">pad_frame</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pad</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">fill</span><span class="p">)</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a><a href="#__codelineno-0-295"><span class="linenos" data-linenos="295 "></span></a>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a><a href="#__codelineno-0-296"><span class="linenos" data-linenos="296 "></span></a>    <span class="k">if</span> <span class="n">flip_h</span><span class="p">:</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a><a href="#__codelineno-0-297"><span class="linenos" data-linenos="297 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">flip_h_frame</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><a href="#__codelineno-0-298"><span class="linenos" data-linenos="298 "></span></a>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a><a href="#__codelineno-0-299"><span class="linenos" data-linenos="299 "></span></a>    <span class="k">if</span> <span class="n">flip_v</span><span class="p">:</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a><a href="#__codelineno-0-300"><span class="linenos" data-linenos="300 "></span></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">flip_v_frame</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a><a href="#__codelineno-0-301"><span class="linenos" data-linenos="301 "></span></a>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a><a href="#__codelineno-0-302"><span class="linenos" data-linenos="302 "></span></a>    <span class="k">return</span> <span class="n">result</span>
 </code></pre></div>
             </details>
     </div>
