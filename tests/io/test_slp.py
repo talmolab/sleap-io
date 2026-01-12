@@ -39,6 +39,7 @@ from sleap_io.io.slp import (
     ExportCancelled,
     camera_group_to_dict,
     camera_to_dict,
+    can_use_fast_path,
     embed_frames,
     embed_videos,
     frame_group_to_dict,
@@ -1084,6 +1085,158 @@ def test_embed_two_rounds(tmpdir, slp_real_data):
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
     assert type(labels3.video.backend) is MediaVideo
+
+
+def test_can_use_fast_path(slp_minimal_pkg, centered_pair_low_quality_path):
+    """Test can_use_fast_path() helper function."""
+    # Load embedded package file
+    labels = read_labels(slp_minimal_pkg)
+    video = labels.video
+
+    # Should use fast path for matching format (PNG -> PNG)
+    assert video.backend.image_format == "png"
+    assert can_use_fast_path(video, 0, "png") is True
+
+    # Should NOT use fast path for format mismatch (PNG -> JPG)
+    assert can_use_fast_path(video, 0, "jpg") is False
+
+    # Should NOT use fast path for HDF5 format (requires encoding)
+    assert can_use_fast_path(video, 0, "hdf5") is False
+
+    # Should NOT use fast path for unavailable frames
+    assert can_use_fast_path(video, 999, "png") is False
+
+    # Should NOT use fast path for non-HDF5 backends
+    media_video = Video.from_filename(centered_pair_low_quality_path)
+    assert can_use_fast_path(media_video, 0, "png") is False
+
+
+def test_fast_path_round_trip_preserves_bytes(tmpdir, slp_minimal_pkg):
+    """Test that fast path preserves exact bytes through save/load cycle."""
+    # Load original package file
+    original_labels = read_labels(slp_minimal_pkg)
+    original_video = original_labels.video
+
+    # Get original raw bytes
+    original_raw_bytes = original_video.backend.get_frame_raw_bytes(0)
+    assert original_raw_bytes is not None
+
+    # Save and reload with fast path (matching PNG format)
+    save_path = str(tmpdir / "roundtrip.pkg.slp")
+    write_labels(save_path, original_labels)
+
+    reloaded_labels = read_labels(save_path)
+    reloaded_raw_bytes = reloaded_labels.video.backend.get_frame_raw_bytes(0)
+
+    # Fast path should preserve exact bytes
+    assert reloaded_raw_bytes is not None
+    assert len(original_raw_bytes) == len(reloaded_raw_bytes)
+    np.testing.assert_array_equal(original_raw_bytes, reloaded_raw_bytes)
+
+
+def test_fast_path_multiple_cycles_no_degradation(tmpdir, slp_minimal_pkg):
+    """Test that multiple save/load cycles don't degrade quality with fast path."""
+    # Load original
+    labels = read_labels(slp_minimal_pkg)
+    original_raw_bytes = labels.video.backend.get_frame_raw_bytes(0)
+
+    # Save/load multiple times
+    current_labels = labels
+    for i in range(5):
+        save_path = str(tmpdir / f"cycle_{i}.pkg.slp")
+        write_labels(save_path, current_labels)
+        current_labels = read_labels(save_path)
+
+    # After 5 cycles, bytes should still be identical (fast path)
+    final_raw_bytes = current_labels.video.backend.get_frame_raw_bytes(0)
+    np.testing.assert_array_equal(original_raw_bytes, final_raw_bytes)
+
+
+def test_fast_path_falls_back_to_slow_path_for_format_mismatch(tmpdir, slp_minimal_pkg):
+    """Test that format mismatch correctly falls back to slow path."""
+    # Load package with PNG embedded
+    labels = read_labels(slp_minimal_pkg)
+    assert labels.video.backend.image_format == "png"
+    original_png_bytes = labels.video.backend.get_frame_raw_bytes(0)
+
+    # Verify PNG magic bytes in original
+    png_magic = original_png_bytes[:4].view(np.uint8)
+    assert list(png_magic) == [137, 80, 78, 71]  # PNG signature
+
+    # Prepare frames metadata manually
+    save_path = str(tmpdir / "converted.pkg.slp")
+
+    # Create the HDF5 file structure first
+    with h5py.File(save_path, "w") as f:
+        pass  # Just create empty file
+
+    frames_metadata = [
+        {
+            "video": labels.video,
+            "frame_idx": 0,
+            "video_ind": 0,
+            "group": "video0",
+        }
+    ]
+
+    # Process with JPG format - this will use slow path since source is PNG
+    process_and_embed_frames(
+        save_path, frames_metadata, image_format="jpg", verbose=False
+    )
+
+    # Verify JPG format was written
+    with h5py.File(save_path, "r") as f:
+        assert "video0/video" in f
+        fmt = f["video0/video"].attrs.get("format", None)
+        assert fmt == "jpg"
+
+        # Verify JPEG magic bytes
+        raw_data = f["video0/video"][0]
+        jpg_magic = np.array(raw_data[:2]).view(np.uint8)
+        assert list(jpg_magic) == [
+            255,
+            216,
+        ]  # JPEG magic (0xFF 0xD8)  # JPEG magic  # JPEG  # JPEG
+
+
+def test_can_use_fast_path_non_embedded_hdf5(tmpdir):
+    """Test can_use_fast_path() returns False for non-embedded HDF5Video."""
+    from sleap_io.io.video_reading import HDF5Video
+
+    # Create an HDF5 file with raw numpy arrays (format="hdf5", not encoded)
+    h5_path = str(tmpdir / "raw_video.h5")
+    with h5py.File(h5_path, "w") as f:
+        ds = f.create_dataset("video", data=np.zeros((5, 64, 64, 1), dtype=np.uint8))
+        ds.attrs["format"] = "hdf5"  # Raw format, not embedded images
+
+    # Create Video with HDF5Video backend
+    video = Video(
+        filename=h5_path,
+        backend=HDF5Video(filename=h5_path, dataset="video"),
+        open_backend=False,
+    )
+    assert video.backend.has_embedded_images is False
+
+    # Should NOT use fast path - has HDF5Video backend but no embedded images
+    assert can_use_fast_path(video, 0, "png") is False
+
+
+def test_fast_path_progress_callback_cancellation(tmpdir, slp_minimal_pkg):
+    """Test that progress_callback cancellation works in fast path."""
+    # Load package file (uses fast path when saving with same format)
+    labels = read_labels(slp_minimal_pkg)
+    assert labels.video.backend.image_format == "png"
+
+    save_path = str(tmpdir / "cancelled.pkg.slp")
+
+    # Cancel immediately
+    def cancel_immediately(current, total):
+        return False
+
+    with pytest.raises(ExportCancelled, match="Export cancelled by user"):
+        write_labels(
+            save_path, labels, embed="user", progress_callback=cancel_immediately
+        )
 
 
 def test_embed_empty_video(tmpdir, slp_real_data, centered_pair_frame_paths):
