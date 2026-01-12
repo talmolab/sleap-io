@@ -9,7 +9,6 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
-
 # Map quality string to PIL resampling filter
 QUALITY_TO_RESAMPLE = {
     "nearest": Image.Resampling.NEAREST,

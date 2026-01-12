@@ -10,8 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
-import numpy as np
-
 from sleap_io.transform.core import Transform
 
 if TYPE_CHECKING:
@@ -154,7 +152,8 @@ def transform_labels(
                 input_size = (w, h)
             except Exception:
                 raise ValueError(
-                    f"Cannot determine dimensions for video {video_idx}: {video.filename}"
+                    f"Cannot determine dimensions for video {video_idx}: "
+                    f"{video.filename}"
                 )
 
         # Transform video file

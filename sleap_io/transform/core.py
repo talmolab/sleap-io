@@ -303,7 +303,9 @@ def resolve_scale(
         return (1.0, 1.0)
 
 
-def parse_crop(value: str, input_size: tuple[int, int] | None = None) -> tuple[int, ...]:
+def parse_crop(
+    value: str, input_size: tuple[int, int] | None = None
+) -> tuple[int, ...]:
     """Parse crop value from CLI string.
 
     Args:
