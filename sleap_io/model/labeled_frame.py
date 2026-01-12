@@ -6,7 +6,7 @@ The `LabeledFrame` class is a data structure that contains `Instance`s and
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from attrs import define, field
@@ -35,13 +35,13 @@ class LabeledFrame:
 
     video: Video
     frame_idx: int = field(converter=int)
-    instances: list[Union[Instance, PredictedInstance]] = field(factory=list)
+    instances: list[Instance | PredictedInstance] = field(factory=list)
 
     def __len__(self) -> int:
         """Return the number of instances in the frame."""
         return len(self.instances)
 
-    def __getitem__(self, key: int) -> Union[Instance, PredictedInstance]:
+    def __getitem__(self, key: int) -> Instance | PredictedInstance:
         """Return the `Instance` at `key` index in the `instances` list."""
         return self.instances[key]
 
@@ -222,7 +222,7 @@ class LabeledFrame:
     def merge(
         self,
         other: "LabeledFrame",
-        instance: Optional["InstanceMatcher"] = None,
+        instance: "InstanceMatcher | None" = None,
         frame: str = "auto",
     ) -> tuple[list[Instance], list[tuple[Instance, Instance, str]]]:
         """Merge instances from another frame into this frame.

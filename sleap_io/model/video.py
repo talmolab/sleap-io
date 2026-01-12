@@ -7,7 +7,7 @@ a video and its components used in SLEAP.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import attrs
 import h5py
@@ -75,15 +75,15 @@ class Video:
     """
 
     filename: str | list[str]
-    backend: Optional[VideoBackend] = None
+    backend: VideoBackend | None = None
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
-    source_video: Optional[Video] = None
+    source_video: "Video | None" = None
     open_backend: bool = True
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
 
     @property
-    def original_video(self) -> Optional["Video"]:
+    def original_video(self) -> "Video | None":
         """The root video in the provenance chain.
 
         For embedded videos, this returns the ultimate source video by
@@ -142,10 +142,10 @@ class Video:
     def from_filename(
         cls,
         filename: str | list[str],
-        dataset: Optional[str] = None,
-        grayscale: Optional[bool] = None,
+        dataset: str | None = None,
+        grayscale: bool | None = None,
         keep_open: bool = True,
-        source_video: Optional[Video] = None,
+        source_video: "Video | None" = None,
         **kwargs,
     ) -> VideoBackend:
         """Create a Video from a filename.
@@ -189,7 +189,7 @@ class Video:
         )
 
     @property
-    def shape(self) -> Tuple[int, int, int, int] | None:
+    def shape(self) -> tuple[int, int, int, int] | None:
         """Return the shape of the video as (num_frames, height, width, channels).
 
         If the video backend is not set or it cannot determine the shape of the video,
@@ -197,7 +197,7 @@ class Video:
         """
         return self._get_shape()
 
-    def _get_shape(self) -> Tuple[int, int, int, int] | None:
+    def _get_shape(self) -> tuple[int, int, int, int] | None:
         """Return the shape of the video as (num_frames, height, width, channels).
 
         This suppresses errors related to querying the backend for the video shape, such
@@ -236,7 +236,7 @@ class Video:
         self.backend_metadata["grayscale"] = value
 
     @property
-    def fps(self) -> Optional[float]:
+    def fps(self) -> float | None:
         """Return the frames per second of the video.
 
         For MediaVideo backends, this reads FPS from the video container metadata.
@@ -251,7 +251,7 @@ class Video:
         return self.backend_metadata.get("fps")
 
     @fps.setter
-    def fps(self, value: Optional[float]):
+    def fps(self, value: float | None):
         """Set the frames per second.
 
         Args:
@@ -271,7 +271,7 @@ class Video:
             self.backend.fps = value
         self.backend_metadata["fps"] = value
 
-    def frame_to_seconds(self, frame_idx: int) -> Optional[float]:
+    def frame_to_seconds(self, frame_idx: int) -> float | None:
         """Convert a frame index to timestamp in seconds.
 
         Args:
@@ -288,7 +288,7 @@ class Video:
             return None
         return frame_idx / self.fps
 
-    def seconds_to_frame(self, seconds: float) -> Optional[int]:
+    def seconds_to_frame(self, seconds: float) -> int | None:
         """Convert a timestamp in seconds to frame index.
 
         Args:
@@ -399,11 +399,11 @@ class Video:
 
     def open(
         self,
-        filename: Optional[str] = None,
-        dataset: Optional[str] = None,
-        grayscale: Optional[str] = None,
+        filename: str | None = None,
+        dataset: str | None = None,
+        grayscale: str | None = None,
         keep_open: bool = True,
-        plugin: Optional[str] = None,
+        plugin: str | None = None,
     ):
         """Open the video backend for reading.
 
@@ -761,9 +761,9 @@ class Video:
         self,
         save_path: str | Path,
         frame_inds: list[int] | np.ndarray | None = None,
-        fps: Optional[float] = None,
+        fps: float | None = None,
         video_kwargs: dict[str, Any] | None = None,
-    ) -> Video:
+    ) -> "Video":
         """Save video frames to a new video file.
 
         Args:

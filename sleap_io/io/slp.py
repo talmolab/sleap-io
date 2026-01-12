@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from enum import Enum, IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable
 
 import h5py
 import imageio.v3 as iio
@@ -84,7 +84,7 @@ def make_video(
     labels_path: str,
     video_json: dict,
     open_backend: bool = True,
-    _hdf5_file: Optional[h5py.File] = None,
+    _hdf5_file: h5py.File | None = None,
 ) -> Video:
     """Create a `Video` object from a JSON dictionary.
 
@@ -271,7 +271,7 @@ def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
     return videos
 
 
-def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
+def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
     """Convert a `Video` object to a JSON-compatible dictionary.
 
     Args:
@@ -416,7 +416,7 @@ def process_and_embed_frames(
     image_format: str = "png",
     fixed_length: bool = True,
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
     progress_callback: Callable[[int, int], bool] | None = None,
 ) -> dict[Video, Video]:
     """Process and embed frames into a SLEAP labels file.
@@ -678,7 +678,7 @@ def embed_frames(
     embed: list[tuple[Video, int]],
     image_format: str = "png",
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
     embed_all_videos: bool = True,
     progress_callback: Callable[[int, int], bool] | None = None,
 ):
@@ -735,7 +735,7 @@ def embed_videos(
     labels: Labels,
     embed: bool | str | list[tuple[Video, int]],
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
     embed_all_videos: bool = True,
     progress_callback: Callable[[int, int], bool] | None = None,
 ):
@@ -804,7 +804,7 @@ def write_videos(
     labels_path: str,
     videos: list[Video],
     restore_source: bool = False,
-    reference_mode: Optional[VideoReferenceMode] = None,
+    reference_mode: VideoReferenceMode | None = None,
     original_videos: list[Video] | None = None,
     verbose: bool = True,
 ):
@@ -1166,7 +1166,7 @@ def _points_from_hdf5_data(
     pts_data: np.ndarray,
     skeleton: Skeleton,
     is_predicted: bool = False,
-) -> Union["PointsArray", "PredictedPointsArray"]:
+) -> "PointsArray | PredictedPointsArray":
     """Build PointsArray directly from HDF5 structured array data.
 
     This is a fast path that avoids column_stack and intermediate array creation
@@ -1208,7 +1208,7 @@ def read_instances(
     points: np.ndarray,
     pred_points: np.ndarray,
     format_id: float,
-) -> list[Union[Instance, PredictedInstance]]:
+) -> list[Instance | PredictedInstance]:
     """Read `Instance` dataset in a SLEAP labels file.
 
     Args:
@@ -2206,9 +2206,9 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
 
 
 def read_labels_set(
-    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
+    path: str | Path | list[str | Path] | dict[str, str | Path],
     open_videos: bool = True,
-) -> LabelsSet:
+) -> "LabelsSet":
     """Load a LabelsSet from multiple SLP files.
 
     Args:
@@ -2358,7 +2358,7 @@ def write_labels(
     restore_original_videos: bool = True,
     embed_inplace: bool = False,
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
     embed_all_videos: bool = True,
     progress_callback: Callable[[int, int], bool] | None = None,
 ):

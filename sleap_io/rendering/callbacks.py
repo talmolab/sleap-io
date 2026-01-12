@@ -6,7 +6,7 @@ during rendering, giving access to the Skia canvas and rendering metadata.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from attrs import define
@@ -83,9 +83,9 @@ class InstanceContext:
     points: np.ndarray
     skeleton_edges: list[tuple[int, int]]
     node_names: list[str]
-    track_id: Optional[int] = None
-    track_name: Optional[str] = None
-    confidence: Optional[float] = None
+    track_id: int | None = None
+    track_name: str | None = None
+    confidence: float | None = None
     scale: float = 1.0
     offset: tuple[float, float] = (0.0, 0.0)
 
@@ -104,7 +104,7 @@ class InstanceContext:
             (y - self.offset[1]) * self.scale,
         )
 
-    def get_centroid(self) -> Optional[tuple[float, float]]:
+    def get_centroid(self) -> tuple[float, float] | None:
         """Get centroid of valid points.
 
         Returns:
@@ -117,7 +117,7 @@ class InstanceContext:
         mean_pt = valid_points.mean(axis=0)
         return (float(mean_pt[0]), float(mean_pt[1]))
 
-    def get_bbox(self) -> Optional[tuple[float, float, float, float]]:
+    def get_bbox(self) -> tuple[float, float, float, float] | None:
         """Get bounding box of valid points.
 
         Returns:

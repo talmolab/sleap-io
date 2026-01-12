@@ -17,7 +17,7 @@ automatic strategies.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Union
+from typing import Any
 
 import attrs
 import numpy as np
@@ -370,7 +370,7 @@ class SkeletonMatcher:
             Only used when method is OVERLAP. Default is 0.5.
     """
 
-    method: Union[SkeletonMatchMethod, str] = attrs.field(
+    method: SkeletonMatchMethod | str = attrs.field(
         default=SkeletonMatchMethod.STRUCTURE,
         converter=lambda x: SkeletonMatchMethod(x) if isinstance(x, str) else x,
     )
@@ -409,7 +409,7 @@ class InstanceMatcher:
             Not used for IDENTITY method. Default is 5.0.
     """
 
-    method: Union[InstanceMatchMethod, str] = attrs.field(
+    method: InstanceMatchMethod | str = attrs.field(
         default=InstanceMatchMethod.SPATIAL,
         converter=lambda x: InstanceMatchMethod(x) if isinstance(x, str) else x,
     )
@@ -493,7 +493,7 @@ class TrackMatcher:
             or a string that will be converted to the enum. Default is NAME.
     """
 
-    method: Union[TrackMatchMethod, str] = attrs.field(
+    method: TrackMatchMethod | str = attrs.field(
         default=TrackMatchMethod.NAME,
         converter=lambda x: TrackMatchMethod(x) if isinstance(x, str) else x,
     )
@@ -521,7 +521,7 @@ class VideoMatcher:
         check that doesn't include the full leaf-uniqueness algorithm.
     """
 
-    method: Union[VideoMatchMethod, str] = attrs.field(
+    method: VideoMatchMethod | str = attrs.field(
         default=VideoMatchMethod.AUTO,
         converter=lambda x: VideoMatchMethod(x) if isinstance(x, str) else x,
     )

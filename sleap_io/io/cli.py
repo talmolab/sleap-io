@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import rich_click as click
 from rich import box
@@ -89,8 +89,8 @@ OUTPUT_EXTENSION_TO_FORMAT = {
 
 
 def _resolve_input(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
+    input_arg: Path | None,
+    input_opt: Path | None,
     name: str = "input file",
 ) -> Path:
     """Resolve input from positional argument or -i option.
@@ -129,8 +129,8 @@ def _get_package_version(package: str) -> str:
 
 
 def _parse_crop_string(
-    crop_str: Optional[str],
-) -> Optional[tuple]:
+    crop_str: str | None,
+) -> tuple | None:
     """Parse crop string from CLI into crop specification.
 
     Args:
@@ -793,7 +793,7 @@ def _print_video_summary(labels: Labels) -> None:
             console.print(f"  [dim]... +{n_remaining} more without cached metadata[/]")
 
 
-def _print_video_details(labels: Labels, video_index: Optional[int] = None) -> None:
+def _print_video_details(labels: Labels, video_index: int | None = None) -> None:
     """Print detailed video information with consistent field ordering.
 
     Args:
@@ -1154,14 +1154,14 @@ def _print_provenance(labels: Labels, compact: bool = False) -> None:
     help="Print all available details.",
 )
 def show(
-    path_arg: Optional[Path],
-    path_opt: Optional[Path],
+    path_arg: Path | None,
+    path_opt: Path | None,
     lazy: bool,
-    open_videos: Optional[bool],
-    lf_index: Optional[int],
+    open_videos: bool | None,
+    lf_index: int | None,
     skeleton: bool,
     video: bool,
-    video_index: Optional[int],
+    video_index: int | None,
     tracks: bool,
     provenance: bool,
     show_all: bool,
@@ -1259,7 +1259,7 @@ def show(
         click.echo(repr(obj))
 
 
-def _infer_input_format(path: Path) -> Optional[str]:
+def _infer_input_format(path: Path) -> str | None:
     """Infer input format from file path.
 
     Args:
@@ -1287,7 +1287,7 @@ def _infer_input_format(path: Path) -> Optional[str]:
     return None
 
 
-def _infer_output_format(path: Path) -> Optional[str]:
+def _infer_output_format(path: Path) -> str | None:
     """Infer output format from file path.
 
     Args:
@@ -1368,12 +1368,12 @@ def _infer_output_format(path: Path) -> Optional[str]:
     help="Save JSON metadata file for round-trip support (CSV only).",
 )
 def convert(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
+    input_arg: Path | None,
+    input_opt: Path | None,
     output_path: Path,
-    input_format: Optional[str],
-    output_format: Optional[str],
-    embed: Optional[str],
+    input_format: str | None,
+    output_format: str | None,
+    embed: str | None,
     csv_format: str,
     scorer: str,
     save_metadata: bool,
@@ -1554,15 +1554,15 @@ def convert(
     help="Embed frames in output files.",
 )
 def split(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
+    input_arg: Path | None,
+    input_opt: Path | None,
     output_dir: Path,
     train_fraction: float,
-    val_fraction: Optional[float],
-    test_fraction: Optional[float],
+    val_fraction: float | None,
+    test_fraction: float | None,
     remove_predictions: bool,
-    seed: Optional[int],
-    embed: Optional[str],
+    seed: int | None,
+    embed: str | None,
 ):
     """Split labels into train/val/test sets.
 
@@ -1775,7 +1775,7 @@ def split(
 def unsplit(
     input_files: tuple[Path, ...],
     output_path: Path,
-    embed: Optional[str],
+    embed: str | None,
 ):
     """Merge split files back into a single labels file.
 
@@ -1961,7 +1961,7 @@ def merge(
     track: str,
     frame: str,
     instance: str,
-    embed: Optional[str],
+    embed: str | None,
     verbose: bool,
 ):
     """Merge multiple labels files into one.
@@ -2187,9 +2187,9 @@ def merge(
     help="Show all details: full image lists, source videos, original videos.",
 )
 def filenames(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
-    output_path: Optional[Path],
+    input_arg: Path | None,
+    input_opt: Path | None,
+    output_path: Path | None,
     new_filenames: tuple[str, ...],
     filename_map: tuple[tuple[str, str], ...],
     prefix_map: tuple[tuple[str, str], ...],
@@ -2542,18 +2542,18 @@ def filenames(
     help="List available color palettes and exit.",
 )
 def render(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
-    output_path: Optional[Path],
-    lf_ind: Optional[int],
-    frame_idx: Optional[int],
-    start_frame_idx: Optional[int],
-    end_frame_idx: Optional[int],
+    input_arg: Path | None,
+    input_opt: Path | None,
+    output_path: Path | None,
+    lf_ind: int | None,
+    frame_idx: int | None,
+    start_frame_idx: int | None,
+    end_frame_idx: int | None,
     video_ind: int,
-    all_frames: Optional[bool],
-    preset: Optional[str],
-    scale: Optional[float],
-    fps: Optional[float],
+    all_frames: bool | None,
+    preset: str | None,
+    scale: float | None,
+    fps: float | None,
     crf: int,
     x264_preset: str,
     color_by: str,
@@ -2564,7 +2564,7 @@ def render(
     alpha: float,
     no_nodes: bool,
     no_edges: bool,
-    crop_str: Optional[str],
+    crop_str: str | None,
     background: str,
     list_colors: bool,
     list_palettes: bool,
@@ -3036,9 +3036,9 @@ def _analyze_skeletons(
     help="Show detailed analysis.",
 )
 def fix(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
-    output_path: Optional[Path],
+    input_arg: Path | None,
+    input_opt: Path | None,
+    output_path: Path | None,
     deduplicate_videos: bool,
     remove_unused_skeletons: bool,
     consolidate_skeletons: bool,
@@ -3123,7 +3123,7 @@ def fix(
     has_multi_user_skeletons = len(user_skels) > 1
 
     # Find most frequent user skeleton for consolidation
-    most_frequent_skeleton: Optional[Skeleton] = None
+    most_frequent_skeleton: Skeleton | None = None
     other_user_skeletons: list[Skeleton] = []
     if has_multi_user_skeletons:
         # Sort by user count descending
@@ -3468,8 +3468,8 @@ def fix(
     help="Include suggested frames.",
 )
 def embed(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
+    input_arg: Path | None,
+    input_opt: Path | None,
     output_path: Path,
     include_user: bool,
     include_predictions: bool,
@@ -3585,8 +3585,8 @@ def embed(
     help="Output .slp file path.",
 )
 def unembed(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
+    input_arg: Path | None,
+    input_opt: Path | None,
     output_path: Path,
 ):
     """Remove embedded frames and restore video references.
@@ -3732,13 +3732,13 @@ def unembed(
     help="H.264 encoding speed/compression trade-off.",
 )
 def trim(
-    input_arg: Optional[Path],
-    input_opt: Optional[Path],
-    output_path: Optional[Path],
-    start_frame: Optional[int],
-    end_frame: Optional[int],
-    video_ind: Optional[int],
-    fps: Optional[float],
+    input_arg: Path | None,
+    input_opt: Path | None,
+    output_path: Path | None,
+    start_frame: int | None,
+    end_frame: int | None,
+    video_ind: int | None,
+    fps: float | None,
     crf: int,
     x264_preset: str,
 ) -> None:
@@ -3775,8 +3775,8 @@ def trim(
     input_path = _resolve_input(input_arg, input_opt, "input file")
 
     # Try to load as labels first, then as video
-    labels: Optional[Labels] = None
-    video: Optional[Video] = None
+    labels: Labels | None = None
+    video: Video | None = None
 
     try:
         result = io_main.load_file(str(input_path), open_videos=True)
@@ -3827,10 +3827,10 @@ def trim(
 def _trim_labels(
     labels: Labels,
     input_path: Path,
-    output_path: Optional[Path],
-    start_frame: Optional[int],
-    end_frame: Optional[int],
-    video_ind: Optional[int],
+    output_path: Path | None,
+    start_frame: int | None,
+    end_frame: int | None,
+    video_ind: int | None,
     video_kwargs: dict[str, Any],
 ) -> None:
     """Trim labels and associated video to a frame range."""
@@ -3915,9 +3915,9 @@ def _trim_labels(
 def _trim_video(
     video: Video,
     input_path: Path,
-    output_path: Optional[Path],
-    start_frame: Optional[int],
-    end_frame: Optional[int],
+    output_path: Path | None,
+    start_frame: int | None,
+    end_frame: int | None,
     video_kwargs: dict[str, Any],
 ) -> None:
     """Trim a standalone video to a frame range."""

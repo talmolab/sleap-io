@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, List, Optional, Union
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
@@ -55,7 +55,7 @@ def save_slp(
     restore_original_videos: bool = True,
     embed_inplace: bool = False,
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
     progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Save a SLEAP dataset to a `.slp` file.
@@ -124,7 +124,7 @@ def load_nwb(filename: str) -> Labels:
 
 def save_nwb(
     labels: Labels,
-    filename: Union[str, Path],
+    filename: str | Path,
     nwb_format: str = "auto",
     append: bool = False,
 ) -> None:
@@ -155,7 +155,7 @@ def save_nwb(
 
 
 def load_labelstudio(
-    filename: str, skeleton: Optional[Union[Skeleton, list[str]]] = None
+    filename: str, skeleton: Skeleton | list[str] | None = None
 ) -> Labels:
     """Read Label Studio-style annotations from a file and return a `Labels` object.
 
@@ -200,7 +200,7 @@ def load_alphatracker(filename: str) -> Labels:
     return alphatracker.read_labels(filename)
 
 
-def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
+def load_jabs(filename: str, skeleton: Skeleton | None = None) -> Labels:
     """Read JABS-style predictions from a file and return a `Labels` object.
 
     Args:
@@ -217,7 +217,7 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
 
 def load_analysis_h5(
     filename: str,
-    video: Optional[Union["Video", str]] = None,
+    video: "Video | str | None" = None,
 ) -> Labels:
     """Load SLEAP Analysis HDF5 file.
 
@@ -246,15 +246,15 @@ def save_analysis_h5(
     labels: Labels,
     filename: str,
     *,
-    video: Optional[Union["Video", int]] = None,
-    labels_path: Optional[str] = None,
+    video: "Video | int | None" = None,
+    labels_path: str | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
-    preset: Optional[str] = None,
-    frame_dim: Optional[int] = None,
-    track_dim: Optional[int] = None,
-    node_dim: Optional[int] = None,
-    xy_dim: Optional[int] = None,
+    preset: str | None = None,
+    frame_dim: int | None = None,
+    track_dim: int | None = None,
+    node_dim: int | None = None,
+    xy_dim: int | None = None,
     save_metadata: bool = True,
 ) -> None:
     """Save Labels to SLEAP Analysis HDF5 file.
@@ -304,7 +304,7 @@ def save_analysis_h5(
     )
 
 
-def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = None):
+def save_jabs(labels: Labels, pose_version: int, root_folder: str | None = None):
     """Save a SLEAP dataset to JABS pose file format.
 
     Args:
@@ -321,7 +321,7 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = No
 
 
 def load_dlc(
-    filename: str, video_search_paths: Optional[List[Union[str, Path]]] = None, **kwargs
+    filename: str, video_search_paths: list[str | Path] | None = None, **kwargs
 ) -> Labels:
     """Read DeepLabCut annotations from a CSV file and return a `Labels` object.
 
@@ -341,7 +341,7 @@ def load_dlc(
 def load_ultralytics(
     dataset_path: str,
     split: str = "train",
-    skeleton: Optional[Skeleton] = None,
+    skeleton: Skeleton | None = None,
     **kwargs,
 ) -> Labels:
     """Load an Ultralytics YOLO pose dataset as a SLEAP `Labels` object.
@@ -484,7 +484,7 @@ def _detect_coco_format(json_path: str) -> bool:
 
 def load_leap(
     filename: str,
-    skeleton: Optional[Skeleton] = None,
+    skeleton: Skeleton | None = None,
     **kwargs,
 ) -> Labels:
     """Load a LEAP dataset from a .mat file.
@@ -506,8 +506,8 @@ def load_leap(
 def load_csv(
     filename: str,
     format: str = "auto",
-    video: Optional[Union["Video", str]] = None,
-    skeleton: Optional["Skeleton"] = None,
+    video: "Video | str | None" = None,
+    skeleton: "Skeleton | None" = None,
 ) -> "Labels":
     """Load pose data from a CSV file.
 
@@ -538,7 +538,7 @@ def save_csv(
     labels: "Labels",
     filename: str,
     format: str = "sleap",
-    video: Optional[Union["Video", int]] = None,
+    video: "Video | int | None" = None,
     include_score: bool = True,
     scorer: str = "sleap-io",
     save_metadata: bool = False,
@@ -575,7 +575,7 @@ def save_csv(
 
 def load_coco(
     json_path: str,
-    dataset_root: Optional[str] = None,
+    dataset_root: str | None = None,
     grayscale: bool = False,
     **kwargs,
 ) -> Labels:
@@ -600,7 +600,7 @@ def load_coco(
 def save_coco(
     labels: Labels,
     json_path: str,
-    image_filenames: Optional[Union[str, List[str]]] = None,
+    image_filenames: str | list[str] | None = None,
     visibility_encoding: str = "ternary",
 ):
     """Save a SLEAP dataset to COCO-style JSON annotation format.
@@ -744,8 +744,8 @@ def save_video(
 
 
 def load_file(
-    filename: str | Path, format: Optional[str] = None, **kwargs
-) -> Union[Labels, Video]:
+    filename: str | Path, format: str | None = None, **kwargs
+) -> Labels | Video:
     """Load a file and return the appropriate object.
 
     Args:
@@ -854,7 +854,7 @@ def load_file(
 def save_file(
     labels: Labels,
     filename: str | Path,
-    format: Optional[str] = None,
+    format: str | None = None,
     verbose: bool = True,
     progress_callback: Callable[[int, int], bool] | None = None,
     **kwargs,
@@ -975,7 +975,7 @@ def save_file(
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
 
 
-def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
+def load_skeleton(filename: str | Path) -> Skeleton | list[Skeleton]:
     """Load skeleton(s) from a JSON, YAML, or SLP file.
 
     Args:
@@ -1017,11 +1017,11 @@ def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
 
 
 def load_labels_set(
-    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
-    format: Optional[str] = None,
+    path: str | Path | list[str | Path] | dict[str, str | Path],
+    format: str | None = None,
     open_videos: bool = True,
     **kwargs,
-) -> LabelsSet:
+) -> "LabelsSet":
     """Load a LabelsSet from multiple files.
 
     Args:
@@ -1105,7 +1105,7 @@ def load_labels_set(
         )
 
 
-def save_skeleton(skeleton: Union[Skeleton, List[Skeleton]], filename: str | Path):
+def save_skeleton(skeleton: Skeleton | list[Skeleton], filename: str | Path):
     """Save skeleton(s) to a JSON or YAML file.
 
     Args:

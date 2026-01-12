@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, ItemsView, Iterator, KeysView, Union, ValuesView
+from typing import ItemsView, Iterator, KeysView, ValuesView
 
 import attrs
 
@@ -37,9 +37,9 @@ class LabelsSet:
         >>> labels_set["test"] = test_labels
     """
 
-    labels: Dict[str, Labels] = attrs.field(factory=dict)
+    labels: dict[str, Labels] = attrs.field(factory=dict)
 
-    def __getitem__(self, key: Union[str, int]) -> Labels:
+    def __getitem__(self, key: str | int) -> Labels:
         """Get Labels by name (string) or index (int) for tuple-like access.
 
         Args:
@@ -150,8 +150,8 @@ class LabelsSet:
 
     def save(
         self,
-        save_dir: Union[str, Path],
-        embed: Union[bool, str] = True,
+        save_dir: str | Path,
+        embed: bool | str = True,
         format: str = "slp",
         **kwargs,
     ) -> None:
