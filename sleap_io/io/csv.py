@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -40,8 +40,8 @@ CSVFormat = Literal["sleap", "dlc", "points", "instances", "frames", "auto"]
 def read_labels(
     filename: str | Path,
     format: CSVFormat = "auto",
-    video: Optional[Union[Video, str]] = None,
-    skeleton: Optional[Skeleton] = None,
+    video: Video | str | None = None,
+    skeleton: Skeleton | None = None,
 ) -> Labels:
     """Read pose data from CSV file and return a Labels object.
 
@@ -120,7 +120,7 @@ def write_labels(
     filename: str | Path,
     format: CSVFormat = "sleap",
     *,
-    video: Optional[Union[Video, int]] = None,
+    video: Video | int | None = None,
     include_score: bool = True,
     include_empty: bool = False,
     scorer: str = "sleap-io",
@@ -264,8 +264,8 @@ def is_csv_file(filename: str | Path) -> bool:
 
 def _read_sleap(
     filename: Path,
-    video: Optional[Union[Video, str]] = None,
-    skeleton: Optional[Skeleton] = None,
+    video: Video | str | None = None,
+    skeleton: Skeleton | None = None,
 ) -> Labels:
     """Read SLEAP Analysis CSV format.
 
@@ -301,7 +301,7 @@ def _read_sleap(
 def _write_sleap(
     labels: Labels,
     filename: Path,
-    video: Optional[Union[Video, int]] = None,
+    video: Video | int | None = None,
     include_score: bool = True,
 ) -> None:
     """Write SLEAP Analysis CSV format.
@@ -346,7 +346,7 @@ def _write_sleap(
 
 def _read_dlc(
     filename: Path,
-    video: Optional[Union[Video, str]] = None,
+    video: Video | str | None = None,
 ) -> Labels:
     """Read DeepLabCut CSV format.
 
@@ -360,7 +360,7 @@ def _read_dlc(
 def _write_dlc(
     labels: Labels,
     filename: Path,
-    video: Optional[Union[Video, int]] = None,
+    video: Video | int | None = None,
     include_score: bool = False,
     scorer: str = "sleap-io",
 ) -> None:
@@ -471,8 +471,8 @@ def _write_dlc(
 def _read_codec_format(
     filename: Path,
     format: str,
-    video: Optional[Union[Video, str]] = None,
-    skeleton: Optional[Skeleton] = None,
+    video: Video | str | None = None,
+    skeleton: Skeleton | None = None,
 ) -> Labels:
     """Read CSV in codec format (points, instances, frames)."""
     from sleap_io.codecs import from_dataframe
@@ -498,7 +498,7 @@ def _write_codec_format(
     labels: Labels,
     filename: Path,
     format: str,
-    video: Optional[Union[Video, int]] = None,
+    video: Video | int | None = None,
     include_score: bool = True,
 ) -> None:
     """Write CSV in codec format (points, instances, frames)."""

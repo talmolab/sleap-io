@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -14,7 +13,7 @@ from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
 
-def read_labels(labels_path: str, skeleton: Optional[Skeleton] = None) -> Labels:
+def read_labels(labels_path: str, skeleton: Skeleton | None = None) -> Labels:
     """Read LEAP pose data from a .mat file and return a `Labels` object.
 
     Args:

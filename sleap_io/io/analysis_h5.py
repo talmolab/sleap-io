@@ -95,7 +95,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
@@ -119,7 +118,7 @@ from sleap_io.model.video import Video
 
 # Presets define dimension positions in the stored array
 # Format: {dim_name: position} for the tracks array (4D)
-PRESETS: Dict[str, Dict[str, int]] = {
+PRESETS: dict[str, dict[str, int]] = {
     # Standard: (frame, track, node, xy) - intuitive Python indexing
     "standard": {"frame": 0, "track": 1, "node": 2, "xy": 3},
     # MATLAB: (track, xy, node, frame) - SLEAP-compatible column-major
@@ -128,12 +127,12 @@ PRESETS: Dict[str, Dict[str, int]] = {
 
 
 def _get_axis_order(
-    preset: Optional[str],
-    frame_dim: Optional[int],
-    track_dim: Optional[int],
-    node_dim: Optional[int],
-    xy_dim: Optional[int],
-) -> Tuple[Dict[str, int], str]:
+    preset: str | None,
+    frame_dim: int | None,
+    track_dim: int | None,
+    node_dim: int | None,
+    xy_dim: int | None,
+) -> tuple[dict[str, int], str]:
     """Resolve axis ordering from preset or explicit dimensions.
 
     Args:
@@ -187,8 +186,8 @@ def _get_axis_order(
 
 
 def _get_transpose_axes(
-    from_order: Dict[str, int], to_order: Dict[str, int], ndim: int
-) -> Tuple[int, ...]:
+    from_order: dict[str, int], to_order: dict[str, int], ndim: int
+) -> tuple[int, ...]:
     """Compute transpose axes to convert between axis orderings.
 
     Args:
@@ -218,7 +217,7 @@ def _get_transpose_axes(
     return tuple(axes)
 
 
-def _get_dims_tuple(axis_order: Dict[str, int], ndim: int) -> Tuple[str, ...]:
+def _get_dims_tuple(axis_order: dict[str, int], ndim: int) -> tuple[str, ...]:
     """Get dimension names tuple for given axis ordering.
 
     Args:
@@ -248,7 +247,7 @@ def _get_dims_tuple(axis_order: Dict[str, int], ndim: int) -> Tuple[str, ...]:
 # =============================================================================
 
 
-def is_analysis_h5_file(filename: Union[str, Path]) -> bool:
+def is_analysis_h5_file(filename: str | Path) -> bool:
     """Check if file is a SLEAP Analysis HDF5 file.
 
     This distinguishes Analysis HDF5 files from JABS HDF5 files by checking
@@ -275,8 +274,8 @@ def is_analysis_h5_file(filename: Union[str, Path]) -> bool:
 
 
 def read_labels(
-    filename: Union[str, Path],
-    video: Optional[Union[Video, str]] = None,
+    filename: str | Path,
+    video: Video | str | None = None,
 ) -> Labels:
     """Load SLEAP Analysis HDF5 file.
 
@@ -475,16 +474,16 @@ def read_labels(
 
 def _get_occupancy_and_points(
     labels: Labels,
-    video: Optional[Video] = None,
+    video: Video | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
-) -> Tuple[
+) -> tuple[
     np.ndarray,
     np.ndarray,
     np.ndarray,
     np.ndarray,
     np.ndarray,
-    List[str],
+    list[str],
     int,
 ]:
     """Build numpy matrices with track occupancy and point location data.
@@ -619,17 +618,17 @@ def _get_occupancy_and_points(
 
 def write_labels(
     labels: Labels,
-    filename: Union[str, Path],
+    filename: str | Path,
     *,
-    video: Optional[Union[Video, int]] = None,
-    labels_path: Optional[str] = None,
+    video: Video | int | None = None,
+    labels_path: str | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
-    preset: Optional[str] = None,
-    frame_dim: Optional[int] = None,
-    track_dim: Optional[int] = None,
-    node_dim: Optional[int] = None,
-    xy_dim: Optional[int] = None,
+    preset: str | None = None,
+    frame_dim: int | None = None,
+    track_dim: int | None = None,
+    node_dim: int | None = None,
+    xy_dim: int | None = None,
     save_metadata: bool = True,
 ) -> None:
     """Save Labels to SLEAP Analysis HDF5 file.
@@ -769,7 +768,7 @@ def write_labels(
         def write_dataset(
             name: str,
             data,
-            dim_names: Optional[tuple] = None,
+            dim_names: tuple | None = None,
         ) -> None:
             if isinstance(data, np.ndarray):
                 ds = f.create_dataset(

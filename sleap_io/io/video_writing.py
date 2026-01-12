@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import TracebackType
-from typing import List, Optional, Type
 
 import attrs
 import imageio
@@ -49,7 +48,7 @@ class VideoWriter:
     crf: int = 25
     preset: str = "superfast"
     output_params: list[str] = attrs.field(factory=list)
-    _writer: "imageio.plugins.ffmpeg.FfmpegFormat.Writer" | None = None
+    _writer: "imageio.plugins.ffmpeg.FfmpegFormat.Writer | None" = None
 
     def build_output_params(self) -> list[str]:
         """Build the output parameters for FFMPEG."""
@@ -103,10 +102,10 @@ class VideoWriter:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
-    ) -> Optional[bool]:
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None:
         """Context manager exit."""
         self.close()
         return False
@@ -151,7 +150,7 @@ class MJPEGFrameWriter:
     quality: int = 2
 
     output_params: list[str] = attrs.field(factory=list)
-    _writer: "imageio.plugins.ffmpeg.FfmpegFormat.Writer" | None = None
+    _writer: "imageio.plugins.ffmpeg.FfmpegFormat.Writer | None" = None
     _frame_index: int = 0
 
     def build_output_params(self) -> list[str]:
@@ -207,7 +206,7 @@ class MJPEGFrameWriter:
         self._writer.append_data(frame)
         self._frame_index += 1
 
-    def write_frames(self, frames: List[np.ndarray]):
+    def write_frames(self, frames: list[np.ndarray]):
         """Write multiple frames to the MJPEG video.
 
         Args:
@@ -222,10 +221,10 @@ class MJPEGFrameWriter:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
-    ) -> Optional[bool]:
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None:
         """Context manager exit."""
         self.close()
         return False

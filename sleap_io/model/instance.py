@@ -9,8 +9,6 @@ estimated, such as confidence scores.
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import attrs
 import numpy as np
 
@@ -414,17 +412,17 @@ class Instance:
 
     points: PointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
     skeleton: Skeleton
-    track: Optional[Track] = None
-    tracking_score: Optional[float] = None
-    from_predicted: Optional[PredictedInstance] = None
+    track: Track | None = None
+    tracking_score: float | None = None
+    from_predicted: "PredictedInstance | None" = None
 
     @classmethod
     def empty(
         cls,
         skeleton: Skeleton,
-        track: Optional[Track] = None,
-        tracking_score: Optional[float] = None,
-        from_predicted: Optional[PredictedInstance] = None,
+        track: Track | None = None,
+        tracking_score: float | None = None,
+        from_predicted: "PredictedInstance | None" = None,
     ) -> "Instance":
         """Create an empty instance with no points.
 
@@ -475,9 +473,9 @@ class Instance:
         cls,
         points_data: np.ndarray,
         skeleton: Skeleton,
-        track: Optional[Track] = None,
-        tracking_score: Optional[float] = None,
-        from_predicted: Optional[PredictedInstance] = None,
+        track: Track | None = None,
+        tracking_score: float | None = None,
+        from_predicted: "PredictedInstance | None" = None,
     ) -> "Instance":
         """Create an instance object from a numpy array.
 
@@ -553,14 +551,14 @@ class Instance:
         else:
             return self.points["xy"].copy()
 
-    def __getitem__(self, node: Union[int, str, Node]) -> np.ndarray:
+    def __getitem__(self, node: int | str | Node) -> np.ndarray:
         """Return the point associated with a node."""
         if type(node) is not int:
             node = self.skeleton.index(node)
 
         return self.points[node]
 
-    def __setitem__(self, node: Union[int, str, Node], value):
+    def __setitem__(self, node: int | str | Node, value):
         """Set the point associated with a node.
 
         Args:
@@ -797,7 +795,7 @@ class Instance:
 
         return iou >= iou_threshold
 
-    def bounding_box(self) -> Optional[np.ndarray]:
+    def bounding_box(self) -> np.ndarray | None:
         """Get the bounding box of visible points.
 
         Returns:
@@ -837,9 +835,9 @@ class PredictedInstance(Instance):
     points: PredictedPointsArray = attrs.field(eq=attrs.cmp_using(eq=np.array_equal))
     skeleton: Skeleton
     score: float = 0.0
-    track: Optional[Track] = None
-    tracking_score: Optional[float] = 0
-    from_predicted: Optional[PredictedInstance] = None
+    track: Track | None = None
+    tracking_score: float | None = 0
+    from_predicted: "PredictedInstance | None" = None
 
     def __repr__(self) -> str:
         """Return a readable representation of the instance."""
@@ -862,9 +860,9 @@ class PredictedInstance(Instance):
         cls,
         skeleton: Skeleton,
         score: float = 0.0,
-        track: Optional[Track] = None,
-        tracking_score: Optional[float] = None,
-        from_predicted: Optional[PredictedInstance] = None,
+        track: Track | None = None,
+        tracking_score: float | None = None,
+        from_predicted: "PredictedInstance | None" = None,
     ) -> "PredictedInstance":
         """Create an empty instance with no points."""
         points = PredictedPointsArray.empty(len(skeleton))
@@ -901,11 +899,11 @@ class PredictedInstance(Instance):
         cls,
         points_data: np.ndarray,
         skeleton: Skeleton,
-        point_scores: Optional[np.ndarray] = None,
+        point_scores: np.ndarray | None = None,
         score: float = 0.0,
-        track: Optional[Track] = None,
-        tracking_score: Optional[float] = None,
-        from_predicted: Optional[PredictedInstance] = None,
+        track: Track | None = None,
+        tracking_score: float | None = None,
+        from_predicted: "PredictedInstance | None" = None,
     ) -> "PredictedInstance":
         """Create a predicted instance object from a numpy array."""
         points = cls._convert_points(points_data, skeleton)
@@ -1021,12 +1019,12 @@ class PredictedInstance(Instance):
         self.points = new_points
         self.points["name"] = self.skeleton.node_names
 
-    def __getitem__(self, node: Union[int, str, Node]) -> np.ndarray:
+    def __getitem__(self, node: int | str | Node) -> np.ndarray:
         """Return the point associated with a node."""
         # Inherit from Instance.__getitem__
         return super().__getitem__(node)
 
-    def __setitem__(self, node: Union[int, str, Node], value):
+    def __setitem__(self, node: int | str | Node, value):
         """Set the point associated with a node.
 
         Args:

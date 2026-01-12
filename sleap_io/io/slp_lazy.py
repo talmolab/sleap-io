@@ -9,7 +9,7 @@ These classes are implementation details - users interact with Labels objects.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Iterator
 
 import attrs
 import numpy as np
@@ -58,7 +58,7 @@ class LazyDataStore:
 
     # Metadata
     format_id: float
-    _source_path: Optional[str] = attrs.field(default=None, alias="source_path")
+    _source_path: str | None = attrs.field(default=None, alias="source_path")
 
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
@@ -165,7 +165,7 @@ class LazyDataStore:
             instances=instances,
         )
 
-    def _materialize_instance(self, idx: int) -> Union["Instance", "PredictedInstance"]:
+    def _materialize_instance(self, idx: int) -> "Instance | PredictedInstance":
         """Create a single Instance from raw data.
 
         Args:
@@ -324,7 +324,7 @@ class LazyDataStore:
 
     def to_numpy(
         self,
-        video: Optional["Video"] = None,
+        video: "Video | None" = None,
         untracked: bool = False,
         return_confidence: bool = False,
         user_instances: bool = True,
@@ -674,9 +674,7 @@ class LazyFrameList:
         """Return number of frames."""
         return len(self._store)
 
-    def __getitem__(
-        self, idx: Union[int, slice]
-    ) -> Union["LabeledFrame", list["LabeledFrame"]]:
+    def __getitem__(self, idx: int | slice) -> "LabeledFrame | list[LabeledFrame]":
         """Get frame(s) by index or slice.
 
         Args:

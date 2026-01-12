@@ -6,7 +6,7 @@ locations using Skia.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Literal, Optional
+from typing import TYPE_CHECKING, Callable, Literal
 
 if TYPE_CHECKING:
     import skia
@@ -21,7 +21,7 @@ def draw_circle_marker(
     y: float,
     size: float,
     fill_paint: "skia.Paint",
-    edge_paint: Optional["skia.Paint"] = None,
+    edge_paint: "skia.Paint | None" = None,
 ) -> None:
     """Draw a filled circle marker, optionally with edge.
 
@@ -44,7 +44,7 @@ def draw_square_marker(
     y: float,
     size: float,
     fill_paint: "skia.Paint",
-    edge_paint: Optional["skia.Paint"] = None,
+    edge_paint: "skia.Paint | None" = None,
 ) -> None:
     """Draw a filled square marker, optionally with edge.
 
@@ -71,7 +71,7 @@ def draw_diamond_marker(
     y: float,
     size: float,
     fill_paint: "skia.Paint",
-    edge_paint: Optional["skia.Paint"] = None,
+    edge_paint: "skia.Paint | None" = None,
 ) -> None:
     """Draw a diamond (rotated square) marker.
 
@@ -102,7 +102,7 @@ def draw_triangle_marker(
     y: float,
     size: float,
     fill_paint: "skia.Paint",
-    edge_paint: Optional["skia.Paint"] = None,
+    edge_paint: "skia.Paint | None" = None,
 ) -> None:
     """Draw a triangle marker (pointing up).
 
@@ -134,7 +134,7 @@ def draw_cross_marker(
     y: float,
     size: float,
     fill_paint: "skia.Paint",
-    edge_paint: Optional["skia.Paint"] = None,
+    edge_paint: "skia.Paint | None" = None,
 ) -> None:
     """Draw a cross/plus marker.
 
@@ -170,7 +170,7 @@ MARKER_FUNCS: dict[
             float,
             float,
             "skia.Paint",
-            Optional["skia.Paint"],
+            "skia.Paint | None",
         ],
         None,
     ],
@@ -192,7 +192,7 @@ def get_marker_func(
         float,
         float,
         "skia.Paint",
-        Optional["skia.Paint"],
+        "skia.Paint | None",
     ],
     None,
 ]:

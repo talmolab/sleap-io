@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Tuple
 
 import attrs
 import h5py
@@ -43,7 +42,7 @@ _AVAILABLE_IMAGE_BACKENDS = {
 
 
 # Global default video plugin
-_default_video_plugin: Optional[str] = None
+_default_video_plugin: str | None = None
 
 
 def normalize_plugin_name(plugin: str) -> str:
@@ -81,7 +80,7 @@ def normalize_plugin_name(plugin: str) -> str:
     return aliases[plugin_lower]
 
 
-def set_default_video_plugin(plugin: Optional[str]) -> None:
+def set_default_video_plugin(plugin: str | None) -> None:
     """Set the default video plugin for all subsequently loaded videos.
 
     Args:
@@ -102,7 +101,7 @@ def set_default_video_plugin(plugin: Optional[str]) -> None:
     _default_video_plugin = plugin
 
 
-def get_default_video_plugin() -> Optional[str]:
+def get_default_video_plugin() -> str | None:
     """Get the current default video plugin.
 
     Returns:
@@ -120,7 +119,7 @@ def get_default_video_plugin() -> Optional[str]:
 
 
 # Global default image plugin for encoding/decoding embedded images
-_default_image_plugin: Optional[str] = None
+_default_image_plugin: str | None = None
 
 
 def normalize_image_plugin_name(plugin: str) -> str:
@@ -155,7 +154,7 @@ def normalize_image_plugin_name(plugin: str) -> str:
     return aliases[plugin_lower]
 
 
-def set_default_image_plugin(plugin: Optional[str]) -> None:
+def set_default_image_plugin(plugin: str | None) -> None:
     """Set the default image plugin for encoding/decoding embedded images.
 
     Args:
@@ -176,7 +175,7 @@ def set_default_image_plugin(plugin: Optional[str]) -> None:
     _default_image_plugin = plugin
 
 
-def get_default_image_plugin() -> Optional[str]:
+def get_default_image_plugin() -> str | None:
     """Get the current default image plugin.
 
     Returns:
@@ -228,7 +227,7 @@ def get_available_image_backends() -> list[str]:
 
 
 def get_installation_instructions(
-    plugin: Optional[str] = None, backend_type: str = "video"
+    plugin: str | None = None, backend_type: str = "video"
 ) -> str:
     """Get installation instructions for backend plugins.
 
@@ -312,14 +311,14 @@ class VideoBackend:
     """
 
     filename: str | Path | list[str] | list[Path]
-    grayscale: Optional[bool] = None
+    grayscale: bool | None = None
     keep_open: bool = True
-    _cached_shape: Optional[Tuple[int, int, int, int]] = None
-    _open_reader: Optional[object] = None
-    _fps: Optional[float] = None
+    _cached_shape: tuple[int, int, int, int] | None = None
+    _open_reader: object | None = None
+    _fps: float | None = None
 
     @property
-    def fps(self) -> Optional[float]:
+    def fps(self) -> float | None:
         """Frames per second of the video.
 
         Returns:
@@ -333,7 +332,7 @@ class VideoBackend:
         return self._fps
 
     @fps.setter
-    def fps(self, value: Optional[float]) -> None:
+    def fps(self, value: float | None) -> None:
         """Set the FPS.
 
         Args:
@@ -350,11 +349,11 @@ class VideoBackend:
     def from_filename(
         cls,
         filename: str | list[str],
-        dataset: Optional[str] = None,
-        grayscale: Optional[bool] = None,
+        dataset: str | None = None,
+        grayscale: bool | None = None,
         keep_open: bool = True,
         **kwargs,
-    ) -> VideoBackend:
+    ) -> "VideoBackend":
         """Create a VideoBackend from a filename.
 
         Args:
@@ -483,7 +482,7 @@ class VideoBackend:
         raise NotImplementedError
 
     @property
-    def img_shape(self) -> Tuple[int, int, int]:
+    def img_shape(self) -> tuple[int, int, int]:
         """Shape of a single frame in the video."""
         height, width, channels = self.read_test_frame().shape
         if self.grayscale is None:
@@ -495,7 +494,7 @@ class VideoBackend:
         return int(height), int(width), int(channels)
 
     @property
-    def shape(self) -> Tuple[int, int, int, int]:
+    def shape(self) -> tuple[int, int, int, int]:
         """Shape of the video as a tuple of `(frames, height, width, channels)`.
 
         On first call, this will defer to `num_frames` and `img_shape` to determine the
@@ -741,7 +740,7 @@ class MediaVideo(VideoBackend):
             return n_frames
 
     @property
-    def fps(self) -> Optional[float]:
+    def fps(self) -> float | None:
         """Frames per second from video container metadata.
 
         Returns:
@@ -775,7 +774,7 @@ class MediaVideo(VideoBackend):
             return None
 
     @fps.setter
-    def fps(self, value: Optional[float]) -> None:
+    def fps(self, value: float | None) -> None:
         """Set an explicit FPS override.
 
         Args:
@@ -936,17 +935,17 @@ class HDF5Video(VideoBackend):
             since PyAV doesn't support image decoding.
     """
 
-    dataset: Optional[str] = None
+    dataset: str | None = None
     input_format: str = attrs.field(
         default="channels_last",
         validator=attrs.validators.in_(["channels_last", "channels_first"]),
     )
     frame_map: dict[int, int] = attrs.field(init=False, default=attrs.Factory(dict))
-    source_filename: Optional[str] = None
-    source_inds: Optional[np.ndarray] = None
+    source_filename: str | None = None
+    source_inds: np.ndarray | None = None
     image_format: str = "hdf5"
     channel_order: str = "RGB"
-    plugin: Optional[str] = None
+    plugin: str | None = None
 
     EXTS = ("h5", "hdf5", "slp")
 
@@ -1042,7 +1041,7 @@ class HDF5Video(VideoBackend):
             return f[self.dataset].shape[0]
 
     @property
-    def img_shape(self) -> Tuple[int, int, int]:
+    def img_shape(self) -> tuple[int, int, int]:
         """Shape of a single frame in the video as `(height, width, channels)`."""
         with h5py.File(self.filename, "r") as f:
             ds = f[self.dataset]
@@ -1332,7 +1331,7 @@ class TiffVideo(VideoBackend):
     """
 
     EXTS = ("tif", "tiff")
-    format: Optional[str] = None
+    format: str | None = None
 
     @staticmethod
     def is_multipage(filename: str) -> bool:

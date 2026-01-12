@@ -13,7 +13,7 @@ Supported formats:
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Generator, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Generator, Iterator, Literal
 
 import numpy as np
 import pandas as pd
@@ -23,8 +23,6 @@ from sleap_io.model.labels import Labels
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
-    from typing_extensions import Literal
-
     from sleap_io.io.slp_lazy import LazyDataStore
 
 # Optional polars support
@@ -108,13 +106,13 @@ def to_dataframe(
     labels: Labels,
     format: DataFrameFormat | str = DataFrameFormat.POINTS,
     *,
-    video: Optional[Video | int] = None,
+    video: Video | int | None = None,
     include_metadata: bool = True,
     include_score: bool = True,
     include_user_instances: bool = True,
     include_predicted_instances: bool = True,
     video_id: Literal["path", "index", "name", "object"] = "path",
-    include_video: Optional[bool] = None,
+    include_video: bool | None = None,
     instance_id: Literal["index", "track"] = "index",
     untracked: Literal["error", "ignore"] = "error",
     backend: Literal["pandas", "polars"] = "pandas",
@@ -213,7 +211,7 @@ def to_dataframe(
             )
 
     # Convert video parameter to index for fast path filtering
-    video_filter_idx: Optional[int] = None
+    video_filter_idx: int | None = None
     if video is not None:
         if isinstance(video, int):
             video_filter_idx = video
@@ -326,13 +324,13 @@ def to_dataframe_iter(
     format: DataFrameFormat | str = DataFrameFormat.POINTS,
     *,
     chunk_size: int | None = None,
-    video: Optional[Video | int] = None,
+    video: Video | int | None = None,
     include_metadata: bool = True,
     include_score: bool = True,
     include_user_instances: bool = True,
     include_predicted_instances: bool = True,
     video_id: Literal["path", "index", "name", "object"] = "path",
-    include_video: Optional[bool] = None,
+    include_video: bool | None = None,
     instance_id: Literal["index", "track"] = "index",
     untracked: Literal["error", "ignore"] = "error",
     backend: Literal["pandas", "polars"] = "pandas",
@@ -541,9 +539,7 @@ def to_dataframe_iter(
         yield df
 
 
-def _format_video(
-    video: Video, labels: Labels, video_id: str
-) -> Union[str, int, Video]:
+def _format_video(video: Video, labels: Labels, video_id: str) -> str | int | Video:
     """Format video based on video_id parameter.
 
     Args:
@@ -1103,7 +1099,7 @@ def _to_points_df_lazy(
     store: "LazyDataStore",
     labels: Labels,
     *,
-    video_filter: Optional[int] = None,
+    video_filter: int | None = None,
     include_metadata: bool = True,
     include_score: bool = True,
     include_user_instances: bool = True,
@@ -1226,7 +1222,7 @@ def _to_instances_df_lazy(
     store: "LazyDataStore",
     labels: Labels,
     *,
-    video_filter: Optional[int] = None,
+    video_filter: int | None = None,
     include_metadata: bool = True,
     include_score: bool = True,
     include_user_instances: bool = True,
@@ -1881,8 +1877,8 @@ def _to_multi_index_df(  # noqa: D417
 def from_dataframe(
     df: pd.DataFrame,
     *,
-    video: Optional[Video] = None,
-    skeleton: Optional["Skeleton"] = None,  # noqa: F821
+    video: Video | None = None,
+    skeleton: "Skeleton | None" = None,  # noqa: F821
     format: DataFrameFormat | str = DataFrameFormat.POINTS,
 ) -> Labels:
     """Create a Labels object from a DataFrame.
@@ -1944,8 +1940,8 @@ def from_dataframe(
 def _from_points_df(
     df: pd.DataFrame,
     *,
-    video: Optional[Video] = None,
-    skeleton: Optional["Skeleton"] = None,  # noqa: F821
+    video: Video | None = None,
+    skeleton: "Skeleton | None" = None,  # noqa: F821
 ) -> Labels:
     """Create Labels from a points format DataFrame (one row per point)."""
     from sleap_io.model.labeled_frame import LabeledFrame
@@ -2207,8 +2203,8 @@ def _from_points_df(
 def _from_instances_df(
     df: pd.DataFrame,
     *,
-    video: Optional[Video] = None,
-    skeleton: Optional["Skeleton"] = None,  # noqa: F821
+    video: Video | None = None,
+    skeleton: "Skeleton | None" = None,  # noqa: F821
 ) -> Labels:
     """Create Labels from an instances format DataFrame (one row per instance)."""
     from sleap_io.model.labeled_frame import LabeledFrame
@@ -2390,8 +2386,8 @@ def _from_instances_df(
 def _from_frames_df(
     df: pd.DataFrame,
     *,
-    video: Optional[Video] = None,
-    skeleton: Optional["Skeleton"] = None,  # noqa: F821
+    video: Video | None = None,
+    skeleton: "Skeleton | None" = None,  # noqa: F821
 ) -> Labels:
     """Create Labels from a frames format DataFrame (one row per frame, wide format)."""
     from sleap_io.model.labeled_frame import LabeledFrame
@@ -2607,8 +2603,8 @@ def _from_frames_df(
 def _from_multi_index_df(
     df: pd.DataFrame,
     *,
-    video: Optional[Video] = None,
-    skeleton: Optional["Skeleton"] = None,  # noqa: F821
+    video: Video | None = None,
+    skeleton: "Skeleton | None" = None,  # noqa: F821
 ) -> Labels:
     """Create Labels from a multi-index format DataFrame (hierarchical columns)."""
     # Handle multi-index columns

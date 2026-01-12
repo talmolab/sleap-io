@@ -6,7 +6,7 @@ This module provides the main API for rendering pose data with skia-python.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Literal
 
 import numpy as np
 
@@ -37,20 +37,16 @@ PRESETS: dict[str, dict] = {
 }
 
 # Type alias for crop specification
-# Note: Use Tuple (not tuple) for Python 3.8 compatibility in Union
 # Supports both pixel coordinates (int tuple) and normalized coordinates (float tuple)
-CropSpec = Union[
-    Tuple[int, int, int, int],  # Pixel coordinates
-    Tuple[float, float, float, float],  # Normalized coordinates (0.0-1.0)
-    None,
-]
+CropSpec = (
+    tuple[int, int, int, int]  # Pixel coordinates
+    | tuple[float, float, float, float]  # Normalized coordinates (0.0-1.0)
+    | None
+)
 
 
 def _resolve_crop(
-    crop: Union[
-        Tuple[int, int, int, int],
-        Tuple[float, float, float, float],
-    ],
+    crop: tuple[int, int, int, int] | tuple[float, float, float, float],
     frame_shape: tuple[int, int],
 ) -> tuple[int, int, int, int]:
     """Resolve crop specification to pixel coordinates.
@@ -101,7 +97,7 @@ def _apply_crop(
     frame: np.ndarray,
     instances_points: list[np.ndarray],
     crop: tuple[int, int, int, int],
-    output_size: Optional[tuple[int, int]] = None,
+    output_size: tuple[int, int] | None = None,
 ) -> tuple[np.ndarray, list[np.ndarray], float]:
     """Apply crop to frame and shift instance coordinates.
 
@@ -292,7 +288,7 @@ def render_frame(
     *,
     # Appearance
     color_by: ColorScheme = "instance",
-    palette: Union[PaletteName, str] = "standard",
+    palette: PaletteName | str = "standard",
     marker_shape: MarkerShape = "circle",
     marker_size: float = 4.0,
     line_width: float = 2.0,
@@ -301,15 +297,15 @@ def render_frame(
     show_edges: bool = True,
     scale: float = 1.0,
     # Track info for track coloring
-    track_indices: Optional[list[int]] = None,
+    track_indices: list[int] | None = None,
     n_tracks: int = 0,
     # Callbacks
-    pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
-    post_render_callback: Optional[Callable[[RenderContext], None]] = None,
-    per_instance_callback: Optional[Callable[[InstanceContext], None]] = None,
+    pre_render_callback: Callable[[RenderContext], None] | None = None,
+    post_render_callback: Callable[[RenderContext], None] | None = None,
+    per_instance_callback: Callable[[InstanceContext], None] | None = None,
     # Callback context info
     frame_idx: int = 0,
-    instance_metadata: Optional[list[dict]] = None,
+    instance_metadata: list[dict] | None = None,
 ) -> np.ndarray:
     """Render poses on a single frame.
 
@@ -505,24 +501,20 @@ def render_frame(
 
 
 def render_image(
-    source: Union[
-        "Labels",
-        "LabeledFrame",
-        list[Union["Instance", "PredictedInstance"]],
-    ],
-    save_path: Optional[Union[str, Path]] = None,
+    source: "Labels | LabeledFrame | list[Instance | PredictedInstance]",
+    save_path: str | Path | None = None,
     *,
     # Frame specification (for Labels input)
-    lf_ind: Optional[int] = None,
-    video: Optional[Union["Video", int]] = None,
-    frame_idx: Optional[int] = None,
+    lf_ind: int | None = None,
+    video: "Video | int | None" = None,
+    frame_idx: int | None = None,
     # Image override
-    image: Optional[np.ndarray] = None,
+    image: np.ndarray | None = None,
     # Cropping
     crop: CropSpec = None,
     # Appearance
     color_by: ColorScheme = "auto",
-    palette: Union[PaletteName, str] = "standard",
+    palette: PaletteName | str = "standard",
     marker_shape: MarkerShape = "circle",
     marker_size: float = 4.0,
     line_width: float = 2.0,
@@ -531,11 +523,11 @@ def render_image(
     show_edges: bool = True,
     scale: float = 1.0,
     # Background control
-    background: Union[Literal["video"], ColorSpec] = "video",
+    background: Literal["video"] | ColorSpec = "video",
     # Callbacks
-    pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
-    post_render_callback: Optional[Callable[[RenderContext], None]] = None,
-    per_instance_callback: Optional[Callable[[InstanceContext], None]] = None,
+    pre_render_callback: Callable[[RenderContext], None] | None = None,
+    post_render_callback: Callable[[RenderContext], None] | None = None,
+    per_instance_callback: Callable[[InstanceContext], None] | None = None,
 ) -> np.ndarray:
     """Render single frame with pose overlays.
 
@@ -618,7 +610,7 @@ def render_image(
 
     # Handle background parameter
     use_video = background == "video"
-    background_color: Optional[tuple[int, int, int]] = None
+    background_color: tuple[int, int, int] | None = None
     if not use_video:
         background_color = resolve_color(background)
 
@@ -818,24 +810,24 @@ def render_image(
 
 
 def render_video(
-    source: Union["Labels", list["LabeledFrame"]],
-    save_path: Optional[Union[str, Path]] = None,
+    source: "Labels | list[LabeledFrame]",
+    save_path: str | Path | None = None,
     *,
     # Video selection
-    video: Optional[Union["Video", int]] = None,
+    video: "Video | int | None" = None,
     # Frame selection
-    frame_inds: Optional[list[int]] = None,
-    start: Optional[int] = None,
-    end: Optional[int] = None,
+    frame_inds: list[int] | None = None,
+    start: int | None = None,
+    end: int | None = None,
     include_unlabeled: bool = False,
     # Cropping
     crop: CropSpec = None,
     # Quality/scale
-    preset: Optional[Literal["preview", "draft", "final"]] = None,
+    preset: Literal["preview", "draft", "final"] | None = None,
     scale: float = 1.0,
     # Appearance
     color_by: ColorScheme = "auto",
-    palette: Union[PaletteName, str] = "standard",
+    palette: PaletteName | str = "standard",
     marker_shape: MarkerShape = "circle",
     marker_size: float = 4.0,
     line_width: float = 2.0,
@@ -843,20 +835,20 @@ def render_video(
     show_nodes: bool = True,
     show_edges: bool = True,
     # Video encoding
-    fps: Optional[float] = None,
+    fps: float | None = None,
     codec: str = "libx264",
     crf: int = 25,
     x264_preset: str = "superfast",
     # Background control
-    background: Union[Literal["video"], ColorSpec] = "video",
+    background: Literal["video"] | ColorSpec = "video",
     # Callbacks
-    pre_render_callback: Optional[Callable[[RenderContext], None]] = None,
-    post_render_callback: Optional[Callable[[RenderContext], None]] = None,
-    per_instance_callback: Optional[Callable[[InstanceContext], None]] = None,
+    pre_render_callback: Callable[[RenderContext], None] | None = None,
+    post_render_callback: Callable[[RenderContext], None] | None = None,
+    per_instance_callback: Callable[[InstanceContext], None] | None = None,
     # Progress
-    progress_callback: Optional[Callable[[int, int], bool]] = None,
+    progress_callback: Callable[[int, int], bool] | None = None,
     show_progress: bool = True,
-) -> Union["Video", list[np.ndarray]]:
+) -> "Video | list[np.ndarray]":
     """Render video with pose overlays.
 
     Args:
@@ -932,7 +924,7 @@ def render_video(
 
     # Handle background parameter
     use_video = background == "video"
-    background_color: Optional[tuple[int, int, int]] = None
+    background_color: tuple[int, int, int] | None = None
     if not use_video:
         background_color = resolve_color(background)
 
@@ -1063,7 +1055,7 @@ def render_video(
 
     # Resolve crop bounds once (before the loop)
     # We need the video shape to resolve normalized coordinates
-    crop_bounds: Optional[tuple[int, int, int, int]] = None
+    crop_bounds: tuple[int, int, int, int] | None = None
     if crop is not None:
         if hasattr(target_video, "shape") and target_video.shape is not None:
             h, w = target_video.shape[1:3]

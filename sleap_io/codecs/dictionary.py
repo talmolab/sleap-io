@@ -13,7 +13,7 @@ The dictionary codec is useful for:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labels import Labels
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 def to_dict(
     labels: Labels,
     *,
-    video: Optional[Video | int] = None,
+    video: Video | int | None = None,
     skip_empty_frames: bool = False,
 ) -> dict[str, Any]:
     """Convert Labels to a primitive dictionary (JSON-serializable).
@@ -72,7 +72,7 @@ def to_dict(
           Python primitives
     """
     # Convert video parameter to index for fast path filtering
-    video_filter_idx: Optional[int] = None
+    video_filter_idx: int | None = None
     if video is not None:
         if isinstance(video, int):
             video_filter_idx = video
@@ -239,7 +239,7 @@ def to_dict(
 def _build_labeled_frames_lazy(
     store: "LazyDataStore",
     *,
-    video_filter: Optional[int] = None,
+    video_filter: int | None = None,
     skip_empty_frames: bool = False,
 ) -> list[dict[str, Any]]:
     """Build labeled frames list directly from LazyDataStore arrays.

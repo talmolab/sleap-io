@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 import numpy as np
 from attrs import define, field
@@ -71,7 +71,7 @@ class Labels:
     provenance: dict[str, Any] = field(factory=dict)
 
     # Internal lazy state (private, not part of public API)
-    _lazy_store: Optional["LazyDataStore"] = field(
+    _lazy_store: "LazyDataStore | None" = field(
         default=None, repr=False, eq=False, alias="lazy_store"
     )
 
@@ -365,7 +365,7 @@ class Labels:
         """Return a readable representation of the labels."""
         return self.__repr__()
 
-    def copy(self, *, open_videos: Optional[bool] = None) -> Labels:
+    def copy(self, *, open_videos: bool | None = None) -> "Labels":
         """Create a deep copy of the Labels object.
 
         Args:
@@ -485,7 +485,7 @@ class Labels:
 
     def numpy(
         self,
-        video: Optional[Union[Video, int]] = None,
+        video: Video | int | None = None,
         untracked: bool = False,
         return_confidence: bool = False,
         user_instances: bool = True,
@@ -556,7 +556,7 @@ class Labels:
     def to_dict(
         self,
         *,
-        video: Optional[Union[Video, int]] = None,
+        video: Video | int | None = None,
         skip_empty_frames: bool = False,
     ) -> dict:
         """Convert labels to a JSON-serializable dictionary.
@@ -591,13 +591,13 @@ class Labels:
         self,
         format: str = "points",
         *,
-        video: Optional[Union[Video, int]] = None,
+        video: Video | int | None = None,
         include_metadata: bool = True,
         include_score: bool = True,
         include_user_instances: bool = True,
         include_predicted_instances: bool = True,
         video_id: str = "path",
-        include_video: Optional[bool] = None,
+        include_video: bool | None = None,
         backend: str = "pandas",
     ):
         """Convert labels to a pandas or polars DataFrame.
@@ -649,14 +649,14 @@ class Labels:
         self,
         format: str = "points",
         *,
-        chunk_size: Optional[int] = None,
-        video: Optional[Union[Video, int]] = None,
+        chunk_size: int | None = None,
+        video: Video | int | None = None,
         include_metadata: bool = True,
         include_score: bool = True,
         include_user_instances: bool = True,
         include_predicted_instances: bool = True,
         video_id: str = "path",
-        include_video: Optional[bool] = None,
+        include_video: bool | None = None,
         instance_id: str = "index",
         untracked: str = "error",
         backend: str = "pandas",
@@ -901,7 +901,7 @@ class Labels:
     def save(
         self,
         filename: str,
-        format: Optional[str] = None,
+        format: str | None = None,
         embed: bool | str | list[tuple[Video, int]] | None = False,
         restore_original_videos: bool = True,
         embed_inplace: bool = False,
@@ -980,9 +980,9 @@ class Labels:
 
     def render(
         self,
-        save_path: Optional[Union[str, Path]] = None,
+        save_path: str | Path | None = None,
         **kwargs,
-    ) -> Union["Video", list]:
+    ) -> "Video | list":
         """Render video with pose overlays.
 
         Convenience method that delegates to `sleap_io.render_video()`.
@@ -1504,7 +1504,7 @@ class Labels:
 
     def extract(
         self, inds: list[int] | list[tuple[Video, int]] | np.ndarray, copy: bool = True
-    ) -> Labels:
+    ) -> "Labels":
         """Extract a set of frames into a new Labels object.
 
         Args:
@@ -1627,7 +1627,7 @@ class Labels:
         save_dir: str | Path | None = None,
         seed: int | None = None,
         embed: bool = True,
-    ) -> LabelsSet:
+    ) -> "LabelsSet":
         """Make splits for training with embedded images.
 
         Args:
@@ -1728,7 +1728,7 @@ class Labels:
         frame_inds: list[int] | np.ndarray,
         video: Video | int | None = None,
         video_kwargs: dict[str, Any] | None = None,
-    ) -> Labels:
+    ) -> "Labels":
         """Trim the labels to a subset of frames and videos accordingly.
 
         Args:
@@ -1801,8 +1801,8 @@ class Labels:
     def update_from_numpy(
         self,
         tracks_arr: np.ndarray,
-        video: Optional[Union[Video, int]] = None,
-        tracks: Optional[list[Track]] = None,
+        video: Video | int | None = None,
+        tracks: list[Track] | None = None,
         create_missing: bool = True,
     ):
         """Update instances from a numpy array of tracks.
@@ -2033,13 +2033,13 @@ class Labels:
     def merge(
         self,
         other: "Labels",
-        skeleton: Optional[Union[str, "SkeletonMatcher"]] = None,
-        video: Optional[Union[str, "VideoMatcher"]] = None,
-        track: Optional[Union[str, "TrackMatcher"]] = None,
+        skeleton: "str | SkeletonMatcher | None" = None,
+        video: "str | VideoMatcher | None" = None,
+        track: "str | TrackMatcher | None" = None,
         frame: str = "auto",
-        instance: Optional[Union[str, "InstanceMatcher"]] = None,
+        instance: "str | InstanceMatcher | None" = None,
         validate: bool = True,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
         error_mode: str = "continue",
     ) -> "MergeResult":
         """Merge another Labels object into this one.
@@ -2469,10 +2469,10 @@ class Labels:
 
     def _map_instance(
         self,
-        instance: Union[Instance, PredictedInstance],
+        instance: Instance | PredictedInstance,
         skeleton_map: dict[Skeleton, Skeleton],
         track_map: dict[Track, Track],
-    ) -> Union[Instance, PredictedInstance]:
+    ) -> Instance | PredictedInstance:
         """Map an instance to use mapped skeleton and track.
 
         Args:

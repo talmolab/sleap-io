@@ -7,7 +7,7 @@ array shapes, instance selection, and metadata handling.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 def to_numpy(
     labels: Labels,
     *,
-    video: Optional[Union[Video, int]] = None,
+    video: Video | int | None = None,
     untracked: bool = False,
     return_confidence: bool = False,
     user_instances: bool = True,
@@ -243,12 +243,12 @@ def to_numpy(
 def from_numpy(
     tracks_array: np.ndarray,
     *,
-    videos: Optional[list[Video]] = None,
-    video: Optional[Video] = None,
-    skeletons: Optional[list[Skeleton] | Skeleton] = None,
-    skeleton: Optional[Skeleton] = None,
-    tracks: Optional[list[Track]] = None,
-    track_names: Optional[list[str]] = None,
+    videos: list[Video] | None = None,
+    video: Video | None = None,
+    skeletons: list[Skeleton] | Skeleton | None = None,
+    skeleton: Skeleton | None = None,
+    tracks: list[Track] | None = None,
+    track_names: list[str] | None = None,
     first_frame: int = 0,
     return_confidence: bool = False,
 ) -> Labels:

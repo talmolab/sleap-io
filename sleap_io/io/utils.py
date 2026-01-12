@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import h5py  # type: ignore[import]
 import numpy as np
@@ -24,9 +24,7 @@ def read_hdf5_dataset(filename: str, dataset: str) -> np.ndarray:
     return data
 
 
-def _overwrite_hdf5_dataset(
-    f: Union[h5py.File, h5py.Group], dataset: str, data: np.ndarray
-):
+def _overwrite_hdf5_dataset(f: h5py.File | h5py.Group, dataset: str, data: np.ndarray):
     """Overwrite dataset in HDF5 file.
 
     Args:
@@ -87,7 +85,7 @@ def write_hdf5_group(filename: str, data: dict[str, np.ndarray]):
     """
 
     def overwrite_hdf5_group(
-        file_or_group: Union[h5py.File, h5py.Group], group_name: str
+        file_or_group: h5py.File | h5py.Group, group_name: str
     ) -> h5py.Group:
         """Overwrite group in HDF5 file.
 
@@ -122,8 +120,8 @@ def write_hdf5_group(filename: str, data: dict[str, np.ndarray]):
 
 
 def read_hdf5_attrs(
-    filename: str, dataset: str = "/", attribute: Optional[str] = None
-) -> Union[Any, dict[str, Any]]:
+    filename: str, dataset: str = "/", attribute: str | None = None
+) -> Any | dict[str, Any]:
     """Read attributes from an HDF5 dataset.
 
     Args:
@@ -155,7 +153,7 @@ def write_hdf5_attrs(filename: str, dataset: str, attributes: dict[str, Any]):
     """
 
     def _overwrite_hdf5_attr(
-        group_or_dataset: Union[h5py.Group, h5py.Dataset], attr_name: str, data: Any
+        group_or_dataset: h5py.Group | h5py.Dataset, attr_name: str, data: Any
     ):
         """Overwrite attribute for group or dataset in HDF5 file.
 

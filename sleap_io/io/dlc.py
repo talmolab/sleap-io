@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -16,7 +15,7 @@ from sleap_io.model.skeleton import Node, Skeleton
 from sleap_io.model.video import Video
 
 
-def is_dlc_file(filename: Union[str, Path]) -> bool:
+def is_dlc_file(filename: str | Path) -> bool:
     """Check if file is a DLC CSV file.
 
     Args:
@@ -48,8 +47,8 @@ def is_dlc_file(filename: Union[str, Path]) -> bool:
 
 
 def load_dlc(
-    filename: Union[str, Path],
-    video_search_paths: Optional[list[Union[str, Path]]] = None,
+    filename: str | Path,
+    video_search_paths: list[str | Path] | None = None,
     **kwargs,
 ) -> Labels:
     """Load DeepLabCut annotations from CSV file.
