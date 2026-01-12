@@ -2645,7 +2645,7 @@
                 <code>format</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2708,7 +2708,7 @@ and "video".</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../reference/sleap_io/model/labels/#sleap_io.model.labels.Labels">Labels</a>, <a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a>]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Labels&lt;/code&gt; (&lt;code&gt;sleap_io.model.labels.Labels&lt;/code&gt;)" href="../reference/sleap_io/model/labels/#sleap_io.model.labels.Labels">Labels</a> | <a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2723,8 +2723,8 @@ and "video".</p>
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-746" name="__codelineno-0-746"></a><a href="#__codelineno-0-746"><span class="linenos" data-linenos="746 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_file</span><span class="p">(</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a><a href="#__codelineno-0-747"><span class="linenos" data-linenos="747 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a><a href="#__codelineno-0-748"><span class="linenos" data-linenos="748 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Labels</span><span class="p">,</span> <span class="n">Video</span><span class="p">]:</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a><a href="#__codelineno-0-747"><span class="linenos" data-linenos="747 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a><a href="#__codelineno-0-748"><span class="linenos" data-linenos="748 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span> <span class="o">|</span> <span class="n">Video</span><span class="p">:</span>
 <a id="__codelineno-0-749" name="__codelineno-0-749"></a><a href="#__codelineno-0-749"><span class="linenos" data-linenos="749 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a file and return the appropriate object.</span>
 <a id="__codelineno-0-750" name="__codelineno-0-750"></a><a href="#__codelineno-0-750"><span class="linenos" data-linenos="750 "></span></a>
 <a id="__codelineno-0-751" name="__codelineno-0-751"></a><a href="#__codelineno-0-751"><span class="linenos" data-linenos="751 "></span></a><span class="sd">    Args:</span>
@@ -2896,7 +2896,7 @@ and "video".</p>
                 <code>format</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2986,7 +2986,7 @@ the operation is cancelled and <code>ExportCancelled</code> is raised.</p>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-854" name="__codelineno-0-854"></a><a href="#__codelineno-0-854"><span class="linenos" data-linenos="854 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_file</span><span class="p">(</span>
 <a id="__codelineno-0-855" name="__codelineno-0-855"></a><a href="#__codelineno-0-855"><span class="linenos" data-linenos="855 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
 <a id="__codelineno-0-856" name="__codelineno-0-856"></a><a href="#__codelineno-0-856"><span class="linenos" data-linenos="856 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a><a href="#__codelineno-0-857"><span class="linenos" data-linenos="857 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-857" name="__codelineno-0-857"></a><a href="#__codelineno-0-857"><span class="linenos" data-linenos="857 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-858" name="__codelineno-0-858"></a><a href="#__codelineno-0-858"><span class="linenos" data-linenos="858 "></span></a>    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-859" name="__codelineno-0-859"></a><a href="#__codelineno-0-859"><span class="linenos" data-linenos="859 "></span></a>    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-860" name="__codelineno-0-860"></a><a href="#__codelineno-0-860"><span class="linenos" data-linenos="860 "></span></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
@@ -3837,7 +3837,7 @@ which is faster but mutates the input. Only applies when embedding.</p>
                 <code>plugin</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3883,7 +3883,7 @@ progress bar is disabled in favor of the callback.</p>
 <a id="__codelineno-0-55" name="__codelineno-0-55"></a><a href="#__codelineno-0-55"><span class="linenos" data-linenos=" 55 "></span></a>    <span class="n">restore_original_videos</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-56" name="__codelineno-0-56"></a><a href="#__codelineno-0-56"><span class="linenos" data-linenos=" 56 "></span></a>    <span class="n">embed_inplace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-0-57" name="__codelineno-0-57"></a><a href="#__codelineno-0-57"><span class="linenos" data-linenos=" 57 "></span></a>    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a><a href="#__codelineno-0-58"><span class="linenos" data-linenos=" 58 "></span></a>    <span class="n">plugin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><a href="#__codelineno-0-58"><span class="linenos" data-linenos=" 58 "></span></a>    <span class="n">plugin</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-59" name="__codelineno-0-59"></a><a href="#__codelineno-0-59"><span class="linenos" data-linenos=" 59 "></span></a>    <span class="n">progress_callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-60" name="__codelineno-0-60"></a><a href="#__codelineno-0-60"><span class="linenos" data-linenos=" 60 "></span></a><span class="p">):</span>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a><a href="#__codelineno-0-61"><span class="linenos" data-linenos=" 61 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save a SLEAP dataset to a `.slp` file.</span>
@@ -4172,7 +4172,7 @@ progress bar is disabled in favor of the callback.</p>
                 <code>filename</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib._local.Path">Path</span>]</code>
+                  <code><span title="str">str</span> | <span title="pathlib._local.Path">Path</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4251,7 +4251,7 @@ predictions format. Defaults to False.</p>
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-125" name="__codelineno-0-125"></a><a href="#__codelineno-0-125"><span class="linenos" data-linenos="125 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_nwb</span><span class="p">(</span>
 <a id="__codelineno-0-126" name="__codelineno-0-126"></a><a href="#__codelineno-0-126"><span class="linenos" data-linenos="126 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
-<a id="__codelineno-0-127" name="__codelineno-0-127"></a><a href="#__codelineno-0-127"><span class="linenos" data-linenos="127 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span>
+<a id="__codelineno-0-127" name="__codelineno-0-127"></a><a href="#__codelineno-0-127"><span class="linenos" data-linenos="127 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
 <a id="__codelineno-0-128" name="__codelineno-0-128"></a><a href="#__codelineno-0-128"><span class="linenos" data-linenos="128 "></span></a>    <span class="n">nwb_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-129" name="__codelineno-0-129"></a><a href="#__codelineno-0-129"><span class="linenos" data-linenos="129 "></span></a>    <span class="n">append</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-0-130" name="__codelineno-0-130"></a><a href="#__codelineno-0-130"><span class="linenos" data-linenos="130 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -4473,7 +4473,7 @@ predictions format. Defaults to False.</p>
                 <code>skeleton</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4513,7 +4513,7 @@ predictions format. Defaults to False.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-203" name="__codelineno-0-203"></a><a href="#__codelineno-0-203"><span class="linenos" data-linenos="203 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_jabs</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-203" name="__codelineno-0-203"></a><a href="#__codelineno-0-203"><span class="linenos" data-linenos="203 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_jabs</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">skeleton</span><span class="p">:</span> <span class="n">Skeleton</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
 <a id="__codelineno-0-204" name="__codelineno-0-204"></a><a href="#__codelineno-0-204"><span class="linenos" data-linenos="204 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Read JABS-style predictions from a file and return a `Labels` object.</span>
 <a id="__codelineno-0-205" name="__codelineno-0-205"></a><a href="#__codelineno-0-205"><span class="linenos" data-linenos="205 "></span></a>
 <a id="__codelineno-0-206" name="__codelineno-0-206"></a><a href="#__codelineno-0-206"><span class="linenos" data-linenos="206 "></span></a><span class="sd">    Args:</span>
@@ -4594,7 +4594,7 @@ predictions format. Defaults to False.</p>
                 <code>root_folder</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4616,7 +4616,7 @@ predictions format. Defaults to False.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-307" name="__codelineno-0-307"></a><a href="#__codelineno-0-307"><span class="linenos" data-linenos="307 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_jabs</span><span class="p">(</span><span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span> <span class="n">pose_version</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">root_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-307" name="__codelineno-0-307"></a><a href="#__codelineno-0-307"><span class="linenos" data-linenos="307 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_jabs</span><span class="p">(</span><span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span> <span class="n">pose_version</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">root_folder</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <a id="__codelineno-0-308" name="__codelineno-0-308"></a><a href="#__codelineno-0-308"><span class="linenos" data-linenos="308 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save a SLEAP dataset to JABS pose file format.</span>
 <a id="__codelineno-0-309" name="__codelineno-0-309"></a><a href="#__codelineno-0-309"><span class="linenos" data-linenos="309 "></span></a>
 <a id="__codelineno-0-310" name="__codelineno-0-310"></a><a href="#__codelineno-0-310"><span class="linenos" data-linenos="310 "></span></a><span class="sd">    Args:</span>
@@ -4684,7 +4684,7 @@ predictions format. Defaults to False.</p>
                 <code>video</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a>, <span title="str">str</span>]]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a> | <span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4739,7 +4739,7 @@ Labels context.</p>
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-218" name="__codelineno-0-218"></a><a href="#__codelineno-0-218"><span class="linenos" data-linenos="218 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_analysis_h5</span><span class="p">(</span>
 <a id="__codelineno-0-219" name="__codelineno-0-219"></a><a href="#__codelineno-0-219"><span class="linenos" data-linenos="219 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a><a href="#__codelineno-0-220"><span class="linenos" data-linenos="220 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Video&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><a href="#__codelineno-0-220"><span class="linenos" data-linenos="220 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="s2">&quot;Video | str | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-221" name="__codelineno-0-221"></a><a href="#__codelineno-0-221"><span class="linenos" data-linenos="221 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
 <a id="__codelineno-0-222" name="__codelineno-0-222"></a><a href="#__codelineno-0-222"><span class="linenos" data-linenos="222 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load SLEAP Analysis HDF5 file.</span>
 <a id="__codelineno-0-223" name="__codelineno-0-223"></a><a href="#__codelineno-0-223"><span class="linenos" data-linenos="223 "></span></a>
@@ -4830,7 +4830,7 @@ Labels context.</p>
                 <code>video</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a>, <span title="int">int</span>]]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a> | <span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4847,7 +4847,7 @@ object or an integer index.</p>
                 <code>labels_path</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4898,7 +4898,7 @@ Default True.</p>
                 <code>preset</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4919,7 +4919,7 @@ Mutually exclusive with explicit dimension parameters.</p>
                 <code>frame_dim</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4935,7 +4935,7 @@ Mutually exclusive with explicit dimension parameters.</p>
                 <code>track_dim</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4951,7 +4951,7 @@ Mutually exclusive with explicit dimension parameters.</p>
                 <code>node_dim</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4967,7 +4967,7 @@ Mutually exclusive with explicit dimension parameters.</p>
                 <code>xy_dim</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5010,15 +5010,15 @@ Default True.</p>
 <a id="__codelineno-0-246" name="__codelineno-0-246"></a><a href="#__codelineno-0-246"><span class="linenos" data-linenos="246 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
 <a id="__codelineno-0-247" name="__codelineno-0-247"></a><a href="#__codelineno-0-247"><span class="linenos" data-linenos="247 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-248" name="__codelineno-0-248"></a><a href="#__codelineno-0-248"><span class="linenos" data-linenos="248 "></span></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Video&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a>    <span class="n">labels_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><a href="#__codelineno-0-249"><span class="linenos" data-linenos="249 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="s2">&quot;Video | int | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a>    <span class="n">labels_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-251" name="__codelineno-0-251"></a><a href="#__codelineno-0-251"><span class="linenos" data-linenos="251 "></span></a>    <span class="n">all_frames</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-252" name="__codelineno-0-252"></a><a href="#__codelineno-0-252"><span class="linenos" data-linenos="252 "></span></a>    <span class="n">min_occupancy</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a>    <span class="n">preset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a><a href="#__codelineno-0-254"><span class="linenos" data-linenos="254 "></span></a>    <span class="n">frame_dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a><a href="#__codelineno-0-255"><span class="linenos" data-linenos="255 "></span></a>    <span class="n">track_dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a><a href="#__codelineno-0-256"><span class="linenos" data-linenos="256 "></span></a>    <span class="n">node_dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a><a href="#__codelineno-0-257"><span class="linenos" data-linenos="257 "></span></a>    <span class="n">xy_dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a>    <span class="n">preset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><a href="#__codelineno-0-254"><span class="linenos" data-linenos="254 "></span></a>    <span class="n">frame_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><a href="#__codelineno-0-255"><span class="linenos" data-linenos="255 "></span></a>    <span class="n">track_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><a href="#__codelineno-0-256"><span class="linenos" data-linenos="256 "></span></a>    <span class="n">node_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><a href="#__codelineno-0-257"><span class="linenos" data-linenos="257 "></span></a>    <span class="n">xy_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-258" name="__codelineno-0-258"></a><a href="#__codelineno-0-258"><span class="linenos" data-linenos="258 "></span></a>    <span class="n">save_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-259" name="__codelineno-0-259"></a><a href="#__codelineno-0-259"><span class="linenos" data-linenos="259 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-260" name="__codelineno-0-260"></a><a href="#__codelineno-0-260"><span class="linenos" data-linenos="260 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save Labels to SLEAP Analysis HDF5 file.</span>
@@ -5167,7 +5167,7 @@ Default True.</p>
                 <code>skeleton</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>, <span title="list">list</span>[<span title="str">str</span>]]]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a> | <span title="list">list</span>[<span title="str">str</span>] | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5211,7 +5211,7 @@ the skeleton.</p>
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-157" name="__codelineno-0-157"></a><a href="#__codelineno-0-157"><span class="linenos" data-linenos="157 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_labelstudio</span><span class="p">(</span>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><a href="#__codelineno-0-158"><span class="linenos" data-linenos="158 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><a href="#__codelineno-0-158"><span class="linenos" data-linenos="158 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">skeleton</span><span class="p">:</span> <span class="n">Skeleton</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 <a id="__codelineno-0-159" name="__codelineno-0-159"></a><a href="#__codelineno-0-159"><span class="linenos" data-linenos="159 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
 <a id="__codelineno-0-160" name="__codelineno-0-160"></a><a href="#__codelineno-0-160"><span class="linenos" data-linenos="160 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Read Label Studio-style annotations from a file and return a `Labels` object.</span>
 <a id="__codelineno-0-161" name="__codelineno-0-161"></a><a href="#__codelineno-0-161"><span class="linenos" data-linenos="161 "></span></a>
@@ -5361,7 +5361,7 @@ the skeleton.</p>
                 <code>video_search_paths</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.List">List</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib._local.Path">Path</span>]]]</code>
+                  <code><span title="list">list</span>[<span title="str">str</span> | <span title="pathlib._local.Path">Path</span>] | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5417,7 +5417,7 @@ the skeleton.</p>
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-323" name="__codelineno-0-323"></a><a href="#__codelineno-0-323"><span class="linenos" data-linenos="323 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_dlc</span><span class="p">(</span>
-<a id="__codelineno-0-324" name="__codelineno-0-324"></a><a href="#__codelineno-0-324"><span class="linenos" data-linenos="324 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">video_search_paths</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a><a href="#__codelineno-0-324"><span class="linenos" data-linenos="324 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">video_search_paths</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
 <a id="__codelineno-0-325" name="__codelineno-0-325"></a><a href="#__codelineno-0-325"><span class="linenos" data-linenos="325 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
 <a id="__codelineno-0-326" name="__codelineno-0-326"></a><a href="#__codelineno-0-326"><span class="linenos" data-linenos="326 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Read DeepLabCut annotations from a CSV file and return a `Labels` object.</span>
 <a id="__codelineno-0-327" name="__codelineno-0-327"></a><a href="#__codelineno-0-327"><span class="linenos" data-linenos="327 "></span></a>
@@ -5601,7 +5601,7 @@ the skeleton.</p>
                 <code>video</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a>, <span title="str">str</span>]]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a> | <span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5617,7 +5617,7 @@ the skeleton.</p>
                 <code>skeleton</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5672,8 +5672,8 @@ Labels context including skeleton edges, symmetries, and provenance.</p>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-506" name="__codelineno-0-506"></a><a href="#__codelineno-0-506"><span class="linenos" data-linenos="506 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_csv</span><span class="p">(</span>
 <a id="__codelineno-0-507" name="__codelineno-0-507"></a><a href="#__codelineno-0-507"><span class="linenos" data-linenos="507 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-508" name="__codelineno-0-508"></a><a href="#__codelineno-0-508"><span class="linenos" data-linenos="508 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><a href="#__codelineno-0-509"><span class="linenos" data-linenos="509 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Video&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a><a href="#__codelineno-0-510"><span class="linenos" data-linenos="510 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;Skeleton&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><a href="#__codelineno-0-509"><span class="linenos" data-linenos="509 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="s2">&quot;Video | str | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a><a href="#__codelineno-0-510"><span class="linenos" data-linenos="510 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="s2">&quot;Skeleton | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-511" name="__codelineno-0-511"></a><a href="#__codelineno-0-511"><span class="linenos" data-linenos="511 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Labels&quot;</span><span class="p">:</span>
 <a id="__codelineno-0-512" name="__codelineno-0-512"></a><a href="#__codelineno-0-512"><span class="linenos" data-linenos="512 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load pose data from a CSV file.</span>
 <a id="__codelineno-0-513" name="__codelineno-0-513"></a><a href="#__codelineno-0-513"><span class="linenos" data-linenos="513 "></span></a>
@@ -5783,7 +5783,7 @@ Labels context including skeleton edges, symmetries, and provenance.</p>
                 <code>video</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a>, <span title="int">int</span>]]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Video&lt;/code&gt; (&lt;code&gt;sleap_io.model.video.Video&lt;/code&gt;)" href="../reference/sleap_io/model/video/#sleap_io.model.video.Video">Video</a> | <span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5859,7 +5859,7 @@ full round-trip reconstruction. Default False.</p>
 <a id="__codelineno-0-538" name="__codelineno-0-538"></a><a href="#__codelineno-0-538"><span class="linenos" data-linenos="538 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="s2">&quot;Labels&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-539" name="__codelineno-0-539"></a><a href="#__codelineno-0-539"><span class="linenos" data-linenos="539 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-540" name="__codelineno-0-540"></a><a href="#__codelineno-0-540"><span class="linenos" data-linenos="540 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sleap&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-541" name="__codelineno-0-541"></a><a href="#__codelineno-0-541"><span class="linenos" data-linenos="541 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Video&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a><a href="#__codelineno-0-541"><span class="linenos" data-linenos="541 "></span></a>    <span class="n">video</span><span class="p">:</span> <span class="s2">&quot;Video | int | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-542" name="__codelineno-0-542"></a><a href="#__codelineno-0-542"><span class="linenos" data-linenos="542 "></span></a>    <span class="n">include_score</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-543" name="__codelineno-0-543"></a><a href="#__codelineno-0-543"><span class="linenos" data-linenos="543 "></span></a>    <span class="n">scorer</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sleap-io&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-544" name="__codelineno-0-544"></a><a href="#__codelineno-0-544"><span class="linenos" data-linenos="544 "></span></a>    <span class="n">save_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -6036,7 +6036,7 @@ full round-trip reconstruction. Default False.</p>
                 <code>skeleton</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6094,7 +6094,7 @@ from the data in the file.</p>
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-485" name="__codelineno-0-485"></a><a href="#__codelineno-0-485"><span class="linenos" data-linenos="485 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_leap</span><span class="p">(</span>
 <a id="__codelineno-0-486" name="__codelineno-0-486"></a><a href="#__codelineno-0-486"><span class="linenos" data-linenos="486 "></span></a>    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-487" name="__codelineno-0-487"></a><a href="#__codelineno-0-487"><span class="linenos" data-linenos="487 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a><a href="#__codelineno-0-487"><span class="linenos" data-linenos="487 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Skeleton</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-488" name="__codelineno-0-488"></a><a href="#__codelineno-0-488"><span class="linenos" data-linenos="488 "></span></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <a id="__codelineno-0-489" name="__codelineno-0-489"></a><a href="#__codelineno-0-489"><span class="linenos" data-linenos="489 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
 <a id="__codelineno-0-490" name="__codelineno-0-490"></a><a href="#__codelineno-0-490"><span class="linenos" data-linenos="490 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a LEAP dataset from a .mat file.</span>
@@ -6165,7 +6165,7 @@ from the data in the file.</p>
                 <code>dataset_root</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6240,7 +6240,7 @@ from the data in the file.</p>
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-576" name="__codelineno-0-576"></a><a href="#__codelineno-0-576"><span class="linenos" data-linenos="576 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_coco</span><span class="p">(</span>
 <a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a>    <span class="n">json_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a>    <span class="n">dataset_root</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a>    <span class="n">dataset_root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a>    <span class="n">grayscale</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-0-580" name="__codelineno-0-580"></a><a href="#__codelineno-0-580"><span class="linenos" data-linenos="580 "></span></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <a id="__codelineno-0-581" name="__codelineno-0-581"></a><a href="#__codelineno-0-581"><span class="linenos" data-linenos="581 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
@@ -6328,7 +6328,7 @@ from the data in the file.</p>
                 <code>image_filenames</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.List">List</span>[<span title="str">str</span>]]]</code>
+                  <code><span title="str">str</span> | <span title="list">list</span>[<span title="str">str</span>] | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6379,7 +6379,7 @@ from the data in the file.</p>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-600" name="__codelineno-0-600"></a><a href="#__codelineno-0-600"><span class="linenos" data-linenos="600 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_coco</span><span class="p">(</span>
 <a id="__codelineno-0-601" name="__codelineno-0-601"></a><a href="#__codelineno-0-601"><span class="linenos" data-linenos="601 "></span></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Labels</span><span class="p">,</span>
 <a id="__codelineno-0-602" name="__codelineno-0-602"></a><a href="#__codelineno-0-602"><span class="linenos" data-linenos="602 "></span></a>    <span class="n">json_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a>    <span class="n">image_filenames</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><a href="#__codelineno-0-603"><span class="linenos" data-linenos="603 "></span></a>    <span class="n">image_filenames</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-604" name="__codelineno-0-604"></a><a href="#__codelineno-0-604"><span class="linenos" data-linenos="604 "></span></a>    <span class="n">visibility_encoding</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ternary&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-605" name="__codelineno-0-605"></a><a href="#__codelineno-0-605"><span class="linenos" data-linenos="605 "></span></a><span class="p">):</span>
 <a id="__codelineno-0-606" name="__codelineno-0-606"></a><a href="#__codelineno-0-606"><span class="linenos" data-linenos="606 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save a SLEAP dataset to COCO-style JSON annotation format.</span>
@@ -6475,7 +6475,7 @@ data.yaml.</p>
                 <code>skeleton</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6538,7 +6538,7 @@ Currently supports:
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-341" name="__codelineno-0-341"></a><a href="#__codelineno-0-341"><span class="linenos" data-linenos="341 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_ultralytics</span><span class="p">(</span>
 <a id="__codelineno-0-342" name="__codelineno-0-342"></a><a href="#__codelineno-0-342"><span class="linenos" data-linenos="342 "></span></a>    <span class="n">dataset_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-343" name="__codelineno-0-343"></a><a href="#__codelineno-0-343"><span class="linenos" data-linenos="343 "></span></a>    <span class="n">split</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;train&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-344" name="__codelineno-0-344"></a><a href="#__codelineno-0-344"><span class="linenos" data-linenos="344 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a><a href="#__codelineno-0-344"><span class="linenos" data-linenos="344 "></span></a>    <span class="n">skeleton</span><span class="p">:</span> <span class="n">Skeleton</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-345" name="__codelineno-0-345"></a><a href="#__codelineno-0-345"><span class="linenos" data-linenos="345 "></span></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <a id="__codelineno-0-346" name="__codelineno-0-346"></a><a href="#__codelineno-0-346"><span class="linenos" data-linenos="346 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Labels</span><span class="p">:</span>
 <a id="__codelineno-0-347" name="__codelineno-0-347"></a><a href="#__codelineno-0-347"><span class="linenos" data-linenos="347 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load an Ultralytics YOLO pose dataset as a SLEAP `Labels` object.</span>
@@ -6747,7 +6747,7 @@ Currently supports:
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib._local.Path">Path</span>, <span title="list">list</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib._local.Path">Path</span>]], <span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="pathlib._local.Path">Path</span>]]]</code>
+                  <code><span title="str">str</span> | <span title="pathlib._local.Path">Path</span> | <span title="list">list</span>[<span title="str">str</span> | <span title="pathlib._local.Path">Path</span>] | <span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span> | <span title="pathlib._local.Path">Path</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6766,7 +6766,7 @@ Currently supports:
                 <code>format</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6851,11 +6851,11 @@ Supported formats: "slp", "ultralytics"</p>
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
               <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1019" name="__codelineno-0-1019"></a><a href="#__codelineno-0-1019"><span class="linenos" data-linenos="1019 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_labels_set</span><span class="p">(</span>
-<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a><a href="#__codelineno-0-1020"><span class="linenos" data-linenos="1020 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]]],</span>
-<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><a href="#__codelineno-0-1021"><span class="linenos" data-linenos="1021 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a><a href="#__codelineno-0-1020"><span class="linenos" data-linenos="1020 "></span></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">],</span>
+<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><a href="#__codelineno-0-1021"><span class="linenos" data-linenos="1021 "></span></a>    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-1022" name="__codelineno-0-1022"></a><a href="#__codelineno-0-1022"><span class="linenos" data-linenos="1022 "></span></a>    <span class="n">open_videos</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-1023" name="__codelineno-0-1023"></a><a href="#__codelineno-0-1023"><span class="linenos" data-linenos="1023 "></span></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-<a id="__codelineno-0-1024" name="__codelineno-0-1024"></a><a href="#__codelineno-0-1024"><span class="linenos" data-linenos="1024 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelsSet</span><span class="p">:</span>
+<a id="__codelineno-0-1024" name="__codelineno-0-1024"></a><a href="#__codelineno-0-1024"><span class="linenos" data-linenos="1024 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;LabelsSet&quot;</span><span class="p">:</span>
 <a id="__codelineno-0-1025" name="__codelineno-0-1025"></a><a href="#__codelineno-0-1025"><span class="linenos" data-linenos="1025 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a LabelsSet from multiple files.</span>
 <a id="__codelineno-0-1026" name="__codelineno-0-1026"></a><a href="#__codelineno-0-1026"><span class="linenos" data-linenos="1026 "></span></a>
 <a id="__codelineno-0-1027" name="__codelineno-0-1027"></a><a href="#__codelineno-0-1027"><span class="linenos" data-linenos="1027 "></span></a><span class="sd">    Args:</span>
@@ -7004,7 +7004,7 @@ Supported formats: "slp", "ultralytics"</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>, <span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a> | <span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -7028,7 +7028,7 @@ The format is detected based on the file extension and content.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-978" name="__codelineno-0-978"></a><a href="#__codelineno-0-978"><span class="linenos" data-linenos=" 978 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_skeleton</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]]:</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-978" name="__codelineno-0-978"></a><a href="#__codelineno-0-978"><span class="linenos" data-linenos=" 978 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">load_skeleton</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Skeleton</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]:</span>
 <a id="__codelineno-0-979" name="__codelineno-0-979"></a><a href="#__codelineno-0-979"><span class="linenos" data-linenos=" 979 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load skeleton(s) from a JSON, YAML, or SLP file.</span>
 <a id="__codelineno-0-980" name="__codelineno-0-980"></a><a href="#__codelineno-0-980"><span class="linenos" data-linenos=" 980 "></span></a>
 <a id="__codelineno-0-981" name="__codelineno-0-981"></a><a href="#__codelineno-0-981"><span class="linenos" data-linenos=" 981 "></span></a><span class="sd">    Args:</span>
@@ -7103,7 +7103,7 @@ The format is detected based on the file extension and content.</p>
                 <code>skeleton</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>, <span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a> | <span title="list">list</span>[<a class="autorefs autorefs-internal" title="&lt;code&gt;Skeleton&lt;/code&gt; (&lt;code&gt;sleap_io.model.skeleton.Skeleton&lt;/code&gt;)" href="../reference/sleap_io/model/skeleton/#sleap_io.model.skeleton.Skeleton">Skeleton</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -7143,7 +7143,7 @@ while YAML files use a simplified human-readable format.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>sleap_io/io/main.py</code></summary>
-              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1108" name="__codelineno-0-1108"></a><a href="#__codelineno-0-1108"><span class="linenos" data-linenos="1108 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_skeleton</span><span class="p">(</span><span class="n">skeleton</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">]],</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">):</span>
+              <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1108" name="__codelineno-0-1108"></a><a href="#__codelineno-0-1108"><span class="linenos" data-linenos="1108 "></span></a><span class="k">def</span><span class="w"> </span><span class="nf">save_skeleton</span><span class="p">(</span><span class="n">skeleton</span><span class="p">:</span> <span class="n">Skeleton</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">Skeleton</span><span class="p">],</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">):</span>
 <a id="__codelineno-0-1109" name="__codelineno-0-1109"></a><a href="#__codelineno-0-1109"><span class="linenos" data-linenos="1109 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save skeleton(s) to a JSON or YAML file.</span>
 <a id="__codelineno-0-1110" name="__codelineno-0-1110"></a><a href="#__codelineno-0-1110"><span class="linenos" data-linenos="1110 "></span></a>
 <a id="__codelineno-0-1111" name="__codelineno-0-1111"></a><a href="#__codelineno-0-1111"><span class="linenos" data-linenos="1111 "></span></a><span class="sd">    Args:</span>
@@ -7389,7 +7389,7 @@ while YAML files use a simplified human-readable format.</p>
       <div class="md-copyright">
   
     <div class="md-copyright__highlight">
-      Copyright &copy; 2022 - 2025 Talmo Lab
+      Copyright &copy; 2022 - 2026 Talmo Lab
 
     </div>
   
@@ -7445,6 +7445,8 @@ while YAML files use a simplified human-readable format.</p>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../js/toc-code-style.js"></script>
       
     
   </body>
