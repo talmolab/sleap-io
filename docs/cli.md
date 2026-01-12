@@ -2102,7 +2102,7 @@ Saved: video.seekable.mp4
 
 ## `sio transform`
 
-Apply geometric transformations (crop, scale, rotate, pad) to videos while automatically adjusting all landmark coordinates to maintain alignment. This is useful for resizing datasets, extracting regions of interest, or standardizing video dimensions across multi-camera setups.
+Apply geometric transformations (crop, scale, rotate, pad) to videos while automatically adjusting all landmark coordinates to maintain alignment. This is useful for resizing datasets, extracting regions of interest, or standardizing video dimensions in mixed source projects.
 
 ```bash
 sio transform <input> [OPTIONS] -o <output>
