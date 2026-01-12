@@ -20,6 +20,8 @@ from sleap_io.model.matching import (
     TrackMatchMethod,
     VideoMatcher,
     VideoMatchMethod,
+    _is_same_file_direct,
+    is_same_file,
 )
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
@@ -1390,3 +1392,124 @@ class TestVideoMatcherCoverageGaps:
         # since both normalize to same basename "video.mp4"
         # The exact match depends on path resolution behavior
         assert result is candidate or result is None
+
+
+    def test_is_same_file_hdf5_different_datasets(self):
+        """Test that HDF5 videos with same filename but different datasets are different.
+
+        Regression test for a bug where embedded videos from split pkg.slp files
+        were incorrectly matched because only the filename was compared, not the
+        HDF5 dataset within the file.
+
+        For example, train.pkg.slp and val.pkg.slp might both have videos with
+        original_video pointing to the same source file but different datasets
+        (video0/video, video1/video, etc.). These should NOT be matched.
+        """
+        from sleap_io.io.video_reading import HDF5Video
+
+        # Create two videos with same filename but different datasets
+        # This simulates embedded videos from the same original source
+        backend1 = HDF5Video(
+            filename="source.pkg.slp",
+            dataset="video0/video",
+            grayscale=None,
+            keep_open=False,
+        )
+        video1 = Video(filename="source.pkg.slp", backend=backend1, open_backend=False)
+
+        backend2 = HDF5Video(
+            filename="source.pkg.slp",
+            dataset="video1/video",  # Different dataset!
+            grayscale=None,
+            keep_open=False,
+        )
+        video2 = Video(filename="source.pkg.slp", backend=backend2, open_backend=False)
+
+        backend3 = HDF5Video(
+            filename="source.pkg.slp",
+            dataset="video0/video",  # Same dataset as video1
+            grayscale=None,
+            keep_open=False,
+        )
+        video3 = Video(filename="source.pkg.slp", backend=backend3, open_backend=False)
+
+        # Same filename, different datasets → different videos
+        assert not _is_same_file_direct(video1, video2)
+
+        # Same filename, same dataset → same video
+        assert _is_same_file_direct(video1, video3)
+
+    def test_is_same_file_hdf5_with_provenance_chain(self):
+        """Test is_same_file works with HDF5 videos in provenance chains.
+
+        This tests the full is_same_file function (which traverses provenance)
+        with embedded videos that have source_video set.
+        """
+        from sleap_io.io.video_reading import HDF5Video
+
+        # Create source videos (the original_video in the chain)
+        source1_backend = HDF5Video(
+            filename="original.pkg.slp",
+            dataset="video5/video",
+            grayscale=None,
+            keep_open=False,
+        )
+        source1 = Video(
+            filename="original.pkg.slp", backend=source1_backend, open_backend=False
+        )
+
+        source2_backend = HDF5Video(
+            filename="original.pkg.slp",
+            dataset="video10/video",  # Different dataset
+            grayscale=None,
+            keep_open=False,
+        )
+        source2 = Video(
+            filename="original.pkg.slp", backend=source2_backend, open_backend=False
+        )
+
+        # Create embedded videos pointing to different sources
+        embedded1_backend = HDF5Video(
+            filename="train.pkg.slp",
+            dataset="video0/video",
+            grayscale=None,
+            keep_open=False,
+        )
+        embedded1 = Video(
+            filename="train.pkg.slp",
+            backend=embedded1_backend,
+            source_video=source1,
+            open_backend=False,
+        )
+
+        embedded2_backend = HDF5Video(
+            filename="val.pkg.slp",
+            dataset="video0/video",
+            grayscale=None,
+            keep_open=False,
+        )
+        embedded2 = Video(
+            filename="val.pkg.slp",
+            backend=embedded2_backend,
+            source_video=source2,
+            open_backend=False,
+        )
+
+        embedded3_backend = HDF5Video(
+            filename="test.pkg.slp",
+            dataset="video0/video",
+            grayscale=None,
+            keep_open=False,
+        )
+        embedded3 = Video(
+            filename="test.pkg.slp",
+            backend=embedded3_backend,
+            source_video=source1,
+            open_backend=False,
+        )
+
+        # Different source datasets → different videos
+        assert not is_same_file(embedded1, embedded2)
+
+        # Same source dataset → same videos
+        assert is_same_file(embedded1, embedded3)
