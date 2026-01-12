@@ -7805,3 +7805,178 @@ def test_transform_video_file_dry_run(tmp_path, centered_pair_low_quality_path):
     assert "Transform Summary" in output
     assert "Dry run" in output
     assert not output_path.exists()
+
+
+def test_transform_parse_fill_value_int():
+    """Test _parse_fill_value with integer value."""
+    from sleap_io.io.cli import _parse_fill_value
+
+    assert _parse_fill_value("0") == 0
+    assert _parse_fill_value("128") == 128
+    assert _parse_fill_value("255") == 255
+
+
+def test_transform_parse_fill_value_rgb():
+    """Test _parse_fill_value with RGB tuple."""
+    from sleap_io.io.cli import _parse_fill_value
+
+    assert _parse_fill_value("128,128,128") == (128, 128, 128)
+    assert _parse_fill_value("0,0,0") == (0, 0, 0)
+    assert _parse_fill_value("255,255,255") == (255, 255, 255)
+    assert _parse_fill_value(" 10, 20, 30 ") == (10, 20, 30)  # with spaces
+
+
+def test_transform_parse_fill_value_invalid():
+    """Test _parse_fill_value with invalid values."""
+    import click
+
+    from sleap_io.io.cli import _parse_fill_value
+
+    with pytest.raises(click.ClickException, match="0-255"):
+        _parse_fill_value("256")
+
+    with pytest.raises(click.ClickException, match="0-255"):
+        _parse_fill_value("-1")
+
+    with pytest.raises(click.ClickException, match="3 values"):
+        _parse_fill_value("1,2")
+
+    with pytest.raises(click.ClickException, match="Invalid"):
+        _parse_fill_value("abc")
+
+
+def test_transform_fill_rgb_option(tmp_path, slp_real_data):
+    """Test transform with RGB fill value."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--rotate",
+            "45",
+            "--fill",
+            "128,128,128",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_transform_dry_run_frame(tmp_path, slp_real_data):
+    """Test --dry-run-frame option renders preview."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "0.5",
+            "--dry-run-frame",
+            "0",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    # Should show both dry run message and frame preview
+    assert "Dry run" in output
+    assert "Preview frame 0" in output
+    assert "preview" in output.lower()
+    assert not output_path.exists()
+
+
+def test_transform_dry_run_frame_out_of_range(tmp_path, slp_real_data):
+    """Test --dry-run-frame with out of range frame index."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "0.5",
+            "--dry-run-frame",
+            "99999",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    # Should warn and use frame 0
+    assert "Warning" in output
+    assert "using frame 0" in output
+
+
+def test_transform_encoding_options_shown_in_help():
+    """Test that encoding options appear in help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["transform", "--help"])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "--keyframe-interval" in output
+    assert "--no-audio" in output
+    assert "--dry-run-frame" in output
+
+
+@skip_slow_video_on_windows
+def test_transform_video_file_with_encoding_options(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test transform video with encoding options in dry-run."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--scale",
+            "0.5",
+            "--keyframe-interval",
+            "0.5",
+            "--no-audio",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert not output_path.exists()
+
+
+@skip_slow_video_on_windows
+def test_transform_video_file_dry_run_frame(tmp_path, centered_pair_low_quality_path):
+    """Test transform on raw video with --dry-run-frame."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--scale",
+            "0.5",
+            "--dry-run-frame",
+            "0",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Preview frame 0" in output
+    assert not output_path.exists()
