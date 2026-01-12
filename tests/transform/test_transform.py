@@ -21,7 +21,6 @@ from sleap_io.transform.points import (
     transform_points,
 )
 
-
 # ============================================================================
 # Transform Class Tests
 # ============================================================================
@@ -501,8 +500,8 @@ class TestIntegration:
         # Apply to points
         transformed_points = transform.apply_to_points(points, (100, 100))
 
-        # After crop (20, 20, 80, 80): square at (20-40, 20-40), points at (20, 20), (40, 20), etc.
-        # After scale 0.5: square at (10-20, 10-20), points at (10, 10), (20, 10), etc.
+        # After crop (20, 20, 80, 80): points at (20, 20), (40, 20), etc.
+        # After scale 0.5: points at (10, 10), (20, 10), etc.
 
         # Check that points are at expected locations
         expected_points = np.array([[10, 10], [20, 10], [20, 20], [10, 20]])

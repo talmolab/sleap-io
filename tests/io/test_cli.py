@@ -7483,3 +7483,325 @@ def test_reencode_python_path_fps_fallback(tmp_path, centered_pair_low_quality_p
 
     # Dry run returns None
     assert result is None
+
+
+# ============================================================================
+# Transform Command Tests
+# ============================================================================
+
+
+def test_transform_help():
+    """Test that transform command help is displayed."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["transform", "--help"])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check key sections are present
+    assert "Transform video" in output
+    assert "--crop" in output
+    assert "--scale" in output
+    assert "--rotate" in output
+    assert "--pad" in output
+    assert "--dry-run" in output
+
+
+def test_transform_in_command_list():
+    """Test that transform appears in the main CLI help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "transform" in output
+
+
+def test_transform_no_transforms_error(tmp_path, slp_real_data):
+    """Test that no transforms specified raises error."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        ["transform", slp_real_data, "-o", str(output_path)],
+    )
+    assert result.exit_code != 0
+    assert "No transforms specified" in result.output
+
+
+def test_transform_dry_run(tmp_path, slp_real_data):
+    """Test dry run mode shows summary without executing."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "0.5",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should show summary but not save
+    assert "Transform Summary" in output
+    assert "Dry run" in output
+    assert not output_path.exists()
+
+
+def test_transform_same_input_output_error(tmp_path, slp_real_data):
+    """Test that using same input and output path raises error."""
+    import shutil
+
+    runner = CliRunner()
+    slp_copy = tmp_path / "input.slp"
+    shutil.copy(slp_real_data, slp_copy)
+
+    result = runner.invoke(
+        cli,
+        ["transform", str(slp_copy), "--scale", "0.5", "-o", str(slp_copy)],
+    )
+    assert result.exit_code != 0
+    assert "cannot be the same as input" in result.output
+
+
+def test_transform_output_exists_error(tmp_path, slp_real_data):
+    """Test that existing output SLP raises error without --overwrite."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+    output_path.touch()  # Create existing file
+
+    result = runner.invoke(
+        cli,
+        ["transform", slp_real_data, "--scale", "0.5", "-o", str(output_path)],
+    )
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+
+
+def test_transform_accepts_positional_input(tmp_path, slp_real_data):
+    """Test that positional input argument works."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "0.5",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_transform_accepts_flag_input(tmp_path, slp_real_data):
+    """Test that -i/--input flag works."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            "-i",
+            slp_real_data,
+            "--scale",
+            "0.5",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_transform_parse_crop(tmp_path, slp_real_data):
+    """Test crop parameter parsing."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--crop",
+            "10,10,100,100",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Crop:" in output
+
+
+def test_transform_parse_scale(tmp_path, slp_real_data):
+    """Test scale parameter parsing."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "0.5",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Scale:" in output
+
+
+def test_transform_parse_rotate(tmp_path, slp_real_data):
+    """Test rotate parameter parsing."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--rotate",
+            "90",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Rotate:" in output
+
+
+def test_transform_parse_pad(tmp_path, slp_real_data):
+    """Test pad parameter parsing."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--pad",
+            "10,10,10,10",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Pad:" in output
+
+
+def test_transform_combined(tmp_path, slp_real_data):
+    """Test combined transforms."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--crop",
+            "0,0,200,200",
+            "--scale",
+            "0.5",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Crop:" in output
+    assert "Scale:" in output
+
+
+def test_transform_per_video_params(tmp_path, slp_real_data):
+    """Test per-video parameters with idx: prefix.
+
+    Note: Uses slp_real_data which has a single video with valid path.
+    Per-video params with idx:0 should work for single video.
+    """
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "0:0.5",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_transform_video_index_out_of_range(tmp_path, slp_real_data):
+    """Test that out-of-range video index raises error."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "99:0.5",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "out of range" in result.output
+
+
+@skip_slow_video_on_windows
+def test_transform_video_file_dry_run(tmp_path, centered_pair_low_quality_path):
+    """Test transform on raw video file in dry-run mode."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--scale",
+            "0.5",
+            "--dry-run",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "Transform Summary" in output
+    assert "Dry run" in output
+    assert not output_path.exists()
