@@ -4168,8 +4168,9 @@ def _run_ffmpeg_with_progress(
 
     # Add progress flag to ffmpeg
     cmd_with_progress = cmd.copy()
-    # Insert progress flags after 'ffmpeg'
-    progress_flags = ["-progress", "pipe:1", "-stats_period", "0.5"]
+    # Insert progress flags after the ffmpeg executable path
+    # Note: -stats_period not supported in ffmpeg 4.x, use -progress alone
+    progress_flags = ["-progress", "pipe:1"]
     cmd_with_progress[1:1] = progress_flags
 
     process = subprocess.Popen(
