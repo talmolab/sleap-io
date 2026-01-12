@@ -572,6 +572,51 @@ def _is_embedded(vid: Video) -> bool:
     return vid.backend_metadata.get("has_embedded_images", False)
 
 
+def _is_pkg_slp(path: Path) -> bool:
+    """Check if a file path is a .pkg.slp file.
+
+    Args:
+        path: File path to check.
+
+    Returns:
+        True if the path ends with .pkg.slp (case-insensitive).
+    """
+    return path.name.lower().endswith(".pkg.slp")
+
+
+def _should_preserve_embedded(
+    input_paths: list[Path] | Path, output_path: Path, embed: str | None
+) -> bool:
+    """Check if embedded videos should be preserved by default.
+
+    When all input files are .pkg.slp files and the output is also .pkg.slp,
+    we should preserve the existing embedded videos unless the user explicitly
+    specified an --embed option.
+
+    Args:
+        input_paths: Input file path(s). Can be a single Path or list of Paths.
+        output_path: Output file path.
+        embed: The user-specified embed option (None if not specified).
+
+    Returns:
+        True if embedded videos should be preserved.
+    """
+    # User explicitly specified embed option - respect their choice
+    if embed is not None:
+        return False
+
+    # Output must be pkg.slp
+    if not _is_pkg_slp(output_path):
+        return False
+
+    # Handle single path or list
+    if isinstance(input_paths, Path):
+        input_paths = [input_paths]
+
+    # All inputs must be pkg.slp
+    return all(_is_pkg_slp(p) for p in input_paths)
+
+
 def _get_dataset(vid: Video) -> str | None:
     """Get HDF5 dataset path.
 
