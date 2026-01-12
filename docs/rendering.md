@@ -654,7 +654,7 @@ sio.render_video(
 
 ## CLI Reference
 
-For CLI usage, see the [CLI Guide](cli.md#sio-render---render-pose-videos-and-images).
+For CLI usage, see the [CLI Guide](cli.md#sio-render).
 
 ```bash
 # Basic rendering
