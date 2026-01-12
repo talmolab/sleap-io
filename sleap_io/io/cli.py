@@ -572,6 +572,51 @@ def _is_embedded(vid: Video) -> bool:
     return vid.backend_metadata.get("has_embedded_images", False)
 
 
+def _is_pkg_slp(path: Path) -> bool:
+    """Check if a file path is a .pkg.slp file.
+
+    Args:
+        path: File path to check.
+
+    Returns:
+        True if the path ends with .pkg.slp (case-insensitive).
+    """
+    return path.name.lower().endswith(".pkg.slp")
+
+
+def _should_preserve_embedded(
+    input_paths: list[Path] | Path, output_path: Path, embed: str | None
+) -> bool:
+    """Check if embedded videos should be preserved by default.
+
+    When all input files are .pkg.slp files and the output is also .pkg.slp,
+    we should preserve the existing embedded videos unless the user explicitly
+    specified an --embed option.
+
+    Args:
+        input_paths: Input file path(s). Can be a single Path or list of Paths.
+        output_path: Output file path.
+        embed: The user-specified embed option (None if not specified).
+
+    Returns:
+        True if embedded videos should be preserved.
+    """
+    # User explicitly specified embed option - respect their choice
+    if embed is not None:
+        return False
+
+    # Output must be pkg.slp
+    if not _is_pkg_slp(output_path):
+        return False
+
+    # Handle single path or list
+    if isinstance(input_paths, Path):
+        input_paths = [input_paths]
+
+    # All inputs must be pkg.slp
+    return all(_is_pkg_slp(p) for p in input_paths)
+
+
 def _get_dataset(vid: Video) -> str | None:
     """Get HDF5 dataset path.
 
@@ -1464,7 +1509,13 @@ def convert(
     # Save the output file
     try:
         save_kwargs: dict = {"format": resolved_output_format}
-        if embed is not None:
+        # Check for pkg.slp to pkg.slp preservation
+        if resolved_output_format == "slp" and _should_preserve_embedded(
+            input_path, output_path, embed
+        ):
+            # Preserve existing embedded videos from pkg.slp input
+            save_kwargs["embed"] = None
+        elif embed is not None:
             save_kwargs["embed"] = embed
         # Handle CSV-specific options
         if resolved_output_format == "csv":
@@ -1872,7 +1923,10 @@ def unsplit(
 
     try:
         save_kwargs: dict = {}
-        if embed is not None:
+        if _should_preserve_embedded(expanded_files, output_path, embed):
+            # Preserve existing embedded videos from pkg.slp inputs
+            save_kwargs["embed"] = None
+        elif embed is not None:
             save_kwargs["embed"] = embed
         io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
@@ -2105,7 +2159,10 @@ def merge(
 
     try:
         save_kwargs: dict = {}
-        if embed is not None:
+        if _should_preserve_embedded(expanded_files, output_path, embed):
+            # Preserve existing embedded videos from pkg.slp inputs
+            save_kwargs["embed"] = None
+        elif embed is not None:
             save_kwargs["embed"] = embed
         io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
@@ -3410,7 +3467,11 @@ def fix(
     # ==========================================================================
 
     try:
-        io_main.save_file(labels, str(output_path))
+        save_kwargs: dict = {}
+        if _should_preserve_embedded(input_path, output_path, embed=None):
+            # Preserve existing embedded videos from pkg.slp input
+            save_kwargs["embed"] = None
+        io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
