@@ -1150,8 +1150,8 @@ class HDF5Video(VideoBackend):
 
         Returns:
             Raw encoded bytes as int8 numpy array, or None if:
-            - The backend doesn't have embedded images
-            - The image format is "hdf5" (raw numpy arrays, no encoding)
+            - The backend doesn't have embedded images (including "hdf5" format which
+              stores raw numpy arrays, not encoded images)
             - The frame index is not available
 
         Notes:
@@ -1159,10 +1159,6 @@ class HDF5Video(VideoBackend):
             For fixed-length datasets, returns bytes with trailing zeros stripped.
         """
         if not self.has_embedded_images:
-            return None
-
-        if self.image_format == "hdf5":
-            # Raw numpy arrays, not encoded - no fast path possible
             return None
 
         if not self.has_frame(frame_idx):

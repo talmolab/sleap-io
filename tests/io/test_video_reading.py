@@ -224,6 +224,54 @@ def test_hdf5video_get_frame_raw_bytes_non_embedded(tmpdir):
     assert raw_bytes is None
 
 
+def test_hdf5video_get_frame_raw_bytes_keep_open_false(slp_minimal_pkg):
+    """Test get_frame_raw_bytes() works with keep_open=False."""
+    backend = HDF5Video.from_filename(slp_minimal_pkg, keep_open=False)
+    assert type(backend) is HDF5Video
+    assert backend.keep_open is False
+
+    # Get raw bytes for frame 0 - should work with keep_open=False
+    raw_bytes = backend.get_frame_raw_bytes(0)
+
+    # Should still return valid PNG bytes
+    assert raw_bytes is not None
+    assert isinstance(raw_bytes, np.ndarray)
+
+    # Verify PNG magic bytes
+    png_magic = raw_bytes[:4].view(np.uint8)
+    assert list(png_magic) == [137, 80, 78, 71]
+
+
+def test_hdf5video_get_frame_raw_bytes_fixed_length(tmpdir):
+    """Test get_frame_raw_bytes() with fixed-length dataset (strips trailing zeros)."""
+    import cv2
+
+    # Create a test image and encode it to PNG
+    test_img = np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".png", test_img)
+    png_bytes = encoded.flatten().astype(np.int8)
+
+    # Create HDF5 with fixed-length dataset (padded with zeros)
+    h5_path = str(tmpdir / "fixed_length.h5")
+    max_size = len(png_bytes) + 1000  # Add padding space
+    with h5py.File(h5_path, "w") as f:
+        ds = f.create_dataset("video", shape=(1, max_size), dtype=np.int8)
+        ds[0, : len(png_bytes)] = png_bytes  # Rest is zeros (padding)
+        ds.attrs["format"] = "png"
+        ds.attrs["imgformat"] = "png"
+
+    # Read back with get_frame_raw_bytes - should strip trailing zeros
+    backend = HDF5Video(filename=h5_path, dataset="video", keep_open=False)
+    assert backend.has_embedded_images is True
+
+    raw_bytes = backend.get_frame_raw_bytes(0)
+    assert raw_bytes is not None
+
+    # Should have stripped trailing zeros - length should match original
+    assert len(raw_bytes) == len(png_bytes)
+    np.testing.assert_array_equal(raw_bytes, png_bytes)
+
+
 def test_imagevideo(centered_pair_frame_paths):
     backend = VideoBackend.from_filename(centered_pair_frame_paths)
     assert type(backend) is ImageVideo

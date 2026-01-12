@@ -1199,6 +1199,46 @@ def test_fast_path_falls_back_to_slow_path_for_format_mismatch(tmpdir, slp_minim
         ]  # JPEG magic (0xFF 0xD8)  # JPEG magic  # JPEG  # JPEG
 
 
+def test_can_use_fast_path_non_embedded_hdf5(tmpdir):
+    """Test can_use_fast_path() returns False for non-embedded HDF5Video."""
+    from sleap_io.io.video_reading import HDF5Video
+
+    # Create an HDF5 file with raw numpy arrays (format="hdf5", not encoded)
+    h5_path = str(tmpdir / "raw_video.h5")
+    with h5py.File(h5_path, "w") as f:
+        ds = f.create_dataset("video", data=np.zeros((5, 64, 64, 1), dtype=np.uint8))
+        ds.attrs["format"] = "hdf5"  # Raw format, not embedded images
+
+    # Create Video with HDF5Video backend
+    video = Video(
+        filename=h5_path,
+        backend=HDF5Video(filename=h5_path, dataset="video"),
+        open_backend=False,
+    )
+    assert video.backend.has_embedded_images is False
+
+    # Should NOT use fast path - has HDF5Video backend but no embedded images
+    assert can_use_fast_path(video, 0, "png") is False
+
+
+def test_fast_path_progress_callback_cancellation(tmpdir, slp_minimal_pkg):
+    """Test that progress_callback cancellation works in fast path."""
+    # Load package file (uses fast path when saving with same format)
+    labels = read_labels(slp_minimal_pkg)
+    assert labels.video.backend.image_format == "png"
+
+    save_path = str(tmpdir / "cancelled.pkg.slp")
+
+    # Cancel immediately
+    def cancel_immediately(current, total):
+        return False
+
+    with pytest.raises(ExportCancelled, match="Export cancelled by user"):
+        write_labels(
+            save_path, labels, embed="user", progress_callback=cancel_immediately
+        )
+
+
 def test_embed_empty_video(tmpdir, slp_real_data, centered_pair_frame_paths):
     """Test that videos without labeled frames are still embedded in package files.
 
