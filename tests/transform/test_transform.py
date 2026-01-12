@@ -169,6 +169,14 @@ class TestTransform:
         result = transform.apply_to_frame(frame)
         assert result.shape == (50, 50)
 
+    def test_apply_to_points_all_nan(self):
+        """Test apply_to_points with all NaN points (covers core.py:236 else branch)."""
+        transform = Transform(scale=(2.0, 2.0))
+        points = np.array([[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]])
+        result = transform.apply_to_points(points, (640, 480))
+        # All points should remain NaN
+        assert np.isnan(result).all()
+
 
 # ============================================================================
 # Frame Transform Tests
@@ -287,6 +295,38 @@ class TestFrameTransforms:
             pad=(5, 5, 5, 5),  # -> 35x35
         )
         assert result.shape == (35, 35)
+
+    def test_transform_frame_with_rotation(self):
+        """Test transform_frame with rotation (covers frame.py:289)."""
+        frame = np.ones((100, 100), dtype=np.uint8) * 128
+        result = transform_frame(frame, rotate=45)
+        # Rotation should expand the frame
+        assert result.shape[0] >= 100
+        assert result.shape[1] >= 100
+
+    def test_transform_frame_with_flip_v(self):
+        """Test transform_frame with vertical flip (covers frame.py:300)."""
+        frame = np.zeros((100, 100), dtype=np.uint8)
+        frame[:50, :] = 255  # Top half white
+
+        result = transform_frame(frame, flip_v=True)
+
+        # After vertical flip, bottom half should be white
+        assert result.shape == (100, 100)
+        assert result[99, 0] == 255  # Bottom should be white
+        assert result[0, 0] == 0  # Top should be black
+
+    def test_transform_frame_with_flip_h(self):
+        """Test transform_frame with horizontal flip (covers frame.py:296)."""
+        frame = np.zeros((100, 100), dtype=np.uint8)
+        frame[:, :50] = 255  # Left half white
+
+        result = transform_frame(frame, flip_h=True)
+
+        # After horizontal flip, right half should be white
+        assert result.shape == (100, 100)
+        assert result[0, 99] == 255  # Right should be white
+        assert result[0, 0] == 0  # Left should be black
 
 
 class TestFrameTransformsGrayscale:
@@ -547,6 +587,22 @@ class TestPointTransforms:
         mask = get_out_of_bounds_mask(points, bounds)
         # (0,0) in, (99,99) in, (100,50) out (x>=100), (50,100) out (y>=100)
         np.testing.assert_array_equal(mask, [False, False, True, True])
+
+    def test_transform_points_all_nan(self):
+        """Test transform_points with all NaN points."""
+        matrix = np.array([[2, 0, 0], [0, 2, 0], [0, 0, 1]], dtype=np.float64)
+        points = np.array([[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]])
+        result = transform_points(points, matrix)
+        # All points should remain NaN
+        assert np.isnan(result).all()
+
+    def test_get_out_of_bounds_mask_all_nan(self):
+        """Test get_out_of_bounds_mask with all NaN points."""
+        points = np.array([[np.nan, np.nan], [np.nan, np.nan]])
+        bounds = (0, 0, 100, 100)
+        mask = get_out_of_bounds_mask(points, bounds)
+        # All NaN points should NOT be marked as OOB
+        np.testing.assert_array_equal(mask, [False, False])
 
 
 # ============================================================================
@@ -1290,3 +1346,251 @@ class TestVideoTransforms:
             video0_data = json.loads(videos_json[0])
             assert "backend" in video0_data
             assert "filename" in video0_data["backend"]
+
+    def test_transform_embedded_video_with_progress(self, tmp_path, slp_minimal_pkg):
+        """Test transform_embedded_video with progress callback."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_embedded_video
+
+        labels = sio.load_slp(slp_minimal_pkg)
+        video = labels.videos[0]
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.pkg.slp"
+
+        # Save empty labels file first
+        labels.save(str(output_path))
+
+        progress_calls = []
+
+        def progress_cb(current: int, total: int) -> None:
+            progress_calls.append((current, total))
+
+        transform_embedded_video(
+            video=video,
+            output_path=output_path,
+            video_idx=0,
+            transform=transform,
+            progress_callback=progress_cb,
+        )
+
+        # Progress callback should have been called for each frame
+        assert len(progress_calls) > 0
+        # Last call should have current == total
+        assert progress_calls[-1][0] == progress_calls[-1][1]
+
+    def test_transform_embedded_video_imageio(
+        self, tmp_path, slp_minimal_pkg, monkeypatch
+    ):
+        """Test transform_embedded_video using imageio backend."""
+        import sys
+
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_embedded_video
+
+        labels = sio.load_slp(slp_minimal_pkg)
+        video = labels.videos[0]
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.pkg.slp"
+
+        # Save empty labels file first
+        labels.save(str(output_path))
+
+        # Force imageio by removing cv2 from modules temporarily
+        cv2_module = sys.modules.get("cv2")
+        if "cv2" in sys.modules:
+            del sys.modules["cv2"]
+
+        try:
+            result = transform_embedded_video(
+                video=video,
+                output_path=output_path,
+                video_idx=0,
+                transform=transform,
+                plugin="imageio",  # Explicitly use imageio
+            )
+
+            assert result is not None
+            # Output dimensions should be scaled
+            assert result.shape[1] == int(video.shape[1] * 0.5)
+            assert result.shape[2] == int(video.shape[2] * 0.5)
+        finally:
+            # Restore cv2 module
+            if cv2_module is not None:
+                sys.modules["cv2"] = cv2_module
+
+    def test_transform_embedded_video_grayscale_imageio(
+        self, tmp_path, slp_minimal_pkg
+    ):
+        """Test transform_embedded_video with grayscale image via imageio."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_embedded_video
+
+        labels = sio.load_slp(slp_minimal_pkg)
+        video = labels.videos[0]
+
+        # Check if the video is grayscale (1 channel)
+        # If not, we still test the path but may not hit the squeeze branch
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.pkg.slp"
+
+        labels.save(str(output_path))
+
+        result = transform_embedded_video(
+            video=video,
+            output_path=output_path,
+            video_idx=0,
+            transform=transform,
+            plugin="imageio",
+        )
+
+        assert result is not None
+
+    def test_transform_video_with_explicit_fps(
+        self, tmp_path, centered_pair_low_quality_path
+    ):
+        """Test transform_video with explicitly specified fps."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_video
+
+        video = sio.load_video(str(centered_pair_low_quality_path))
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.mp4"
+
+        # Pass explicit fps to skip the fallback logic
+        result = transform_video(
+            video=video,
+            output_path=output_path,
+            transform=transform,
+            fps=25.0,  # Explicit fps
+            crf=35,
+        )
+
+        assert result == output_path
+        assert output_path.exists()
+
+    def test_update_videos_json_with_input_format(self, tmp_path, slp_minimal_pkg):
+        """Test _update_videos_json with backend that has input_format attribute."""
+        import json
+
+        import h5py
+
+        import sleap_io as sio
+        from sleap_io.transform.video import _update_videos_json
+
+        labels = sio.load_slp(slp_minimal_pkg)
+
+        # Save to create a new file
+        output_path = tmp_path / "test.pkg.slp"
+        labels.save(str(output_path))
+
+        # Add input_format to backend to test that branch (line 335-336)
+        video = labels.videos[0]
+        if hasattr(video.backend, "__dict__"):
+            video.backend.input_format = "png"
+
+        # Update videos_json
+        _update_videos_json(output_path, labels.videos)
+
+        # Verify the update
+        with h5py.File(output_path, "r") as f:
+            videos_json = list(f["videos_json"][:])
+            video0_data = json.loads(videos_json[0])
+            # Check that the backend info is present
+            assert "backend" in video0_data
+
+    def test_transform_labels_video_no_shape_gets_from_frame(self, tmp_path):
+        """Test transform_labels when video.shape is None but frame is readable."""
+        import sleap_io as sio
+        from sleap_io.model.instance import Instance
+        from sleap_io.model.labeled_frame import LabeledFrame
+        from sleap_io.model.skeleton import Node, Skeleton
+        from sleap_io.model.video import Video
+        from sleap_io.transform.video import transform_labels
+
+        skeleton = Skeleton(nodes=[Node("a")])
+
+        # Create a video with metadata that provides shape
+        video = Video(
+            filename="fake_video.mp4",
+            backend_metadata={"shape": (10, 100, 100, 1)},
+        )
+
+        inst = Instance.from_numpy(np.array([[50.0, 50.0]]), skeleton=skeleton)
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+        transform = Transform(scale=(0.5, 0.5))
+
+        # This should work since video.shape returns from backend_metadata
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=tmp_path / "output.slp",
+            dry_run=True,
+        )
+
+        assert result is not None
+        # Check that coordinates were transformed
+        np.testing.assert_array_almost_equal(
+            result.labeled_frames[0].instances[0].numpy(), [[25.0, 25.0]]
+        )
+
+    def test_transform_embedded_video_no_fps(self, tmp_path, slp_minimal_pkg):
+        """Test transform_embedded_video when video has no fps attribute."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_embedded_video
+
+        labels = sio.load_slp(slp_minimal_pkg)
+        video = labels.videos[0]
+
+        # Clear fps if present
+        if hasattr(video, "_fps"):
+            original_fps = video._fps
+            video._fps = None
+        else:
+            original_fps = None
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.pkg.slp"
+        labels.save(str(output_path))
+
+        try:
+            result = transform_embedded_video(
+                video=video,
+                output_path=output_path,
+                video_idx=0,
+                transform=transform,
+            )
+            assert result is not None
+        finally:
+            # Restore fps
+            if original_fps is not None:
+                video._fps = original_fps
+
+    def test_is_embedded_video_no_backend(self):
+        """Test _is_embedded_video with video that has no backend."""
+        from sleap_io.model.video import Video
+        from sleap_io.transform.video import _is_embedded_video
+
+        # Video with open_backend=False - backend will be None
+        video = Video(filename="test.mp4", open_backend=False)
+
+        # backend is None, so should return False
+        assert _is_embedded_video(video) is False
+
+    def test_get_frame_indices_no_frame_map(self, slp_real_data):
+        """Test _get_frame_indices when HDF5Video has no frame_map."""
+        import sleap_io as sio
+        from sleap_io.transform.video import _get_frame_indices
+
+        labels = sio.load_slp(slp_real_data)
+        video = labels.videos[0]
+
+        # Regular video (not embedded) has no frame_map
+        frame_inds = _get_frame_indices(video)
+
+        # Should return sequential indices
+        assert frame_inds == list(range(video.shape[0]))
