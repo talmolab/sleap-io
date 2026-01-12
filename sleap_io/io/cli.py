@@ -5332,6 +5332,9 @@ def _build_transforms_from_params(
     input_sizes: list[tuple[int, int]],
     quality: str,
     fill: tuple[int, ...] | int,
+    clip_rotation: bool = False,
+    flip_h: bool = False,
+    flip_v: bool = False,
 ) -> dict[int, Any]:
     """Build Transform objects from CLI parameters.
 
@@ -5344,6 +5347,10 @@ def _build_transforms_from_params(
         input_sizes: List of (width, height) for each video.
         quality: Interpolation quality.
         fill: Fill value for out-of-bounds regions (int or RGB tuple).
+        clip_rotation: If True, rotation clips to original dimensions instead of
+            expanding canvas to fit rotated image.
+        flip_h: If True, flip horizontally.
+        flip_v: If True, flip vertically.
 
     Returns:
         Dictionary mapping video index to Transform.
@@ -5434,6 +5441,9 @@ def _build_transforms_from_params(
             pad=video_pads[i],
             quality=quality,
             fill=fill,
+            clip_rotation=clip_rotation,
+            flip_h=flip_h,
+            flip_v=flip_v,
         )
         if transform:  # Only include non-empty transforms
             transforms[i] = transform
@@ -5484,10 +5494,30 @@ def _build_transforms_from_params(
     help="Rotation: '[idx:]degrees'. Clockwise positive.",
 )
 @click.option(
+    "--clip-rotation",
+    is_flag=True,
+    default=False,
+    help="Keep original dimensions when rotating (clips corners).",
+)
+@click.option(
     "--pad",
     "pad_params",
     multiple=True,
     help="Padding: '[idx:]top,right,bottom,left' or single value for uniform.",
+)
+@click.option(
+    "--flip-horizontal",
+    "flip_h",
+    is_flag=True,
+    default=False,
+    help="Flip horizontally (mirror left-right).",
+)
+@click.option(
+    "--flip-vertical",
+    "flip_v",
+    is_flag=True,
+    default=False,
+    help="Flip vertically (mirror top-bottom).",
 )
 # Quality options
 @click.option(
@@ -5567,7 +5597,10 @@ def transform(
     crop_params: tuple[str, ...],
     scale_params: tuple[str, ...],
     rotate_params: tuple[str, ...],
+    clip_rotation: bool,
     pad_params: tuple[str, ...],
+    flip_h: bool,
+    flip_v: bool,
     quality: str,
     fill: str,
     crf: int,
@@ -5581,10 +5614,10 @@ def transform(
 ) -> None:
     """Transform video and adjust label coordinates.
 
-    Apply geometric transformations (crop, scale, rotate, pad) to videos while
+    Apply geometric transformations (crop, scale, rotate, pad, flip) to videos while
     automatically adjusting all landmark coordinates to maintain alignment.
 
-    Transforms are applied in order: crop -> scale -> rotate -> pad.
+    Transforms are applied in order: crop -> scale -> rotate -> pad -> flip.
 
     [bold]Per-video transforms:[/]
     Prefix any parameter with 'idx:' to apply to a specific video:
@@ -5660,6 +5693,9 @@ def transform(
             dry_run=dry_run,
             dry_run_frame=dry_run_frame,
             overwrite=overwrite,
+            clip_rotation=clip_rotation,
+            flip_h=flip_h,
+            flip_v=flip_v,
         )
         return
 
@@ -5685,9 +5721,10 @@ def transform(
         )
 
     # Validate that at least one transform is specified
-    if not any([crop_params, scale_params, rotate_params, pad_params]):
+    if not any([crop_params, scale_params, rotate_params, pad_params, flip_h, flip_v]):
         raise click.ClickException(
-            "No transforms specified. Use --crop, --scale, --rotate, or --pad."
+            "No transforms specified. Use --crop, --scale, --rotate, --pad, "
+            "--flip-horizontal, or --flip-vertical."
         )
 
     # Load SLP file
@@ -5721,6 +5758,9 @@ def transform(
             input_sizes=input_sizes,
             quality=quality,
             fill=fill_value,
+            clip_rotation=clip_rotation,
+            flip_h=flip_h,
+            flip_v=flip_v,
         )
     except ValueError as e:
         raise click.ClickException(str(e))
@@ -5867,6 +5907,9 @@ def _transform_video_file(
     dry_run: bool,
     dry_run_frame: int | None,
     overwrite: bool,
+    clip_rotation: bool = False,
+    flip_h: bool = False,
+    flip_v: bool = False,
 ) -> None:
     """Transform a raw video file without labels.
 
@@ -5887,6 +5930,9 @@ def _transform_video_file(
         dry_run: Preview mode.
         dry_run_frame: Specific frame to render in preview.
         overwrite: Overwrite existing.
+        clip_rotation: If True, rotation clips to original dimensions.
+        flip_h: If True, flip horizontally.
+        flip_v: If True, flip vertically.
     """
     from sleap_io.model.video import Video
     from sleap_io.transform import Transform
@@ -5910,9 +5956,10 @@ def _transform_video_file(
         )
 
     # Validate that at least one transform is specified
-    if not any([crop_params, scale_params, rotate_params, pad_params]):
+    if not any([crop_params, scale_params, rotate_params, pad_params, flip_h, flip_v]):
         raise click.ClickException(
-            "No transforms specified. Use --crop, --scale, --rotate, or --pad."
+            "No transforms specified. Use --crop, --scale, --rotate, --pad, "
+            "--flip-horizontal, or --flip-vertical."
         )
 
     # Load video to get dimensions
@@ -5961,6 +6008,9 @@ def _transform_video_file(
         pad=pad,
         quality=quality,
         fill=fill,
+        clip_rotation=clip_rotation,
+        flip_h=flip_h,
+        flip_v=flip_v,
     )
 
     if not transform:

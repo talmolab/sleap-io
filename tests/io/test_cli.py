@@ -8122,3 +8122,90 @@ def test_transform_video_file_rotate_and_pad(tmp_path, centered_pair_low_quality
     assert result.exit_code == 0, result.output
     assert "Rotate: 45" in result.output
     assert "Pad: (10, 10, 10, 10)" in result.output
+
+
+def test_transform_clip_rotation(tmp_path, centered_pair_low_quality_path):
+    """Test --clip-rotation flag keeps original dimensions when rotating."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    # Without --clip-rotation, 45 degree rotation should expand canvas
+    result_expanded = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--rotate",
+            "45",
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result_expanded.exit_code == 0, result_expanded.output
+    # Original is 384x384, 45 degree rotation expands to ~543x543
+    assert "384x384 -> 5" in result_expanded.output  # 543x543
+
+    # With --clip-rotation, dimensions should stay the same
+    result_clipped = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--rotate",
+            "45",
+            "--clip-rotation",
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result_clipped.exit_code == 0, result_clipped.output
+    # With clipping, dimensions stay at 384x384
+    assert "384x384 -> 384x384" in result_clipped.output
+
+
+def test_transform_flip_horizontal(tmp_path, centered_pair_low_quality_path):
+    """Test --flip-horizontal flag."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--flip-horizontal",
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    # Flip should be accepted as a valid transform
+    assert "Transform Summary" in result.output
+    # Dimensions should stay the same
+    assert "384x384 -> 384x384" in result.output
+
+
+def test_transform_flip_vertical(tmp_path, centered_pair_low_quality_path):
+    """Test --flip-vertical flag."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--flip-vertical",
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    # Flip should be accepted as a valid transform
+    assert "Transform Summary" in result.output
+    # Dimensions should stay the same
+    assert "384x384 -> 384x384" in result.output
