@@ -3468,7 +3468,11 @@ def fix(
     # ==========================================================================
 
     try:
-        io_main.save_file(labels, str(output_path))
+        save_kwargs: dict = {}
+        if _should_preserve_embedded(input_path, output_path, embed=None):
+            # Preserve existing embedded videos from pkg.slp input
+            save_kwargs["embed"] = None
+        io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 
