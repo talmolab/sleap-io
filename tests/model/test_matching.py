@@ -1395,7 +1395,7 @@ class TestVideoMatcherCoverageGaps:
 
 
     def test_is_same_file_hdf5_different_datasets(self):
-        """Test that HDF5 videos with same filename but different datasets are different.
+        """Test that HDF5 videos with same filename but different datasets.
 
         Regression test for a bug where embedded videos from split pkg.slp files
         were incorrectly matched because only the filename was compared, not the
