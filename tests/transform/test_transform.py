@@ -738,7 +738,6 @@ class TestVideoTransforms:
     def test_transform_labels_default_video_dir(self, tmp_path, slp_real_data):
         """Test transform_labels with default video output directory."""
         import sleap_io as sio
-
         from sleap_io.transform.video import transform_labels
 
         labels = sio.load_slp(slp_real_data)
@@ -747,7 +746,7 @@ class TestVideoTransforms:
         output_path = tmp_path / "output.slp"
         # Don't specify video_output_dir - should default
 
-        result = transform_labels(
+        transform_labels(
             labels=labels,
             transforms=transform,
             output_path=output_path,
@@ -762,7 +761,6 @@ class TestVideoTransforms:
     def test_transform_labels_per_video_transforms(self, tmp_path, slp_real_data):
         """Test transform_labels with per-video transforms dict."""
         import sleap_io as sio
-
         from sleap_io.transform.video import transform_labels
 
         labels = sio.load_slp(slp_real_data)
@@ -784,7 +782,6 @@ class TestVideoTransforms:
     def test_transform_labels_skip_no_transform(self, tmp_path, slp_real_data):
         """Test that videos without transform are skipped."""
         import sleap_io as sio
-
         from sleap_io.transform.video import transform_labels
 
         labels = sio.load_slp(slp_real_data)
@@ -806,7 +803,6 @@ class TestVideoTransforms:
     def test_compute_transform_summary_single_transform(self, slp_real_data):
         """Test compute_transform_summary with a single Transform."""
         import sleap_io as sio
-
         from sleap_io.transform.video import compute_transform_summary
 
         labels = sio.load_slp(slp_real_data)
@@ -831,7 +827,6 @@ class TestVideoTransforms:
     def test_compute_transform_summary_with_dict(self, slp_real_data):
         """Test compute_transform_summary with dict of transforms."""
         import sleap_io as sio
-
         from sleap_io.transform.video import compute_transform_summary
 
         labels = sio.load_slp(slp_real_data)
@@ -846,7 +841,6 @@ class TestVideoTransforms:
     def test_compute_transform_summary_small_output_warning(self, slp_real_data):
         """Test that compute_transform_summary warns about very small output."""
         import sleap_io as sio
-
         from sleap_io.transform.video import compute_transform_summary
 
         labels = sio.load_slp(slp_real_data)
@@ -862,7 +856,6 @@ class TestVideoTransforms:
     def test_compute_transform_summary_no_transform(self, slp_real_data):
         """Test compute_transform_summary when video has no transform."""
         import sleap_io as sio
-
         from sleap_io.transform.video import compute_transform_summary
 
         labels = sio.load_slp(slp_real_data)
@@ -877,7 +870,6 @@ class TestVideoTransforms:
     def test_transform_labels_with_progress_callback(self, tmp_path, slp_real_data):
         """Test transform_labels with progress callback."""
         import sleap_io as sio
-
         from sleap_io.transform.video import transform_labels
 
         labels = sio.load_slp(slp_real_data)
@@ -888,7 +880,7 @@ class TestVideoTransforms:
         def progress_callback(video_name: str, current: int, total: int) -> None:
             progress_calls.append((video_name, current, total))
 
-        result = transform_labels(
+        transform_labels(
             labels=labels,
             transforms=transform,
             output_path=tmp_path / "output.slp",
@@ -906,15 +898,12 @@ class TestVideoTransforms:
     def test_transform_labels_multiview(self, tmp_path, slp_real_data):
         """Test transform_labels with multiple videos exercises skip path."""
         import sleap_io as sio
-
-        from sleap_io.model.instance import Instance, PredictedInstance
         from sleap_io.model.labeled_frame import LabeledFrame
         from sleap_io.model.video import Video
         from sleap_io.transform.video import transform_labels
 
         # Load base labels
         labels = sio.load_slp(slp_real_data)
-        original_video = labels.videos[0]
 
         # Create a second synthetic video (dummy - won't be processed)
         dummy_video = Video(
@@ -944,7 +933,6 @@ class TestVideoTransforms:
     def test_compute_transform_summary_video_no_shape(self, slp_real_data):
         """Test compute_transform_summary when video has no shape info."""
         import sleap_io as sio
-
         from sleap_io.model.video import Video
         from sleap_io.transform.video import compute_transform_summary
 
