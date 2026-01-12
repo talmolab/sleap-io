@@ -288,6 +288,34 @@ class TestFrameTransforms:
         assert result.shape == (35, 35)
 
 
+class TestFrameTransformsGrayscale:
+    """Tests for frame transforms with grayscale images (H, W, 1)."""
+
+    def test_scale_frame_grayscale_hwc(self):
+        """Test scale_frame with grayscale (H, W, 1) format."""
+        # Create grayscale frame with shape (H, W, 1)
+        frame = np.zeros((100, 100, 1), dtype=np.uint8)
+        frame[40:60, 40:60] = 255  # White square
+
+        result = scale_frame(frame, (0.5, 0.5))
+
+        # Should preserve (H, W, 1) shape
+        assert result.shape == (50, 50, 1)
+        assert result.dtype == np.uint8
+
+    def test_rotate_frame_grayscale_hwc(self):
+        """Test rotate_frame with grayscale (H, W, 1) format."""
+        frame = np.zeros((100, 100, 1), dtype=np.uint8)
+        frame[0:10, 0:10] = 255  # White square in top-left
+
+        result = rotate_frame(frame, 90)
+
+        # Should preserve (H, W, 1) shape
+        assert result.shape == (100, 100, 1)
+        # After clockwise 90 degree rotation, top-left becomes top-right
+        assert result[0:10, 90:100].mean() > 200
+
+
 # ============================================================================
 # Points Transform Tests
 # ============================================================================
@@ -523,3 +551,117 @@ class TestIntegration:
         # (10, 10) -> (90, 90)
         transformed = transform.apply_to_points(points, (100, 100))
         np.testing.assert_array_almost_equal(transformed, [[90, 90]])
+
+
+# ============================================================================
+# Video Transform Tests
+# ============================================================================
+
+
+class TestVideoTransforms:
+    """Tests for video transformation functions."""
+
+    def test_transform_video_basic(self, tmp_path, centered_pair_low_quality_path):
+        """Test basic video transformation."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_video
+
+        # Load video (use small subset via trimming)
+        video = sio.load_video(str(centered_pair_low_quality_path))
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.mp4"
+
+        result = transform_video(
+            video=video,
+            output_path=output_path,
+            transform=transform,
+            crf=35,
+        )
+
+        assert result == output_path
+        assert output_path.exists()
+
+        # Verify output dimensions
+        out_vid = sio.load_video(str(output_path))
+        assert out_vid.shape[1] == 192  # 384 * 0.5
+        assert out_vid.shape[2] == 192
+
+    def test_transform_video_with_progress(
+        self, tmp_path, centered_pair_low_quality_path
+    ):
+        """Test video transformation with progress callback."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_video
+
+        video = sio.load_video(str(centered_pair_low_quality_path))
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.mp4"
+
+        progress_calls = []
+
+        def progress_cb(current, total):
+            progress_calls.append((current, total))
+
+        transform_video(
+            video=video,
+            output_path=output_path,
+            transform=transform,
+            crf=35,
+            progress_callback=progress_cb,
+        )
+
+        # Should have callbacks for all frames
+        assert len(progress_calls) > 0
+        # Last call should have completed all frames
+        assert progress_calls[-1][0] == progress_calls[-1][1]
+
+    def test_transform_labels_basic(self, tmp_path, slp_real_data):
+        """Test transform_labels function."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.slp"
+        video_output_dir = tmp_path / "videos"
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=output_path,
+            video_output_dir=video_output_dir,
+            crf=35,
+        )
+
+        # Check result is returned and has frames
+        assert result is not None
+        assert len(result.labeled_frames) > 0
+        # Check video output was created
+        assert video_output_dir.exists()
+
+    def test_transform_labels_dry_run(self, tmp_path, slp_real_data):
+        """Test transform_labels in dry-run mode."""
+        import sleap_io as sio
+        from sleap_io.transform.video import transform_labels
+
+        labels = sio.load_slp(slp_real_data)
+
+        transform = Transform(scale=(0.5, 0.5))
+        output_path = tmp_path / "output.slp"
+        video_output_dir = tmp_path / "videos"
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=output_path,
+            video_output_dir=video_output_dir,
+            dry_run=True,  # Don't actually process videos
+        )
+
+        # Check result is returned
+        assert result is not None
+        assert len(result.labeled_frames) > 0
+        # In dry-run, video dir should not be created
+        assert not video_output_dir.exists()

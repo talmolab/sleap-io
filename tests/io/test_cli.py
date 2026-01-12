@@ -7980,3 +7980,63 @@ def test_transform_video_file_dry_run_frame(tmp_path, centered_pair_low_quality_
     output = _strip_ansi(result.output)
     assert "Preview frame 0" in output
     assert not output_path.exists()
+
+
+@skip_slow_video_on_windows
+def test_transform_video_file_actual(tmp_path, centered_pair_low_quality_path):
+    """Test actual video transformation (not dry-run)."""
+    import sleap_io as sio
+
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    # Scale down to make test faster
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(centered_pair_low_quality_path),
+            "--scale",
+            "0.25",  # Small scale for fast test
+            "--crf",
+            "35",  # Lower quality for faster encoding
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+    # Verify output video
+    vid = sio.load_video(str(output_path))
+    assert vid.shape[1] == 96  # 384 * 0.25
+    assert vid.shape[2] == 96
+
+
+@skip_slow_video_on_windows
+def test_transform_slp_actual(tmp_path, slp_real_data):
+    """Test actual SLP transformation (not dry-run)."""
+    import sleap_io as sio
+
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            slp_real_data,
+            "--scale",
+            "0.25",
+            "--crf",
+            "35",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+    # Verify output
+    labels = sio.load_slp(str(output_path))
+    assert len(labels.videos) == 1
