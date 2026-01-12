@@ -186,3 +186,38 @@ def count_out_of_bounds(
     )
 
     return int(out_of_bounds.sum())
+
+
+def get_out_of_bounds_mask(
+    points: np.ndarray,
+    bounds: tuple[int, int, int, int],
+) -> np.ndarray:
+    """Get a boolean mask indicating which points are outside bounds.
+
+    Args:
+        points: Coordinate array of shape (n_points, 2) where each row is (x, y).
+        bounds: Bounds as (x_min, y_min, x_max, y_max).
+
+    Returns:
+        Boolean array of shape (n_points,) where True indicates the point is
+        out of bounds. NaN points are considered in bounds (not marked as OOB).
+    """
+    x_min, y_min, x_max, y_max = bounds
+
+    # Mask for valid (non-NaN) points
+    valid_mask = ~np.isnan(points).any(axis=-1)
+
+    # Initialize result - NaN points are not considered OOB
+    oob_mask = np.zeros(len(points), dtype=bool)
+
+    if valid_mask.any():
+        valid_points = points[valid_mask]
+        oob = (
+            (valid_points[:, 0] < x_min)
+            | (valid_points[:, 0] >= x_max)
+            | (valid_points[:, 1] < y_min)
+            | (valid_points[:, 1] >= y_max)
+        )
+        oob_mask[valid_mask] = oob
+
+    return oob_mask

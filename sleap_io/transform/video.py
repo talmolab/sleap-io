@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from sleap_io.transform.core import Transform
+from sleap_io.transform.points import get_out_of_bounds_mask
 
 if TYPE_CHECKING:
     from sleap_io.model.labels import Labels
@@ -487,6 +488,11 @@ def transform_labels(
 
         # Update coordinates for this video's labeled frames
         copied_video = new_labels.videos[video_idx]
+
+        # Compute output bounds for OOB visibility check
+        output_w, output_h = transform.output_size(input_size)
+        output_bounds = (0, 0, output_w, output_h)
+
         for lf in new_labels.labeled_frames:
             if lf.video is not copied_video:
                 continue
@@ -495,6 +501,10 @@ def transform_labels(
                 points = instance.numpy(invisible_as_nan=False)
                 transformed_points = transform.apply_to_points(points, input_size)
                 instance.points["xy"] = transformed_points
+
+                # Mark out-of-bounds points as not visible
+                oob_mask = get_out_of_bounds_mask(transformed_points, output_bounds)
+                instance.points["visible"][oob_mask] = False
 
     # Replace video references for regular videos
     if video_map:

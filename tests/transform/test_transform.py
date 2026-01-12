@@ -15,6 +15,7 @@ from sleap_io.transform.frame import (
 from sleap_io.transform.points import (
     count_out_of_bounds,
     crop_points,
+    get_out_of_bounds_mask,
     pad_points,
     rotate_points,
     scale_points,
@@ -515,6 +516,38 @@ class TestPointTransforms:
         count = count_out_of_bounds(points, (0, 0, 100, 100))
         assert count == 0
 
+    def test_get_out_of_bounds_mask_basic(self):
+        """Test get_out_of_bounds_mask returns correct boolean mask."""
+        points = np.array([[-10, 50], [50, 50], [150, 50], [50, -10], [50, 150]])
+        bounds = (0, 0, 100, 100)
+        mask = get_out_of_bounds_mask(points, bounds)
+        expected = [True, False, True, True, True]
+        np.testing.assert_array_equal(mask, expected)
+
+    def test_get_out_of_bounds_mask_all_valid(self):
+        """Test mask when all points are in bounds."""
+        points = np.array([[10, 10], [50, 50], [90, 90]])
+        bounds = (0, 0, 100, 100)
+        mask = get_out_of_bounds_mask(points, bounds)
+        np.testing.assert_array_equal(mask, [False, False, False])
+
+    def test_get_out_of_bounds_mask_with_nan(self):
+        """Test that NaN points are not marked as OOB."""
+        points = np.array([[-10, 50], [np.nan, np.nan], [50, 50]])
+        bounds = (0, 0, 100, 100)
+        mask = get_out_of_bounds_mask(points, bounds)
+        # NaN point should NOT be marked as OOB (False), OOB point should be True
+        np.testing.assert_array_equal(mask, [True, False, False])
+
+    def test_get_out_of_bounds_mask_boundary(self):
+        """Test boundary conditions (>= max is out of bounds)."""
+        # Points exactly at the max boundary are out of bounds
+        points = np.array([[0, 0], [99, 99], [100, 50], [50, 100]])
+        bounds = (0, 0, 100, 100)
+        mask = get_out_of_bounds_mask(points, bounds)
+        # (0,0) in, (99,99) in, (100,50) out (x>=100), (50,100) out (y>=100)
+        np.testing.assert_array_equal(mask, [False, False, True, True])
+
 
 # ============================================================================
 # CLI Parsing Tests
@@ -878,6 +911,75 @@ class TestVideoTransforms:
 
         # Should return without processing (no transform for video 0)
         assert result is not None
+
+    def test_transform_labels_marks_oob_points_invisible(self, tmp_path):
+        """Test that out-of-bounds points are marked as not visible."""
+        import sleap_io as sio
+        from sleap_io.model.instance import Instance
+        from sleap_io.model.labeled_frame import LabeledFrame
+        from sleap_io.model.skeleton import Node, Skeleton
+        from sleap_io.model.video import Video
+        from sleap_io.transform.video import transform_labels
+
+        # Create a simple skeleton with 3 nodes
+        skeleton = Skeleton(nodes=[Node("a"), Node("b"), Node("c")])
+
+        # Create video with shape set via backend_metadata (100x100)
+        video = Video(
+            filename="fake_video.mp4",
+            backend_metadata={"shape": (2, 100, 100, 1)},  # (frames, h, w, c)
+        )
+
+        # Create instance with points:
+        # - (50, 50): center, stays in bounds after any reasonable transform
+        # - (10, 10): near corner, will go OOB after crop
+        # - (90, 90): near opposite corner, will go OOB after crop
+        inst = Instance.from_numpy(
+            np.array([[50.0, 50.0], [10.0, 10.0], [90.0, 90.0]]),
+            skeleton=skeleton,
+        )
+        # Verify all points start as visible
+        assert inst.points["visible"].all()
+
+        lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+        labels = sio.Labels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+        # Apply a crop that puts points (10, 10) and (90, 90) out of bounds
+        # Crop to center 40x40 region: (30, 30, 70, 70)
+        transform = Transform(crop=(30, 30, 70, 70))
+        output_path = tmp_path / "output.slp"
+
+        result = transform_labels(
+            labels=labels,
+            transforms=transform,
+            output_path=output_path,
+            dry_run=True,  # Don't process videos, just transform coords
+        )
+
+        # Get the transformed instance
+        result_inst = result.labeled_frames[0].instances[0]
+
+        # Check coordinates were transformed (shifted by crop offset)
+        # Point (50, 50) -> (20, 20) after crop offset
+        np.testing.assert_array_almost_equal(
+            result_inst.points["xy"][0], [20.0, 20.0]
+        )
+        # Point (10, 10) -> (-20, -20) after crop offset (OOB)
+        np.testing.assert_array_almost_equal(
+            result_inst.points["xy"][1], [-20.0, -20.0]
+        )
+        # Point (90, 90) -> (60, 60) after crop offset (OOB, since output is 40x40)
+        np.testing.assert_array_almost_equal(
+            result_inst.points["xy"][2], [60.0, 60.0]
+        )
+
+        # Check visibility: only center point should be visible
+        # Point 0 (20, 20): in bounds (0 <= x < 40, 0 <= y < 40) - VISIBLE
+        # Point 1 (-20, -20): out of bounds - NOT VISIBLE
+        # Point 2 (60, 60): out of bounds (>= 40) - NOT VISIBLE
+        assert result_inst.points["visible"][0]  # center point in bounds
+        assert not result_inst.points["visible"][1]  # OOB (negative)
+        assert not result_inst.points["visible"][2]  # OOB (>= output size)
 
     def test_compute_transform_summary_single_transform(self, slp_real_data):
         """Test compute_transform_summary with a single Transform."""
