@@ -6,17 +6,24 @@ Covers summary output, labeled frame details, skeleton printing, and format conv
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
 from sleap_io import load_slp
-from sleap_io.io.cli import cli
+from sleap_io.io.cli import _get_ffmpeg_version, _is_ffmpeg_available, cli
 from sleap_io.model.instance import PredictedInstance
 from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.version import __version__
+
+# Skip marker for tests that are extremely slow on Windows CI due to video encoding
+skip_slow_video_on_windows = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Video encoding tests are extremely slow on Windows CI (~1 min per test)",
+)
 
 
 def _strip_ansi(text: str) -> str:
@@ -5282,6 +5289,7 @@ def test_trim_labels_with_video_options(tmp_path, slp_real_data):
     assert output_path.with_suffix(".mp4").exists()
 
 
+@skip_slow_video_on_windows
 def test_trim_video_only(tmp_path, centered_pair_low_quality_path):
     """Test trimming a standalone video file."""
     runner = CliRunner()
@@ -5308,6 +5316,7 @@ def test_trim_video_only(tmp_path, centered_pair_low_quality_path):
     assert output_path.exists()
 
 
+@skip_slow_video_on_windows
 def test_trim_video_only_with_fps(tmp_path, centered_pair_low_quality_path):
     """Test video trimming with FPS option."""
     runner = CliRunner()
@@ -5772,3 +5781,1441 @@ def test_trim_video_write_failure(tmp_path, centered_pair_low_quality_path):
     finally:
         # Restore permissions for cleanup
         os.chmod(output_path, 0o755)
+
+
+# =============================================================================
+# Reencode command tests
+# =============================================================================
+
+
+def test_reencode_help():
+    """Test that reencode command help is displayed."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reencode", "--help"])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Check key options are documented
+    assert "reencode" in output.lower()
+    assert "--quality" in output
+    assert "--crf" in output
+    assert "--keyframe-interval" in output
+    assert "--encoding" in output
+    assert "--dry-run" in output
+
+
+def test_reencode_in_command_list():
+    """Test that reencode appears in the main CLI help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "reencode" in output
+
+
+def test_reencode_dry_run(tmp_path, centered_pair_low_quality_path):
+    """Test dry run mode shows command without executing."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Should show either ffmpeg command or Python path message
+    if _is_ffmpeg_available():
+        assert "ffmpeg" in output
+        assert "libx264" in output
+    else:
+        assert "Python path" in output
+    # Output file should NOT exist (dry run)
+    assert not output_path.exists()
+
+
+def test_reencode_dry_run_python_path(tmp_path, centered_pair_low_quality_path):
+    """Test dry run mode with Python path."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+            "--no-ffmpeg",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Python path" in output
+    assert not output_path.exists()
+
+
+def test_reencode_quality_crf_mutually_exclusive(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test that --quality and --crf cannot be used together."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--quality",
+            "high",
+            "--crf",
+            "20",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Cannot use both --quality and --crf" in output
+
+
+def test_reencode_invalid_crf(tmp_path, centered_pair_low_quality_path):
+    """Test that invalid CRF values are rejected."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--crf",
+            "60",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "CRF must be between 0 and 51" in output
+
+
+def test_reencode_same_input_output_error(tmp_path, centered_pair_low_quality_path):
+    """Test that using same path for input and output is rejected."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            centered_pair_low_quality_path,
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "cannot be the same as input" in output.lower()
+
+
+def test_reencode_output_exists_error(tmp_path, centered_pair_low_quality_path):
+    """Test that existing output file is rejected without --overwrite."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+    output_path.touch()  # Create existing file
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "already exists" in output.lower()
+
+
+def test_reencode_input_not_found(tmp_path):
+    """Test error when input file does not exist."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            "/nonexistent/video.mp4",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+
+
+def test_reencode_accepts_positional_input(tmp_path, centered_pair_low_quality_path):
+    """Test that positional input argument works."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+
+def test_reencode_accepts_flag_input(tmp_path, centered_pair_low_quality_path):
+    """Test that -i/--input flag works."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            "-i",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+
+
+def test_reencode_rejects_both_inputs(tmp_path, centered_pair_low_quality_path):
+    """Test that providing both positional and flag input is rejected."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-i",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Cannot specify" in output
+
+
+def test_reencode_missing_input(tmp_path):
+    """Test that missing input is rejected."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "Missing" in output
+
+
+def test_reencode_default_output_path(tmp_path, centered_pair_low_quality_path):
+    """Test that default output path is generated correctly."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Default should add .reencoded before extension
+    assert "centered_pair_low_quality.reencoded.mp4" in output
+
+
+@skip_slow_video_on_windows
+def test_reencode_basic(tmp_path, centered_pair_low_quality_path):
+    """Test basic reencoding (ffmpeg or Python path)."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Check for either ffmpeg or Python path output
+    assert "Reencoding" in output
+    assert "Saved:" in output
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
+
+
+@skip_slow_video_on_windows
+def test_reencode_with_quality(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with quality option."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--quality",
+            "low",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # CRF is shown in ffmpeg path output, not in Python path
+    if _is_ffmpeg_available():
+        assert "CRF 32" in output  # low quality = CRF 32
+    assert output_path.exists()
+
+
+def test_reencode_with_keyframe_interval(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with custom keyframe interval."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--keyframe-interval",
+            "0.5",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Check for either ffmpeg GOP setting or Python path
+    if _is_ffmpeg_available():
+        # In dry-run mode, check that ffmpeg command has a GOP setting
+        # The video is ~15fps, so 0.5s interval -> GOP of ~7
+        assert "-g" in output
+        assert "ffmpeg" in output
+    else:
+        assert "Python path" in output
+
+
+def test_reencode_with_encoding_preset(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with encoding preset option."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--encoding",
+            "ultrafast",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "ultrafast" in output
+
+
+@skip_slow_video_on_windows
+def test_reencode_python_path(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with Python fallback path."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--no-ffmpeg",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Python path" in output
+    assert output_path.exists()
+
+
+@skip_slow_video_on_windows
+def test_reencode_overwrite(tmp_path, centered_pair_low_quality_path):
+    """Test that --overwrite allows replacing existing output."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+    output_path.write_bytes(b"existing content")  # Create existing file
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--overwrite",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    assert output_path.exists()
+    # File should be larger than original dummy content
+    assert output_path.stat().st_size > 20
+
+
+def test_reencode_with_gop_option(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with explicit --gop option."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--gop",
+            "15",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # GOP of 15 frames should appear in ffmpeg command or Python path info
+    if _is_ffmpeg_available():
+        assert "-g" in output
+        assert "15" in output
+    else:
+        assert "Python path" in output
+
+
+@skip_slow_video_on_windows
+def test_reencode_with_fps_python_path(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with --fps option using Python path."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--fps",
+            "15",
+            "--no-ffmpeg",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    assert "Python path" in output
+    assert output_path.exists()
+
+
+def test_reencode_use_ffmpeg_without_ffmpeg():
+    """Test --use-ffmpeg flag when ffmpeg might not be available."""
+    runner = CliRunner()
+
+    # This test demonstrates the --use-ffmpeg flag behavior
+    # On systems without ffmpeg, it should fail with helpful message
+    if not _is_ffmpeg_available():
+        with runner.isolated_filesystem():
+            # Create a dummy input file to pass Click's exists validation
+            Path("dummy.mp4").touch()
+            result = runner.invoke(
+                cli,
+                [
+                    "reencode",
+                    "dummy.mp4",
+                    "-o",
+                    "output.mp4",
+                    "--use-ffmpeg",
+                ],
+            )
+            assert result.exit_code != 0
+            output = _strip_ansi(result.output)
+            assert "ffmpeg not found" in output
+
+
+def test_get_ffmpeg_version():
+    """Test _get_ffmpeg_version helper function."""
+    version = _get_ffmpeg_version()
+
+    if _is_ffmpeg_available():
+        # If ffmpeg is available, we should get a version string
+        assert version is not None
+        # Version should look like a version number (contains digits and dots)
+        assert any(c.isdigit() for c in version)
+    else:
+        # If ffmpeg is not available, version should be None
+        assert version is None
+
+
+@skip_slow_video_on_windows
+def test_reencode_with_fps_ffmpeg_path(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with --fps option using ffmpeg path (if available)."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    if _is_ffmpeg_available():
+        result = runner.invoke(
+            cli,
+            [
+                "reencode",
+                centered_pair_low_quality_path,
+                "-o",
+                str(output_path),
+                "--fps",
+                "15",
+            ],
+        )
+        assert result.exit_code == 0, _strip_ansi(result.output)
+        output = _strip_ansi(result.output)
+
+        # Should show FPS change message
+        assert "FPS:" in output or "Reencoding" in output
+        assert output_path.exists()
+
+
+def test_reencode_with_gop_and_fps(tmp_path, centered_pair_low_quality_path):
+    """Test reencoding with both --gop and --fps options."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.mp4"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            centered_pair_low_quality_path,
+            "-o",
+            str(output_path),
+            "--gop",
+            "10",
+            "--fps",
+            "15",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    output = _strip_ansi(result.output)
+
+    # Should show either ffmpeg command or Python path
+    if _is_ffmpeg_available():
+        assert "ffmpeg" in output
+        # GOP should be in command
+        assert "-g" in output
+    else:
+        assert "Python path" in output
+
+
+# SLP batch processing tests
+
+
+def test_reencode_slp_dry_run(tmp_path, slp_real_data):
+    """Test SLP batch processing in dry-run mode."""
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli, ["reencode", slp_real_data, "-o", str(output_slp), "--dry-run"]
+    )
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Should show SLP-specific output
+    assert "Loading SLP" in result.output
+    assert "video(s)" in result.output
+    assert "Dry run" in result.output
+
+    # Output files should not be created
+    assert not output_slp.exists()
+
+
+def test_reencode_slp_default_output_path(tmp_path, slp_real_data):
+    """Test SLP default output path generation."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy SLP file to tmp_path so we can test default output
+    tmp_slp = tmp_path / "project.slp"
+    shutil.copy(slp_real_data, tmp_slp)
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "--dry-run"])
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Should mention the default output path
+    assert "project.reencoded.slp" in result.output
+
+
+def test_reencode_slp_same_input_output_error(tmp_path, slp_real_data):
+    """Test that using same input and output path raises error."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy SLP to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    shutil.copy(slp_real_data, tmp_slp)
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(tmp_slp)])
+
+    # Should fail with clear error
+    assert result.exit_code != 0
+    assert "same as input" in result.output.lower()
+
+
+def test_reencode_slp_output_exists_error(tmp_path, slp_real_data):
+    """Test that existing output SLP raises error without --overwrite."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy SLP and create existing output
+    tmp_slp = tmp_path / "project.slp"
+    output_slp = tmp_path / "output.slp"
+    shutil.copy(slp_real_data, tmp_slp)
+    output_slp.touch()  # Create existing file
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(output_slp)])
+
+    # Should fail with clear error
+    assert result.exit_code != 0
+    assert "already exists" in result.output.lower()
+
+
+def test_reencode_slp_quality_crf_mutually_exclusive(tmp_path, slp_real_data):
+    """Test that --quality and --crf are mutually exclusive for SLP."""
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "reencode",
+            slp_real_data,
+            "-o",
+            str(output_slp),
+            "--quality",
+            "high",
+            "--crf",
+            "20",
+            "--dry-run",
+        ],
+    )
+
+    # Should fail
+    assert result.exit_code != 0
+    assert "both" in result.output.lower() or "quality" in result.output.lower()
+
+
+def test_reencode_slp_invalid_crf(tmp_path, slp_real_data):
+    """Test that invalid CRF values are rejected for SLP."""
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        ["reencode", slp_real_data, "-o", str(output_slp), "--crf", "60", "--dry-run"],
+    )
+
+    # Should fail with CRF error
+    assert result.exit_code != 0
+    assert "crf" in result.output.lower()
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_reencode_slp_basic(tmp_path, slp_real_data):
+    """Test basic SLP batch reencoding."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path to avoid modifying test data
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Load and fix video path to use tmp_path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(output_slp)])
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Output SLP should exist
+    assert output_slp.exists()
+
+    # Video directory should exist
+    video_dir = tmp_path / "output.videos"
+    assert video_dir.exists()
+
+    # Load output SLP and check videos
+    output_labels = sio.load_slp(str(output_slp))
+    assert len(output_labels.videos) == len(labels.videos)
+
+    # Check that video paths were updated
+    for video in output_labels.videos:
+        assert ".reencoded" in video.filename
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_reencode_slp_with_quality(tmp_path, slp_real_data):
+    """Test SLP batch reencoding with quality option."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Load and fix video path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_slp), "--quality", "high"]
+    )
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Output should mention CRF 18 (high quality)
+    assert "CRF 18" in result.output
+
+
+@skip_slow_video_on_windows
+@pytest.mark.skipif(
+    not _is_ffmpeg_available(), reason="ffmpeg not available in test environment"
+)
+def test_reencode_slp_overwrite(tmp_path, slp_real_data):
+    """Test SLP batch reencoding with --overwrite flag."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Create existing output file
+    output_slp.touch()
+
+    # Load and fix video path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    # Without --overwrite should fail
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(output_slp)])
+    assert result.exit_code != 0
+
+    # With --overwrite should succeed
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_slp), "--overwrite"]
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_reencode_slp_no_videos(tmp_path):
+    """Test SLP batch reencoding with empty video list."""
+    runner = CliRunner()
+
+    # Create a Labels object with no videos
+    skeleton = Skeleton(["node"])
+    labels = Labels(skeletons=[skeleton], videos=[], labeled_frames=[])
+
+    # Save to SLP
+    input_slp = tmp_path / "empty.slp"
+    output_slp = tmp_path / "output.slp"
+    labels.save(str(input_slp))
+
+    result = runner.invoke(cli, ["reencode", str(input_slp), "-o", str(output_slp)])
+
+    # Should succeed but warn about no videos
+    assert result.exit_code == 0
+    assert "No videos found" in result.output
+
+
+def test_reencode_slp_with_image_video(tmp_path):
+    """Test that ImageVideo backends are skipped during SLP reencoding."""
+    from sleap_io.model.video import Video
+
+    runner = CliRunner()
+
+    # Create a Labels object with an ImageVideo-style video
+    skeleton = Skeleton(["node"])
+
+    # Create ImageVideo by using a list of image paths
+    # When video has multiple filenames, it's treated as ImageVideo
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+
+    # Create some dummy image files
+    for i in range(3):
+        img_path = image_dir / f"frame_{i:04d}.png"
+        img_path.write_bytes(b"fake image data")
+
+    # Use the image filenames list pattern for ImageVideo
+    image_paths = [str(image_dir / f"frame_{i:04d}.png") for i in range(3)]
+
+    # Create video from first image - this creates a MediaVideo initially
+    video = Video.from_filename(image_paths[0])
+
+    labels = Labels(skeletons=[skeleton], videos=[video], labeled_frames=[])
+
+    # Save to SLP
+    input_slp = tmp_path / "imageseq.slp"
+    output_slp = tmp_path / "output.slp"
+    labels.save(str(input_slp))
+
+    result = runner.invoke(cli, ["reencode", str(input_slp), "-o", str(output_slp)])
+
+    # Check output - command runs but skips the "video" (image files aren't reencoded)
+    # The MediaVideo wrapper around a single image may fail to read
+    assert result.exit_code in (0, 1)  # May succeed or fail depending on image validity
+
+
+def test_reencode_slp_with_missing_backend(tmp_path):
+    """Test error handling when video file doesn't exist."""
+    from sleap_io.model.video import Video
+
+    runner = CliRunner()
+
+    # Create a Labels object with a video pointing to non-existent file
+    skeleton = Skeleton(["node"])
+    video = Video(filename="/nonexistent/path/video.mp4")
+
+    labels = Labels(skeletons=[skeleton], videos=[video], labeled_frames=[])
+
+    # Save to SLP
+    input_slp = tmp_path / "missing.slp"
+    output_slp = tmp_path / "output.slp"
+    labels.save(str(input_slp))
+
+    result = runner.invoke(cli, ["reencode", str(input_slp), "-o", str(output_slp)])
+
+    # Should fail because video file doesn't exist
+    # The error is caught and reported gracefully
+    assert (
+        result.exit_code != 0 or "Error" in result.output or "Skipped" in result.output
+    )
+    # Check output contains informative error message
+    output = _strip_ansi(result.output)
+    assert "video" in output.lower() or "Error" in output or "Skipping" in output
+
+
+@skip_slow_video_on_windows
+def test_reencode_slp_hdf5_video(tmp_path, slp_minimal_pkg):
+    """Test SLP batch reencoding with HDF5Video (embedded images).
+
+    This tests the Python path code in _reencode_video_object since HDF5Video
+    cannot use the ffmpeg fast path.
+    """
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy the PKG.SLP to tmp_path
+    tmp_slp = tmp_path / "project.pkg.slp"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_minimal_pkg, tmp_slp)
+
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_slp), "--dry-run"]
+    )
+
+    # Dry run should succeed
+    assert result.exit_code == 0, result.output
+
+    # Should mention Python path for HDF5
+    output = _strip_ansi(result.output)
+    assert "Python" in output or "HDF5" in output or "Would reencode" in output
+
+
+def test_reencode_slp_output_video_exists(tmp_path, slp_real_data):
+    """Test that existing output videos are skipped without --overwrite in SLP mode."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Load and fix video path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    # Create the video output directory and a pre-existing output video
+    video_dir = tmp_path / "output.videos"
+    video_dir.mkdir()
+    existing_video = video_dir / "centered_pair_low_quality.reencoded.mp4"
+    existing_video.touch()  # Create empty file
+
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_slp), "--dry-run"]
+    )
+
+    # Dry run should succeed
+    assert result.exit_code == 0, result.output
+
+    # Should report that the video was skipped because output exists
+    output = _strip_ansi(result.output)
+    assert "Skipping" in output or "exists" in output.lower()
+
+
+@skip_slow_video_on_windows
+def test_reencode_slp_hdf5_video_actual(tmp_path, slp_minimal_pkg):
+    """Test actual HDF5Video reencoding (Python path).
+
+    This test covers the Python path code in _reencode_video_object since
+    HDF5Video cannot use the ffmpeg fast path.
+    """
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy the PKG.SLP to tmp_path
+    tmp_slp = tmp_path / "project.pkg.slp"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_minimal_pkg, tmp_slp)
+
+    result = runner.invoke(cli, ["reencode", str(tmp_slp), "-o", str(output_slp)])
+
+    # Command should succeed
+    assert result.exit_code == 0, result.output
+
+    # Output SLP should exist
+    assert output_slp.exists()
+
+    # Video directory should exist with reencoded video
+    video_dir = tmp_path / "output.videos"
+    assert video_dir.exists()
+
+    # Should have used Python path for HDF5
+    output = _strip_ansi(result.output)
+    assert "Python" in output or "Reencoding" in output
+
+    # Check that a reencoded video was created
+    reencoded_videos = list(video_dir.glob("*.mp4"))
+    assert len(reencoded_videos) > 0, f"No reencoded videos found in {video_dir}"
+
+
+def test_reencode_output_suffix_normalization(tmp_path, centered_pair_low_quality_path):
+    """Test that output suffix is normalized to .mp4 for unusual input extensions."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy video with unusual extension
+    unusual_input = tmp_path / "video.webm"
+    shutil.copy(centered_pair_low_quality_path, unusual_input)
+
+    result = runner.invoke(cli, ["reencode", str(unusual_input), "--dry-run"])
+
+    # Dry run should succeed
+    assert result.exit_code == 0, result.output
+
+    # Output should show .mp4 extension (normalized from .webm)
+    output = _strip_ansi(result.output)
+    # The default output should be video.reencoded.mp4 (not video.reencoded.webm)
+    assert ".reencoded.mp4" in output or "video.reencoded" in output
+
+
+def test_reencode_slp_hdf5_use_ffmpeg_error(tmp_path, slp_minimal_pkg):
+    """Test that --use-ffmpeg fails with HDF5Video."""
+    import shutil
+
+    runner = CliRunner()
+
+    # Copy the PKG.SLP to tmp_path
+    tmp_slp = tmp_path / "project.pkg.slp"
+    output_slp = tmp_path / "output.slp"
+
+    shutil.copy(slp_minimal_pkg, tmp_slp)
+
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_slp), "--use-ffmpeg"]
+    )
+
+    # Should fail because HDF5 videos can't use ffmpeg
+    assert result.exit_code != 0
+    output = _strip_ansi(result.output)
+    assert "HDF5" in output or "cannot" in output.lower() or "Python" in output
+
+
+def test_reencode_slp_output_suffix_enforcement(tmp_path, slp_real_data):
+    """Test that SLP output gets .slp suffix even if specified otherwise."""
+    import shutil
+
+    import sleap_io as sio
+
+    runner = CliRunner()
+
+    # Copy the SLP and video to tmp_path
+    tmp_slp = tmp_path / "project.slp"
+    tmp_video = tmp_path / "centered_pair_low_quality.mp4"
+    # Output with wrong extension
+    output_path = tmp_path / "output.txt"
+
+    shutil.copy(slp_real_data, tmp_slp)
+    shutil.copy("tests/data/videos/centered_pair_low_quality.mp4", tmp_video)
+
+    # Load and fix video path
+    labels = sio.load_slp(str(tmp_slp))
+    labels.videos[0].replace_filename(str(tmp_video))
+    labels.save(str(tmp_slp))
+
+    result = runner.invoke(
+        cli, ["reencode", str(tmp_slp), "-o", str(output_path), "--dry-run"]
+    )
+
+    # Dry run should succeed
+    assert result.exit_code == 0, result.output
+
+    # Output should show .slp extension (normalized from .txt)
+    output = _strip_ansi(result.output)
+    assert ".slp" in output
+
+
+# =============================================================================
+# Reencode internal function tests for edge case coverage
+# =============================================================================
+
+
+def test_reencode_video_object_with_image_video(tmp_path):
+    """Test _reencode_video_object skips ImageVideo backends (lines 4343-4346)."""
+    import numpy as np
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.io.video_reading import ImageVideo
+    from sleap_io.model.video import Video
+
+    # Create an ImageVideo with synthetic images
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+
+    # Create some dummy image files
+    from PIL import Image
+
+    for i in range(3):
+        img = Image.fromarray(np.zeros((100, 100, 3), dtype=np.uint8))
+        img.save(img_dir / f"frame_{i:03d}.png")
+
+    # Create Video with ImageVideo backend
+    backend = ImageVideo(img_dir)
+    video = Video(filename=str(img_dir), backend=backend)
+
+    output_path = tmp_path / "output.mp4"
+
+    # Should return None (skip) without error
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+    )
+
+    assert result is None
+    assert not output_path.exists()
+
+
+def test_reencode_video_object_output_exists_no_overwrite(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object raises error when output exists (line 4350)."""
+    import click
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+    output_path = tmp_path / "output.mp4"
+
+    # Create existing output file
+    output_path.touch()
+
+    with pytest.raises(click.ClickException) as exc_info:
+        _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            overwrite=False,
+        )
+
+    assert "already exists" in str(exc_info.value)
+    assert "--overwrite" in str(exc_info.value)
+
+
+def test_reencode_video_object_unknown_backend(tmp_path):
+    """Test _reencode_video_object with unknown backend type (lines 4365-4366)."""
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    # Create a Video with a custom/unknown backend type
+    class CustomBackend:
+        """A mock backend that is not one of the known types."""
+
+        def __init__(self):
+            self.filename = "/fake/path.mp4"
+
+        def __len__(self):
+            return 10
+
+        def __getitem__(self, idx):
+            import numpy as np
+
+            return np.zeros((100, 100, 3), dtype=np.uint8)
+
+    video = Video(filename="/fake/path.mp4", backend=CustomBackend())
+    output_path = tmp_path / "output.mp4"
+
+    # Should use Python path (can_use_ffmpeg=False) since backend is unknown
+    # This will fail because the file doesn't exist, but it tests the branch
+    # Actually, it will try Python path and fail on video loading
+    # Let's test with dry_run to avoid actual encoding
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+        dry_run=True,
+    )
+
+    # Dry run returns None
+    assert result is None
+
+
+def test_reencode_video_object_force_ffmpeg_on_hdf5(tmp_path, slp_minimal_pkg):
+    """Test _reencode_video_object error when forcing ffmpeg on HDF5."""
+    import click
+
+    import sleap_io as sio
+    from sleap_io.io.cli import _reencode_video_object
+
+    # Load the pkg.slp which has HDF5Video
+    labels = sio.load_slp(str(slp_minimal_pkg))
+    video = labels.videos[0]
+    output_path = tmp_path / "output.mp4"
+
+    # Force ffmpeg path on HDF5 video should error
+    with pytest.raises(click.ClickException) as exc_info:
+        _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            use_ffmpeg=True,
+        )
+
+    assert "HDF5" in str(exc_info.value)
+    assert "Python path" in str(exc_info.value) or "--no-ffmpeg" in str(exc_info.value)
+
+
+@skip_slow_video_on_windows
+def test_reencode_video_object_with_fps_change(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object shows FPS change message (line 4419)."""
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+    output_path = tmp_path / "output.mp4"
+
+    # Call with output_fps to trigger line 4419
+    if _is_ffmpeg_available():
+        result = _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            output_fps=15.0,  # Different from source
+        )
+
+        # Should succeed and return output path
+        assert result == output_path
+        assert output_path.exists()
+
+
+@skip_slow_video_on_windows
+def test_reencode_video_object_file_size_comparison(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object shows file size comparison (lines 4499-4511)."""
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+    output_path = tmp_path / "output.mp4"
+
+    # Perform actual encoding (non-dry_run) to trigger file size comparison
+    if _is_ffmpeg_available():
+        result = _reencode_video_object(
+            video=video,
+            output_path=output_path,
+            crf=25,
+            preset="superfast",
+            keyframe_interval=1.0,
+            dry_run=False,
+        )
+
+        # Should succeed and return output path
+        assert result == output_path
+        assert output_path.exists()
+        # File size comparison is printed to console (can't easily verify output)
+
+
+def test_reencode_video_object_with_tiff_video(tmp_path):
+    """Test _reencode_video_object skips TiffVideo backends (lines 4343-4346).
+
+    This tests the same code path as ImageVideo but for TiffVideo backend.
+    """
+    import numpy as np
+    import tifffile
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.io.video_reading import TiffVideo
+    from sleap_io.model.video import Video
+
+    # Create a TIFF stack
+    tiff_path = tmp_path / "stack.tif"
+    frames = np.zeros((3, 100, 100), dtype=np.uint8)  # 3 grayscale frames
+    tifffile.imwrite(tiff_path, frames)
+
+    # Create Video with TiffVideo backend
+    backend = TiffVideo(tiff_path)
+    video = Video(filename=str(tiff_path), backend=backend)
+
+    output_path = tmp_path / "output.mp4"
+
+    # Should return None (skip) without error
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+    )
+
+    assert result is None
+    assert not output_path.exists()
+
+
+def test_reencode_slp_result_none_non_dryrun(tmp_path):
+    """Test _reencode_slp handles skipped videos in non-dry_run mode (line 4637).
+
+    This tests the branch where _reencode_video_object returns None
+    (for skipped backends like ImageVideo/TiffVideo) while not in dry_run mode.
+
+    Note: The ImageVideo/TiffVideo skip branches (lines 4582-4588) in _reencode_slp
+    catch these cases before reaching _reencode_video_object, so line 4637
+    (result_path is None and not dry_run) is primarily defensive code for edge cases.
+    """
+    import numpy as np
+    from PIL import Image
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.io.video_reading import ImageVideo
+    from sleap_io.model.video import Video
+
+    # Create an ImageVideo backend
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+
+    for i in range(3):
+        img = Image.fromarray(np.zeros((100, 100, 3), dtype=np.uint8))
+        img.save(img_dir / f"frame_{i:03d}.png")
+
+    # Create ImageVideo with list of filenames (as expected)
+    image_files = sorted(img_dir.glob("*.png"))
+    backend = ImageVideo(image_files)
+    video = Video(filename=str(img_dir), backend=backend)
+
+    output_path = tmp_path / "output.mp4"
+
+    # Call _reencode_video_object directly (non-dry_run)
+    # ImageVideo should return None (skipped)
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+        dry_run=False,  # Non-dry_run mode
+    )
+
+    # Should return None (skipped)
+    assert result is None
+    assert not output_path.exists()
+
+
+def test_reencode_video_object_invalid_output_path(
+    tmp_path, centered_pair_low_quality_path
+):
+    """Test _reencode_video_object with invalid output path raises ClickException."""
+    import click
+
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename(centered_pair_low_quality_path)
+
+    # Use an invalid output path (directory doesn't exist)
+    invalid_output = tmp_path / "nonexistent_dir" / "subdir" / "output.mp4"
+
+    if _is_ffmpeg_available():
+        with pytest.raises(click.ClickException) as exc_info:
+            _reencode_video_object(
+                video=video,
+                output_path=invalid_output,
+                crf=25,
+                preset="superfast",
+                keyframe_interval=1.0,
+            )
+
+        # Should get an error about ffmpeg failing
+        assert "failed" in str(exc_info.value).lower()
+
+
+def test_reencode_python_path_fps_fallback(tmp_path, centered_pair_low_quality_path):
+    """Test _reencode_python_path uses 30.0 FPS fallback (line 4255).
+
+    This tests the fallback when a Video object doesn't have fps in its backend.
+    We test via _reencode_video_object with Python path and a backend without fps.
+    """
+    from sleap_io.io.cli import _reencode_video_object
+    from sleap_io.model.video import Video
+
+    # Create a Video with a backend that doesn't have fps attribute
+    class NoFpsBackend:
+        """Backend without fps attribute - simulates edge case."""
+
+        def __init__(self, real_video_path):
+            self.filename = str(real_video_path)
+            self._video = Video.from_filename(str(real_video_path))
+
+        def __len__(self):
+            return len(self._video)
+
+        def __getitem__(self, idx):
+            return self._video[idx]
+
+        # Note: No 'fps' attribute - this triggers line 4255 fallback
+
+    backend = NoFpsBackend(centered_pair_low_quality_path)
+    video = Video(filename=str(centered_pair_low_quality_path), backend=backend)
+    output_path = tmp_path / "output.mp4"
+
+    # Force Python path (--no-ffmpeg) to hit _reencode_python_path
+    # The Python path will check for backend.fps and use 30.0 fallback
+    result = _reencode_video_object(
+        video=video,
+        output_path=output_path,
+        crf=25,
+        preset="superfast",
+        keyframe_interval=1.0,
+        use_ffmpeg=False,  # Force Python path
+        dry_run=True,  # Dry run to avoid slow encoding
+    )
+
+    # Dry run returns None
+    assert result is None

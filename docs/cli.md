@@ -69,6 +69,7 @@ sio filenames --help
 sio fix --help
 sio render --help
 sio trim --help
+sio reencode --help
 
 # Check version and installed plugins
 sio --version
@@ -142,6 +143,14 @@ sio render predictions.slp --color-by track --marker-shape diamond
 sio trim labels.slp --start 100 --end 1000                 # -> labels.trim.slp
 sio trim labels.slp --start 100 --end 1000 -o clip.slp
 sio trim video.mp4 --start 100 --end 500                   # Video-only mode
+
+# Reencode video for reliable seeking (critical for annotation)
+sio reencode video.mp4 -o video.seekable.mp4               # Fix seeking issues
+sio reencode video.mp4 -o output.mp4 --quality high        # Higher quality
+sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5  # Max reliability
+sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low  # Downsample
+sio reencode video.mp4 -o output.mp4 --dry-run             # Show ffmpeg command
+sio reencode project.slp -o project.reencoded.slp          # Batch reencode all videos in SLP
 ```
 
 ---
@@ -1857,6 +1866,229 @@ When trimming labels, frame indices are automatically adjusted to match the new 
 - Original frames 100-500 become frames 0-400 in the trimmed output
 - Labeled frames outside the trim range are removed
 - Suggestions are filtered and adjusted similarly
+
+---
+
+### `sio reencode` - Reencode Video for Reliable Seeking
+
+Reencode videos with frequent keyframes for **reliable and fast** random access during annotation and playback. This command addresses two critical issues that can cause problems in annotation and computer vision workflows:
+
+1. **Unreliable seeking**: Some video formats, codecs, or encoding settings cause frame-inaccurate seeking, where requesting frame N returns frame N-1 or N+1. This leads to misaligned annotations that don't match the actual image content.
+
+2. **Slow seeking**: Videos with sparse keyframes require decoding many intermediate frames to reach a target frame, causing sluggish navigation during annotation.
+
+!!! warning "Why seeking reliability matters"
+    In pose estimation and annotation workflows, even single-frame seeking errors can corrupt your dataset. If you label "frame 100" but your video library actually returns frame 99, your ground truth annotations will be permanently misaligned with the images used during training. This is especially problematic because the errors are often inconsistent and hard to detect.
+
+    **Common sources of unreliable seeking:**
+
+    - Variable frame rate (VFR) videos from screen recordings or phones
+    - Videos with B-frames and complex GOP structures
+    - AVI files with missing or corrupt index
+    - Some MP4s encoded with certain camera firmware
+    - Seeking behavior differences between OpenCV, PyAV, and imageio-ffmpeg
+
+```bash
+sio reencode <input> [-o <output>] [options]
+sio reencode -i <input> [-o <output>] [options]
+```
+
+#### Basic Usage
+
+```bash
+# Reencode with default settings (medium quality, 1 keyframe/second)
+sio reencode video.mp4 -o video.seekable.mp4
+
+# Higher quality encoding
+sio reencode video.mp4 -o output.mp4 --quality high
+
+# More frequent keyframes for faster seeking
+sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5
+
+# Downsample high-speed video for preview
+sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low
+
+# Preview the ffmpeg command without executing
+sio reencode video.mp4 -o output.mp4 --dry-run
+
+# Force Python path (for HDF5-embedded sources or when ffmpeg unavailable)
+sio reencode video.mp4 -o output.mp4 --no-ffmpeg
+```
+
+#### SLP Batch Processing
+
+When given an `.slp` file as input, the reencode command processes all videos in the SLEAP project:
+
+```bash
+# Reencode all videos in an SLP project
+sio reencode project.slp -o project.reencoded.slp
+
+# With quality option
+sio reencode project.slp -o project.reencoded.slp --quality high
+
+# Preview what would be done
+sio reencode project.slp -o project.reencoded.slp --dry-run
+```
+
+This creates:
+
+- A new SLP file with updated video paths
+- A `{output_name}.videos/` directory containing the reencoded videos
+
+**Behavior by video type:**
+
+- **MediaVideo** (`.mp4`, `.avi`, `.mov`, etc.): Reencoded using ffmpeg (fast)
+- **HDF5Video** (embedded videos in `.slp` files): Reencoded using Python path
+- **ImageVideo** (image sequences): Skipped (cannot be reencoded to video)
+- **TiffVideo** (TIFF stacks): Skipped (cannot be reencoded to video)
+
+This is particularly useful for:
+
+- Fixing seeking issues in all videos before starting annotation
+- Standardizing video formats across a multi-video project
+- Extracting embedded videos from `.pkg.slp` files to standalone MP4s
+
+#### Options Reference
+
+##### Input/Output Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-i, --input` | (required) | Input video or SLP file (can also pass as positional argument) |
+| `-o, --output` | `{input}.reencoded.mp4` or `.slp` | Output video/SLP path |
+| `--overwrite` | False | Overwrite existing output file |
+| `--dry-run` | False | Show ffmpeg command without executing |
+
+##### Quality Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--quality` | medium | Quality level: `lossless`, `high`, `medium`, `low` |
+| `--crf` | (from quality) | Direct CRF control (0-51, lower=better). Overrides `--quality` |
+
+**Quality level mapping:**
+
+| Level | CRF | Description |
+|-------|-----|-------------|
+| `lossless` | 0 | Mathematically identical (huge files) |
+| `high` | 18 | Visually lossless |
+| `medium` | 25 | Good quality, reasonable size (default) |
+| `low` | 32 | Smaller files, some quality loss |
+
+##### Keyframe Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--keyframe-interval` | 1.0 | Keyframe interval in seconds. Lower = better seekability, larger files |
+| `--gop` | (from interval) | GOP size in frames. Overrides `--keyframe-interval` |
+
+!!! tip "Choosing keyframe interval"
+    More frequent keyframes improve both seeking speed and reliability:
+
+    - **0.5 seconds**: 2 keyframes/second - most reliable, fastest seeking, ~50% larger files
+    - **1.0 second**: 1 keyframe/second - good balance (default)
+    - **2.0 seconds**: Smaller files, slightly slower seeking
+
+    For maximum reliability in annotation workflows, prefer shorter intervals (0.5-1.0s).
+
+##### Frame Rate Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--fps` | source FPS | Output frame rate. Useful for downsampling high-speed video |
+
+##### Encoding Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--encoding` | superfast | x264 encoding preset. Slower = better compression |
+| `--use-ffmpeg/--no-ffmpeg` | auto | Force ffmpeg fast path or Python fallback |
+
+Available encoding presets (fastest to slowest): `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`
+
+!!! note "FFmpeg vs Python path"
+    - **FFmpeg path** (default): ~10x faster, uses direct ffmpeg subprocess
+    - **Python path** (`--no-ffmpeg`): Frame-by-frame processing, works with any video source including HDF5-embedded videos
+
+#### How Reencoding Improves Seeking
+
+The reencoded video has several properties that ensure reliable, frame-accurate seeking:
+
+- **Regular keyframe intervals**: Keyframes (I-frames) can be decoded independently. With keyframes every 1 second at 30fps, the decoder never needs to process more than 30 frames to reach any target.
+- **No B-frames**: The output uses only I-frames and P-frames, eliminating bidirectional dependencies that can confuse some decoders.
+- **Constant frame rate**: Variable frame rate is converted to constant, ensuring frame indices map predictably to timestamps.
+- **Clean GOP structure**: Each group of pictures has a consistent, predictable structure.
+- **Standard H.264 encoding**: Widely supported codec with consistent behavior across video libraries.
+
+#### Common Scenarios
+
+**Fixing unreliable seeking for annotation:**
+
+```bash
+# Videos from phones/screen recordings often have VFR issues
+sio reencode phone_recording.mp4 -o reliable.mp4
+
+# Camera videos with seeking problems
+sio reencode problematic_camera.avi -o reliable.mp4
+
+# Maximum reliability for critical annotation projects
+sio reencode raw.mp4 -o reliable.mp4 --keyframe-interval 0.5 --quality high
+```
+
+**Fixing slow-seeking videos:**
+
+```bash
+# Basic reencoding with more frequent keyframes
+sio reencode slow_video.mp4 -o fast_video.mp4
+
+# Maximum seekability (keyframe every 0.5 seconds)
+sio reencode slow_video.mp4 -o fast_video.mp4 --keyframe-interval 0.5
+```
+
+**Standardizing video format before annotation:**
+
+```bash
+# Convert and normalize any video before starting annotation
+# This prevents seeking issues from corrupting your labels later
+sio reencode experiment_video.mov -o experiment_video.mp4
+```
+
+**Creating preview videos from high-speed recordings:**
+
+```bash
+# Downsample 250fps to 30fps with lower quality
+sio reencode highspeed_250fps.mp4 -o preview.mp4 --fps 30 --quality low
+```
+
+**High-quality archival encoding:**
+
+```bash
+# Visually lossless with slow compression for smaller files
+sio reencode raw.mp4 -o archival.mp4 --quality high --encoding slow
+```
+
+**Processing HDF5-embedded videos:**
+
+```bash
+# Force Python path for embedded video sources
+sio reencode embedded_video.h5 -o extracted.mp4 --no-ffmpeg
+```
+
+#### Output
+
+The command displays progress and file size comparison:
+
+```
+Reencoding: video.mp4
+  Output: video.seekable.mp4
+  Quality: CRF 25, Preset: superfast, Keyframes: 1.0s
+[████████████████████████████████] 100% • 1000/1000 frames
+Saved: video.seekable.mp4
+  Size: 45.2 MB -> 52.1 MB (+15.3%)
+```
+
+!!! info "File size vs reliability trade-off"
+    More frequent keyframes typically increase file size by 10-50% depending on video content. This trade-off is almost always worthwhile for annotation workflows—the cost of misaligned annotations due to seeking errors far exceeds the cost of additional storage.
 
 ---
 
