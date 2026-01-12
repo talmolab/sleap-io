@@ -24,6 +24,8 @@ def transform_video(
     fps: float | None = None,
     crf: int = 25,
     preset: str = "superfast",
+    keyframe_interval: float | None = None,
+    no_audio: bool = False,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> Path:
     """Transform a video file and save to a new path.
@@ -35,6 +37,9 @@ def transform_video(
         fps: Output frame rate. If None, uses source FPS.
         crf: Constant rate factor for video quality (0-51, lower is better).
         preset: x264 encoding preset.
+        keyframe_interval: Interval between keyframes in seconds. If None, uses
+            encoder default.
+        no_audio: If True, strips audio from output.
         progress_callback: Optional callback called with (current_frame, total_frames).
 
     Returns:
@@ -62,6 +67,8 @@ def transform_video(
         fps=fps,
         crf=crf,
         preset=preset,
+        keyframe_interval=keyframe_interval,
+        no_audio=no_audio,
     ) as writer:
         for frame_idx in range(n_frames):
             # Read frame
@@ -90,6 +97,8 @@ def transform_labels(
     fps: float | None = None,
     crf: int = 25,
     preset: str = "superfast",
+    keyframe_interval: float | None = None,
+    no_audio: bool = False,
     progress_callback: Callable[[str, int, int], None] | None = None,
     dry_run: bool = False,
 ) -> "Labels":
@@ -105,6 +114,9 @@ def transform_labels(
         fps: Output frame rate. If None, preserves source FPS.
         crf: Constant rate factor for video quality (0-51, lower is better).
         preset: x264 encoding preset.
+        keyframe_interval: Interval between keyframes in seconds. If None, uses
+            encoder default.
+        no_audio: If True, strips audio from output.
         progress_callback: Optional callback called with (video_name, current, total).
         dry_run: If True, compute transforms but don't process videos.
 
@@ -172,6 +184,8 @@ def transform_labels(
                 fps=fps,
                 crf=crf,
                 preset=preset,
+                keyframe_interval=keyframe_interval,
+                no_audio=no_audio,
                 progress_callback=_progress,
             )
 

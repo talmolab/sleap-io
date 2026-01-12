@@ -5286,6 +5286,43 @@ def _parse_transform_param(
     return None, value
 
 
+def _parse_fill_value(value: str) -> tuple[int, ...] | int:
+    """Parse fill value from string.
+
+    Args:
+        value: Fill value as string. Either a single integer (e.g., "0", "128")
+            or comma-separated RGB values (e.g., "128,128,128").
+
+    Returns:
+        Single int for grayscale or tuple of ints for RGB.
+
+    Raises:
+        click.ClickException: If value cannot be parsed.
+    """
+    value = value.strip()
+    if "," in value:
+        try:
+            parts = [int(p.strip()) for p in value.split(",")]
+            if len(parts) != 3:
+                raise click.ClickException(
+                    f"RGB fill must have 3 values, got {len(parts)}: {value}"
+                )
+            for p in parts:
+                if not 0 <= p <= 255:
+                    raise click.ClickException(f"Fill values must be 0-255, got: {p}")
+            return tuple(parts)
+        except ValueError:
+            raise click.ClickException(f"Invalid fill value: {value}")
+    else:
+        try:
+            val = int(value)
+            if not 0 <= val <= 255:
+                raise click.ClickException(f"Fill value must be 0-255, got: {val}")
+            return val
+        except ValueError:
+            raise click.ClickException(f"Invalid fill value: {value}")
+
+
 def _build_transforms_from_params(
     n_videos: int,
     crop_params: tuple[str, ...],
@@ -5294,7 +5331,7 @@ def _build_transforms_from_params(
     pad_params: tuple[str, ...],
     input_sizes: list[tuple[int, int]],
     quality: str,
-    fill: int,
+    fill: tuple[int, ...] | int,
 ) -> dict[int, Any]:
     """Build Transform objects from CLI parameters.
 
@@ -5306,7 +5343,7 @@ def _build_transforms_from_params(
         pad_params: Padding parameter strings (may have idx: prefix).
         input_sizes: List of (width, height) for each video.
         quality: Interpolation quality.
-        fill: Fill value for out-of-bounds regions.
+        fill: Fill value for out-of-bounds regions (int or RGB tuple).
 
     Returns:
         Dictionary mapping video index to Transform.
@@ -5462,10 +5499,10 @@ def _build_transforms_from_params(
 )
 @click.option(
     "--fill",
-    type=int,
-    default=0,
+    type=str,
+    default="0",
     show_default=True,
-    help="Fill value for out-of-bounds regions (0-255).",
+    help="Fill value for out-of-bounds regions. Int (0-255) or R,G,B.",
 )
 # Encoding options
 @click.option(
@@ -5491,12 +5528,30 @@ def _build_transforms_from_params(
     default=None,
     help="Output frame rate. Default: preserve source FPS.",
 )
+@click.option(
+    "--keyframe-interval",
+    type=float,
+    default=None,
+    help="Keyframe interval in seconds. Lower = better seeking, larger files.",
+)
+@click.option(
+    "--no-audio",
+    is_flag=True,
+    default=False,
+    help="Strip audio from output videos.",
+)
 # Execution control
 @click.option(
     "--dry-run",
     is_flag=True,
     default=False,
     help="Preview transforms without executing.",
+)
+@click.option(
+    "--dry-run-frame",
+    type=int,
+    default=None,
+    help="Frame index to render in dry-run preview. Implies --dry-run.",
 )
 @click.option(
     "--overwrite",
@@ -5514,11 +5569,14 @@ def transform(
     rotate_params: tuple[str, ...],
     pad_params: tuple[str, ...],
     quality: str,
-    fill: int,
+    fill: str,
     crf: int,
     preset: str,
     output_fps: float | None,
+    keyframe_interval: float | None,
+    no_audio: bool,
     dry_run: bool,
+    dry_run_frame: int | None,
     overwrite: bool,
 ) -> None:
     """Transform video and adjust label coordinates.
@@ -5566,6 +5624,13 @@ def transform(
     # Resolve input path
     input_path = _resolve_input(input_arg, input_opt, "input file")
 
+    # Parse fill value (int or R,G,B)
+    fill_value = _parse_fill_value(fill)
+
+    # Handle dry_run_frame (implies dry_run)
+    if dry_run_frame is not None:
+        dry_run = True
+
     # Check if input is video or SLP
     is_video = input_path.suffix.lower() in {
         ".mp4",
@@ -5586,11 +5651,14 @@ def transform(
             rotate_params=rotate_params,
             pad_params=pad_params,
             quality=quality,
-            fill=fill,
+            fill=fill_value,
             crf=crf,
             preset=preset,
             output_fps=output_fps,
+            keyframe_interval=keyframe_interval,
+            no_audio=no_audio,
             dry_run=dry_run,
+            dry_run_frame=dry_run_frame,
             overwrite=overwrite,
         )
         return
@@ -5652,7 +5720,7 @@ def transform(
             pad_params=pad_params,
             input_sizes=input_sizes,
             quality=quality,
-            fill=fill,
+            fill=fill_value,
         )
     except ValueError as e:
         raise click.ClickException(str(e))
@@ -5690,6 +5758,51 @@ def transform(
 
     if dry_run:
         console.print(f"\n[bold]Dry run - would save SLP to:[/] {output_path}")
+
+        # Render preview frame if requested
+        if dry_run_frame is not None:
+            # Find first video with a transform
+            for video_idx, video in enumerate(labels.videos):
+                if video_idx in transforms:
+                    transform = transforms[video_idx]
+                    frame_idx = dry_run_frame
+                    n_frames = video.shape[0] if video.shape else 0
+
+                    if frame_idx >= n_frames:
+                        console.print(
+                            f"[yellow]Warning: Frame {frame_idx} exceeds video "
+                            f"length ({n_frames}), using frame 0[/]"
+                        )
+                        frame_idx = 0
+
+                    console.print(
+                        f"\n[bold]Preview frame {frame_idx} from video {video_idx}:[/]"
+                    )
+
+                    # Read and transform frame
+                    frame = video[frame_idx]
+                    if frame is not None:
+                        transformed = transform.apply_to_frame(frame)
+
+                        # Save preview to temp file
+                        import tempfile
+
+                        import numpy as np
+                        from PIL import Image
+
+                        preview_path = Path(tempfile.gettempdir()) / "sio_preview.png"
+                        # Squeeze grayscale channel for PIL compatibility
+                        preview_arr = np.squeeze(transformed)
+                        # Ensure contiguous array
+                        preview_arr = np.ascontiguousarray(preview_arr)
+                        img = Image.fromarray(preview_arr)
+                        img.save(preview_path)
+                        console.print(f"  Saved preview to: {preview_path}")
+                        console.print(
+                            f"  Original: {frame.shape[1]}x{frame.shape[0]} -> "
+                            f"Transformed: {img.size[0]}x{img.size[1]}"
+                        )
+                    break
         return
 
     # Create video output directory
@@ -5725,6 +5838,8 @@ def transform(
             fps=output_fps,
             crf=crf,
             preset=preset,
+            keyframe_interval=keyframe_interval,
+            no_audio=no_audio,
             progress_callback=progress_callback,
             dry_run=False,
         )
@@ -5743,11 +5858,14 @@ def _transform_video_file(
     rotate_params: tuple[str, ...],
     pad_params: tuple[str, ...],
     quality: str,
-    fill: int,
+    fill: tuple[int, ...] | int,
     crf: int,
     preset: str,
     output_fps: float | None,
+    keyframe_interval: float | None,
+    no_audio: bool,
     dry_run: bool,
+    dry_run_frame: int | None,
     overwrite: bool,
 ) -> None:
     """Transform a raw video file without labels.
@@ -5760,11 +5878,14 @@ def _transform_video_file(
         rotate_params: Rotation parameter strings.
         pad_params: Padding parameter strings.
         quality: Interpolation quality.
-        fill: Fill value.
+        fill: Fill value (int or RGB tuple).
         crf: Video quality CRF.
         preset: Encoding preset.
         output_fps: Output FPS.
+        keyframe_interval: Keyframe interval in seconds.
+        no_audio: Strip audio from output.
         dry_run: Preview mode.
+        dry_run_frame: Specific frame to render in preview.
         overwrite: Overwrite existing.
     """
     from sleap_io.model.video import Video
@@ -5862,6 +5983,42 @@ def _transform_video_file(
 
     if dry_run:
         console.print(f"\n[bold]Dry run - would save video to:[/] {output_path}")
+
+        # Render preview frame if requested
+        if dry_run_frame is not None:
+            frame_idx = dry_run_frame
+            if frame_idx >= n_frames:
+                console.print(
+                    f"[yellow]Warning: Frame {frame_idx} exceeds video "
+                    f"length ({n_frames}), using frame 0[/]"
+                )
+                frame_idx = 0
+
+            console.print(f"\n[bold]Preview frame {frame_idx}:[/]")
+
+            # Read and transform frame
+            frame = video[frame_idx]
+            if frame is not None:
+                transformed = transform.apply_to_frame(frame)
+
+                # Save preview to temp file
+                import tempfile
+
+                import numpy as np
+                from PIL import Image
+
+                preview_path = Path(tempfile.gettempdir()) / "sio_preview.png"
+                # Squeeze grayscale channel for PIL compatibility
+                preview_arr = np.squeeze(transformed)
+                # Ensure contiguous array
+                preview_arr = np.ascontiguousarray(preview_arr)
+                img = Image.fromarray(preview_arr)
+                img.save(preview_path)
+                console.print(f"  Saved preview to: {preview_path}")
+                console.print(
+                    f"  Original: {frame.shape[1]}x{frame.shape[0]} -> "
+                    f"Transformed: {img.size[0]}x{img.size[1]}"
+                )
         return
 
     # Transform video with progress
@@ -5886,6 +6043,8 @@ def _transform_video_file(
             fps=output_fps,
             crf=crf,
             preset=preset,
+            keyframe_interval=keyframe_interval,
+            no_audio=no_audio,
             progress_callback=progress_callback,
         )
 
