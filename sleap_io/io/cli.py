@@ -408,6 +408,7 @@ def _print_video_standalone(path: Path, video: Video) -> None:
     console.print()
     full_path = path.resolve()
     console.print(f"  [dim]Full[/]      {full_path}")
+    console.print(f"  [dim]Size[/]      {_format_file_size(file_size)}")
 
     # Show encoding info if ffmpeg is available
     enc_info = _get_video_encoding_info(path)
@@ -424,6 +425,11 @@ def _print_video_standalone(path: Path, video: Video) -> None:
         if enc_parts:
             console.print(f"  [dim]Codec[/]     {', '.join(enc_parts)}")
 
+        # FPS - from ffmpeg or video backend
+        fps = enc_info.fps or (video.fps if video.fps else None)
+        if fps:
+            console.print(f"  [dim]FPS[/]       {fps:.2f}")
+
         # Bitrate
         if enc_info.bitrate_kbps:
             console.print(f"  [dim]Bitrate[/]   {enc_info.bitrate_kbps} kb/s")
@@ -434,7 +440,6 @@ def _print_video_standalone(path: Path, video: Video) -> None:
             gop = _estimate_gop_size(path)
         if gop:
             # Show GOP with fps context for interpretability
-            fps = enc_info.fps or (video.fps if video.fps else None)
             if fps and fps > 0:
                 gop_secs = gop / fps
                 console.print(f"  [dim]GOP[/]       {gop} frames ({gop_secs:.1f}s)")
