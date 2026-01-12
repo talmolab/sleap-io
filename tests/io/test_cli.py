@@ -6696,7 +6696,6 @@ def test_reencode_slp_hdf5_video(tmp_path, slp_minimal_pkg):
     """
     import shutil
 
-
     runner = CliRunner()
 
     # Copy the PKG.SLP to tmp_path
@@ -6764,7 +6763,6 @@ def test_reencode_slp_hdf5_video_actual(tmp_path, slp_minimal_pkg):
     HDF5Video cannot use the ffmpeg fast path.
     """
     import shutil
-
 
     runner = CliRunner()
 
