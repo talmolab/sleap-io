@@ -184,6 +184,18 @@ def transform_embedded_video(
     frame_inds = _get_frame_indices(video)
     n_frames = len(frame_inds)
 
+    # Handle empty videos (no embedded frames)
+    if n_frames == 0:
+        # Return a video object that references the same empty structure
+        from sleap_io.io.video_reading import VideoBackend
+
+        source_video = video.source_video if video.source_video is not None else video
+        return Video(
+            filename=str(output_path),
+            backend=video.backend,  # Keep same backend reference
+            source_video=source_video,
+        )
+
     # Get input dimensions for computing output size
     if video.shape is not None:
         h, w = video.shape[1:3]
@@ -286,6 +298,57 @@ def transform_embedded_video(
     )
 
     return embedded_video
+
+
+def _update_videos_json(output_path: Path, videos: list["Video"]) -> None:
+    """Update the videos_json dataset in an HDF5 file.
+
+    This is used after writing embedded video data to update the video references
+    without re-saving the entire file (which would overwrite the embedded data).
+
+    Args:
+        output_path: Path to the HDF5/SLP file.
+        videos: List of Video objects with updated backend references.
+    """
+    import json
+
+    import h5py
+
+    # Build the videos JSON array
+    videos_json_data = []
+    for video in videos:
+        # Build backend dict
+        backend = video.backend
+        backend_dict: dict = {}
+
+        if hasattr(backend, "filename"):
+            # For embedded videos, use "." as filename to indicate same file
+            if str(video.filename) == str(output_path):
+                backend_dict["filename"] = "."
+            else:
+                backend_dict["filename"] = backend.filename
+
+        if hasattr(backend, "dataset") and backend.dataset:
+            backend_dict["dataset"] = backend.dataset
+
+        if hasattr(backend, "input_format"):
+            backend_dict["input_format"] = backend.input_format
+
+        if hasattr(backend, "convert_range"):
+            backend_dict["convert_range"] = backend.convert_range
+
+        video_dict = {"backend": backend_dict}
+        videos_json_data.append(json.dumps(video_dict, separators=(",", ":")))
+
+    # Update the videos_json dataset in place
+    with h5py.File(output_path, "a") as f:
+        if "videos_json" in f:
+            del f["videos_json"]
+        f.create_dataset(
+            "videos_json",
+            data=videos_json_data,
+            dtype=h5py.special_dtype(vlen=str),
+        )
 
 
 def transform_labels(
@@ -468,6 +531,10 @@ def transform_labels(
         # Replace video references for embedded videos
         if embedded_video_map:
             new_labels.replace_videos(video_map=embedded_video_map)
+
+            # Update videos_json in the HDF5 file to point to the embedded data
+            # We can't re-save because that would overwrite the embedded video data
+            _update_videos_json(output_path, new_labels.videos)
 
     return new_labels
 

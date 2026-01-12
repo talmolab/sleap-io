@@ -5885,8 +5885,15 @@ def transform(
         )
 
     # Save the transformed SLP
-    console.print(f"\n[bold]Saving SLP:[/] {output_path}")
-    transformed_labels.save(str(output_path))
+    # Note: For embedded videos, transform_labels already saved the file
+    # (to preserve the embedded video data). We only need to save for
+    # non-embedded videos.
+    from sleap_io.transform.video import _is_embedded_video
+
+    has_embedded = any(_is_embedded_video(v) for v in labels.videos)
+    if not has_embedded:
+        console.print(f"\n[bold]Saving SLP:[/] {output_path}")
+        transformed_labels.save(str(output_path))
     console.print(f"[bold green]Saved:[/] {output_path}")
 
 
