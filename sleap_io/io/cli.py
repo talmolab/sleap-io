@@ -8,7 +8,10 @@ in minimal environments and CI.
 
 from __future__ import annotations
 
+import re
+import subprocess
 import sys
+from dataclasses import dataclass
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any
@@ -26,6 +29,30 @@ from sleap_io.model.labels import Labels
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 from sleap_io.version import __version__
+
+
+@dataclass
+class VideoEncodingInfo:
+    """Video encoding information extracted via ffmpeg.
+
+    Attributes:
+        codec: Video codec name (e.g., "h264", "hevc").
+        codec_profile: Codec profile (e.g., "Main", "High").
+        pixel_format: Pixel format (e.g., "yuv420p").
+        bitrate_kbps: Bitrate in kilobits per second.
+        fps: Frames per second.
+        gop_size: Group of pictures size (keyframe interval).
+        container: Container format (e.g., "mov", "avi").
+    """
+
+    codec: str | None = None
+    codec_profile: str | None = None
+    pixel_format: str | None = None
+    bitrate_kbps: int | None = None
+    fps: float | None = None
+    gop_size: int | None = None
+    container: str | None = None
+
 
 # Rich console for formatted output
 # Set minimum width to avoid truncation issues in CI/non-TTY environments
@@ -342,8 +369,6 @@ def _print_video_standalone(path: Path, video: Video) -> None:
 
     # Get video info using defensive helpers
     video_type = _get_video_type(video)
-    status = _build_status_line(video)
-    plugin = _get_plugin(video)
 
     # Build header content (without full path - shown below to avoid truncation)
     header_lines = [
@@ -379,20 +404,42 @@ def _print_video_standalone(path: Path, video: Video) -> None:
         )
     )
 
-    # Additional details below panel (full path here to avoid truncation)
+    # Additional details below panel
     console.print()
     full_path = path.resolve()
     console.print(f"  [dim]Full[/]      {full_path}")
-    console.print(f"  [dim]Status[/]    {status}")
-    if plugin:
-        console.print(f"  [dim]Plugin[/]    {plugin}")
 
-    # Show backend metadata if available
-    if video.backend_metadata:
-        meta = video.backend_metadata
-        if meta.get("grayscale") is not None:
-            gs_str = "yes" if meta["grayscale"] else "no"
-            console.print(f"  [dim]Grayscale[/] {gs_str}")
+    # Show encoding info if ffmpeg is available
+    enc_info = _get_video_encoding_info(path)
+    if enc_info:
+        # Build encoding line: codec (profile), pixel format
+        enc_parts = []
+        if enc_info.codec:
+            codec_str = enc_info.codec
+            if enc_info.codec_profile:
+                codec_str += f" ({enc_info.codec_profile})"
+            enc_parts.append(codec_str)
+        if enc_info.pixel_format:
+            enc_parts.append(enc_info.pixel_format)
+        if enc_parts:
+            console.print(f"  [dim]Codec[/]     {', '.join(enc_parts)}")
+
+        # Bitrate
+        if enc_info.bitrate_kbps:
+            console.print(f"  [dim]Bitrate[/]   {enc_info.bitrate_kbps} kb/s")
+
+        # GOP size (keyframe interval) - estimate if not already known
+        gop = enc_info.gop_size
+        if gop is None:
+            gop = _estimate_gop_size(path)
+        if gop:
+            # Show GOP with fps context for interpretability
+            fps = enc_info.fps or (video.fps if video.fps else None)
+            if fps and fps > 0:
+                gop_secs = gop / fps
+                console.print(f"  [dim]GOP[/]       {gop} frames ({gop_secs:.1f}s)")
+            else:
+                console.print(f"  [dim]GOP[/]       {gop} frames")
 
     console.print()
 
@@ -4062,6 +4109,151 @@ def _get_ffmpeg_version() -> str | None:
         import imageio_ffmpeg
 
         return imageio_ffmpeg.get_ffmpeg_version()
+    except Exception:
+        return None
+
+
+def _run_ffmpeg_info(video_path: str | Path, timeout: int = 10) -> str | None:
+    """Run ffmpeg -i to get video info output.
+
+    Args:
+        video_path: Path to video file.
+        timeout: Timeout in seconds.
+
+    Returns:
+        stderr output from ffmpeg (where metadata is printed), or None on failure.
+    """
+    if not _is_ffmpeg_available():
+        return None
+
+    try:
+        import imageio_ffmpeg
+
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        result = subprocess.run(
+            [ffmpeg_exe, "-i", str(video_path)],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        # ffmpeg outputs info to stderr (returns non-zero since no output specified)
+        return result.stderr
+    except Exception:
+        return None
+
+
+def _get_video_encoding_info(video_path: str | Path) -> VideoEncodingInfo | None:
+    """Get video encoding information using ffmpeg.
+
+    Uses `ffmpeg -i` to extract metadata without requiring ffprobe.
+
+    Args:
+        video_path: Path to video file.
+
+    Returns:
+        VideoEncodingInfo with available metadata, or None if ffmpeg unavailable.
+    """
+    raw = _run_ffmpeg_info(video_path)
+    if not raw:
+        return None
+
+    info = VideoEncodingInfo()
+
+    # Parse container format
+    # Pattern: Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'video.mp4':
+    input_match = re.search(r"Input #\d+,\s*([^,]+)", raw)
+    if input_match:
+        info.container = input_match.group(1).strip()
+
+    # Parse overall bitrate
+    # Pattern: Duration: 00:01:13.33, start: 0.000000, bitrate: 104 kb/s
+    bitrate_match = re.search(r"bitrate:\s*(\d+)\s*kb/s", raw)
+    if bitrate_match:
+        info.bitrate_kbps = int(bitrate_match.group(1))
+
+    # Parse video stream info
+    # Examples:
+    # Stream #0:0: Video: h264 (High), yuv420p, 1920x1080, 25 fps
+    # Stream #0:0[0x1](und): Video: h264 (Main), yuv420p, 384x384, 15 fps
+    video_line_match = re.search(r"Stream.*Video:\s*(.+)", raw)
+    if video_line_match:
+        stream_info = video_line_match.group(1)
+
+        # Codec and profile
+        # Pattern: h264 (High) or h264 (Main) (avc1 / ...) or just h264
+        codec_match = re.match(r"(\w+)(?:\s*\(([^)]+)\))?", stream_info)
+        if codec_match:
+            info.codec = codec_match.group(1)
+            if codec_match.group(2) and "/" not in codec_match.group(2):
+                info.codec_profile = codec_match.group(2)
+
+        # Pixel format - common formats after codec section
+        pix_fmt_match = re.search(
+            r",\s*(yuv\w+|yuvj\w+|rgb\d+|bgr\d+|gray\w*)", stream_info
+        )
+        if pix_fmt_match:
+            info.pixel_format = pix_fmt_match.group(1)
+
+        # FPS - look for "XX fps" pattern
+        fps_match = re.search(r"(\d+(?:\.\d+)?)\s*fps", stream_info)
+        if fps_match:
+            info.fps = float(fps_match.group(1))
+
+    return info
+
+
+def _estimate_gop_size(video_path: str | Path, sample_frames: int = 300) -> int | None:
+    """Estimate GOP size by analyzing frame types.
+
+    Args:
+        video_path: Path to video file.
+        sample_frames: Number of frames to analyze.
+
+    Returns:
+        Estimated GOP size in frames, or None if cannot be determined.
+    """
+    if not _is_ffmpeg_available():
+        return None
+
+    try:
+        import imageio_ffmpeg
+
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        result = subprocess.run(
+            [
+                ffmpeg_exe,
+                "-i",
+                str(video_path),
+                "-vf",
+                f"select='lt(n,{sample_frames})',showinfo",
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        # Parse showinfo output for frame types (type:I, type:P, type:B)
+        frame_types = re.findall(r"type:([IPB])", result.stderr)
+
+        if not frame_types:
+            return None
+
+        # Find I-frame (keyframe) positions
+        i_frame_positions = [i for i, t in enumerate(frame_types) if t == "I"]
+
+        if len(i_frame_positions) >= 2:
+            # Calculate average distance between keyframes
+            gaps = [
+                i_frame_positions[i + 1] - i_frame_positions[i]
+                for i in range(len(i_frame_positions) - 1)
+            ]
+            if gaps:
+                return int(sum(gaps) / len(gaps))
+
+        return None
     except Exception:
         return None
 
