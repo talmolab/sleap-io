@@ -70,6 +70,7 @@ sio fix --help
 sio render --help
 sio trim --help
 sio reencode --help
+sio transform --help
 
 # Check version and installed plugins
 sio --version
@@ -151,6 +152,17 @@ sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5  # Max reliability
 sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low  # Downsample
 sio reencode video.mp4 -o output.mp4 --dry-run             # Show ffmpeg command
 sio reencode project.slp -o project.reencoded.slp          # Batch reencode all videos in SLP
+
+# Transform video and adjust landmark coordinates
+sio transform labels.slp --scale 0.5 -o scaled.slp         # Scale down 50%
+sio transform labels.slp --crop 100,100,500,500 -o crop.slp  # Crop to region
+sio transform labels.slp --rotate 90 -o rotated.slp        # Rotate 90 degrees
+sio transform labels.slp --flip-horizontal -o flipped.slp  # Mirror horizontally
+sio transform labels.slp --crop 100,100,500,500 --scale 2.0 -o zoomed.slp
+sio transform multi_cam.slp --crop 0:100,100,500,500 -o cropped.slp  # Per-video
+sio transform labels.slp --scale 0.5 --dry-run             # Preview transforms
+sio transform labels.slp --scale 0.5 --dry-run-frame 0     # Preview specific frame
+sio transform video.mp4 --scale 0.5 -o video_scaled.mp4    # Transform raw video
 ```
 
 ---
@@ -2087,6 +2099,116 @@ Saved: video.seekable.mp4
 
 !!! info "File size vs reliability trade-off"
     More frequent keyframes typically increase file size by 10-50% depending on video content. This trade-off is almost always worthwhile for annotation workflows—the cost of misaligned annotations due to seeking errors far exceeds the cost of additional storage.
+
+---
+
+## `sio transform`
+
+Apply geometric transformations (crop, scale, rotate, pad, flip) to videos while automatically adjusting all landmark coordinates to maintain alignment.
+
+!!! tip "Full Tutorial"
+    For detailed examples with visual galleries, config file specifications, and Python API usage, see the [Transforms Guide](transforms.md).
+
+```bash
+sio transform <input> [OPTIONS] -o <output>
+```
+
+### Basic Usage
+
+```bash
+# Scale down 50%
+sio transform labels.slp --scale 0.5 -o scaled.slp
+
+# Crop to region (x1,y1,x2,y2)
+sio transform labels.slp --crop 100,100,500,500 -o cropped.slp
+
+# Rotate 90 degrees clockwise
+sio transform labels.slp --rotate 90 -o rotated.slp
+
+# Flip horizontally
+sio transform labels.slp --flip-horizontal -o flipped.slp
+
+# Combined transforms (applied in order: crop -> scale -> rotate -> pad -> flip)
+sio transform labels.slp --crop 100,100,500,500 --scale 2.0 -o zoomed.slp
+
+# Preview without processing
+sio transform labels.slp --scale 0.5 --dry-run
+
+# Transform raw video (no labels)
+sio transform video.mp4 --scale 0.5 -o video_scaled.mp4
+```
+
+### Transform Pipeline
+
+Transforms are always applied in a fixed order: **crop → scale → rotate → pad → flip**
+
+All landmark coordinates are automatically transformed using affine matrices to maintain alignment.
+
+### Options Reference
+
+#### Input/Output
+
+| Option | Description |
+|--------|-------------|
+| `-i, --input` | Input SLP file or video |
+| `-o, --output` | Output path (default: `{input}.transformed.slp`) |
+| `--config` | YAML config file with per-video transforms |
+| `--output-transforms` | Export transform metadata to YAML |
+| `--embed-provenance` | Store transform metadata in output SLP |
+| `--overwrite, -y` | Overwrite existing output files |
+
+#### Transforms
+
+| Option | Format | Description |
+|--------|--------|-------------|
+| `--crop` | `[idx:]x1,y1,x2,y2` | Crop region (pixels or normalized 0.0-1.0) |
+| `--scale` | `[idx:]value` or `[idx:]w,h` | Scale factor or target dimensions |
+| `--rotate` | `[idx:]degrees` | Rotation angle (clockwise positive) |
+| `--clip-rotation` | flag | Keep original dimensions when rotating |
+| `--pad` | `[idx:]t,r,b,l` | Padding in pixels |
+| `--flip-horizontal` | flag | Mirror left-right |
+| `--flip-vertical` | flag | Mirror top-bottom |
+
+#### Quality & Encoding
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--quality` | `bilinear` | Interpolation: `nearest`, `bilinear`, `bicubic` |
+| `--fill` | `0` | Fill value (0-255 or `R,G,B`) |
+| `--crf` | `25` | Video quality (0-51, lower = better) |
+| `--x264-preset` | `superfast` | Encoding speed |
+| `--fps` | (source) | Output frame rate |
+| `--keyframe-interval` | (none) | Keyframe interval in seconds |
+| `--no-audio` | off | Strip audio |
+
+#### Execution
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Preview transforms without executing |
+| `--dry-run-frame N` | Render specific frame in preview |
+
+### Per-Video Parameters
+
+For multi-video files, use the `idx:` prefix to target specific videos:
+
+```bash
+sio transform multi_cam.slp \
+    --crop 0:100,100,500,500 \
+    --crop 1:200,200,600,600 \
+    --scale 0.5 \
+    -o processed.slp
+```
+
+### Config File
+
+For complex scenarios, use a YAML config file:
+
+```bash
+sio transform labels.slp --config transforms.yaml -o output.slp
+```
+
+See the [Transforms Guide](transforms.md#config-file-format) for config file format and examples.
 
 ---
 

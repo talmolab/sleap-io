@@ -37,6 +37,10 @@
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
+         <loc>https://io.sleap.ai/dev/transforms/</loc>
+         <lastmod>2026-01-13</lastmod>
+    </url>
+    <url>
          <loc>https://io.sleap.ai/dev/formats/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
@@ -214,6 +218,26 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/reference/sleap_io/rendering/shapes/</loc>
+         <lastmod>2026-01-13</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/transform/</loc>
+         <lastmod>2026-01-13</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/transform/core/</loc>
+         <lastmod>2026-01-13</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/transform/frame/</loc>
+         <lastmod>2026-01-13</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/transform/points/</loc>
+         <lastmod>2026-01-13</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/reference/sleap_io/transform/video/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
 </urlset>
