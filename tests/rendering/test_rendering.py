@@ -433,6 +433,137 @@ class TestCallbacks:
 
         assert ctx.get_bbox() is None
 
+    def test_render_image_crop_passes_offset_to_callbacks(self, labels_predictions):
+        """Test that crop offset is passed to RenderContext in callbacks.
+
+        When render_image is called with a crop parameter, the RenderContext
+        provided to callbacks should have its offset set to the crop origin
+        (x1, y1) so that world_to_canvas() transforms correctly.
+        """
+        from sleap_io.rendering import render_image
+        from sleap_io.rendering.callbacks import RenderContext
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Track the offset received in callback
+        captured_offsets = []
+
+        def pre_callback(ctx: RenderContext):
+            captured_offsets.append(ctx.offset)
+
+        # Render with explicit crop bounds: (x1, y1, x2, y2) = (100, 50, 200, 150)
+        crop_bounds = (100, 50, 200, 150)
+        render_image(
+            lf, image=frame, crop=crop_bounds, pre_render_callback=pre_callback
+        )
+
+        assert len(captured_offsets) == 1
+        # Offset should be (x1, y1) from the crop bounds
+        assert captured_offsets[0] == (100.0, 50.0)
+
+    def test_render_image_no_crop_offset_is_zero(self, labels_predictions):
+        """Test that offset is (0, 0) when no crop is used."""
+        from sleap_io.rendering import render_image
+        from sleap_io.rendering.callbacks import RenderContext
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        captured_offsets = []
+
+        def pre_callback(ctx: RenderContext):
+            captured_offsets.append(ctx.offset)
+
+        # Render without crop
+        render_image(lf, image=frame, pre_render_callback=pre_callback)
+
+        assert len(captured_offsets) == 1
+        assert captured_offsets[0] == (0.0, 0.0)
+
+    def test_render_image_crop_per_instance_callback_offset(self, labels_predictions):
+        """Test that per_instance_callback receives correct crop offset."""
+        from sleap_io.rendering import render_image
+        from sleap_io.rendering.callbacks import InstanceContext
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        captured_offsets = []
+
+        def instance_callback(ctx: InstanceContext):
+            captured_offsets.append(ctx.offset)
+
+        crop_bounds = (50, 25, 250, 225)
+        render_image(
+            lf, image=frame, crop=crop_bounds, per_instance_callback=instance_callback
+        )
+
+        # Should have one offset captured per instance
+        assert len(captured_offsets) == len(lf.instances)
+        # All offsets should match crop origin
+        for offset in captured_offsets:
+            assert offset == (50.0, 25.0)
+
+    def test_render_image_crop_post_callback_offset(self, labels_predictions):
+        """Test that post_render_callback receives correct crop offset."""
+        from sleap_io.rendering import render_image
+        from sleap_io.rendering.callbacks import RenderContext
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        captured_offsets = []
+
+        def post_callback(ctx: RenderContext):
+            captured_offsets.append(ctx.offset)
+
+        crop_bounds = (75, 100, 275, 300)
+        render_image(
+            lf, image=frame, crop=crop_bounds, post_render_callback=post_callback
+        )
+
+        assert len(captured_offsets) == 1
+        assert captured_offsets[0] == (75.0, 100.0)
+
+    def test_render_image_crop_world_to_canvas_integration(self, labels_predictions):
+        """Test that world_to_canvas correctly transforms coordinates with crop.
+
+        This is an end-to-end test verifying that callbacks can use
+        world_to_canvas to correctly map world coordinates to canvas space
+        when a crop is applied.
+        """
+        from sleap_io.rendering import render_image
+        from sleap_io.rendering.callbacks import RenderContext
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Test with a crop at (100, 50)
+        crop_bounds = (100, 50, 300, 250)
+        scale = 1.0
+        captured_transforms = []
+
+        def pre_callback(ctx: RenderContext):
+            # A point at world (150, 100) should be at canvas (50, 50) after crop
+            canvas_x, canvas_y = ctx.world_to_canvas(150, 100)
+            captured_transforms.append((canvas_x, canvas_y))
+
+        render_image(
+            lf,
+            image=frame,
+            crop=crop_bounds,
+            scale=scale,
+            pre_render_callback=pre_callback,
+        )
+
+        assert len(captured_transforms) == 1
+        canvas_x, canvas_y = captured_transforms[0]
+        # world_to_canvas: (x - offset_x) * scale, (y - offset_y) * scale
+        # (150 - 100) * 1.0 = 50, (100 - 50) * 1.0 = 50
+        assert canvas_x == 50.0
+        assert canvas_y == 50.0
+
 
 # ============================================================================
 # Core Rendering Tests

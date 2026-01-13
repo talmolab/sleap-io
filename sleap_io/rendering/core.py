@@ -306,6 +306,7 @@ def render_frame(
     # Callback context info
     frame_idx: int = 0,
     instance_metadata: list[dict] | None = None,
+    crop_offset: tuple[float, float] = (0.0, 0.0),
 ) -> np.ndarray:
     """Render poses on a single frame.
 
@@ -335,6 +336,8 @@ def render_frame(
         frame_idx: Current frame index (for callbacks).
         instance_metadata: List of dicts with 'track_id', 'track_name', 'confidence'
             for each instance (for callbacks).
+        crop_offset: (x, y) offset for cropped views, passed to RenderContext
+            for correct world_to_canvas transformation in callbacks.
 
     Returns:
         Rendered RGBA array (H*scale, W*scale, 4) as uint8.
@@ -384,7 +387,7 @@ def render_frame(
             skeleton_edges=edge_inds,
             node_names=node_names,
             scale=scale,
-            offset=(0.0, 0.0),
+            offset=crop_offset,
         )
         pre_render_callback(ctx)
 
@@ -476,7 +479,7 @@ def render_frame(
                 track_name=meta.get("track_name"),
                 confidence=meta.get("confidence"),
                 scale=scale,
-                offset=(0.0, 0.0),
+                offset=crop_offset,
             )
             per_instance_callback(inst_ctx)
 
@@ -490,7 +493,7 @@ def render_frame(
             skeleton_edges=edge_inds,
             node_names=node_names,
             scale=scale,
-            offset=(0.0, 0.0),
+            offset=crop_offset,
         )
         post_render_callback(ctx)
 
@@ -748,10 +751,12 @@ def render_image(
     # Apply cropping if specified
     render_image_data = image
     render_points = instances_points
+    crop_offset: tuple[float, float] = (0.0, 0.0)
     if crop is not None:
         h, w = image.shape[:2]
         # Resolve normalized or pixel coordinates
         crop_bounds = _resolve_crop(crop, (h, w))
+        crop_offset = (float(crop_bounds[0]), float(crop_bounds[1]))
 
         render_image_data, render_points, _ = _apply_crop(
             image, instances_points, crop_bounds
@@ -796,6 +801,7 @@ def render_image(
         per_instance_callback=per_instance_callback,
         frame_idx=fidx_for_callback,
         instance_metadata=instance_metadata,
+        crop_offset=crop_offset,
     )
 
     # Save if save_path provided
@@ -1056,6 +1062,7 @@ def render_video(
     # Resolve crop bounds once (before the loop)
     # We need the video shape to resolve normalized coordinates
     crop_bounds: tuple[int, int, int, int] | None = None
+    crop_offset: tuple[float, float] = (0.0, 0.0)
     if crop is not None:
         if hasattr(target_video, "shape") and target_video.shape is not None:
             h, w = target_video.shape[1:3]
@@ -1063,6 +1070,7 @@ def render_video(
             # Fallback: try to get from first frame
             h, w = 480, 640  # reasonable default
         crop_bounds = _resolve_crop(crop, (h, w))
+        crop_offset = (float(crop_bounds[0]), float(crop_bounds[1]))
 
     # Setup progress
     if show_progress:
@@ -1138,6 +1146,7 @@ def render_video(
                 per_instance_callback=None,
                 frame_idx=fidx,
                 instance_metadata=[],
+                crop_offset=crop_offset,
             )
             rendered_frames.append(rendered)
             continue
@@ -1215,6 +1224,7 @@ def render_video(
             per_instance_callback=per_instance_callback,
             frame_idx=fidx,
             instance_metadata=instance_metadata,
+            crop_offset=crop_offset,
         )
 
         rendered_frames.append(rendered)
