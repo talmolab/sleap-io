@@ -151,8 +151,9 @@ nav:
   - Guides:
     - Examples: examples.md
     - Codecs: codecs.md
-    - Rendering: rendering.md
     - Merging: merging.md
+    - Rendering: rendering.md
+    - Transforms: transforms.md
   - Reference:
     - Model: model.md
     - Formats:

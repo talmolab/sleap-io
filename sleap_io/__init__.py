@@ -78,6 +78,9 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "model.skeleton": ["Edge", "Node", "Skeleton", "Symmetry"],
         "model.suggestions": ["SuggestionFrame"],
         "model.video": ["Video"],
+        # Transform module
+        "transform.core": ["Transform"],
+        "transform.video": ["transform_labels", "transform_video"],
     },
 )
 

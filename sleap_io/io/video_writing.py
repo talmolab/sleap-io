@@ -26,6 +26,10 @@ class VideoWriter:
             "libx264".
         preset: H264 encoding preset. Defaults to "superfast". No effect if codec is not
             "libx264".
+        keyframe_interval: Interval between keyframes in seconds. If None, uses encoder
+            default. Lower values improve seeking but increase file size. Defaults to
+            None.
+        no_audio: If True, strips audio from the output. Defaults to False.
         output_params: Additional output parameters for FFMPEG. This should be a list of
             strings corresponding to command line arguments for FFMPEG and libx264. Use
             `ffmpeg -h encoder=libx264` to see all options for libx264 output_params.
@@ -47,6 +51,8 @@ class VideoWriter:
     codec: str = "libx264"
     crf: int = 25
     preset: str = "superfast"
+    keyframe_interval: float | None = None
+    no_audio: bool = False
     output_params: list[str] = attrs.field(factory=list)
     _writer: "imageio.plugins.ffmpeg.FfmpegFormat.Writer | None" = None
 
@@ -62,6 +68,13 @@ class VideoWriter:
                     self.preset,
                 ]
             )
+        # Add keyframe interval (GOP size)
+        if self.keyframe_interval is not None:
+            gop_size = max(1, int(self.fps * self.keyframe_interval))
+            output_params.extend(["-g", str(gop_size)])
+        # Strip audio if requested
+        if self.no_audio:
+            output_params.extend(["-an"])
         return output_params + self.output_params
 
     def open(self):
