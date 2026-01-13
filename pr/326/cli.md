@@ -2104,11 +2104,13 @@ Saved: video.seekable.mp4
 
 ## `sio transform`
 
-Apply geometric transformations (crop, scale, rotate, pad) to videos while automatically adjusting all landmark coordinates to maintain alignment. This is useful for resizing datasets, extracting regions of interest, or standardizing video dimensions in mixed source projects.
+Apply geometric transformations (crop, scale, rotate, pad, flip) to videos while automatically adjusting all landmark coordinates to maintain alignment.
+
+!!! tip "Full Tutorial"
+    For detailed examples with visual galleries, config file specifications, and Python API usage, see the [Transforms Guide](transforms.md).
 
 ```bash
 sio transform <input> [OPTIONS] -o <output>
-sio transform -i <input> [OPTIONS] -o <output>
 ```
 
 ### Basic Usage
@@ -2123,420 +2125,90 @@ sio transform labels.slp --crop 100,100,500,500 -o cropped.slp
 # Rotate 90 degrees clockwise
 sio transform labels.slp --rotate 90 -o rotated.slp
 
-# Add 50px padding on all sides
-sio transform labels.slp --pad 50,50,50,50 -o padded.slp
+# Flip horizontally
+sio transform labels.slp --flip-horizontal -o flipped.slp
 
-# Combined transforms (applied in order: crop -> scale -> rotate -> pad)
+# Combined transforms (applied in order: crop -> scale -> rotate -> pad -> flip)
 sio transform labels.slp --crop 100,100,500,500 --scale 2.0 -o zoomed.slp
 
-# Preview transforms without processing
+# Preview without processing
 sio transform labels.slp --scale 0.5 --dry-run
-```
 
-**Example output:**
-
-```
-Loading SLP: labels.slp
-  Found 1 video(s)
-
-Transform Summary:
-
-  Video 0: video.mp4
-    Size: 1920x1080 -> 960x540
-    Scale: (0.5, 0.5)
-
-Saving SLP: scaled.slp
-Saved: scaled.slp
+# Transform raw video (no labels)
+sio transform video.mp4 --scale 0.5 -o video_scaled.mp4
 ```
 
 ### Transform Pipeline
 
 Transforms are always applied in a fixed order: **crop → scale → rotate → pad → flip**
 
-This order ensures predictable results:
-
-1. **Crop** extracts a region of interest from the original frame
-2. **Scale** resizes the cropped region
-3. **Rotate** rotates around the frame center
-4. **Pad** adds borders to the result
-5. **Flip** mirrors the image horizontally and/or vertically
-
-All landmark coordinates are automatically transformed using the corresponding affine matrix to maintain alignment with the video.
+All landmark coordinates are automatically transformed using affine matrices to maintain alignment.
 
 ### Options Reference
 
-#### Input/Output Options
+#### Input/Output
 
 | Option | Description |
 |--------|-------------|
-| `-i, --input` | Input SLP file or video (can also pass as positional argument) |
-| `-o, --output` | Output path. Default: `{input}.transformed.slp` or `.mp4` |
+| `-i, --input` | Input SLP file or video |
+| `-o, --output` | Output path (default: `{input}.transformed.slp`) |
 | `--config` | YAML config file with per-video transforms |
-| `--output-transforms` | Export transform metadata to YAML file |
-| `--embed-provenance` | Store transform metadata in output SLP file |
+| `--output-transforms` | Export transform metadata to YAML |
+| `--embed-provenance` | Store transform metadata in output SLP |
 | `--overwrite, -y` | Overwrite existing output files |
 
-#### Transform Options
+#### Transforms
 
 | Option | Format | Description |
 |--------|--------|-------------|
 | `--crop` | `[idx:]x1,y1,x2,y2` | Crop region (pixels or normalized 0.0-1.0) |
-| `--scale` | `[idx:]value` or `[idx:]w,h` | Scale factor(s) or target dimensions |
+| `--scale` | `[idx:]value` or `[idx:]w,h` | Scale factor or target dimensions |
 | `--rotate` | `[idx:]degrees` | Rotation angle (clockwise positive) |
-| `--clip-rotation` | flag | Keep original dimensions when rotating (clips corners) |
-| `--pad` | `[idx:]top,right,bottom,left` | Padding in pixels (or single value for uniform) |
-| `--flip-horizontal` | flag | Mirror image left-right |
-| `--flip-vertical` | flag | Mirror image top-bottom |
+| `--clip-rotation` | flag | Keep original dimensions when rotating |
+| `--pad` | `[idx:]t,r,b,l` | Padding in pixels |
+| `--flip-horizontal` | flag | Mirror left-right |
+| `--flip-vertical` | flag | Mirror top-bottom |
 
-#### Quality & Encoding Options
+#### Quality & Encoding
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--quality` | `bilinear` | Interpolation: `nearest`, `bilinear`, `bicubic` |
-| `--fill` | `0` | Fill value for out-of-bounds regions. Integer (0-255) or RGB (`R,G,B`) |
+| `--fill` | `0` | Fill value (0-255 or `R,G,B`) |
 | `--crf` | `25` | Video quality (0-51, lower = better) |
-| `--preset` | `superfast` | Encoding speed: `ultrafast` to `slow` |
+| `--x264-preset` | `superfast` | Encoding speed |
 | `--fps` | (source) | Output frame rate |
-| `--keyframe-interval` | (none) | Keyframe interval in seconds. Lower = better seeking, larger files |
-| `--no-audio` | off | Strip audio from output videos |
+| `--keyframe-interval` | (none) | Keyframe interval in seconds |
+| `--no-audio` | off | Strip audio |
 
-#### Execution Options
+#### Execution
 
 | Option | Description |
 |--------|-------------|
 | `--dry-run` | Preview transforms without executing |
-| `--dry-run-frame N` | Render specific frame N in dry-run preview. Implies `--dry-run` |
-
-### Scale Option
-
-The `--scale` option supports multiple formats:
-
-```bash
-# Uniform scaling (preserve aspect ratio)
---scale 0.5           # 50% size
---scale 2.0           # 200% size (use decimal for ratios)
-
-# Target width (auto-compute height to preserve aspect ratio)
---scale 640           # Width = 640px, height auto
---scale 640,-1        # Same as above (-1 = auto)
-
-# Target height (auto-compute width)
---scale -1,480        # Height = 480px, width auto
-
-# Exact dimensions (may change aspect ratio)
---scale 640,480       # Exact 640x480
-
-# Different ratios per axis
---scale 0.5,0.75      # 50% width, 75% height
-```
-
-**Type detection:**
-
-- Values with decimal point → ratios (e.g., `0.5` = 50%)
-- Integer values → pixels (e.g., `640` = 640px)
-- `-1` → auto-compute to preserve aspect ratio
-
-### Crop Option
-
-The `--crop` option specifies a rectangular region:
-
-```bash
-# Pixel coordinates (x1, y1, x2, y2)
---crop 100,100,500,500       # Extract 400x400 region
-
-# Normalized coordinates (0.0-1.0)
---crop 0.25,0.25,0.75,0.75   # Center 50% of frame
-```
-
-**Type detection:**
-
-- All values have decimals AND in [0.0, 1.0] → normalized
-- Otherwise → pixel coordinates
-
-**Coordinate convention:**
-
-- Origin at top-left (0, 0)
-- (x2, y2) is exclusive (Python slicing style)
+| `--dry-run-frame N` | Render specific frame in preview |
 
 ### Per-Video Parameters
 
-For multi-video SLP files, you can apply different transforms to each video using the `idx:` prefix:
+For multi-video files, use the `idx:` prefix to target specific videos:
 
 ```bash
-# Same transform for all videos
-sio transform multi_cam.slp --scale 0.5 -o scaled.slp
-
-# Different crops per camera
 sio transform multi_cam.slp \
     --crop 0:100,100,500,500 \
     --crop 1:200,200,600,600 \
-    --crop 2:150,150,550,550 \
-    -o cropped.slp
-
-# Mix uniform and per-video parameters
-sio transform multi_cam.slp \
     --scale 0.5 \
-    --crop 0:100,100,500,500 \
-    --crop 1:200,200,600,600 \
     -o processed.slp
 ```
 
-**Precedence:** config file < uniform parameters < indexed parameters (highest priority).
+### Config File
 
-### Config File Format
-
-For complex multi-video scenarios, use a YAML config file:
+For complex scenarios, use a YAML config file:
 
 ```bash
-sio transform multi_cam.slp --config transforms.yaml -o output.slp
+sio transform labels.slp --config transforms.yaml -o output.slp
 ```
 
-**Config file format:**
-
-```yaml
-# transforms.yaml
-videos:
-  0:
-    crop: [100, 100, 500, 500]
-    scale: 0.5
-    rotate: 0
-    pad: [0, 0, 0, 0]
-  1:
-    crop: [200, 200, 600, 600]
-    scale: [640, -1]  # 640px width, auto height
-    rotate: 90
-  2:
-    # No transforms - pass through unchanged
-```
-
-**Supported config options per video:**
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `crop` | `[x1, y1, x2, y2]` | Crop region as pixel coordinates or string |
-| `scale` | `float` or `[w, h]` | Scale factor or target dimensions |
-| `rotate` | `float` | Rotation angle in degrees |
-| `pad` | `[top, right, bottom, left]` or `int` | Padding in pixels |
-| `flip_horizontal` | `bool` | Mirror horizontally |
-| `flip_vertical` | `bool` | Mirror vertically |
-| `clip_rotation` | `bool` | Clip rotation to original dimensions |
-
-Config file options can be combined with CLI options. CLI options take precedence.
-
-### Transform Metadata
-
-Export transform metadata for reproducibility or downstream processing:
-
-```bash
-# Export to YAML file
-sio transform labels.slp --scale 0.5 \
-    --output-transforms transforms_meta.yaml \
-    -o output.slp
-
-# Embed in output SLP file
-sio transform labels.slp --scale 0.5 \
-    --embed-provenance \
-    -o output.slp
-```
-
-**Metadata YAML format:**
-
-```yaml
-generated: "2026-01-12T15:30:00+00:00"
-source: "/path/to/original.slp"
-output: "/path/to/output.slp"
-sleap_io_version: "0.5.0"
-videos:
-  0:
-    input: "video1.mp4"
-    input_size: [1920, 1080]
-    output_size: [960, 540]
-    transforms:
-      crop: null
-      scale: [0.5, 0.5]
-      rotate: null
-      pad: null
-      flip_horizontal: false
-      flip_vertical: false
-    coordinate_transform:
-      matrix: [[0.5, 0, 0], [0, 0.5, 0], [0, 0, 1]]
-```
-
-The coordinate transform matrix can be used to convert coordinates between original and transformed space.
-
-### Raw Video Mode
-
-The transform command can also process standalone video files (without labels):
-
-```bash
-# Transform video file directly
-sio transform video.avi --scale 0.5 -o video_scaled.mp4
-
-# Multiple transforms
-sio transform video.mp4 \
-    --crop 100,100,500,500 \
-    --rotate 90 \
-    -o video_transformed.mp4
-```
-
-When transforming raw video:
-
-- Output is always MP4 format
-- No coordinate transformations (no landmarks to adjust)
-- Same transform options available
-
-### Output Structure
-
-#### SLP Input
-
-```
-input.slp
-↓
-output.transformed.slp
-output.transformed.videos/
-├── video1.transformed.mp4
-├── video2.transformed.mp4
-└── ...
-```
-
-The output SLP file references the newly created videos in the `.videos/` directory.
-
-#### Raw Video Input
-
-```
-input.avi → output.transformed.mp4
-```
-
-### Common Scenarios
-
-**Scaling down large videos for faster training:**
-
-```bash
-sio transform labels.slp --scale 0.5 -o labels_half.slp
-```
-
-**Extracting a region of interest:**
-
-```bash
-# Crop to arena or enclosure
-sio transform labels.slp --crop 200,150,800,650 -o arena.slp
-
-# Zoom into cropped region
-sio transform labels.slp --crop 200,150,800,650 --scale 2.0 -o zoomed.slp
-```
-
-**Standardizing multi-camera dimensions:**
-
-```bash
-# Resize all cameras to 640x480
-sio transform multi_view.slp --scale 640,480 -o standardized.slp
-
-# Different crops per camera to align FOVs
-sio transform multi_view.slp \
-    --crop 0:100,50,740,530 \
-    --crop 1:80,60,720,540 \
-    --scale 640,480 \
-    -o aligned.slp
-```
-
-**Rotating videos:**
-
-```bash
-# Rotate 90 degrees clockwise
-sio transform labels.slp --rotate 90 -o rotated.slp
-
-# Rotate 180 degrees (flip)
-sio transform labels.slp --rotate 180 -o flipped.slp
-
-# Rotate counter-clockwise
-sio transform labels.slp --rotate -90 -o rotated_ccw.slp
-```
-
-**Adding padding for augmentation:**
-
-```bash
-# Add 50px black border on all sides
-sio transform labels.slp --pad 50 -o padded.slp
-
-# Asymmetric padding
-sio transform labels.slp --pad 100,50,100,50 -o padded.slp
-
-# Custom fill color (gray background)
-sio transform labels.slp --pad 50 --fill 128 -o padded_gray.slp
-
-# RGB fill color (blue background)
-sio transform labels.slp --pad 50 --fill 0,0,255 -o padded_blue.slp
-```
-
-**Flipping videos:**
-
-```bash
-# Mirror horizontally (left-right flip)
-sio transform labels.slp --flip-horizontal -o flipped_h.slp
-
-# Mirror vertically (top-bottom flip)
-sio transform labels.slp --flip-vertical -o flipped_v.slp
-
-# Both flips (equivalent to 180° rotation)
-sio transform labels.slp --flip-horizontal --flip-vertical -o flipped_both.slp
-```
-
-**Rotation with clipping:**
-
-```bash
-# Normal rotation expands canvas to fit rotated image
-sio transform labels.slp --rotate 45 -o rotated_expanded.slp
-
-# Clip rotation keeps original dimensions (corners are clipped)
-sio transform labels.slp --rotate 45 --clip-rotation -o rotated_clipped.slp
-```
-
-**Preview before processing:**
-
-```bash
-# Check what will happen without writing files
-sio transform labels.slp \
-    --crop 100,100,500,500 \
-    --scale 2.0 \
-    --dry-run
-
-# Preview a specific frame (renders PNG to temp directory)
-sio transform labels.slp \
-    --crop 100,100,500,500 \
-    --scale 2.0 \
-    --dry-run-frame 50
-
-# Preview frame 0 with rotation
-sio transform labels.slp --rotate 45 --dry-run-frame 0
-```
-
-**Video encoding options:**
-
-```bash
-# Better seeking for annotation workflows
-sio transform labels.slp --scale 0.5 --keyframe-interval 0.5 -o scaled.slp
-
-# Strip audio from output videos
-sio transform labels.slp --scale 0.5 --no-audio -o scaled_silent.slp
-```
-
-### Coordinate Transformation
-
-All landmark coordinates are automatically transformed using an affine matrix that combines all operations:
-
-| Transform | Coordinate Adjustment |
-|-----------|----------------------|
-| **Crop** | `new = old - offset` |
-| **Scale** | `new = old * factor` |
-| **Rotate** | Affine rotation around center |
-| **Pad** | `new = old + padding` |
-| **Flip** | `new_x = width - old_x` (horizontal), `new_y = height - old_y` (vertical) |
-
-The combined transformation ensures that:
-
-- Landmarks remain aligned with the animal in the transformed video
-- Point coordinates may become negative or exceed frame bounds if animals move outside the crop region (coordinates are preserved, not clipped)
-- Sub-pixel coordinates are preserved for accurate representation
+See the [Transforms Guide](transforms.md#config-file-format) for config file format and examples.
 
 ---
 
