@@ -11,11 +11,10 @@ to maintain alignment with the transformed video.
 
 Example:
     >>> import sleap_io as sio
-    >>> from sleap_io.transform import Transform, transform_labels
     >>> from pathlib import Path
     >>> labels = sio.load_slp("predictions.slp")
-    >>> transform = Transform(crop=(100, 100, 500, 500), scale=(0.5, 0.5))
-    >>> result = transform_labels(labels, transform, Path("output.slp"))
+    >>> transform = sio.Transform(crop=(100, 100, 500, 500), scale=(0.5, 0.5))
+    >>> result = sio.transform_labels(labels, transform, Path("output.slp"))
 """
 
 from sleap_io.transform.core import Transform

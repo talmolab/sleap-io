@@ -16,11 +16,10 @@ Or use the Python API:
 
 ```python
 import sleap_io as sio
-from sleap_io.transform import Transform, transform_labels
 
 labels = sio.load_slp("labels.slp")
-transform = Transform(scale=(0.5, 0.5))
-transformed = transform_labels(labels, transform, "scaled.slp")
+transform = sio.Transform(scale=(0.5, 0.5))
+transformed = sio.transform_labels(labels, transform, "scaled.slp")
 ```
 
 Both approaches automatically:
@@ -30,6 +29,78 @@ Both approaches automatically:
 - Preserve alignment between poses and video
 
 ![Original frame](assets/transforms/original.png)
+
+---
+
+## How SLP Files Are Processed
+
+When you transform a `.slp` file, the behavior depends on whether the videos are external references (MediaVideo) or embedded within the file.
+
+### External videos (MediaVideo)
+
+For standard `.slp` files that reference external video files:
+
+- **Transformed videos** are saved as `.mp4` files in a new directory: `{output_name}.videos/`
+- **Video naming**: Each video is saved as `{original_name}.transformed.mp4`
+- **Overwrite mode**: If the output directory exists, videos with the same name are overwritten
+
+```
+input.slp                          # References video.mp4
+    ↓
+output.slp                         # References output.videos/video.transformed.mp4
+output.videos/
+    video.transformed.mp4          # Transformed video frames
+```
+
+Example:
+
+```bash
+sio transform predictions.slp --scale 0.5 -o scaled.slp
+# Creates:
+#   scaled.slp
+#   scaled.videos/original_video.transformed.mp4
+```
+
+### Embedded videos (`.pkg.slp`)
+
+For package files with embedded video frames:
+
+- **Transformed frames** are embedded directly in the output `.slp` file
+- **No separate video files** are created
+- **File size**: Output may be larger due to re-encoded frames
+
+```
+input.pkg.slp                      # Contains embedded frames
+    ↓
+output.pkg.slp                     # Contains transformed embedded frames
+```
+
+Example:
+
+```bash
+sio transform predictions.pkg.slp --scale 0.5 -o scaled.pkg.slp
+# Creates:
+#   scaled.pkg.slp (with embedded transformed frames)
+```
+
+### Custom video output directory
+
+You can specify where transformed videos are saved:
+
+=== "Python"
+    ```python
+    import sleap_io as sio
+    from pathlib import Path
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(scale=(0.5, 0.5))
+    sio.transform_labels(
+        labels,
+        transform,
+        Path("output.slp"),
+        video_output_dir=Path("custom_videos/"),
+    )
+    ```
 
 ---
 
@@ -48,7 +119,11 @@ Scale by a ratio to shrink or enlarge:
 
 === "Python"
     ```python
-    transform = Transform(scale=(0.5, 0.5))
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(scale=(0.5, 0.5))
+    sio.transform_labels(labels, transform, "scaled.slp")
     ```
 
 ![Scale 50%](assets/transforms/scale_half.png)
@@ -64,11 +139,15 @@ Specify a pixel width and auto-compute height to preserve aspect ratio:
 
 === "Python"
     ```python
-    # Use parse_scale helper for CLI-style input
-    from sleap_io.transform import parse_scale, resolve_scale
-    scale = parse_scale("640")
-    scale = resolve_scale(scale, (1024, 1024))  # Resolve with input size
-    transform = Transform(scale=scale)
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    # Compute scale factor from target width (preserving aspect ratio)
+    input_width = labels.videos[0].shape[2]  # Get original width
+    target_width = 640
+    scale_factor = target_width / input_width
+    transform = sio.Transform(scale=(scale_factor, scale_factor))
+    sio.transform_labels(labels, transform, "scaled.slp")
     ```
 
 ![Scale to width 640](assets/transforms/scale_width.png)
@@ -84,11 +163,14 @@ Specify exact output dimensions (may change aspect ratio):
 
 === "Python"
     ```python
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
     # Compute scale factors from target dimensions
-    input_size = (1024, 1024)
-    target_size = (800, 600)
-    scale = (target_size[0] / input_size[0], target_size[1] / input_size[1])
-    transform = Transform(scale=scale)
+    h, w = labels.videos[0].shape[1:3]
+    target_w, target_h = 800, 600
+    transform = sio.Transform(scale=(target_w / w, target_h / h))
+    sio.transform_labels(labels, transform, "scaled.slp")
     ```
 
 ![Scale to 800x600](assets/transforms/scale_dimensions.png)
@@ -111,19 +193,30 @@ Extract a rectangular region of interest.
 
 ### Pixel coordinates
 
-Specify `(x1, y1, x2, y2)` in pixels. Origin is top-left, coordinates are exclusive (Python slicing style):
+Specify `(x1, y1, x2, y2)` in pixels:
+
+- **0-based indexing**: Pixel (0, 0) is the top-left corner of the image
+- **Top-left corner alignment**: Coordinates refer to the top-left corner of each pixel
+- **Exclusive end**: The region includes pixels from (x1, y1) up to but not including (x2, y2), similar to Python slicing
+
+For example, `--crop 128,256,640,768` extracts a 512×512 region starting at pixel (128, 256):
 
 === "CLI"
     ```bash
-    sio transform labels.slp --crop 256,256,768,768 -o cropped.slp
+    sio transform labels.slp --crop 128,256,640,768 -o cropped.slp
     ```
 
 === "Python"
     ```python
-    transform = Transform(crop=(256, 256, 768, 768))
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    # Crop region: x from 128 to 640, y from 256 to 768
+    transform = sio.Transform(crop=(128, 256, 640, 768))
+    sio.transform_labels(labels, transform, "cropped.slp")
     ```
 
-![Crop center region](assets/transforms/crop_pixel.png)
+![Crop region](assets/transforms/crop_pixel.png)
 
 ### Normalized coordinates
 
@@ -136,9 +229,14 @@ Use values in `[0.0, 1.0]` for resolution-independent crops:
 
 === "Python"
     ```python
-    from sleap_io.transform import parse_crop
-    crop = parse_crop("0.25,0.25,0.75,0.75", input_size=(1024, 1024))
-    transform = Transform(crop=crop)
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    # Convert normalized to pixel coordinates
+    h, w = labels.videos[0].shape[1:3]
+    x1, y1, x2, y2 = int(0.25 * w), int(0.25 * h), int(0.75 * w), int(0.75 * h)
+    transform = sio.Transform(crop=(x1, y1, x2, y2))
+    sio.transform_labels(labels, transform, "cropped.slp")
     ```
 
 ![Crop with normalized coordinates](assets/transforms/crop_normalized.png)
@@ -154,7 +252,11 @@ Combine crop with scale to zoom into a region:
 
 === "Python"
     ```python
-    transform = Transform(crop=(256, 256, 768, 768), scale=(2.0, 2.0))
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(crop=(256, 256, 768, 768), scale=(2.0, 2.0))
+    sio.transform_labels(labels, transform, "zoomed.slp")
     ```
 
 ![Crop and zoom](assets/transforms/crop_zoom.png)
@@ -176,7 +278,11 @@ Rotate by 90, 180, or 270 degrees:
 
 === "Python"
     ```python
-    transform = Transform(rotate=90)
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(rotate=90)
+    sio.transform_labels(labels, transform, "rotated.slp")
     ```
 
 ![Rotate 90 degrees](assets/transforms/rotate_90.png)
@@ -192,7 +298,11 @@ By default, the canvas expands to fit the rotated content:
 
 === "Python"
     ```python
-    transform = Transform(rotate=45, clip_rotation=False)  # Default
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(rotate=45, clip_rotation=False)  # Default
+    sio.transform_labels(labels, transform, "rotated.slp")
     ```
 
 ![Rotate 45 degrees expanded](assets/transforms/rotate_45_expand.png)
@@ -208,7 +318,11 @@ Keep original dimensions by clipping corners:
 
 === "Python"
     ```python
-    transform = Transform(rotate=45, clip_rotation=True)
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(rotate=45, clip_rotation=True)
+    sio.transform_labels(labels, transform, "rotated.slp")
     ```
 
 ![Rotate 45 degrees clipped](assets/transforms/rotate_45_clip.png)
@@ -230,7 +344,11 @@ Add equal padding on all sides:
 
 === "Python"
     ```python
-    transform = Transform(pad=(50, 50, 50, 50))
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(pad=(50, 50, 50, 50))
+    sio.transform_labels(labels, transform, "padded.slp")
     ```
 
 ![Uniform padding](assets/transforms/pad_uniform.png)
@@ -246,7 +364,11 @@ Specify `(top, right, bottom, left)` padding:
 
 === "Python"
     ```python
-    transform = Transform(pad=(100, 50, 100, 50))
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(pad=(100, 50, 100, 50))
+    sio.transform_labels(labels, transform, "padded.slp")
     ```
 
 ![Asymmetric padding](assets/transforms/pad_asymmetric.png)
@@ -266,11 +388,17 @@ Use `--fill` to set the padding color:
 
 === "Python"
     ```python
-    # Grayscale
-    transform = Transform(pad=(50, 50, 50, 50), fill=128)
+    import sleap_io as sio
 
-    # RGB (for color videos)
-    transform = Transform(pad=(50, 50, 50, 50), fill=(255, 128, 0))
+    labels = sio.load_slp("labels.slp")
+
+    # Grayscale fill
+    transform = sio.Transform(pad=(50, 50, 50, 50), fill=128)
+    sio.transform_labels(labels, transform, "padded_gray.slp")
+
+    # RGB fill (for color videos)
+    transform = sio.Transform(pad=(50, 50, 50, 50), fill=(255, 128, 0))
+    sio.transform_labels(labels, transform, "padded_orange.slp")
     ```
 
 ![Gray fill padding](assets/transforms/pad_fill_gray.png)
@@ -294,7 +422,11 @@ Mirror left-right:
 
 === "Python"
     ```python
-    transform = Transform(flip_h=True)
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(flip_h=True)
+    sio.transform_labels(labels, transform, "flipped.slp")
     ```
 
 ![Horizontal flip](assets/transforms/flip_horizontal.png)
@@ -310,7 +442,11 @@ Mirror top-bottom:
 
 === "Python"
     ```python
-    transform = Transform(flip_v=True)
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(flip_v=True)
+    sio.transform_labels(labels, transform, "flipped.slp")
     ```
 
 ![Vertical flip](assets/transforms/flip_vertical.png)
@@ -326,7 +462,11 @@ Equivalent to 180° rotation:
 
 === "Python"
     ```python
-    transform = Transform(flip_h=True, flip_v=True)
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(flip_h=True, flip_v=True)
+    sio.transform_labels(labels, transform, "flipped.slp")
     ```
 
 ![Both flips](assets/transforms/flip_both.png)
@@ -359,10 +499,14 @@ This ensures predictable results when combining operations:
 
 === "Python"
     ```python
-    transform = Transform(
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(
         crop=(200, 200, 800, 800),
         scale=(0.5, 0.5),
     )
+    sio.transform_labels(labels, transform, "zoomed.slp")
     ```
 
 ![Crop and scale combined](assets/transforms/combined_crop_scale.png)
@@ -380,11 +524,15 @@ This ensures predictable results when combining operations:
 
 === "Python"
     ```python
-    transform = Transform(
+    import sleap_io as sio
+
+    labels = sio.load_slp("labels.slp")
+    transform = sio.Transform(
         scale=(0.5, 0.5),
         pad=(50, 50, 50, 50),
         flip_h=True,
     )
+    sio.transform_labels(labels, transform, "processed.slp")
     ```
 
 ![Scale, pad, and flip combined](assets/transforms/combined_scale_pad_flip.png)
@@ -535,9 +683,58 @@ This saves a preview PNG to `/tmp/sio_preview.png` showing the transformed frame
 
 ## Metadata & Provenance
 
+By default, transform metadata is automatically embedded in the output SLP file. This preserves a record of how the data was transformed for reproducibility and debugging.
+
+### Embedded provenance format
+
+The embedded metadata is stored in `labels.provenance["transform"]` and includes:
+
+```yaml
+generated: "2026-01-12T20:30:00+00:00"   # When the transform was applied
+source: "/path/to/input.slp"              # Path to the source file
+output: "/path/to/output.slp"             # Path to the output file
+sleap_io_version: "0.3.0"                 # Version used
+videos:
+  0:                                      # Per-video transform details
+    input: "/path/to/video.mp4"           # Source video path
+    input_size: [1024, 1024]              # Original dimensions [width, height]
+    output_size: [512, 512]               # Transformed dimensions
+    coordinate_transform:
+      matrix: [[...]]                     # 3x3 affine transformation matrix
+    transforms:
+      crop: [256, 256, 768, 768]          # Applied crop (or null)
+      scale: [0.5, 0.5]                   # Applied scale (or null)
+      rotate: null                        # Applied rotation (or null)
+      pad: null                           # Applied padding (or null)
+      flip_horizontal: false
+      flip_vertical: false
+      clip_rotation: false
+```
+
+Access the embedded metadata:
+
+```python
+import sleap_io as sio
+
+labels = sio.load_slp("output.slp")
+transform_info = labels.provenance.get("transform")
+
+# Get source file path
+source_path = transform_info["source"]
+
+# Get transform matrix for coordinate conversion
+matrix = transform_info["videos"]["0"]["coordinate_transform"]["matrix"]
+```
+
+To disable provenance embedding:
+
+```bash
+sio transform labels.slp --scale 0.5 --no-embed-provenance -o output.slp
+```
+
 ### Export transform metadata
 
-Save transform details to a YAML file for reproducibility:
+Save transform details to a standalone YAML file:
 
 ```bash
 sio transform labels.slp --scale 0.5 \
@@ -545,24 +742,7 @@ sio transform labels.slp --scale 0.5 \
     -o output.slp
 ```
 
-The metadata includes input/output sizes, transform parameters, and the affine transformation matrix for coordinate conversion.
-
-### Embed provenance
-
-Store transform metadata in the output SLP file:
-
-```bash
-sio transform labels.slp --scale 0.5 \
-    --embed-provenance \
-    -o output.slp
-```
-
-Access the embedded metadata:
-
-```python
-labels = sio.load_slp("output.slp")
-transform_info = labels.provenance.get("transform")
-```
+This creates a YAML file with the same format as the embedded provenance, useful for external tracking or when processing multiple files.
 
 ---
 
@@ -606,16 +786,21 @@ All landmark coordinates are automatically adjusted using affine transformation 
 ### Access the transformation matrix
 
 ```python
-transform = Transform(scale=(0.5, 0.5), rotate=45)
+import sleap_io as sio
+
+transform = sio.Transform(scale=(0.5, 0.5), rotate=45)
 matrix = transform.to_matrix(input_size=(1024, 1024))
 # Returns 3x3 affine transformation matrix
+print(matrix)  # [[a, b, tx], [c, d, ty], [0, 0, 1]]
 ```
 
 ### Transform points manually
 
 ```python
 import numpy as np
+import sleap_io as sio
 
+transform = sio.Transform(scale=(0.5, 0.5), rotate=45)
 points = np.array([[100, 200], [300, 400]])
 transformed_points = transform.apply_to_points(points, input_size=(1024, 1024))
 ```

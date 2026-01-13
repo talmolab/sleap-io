@@ -5793,10 +5793,10 @@ def _export_transform_metadata(metadata: dict, output_path: Path) -> None:
     help="Export transform metadata to YAML file.",
 )
 @click.option(
-    "--embed-provenance",
+    "--embed-provenance/--no-embed-provenance",
     is_flag=True,
-    default=False,
-    help="Store transform metadata in output SLP file.",
+    default=True,
+    help="Store transform metadata in output SLP file (default: enabled).",
 )
 # Transform options (can be repeated with idx: prefix for per-video)
 @click.option(
