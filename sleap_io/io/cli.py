@@ -6193,10 +6193,16 @@ def transform(
                     break
         return
 
-    # Create video output directory
+    # Check if all videos are embedded (no need for video output directory)
+    from sleap_io.transform.video import _is_embedded_video
+
+    all_embedded = all(_is_embedded_video(v) for v in labels.videos)
+
+    # Create video output directory only for non-embedded videos
     video_output_dir = output_path.with_name(output_path.stem + ".videos")
-    video_output_dir.mkdir(parents=True, exist_ok=True)
-    console.print(f"\n[dim]  Video output directory: {video_output_dir}[/]")
+    if not all_embedded:
+        video_output_dir.mkdir(parents=True, exist_ok=True)
+        console.print(f"\n[dim]  Video output directory: {video_output_dir}[/]")
 
     # Progress callback
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
@@ -6236,8 +6242,6 @@ def transform(
     # Note: For embedded videos, transform_labels already saved the file
     # (to preserve the embedded video data). We only need to save for
     # non-embedded videos.
-    from sleap_io.transform.video import _is_embedded_video
-
     has_embedded = any(_is_embedded_video(v) for v in labels.videos)
 
     # Generate transform metadata
