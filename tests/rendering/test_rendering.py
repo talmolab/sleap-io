@@ -433,6 +433,54 @@ class TestCallbacks:
 
         assert ctx.get_bbox() is None
 
+    def test_render_image_crop_passes_offset_to_callbacks(self, labels_predictions):
+        """Test that crop offset is passed to RenderContext in callbacks.
+
+        When render_image is called with a crop parameter, the RenderContext
+        provided to callbacks should have its offset set to the crop origin
+        (x1, y1) so that world_to_canvas() transforms correctly.
+        """
+        from sleap_io.rendering import render_image
+        from sleap_io.rendering.callbacks import RenderContext
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        # Track the offset received in callback
+        captured_offsets = []
+
+        def pre_callback(ctx: RenderContext):
+            captured_offsets.append(ctx.offset)
+
+        # Render with explicit crop bounds: (x1, y1, x2, y2) = (100, 50, 200, 150)
+        crop_bounds = (100, 50, 200, 150)
+        render_image(
+            lf, image=frame, crop=crop_bounds, pre_render_callback=pre_callback
+        )
+
+        assert len(captured_offsets) == 1
+        # Offset should be (x1, y1) from the crop bounds
+        assert captured_offsets[0] == (100.0, 50.0)
+
+    def test_render_image_no_crop_offset_is_zero(self, labels_predictions):
+        """Test that offset is (0, 0) when no crop is used."""
+        from sleap_io.rendering import render_image
+        from sleap_io.rendering.callbacks import RenderContext
+
+        lf = labels_predictions.labeled_frames[0]
+        frame = lf.video[lf.frame_idx]
+
+        captured_offsets = []
+
+        def pre_callback(ctx: RenderContext):
+            captured_offsets.append(ctx.offset)
+
+        # Render without crop
+        render_image(lf, image=frame, pre_render_callback=pre_callback)
+
+        assert len(captured_offsets) == 1
+        assert captured_offsets[0] == (0.0, 0.0)
+
 
 # ============================================================================
 # Core Rendering Tests
