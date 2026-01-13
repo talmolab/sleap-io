@@ -2171,6 +2171,9 @@ All landmark coordinates are automatically transformed using the corresponding a
 |--------|-------------|
 | `-i, --input` | Input SLP file or video (can also pass as positional argument) |
 | `-o, --output` | Output path. Default: `{input}.transformed.slp` or `.mp4` |
+| `--config` | YAML config file with per-video transforms |
+| `--output-transforms` | Export transform metadata to YAML file |
+| `--embed-provenance` | Store transform metadata in output SLP file |
 | `--overwrite, -y` | Overwrite existing output files |
 
 #### Transform Options
@@ -2278,7 +2281,88 @@ sio transform multi_cam.slp \
     -o processed.slp
 ```
 
-**Precedence:** Indexed parameters (`0:...`) override uniform parameters for that video.
+**Precedence:** config file < uniform parameters < indexed parameters (highest priority).
+
+### Config File Format
+
+For complex multi-video scenarios, use a YAML config file:
+
+```bash
+sio transform multi_cam.slp --config transforms.yaml -o output.slp
+```
+
+**Config file format:**
+
+```yaml
+# transforms.yaml
+videos:
+  0:
+    crop: [100, 100, 500, 500]
+    scale: 0.5
+    rotate: 0
+    pad: [0, 0, 0, 0]
+  1:
+    crop: [200, 200, 600, 600]
+    scale: [640, -1]  # 640px width, auto height
+    rotate: 90
+  2:
+    # No transforms - pass through unchanged
+```
+
+**Supported config options per video:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `crop` | `[x1, y1, x2, y2]` | Crop region as pixel coordinates or string |
+| `scale` | `float` or `[w, h]` | Scale factor or target dimensions |
+| `rotate` | `float` | Rotation angle in degrees |
+| `pad` | `[top, right, bottom, left]` or `int` | Padding in pixels |
+| `flip_horizontal` | `bool` | Mirror horizontally |
+| `flip_vertical` | `bool` | Mirror vertically |
+| `clip_rotation` | `bool` | Clip rotation to original dimensions |
+
+Config file options can be combined with CLI options. CLI options take precedence.
+
+### Transform Metadata
+
+Export transform metadata for reproducibility or downstream processing:
+
+```bash
+# Export to YAML file
+sio transform labels.slp --scale 0.5 \
+    --output-transforms transforms_meta.yaml \
+    -o output.slp
+
+# Embed in output SLP file
+sio transform labels.slp --scale 0.5 \
+    --embed-provenance \
+    -o output.slp
+```
+
+**Metadata YAML format:**
+
+```yaml
+generated: "2026-01-12T15:30:00+00:00"
+source: "/path/to/original.slp"
+output: "/path/to/output.slp"
+sleap_io_version: "0.5.0"
+videos:
+  0:
+    input: "video1.mp4"
+    input_size: [1920, 1080]
+    output_size: [960, 540]
+    transforms:
+      crop: null
+      scale: [0.5, 0.5]
+      rotate: null
+      pad: null
+      flip_horizontal: false
+      flip_vertical: false
+    coordinate_transform:
+      matrix: [[0.5, 0, 0], [0, 0.5, 0], [0, 0, 1]]
+```
+
+The coordinate transform matrix can be used to convert coordinates between original and transformed space.
 
 ### Raw Video Mode
 
