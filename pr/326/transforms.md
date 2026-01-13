@@ -195,8 +195,8 @@ Extract a rectangular region of interest.
 
 Specify `(x1, y1, x2, y2)` in pixels:
 
-- **0-based indexing**: Pixel (0, 0) is the top-left corner of the image
-- **Top-left corner alignment**: Coordinates refer to the top-left corner of each pixel
+- **0-based indexing**: Pixel (0, 0) is the top-left pixel of the image
+- **Center pixel alignment**: Coordinates refer to the center of each pixel (SLEAP uses center pixel indexing)
 - **Exclusive end**: The region includes pixels from (x1, y1) up to but not including (x2, y2), similar to Python slicing
 
 For example, `--crop 128,256,640,768` extracts a 512×512 region starting at pixel (128, 256):
@@ -778,10 +778,10 @@ All landmark coordinates are automatically adjusted using affine transformation 
 |-----------|----------------------|
 | **Crop** | `new = old - offset` |
 | **Scale** | `new = old * factor` |
-| **Rotate** | Affine rotation around center |
+| **Rotate** | Affine rotation around image center `((w-1)/2, (h-1)/2)` |
 | **Pad** | `new = old + padding_offset` |
-| **Flip H** | `new_x = width - old_x` |
-| **Flip V** | `new_y = height - old_y` |
+| **Flip H** | `new_x = (width - 1) - old_x` |
+| **Flip V** | `new_y = (height - 1) - old_y` |
 
 ### Access the transformation matrix
 
