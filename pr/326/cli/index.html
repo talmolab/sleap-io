@@ -2974,10 +2974,12 @@ The <code>[all]</code> extra installs faster video backends (OpenCV, PyAV) for i
 <a id="__codelineno-2-99" name="__codelineno-2-99" href="#__codelineno-2-99"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>-o<span class="w"> </span>scaled.slp<span class="w">         </span><span class="c1"># Scale down 50%</span>
 <a id="__codelineno-2-100" name="__codelineno-2-100" href="#__codelineno-2-100"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--crop<span class="w"> </span><span class="m">100</span>,100,500,500<span class="w"> </span>-o<span class="w"> </span>crop.slp<span class="w">  </span><span class="c1"># Crop to region</span>
 <a id="__codelineno-2-101" name="__codelineno-2-101" href="#__codelineno-2-101"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--rotate<span class="w"> </span><span class="m">90</span><span class="w"> </span>-o<span class="w"> </span>rotated.slp<span class="w">        </span><span class="c1"># Rotate 90 degrees</span>
-<a id="__codelineno-2-102" name="__codelineno-2-102" href="#__codelineno-2-102"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--crop<span class="w"> </span><span class="m">100</span>,100,500,500<span class="w"> </span>--scale<span class="w"> </span><span class="m">2</span>.0<span class="w"> </span>-o<span class="w"> </span>zoomed.slp
-<a id="__codelineno-2-103" name="__codelineno-2-103" href="#__codelineno-2-103"></a>sio<span class="w"> </span>transform<span class="w"> </span>multi_cam.slp<span class="w"> </span>--crop<span class="w"> </span><span class="m">0</span>:100,100,500,500<span class="w"> </span>-o<span class="w"> </span>cropped.slp<span class="w">  </span><span class="c1"># Per-video</span>
-<a id="__codelineno-2-104" name="__codelineno-2-104" href="#__codelineno-2-104"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--dry-run<span class="w">             </span><span class="c1"># Preview transforms</span>
-<a id="__codelineno-2-105" name="__codelineno-2-105" href="#__codelineno-2-105"></a>sio<span class="w"> </span>transform<span class="w"> </span>video.mp4<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>-o<span class="w"> </span>video_scaled.mp4<span class="w">    </span><span class="c1"># Transform raw video</span>
+<a id="__codelineno-2-102" name="__codelineno-2-102" href="#__codelineno-2-102"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--flip-horizontal<span class="w"> </span>-o<span class="w"> </span>flipped.slp<span class="w">  </span><span class="c1"># Mirror horizontally</span>
+<a id="__codelineno-2-103" name="__codelineno-2-103" href="#__codelineno-2-103"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--crop<span class="w"> </span><span class="m">100</span>,100,500,500<span class="w"> </span>--scale<span class="w"> </span><span class="m">2</span>.0<span class="w"> </span>-o<span class="w"> </span>zoomed.slp
+<a id="__codelineno-2-104" name="__codelineno-2-104" href="#__codelineno-2-104"></a>sio<span class="w"> </span>transform<span class="w"> </span>multi_cam.slp<span class="w"> </span>--crop<span class="w"> </span><span class="m">0</span>:100,100,500,500<span class="w"> </span>-o<span class="w"> </span>cropped.slp<span class="w">  </span><span class="c1"># Per-video</span>
+<a id="__codelineno-2-105" name="__codelineno-2-105" href="#__codelineno-2-105"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--dry-run<span class="w">             </span><span class="c1"># Preview transforms</span>
+<a id="__codelineno-2-106" name="__codelineno-2-106" href="#__codelineno-2-106"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--dry-run-frame<span class="w"> </span><span class="m">0</span><span class="w">     </span><span class="c1"># Preview specific frame</span>
+<a id="__codelineno-2-107" name="__codelineno-2-107" href="#__codelineno-2-107"></a>sio<span class="w"> </span>transform<span class="w"> </span>video.mp4<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>-o<span class="w"> </span>video_scaled.mp4<span class="w">    </span><span class="c1"># Transform raw video</span>
 </code></pre></div>
 <hr />
 <h2 id="sio-show"><code>sio show</code><a class="headerlink" href="#sio-show" title="Permanent link">&para;</a></h2>
@@ -5350,13 +5352,14 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <a id="__codelineno-114-11" name="__codelineno-114-11" href="#__codelineno-114-11"></a>Saved: scaled.slp
 </code></pre></div>
 <h3 id="transform-pipeline">Transform Pipeline<a class="headerlink" href="#transform-pipeline" title="Permanent link">&para;</a></h3>
-<p>Transforms are always applied in a fixed order: <strong>crop → scale → rotate → pad</strong></p>
+<p>Transforms are always applied in a fixed order: <strong>crop → scale → rotate → pad → flip</strong></p>
 <p>This order ensures predictable results:</p>
 <ol>
 <li><strong>Crop</strong> extracts a region of interest from the original frame</li>
 <li><strong>Scale</strong> resizes the cropped region</li>
 <li><strong>Rotate</strong> rotates around the frame center</li>
-<li><strong>Pad</strong> adds borders to the final result</li>
+<li><strong>Pad</strong> adds borders to the result</li>
+<li><strong>Flip</strong> mirrors the image horizontally and/or vertically</li>
 </ol>
 <p>All landmark coordinates are automatically transformed using the corresponding affine matrix to maintain alignment with the video.</p>
 <h3 id="options-reference_4">Options Reference<a class="headerlink" href="#options-reference_4" title="Permanent link">&para;</a></h3>
@@ -5409,9 +5412,24 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <td>Rotation angle (clockwise positive)</td>
 </tr>
 <tr>
+<td><code>--clip-rotation</code></td>
+<td>flag</td>
+<td>Keep original dimensions when rotating (clips corners)</td>
+</tr>
+<tr>
 <td><code>--pad</code></td>
 <td><code>[idx:]top,right,bottom,left</code></td>
 <td>Padding in pixels (or single value for uniform)</td>
+</tr>
+<tr>
+<td><code>--flip-horizontal</code></td>
+<td>flag</td>
+<td>Mirror image left-right</td>
+</tr>
+<tr>
+<td><code>--flip-vertical</code></td>
+<td>flag</td>
+<td>Mirror image top-bottom</td>
 </tr>
 </tbody>
 </table>
@@ -5433,7 +5451,7 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <tr>
 <td><code>--fill</code></td>
 <td><code>0</code></td>
-<td>Fill value for out-of-bounds regions (0-255)</td>
+<td>Fill value for out-of-bounds regions. Integer (0-255) or RGB (<code>R,G,B</code>)</td>
 </tr>
 <tr>
 <td><code>--crf</code></td>
@@ -5450,6 +5468,16 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <td>(source)</td>
 <td>Output frame rate</td>
 </tr>
+<tr>
+<td><code>--keyframe-interval</code></td>
+<td>(none)</td>
+<td>Keyframe interval in seconds. Lower = better seeking, larger files</td>
+</tr>
+<tr>
+<td><code>--no-audio</code></td>
+<td>off</td>
+<td>Strip audio from output videos</td>
+</tr>
 </tbody>
 </table>
 <h4 id="execution-options">Execution Options<a class="headerlink" href="#execution-options" title="Permanent link">&para;</a></h4>
@@ -5464,6 +5492,10 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <tr>
 <td><code>--dry-run</code></td>
 <td>Preview transforms without executing</td>
+</tr>
+<tr>
+<td><code>--dry-run-frame N</code></td>
+<td>Render specific frame N in dry-run preview. Implies <code>--dry-run</code></td>
 </tr>
 </tbody>
 </table>
@@ -5599,13 +5631,52 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <a id="__codelineno-125-3" name="__codelineno-125-3" href="#__codelineno-125-3"></a>
 <a id="__codelineno-125-4" name="__codelineno-125-4" href="#__codelineno-125-4"></a><span class="c1"># Asymmetric padding</span>
 <a id="__codelineno-125-5" name="__codelineno-125-5" href="#__codelineno-125-5"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--pad<span class="w"> </span><span class="m">100</span>,50,100,50<span class="w"> </span>-o<span class="w"> </span>padded.slp
+<a id="__codelineno-125-6" name="__codelineno-125-6" href="#__codelineno-125-6"></a>
+<a id="__codelineno-125-7" name="__codelineno-125-7" href="#__codelineno-125-7"></a><span class="c1"># Custom fill color (gray background)</span>
+<a id="__codelineno-125-8" name="__codelineno-125-8" href="#__codelineno-125-8"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--pad<span class="w"> </span><span class="m">50</span><span class="w"> </span>--fill<span class="w"> </span><span class="m">128</span><span class="w"> </span>-o<span class="w"> </span>padded_gray.slp
+<a id="__codelineno-125-9" name="__codelineno-125-9" href="#__codelineno-125-9"></a>
+<a id="__codelineno-125-10" name="__codelineno-125-10" href="#__codelineno-125-10"></a><span class="c1"># RGB fill color (blue background)</span>
+<a id="__codelineno-125-11" name="__codelineno-125-11" href="#__codelineno-125-11"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--pad<span class="w"> </span><span class="m">50</span><span class="w"> </span>--fill<span class="w"> </span><span class="m">0</span>,0,255<span class="w"> </span>-o<span class="w"> </span>padded_blue.slp
+</code></pre></div>
+<p><strong>Flipping videos:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-126-1" name="__codelineno-126-1" href="#__codelineno-126-1"></a><span class="c1"># Mirror horizontally (left-right flip)</span>
+<a id="__codelineno-126-2" name="__codelineno-126-2" href="#__codelineno-126-2"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--flip-horizontal<span class="w"> </span>-o<span class="w"> </span>flipped_h.slp
+<a id="__codelineno-126-3" name="__codelineno-126-3" href="#__codelineno-126-3"></a>
+<a id="__codelineno-126-4" name="__codelineno-126-4" href="#__codelineno-126-4"></a><span class="c1"># Mirror vertically (top-bottom flip)</span>
+<a id="__codelineno-126-5" name="__codelineno-126-5" href="#__codelineno-126-5"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--flip-vertical<span class="w"> </span>-o<span class="w"> </span>flipped_v.slp
+<a id="__codelineno-126-6" name="__codelineno-126-6" href="#__codelineno-126-6"></a>
+<a id="__codelineno-126-7" name="__codelineno-126-7" href="#__codelineno-126-7"></a><span class="c1"># Both flips (equivalent to 180° rotation)</span>
+<a id="__codelineno-126-8" name="__codelineno-126-8" href="#__codelineno-126-8"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--flip-horizontal<span class="w"> </span>--flip-vertical<span class="w"> </span>-o<span class="w"> </span>flipped_both.slp
+</code></pre></div>
+<p><strong>Rotation with clipping:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-127-1" name="__codelineno-127-1" href="#__codelineno-127-1"></a><span class="c1"># Normal rotation expands canvas to fit rotated image</span>
+<a id="__codelineno-127-2" name="__codelineno-127-2" href="#__codelineno-127-2"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--rotate<span class="w"> </span><span class="m">45</span><span class="w"> </span>-o<span class="w"> </span>rotated_expanded.slp
+<a id="__codelineno-127-3" name="__codelineno-127-3" href="#__codelineno-127-3"></a>
+<a id="__codelineno-127-4" name="__codelineno-127-4" href="#__codelineno-127-4"></a><span class="c1"># Clip rotation keeps original dimensions (corners are clipped)</span>
+<a id="__codelineno-127-5" name="__codelineno-127-5" href="#__codelineno-127-5"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--rotate<span class="w"> </span><span class="m">45</span><span class="w"> </span>--clip-rotation<span class="w"> </span>-o<span class="w"> </span>rotated_clipped.slp
 </code></pre></div>
 <p><strong>Preview before processing:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-126-1" name="__codelineno-126-1" href="#__codelineno-126-1"></a><span class="c1"># Check what will happen without writing files</span>
-<a id="__codelineno-126-2" name="__codelineno-126-2" href="#__codelineno-126-2"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-126-3" name="__codelineno-126-3" href="#__codelineno-126-3"></a><span class="w">    </span>--crop<span class="w"> </span><span class="m">100</span>,100,500,500<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-126-4" name="__codelineno-126-4" href="#__codelineno-126-4"></a><span class="w">    </span>--scale<span class="w"> </span><span class="m">2</span>.0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-126-5" name="__codelineno-126-5" href="#__codelineno-126-5"></a><span class="w">    </span>--dry-run
+<div class="highlight"><pre><span></span><code><a id="__codelineno-128-1" name="__codelineno-128-1" href="#__codelineno-128-1"></a><span class="c1"># Check what will happen without writing files</span>
+<a id="__codelineno-128-2" name="__codelineno-128-2" href="#__codelineno-128-2"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-128-3" name="__codelineno-128-3" href="#__codelineno-128-3"></a><span class="w">    </span>--crop<span class="w"> </span><span class="m">100</span>,100,500,500<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-128-4" name="__codelineno-128-4" href="#__codelineno-128-4"></a><span class="w">    </span>--scale<span class="w"> </span><span class="m">2</span>.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-128-5" name="__codelineno-128-5" href="#__codelineno-128-5"></a><span class="w">    </span>--dry-run
+<a id="__codelineno-128-6" name="__codelineno-128-6" href="#__codelineno-128-6"></a>
+<a id="__codelineno-128-7" name="__codelineno-128-7" href="#__codelineno-128-7"></a><span class="c1"># Preview a specific frame (renders PNG to temp directory)</span>
+<a id="__codelineno-128-8" name="__codelineno-128-8" href="#__codelineno-128-8"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-128-9" name="__codelineno-128-9" href="#__codelineno-128-9"></a><span class="w">    </span>--crop<span class="w"> </span><span class="m">100</span>,100,500,500<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-128-10" name="__codelineno-128-10" href="#__codelineno-128-10"></a><span class="w">    </span>--scale<span class="w"> </span><span class="m">2</span>.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-128-11" name="__codelineno-128-11" href="#__codelineno-128-11"></a><span class="w">    </span>--dry-run-frame<span class="w"> </span><span class="m">50</span>
+<a id="__codelineno-128-12" name="__codelineno-128-12" href="#__codelineno-128-12"></a>
+<a id="__codelineno-128-13" name="__codelineno-128-13" href="#__codelineno-128-13"></a><span class="c1"># Preview frame 0 with rotation</span>
+<a id="__codelineno-128-14" name="__codelineno-128-14" href="#__codelineno-128-14"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--rotate<span class="w"> </span><span class="m">45</span><span class="w"> </span>--dry-run-frame<span class="w"> </span><span class="m">0</span>
+</code></pre></div>
+<p><strong>Video encoding options:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-129-1" name="__codelineno-129-1" href="#__codelineno-129-1"></a><span class="c1"># Better seeking for annotation workflows</span>
+<a id="__codelineno-129-2" name="__codelineno-129-2" href="#__codelineno-129-2"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--keyframe-interval<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>-o<span class="w"> </span>scaled.slp
+<a id="__codelineno-129-3" name="__codelineno-129-3" href="#__codelineno-129-3"></a>
+<a id="__codelineno-129-4" name="__codelineno-129-4" href="#__codelineno-129-4"></a><span class="c1"># Strip audio from output videos</span>
+<a id="__codelineno-129-5" name="__codelineno-129-5" href="#__codelineno-129-5"></a>sio<span class="w"> </span>transform<span class="w"> </span>labels.slp<span class="w"> </span>--scale<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--no-audio<span class="w"> </span>-o<span class="w"> </span>scaled_silent.slp
 </code></pre></div>
 <h3 id="coordinate-transformation">Coordinate Transformation<a class="headerlink" href="#coordinate-transformation" title="Permanent link">&para;</a></h3>
 <p>All landmark coordinates are automatically transformed using an affine matrix that combines all operations:</p>
@@ -5633,6 +5704,10 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <td><strong>Pad</strong></td>
 <td><code>new = old + padding</code></td>
 </tr>
+<tr>
+<td><strong>Flip</strong></td>
+<td><code>new_x = width - old_x</code> (horizontal), <code>new_y = height - old_y</code> (vertical)</td>
+</tr>
 </tbody>
 </table>
 <p>The combined transformation ensures that:</p>
@@ -5645,123 +5720,123 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <h2 id="use-cases">Use Cases<a class="headerlink" href="#use-cases" title="Permanent link">&para;</a></h2>
 <h3 id="inspecting-an-unknown-labels-file">Inspecting an Unknown Labels File<a class="headerlink" href="#inspecting-an-unknown-labels-file" title="Permanent link">&para;</a></h3>
 <p>When you receive a <code>.slp</code> file and want to understand its contents:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-127-1" name="__codelineno-127-1" href="#__codelineno-127-1"></a><span class="c1"># Quick overview</span>
-<a id="__codelineno-127-2" name="__codelineno-127-2" href="#__codelineno-127-2"></a>sio<span class="w"> </span>show<span class="w"> </span>mystery_file.slp
-<a id="__codelineno-127-3" name="__codelineno-127-3" href="#__codelineno-127-3"></a>
-<a id="__codelineno-127-4" name="__codelineno-127-4" href="#__codelineno-127-4"></a><span class="c1"># Full details</span>
-<a id="__codelineno-127-5" name="__codelineno-127-5" href="#__codelineno-127-5"></a>sio<span class="w"> </span>show<span class="w"> </span>mystery_file.slp<span class="w"> </span>--all
+<div class="highlight"><pre><span></span><code><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a><span class="c1"># Quick overview</span>
+<a id="__codelineno-130-2" name="__codelineno-130-2" href="#__codelineno-130-2"></a>sio<span class="w"> </span>show<span class="w"> </span>mystery_file.slp
+<a id="__codelineno-130-3" name="__codelineno-130-3" href="#__codelineno-130-3"></a>
+<a id="__codelineno-130-4" name="__codelineno-130-4" href="#__codelineno-130-4"></a><span class="c1"># Full details</span>
+<a id="__codelineno-130-5" name="__codelineno-130-5" href="#__codelineno-130-5"></a>sio<span class="w"> </span>show<span class="w"> </span>mystery_file.slp<span class="w"> </span>--all
 </code></pre></div>
 <h3 id="checking-video-status-before-processing">Checking Video Status Before Processing<a class="headerlink" href="#checking-video-status-before-processing" title="Permanent link">&para;</a></h3>
 <p>Before running inference or embedding, verify videos are accessible:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-128-1" name="__codelineno-128-1" href="#__codelineno-128-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--video
+<div class="highlight"><pre><span></span><code><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp<span class="w"> </span>--video
 </code></pre></div>
 <p>Look for <code>[not found]</code> tags indicating missing videos.</p>
 <h3 id="fixing-broken-video-paths">Fixing Broken Video Paths<a class="headerlink" href="#fixing-broken-video-paths" title="Permanent link">&para;</a></h3>
 <p>If videos show <code>[not found]</code>, update the paths:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-129-1" name="__codelineno-129-1" href="#__codelineno-129-1"></a><span class="c1"># Check current video paths</span>
-<a id="__codelineno-129-2" name="__codelineno-129-2" href="#__codelineno-129-2"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp
-<a id="__codelineno-129-3" name="__codelineno-129-3" href="#__codelineno-129-3"></a>
-<a id="__codelineno-129-4" name="__codelineno-129-4" href="#__codelineno-129-4"></a><span class="c1"># Update with new location</span>
-<a id="__codelineno-129-5" name="__codelineno-129-5" href="#__codelineno-129-5"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels_fixed.slp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-129-6" name="__codelineno-129-6" href="#__codelineno-129-6"></a><span class="w">    </span>--prefix<span class="w"> </span>/old/location<span class="w"> </span>/new/location
-<a id="__codelineno-129-7" name="__codelineno-129-7" href="#__codelineno-129-7"></a>
-<a id="__codelineno-129-8" name="__codelineno-129-8" href="#__codelineno-129-8"></a><span class="c1"># Verify fix</span>
-<a id="__codelineno-129-9" name="__codelineno-129-9" href="#__codelineno-129-9"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels_fixed.slp
+<div class="highlight"><pre><span></span><code><a id="__codelineno-132-1" name="__codelineno-132-1" href="#__codelineno-132-1"></a><span class="c1"># Check current video paths</span>
+<a id="__codelineno-132-2" name="__codelineno-132-2" href="#__codelineno-132-2"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp
+<a id="__codelineno-132-3" name="__codelineno-132-3" href="#__codelineno-132-3"></a>
+<a id="__codelineno-132-4" name="__codelineno-132-4" href="#__codelineno-132-4"></a><span class="c1"># Update with new location</span>
+<a id="__codelineno-132-5" name="__codelineno-132-5" href="#__codelineno-132-5"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>labels_fixed.slp<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-132-6" name="__codelineno-132-6" href="#__codelineno-132-6"></a><span class="w">    </span>--prefix<span class="w"> </span>/old/location<span class="w"> </span>/new/location
+<a id="__codelineno-132-7" name="__codelineno-132-7" href="#__codelineno-132-7"></a>
+<a id="__codelineno-132-8" name="__codelineno-132-8" href="#__codelineno-132-8"></a><span class="c1"># Verify fix</span>
+<a id="__codelineno-132-9" name="__codelineno-132-9" href="#__codelineno-132-9"></a>sio<span class="w"> </span>filenames<span class="w"> </span>labels_fixed.slp
 </code></pre></div>
 <h3 id="extracting-skeleton-definition">Extracting Skeleton Definition<a class="headerlink" href="#extracting-skeleton-definition" title="Permanent link">&para;</a></h3>
 <p>Get copyable Python code for the skeleton:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp
+<div class="highlight"><pre><span></span><code><a id="__codelineno-133-1" name="__codelineno-133-1" href="#__codelineno-133-1"></a>sio<span class="w"> </span>show<span class="w"> </span>labels.slp
 </code></pre></div>
 <p>Copy the <code>nodes = [...]</code> and <code>edge_inds = [...]</code> lines directly into your code.</p>
 <h3 id="converting-for-sharing">Converting for Sharing<a class="headerlink" href="#converting-for-sharing" title="Permanent link">&para;</a></h3>
 <p>Create a portable package with embedded frames:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a><span class="c1"># Embed user-labeled frames for sharing training data</span>
-<a id="__codelineno-131-2" name="__codelineno-131-2" href="#__codelineno-131-2"></a>sio<span class="w"> </span>embed<span class="w"> </span>project.slp<span class="w"> </span>-o<span class="w"> </span>project.pkg.slp
-<a id="__codelineno-131-3" name="__codelineno-131-3" href="#__codelineno-131-3"></a>
-<a id="__codelineno-131-4" name="__codelineno-131-4" href="#__codelineno-131-4"></a><span class="c1"># Include predictions and suggestions for complete sharing</span>
-<a id="__codelineno-131-5" name="__codelineno-131-5" href="#__codelineno-131-5"></a>sio<span class="w"> </span>embed<span class="w"> </span>project.slp<span class="w"> </span>-o<span class="w"> </span>project.pkg.slp<span class="w"> </span>--predictions<span class="w"> </span>--suggestions
-<a id="__codelineno-131-6" name="__codelineno-131-6" href="#__codelineno-131-6"></a>
-<a id="__codelineno-131-7" name="__codelineno-131-7" href="#__codelineno-131-7"></a><span class="c1"># Later, restore to reference original videos</span>
-<a id="__codelineno-131-8" name="__codelineno-131-8" href="#__codelineno-131-8"></a>sio<span class="w"> </span>unembed<span class="w"> </span>project.pkg.slp<span class="w"> </span>-o<span class="w"> </span>project_restored.slp
+<div class="highlight"><pre><span></span><code><a id="__codelineno-134-1" name="__codelineno-134-1" href="#__codelineno-134-1"></a><span class="c1"># Embed user-labeled frames for sharing training data</span>
+<a id="__codelineno-134-2" name="__codelineno-134-2" href="#__codelineno-134-2"></a>sio<span class="w"> </span>embed<span class="w"> </span>project.slp<span class="w"> </span>-o<span class="w"> </span>project.pkg.slp
+<a id="__codelineno-134-3" name="__codelineno-134-3" href="#__codelineno-134-3"></a>
+<a id="__codelineno-134-4" name="__codelineno-134-4" href="#__codelineno-134-4"></a><span class="c1"># Include predictions and suggestions for complete sharing</span>
+<a id="__codelineno-134-5" name="__codelineno-134-5" href="#__codelineno-134-5"></a>sio<span class="w"> </span>embed<span class="w"> </span>project.slp<span class="w"> </span>-o<span class="w"> </span>project.pkg.slp<span class="w"> </span>--predictions<span class="w"> </span>--suggestions
+<a id="__codelineno-134-6" name="__codelineno-134-6" href="#__codelineno-134-6"></a>
+<a id="__codelineno-134-7" name="__codelineno-134-7" href="#__codelineno-134-7"></a><span class="c1"># Later, restore to reference original videos</span>
+<a id="__codelineno-134-8" name="__codelineno-134-8" href="#__codelineno-134-8"></a>sio<span class="w"> </span>unembed<span class="w"> </span>project.pkg.slp<span class="w"> </span>-o<span class="w"> </span>project_restored.slp
 </code></pre></div>
 <h3 id="batch-conversion-with-shell-scripts">Batch Conversion with Shell Scripts<a class="headerlink" href="#batch-conversion-with-shell-scripts" title="Permanent link">&para;</a></h3>
 <p>Convert multiple files using shell loops:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Bash</label><label for="__tabbed_1_2">PowerShell</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-132-1" name="__codelineno-132-1" href="#__codelineno-132-1"></a><span class="c1"># Convert all SLEAP files to NWB</span>
-<a id="__codelineno-132-2" name="__codelineno-132-2" href="#__codelineno-132-2"></a><span class="k">for</span><span class="w"> </span>f<span class="w"> </span><span class="k">in</span><span class="w"> </span>*.slp<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-132-3" name="__codelineno-132-3" href="#__codelineno-132-3"></a><span class="w">    </span>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">f</span><span class="p">%.slp</span><span class="si">}</span><span class="s2">.nwb&quot;</span>
-<a id="__codelineno-132-4" name="__codelineno-132-4" href="#__codelineno-132-4"></a><span class="k">done</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-135-1" name="__codelineno-135-1" href="#__codelineno-135-1"></a><span class="c1"># Convert all SLEAP files to NWB</span>
+<a id="__codelineno-135-2" name="__codelineno-135-2" href="#__codelineno-135-2"></a><span class="k">for</span><span class="w"> </span>f<span class="w"> </span><span class="k">in</span><span class="w"> </span>*.slp<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-135-3" name="__codelineno-135-3" href="#__codelineno-135-3"></a><span class="w">    </span>sio<span class="w"> </span>convert<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">f</span><span class="p">%.slp</span><span class="si">}</span><span class="s2">.nwb&quot;</span>
+<a id="__codelineno-135-4" name="__codelineno-135-4" href="#__codelineno-135-4"></a><span class="k">done</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-133-1" name="__codelineno-133-1" href="#__codelineno-133-1"></a><span class="c"># Convert all SLEAP files to NWB</span>
-<a id="__codelineno-133-2" name="__codelineno-133-2" href="#__codelineno-133-2"></a><span class="nb">Get-ChildItem</span> <span class="p">*.</span><span class="n">slp</span> <span class="p">|</span> <span class="k">ForEach</span><span class="n">-Object</span> <span class="p">{</span>
-<a id="__codelineno-133-3" name="__codelineno-133-3" href="#__codelineno-133-3"></a>    <span class="n">sio</span> <span class="n">convert</span> <span class="n">-i</span> <span class="nv">$_</span><span class="p">.</span><span class="n">Name</span> <span class="n">-o</span> <span class="p">(</span><span class="nv">$_</span><span class="p">.</span><span class="n">BaseName</span> <span class="p">+</span> <span class="s2">&quot;.nwb&quot;</span><span class="p">)</span>
-<a id="__codelineno-133-4" name="__codelineno-133-4" href="#__codelineno-133-4"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-136-1" name="__codelineno-136-1" href="#__codelineno-136-1"></a><span class="c"># Convert all SLEAP files to NWB</span>
+<a id="__codelineno-136-2" name="__codelineno-136-2" href="#__codelineno-136-2"></a><span class="nb">Get-ChildItem</span> <span class="p">*.</span><span class="n">slp</span> <span class="p">|</span> <span class="k">ForEach</span><span class="n">-Object</span> <span class="p">{</span>
+<a id="__codelineno-136-3" name="__codelineno-136-3" href="#__codelineno-136-3"></a>    <span class="n">sio</span> <span class="n">convert</span> <span class="n">-i</span> <span class="nv">$_</span><span class="p">.</span><span class="n">Name</span> <span class="n">-o</span> <span class="p">(</span><span class="nv">$_</span><span class="p">.</span><span class="n">BaseName</span> <span class="p">+</span> <span class="s2">&quot;.nwb&quot;</span><span class="p">)</span>
+<a id="__codelineno-136-4" name="__codelineno-136-4" href="#__codelineno-136-4"></a><span class="p">}</span>
 </code></pre></div>
 </div>
 </div>
 </div>
 <h3 id="importing-from-other-tools">Importing from Other Tools<a class="headerlink" href="#importing-from-other-tools" title="Permanent link">&para;</a></h3>
 <p>Import pose data from other annotation and analysis tools:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-134-1" name="__codelineno-134-1" href="#__codelineno-134-1"></a><span class="c1"># From COCO format (e.g., mmpose, CVAT exports)</span>
-<a id="__codelineno-134-2" name="__codelineno-134-2" href="#__codelineno-134-2"></a>sio<span class="w"> </span>convert<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>coco
-<a id="__codelineno-134-3" name="__codelineno-134-3" href="#__codelineno-134-3"></a>
-<a id="__codelineno-134-4" name="__codelineno-134-4" href="#__codelineno-134-4"></a><span class="c1"># From Label Studio export</span>
-<a id="__codelineno-134-5" name="__codelineno-134-5" href="#__codelineno-134-5"></a>sio<span class="w"> </span>convert<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>labelstudio
-<a id="__codelineno-134-6" name="__codelineno-134-6" href="#__codelineno-134-6"></a>
-<a id="__codelineno-134-7" name="__codelineno-134-7" href="#__codelineno-134-7"></a><span class="c1"># From DeepLabCut analysis (CSV format)</span>
-<a id="__codelineno-134-8" name="__codelineno-134-8" href="#__codelineno-134-8"></a>sio<span class="w"> </span>convert<span class="w"> </span>video_DLC_results.csv<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>dlc
+<div class="highlight"><pre><span></span><code><a id="__codelineno-137-1" name="__codelineno-137-1" href="#__codelineno-137-1"></a><span class="c1"># From COCO format (e.g., mmpose, CVAT exports)</span>
+<a id="__codelineno-137-2" name="__codelineno-137-2" href="#__codelineno-137-2"></a>sio<span class="w"> </span>convert<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>coco
+<a id="__codelineno-137-3" name="__codelineno-137-3" href="#__codelineno-137-3"></a>
+<a id="__codelineno-137-4" name="__codelineno-137-4" href="#__codelineno-137-4"></a><span class="c1"># From Label Studio export</span>
+<a id="__codelineno-137-5" name="__codelineno-137-5" href="#__codelineno-137-5"></a>sio<span class="w"> </span>convert<span class="w"> </span>annotations.json<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>labelstudio
+<a id="__codelineno-137-6" name="__codelineno-137-6" href="#__codelineno-137-6"></a>
+<a id="__codelineno-137-7" name="__codelineno-137-7" href="#__codelineno-137-7"></a><span class="c1"># From DeepLabCut analysis (CSV format)</span>
+<a id="__codelineno-137-8" name="__codelineno-137-8" href="#__codelineno-137-8"></a>sio<span class="w"> </span>convert<span class="w"> </span>video_DLC_results.csv<span class="w"> </span>-o<span class="w"> </span>labels.slp<span class="w"> </span>--from<span class="w"> </span>dlc
 </code></pre></div>
 <h3 id="exporting-for-training">Exporting for Training<a class="headerlink" href="#exporting-for-training" title="Permanent link">&para;</a></h3>
 <p>Export to formats used by other frameworks:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-135-1" name="__codelineno-135-1" href="#__codelineno-135-1"></a><span class="c1"># For Ultralytics YOLO</span>
-<a id="__codelineno-135-2" name="__codelineno-135-2" href="#__codelineno-135-2"></a>sio<span class="w"> </span>convert<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>yolo_data/<span class="w"> </span>--to<span class="w"> </span>ultralytics
-<a id="__codelineno-135-3" name="__codelineno-135-3" href="#__codelineno-135-3"></a>
-<a id="__codelineno-135-4" name="__codelineno-135-4" href="#__codelineno-135-4"></a><span class="c1"># For tools expecting COCO format</span>
-<a id="__codelineno-135-5" name="__codelineno-135-5" href="#__codelineno-135-5"></a>sio<span class="w"> </span>convert<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>annotations.json<span class="w"> </span>--to<span class="w"> </span>coco
-<a id="__codelineno-135-6" name="__codelineno-135-6" href="#__codelineno-135-6"></a>
-<a id="__codelineno-135-7" name="__codelineno-135-7" href="#__codelineno-135-7"></a><span class="c1"># For NWB-based pipelines (auto-detects annotations vs predictions)</span>
-<a id="__codelineno-135-8" name="__codelineno-135-8" href="#__codelineno-135-8"></a>sio<span class="w"> </span>convert<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>data.nwb<span class="w"> </span>--to<span class="w"> </span>nwb
+<div class="highlight"><pre><span></span><code><a id="__codelineno-138-1" name="__codelineno-138-1" href="#__codelineno-138-1"></a><span class="c1"># For Ultralytics YOLO</span>
+<a id="__codelineno-138-2" name="__codelineno-138-2" href="#__codelineno-138-2"></a>sio<span class="w"> </span>convert<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>yolo_data/<span class="w"> </span>--to<span class="w"> </span>ultralytics
+<a id="__codelineno-138-3" name="__codelineno-138-3" href="#__codelineno-138-3"></a>
+<a id="__codelineno-138-4" name="__codelineno-138-4" href="#__codelineno-138-4"></a><span class="c1"># For tools expecting COCO format</span>
+<a id="__codelineno-138-5" name="__codelineno-138-5" href="#__codelineno-138-5"></a>sio<span class="w"> </span>convert<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>annotations.json<span class="w"> </span>--to<span class="w"> </span>coco
+<a id="__codelineno-138-6" name="__codelineno-138-6" href="#__codelineno-138-6"></a>
+<a id="__codelineno-138-7" name="__codelineno-138-7" href="#__codelineno-138-7"></a><span class="c1"># For NWB-based pipelines (auto-detects annotations vs predictions)</span>
+<a id="__codelineno-138-8" name="__codelineno-138-8" href="#__codelineno-138-8"></a>sio<span class="w"> </span>convert<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>data.nwb<span class="w"> </span>--to<span class="w"> </span>nwb
 </code></pre></div>
 <h3 id="rendering-pose-videos">Rendering Pose Videos<a class="headerlink" href="#rendering-pose-videos" title="Permanent link">&para;</a></h3>
 <p>Create video visualizations of your pose predictions:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-136-1" name="__codelineno-136-1" href="#__codelineno-136-1"></a><span class="c1"># Quick preview to check predictions</span>
-<a id="__codelineno-136-2" name="__codelineno-136-2" href="#__codelineno-136-2"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>preview.mp4<span class="w"> </span>--preset<span class="w"> </span>preview
-<a id="__codelineno-136-3" name="__codelineno-136-3" href="#__codelineno-136-3"></a>
-<a id="__codelineno-136-4" name="__codelineno-136-4" href="#__codelineno-136-4"></a><span class="c1"># Final render with custom styling for publication</span>
-<a id="__codelineno-136-5" name="__codelineno-136-5" href="#__codelineno-136-5"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>final.mp4<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-136-6" name="__codelineno-136-6" href="#__codelineno-136-6"></a><span class="w">    </span>--color-by<span class="w"> </span>track<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-136-7" name="__codelineno-136-7" href="#__codelineno-136-7"></a><span class="w">    </span>--palette<span class="w"> </span>tableau10<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-136-8" name="__codelineno-136-8" href="#__codelineno-136-8"></a><span class="w">    </span>--marker-shape<span class="w"> </span>diamond
+<div class="highlight"><pre><span></span><code><a id="__codelineno-139-1" name="__codelineno-139-1" href="#__codelineno-139-1"></a><span class="c1"># Quick preview to check predictions</span>
+<a id="__codelineno-139-2" name="__codelineno-139-2" href="#__codelineno-139-2"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>preview.mp4<span class="w"> </span>--preset<span class="w"> </span>preview
+<a id="__codelineno-139-3" name="__codelineno-139-3" href="#__codelineno-139-3"></a>
+<a id="__codelineno-139-4" name="__codelineno-139-4" href="#__codelineno-139-4"></a><span class="c1"># Final render with custom styling for publication</span>
+<a id="__codelineno-139-5" name="__codelineno-139-5" href="#__codelineno-139-5"></a>sio<span class="w"> </span>render<span class="w"> </span>predictions.slp<span class="w"> </span>-o<span class="w"> </span>final.mp4<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-139-6" name="__codelineno-139-6" href="#__codelineno-139-6"></a><span class="w">    </span>--color-by<span class="w"> </span>track<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-139-7" name="__codelineno-139-7" href="#__codelineno-139-7"></a><span class="w">    </span>--palette<span class="w"> </span>tableau10<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-139-8" name="__codelineno-139-8" href="#__codelineno-139-8"></a><span class="w">    </span>--marker-shape<span class="w"> </span>diamond
 </code></pre></div>
 <h3 id="creating-training-splits">Creating Training Splits<a class="headerlink" href="#creating-training-splits" title="Permanent link">&para;</a></h3>
 <p>Prepare datasets for machine learning with reproducible splits:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-137-1" name="__codelineno-137-1" href="#__codelineno-137-1"></a><span class="c1"># Standard 80/10/10 split for training</span>
-<a id="__codelineno-137-2" name="__codelineno-137-2" href="#__codelineno-137-2"></a>sio<span class="w"> </span>split<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>experiment1/<span class="w"> </span>--train<span class="w"> </span><span class="m">0</span>.8<span class="w"> </span>--test<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span>--seed<span class="w"> </span><span class="m">42</span>
-<a id="__codelineno-137-3" name="__codelineno-137-3" href="#__codelineno-137-3"></a>
-<a id="__codelineno-137-4" name="__codelineno-137-4" href="#__codelineno-137-4"></a><span class="c1"># Remove predictions and embed frames for portable training data</span>
-<a id="__codelineno-137-5" name="__codelineno-137-5" href="#__codelineno-137-5"></a>sio<span class="w"> </span>split<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>training_data/<span class="w"> </span>--remove-predictions<span class="w"> </span>--embed<span class="w"> </span>user<span class="w"> </span>--seed<span class="w"> </span><span class="m">42</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a><span class="c1"># Standard 80/10/10 split for training</span>
+<a id="__codelineno-140-2" name="__codelineno-140-2" href="#__codelineno-140-2"></a>sio<span class="w"> </span>split<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>experiment1/<span class="w"> </span>--train<span class="w"> </span><span class="m">0</span>.8<span class="w"> </span>--test<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span>--seed<span class="w"> </span><span class="m">42</span>
+<a id="__codelineno-140-3" name="__codelineno-140-3" href="#__codelineno-140-3"></a>
+<a id="__codelineno-140-4" name="__codelineno-140-4" href="#__codelineno-140-4"></a><span class="c1"># Remove predictions and embed frames for portable training data</span>
+<a id="__codelineno-140-5" name="__codelineno-140-5" href="#__codelineno-140-5"></a>sio<span class="w"> </span>split<span class="w"> </span>labels.slp<span class="w"> </span>-o<span class="w"> </span>training_data/<span class="w"> </span>--remove-predictions<span class="w"> </span>--embed<span class="w"> </span>user<span class="w"> </span>--seed<span class="w"> </span><span class="m">42</span>
 </code></pre></div>
 <p>The <code>--seed</code> option ensures you can recreate the exact same split later, which is essential for reproducible experiments. Note that the seed is sensitive to <code>--remove-predictions</code> since it changes the frame count—use the same options consistently.</p>
 <div class="admonition tip">
 <p class="admonition-title">NWB training annotations</p>
 <p>The CLI uses auto-detection for NWB format. For explicit control over NWB format (e.g., <code>annotations</code> vs <code>predictions</code> vs <code>annotations_export</code> with embedded video), use the Python API:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-138-1" name="__codelineno-138-1" href="#__codelineno-138-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
-<a id="__codelineno-138-2" name="__codelineno-138-2" href="#__codelineno-138-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-138-3" name="__codelineno-138-3" href="#__codelineno-138-3"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;training.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;annotations&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-141-2" name="__codelineno-141-2" href="#__codelineno-141-2"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-141-3" name="__codelineno-141-3" href="#__codelineno-141-3"></a><span class="n">sio</span><span class="o">.</span><span class="n">save_nwb</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;training.nwb&quot;</span><span class="p">,</span> <span class="n">nwb_format</span><span class="o">=</span><span class="s2">&quot;annotations&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p>See <a href="formats/#nwb-format-nwb">NWB Format</a> for details.</p>
 </div>
 <h3 id="merging-training-splits">Merging Training Splits<a class="headerlink" href="#merging-training-splits" title="Permanent link">&para;</a></h3>
 <p>After training experiments, you may want to recombine split files:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-139-1" name="__codelineno-139-1" href="#__codelineno-139-1"></a><span class="c1"># Merge all splits back into a single file</span>
-<a id="__codelineno-139-2" name="__codelineno-139-2" href="#__codelineno-139-2"></a>sio<span class="w"> </span>unsplit<span class="w"> </span>experiment1/<span class="w"> </span>-o<span class="w"> </span>combined.slp
-<a id="__codelineno-139-3" name="__codelineno-139-3" href="#__codelineno-139-3"></a>
-<a id="__codelineno-139-4" name="__codelineno-139-4" href="#__codelineno-139-4"></a><span class="c1"># Or specify files explicitly</span>
-<a id="__codelineno-139-5" name="__codelineno-139-5" href="#__codelineno-139-5"></a>sio<span class="w"> </span>unsplit<span class="w"> </span>train.slp<span class="w"> </span>val.slp<span class="w"> </span>test.slp<span class="w"> </span>-o<span class="w"> </span>combined.slp
+<div class="highlight"><pre><span></span><code><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a><span class="c1"># Merge all splits back into a single file</span>
+<a id="__codelineno-142-2" name="__codelineno-142-2" href="#__codelineno-142-2"></a>sio<span class="w"> </span>unsplit<span class="w"> </span>experiment1/<span class="w"> </span>-o<span class="w"> </span>combined.slp
+<a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a>
+<a id="__codelineno-142-4" name="__codelineno-142-4" href="#__codelineno-142-4"></a><span class="c1"># Or specify files explicitly</span>
+<a id="__codelineno-142-5" name="__codelineno-142-5" href="#__codelineno-142-5"></a>sio<span class="w"> </span>unsplit<span class="w"> </span>train.slp<span class="w"> </span>val.slp<span class="w"> </span>test.slp<span class="w"> </span>-o<span class="w"> </span>combined.slp
 </code></pre></div>
 <p>This is useful for:</p>
 <ul>
@@ -5772,39 +5847,39 @@ The positional form (e.g., <code>sio show labels.slp</code>) is simpler; the fla
 <p>Videos are automatically deduplicated if the splits were created with <code>sio split --embed</code>.</p>
 <h3 id="cicd-integration">CI/CD Integration<a class="headerlink" href="#cicd-integration" title="Permanent link">&para;</a></h3>
 <p>Use <code>uvx</code> in CI pipelines without installation overhead:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a><span class="c1"># GitHub Actions example</span>
-<a id="__codelineno-140-2" name="__codelineno-140-2" href="#__codelineno-140-2"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Validate labels file</span>
-<a id="__codelineno-140-3" name="__codelineno-140-3" href="#__codelineno-140-3"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io show labels.slp</span>
-<a id="__codelineno-140-4" name="__codelineno-140-4" href="#__codelineno-140-4"></a>
-<a id="__codelineno-140-5" name="__codelineno-140-5" href="#__codelineno-140-5"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Convert to NWB</span>
-<a id="__codelineno-140-6" name="__codelineno-140-6" href="#__codelineno-140-6"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io convert -i labels.slp -o labels.nwb</span>
-<a id="__codelineno-140-7" name="__codelineno-140-7" href="#__codelineno-140-7"></a>
-<a id="__codelineno-140-8" name="__codelineno-140-8" href="#__codelineno-140-8"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Create package with embedded frames</span>
-<a id="__codelineno-140-9" name="__codelineno-140-9" href="#__codelineno-140-9"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io convert -i labels.slp -o labels.pkg.slp --embed user</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-143-1" name="__codelineno-143-1" href="#__codelineno-143-1"></a><span class="c1"># GitHub Actions example</span>
+<a id="__codelineno-143-2" name="__codelineno-143-2" href="#__codelineno-143-2"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Validate labels file</span>
+<a id="__codelineno-143-3" name="__codelineno-143-3" href="#__codelineno-143-3"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io show labels.slp</span>
+<a id="__codelineno-143-4" name="__codelineno-143-4" href="#__codelineno-143-4"></a>
+<a id="__codelineno-143-5" name="__codelineno-143-5" href="#__codelineno-143-5"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Convert to NWB</span>
+<a id="__codelineno-143-6" name="__codelineno-143-6" href="#__codelineno-143-6"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io convert -i labels.slp -o labels.nwb</span>
+<a id="__codelineno-143-7" name="__codelineno-143-7" href="#__codelineno-143-7"></a>
+<a id="__codelineno-143-8" name="__codelineno-143-8" href="#__codelineno-143-8"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Create package with embedded frames</span>
+<a id="__codelineno-143-9" name="__codelineno-143-9" href="#__codelineno-143-9"></a><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uvx sleap-io convert -i labels.slp -o labels.pkg.slp --embed user</span>
 </code></pre></div>
 <hr />
 <h2 id="version-and-plugin-info">Version and Plugin Info<a class="headerlink" href="#version-and-plugin-info" title="Permanent link">&para;</a></h2>
 <p>Check installed version and available backends:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a>sio<span class="w"> </span>--version
+<div class="highlight"><pre><span></span><code><a id="__codelineno-144-1" name="__codelineno-144-1" href="#__codelineno-144-1"></a>sio<span class="w"> </span>--version
 </code></pre></div>
 <p><strong>Example output:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a>sleap-io 0.6.0
-<a id="__codelineno-142-2" name="__codelineno-142-2" href="#__codelineno-142-2"></a>python 3.12.11
-<a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a>
-<a id="__codelineno-142-4" name="__codelineno-142-4" href="#__codelineno-142-4"></a>Core:
-<a id="__codelineno-142-5" name="__codelineno-142-5" href="#__codelineno-142-5"></a>  numpy: 2.4.0
-<a id="__codelineno-142-6" name="__codelineno-142-6" href="#__codelineno-142-6"></a>  h5py: 3.15.1
-<a id="__codelineno-142-7" name="__codelineno-142-7" href="#__codelineno-142-7"></a>  imageio: 2.37.2
-<a id="__codelineno-142-8" name="__codelineno-142-8" href="#__codelineno-142-8"></a>  skia-python: 138.0
-<a id="__codelineno-142-9" name="__codelineno-142-9" href="#__codelineno-142-9"></a>  colorcet: 3.1.0
-<a id="__codelineno-142-10" name="__codelineno-142-10" href="#__codelineno-142-10"></a>
-<a id="__codelineno-142-11" name="__codelineno-142-11" href="#__codelineno-142-11"></a>Video plugins:
-<a id="__codelineno-142-12" name="__codelineno-142-12" href="#__codelineno-142-12"></a>  opencv: 4.8.1
-<a id="__codelineno-142-13" name="__codelineno-142-13" href="#__codelineno-142-13"></a>  pyav: 12.0.0
-<a id="__codelineno-142-14" name="__codelineno-142-14" href="#__codelineno-142-14"></a>  imageio-ffmpeg: 0.6.0
-<a id="__codelineno-142-15" name="__codelineno-142-15" href="#__codelineno-142-15"></a>
-<a id="__codelineno-142-16" name="__codelineno-142-16" href="#__codelineno-142-16"></a>Optional:
-<a id="__codelineno-142-17" name="__codelineno-142-17" href="#__codelineno-142-17"></a>  pymatreader: 0.0.32
+<div class="highlight"><pre><span></span><code><a id="__codelineno-145-1" name="__codelineno-145-1" href="#__codelineno-145-1"></a>sleap-io 0.6.0
+<a id="__codelineno-145-2" name="__codelineno-145-2" href="#__codelineno-145-2"></a>python 3.12.11
+<a id="__codelineno-145-3" name="__codelineno-145-3" href="#__codelineno-145-3"></a>
+<a id="__codelineno-145-4" name="__codelineno-145-4" href="#__codelineno-145-4"></a>Core:
+<a id="__codelineno-145-5" name="__codelineno-145-5" href="#__codelineno-145-5"></a>  numpy: 2.4.0
+<a id="__codelineno-145-6" name="__codelineno-145-6" href="#__codelineno-145-6"></a>  h5py: 3.15.1
+<a id="__codelineno-145-7" name="__codelineno-145-7" href="#__codelineno-145-7"></a>  imageio: 2.37.2
+<a id="__codelineno-145-8" name="__codelineno-145-8" href="#__codelineno-145-8"></a>  skia-python: 138.0
+<a id="__codelineno-145-9" name="__codelineno-145-9" href="#__codelineno-145-9"></a>  colorcet: 3.1.0
+<a id="__codelineno-145-10" name="__codelineno-145-10" href="#__codelineno-145-10"></a>
+<a id="__codelineno-145-11" name="__codelineno-145-11" href="#__codelineno-145-11"></a>Video plugins:
+<a id="__codelineno-145-12" name="__codelineno-145-12" href="#__codelineno-145-12"></a>  opencv: 4.8.1
+<a id="__codelineno-145-13" name="__codelineno-145-13" href="#__codelineno-145-13"></a>  pyav: 12.0.0
+<a id="__codelineno-145-14" name="__codelineno-145-14" href="#__codelineno-145-14"></a>  imageio-ffmpeg: 0.6.0
+<a id="__codelineno-145-15" name="__codelineno-145-15" href="#__codelineno-145-15"></a>
+<a id="__codelineno-145-16" name="__codelineno-145-16" href="#__codelineno-145-16"></a>Optional:
+<a id="__codelineno-145-17" name="__codelineno-145-17" href="#__codelineno-145-17"></a>  pymatreader: 0.0.32
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Troubleshooting video issues</p>
