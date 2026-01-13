@@ -8520,3 +8520,647 @@ def test_transform_config_file_video_index_out_of_range(tmp_path, slp_real_data)
     )
     assert result.exit_code != 0
     assert "out of range" in result.output.lower()
+
+
+def test_transform_fill_rgb_invalid_count():
+    """Test error when RGB fill doesn't have 3 values."""
+    import click
+
+    from sleap_io.io.cli import _parse_fill_value
+
+    with pytest.raises(click.ClickException, match="3 values"):
+        _parse_fill_value("128,128")  # Only 2 values
+
+    with pytest.raises(click.ClickException, match="3 values"):
+        _parse_fill_value("128,128,128,128")  # 4 values
+
+
+def test_transform_fill_value_out_of_range():
+    """Test error when fill value is outside 0-255 range."""
+    import click
+
+    from sleap_io.io.cli import _parse_fill_value
+
+    with pytest.raises(click.ClickException, match="0-255"):
+        _parse_fill_value("256")  # Too high
+
+    with pytest.raises(click.ClickException, match="0-255"):
+        _parse_fill_value("-1")  # Negative
+
+    with pytest.raises(click.ClickException, match="0-255"):
+        _parse_fill_value("128,256,128")  # RGB with one out of range
+
+
+def test_transform_fill_value_invalid_format():
+    """Test error when fill value is not parseable."""
+    import click
+
+    from sleap_io.io.cli import _parse_fill_value
+
+    with pytest.raises(click.ClickException, match="Invalid fill"):
+        _parse_fill_value("abc")  # Not a number
+
+    with pytest.raises(click.ClickException, match="Invalid fill"):
+        _parse_fill_value("12.5")  # Float
+
+
+def test_transform_config_videos_not_mapping(tmp_path, slp_real_data):
+    """Test error when 'videos' in config is not a mapping."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": [0.5]}  # List instead of dict
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "mapping" in result.output.lower()
+
+
+def test_transform_config_invalid_video_index(tmp_path, slp_real_data):
+    """Test error when video index in config is not an integer."""
+    runner = CliRunner()
+
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        f.write("videos:\n  'not_an_int':\n    scale: 0.5\n")
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "invalid video index" in result.output.lower()
+
+
+def test_transform_config_video_config_not_mapping(tmp_path, slp_real_data):
+    """Test error when video config entry is not a mapping."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: "not a dict"}}  # String instead of dict
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "mapping" in result.output.lower()
+
+
+def test_transform_config_invalid_crop_value(tmp_path, slp_real_data):
+    """Test error when crop value in config is invalid."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"crop": "invalid"}}}
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    # Error could be in output or exception
+    error_text = result.output.lower() + str(result.exception).lower()
+    assert "crop" in error_text or "invalid" in error_text
+
+
+def test_transform_config_invalid_scale_value(tmp_path, slp_real_data):
+    """Test error when scale value in config is invalid."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"scale": "invalid"}}}
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    # Error could be in output or exception
+    error_text = result.output.lower() + str(result.exception).lower()
+    assert "scale" in error_text or "float" in error_text or "invalid" in error_text
+
+
+def test_transform_config_invalid_rotate_value(tmp_path, slp_real_data):
+    """Test error when rotate value in config is invalid."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"rotate": "not_a_number"}}}
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    # Error could be in output or exception
+    error_text = result.output.lower() + str(result.exception).lower()
+    assert "rotate" in error_text or "invalid" in error_text
+
+
+def test_transform_config_invalid_pad_value(tmp_path, slp_real_data):
+    """Test error when pad value in config is invalid."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"pad": "invalid"}}}
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    # Error could be in output or exception
+    error_text = result.output.lower() + str(result.exception).lower()
+    assert "pad" in error_text or "invalid" in error_text
+
+
+def test_transform_config_pad_wrong_count(tmp_path, slp_real_data):
+    """Test error when pad in config has wrong number of values."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"pad": [10, 20]}}}  # 2 values instead of 1 or 4
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "pad" in result.output.lower()
+
+
+def test_transform_config_null_video(tmp_path, slp_real_data):
+    """Test config with null video config (no transforms for that video)."""
+    import yaml
+
+    runner = CliRunner()
+
+    # When ALL videos have null config, no transforms are specified -> error
+    config = {"videos": {0: None}}  # Null means no transforms
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    # Should fail because no transforms are specified
+    assert result.exit_code != 0
+    assert "no valid transforms" in result.output.lower()
+
+
+def test_transform_config_normalized_crop(tmp_path, slp_real_data):
+    """Test config with normalized crop values (0-1 range)."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"crop": [0.1, 0.1, 0.9, 0.9]}}}  # Normalized coords
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_transform_config_pixel_crop(tmp_path, slp_real_data):
+    """Test config with pixel crop values."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"crop": [10, 10, 300, 300]}}}  # Pixel coords
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_transform_config_scale_uniform_ratio(tmp_path, slp_real_data):
+    """Test config with uniform scale ratio."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"scale": 0.5}}}  # Single value < 1 = ratio
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "192x192" in result.output  # 384 * 0.5 = 192
+
+
+def test_transform_config_scale_pixel_width(tmp_path, slp_real_data):
+    """Test config with scale as target pixel width."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"scale": 200}}}  # Single value >= 1 = pixel width
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "200x200" in result.output
+
+
+def test_transform_config_scale_tuple_ratios(tmp_path, slp_real_data):
+    """Test config with scale as tuple of ratios."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"scale": [0.5, 0.25]}}}  # Different x/y ratios
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "192x96" in result.output  # 384 * 0.5 = 192, 384 * 0.25 = 96
+
+
+def test_transform_config_scale_tuple_pixels(tmp_path, slp_real_data):
+    """Test config with scale as tuple of pixel dimensions."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"scale": [200, 100]}}}  # Pixel dimensions
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "200x100" in result.output
+
+
+def test_transform_config_pad_single_value(tmp_path, slp_real_data):
+    """Test config with single-value pad (uniform padding)."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"pad": 10}}}  # Single int = uniform padding
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "404x404" in result.output  # 384 + 10 + 10 = 404
+
+
+def test_transform_config_pad_single_value_list(tmp_path, slp_real_data):
+    """Test config with single-value pad as list."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"videos": {0: {"pad": [10]}}}  # Single-element list = uniform
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "404x404" in result.output
+
+
+def test_transform_config_with_flip_options(tmp_path, slp_real_data):
+    """Test config with per-video flip options."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {
+        "videos": {
+            0: {
+                "scale": 0.5,
+                "flip_horizontal": True,
+                "flip_vertical": True,
+            }
+        }
+    }
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_transform_config_with_clip_rotation(tmp_path, slp_real_data):
+    """Test config with per-video clip_rotation option."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {
+        "videos": {
+            0: {
+                "rotate": 45,
+                "clip_rotation": True,
+            }
+        }
+    }
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    # With clip_rotation, dimensions stay at 384x384
+    assert "384x384" in result.output
+
+
+def test_transform_output_transforms_metadata(tmp_path, slp_real_data):
+    """Test --output-transforms exports metadata to YAML."""
+    runner = CliRunner()
+
+    output_path = tmp_path / "output.slp"
+    metadata_path = tmp_path / "transforms.yaml"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--scale",
+            "0.5",
+            "-o",
+            str(output_path),
+            "--output-transforms",
+            str(metadata_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+    assert metadata_path.exists()
+
+    # Verify metadata content
+    import yaml
+
+    with open(metadata_path) as f:
+        metadata = yaml.safe_load(f)
+
+    assert "videos" in metadata
+    assert "generated" in metadata
+    assert "sleap_io_version" in metadata
+
+
+def test_transform_embed_provenance_embedded_video(tmp_path, slp_minimal_pkg):
+    """Test --embed-provenance with embedded video updates HDF5 file."""
+    import json
+
+    import h5py
+
+    runner = CliRunner()
+
+    output_path = tmp_path / "output.pkg.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_minimal_pkg),
+            "--scale",
+            "0.5",
+            "-o",
+            str(output_path),
+            "--embed-provenance",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+    # Verify provenance was embedded in HDF5
+    with h5py.File(output_path, "r") as f:
+        assert "provenance" in f
+        assert "transform_json" in f["provenance"]
+        transform_json = f["provenance/transform_json"][()].decode()
+        metadata = json.loads(transform_json)
+        assert "videos" in metadata
