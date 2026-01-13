@@ -1086,6 +1086,52 @@ class TestVideoTransforms:
         assert len(summary["warnings"]) > 0
         assert "small" in summary["warnings"][0].lower()
 
+    def test_compute_transform_summary_crop_oob_warning(self, slp_real_data):
+        """Test warning when crop extends outside frame bounds."""
+        import sleap_io as sio
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Crop that extends outside the frame
+        transform = Transform(crop=(-10, -10, 100, 100))
+        summary = compute_transform_summary(labels, transform)
+
+        # Should have a warning about crop extending outside
+        warnings_text = " ".join(summary["warnings"]).lower()
+        assert "crop" in warnings_text and "outside" in warnings_text
+
+    def test_compute_transform_summary_rotation_clip_warning(self, slp_real_data):
+        """Test warning when rotation clips >20% of frame with clip_rotation."""
+        import sleap_io as sio
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Large rotation with clipping enabled
+        transform = Transform(rotate=45, clip_rotation=True)
+        summary = compute_transform_summary(labels, transform)
+
+        # Should have a warning about rotation clipping
+        warnings_text = " ".join(summary["warnings"]).lower()
+        assert "rotation" in warnings_text and "clip" in warnings_text
+
+    def test_compute_transform_summary_dimension_rounding_warning(self, slp_real_data):
+        """Test warning when dimensions require rounding."""
+        import sleap_io as sio
+        from sleap_io.transform.video import compute_transform_summary
+
+        labels = sio.load_slp(slp_real_data)
+
+        # Scale that results in non-integer dimensions
+        # 384 * 0.333 = 127.872, which needs rounding
+        transform = Transform(scale=(0.333, 0.333))
+        summary = compute_transform_summary(labels, transform)
+
+        # Should have a warning about rounding
+        warnings_text = " ".join(summary["warnings"]).lower()
+        assert "round" in warnings_text
+
     def test_compute_transform_summary_no_transform(self, slp_real_data):
         """Test compute_transform_summary when video has no transform."""
         import sleap_io as sio

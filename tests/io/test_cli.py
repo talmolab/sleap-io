@@ -8209,3 +8209,314 @@ def test_transform_flip_vertical(tmp_path, centered_pair_low_quality_path):
     assert "Transform Summary" in result.output
     # Dimensions should stay the same
     assert "384x384 -> 384x384" in result.output
+
+
+def test_transform_config_file(tmp_path, slp_real_data):
+    """Test --config option for loading transforms from YAML."""
+    import yaml
+
+    runner = CliRunner()
+
+    # Create a config file
+    config = {
+        "videos": {
+            0: {
+                "scale": 0.5,
+            }
+        }
+    }
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Loading config:" in result.output
+    assert "Transform Summary" in result.output
+
+
+def test_transform_config_file_not_found(tmp_path, slp_real_data):
+    """Test error when config file doesn't exist."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(tmp_path / "nonexistent.yaml"),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    # click.Path with exists=True will raise an error before our code
+    assert result.exit_code != 0
+
+
+def test_transform_config_file_with_cli_override(tmp_path, slp_real_data):
+    """Test that CLI params override config file transforms."""
+    import yaml
+
+    runner = CliRunner()
+
+    # Create a config file with scale 0.5
+    config = {
+        "videos": {
+            0: {
+                "scale": 0.5,
+            }
+        }
+    }
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    # CLI override with scale 0.25
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "--scale",
+            "0.25",
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    # The output size should reflect 0.25 scale, not 0.5
+    assert "Transform Summary" in result.output
+
+
+def test_transform_output_transforms(tmp_path, slp_real_data):
+    """Test --output-transforms option for exporting metadata to YAML."""
+    import yaml
+
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+    transforms_yaml = tmp_path / "transforms_output.yaml"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--scale",
+            "0.5",
+            "-o",
+            str(output_slp),
+            "--output-transforms",
+            str(transforms_yaml),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert transforms_yaml.exists()
+    assert "Transform metadata:" in result.output
+
+    # Verify the contents of the YAML file
+    with open(transforms_yaml) as f:
+        metadata = yaml.safe_load(f)
+
+    assert "generated" in metadata
+    assert "source" in metadata
+    assert "sleap_io_version" in metadata
+    assert "videos" in metadata
+    assert 0 in metadata["videos"]
+    assert "transforms" in metadata["videos"][0]
+
+
+def test_transform_embed_provenance(tmp_path, slp_real_data):
+    """Test --embed-provenance option for storing metadata in output SLP."""
+    import sleap_io as sio
+
+    runner = CliRunner()
+    output_slp = tmp_path / "output.slp"
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--scale",
+            "0.5",
+            "-o",
+            str(output_slp),
+            "--embed-provenance",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Load the output and check for provenance
+    labels = sio.load_slp(str(output_slp))
+    assert "transform" in labels.provenance
+    transform_meta = labels.provenance["transform"]
+    assert "generated" in transform_meta
+    assert "videos" in transform_meta
+
+
+def test_transform_config_file_crop(tmp_path, slp_real_data):
+    """Test config file with crop as list."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {
+        "videos": {
+            0: {
+                "crop": [10, 10, 100, 100],
+            }
+        }
+    }
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "90x90" in result.output  # 100-10 = 90
+
+
+def test_transform_config_file_pad(tmp_path, slp_real_data):
+    """Test config file with padding."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {
+        "videos": {
+            0: {
+                "pad": [10, 10, 10, 10],
+            }
+        }
+    }
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    # Original is 384x384, with 10px padding all around -> 404x404
+    assert "404x404" in result.output
+
+
+def test_transform_config_file_invalid_yaml(tmp_path, slp_real_data):
+    """Test error on invalid YAML in config file."""
+    runner = CliRunner()
+
+    # Create an invalid YAML file
+    config_path = tmp_path / "invalid.yaml"
+    with open(config_path, "w") as f:
+        f.write("not: valid: yaml: {unclosed")
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Invalid YAML" in result.output
+
+
+def test_transform_config_file_missing_videos_key(tmp_path, slp_real_data):
+    """Test error when config file is missing 'videos' key."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {"transforms": {}}  # Wrong key
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "videos" in result.output.lower()
+
+
+def test_transform_config_file_video_index_out_of_range(tmp_path, slp_real_data):
+    """Test error when config references non-existent video index."""
+    import yaml
+
+    runner = CliRunner()
+
+    config = {
+        "videos": {
+            99: {  # Non-existent video
+                "scale": 0.5,
+            }
+        }
+    }
+    config_path = tmp_path / "transforms.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    result = runner.invoke(
+        cli,
+        [
+            "transform",
+            str(slp_real_data),
+            "--config",
+            str(config_path),
+            "-o",
+            str(tmp_path / "output.slp"),
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "out of range" in result.output.lower()

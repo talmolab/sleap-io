@@ -5451,6 +5451,310 @@ def _build_transforms_from_params(
     return transforms
 
 
+def _load_config_file(
+    config_path: Path,
+    input_sizes: list[tuple[int, int]],
+    quality: str,
+    fill: tuple[int, ...] | int,
+    clip_rotation: bool = False,
+    flip_h: bool = False,
+    flip_v: bool = False,
+) -> dict[int, Any]:
+    """Load transforms from a YAML config file.
+
+    Args:
+        config_path: Path to the YAML configuration file.
+        input_sizes: List of (width, height) for each video.
+        quality: Interpolation quality.
+        fill: Fill value for out-of-bounds regions.
+        clip_rotation: If True, clip rotation to original dimensions.
+        flip_h: If True, flip horizontally.
+        flip_v: If True, flip vertically.
+
+    Returns:
+        Dictionary mapping video index to Transform.
+
+    Raises:
+        click.ClickException: If config file is invalid.
+
+    Config file format:
+        ```yaml
+        videos:
+          0:
+            crop: [100, 100, 500, 500]
+            scale: 0.5
+            rotate: 0
+            pad: [0, 0, 0, 0]
+          1:
+            crop: [200, 200, 600, 600]
+            scale: [640, -1]
+            rotate: 90
+        ```
+    """
+    import yaml
+
+    from sleap_io.transform import Transform
+    from sleap_io.transform.core import (
+        parse_crop,
+        parse_pad,
+        parse_scale,
+        resolve_scale,
+    )
+
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+    except FileNotFoundError:
+        raise click.ClickException(f"Config file not found: {config_path}")
+    except yaml.YAMLError as e:
+        raise click.ClickException(f"Invalid YAML in config file: {e}")
+
+    if not isinstance(config, dict) or "videos" not in config:
+        raise click.ClickException(
+            "Config file must have a 'videos' key with video index mappings."
+        )
+
+    videos_config = config["videos"]
+    if not isinstance(videos_config, dict):
+        raise click.ClickException("'videos' must be a mapping of video indices.")
+
+    transforms = {}
+    n_videos = len(input_sizes)
+
+    for video_idx_raw, video_config in videos_config.items():
+        # Parse video index
+        try:
+            video_idx = int(video_idx_raw)
+        except (ValueError, TypeError):
+            raise click.ClickException(
+                f"Invalid video index in config: {video_idx_raw}"
+            )
+
+        if video_idx >= n_videos:
+            raise click.ClickException(
+                f"Video index {video_idx} out of range (have {n_videos} videos)"
+            )
+
+        if video_config is None:
+            # No transforms for this video
+            continue
+
+        if not isinstance(video_config, dict):
+            raise click.ClickException(
+                f"Config for video {video_idx} must be a mapping, "
+                f"got: {type(video_config).__name__}"
+            )
+
+        input_size = input_sizes[video_idx]
+
+        # Parse crop
+        crop = None
+        if "crop" in video_config:
+            crop_val = video_config["crop"]
+            if isinstance(crop_val, (list, tuple)) and len(crop_val) == 4:
+                # Check if normalized (all floats in 0-1)
+                if all(isinstance(v, float) and 0 <= v <= 1 for v in crop_val):
+                    w, h = input_size
+                    crop = (
+                        int(round(crop_val[0] * w)),
+                        int(round(crop_val[1] * h)),
+                        int(round(crop_val[2] * w)),
+                        int(round(crop_val[3] * h)),
+                    )
+                else:
+                    crop = tuple(int(v) for v in crop_val)  # type: ignore
+            elif isinstance(crop_val, str):
+                crop = parse_crop(crop_val, input_size)
+            else:
+                raise click.ClickException(
+                    f"Invalid crop value for video {video_idx}: {crop_val}"
+                )
+
+        # Parse scale
+        scale = None
+        if "scale" in video_config:
+            scale_val = video_config["scale"]
+            if isinstance(scale_val, (int, float)):
+                # Single value - uniform scale
+                if scale_val < 1 and scale_val > 0:
+                    scale = (scale_val, scale_val)
+                else:
+                    # Pixel width
+                    parsed = (-float(scale_val), -1.0)
+                    scale = resolve_scale(parsed, input_size)
+            elif isinstance(scale_val, (list, tuple)) and len(scale_val) == 2:
+                # Check if ratios or pixels
+                val1, val2 = scale_val
+                if all(isinstance(v, float) and 0 < v < 1 for v in scale_val if v > 0):
+                    scale = (val1 if val1 > 0 else -1.0, val2 if val2 > 0 else -1.0)
+                    if scale[0] == -1.0 or scale[1] == -1.0:
+                        scale = resolve_scale(scale, input_size)
+                else:
+                    # Pixels
+                    parsed = (
+                        -float(val1) if val1 > 0 else val1,
+                        -float(val2) if val2 > 0 else val2,
+                    )
+                    scale = resolve_scale(parsed, input_size)
+            elif isinstance(scale_val, str):
+                parsed = parse_scale(scale_val)
+                scale = resolve_scale(parsed, input_size)
+            else:
+                raise click.ClickException(
+                    f"Invalid scale value for video {video_idx}: {scale_val}"
+                )
+
+        # Parse rotate
+        rotate = None
+        if "rotate" in video_config:
+            rotate_val = video_config["rotate"]
+            try:
+                rotate = float(rotate_val)
+            except (ValueError, TypeError):
+                raise click.ClickException(
+                    f"Invalid rotate value for video {video_idx}: {rotate_val}"
+                )
+
+        # Parse pad
+        pad = None
+        if "pad" in video_config:
+            pad_val = video_config["pad"]
+            if isinstance(pad_val, (list, tuple)):
+                if len(pad_val) == 4:
+                    pad = tuple(int(v) for v in pad_val)  # type: ignore
+                elif len(pad_val) == 1:
+                    p = int(pad_val[0])
+                    pad = (p, p, p, p)
+                else:
+                    raise click.ClickException(
+                        f"Pad must have 1 or 4 values for video {video_idx}"
+                    )
+            elif isinstance(pad_val, int):
+                pad = (pad_val, pad_val, pad_val, pad_val)
+            elif isinstance(pad_val, str):
+                pad = parse_pad(pad_val)
+            else:
+                raise click.ClickException(
+                    f"Invalid pad value for video {video_idx}: {pad_val}"
+                )
+
+        # Parse flip options (per-video override)
+        video_flip_h = video_config.get("flip_horizontal", flip_h)
+        video_flip_v = video_config.get("flip_vertical", flip_v)
+
+        # Parse clip_rotation (per-video override)
+        video_clip_rotation = video_config.get("clip_rotation", clip_rotation)
+
+        # Build transform
+        transform = Transform(
+            crop=crop,
+            scale=scale,
+            rotate=rotate,
+            pad=pad,
+            quality=quality,
+            fill=fill,
+            clip_rotation=video_clip_rotation,
+            flip_h=video_flip_h,
+            flip_v=video_flip_v,
+        )
+
+        if transform:
+            transforms[video_idx] = transform
+
+    return transforms
+
+
+def _generate_transform_metadata(
+    labels: "Labels",
+    transforms: dict[int, Any],
+    source_path: Path,
+    output_path: Path,
+) -> dict:
+    """Generate transform metadata for output.
+
+    Args:
+        labels: Source Labels object.
+        transforms: Dictionary mapping video index to Transform.
+        source_path: Path to source file.
+        output_path: Path to output file.
+
+    Returns:
+        Dictionary with transform metadata.
+    """
+    from datetime import datetime, timezone
+
+    from sleap_io.version import __version__
+
+    metadata = {
+        "generated": datetime.now(timezone.utc).isoformat(),
+        "source": str(source_path),
+        "output": str(output_path),
+        "sleap_io_version": __version__,
+        "videos": {},
+    }
+
+    for video_idx, video in enumerate(labels.videos):
+        if video_idx not in transforms:
+            continue
+
+        transform = transforms[video_idx]
+
+        # Get video dimensions
+        if hasattr(video, "shape") and video.shape is not None:
+            h, w = video.shape[1:3]
+            input_size = (w, h)
+        else:
+            input_size = None
+
+        video_meta = {
+            "input": video.filename,
+            "input_size": list(input_size) if input_size else None,
+        }
+
+        if input_size:
+            output_size = transform.output_size(input_size)
+            video_meta["output_size"] = list(output_size)
+
+            # Include affine transformation matrix
+            matrix = transform.to_matrix(input_size)
+            video_meta["coordinate_transform"] = {
+                "matrix": matrix.tolist(),
+            }
+
+        # Include transform parameters
+        video_meta["transforms"] = {
+            "crop": list(transform.crop) if transform.crop else None,
+            "scale": list(transform.scale) if transform.scale else None,
+            "rotate": transform.rotate,
+            "pad": list(transform.pad) if transform.pad else None,
+            "flip_horizontal": transform.flip_h,
+            "flip_vertical": transform.flip_v,
+        }
+
+        metadata["videos"][video_idx] = video_meta
+
+    return metadata
+
+
+def _export_transform_metadata(metadata: dict, output_path: Path) -> None:
+    """Export transform metadata to YAML file.
+
+    Args:
+        metadata: Transform metadata dictionary.
+        output_path: Path to output YAML file.
+    """
+    import yaml
+
+    # Custom representer to handle numpy arrays and other types
+    def represent_data(dumper: yaml.Dumper, data: Any) -> Any:
+        if hasattr(data, "tolist"):
+            return dumper.represent_list(data.tolist())
+        return dumper.represent_data(data)
+
+    with open(output_path, "w") as f:
+        yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
+
+
 @cli.command()
 @click.argument(
     "input_arg",
@@ -5473,6 +5777,26 @@ def _build_transforms_from_params(
     default=None,
     type=click.Path(path_type=Path),
     help="Output path. Default: {input}.transformed.slp or .mp4.",
+)
+@click.option(
+    "--config",
+    "config_path",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="YAML config file with per-video transforms.",
+)
+@click.option(
+    "--output-transforms",
+    "output_transforms_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Export transform metadata to YAML file.",
+)
+@click.option(
+    "--embed-provenance",
+    is_flag=True,
+    default=False,
+    help="Store transform metadata in output SLP file.",
 )
 # Transform options (can be repeated with idx: prefix for per-video)
 @click.option(
@@ -5594,6 +5918,9 @@ def transform(
     input_arg: Path | None,
     input_opt: Path | None,
     output_path: Path | None,
+    config_path: Path | None,
+    output_transforms_path: Path | None,
+    embed_provenance: bool,
     crop_params: tuple[str, ...],
     scale_params: tuple[str, ...],
     rotate_params: tuple[str, ...],
@@ -5720,11 +6047,14 @@ def transform(
             f"Output file already exists: {output_path}\nUse --overwrite to replace it."
         )
 
-    # Validate that at least one transform is specified
-    if not any([crop_params, scale_params, rotate_params, pad_params, flip_h, flip_v]):
+    # Validate that at least one transform source is specified
+    has_cli_transforms = any(
+        [crop_params, scale_params, rotate_params, pad_params, flip_h, flip_v]
+    )
+    if not has_cli_transforms and not config_path:
         raise click.ClickException(
             "No transforms specified. Use --crop, --scale, --rotate, --pad, "
-            "--flip-horizontal, or --flip-vertical."
+            "--flip-horizontal, --flip-vertical, or --config."
         )
 
     # Load SLP file
@@ -5747,14 +6077,12 @@ def transform(
                 f"Cannot determine dimensions for video: {video.filename}"
             )
 
-    # Build transforms from parameters
-    try:
-        transforms = _build_transforms_from_params(
-            n_videos=len(labels.videos),
-            crop_params=crop_params,
-            scale_params=scale_params,
-            rotate_params=rotate_params,
-            pad_params=pad_params,
+    # Build transforms from config file first (lowest precedence)
+    transforms: dict[int, Any] = {}
+    if config_path:
+        console.print(f"[dim]  Loading config: {config_path}[/]")
+        transforms = _load_config_file(
+            config_path=config_path,
             input_sizes=input_sizes,
             quality=quality,
             fill=fill_value,
@@ -5762,8 +6090,27 @@ def transform(
             flip_h=flip_h,
             flip_v=flip_v,
         )
-    except ValueError as e:
-        raise click.ClickException(str(e))
+
+    # Build transforms from CLI parameters (higher precedence)
+    if has_cli_transforms:
+        try:
+            cli_transforms = _build_transforms_from_params(
+                n_videos=len(labels.videos),
+                crop_params=crop_params,
+                scale_params=scale_params,
+                rotate_params=rotate_params,
+                pad_params=pad_params,
+                input_sizes=input_sizes,
+                quality=quality,
+                fill=fill_value,
+                clip_rotation=clip_rotation,
+                flip_h=flip_h,
+                flip_v=flip_v,
+            )
+            # CLI params override config file
+            transforms.update(cli_transforms)
+        except ValueError as e:
+            raise click.ClickException(str(e))
 
     if not transforms:
         raise click.ClickException("No valid transforms specified.")
@@ -5891,10 +6238,47 @@ def transform(
     from sleap_io.transform.video import _is_embedded_video
 
     has_embedded = any(_is_embedded_video(v) for v in labels.videos)
+
+    # Generate transform metadata
+    metadata = _generate_transform_metadata(
+        labels=labels,
+        transforms=transforms,
+        source_path=input_path,
+        output_path=output_path,
+    )
+
+    # Embed provenance in output SLP if requested
+    if embed_provenance:
+        transformed_labels.provenance["transform"] = metadata
+
     if not has_embedded:
         console.print(f"\n[bold]Saving SLP:[/] {output_path}")
         transformed_labels.save(str(output_path))
+    elif embed_provenance:
+        # For embedded videos, we need to update the provenance in the file
+        # since it was already saved
+        import json
+
+        import h5py
+
+        with h5py.File(output_path, "a") as f:
+            if "provenance" not in f:
+                f.create_group("provenance")
+            # Store transform metadata as JSON
+            if "transform_json" in f["provenance"]:
+                del f["provenance/transform_json"]
+            f["provenance"].create_dataset(
+                "transform_json",
+                data=json.dumps(metadata),
+                dtype=h5py.special_dtype(vlen=str),
+            )
+
     console.print(f"[bold green]Saved:[/] {output_path}")
+
+    # Export transform metadata to YAML if requested
+    if output_transforms_path:
+        _export_transform_metadata(metadata, output_transforms_path)
+        console.print(f"[bold green]Transform metadata:[/] {output_transforms_path}")
 
 
 def _transform_video_file(

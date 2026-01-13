@@ -562,8 +562,15 @@ def compute_transform_summary(
         transforms: Either a single Transform or dict mapping video indices.
 
     Returns:
-        Dictionary with transform summary information.
+        Dictionary with transform summary information including warnings for:
+        - Rotation clips >20% of frame area
+        - Landmarks go out of bounds
+        - Output size <32px in any dimension
+        - Non-integer dimensions (rounding applied)
+        - Crop extends outside frame (padding applied)
     """
+    import numpy as np
+
     # Normalize transforms to dict
     if isinstance(transforms, Transform):
         transforms_dict = {i: transforms for i in range(len(labels.videos))}
@@ -597,26 +604,136 @@ def compute_transform_summary(
         else:
             video_info["input_size"] = None
             video_info["n_frames"] = None
+            input_size = None
 
-        # Compute output size
-        if transform and video_info["input_size"]:
+        # Compute output size and generate warnings
+        if transform and input_size:
             output_size = transform.output_size(input_size)
             video_info["output_size"] = output_size
-
-            # Check for warnings
             out_w, out_h = output_size
+            in_w, in_h = input_size
+
+            # Warning: Output size very small (<32px)
             if out_w < 32 or out_h < 32:
                 summary["warnings"].append(
                     f"Video {video_idx}: Output size very small ({out_w}x{out_h})"
                 )
 
-        # Count instances for this video
+            # Warning: Crop extends outside frame (padding applied)
+            if transform.crop:
+                x1, y1, x2, y2 = transform.crop
+                if x1 < 0 or y1 < 0 or x2 > in_w or y2 > in_h:
+                    summary["warnings"].append(
+                        f"Video {video_idx}: Crop extends outside frame, "
+                        f"padding will be applied"
+                    )
+
+            # Warning: Rotation clips >20% of frame
+            if transform.rotate and transform.rotate != 0 and transform.clip_rotation:
+                # Calculate how much area is lost when clipping rotation
+                angle_rad = np.radians(abs(transform.rotate))
+                cos_a = abs(np.cos(angle_rad))
+                sin_a = abs(np.sin(angle_rad))
+
+                # Get the size after crop/scale (before rotation)
+                pre_rotate_w, pre_rotate_h = in_w, in_h
+                if transform.crop:
+                    x1, y1, x2, y2 = transform.crop
+                    pre_rotate_w = x2 - x1
+                    pre_rotate_h = y2 - y1
+                if transform.scale:
+                    scale_x, scale_y = transform.scale
+                    pre_rotate_w = int(round(pre_rotate_w * scale_x))
+                    pre_rotate_h = int(round(pre_rotate_h * scale_y))
+
+                # Expanded dimensions without clipping
+                expanded_w = int(np.ceil(pre_rotate_w * cos_a + pre_rotate_h * sin_a))
+                expanded_h = int(np.ceil(pre_rotate_w * sin_a + pre_rotate_h * cos_a))
+
+                # Calculate area loss percentage
+                original_area = pre_rotate_w * pre_rotate_h
+                expanded_area = expanded_w * expanded_h
+
+                # The clipped content is the original minus what fits in the rotated box
+                # For a simpler estimate, use the ratio of areas
+                if expanded_area > original_area:
+                    clip_fraction = 1 - (original_area / expanded_area)
+                    clip_pct = clip_fraction * 100
+                    if clip_pct > 20:
+                        summary["warnings"].append(
+                            f"Video {video_idx}: Rotation will clip ~{clip_pct:.0f}% "
+                            f"of frame area"
+                        )
+
+            # Warning: Non-integer dimensions (rounding)
+            if transform.scale:
+                scale_x, scale_y = transform.scale
+                # Get pre-scale dimensions
+                pre_scale_w, pre_scale_h = in_w, in_h
+                if transform.crop:
+                    x1, y1, x2, y2 = transform.crop
+                    pre_scale_w = x2 - x1
+                    pre_scale_h = y2 - y1
+
+                # Calculate exact dimensions
+                exact_w = pre_scale_w * scale_x
+                exact_h = pre_scale_h * scale_y
+                rounded_w = int(round(exact_w))
+                rounded_h = int(round(exact_h))
+
+                # Check if rounding was needed
+                if abs(exact_w - rounded_w) > 0.01 or abs(exact_h - rounded_h) > 0.01:
+                    summary["warnings"].append(
+                        f"Video {video_idx}: Dimensions rounded: "
+                        f"{exact_w:.1f}x{exact_h:.1f} -> {rounded_w}x{rounded_h}"
+                    )
+
+        # Count instances and check for OOB landmarks
         n_instances = 0
-        for lf in labels.labeled_frames:
-            if lf.video is video:
-                n_instances += len(lf.instances)
+        n_oob_landmarks = 0
+
+        if transform and input_size:
+            output_size = transform.output_size(input_size)
+            out_w, out_h = output_size
+
+            for lf in labels.labeled_frames:
+                if lf.video is video:
+                    n_instances += len(lf.instances)
+
+                    for instance in lf.instances:
+                        points = instance.numpy(invisible_as_nan=False)
+                        if points.size == 0:
+                            continue
+
+                        # Transform points to output space
+                        transformed = transform.apply_to_points(points, input_size)
+
+                        # Check for OOB (excluding NaN points)
+                        valid_mask = ~np.isnan(transformed).any(axis=-1)
+                        valid_points = transformed[valid_mask]
+
+                        if valid_points.size > 0:
+                            oob = (
+                                (valid_points[:, 0] < 0)
+                                | (valid_points[:, 0] >= out_w)
+                                | (valid_points[:, 1] < 0)
+                                | (valid_points[:, 1] >= out_h)
+                            )
+                            n_oob_landmarks += np.sum(oob)
+        else:
+            for lf in labels.labeled_frames:
+                if lf.video is video:
+                    n_instances += len(lf.instances)
+
         video_info["n_instances"] = n_instances
         summary["total_instances"] += n_instances
+
+        # Warning: Landmarks go out of bounds
+        if n_oob_landmarks > 0:
+            summary["warnings"].append(
+                f"Video {video_idx}: {n_oob_landmarks} landmark(s) will be "
+                f"outside frame bounds"
+            )
 
         # Add transform details
         if transform:
