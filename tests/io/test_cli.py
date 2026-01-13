@@ -4851,6 +4851,50 @@ def test_fix_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     assert output_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
+def test_fix_preserves_embedded_frames_hdf5(tmp_path, slp_real_data):
+    """Test that fix actually copies embedded video data to output HDF5 file.
+
+    This is a more thorough test that verifies:
+    1. The HDF5 file contains video datasets
+    2. The frames can actually be read from the output file
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # First, create a pkg.slp with embedded videos
+    embedded_path = tmp_path / "embedded.pkg.slp"
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input HDF5 has video data
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    # Run fix command
+    output_path = tmp_path / "fixed.pkg.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(embedded_path), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify the output file is usable - can load and read frames
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
+
+
 def test_fix_consolidate_skeletons(tmp_path):
     """Test fix --consolidate-skeletons keeps most frequent skeleton."""
     import numpy as np

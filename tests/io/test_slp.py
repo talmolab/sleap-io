@@ -3731,3 +3731,87 @@ def test_fps_backward_compatibility(tmp_path, slp_real_data):
     # Should still load - FPS comes from container for MediaVideo
     reloaded = read_labels(labels_path)
     assert reloaded.video.fps == 15.0  # Read from container
+
+
+def test_write_videos_preserves_embedded_without_backend(tmp_path, slp_minimal_pkg):
+    """Test that embedded videos are preserved when loaded with open_videos=False.
+
+    This tests the fix for the bug where `sio fix` and other commands that load
+    with `open_videos=False` would lose embedded video data when saving.
+    """
+    from sleap_io.io.slp import VideoReferenceMode
+
+    # Load with open_videos=False (as sio fix does)
+    labels = read_labels(slp_minimal_pkg, open_videos=False)
+    assert labels.videos[0].backend is None  # No backend due to open_videos=False
+
+    # Verify the video has embedded metadata
+    meta = labels.videos[0].backend_metadata
+    assert meta is not None
+    assert meta.get("filename") == "."  # Marker for embedded
+    assert "dataset" in meta
+
+    # Save to new file (EMBED mode should preserve embedded data)
+    output = tmp_path / "test_preserve_embedded.pkg.slp"
+    write_videos(str(output), labels.videos, reference_mode=VideoReferenceMode.EMBED)
+
+    # Verify the embedded video data was copied
+    with h5py.File(output, "r") as f:
+        # Check video dataset exists
+        assert "video0/video" in f
+        # Check it has actual data
+        assert f["video0/video"].shape[0] > 0
+
+
+def test_save_slp_preserves_embedded_without_backend(tmp_path, slp_minimal_pkg):
+    """Test save_slp preserves embedded videos when loaded with open_videos=False."""
+    # Load with open_videos=False
+    labels = read_labels(slp_minimal_pkg, open_videos=False)
+    assert labels.videos[0].backend is None
+
+    # Save with embed=None (preserve existing embedded)
+    output = tmp_path / "test_preserve.pkg.slp"
+    save_slp(labels, str(output), embed=None)
+
+    # Verify embedded data was preserved
+    with h5py.File(output, "r") as f:
+        assert "video0/video" in f
+        assert f["video0/video"].shape[0] > 0
+
+    # Verify the saved file is usable
+    reloaded = read_labels(str(output), open_videos=True)
+    assert reloaded.videos[0].backend is not None
+    assert type(reloaded.videos[0].backend).__name__ == "HDF5Video"
+
+    # Verify we can read frames
+    frame = reloaded.videos[0][0]
+    assert frame.shape[0] > 0
+
+
+def test_is_embedded_video_metadata():
+    """Test the _is_embedded_video_metadata helper function."""
+    from sleap_io.io.slp import _is_embedded_video_metadata
+
+    # Test with embedded video metadata
+    embedded_video = Video(
+        filename="test.pkg.slp",
+        backend=None,
+        backend_metadata={"filename": ".", "dataset": "video0/video"},
+    )
+    assert _is_embedded_video_metadata(embedded_video) is True
+
+    # Test with non-embedded video metadata
+    regular_video = Video(
+        filename="test.mp4",
+        backend=None,
+        backend_metadata={"filename": "test.mp4", "type": "MediaVideo"},
+    )
+    assert _is_embedded_video_metadata(regular_video) is False
+
+    # Test with no metadata
+    no_meta_video = Video(filename="test.mp4", backend=None, backend_metadata=None)
+    assert _is_embedded_video_metadata(no_meta_video) is False
+
+    # Test with empty metadata
+    empty_meta_video = Video(filename="test.mp4", backend=None, backend_metadata={})
+    assert _is_embedded_video_metadata(empty_meta_video) is False
