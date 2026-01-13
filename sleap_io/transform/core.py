@@ -151,11 +151,13 @@ class Transform:
             height = int(round(height * scale_y))
 
         # Apply rotation (about center of current frame)
+        # Note: SLEAP uses center pixel indexing where (0, 0) is the center of the
+        # top-left pixel. The geometric center of an image is at ((w-1)/2, (h-1)/2).
         if self.rotate is not None and self.rotate != 0:
             angle_rad = np.radians(self.rotate)
             cos_a = np.cos(angle_rad)
             sin_a = np.sin(angle_rad)
-            cx, cy = width / 2, height / 2
+            cx, cy = (width - 1) / 2, (height - 1) / 2
 
             # Get rotation output size (may expand if not clipping)
             new_width, new_height, offset_x, offset_y = self._rotation_output_size(
@@ -167,8 +169,8 @@ class Transform:
             # Note: Image coordinates use y-down, so clockwise rotation matrix is:
             #   [cos, -sin]
             #   [sin,  cos]
-            new_cx = new_width / 2
-            new_cy = new_height / 2
+            new_cx = (new_width - 1) / 2
+            new_cy = (new_height - 1) / 2
 
             rotate_matrix = np.array(
                 [
@@ -191,17 +193,21 @@ class Transform:
             width = width + left + right
             height = height + top + bottom
 
-        # Apply horizontal flip (x -> width - x)
+        # Apply horizontal flip (x -> (width - 1) - x)
+        # With center pixel indexing, pixel centers range from 0 to width-1,
+        # so we flip around (width-1)/2 by mapping x -> (width-1) - x.
         if self.flip_h:
             flip_h_matrix = np.array(
-                [[-1, 0, width], [0, 1, 0], [0, 0, 1]], dtype=np.float64
+                [[-1, 0, width - 1], [0, 1, 0], [0, 0, 1]], dtype=np.float64
             )
             matrix = flip_h_matrix @ matrix
 
-        # Apply vertical flip (y -> height - y)
+        # Apply vertical flip (y -> (height - 1) - y)
+        # With center pixel indexing, pixel centers range from 0 to height-1,
+        # so we flip around (height-1)/2 by mapping y -> (height-1) - y.
         if self.flip_v:
             flip_v_matrix = np.array(
-                [[1, 0, 0], [0, -1, height], [0, 0, 1]], dtype=np.float64
+                [[1, 0, 0], [0, -1, height - 1], [0, 0, 1]], dtype=np.float64
             )
             matrix = flip_v_matrix @ matrix
 

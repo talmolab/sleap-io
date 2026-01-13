@@ -179,6 +179,86 @@ class TestTransform:
 
 
 # ============================================================================
+# Center Pixel Indexing Tests
+# ============================================================================
+
+
+class TestCenterPixelIndexing:
+    """Tests verifying center pixel indexing behavior.
+
+    SLEAP uses center pixel indexing (format >= 1.1) where coordinate (x, y)
+    refers to the center of pixel (x, y), not its top-left corner.
+
+    Key properties:
+    - Pixel centers are at integer coordinates: 0, 1, 2, ..., width-1
+    - Geometric center of WxH image is at ((W-1)/2, (H-1)/2)
+    - Flip maps x -> (width-1) - x (not x -> width - x)
+    - Rotation center is at ((w-1)/2, (h-1)/2) (not (w/2, h/2))
+    """
+
+    def test_flip_horizontal_edge_pixels(self):
+        """Test that horizontal flip correctly maps edge pixel centers."""
+        transform = Transform(flip_h=True)
+        # For 100-wide image, leftmost pixel center is 0, rightmost is 99
+        points = np.array([[0, 50], [99, 50]], dtype=np.float64)
+        result = transform.apply_to_points(points, (100, 100))
+        # 0 -> 99, 99 -> 0 (swap edges)
+        np.testing.assert_array_almost_equal(result, [[99, 50], [0, 50]])
+
+    def test_flip_vertical_edge_pixels(self):
+        """Test that vertical flip correctly maps edge pixel centers."""
+        transform = Transform(flip_v=True)
+        # For 100-tall image, topmost pixel center is 0, bottommost is 99
+        points = np.array([[50, 0], [50, 99]], dtype=np.float64)
+        result = transform.apply_to_points(points, (100, 100))
+        # 0 -> 99, 99 -> 0 (swap edges)
+        np.testing.assert_array_almost_equal(result, [[50, 99], [50, 0]])
+
+    def test_flip_center_pixel(self):
+        """Test that flip maps image center to itself."""
+        # For 100x100, center is at (49.5, 49.5)
+        transform_h = Transform(flip_h=True)
+        transform_v = Transform(flip_v=True)
+        transform_hv = Transform(flip_h=True, flip_v=True)
+
+        center = np.array([[49.5, 49.5]], dtype=np.float64)
+
+        # Center should map to itself under any flip
+        result_h = transform_h.apply_to_points(center, (100, 100))
+        result_v = transform_v.apply_to_points(center, (100, 100))
+        result_hv = transform_hv.apply_to_points(center, (100, 100))
+
+        np.testing.assert_array_almost_equal(result_h, [[49.5, 49.5]])
+        np.testing.assert_array_almost_equal(result_v, [[49.5, 49.5]])
+        np.testing.assert_array_almost_equal(result_hv, [[49.5, 49.5]])
+
+    def test_rotation_180_center_fixed(self):
+        """Test that 180° rotation keeps image center fixed."""
+        transform = Transform(rotate=180, clip_rotation=True)
+        # True center of 100x100 image
+        center = np.array([[49.5, 49.5]], dtype=np.float64)
+        result = transform.apply_to_points(center, (100, 100))
+        np.testing.assert_array_almost_equal(result, [[49.5, 49.5]])
+
+    def test_rotation_90_center_fixed(self):
+        """Test that 90° rotation keeps image center fixed."""
+        transform = Transform(rotate=90, clip_rotation=True)
+        center = np.array([[49.5, 49.5]], dtype=np.float64)
+        result = transform.apply_to_points(center, (100, 100))
+        np.testing.assert_array_almost_equal(result, [[49.5, 49.5]])
+
+    def test_rotation_180_swaps_corners(self):
+        """Test that 180° rotation correctly swaps opposite corners."""
+        transform = Transform(rotate=180, clip_rotation=True)
+        # Corners of a 100x100 image
+        corners = np.array([[0, 0], [99, 0], [99, 99], [0, 99]], dtype=np.float64)
+        result = transform.apply_to_points(corners, (100, 100))
+        # Each corner should swap with its diagonal opposite
+        expected = np.array([[99, 99], [0, 99], [0, 0], [99, 0]], dtype=np.float64)
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+# ============================================================================
 # Frame Transform Tests
 # ============================================================================
 
@@ -425,7 +505,12 @@ class TestFrameTransformsGrayscale:
         assert result[0, 0] == 0  # Top-left should be black
 
     def test_flip_transform_frame_and_points(self):
-        """Test that flip transforms frame and points consistently."""
+        """Test that flip transforms frame and points consistently.
+
+        Uses center pixel indexing: coordinate (x, y) refers to the center of
+        pixel (x, y). For a 100-pixel wide image, pixel centers range from 0 to 99.
+        Flip maps x -> (width-1) - x, so x=15 -> x=84 on a 100-wide image.
+        """
         # Test frame
         frame = np.zeros((100, 100), dtype=np.uint8)
         frame[10:20, 10:20] = 255  # White square at (10-20, 10-20)
@@ -439,24 +524,24 @@ class TestFrameTransformsGrayscale:
         transformed_frame_h = transform_h.apply_to_frame(frame)
         transformed_points_h = transform_h.apply_to_points(points, input_size)
 
-        # Point at x=15 should become x=85 (100-15)
-        np.testing.assert_array_almost_equal(transformed_points_h, [[85, 15]])
-        # White square should now be at x=80-90
-        assert transformed_frame_h[15, 85] == 255
+        # Point at x=15 should become x=84 ((100-1)-15 = 84, center pixel indexing)
+        np.testing.assert_array_almost_equal(transformed_points_h, [[84, 15]])
+        # White square at x=10-19 should now be at x=80-89, point at center (84)
+        assert transformed_frame_h[15, 84] == 255
 
         # Test vertical flip
         transform_v = Transform(flip_v=True)
         transformed_points_v = transform_v.apply_to_points(points, input_size)
 
-        # Point at y=15 should become y=85 (100-15)
-        np.testing.assert_array_almost_equal(transformed_points_v, [[15, 85]])
+        # Point at y=15 should become y=84 ((100-1)-15 = 84)
+        np.testing.assert_array_almost_equal(transformed_points_v, [[15, 84]])
 
         # Test both flips
         transform_hv = Transform(flip_h=True, flip_v=True)
         transformed_points_hv = transform_hv.apply_to_points(points, input_size)
 
-        # Point at (15, 15) should become (85, 85)
-        np.testing.assert_array_almost_equal(transformed_points_hv, [[85, 85]])
+        # Point at (15, 15) should become (84, 84)
+        np.testing.assert_array_almost_equal(transformed_points_hv, [[84, 84]])
 
 
 # ============================================================================
@@ -762,32 +847,41 @@ class TestIntegration:
         assert transformed_frame.shape == (30, 30)
 
     def test_rotation_point_consistency(self):
-        """Test that rotation transforms points correctly with clip_rotation."""
+        """Test that rotation transforms points correctly with clip_rotation.
+
+        Uses center pixel indexing where the geometric center of a 100x100 image
+        is at (49.5, 49.5), not (50, 50).
+        """
         # Test 180 degree rotation with clipping (original dimensions preserved)
         transform = Transform(rotate=180, clip_rotation=True)
 
-        # Points at (10, 10), center is (50, 50)
+        # Points at (10, 10), center is (49.5, 49.5) with center pixel indexing
         points = np.array([[10, 10]], dtype=np.float64)
 
-        # After 180 degree rotation around center (50, 50):
-        # (10, 10) -> (90, 90)
+        # After 180 degree rotation around center (49.5, 49.5):
+        # new = 2*center - old = 2*(49.5) - 10 = 99 - 10 = 89
         transformed = transform.apply_to_points(points, (100, 100))
-        np.testing.assert_array_almost_equal(transformed, [[90, 90]])
+        np.testing.assert_array_almost_equal(transformed, [[89, 89]])
 
     def test_rotation_point_consistency_expanded(self):
-        """Test that rotation transforms points correctly with expanded canvas."""
+        """Test that rotation transforms points correctly with expanded canvas.
+
+        With center pixel indexing, the true center of a 100x100 image is
+        at (49.5, 49.5). After 45° rotation, the canvas expands to 142x142
+        with new center at (70.5, 70.5). The original center should stay fixed.
+        """
         # Test 45 degree rotation with expansion (default)
         transform = Transform(rotate=45)
 
         # For a 100x100 frame rotated 45 degrees:
-        # new_width = 100*cos(45) + 100*sin(45) = 100*0.707 + 100*0.707 = 141.4 -> 142
-        # offset = (142 - 100) / 2 = 21
+        # new_width = ceil(100*cos(45) + 100*sin(45)) = ceil(141.4) = 142
+        # new_center = (142-1)/2 = 70.5 (center pixel indexing)
 
-        # Point at center should stay at center
-        points = np.array([[50, 50]], dtype=np.float64)
+        # True center of 100x100 image with center pixel indexing
+        points = np.array([[49.5, 49.5]], dtype=np.float64)
         transformed = transform.apply_to_points(points, (100, 100))
-        # Center of expanded frame is (71, 71)
-        np.testing.assert_array_almost_equal(transformed, [[71, 71]], decimal=0)
+        # Center should stay at new center (70.5, 70.5)
+        np.testing.assert_array_almost_equal(transformed, [[70.5, 70.5]])
 
 
 # ============================================================================
