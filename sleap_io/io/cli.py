@@ -5867,13 +5867,14 @@ def _export_transform_metadata(metadata: dict, output_path: Path) -> None:
     help="Video quality (0-51, lower=better).",
 )
 @click.option(
-    "--preset",
+    "--x264-preset",
+    "x264_preset",
     type=click.Choice(
         ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"]
     ),
     default="superfast",
     show_default=True,
-    help="Encoding speed preset.",
+    help="H.264 encoding speed/compression trade-off.",
 )
 @click.option(
     "--fps",
@@ -5931,7 +5932,7 @@ def transform(
     quality: str,
     fill: str,
     crf: int,
-    preset: str,
+    x264_preset: str,
     output_fps: float | None,
     keyframe_interval: float | None,
     no_audio: bool,
@@ -6013,7 +6014,7 @@ def transform(
             quality=quality,
             fill=fill_value,
             crf=crf,
-            preset=preset,
+            preset=x264_preset,
             output_fps=output_fps,
             keyframe_interval=keyframe_interval,
             no_audio=no_audio,
@@ -6224,7 +6225,7 @@ def transform(
             video_output_dir=video_output_dir,
             fps=output_fps,
             crf=crf,
-            preset=preset,
+            preset=x264_preset,
             keyframe_interval=keyframe_interval,
             no_audio=no_audio,
             progress_callback=progress_callback,
