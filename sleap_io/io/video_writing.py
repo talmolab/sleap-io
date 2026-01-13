@@ -11,6 +11,38 @@ import imageio.v2 as iio_v2
 import numpy as np
 
 
+def _pad_to_macro_block(frame: np.ndarray, macro_block_size: int = 16) -> np.ndarray:
+    """Pad frame to be divisible by macro_block_size, padding only bottom/right.
+
+    This preserves coordinate alignment by only adding padding to the bottom and right
+    edges of the frame. Without this, encoding with x264 may scale or pad symmetrically,
+    causing coordinate shifts.
+
+    Args:
+        frame: Frame to pad. Should be a 2D or 3D numpy array with dimensions
+            (height, width) or (height, width, channels).
+        macro_block_size: Block size to align to. Defaults to 16 for x264.
+
+    Returns:
+        Padded frame with dimensions divisible by macro_block_size, or the original
+        frame if no padding is needed.
+    """
+    h, w = frame.shape[:2]
+
+    # Calculate padding needed (only bottom/right)
+    pad_h = (macro_block_size - (h % macro_block_size)) % macro_block_size
+    pad_w = (macro_block_size - (w % macro_block_size)) % macro_block_size
+
+    if pad_h == 0 and pad_w == 0:
+        return frame
+
+    # Pad only bottom and right
+    if frame.ndim == 2:
+        return np.pad(frame, ((0, pad_h), (0, pad_w)), mode="constant")
+    else:
+        return np.pad(frame, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant")
+
+
 @attrs.define
 class VideoWriter:
     """Simple video writer using imageio and FFMPEG.
@@ -89,6 +121,9 @@ class VideoWriter:
             codec=self.codec,
             pixelformat=self.pixelformat,
             output_params=self.build_output_params(),
+            # Disable imageio's auto-scaling for non-divisible frame sizes.
+            # We handle padding manually in write_frame() to preserve coordinates.
+            macro_block_size=1,
         )
 
     def close(self):
@@ -103,9 +138,17 @@ class VideoWriter:
         Args:
             frame: Frame to write to video. Should be a 2D or 3D numpy array with
                 dimensions (height, width) or (height, width, channels).
+
+        Notes:
+            For libx264 codec, frames are automatically padded to dimensions divisible
+            by 16 (the macro block size). Padding is only added to the bottom and right
+            edges to preserve coordinate alignment.
         """
         if self._writer is None:
             self.open()
+
+        if self.codec == "libx264":
+            frame = _pad_to_macro_block(frame, macro_block_size=16)
 
         self._writer.append_data(frame)
 
