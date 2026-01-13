@@ -80,6 +80,35 @@ class ExportCancelled(Exception):
     pass
 
 
+def _is_embedded_video_metadata(video: Video) -> bool:
+    """Check if a video has embedded frames based on metadata.
+
+    This function detects embedded videos even when the video backend is not open
+    (i.e., when loaded with open_backend=False). It checks the backend_metadata
+    for indicators that the video contains embedded frames.
+
+    Args:
+        video: Video object to check.
+
+    Returns:
+        True if the video appears to have embedded frames based on its metadata.
+    """
+    meta = video.backend_metadata
+    if not meta:
+        return False
+
+    # Embedded videos have filename="." and a dataset like "video0/video"
+    if meta.get("filename") == ".":
+        return True
+
+    # Also check if dataset name indicates embedded video
+    dataset = meta.get("dataset", "")
+    if dataset and "/" in dataset and dataset.endswith("/video"):
+        return True
+
+    return False
+
+
 def make_video(
     labels_path: str,
     video_json: dict,
@@ -887,10 +916,20 @@ def write_videos(
 
     videos_to_embed = []
     videos_to_write = []
+    videos_to_copy = []  # For embedded videos without backend (raw HDF5 copy)
 
     # First determine which videos need embedding
     for video_ind, video in enumerate(videos):
-        if type(video.backend) is HDF5Video and video.backend.has_embedded_images:
+        # Check if video has an open backend with embedded images
+        has_backend_with_embedded = (
+            type(video.backend) is HDF5Video and video.backend.has_embedded_images
+        )
+        # Also detect embedded videos via metadata (when backend is None)
+        has_embedded_via_metadata = (
+            video.backend is None and _is_embedded_video_metadata(video)
+        )
+
+        if has_backend_with_embedded:
             if reference_mode == VideoReferenceMode.RESTORE_ORIGINAL:
                 if video.source_video is None:
                     # No source video available, reference the current embedded video
@@ -917,6 +956,27 @@ def write_videos(
                         (video, frame_idx) for frame_idx in video.backend.source_inds
                     ]
                     videos_to_embed.append((video_ind, video, frames_to_embed))
+        elif has_embedded_via_metadata:
+            # Video has embedded frames but backend is not open (open_videos=False)
+            if reference_mode == VideoReferenceMode.RESTORE_ORIGINAL:
+                if video.source_video is None:
+                    videos_to_write.append((video_ind, video))
+                else:
+                    videos_to_write.append((video_ind, video.source_video))
+            elif reference_mode == VideoReferenceMode.PRESERVE_SOURCE:
+                videos_to_write.append((video_ind, video))
+            else:  # EMBED mode
+                # Check if already embedded in destination
+                already_embedded = False
+                if Path(labels_path).exists():
+                    with h5py.File(labels_path, "r") as f:
+                        already_embedded = f"video{video_ind}/video" in f
+
+                if already_embedded:
+                    videos_to_write.append((video_ind, video))
+                else:
+                    # Need to copy raw HDF5 data from source file
+                    videos_to_copy.append((video_ind, video))
         else:
             videos_to_write.append((video_ind, video))
 
@@ -951,6 +1011,45 @@ def write_videos(
         for video_ind, video, _ in videos_to_embed:
             if video in replaced_videos:
                 videos_to_write.append((video_ind, replaced_videos[video]))
+
+    # Copy raw HDF5 data for embedded videos without backends
+    if videos_to_copy:
+        for video_ind, video in videos_to_copy:
+            # Get the source file path (video.filename points to the source pkg.slp)
+            source_path = video.filename
+            if not Path(source_path).exists():
+                # Can't copy if source doesn't exist, just write metadata
+                videos_to_write.append((video_ind, video))
+                continue
+
+            # Get the source dataset name from backend_metadata
+            meta = video.backend_metadata
+            source_dataset = meta.get("dataset", "") if meta else ""
+            if not source_dataset:
+                videos_to_write.append((video_ind, video))
+                continue
+
+            # Extract the video group name (e.g., "video0" from "video0/video")
+            source_group = source_dataset.split("/")[0] if "/" in source_dataset else ""
+            if not source_group:
+                videos_to_write.append((video_ind, video))
+                continue
+
+            # Destination group name uses the current video index
+            dest_group = f"video{video_ind}"
+
+            # Copy the entire video group from source to destination
+            with h5py.File(source_path, "r") as src_f:
+                if source_group not in src_f:
+                    videos_to_write.append((video_ind, video))
+                    continue
+
+                with h5py.File(labels_path, "a") as dst_f:
+                    # Copy the video group with all its datasets and attributes
+                    src_f.copy(source_group, dst_f, name=dest_group)
+
+            # Add to videos_to_write - the metadata will reference the copied data
+            videos_to_write.append((video_ind, video))
 
     # Write video metadata
     video_jsons = []
