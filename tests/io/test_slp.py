@@ -3815,3 +3815,132 @@ def test_is_embedded_video_metadata():
     # Test with empty metadata
     empty_meta_video = Video(filename="test.mp4", backend=None, backend_metadata={})
     assert _is_embedded_video_metadata(empty_meta_video) is False
+
+
+def test_write_videos_embedded_metadata_restore_original(tmp_path, slp_minimal_pkg):
+    """Test RESTORE_ORIGINAL mode with embedded videos detected via metadata."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    # Load with open_videos=False
+    labels = read_labels(slp_minimal_pkg, open_videos=False)
+    assert labels.videos[0].backend is None
+    assert labels.videos[0].source_video is not None  # Has source video
+
+    # Test RESTORE_ORIGINAL mode - should use source_video
+    output = tmp_path / "test_restore.slp"
+    write_videos(
+        str(output), labels.videos, reference_mode=VideoReferenceMode.RESTORE_ORIGINAL
+    )
+
+    # Verify metadata was written (source video path)
+    loaded = read_videos(str(output))
+    assert len(loaded) == 1
+
+
+def test_write_videos_embedded_metadata_restore_original_no_source(tmp_path):
+    """Test RESTORE_ORIGINAL mode when embedded video has no source_video."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    # Create video with embedded metadata but no source_video
+    video = Video(
+        filename="test.pkg.slp",
+        backend=None,
+        backend_metadata={"filename": ".", "dataset": "video0/video"},
+        source_video=None,
+    )
+
+    output = tmp_path / "test_restore_no_source.slp"
+    write_videos(
+        str(output), [video], reference_mode=VideoReferenceMode.RESTORE_ORIGINAL
+    )
+
+    loaded = read_videos(str(output))
+    assert len(loaded) == 1
+
+
+def test_write_videos_embedded_metadata_preserve_source(tmp_path, slp_minimal_pkg):
+    """Test PRESERVE_SOURCE mode with embedded videos detected via metadata."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    labels = read_labels(slp_minimal_pkg, open_videos=False)
+
+    output = tmp_path / "test_preserve.slp"
+    write_videos(
+        str(output), labels.videos, reference_mode=VideoReferenceMode.PRESERVE_SOURCE
+    )
+
+    loaded = read_videos(str(output))
+    assert len(loaded) == 1
+
+
+def test_write_videos_embedded_metadata_already_embedded(tmp_path, slp_minimal_pkg):
+    """Test EMBED mode when destination already has embedded video."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    labels = read_labels(slp_minimal_pkg, open_videos=False)
+
+    # First, create output with embedded video data
+    output = tmp_path / "test_already.pkg.slp"
+    write_videos(str(output), labels.videos, reference_mode=VideoReferenceMode.EMBED)
+
+    # Now call again - should detect already embedded and skip copy
+    write_videos(str(output), labels.videos, reference_mode=VideoReferenceMode.EMBED)
+
+    # Verify file still valid
+    with h5py.File(output, "r") as f:
+        assert "video0/video" in f
+
+
+def test_write_videos_copy_source_not_exists(tmp_path):
+    """Test videos_to_copy handling when source file doesn't exist."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    # Create video pointing to non-existent file
+    video = Video(
+        filename="/nonexistent/path.pkg.slp",
+        backend=None,
+        backend_metadata={"filename": ".", "dataset": "video0/video"},
+    )
+
+    output = tmp_path / "test_no_source.slp"
+    write_videos(str(output), [video], reference_mode=VideoReferenceMode.EMBED)
+
+    # Should still write metadata
+    loaded = read_videos(str(output))
+    assert len(loaded) == 1
+
+
+def test_write_videos_copy_no_dataset_in_metadata(tmp_path, slp_minimal_pkg):
+    """Test videos_to_copy handling when metadata has no dataset."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    # Create video with embedded marker but missing dataset
+    video = Video(
+        filename=slp_minimal_pkg,
+        backend=None,
+        backend_metadata={"filename": "."},  # No dataset key
+    )
+
+    output = tmp_path / "test_no_dataset.slp"
+    write_videos(str(output), [video], reference_mode=VideoReferenceMode.EMBED)
+
+    loaded = read_videos(str(output))
+    assert len(loaded) == 1
+
+
+def test_write_videos_copy_group_not_in_source(tmp_path, slp_minimal_pkg):
+    """Test videos_to_copy when source HDF5 doesn't have expected group."""
+    from sleap_io.io.slp import VideoReferenceMode
+
+    # Create video pointing to valid file but wrong dataset name
+    video = Video(
+        filename=slp_minimal_pkg,
+        backend=None,
+        backend_metadata={"filename": ".", "dataset": "video999/video"},  # Non-existent
+    )
+
+    output = tmp_path / "test_wrong_group.slp"
+    write_videos(str(output), [video], reference_mode=VideoReferenceMode.EMBED)
+
+    loaded = read_videos(str(output))
+    assert len(loaded) == 1
