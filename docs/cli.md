@@ -157,9 +157,11 @@ sio reencode project.slp -o project.reencoded.slp          # Batch reencode all 
 sio transform labels.slp --scale 0.5 -o scaled.slp         # Scale down 50%
 sio transform labels.slp --crop 100,100,500,500 -o crop.slp  # Crop to region
 sio transform labels.slp --rotate 90 -o rotated.slp        # Rotate 90 degrees
+sio transform labels.slp --flip-horizontal -o flipped.slp  # Mirror horizontally
 sio transform labels.slp --crop 100,100,500,500 --scale 2.0 -o zoomed.slp
 sio transform multi_cam.slp --crop 0:100,100,500,500 -o cropped.slp  # Per-video
 sio transform labels.slp --scale 0.5 --dry-run             # Preview transforms
+sio transform labels.slp --scale 0.5 --dry-run-frame 0     # Preview specific frame
 sio transform video.mp4 --scale 0.5 -o video_scaled.mp4    # Transform raw video
 ```
 
@@ -2149,14 +2151,15 @@ Saved: scaled.slp
 
 ### Transform Pipeline
 
-Transforms are always applied in a fixed order: **crop → scale → rotate → pad**
+Transforms are always applied in a fixed order: **crop → scale → rotate → pad → flip**
 
 This order ensures predictable results:
 
 1. **Crop** extracts a region of interest from the original frame
 2. **Scale** resizes the cropped region
 3. **Rotate** rotates around the frame center
-4. **Pad** adds borders to the final result
+4. **Pad** adds borders to the result
+5. **Flip** mirrors the image horizontally and/or vertically
 
 All landmark coordinates are automatically transformed using the corresponding affine matrix to maintain alignment with the video.
 
@@ -2177,23 +2180,29 @@ All landmark coordinates are automatically transformed using the corresponding a
 | `--crop` | `[idx:]x1,y1,x2,y2` | Crop region (pixels or normalized 0.0-1.0) |
 | `--scale` | `[idx:]value` or `[idx:]w,h` | Scale factor(s) or target dimensions |
 | `--rotate` | `[idx:]degrees` | Rotation angle (clockwise positive) |
+| `--clip-rotation` | flag | Keep original dimensions when rotating (clips corners) |
 | `--pad` | `[idx:]top,right,bottom,left` | Padding in pixels (or single value for uniform) |
+| `--flip-horizontal` | flag | Mirror image left-right |
+| `--flip-vertical` | flag | Mirror image top-bottom |
 
 #### Quality & Encoding Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--quality` | `bilinear` | Interpolation: `nearest`, `bilinear`, `bicubic` |
-| `--fill` | `0` | Fill value for out-of-bounds regions (0-255) |
+| `--fill` | `0` | Fill value for out-of-bounds regions. Integer (0-255) or RGB (`R,G,B`) |
 | `--crf` | `25` | Video quality (0-51, lower = better) |
 | `--preset` | `superfast` | Encoding speed: `ultrafast` to `slow` |
 | `--fps` | (source) | Output frame rate |
+| `--keyframe-interval` | (none) | Keyframe interval in seconds. Lower = better seeking, larger files |
+| `--no-audio` | off | Strip audio from output videos |
 
 #### Execution Options
 
 | Option | Description |
 |--------|-------------|
 | `--dry-run` | Preview transforms without executing |
+| `--dry-run-frame N` | Render specific frame N in dry-run preview. Implies `--dry-run` |
 
 ### Scale Option
 
@@ -2367,6 +2376,35 @@ sio transform labels.slp --pad 50 -o padded.slp
 
 # Asymmetric padding
 sio transform labels.slp --pad 100,50,100,50 -o padded.slp
+
+# Custom fill color (gray background)
+sio transform labels.slp --pad 50 --fill 128 -o padded_gray.slp
+
+# RGB fill color (blue background)
+sio transform labels.slp --pad 50 --fill 0,0,255 -o padded_blue.slp
+```
+
+**Flipping videos:**
+
+```bash
+# Mirror horizontally (left-right flip)
+sio transform labels.slp --flip-horizontal -o flipped_h.slp
+
+# Mirror vertically (top-bottom flip)
+sio transform labels.slp --flip-vertical -o flipped_v.slp
+
+# Both flips (equivalent to 180° rotation)
+sio transform labels.slp --flip-horizontal --flip-vertical -o flipped_both.slp
+```
+
+**Rotation with clipping:**
+
+```bash
+# Normal rotation expands canvas to fit rotated image
+sio transform labels.slp --rotate 45 -o rotated_expanded.slp
+
+# Clip rotation keeps original dimensions (corners are clipped)
+sio transform labels.slp --rotate 45 --clip-rotation -o rotated_clipped.slp
 ```
 
 **Preview before processing:**
@@ -2377,6 +2415,25 @@ sio transform labels.slp \
     --crop 100,100,500,500 \
     --scale 2.0 \
     --dry-run
+
+# Preview a specific frame (renders PNG to temp directory)
+sio transform labels.slp \
+    --crop 100,100,500,500 \
+    --scale 2.0 \
+    --dry-run-frame 50
+
+# Preview frame 0 with rotation
+sio transform labels.slp --rotate 45 --dry-run-frame 0
+```
+
+**Video encoding options:**
+
+```bash
+# Better seeking for annotation workflows
+sio transform labels.slp --scale 0.5 --keyframe-interval 0.5 -o scaled.slp
+
+# Strip audio from output videos
+sio transform labels.slp --scale 0.5 --no-audio -o scaled_silent.slp
 ```
 
 ### Coordinate Transformation
@@ -2389,6 +2446,7 @@ All landmark coordinates are automatically transformed using an affine matrix th
 | **Scale** | `new = old * factor` |
 | **Rotate** | Affine rotation around center |
 | **Pad** | `new = old + padding` |
+| **Flip** | `new_x = width - old_x` (horizontal), `new_y = height - old_y` (vertical) |
 
 The combined transformation ensures that:
 
