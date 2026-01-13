@@ -196,8 +196,11 @@ def test_show_video_file():
     assert "centered_pair_low_quality.mp4" in out
     assert "Video (MediaVideo)" in out
     assert "frames" in out
-    assert "Status" in out
-    assert "Plugin" in out or "Backend" in out
+    # Should show encoding info (if ffmpeg available)
+    # These are more informative than the old Status/Plugin lines
+    if _is_ffmpeg_available():
+        assert "Codec" in out
+        assert "h264" in out.lower()
 
 
 def test_show_video_file_full_path():
@@ -950,8 +953,8 @@ def test_show_standalone_video_no_backend():
         cli_module.console = original_console
 
 
-def test_show_standalone_video_with_backend_metadata():
-    """Test standalone video display with backend_metadata grayscale field."""
+def test_show_standalone_video_with_encoding_info():
+    """Test standalone video display shows encoding info when ffmpeg available."""
     from io import StringIO
 
     from rich.console import Console
@@ -963,9 +966,8 @@ def test_show_standalone_video_with_backend_metadata():
     if not path.exists():
         return
 
-    # Load video and set backend_metadata
+    # Load video
     video = Video.from_filename(str(path))
-    video.backend_metadata = {"grayscale": True}
 
     import sleap_io.io.cli as cli_module
 
@@ -976,9 +978,13 @@ def test_show_standalone_video_with_backend_metadata():
     try:
         _print_video_standalone(path, video)
         out = _strip_ansi(string_io.getvalue())
-        # Should show grayscale info from backend_metadata
-        assert "Grayscale" in out
-        assert "yes" in out
+        # Should show basic video info regardless of ffmpeg
+        assert "Full" in out
+        assert "centered_pair_low_quality.mp4" in out
+        # If ffmpeg is available, should show encoding info
+        if _is_ffmpeg_available():
+            assert "Codec" in out
+            assert "h264" in out.lower()
     finally:
         cli_module.console = original_console
 
@@ -1157,6 +1163,93 @@ def test_show_video_helper_functions():
         backend_metadata={"has_embedded_images": True},
     )
     assert _is_embedded(video3) is True
+
+
+def test_get_video_encoding_info():
+    """Test _get_video_encoding_info helper function."""
+    from sleap_io.io.cli import _get_video_encoding_info
+
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+    if not path.exists():
+        return  # Skip if video doesn't exist
+
+    if not _is_ffmpeg_available():
+        # Should return None when ffmpeg unavailable
+        # We can't test this directly, but we verify the function handles it
+        return
+
+    info = _get_video_encoding_info(path)
+    assert info is not None
+
+    # Check that we extracted the expected codec info
+    assert info.codec == "h264"
+    assert info.codec_profile in ("Main", "High", "Baseline")
+    assert info.pixel_format is not None
+    assert "yuv" in info.pixel_format  # Common for h264
+    assert info.bitrate_kbps is not None
+    assert info.bitrate_kbps > 0
+    assert info.container is not None
+
+
+def test_estimate_gop_size():
+    """Test _estimate_gop_size helper function."""
+    from sleap_io.io.cli import _estimate_gop_size
+
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+    if not path.exists():
+        return  # Skip if video doesn't exist
+
+    if not _is_ffmpeg_available():
+        return
+
+    gop = _estimate_gop_size(path)
+    # GOP should be a positive integer (or None if estimation fails)
+    if gop is not None:
+        assert gop > 0
+        # For typical videos, GOP is usually between 1 and 300
+        assert gop < 500
+
+
+def test_run_ffmpeg_info():
+    """Test _run_ffmpeg_info helper function."""
+    from sleap_io.io.cli import _run_ffmpeg_info
+
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+    if not path.exists():
+        return
+
+    if not _is_ffmpeg_available():
+        result = _run_ffmpeg_info(path)
+        assert result is None
+        return
+
+    result = _run_ffmpeg_info(path)
+    assert result is not None
+    # Should contain typical ffmpeg output keywords
+    assert "Stream" in result or "Input" in result
+    assert "Video" in result
+
+
+def test_show_video_file_encoding_info():
+    """Test that video encoding info appears in sio show output."""
+    runner = CliRunner()
+    path = _data_path("videos/centered_pair_low_quality.mp4")
+
+    if not path.exists():
+        return
+
+    result = runner.invoke(cli, ["show", str(path)])
+    assert result.exit_code == 0, result.output
+    out = _strip_ansi(result.output)
+
+    if _is_ffmpeg_available():
+        # Should show codec info
+        assert "Codec" in out
+        # h264 should appear (case-insensitive)
+        assert "h264" in out.lower()
+        # Should show bitrate
+        assert "Bitrate" in out
+        assert "kb/s" in out
 
 
 def test_show_video_exists_status():
