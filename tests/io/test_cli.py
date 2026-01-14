@@ -5182,6 +5182,243 @@ def test_fix_no_deduplicate_videos(tmp_path):
     assert len(fixed_labels.videos) == 2
 
 
+def test_fix_video_color_grayscale(tmp_path):
+    """Test --video-color grayscale sets all videos to grayscale."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 3))
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--video-color",
+            "grayscale",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Set video color mode to 'grayscale'" in result.output
+
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    for video in fixed_labels.videos:
+        # Check backend_metadata since grayscale property returns shape-based detection
+        assert video.backend_metadata.get("grayscale") is True
+
+
+def test_fix_video_color_rgb(tmp_path):
+    """Test --video-color rgb sets all videos to RGB."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "-o", str(output_path), "--video-color", "rgb"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Set video color mode to 'rgb'" in result.output
+
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    for video in fixed_labels.videos:
+        # Check backend_metadata since grayscale property returns shape-based detection
+        assert video.backend_metadata.get("grayscale") is False
+
+
+def test_fix_video_color_auto(tmp_path):
+    """Test --video-color auto resets to autodetection."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 3))
+    video.grayscale = True  # Pre-set to grayscale
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    output_path = tmp_path / "output.slp"
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "-o", str(output_path), "--video-color", "auto"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Set video color mode to 'auto'" in result.output
+
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    for video in fixed_labels.videos:
+        # Check backend_metadata since grayscale property returns shape-based detection
+        assert video.backend_metadata.get("grayscale") is None
+
+
+def test_fix_video_color_dry_run(tmp_path):
+    """Test --video-color with --dry-run doesn't modify file."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 3))
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--video-color", "grayscale", "--dry-run"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Set video color mode" in result.output
+    assert "DRY RUN" in result.output
+
+    # Verify original file unchanged (grayscale not explicitly set = not in metadata)
+    reloaded = load_slp(str(input_path), open_videos=False)
+    for video in reloaded.videos:
+        # Original file should not have grayscale explicitly set
+        assert video.backend_metadata.get("grayscale") is None
+
+
+def test_fix_video_color_verbose(tmp_path):
+    """Test --video-color with --verbose shows video details."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 3))
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "--video-color",
+            "grayscale",
+            "--dry-run",
+            "--verbose",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Video Color" in result.output
+
+
+def test_fix_video_color_mismatch_detection(tmp_path):
+    """Test video color mismatch detection in analysis."""
+    skeleton = Skeleton(["head", "tail"])
+    # Create a video with grayscale setting but RGB shape (mismatch)
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 3))
+    video.grayscale = True  # Set to grayscale but shape has 3 channels
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    # Should detect mismatch even without --verbose
+    assert "MISMATCH" in output
+
+
+def test_fix_video_color_analysis_rgb_setting(tmp_path):
+    """Test video color analysis with explicit RGB setting (grayscale=False)."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 3))
+    video.grayscale = False  # Explicitly set to RGB
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run", "--verbose"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    # Should show setting=rgb in verbose output
+    assert "setting=rgb" in output
+
+
+def test_fix_video_color_analysis_rgba_shape(tmp_path):
+    """Test video color analysis with RGBA (4-channel) video shape."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 4))
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run", "--verbose"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    # Should show shape=rgba in verbose output
+    assert "shape=rgba" in output
+
+
+def test_fix_video_color_analysis_unusual_channels(tmp_path):
+    """Test video color analysis with unusual channel count (e.g., 2 channels)."""
+    skeleton = Skeleton(["head", "tail"])
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 2))
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run", "--verbose"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    # Should show shape=2ch in verbose output
+    assert "shape=2ch" in output
+
+
+def test_fix_video_color_rgb_grayscale_mismatch(tmp_path):
+    """Test mismatch detection when RGB setting but grayscale shape."""
+    skeleton = Skeleton(["head", "tail"])
+    # Create a video with RGB setting but grayscale shape (1 channel)
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    video.grayscale = False  # Set to RGB but shape has 1 channel
+    labels = Labels(skeletons=[skeleton], videos=[video])
+
+    input_path = tmp_path / "input.slp"
+    labels.save(str(input_path))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run"],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    # Should detect mismatch
+    assert "MISMATCH" in output
+
+
 # ============================================================================
 # embed command tests
 # ============================================================================

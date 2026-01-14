@@ -459,6 +459,88 @@ def test_replace_videos(slp_real_data):
     assert labels.video.filename == "fake.mp4"
 
 
+def test_set_video_color_mode_grayscale(slp_minimal):
+    """Test setting all videos to grayscale mode."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode("grayscale")
+    for video in labels.videos:
+        assert video.grayscale is True
+
+
+def test_set_video_color_mode_rgb(slp_minimal):
+    """Test setting all videos to RGB mode."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode("rgb")
+    for video in labels.videos:
+        assert video.grayscale is False
+
+
+def test_set_video_color_mode_auto(slp_minimal):
+    """Test resetting all videos to auto-detection."""
+    labels = load_slp(slp_minimal)
+    # First set to grayscale
+    labels.set_video_color_mode("grayscale")
+    # Then reset to auto
+    labels.set_video_color_mode("auto")
+    for video in labels.videos:
+        assert video.grayscale is None
+
+
+def test_set_video_color_mode_default_is_auto(slp_minimal):
+    """Test that default mode is 'auto'."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode()  # No argument
+    for video in labels.videos:
+        assert video.grayscale is None
+
+
+def test_set_video_color_mode_propagates_to_source_video():
+    """Test that color mode propagates through source_video chain."""
+    # Create a video with source_video chain (simulating embedded video)
+    source_video = Video(filename="original.mp4", open_backend=False)
+    source_video.backend_metadata["shape"] = (100, 480, 640, 3)
+
+    embedded_video = Video(filename="embedded.pkg.slp", open_backend=False)
+    embedded_video.backend_metadata["shape"] = (10, 480, 640, 3)
+    embedded_video.source_video = source_video
+
+    skeleton = Skeleton(["head", "tail"])
+    labels = Labels(skeletons=[skeleton], videos=[embedded_video])
+
+    # Set color mode
+    labels.set_video_color_mode("grayscale")
+
+    # Both embedded and source should have the setting
+    assert embedded_video.backend_metadata.get("grayscale") is True
+    assert source_video.backend_metadata.get("grayscale") is True
+
+
+def test_set_video_color_mode_propagates_multi_level_chain():
+    """Test that color mode propagates through multi-level source_video chain."""
+    # Create multi-level chain: embedded <- intermediate <- original
+    original = Video(filename="original.mp4", open_backend=False)
+    original.backend_metadata["shape"] = (100, 480, 640, 3)
+
+    intermediate = Video(filename="intermediate.pkg.slp", open_backend=False)
+    intermediate.backend_metadata["shape"] = (50, 480, 640, 3)
+    intermediate.source_video = original
+
+    embedded = Video(filename="final.pkg.slp", open_backend=False)
+    embedded.backend_metadata["shape"] = (10, 480, 640, 3)
+    embedded.source_video = intermediate
+
+    skeleton = Skeleton(["head", "tail"])
+    labels = Labels(skeletons=[skeleton], videos=[embedded])
+
+    # Set color mode
+    labels.set_video_color_mode("rgb")
+
+    # All levels should have the setting
+    assert embedded.backend_metadata.get("grayscale") is False
+    assert intermediate.backend_metadata.get("grayscale") is False
+    assert original.backend_metadata.get("grayscale") is False
+
+
 def test_replace_filenames():
     labels = Labels(videos=[Video.from_filename("a.mp4"), Video.from_filename("b.mp4")])
 
