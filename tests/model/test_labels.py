@@ -459,6 +459,41 @@ def test_replace_videos(slp_real_data):
     assert labels.video.filename == "fake.mp4"
 
 
+def test_set_video_color_mode_grayscale(slp_minimal):
+    """Test setting all videos to grayscale mode."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode("grayscale")
+    for video in labels.videos:
+        assert video.grayscale is True
+
+
+def test_set_video_color_mode_rgb(slp_minimal):
+    """Test setting all videos to RGB mode."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode("rgb")
+    for video in labels.videos:
+        assert video.grayscale is False
+
+
+def test_set_video_color_mode_auto(slp_minimal):
+    """Test resetting all videos to auto-detection."""
+    labels = load_slp(slp_minimal)
+    # First set to grayscale
+    labels.set_video_color_mode("grayscale")
+    # Then reset to auto
+    labels.set_video_color_mode("auto")
+    for video in labels.videos:
+        assert video.grayscale is None
+
+
+def test_set_video_color_mode_default_is_auto(slp_minimal):
+    """Test that default mode is 'auto'."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode()  # No argument
+    for video in labels.videos:
+        assert video.grayscale is None
+
+
 def test_replace_filenames():
     labels = Labels(videos=[Video.from_filename("a.mp4"), Video.from_filename("b.mp4")])
 

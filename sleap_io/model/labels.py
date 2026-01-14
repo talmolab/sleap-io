@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal
 
 import numpy as np
 from attrs import define, field
@@ -2522,3 +2522,35 @@ class Labels:
         for video in self.videos:
             if video.filename.endswith(MediaVideo.EXTS):
                 video.set_video_plugin(plugin)
+
+    def set_video_color_mode(
+        self, mode: Literal["grayscale", "rgb", "auto"] = "auto"
+    ) -> None:
+        """Set video color mode for all videos in this dataset.
+
+        This controls how video frames are read - either forcing grayscale
+        (single channel), RGB (three channels), or auto-detecting from the
+        video content.
+
+        Args:
+            mode: Color mode for video output.
+                - "grayscale": Force single-channel (1ch) output
+                - "rgb": Force three-channel (3ch) output
+                - "auto": Autodetect from video content (default)
+
+        Note:
+            This is useful when auto-detection fails due to compression
+            artifacts or videos with very similar color channels.
+
+        Examples:
+            >>> labels.set_video_color_mode("grayscale")
+            >>> labels.set_video_color_mode("rgb")
+            >>> labels.set_video_color_mode("auto")
+
+        See Also:
+            Video.grayscale: The underlying property this method sets.
+            set_video_plugin: Similar method for setting video backend plugin.
+        """
+        grayscale_value = {"grayscale": True, "rgb": False, "auto": None}[mode]
+        for video in self.videos:
+            video.grayscale = grayscale_value
