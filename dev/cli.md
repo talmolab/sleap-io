@@ -1338,6 +1338,7 @@ Analyzing...
 ⚠ Skeletons:
   'fly_13pt': 1245 user, 500 pred (most frequent)
   'fly_copy': 0 user, 0 pred (unused)
+✓ Video Color: All videos consistent
 ℹ Predictions: 2274 predicted instances (150 untracked)
 
 Actions:
@@ -1377,6 +1378,7 @@ With default options, `sio fix` automatically:
 |--------|---------|-------------|
 | `--deduplicate-videos` | True | Merge duplicate video entries pointing to the same file |
 | `--no-deduplicate-videos` | | Skip video deduplication |
+| `--video-color` | | Set video color mode: `grayscale`, `rgb`, or `auto` |
 
 #### Skeleton Options
 
@@ -1493,6 +1495,23 @@ sio fix labels.slp \
     --no-remove-empty-frames \
     --prefix /old/path /new/path
 ```
+
+**Scenario: Video color mode issues**
+
+If videos are being incorrectly detected as grayscale or RGB (e.g., due to compression artifacts or very similar color channels), you can force the color mode:
+
+```bash
+# Force all videos to grayscale (single channel output)
+sio fix labels.slp --video-color grayscale
+
+# Force all videos to RGB (three channel output)
+sio fix labels.slp --video-color rgb
+
+# Reset to auto-detection
+sio fix labels.slp --video-color auto
+```
+
+This is particularly useful when training models that expect a specific number of input channels.
 
 ---
 

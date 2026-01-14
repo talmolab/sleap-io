@@ -5,6 +5,66 @@
     "aliases": []
   },
   {
+    "version": "0.4.1",
+    "title": "v0.4.1",
+    "aliases": []
+  },
+  {
+    "version": "0.4.0",
+    "title": "v0.4.0",
+    "aliases": []
+  },
+  {
+    "version": "0.3.0",
+    "title": "v0.3.0",
+    "aliases": []
+  },
+  {
+    "version": "0.1.11",
+    "title": "v0.1.11",
+    "aliases": []
+  },
+  {
+    "version": "0.1.10",
+    "title": "v0.1.10",
+    "aliases": []
+  },
+  {
+    "version": "0.1.9",
+    "title": "v0.1.9",
+    "aliases": []
+  },
+  {
+    "version": "0.1.7",
+    "title": "v0.1.7",
+    "aliases": []
+  },
+  {
+    "version": "0.1.6",
+    "title": "v0.1.6",
+    "aliases": []
+  },
+  {
+    "version": "0.1.5",
+    "title": "v0.1.5",
+    "aliases": []
+  },
+  {
+    "version": "0.1.4",
+    "title": "v0.1.4",
+    "aliases": []
+  },
+  {
+    "version": "0.1.1",
+    "title": "v0.1.1",
+    "aliases": []
+  },
+  {
+    "version": "0.1.0",
+    "title": "v0.1.0",
+    "aliases": []
+  },
+  {
     "version": "v0.6.1",
     "title": "v0.6.1",
     "aliases": [
@@ -62,68 +122,8 @@
     "aliases": []
   },
   {
-    "version": "0.4.1",
-    "title": "v0.4.1",
-    "aliases": []
-  },
-  {
-    "version": "0.4.0",
-    "title": "v0.4.0",
-    "aliases": []
-  },
-  {
-    "version": "0.3.0",
-    "title": "v0.3.0",
-    "aliases": []
-  },
-  {
     "version": "v0.2.0",
     "title": "v0.2.0",
-    "aliases": []
-  },
-  {
-    "version": "0.1.11",
-    "title": "v0.1.11",
-    "aliases": []
-  },
-  {
-    "version": "0.1.10",
-    "title": "v0.1.10",
-    "aliases": []
-  },
-  {
-    "version": "0.1.9",
-    "title": "v0.1.9",
-    "aliases": []
-  },
-  {
-    "version": "0.1.7",
-    "title": "v0.1.7",
-    "aliases": []
-  },
-  {
-    "version": "0.1.6",
-    "title": "v0.1.6",
-    "aliases": []
-  },
-  {
-    "version": "0.1.5",
-    "title": "v0.1.5",
-    "aliases": []
-  },
-  {
-    "version": "0.1.4",
-    "title": "v0.1.4",
-    "aliases": []
-  },
-  {
-    "version": "0.1.1",
-    "title": "v0.1.1",
-    "aliases": []
-  },
-  {
-    "version": "0.1.0",
-    "title": "v0.1.0",
     "aliases": []
   }
 ]
