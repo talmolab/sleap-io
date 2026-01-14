@@ -2542,6 +2542,10 @@ class Labels:
             This is useful when auto-detection fails due to compression
             artifacts or videos with very similar color channels.
 
+            For embedded videos (in .pkg.slp files), this also sets the color
+            mode on the source video chain, ensuring the setting persists if
+            the video is later restored/unembedded.
+
         Examples:
             >>> labels.set_video_color_mode("grayscale")
             >>> labels.set_video_color_mode("rgb")
@@ -2554,3 +2558,8 @@ class Labels:
         grayscale_value = {"grayscale": True, "rgb": False, "auto": None}[mode]
         for video in self.videos:
             video.grayscale = grayscale_value
+            # Also set on source_video chain so setting persists through restore
+            source = video.source_video
+            while source is not None:
+                source.grayscale = grayscale_value
+                source = source.source_video
