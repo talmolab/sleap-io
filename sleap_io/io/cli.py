@@ -3027,6 +3027,59 @@ def _analyze_skeletons(
     return all_usage, unused, pred_only, user_skeletons
 
 
+def _analyze_video_colors(labels: Labels) -> list[dict]:
+    """Analyze video color formats for reporting.
+
+    Returns:
+        List of dicts with keys: filename, grayscale_setting, shape_channels,
+        setting_str, shape_str, mismatch
+    """
+    results = []
+    for video in labels.videos:
+        # Use backend_metadata to get explicit setting (not shape-derived property)
+        grayscale_setting = video.backend_metadata.get("grayscale")
+        shape = video.backend_metadata.get("shape")
+        shape_channels = shape[-1] if shape else None
+
+        # Format strings
+        if grayscale_setting is True:
+            setting_str = "grayscale"
+        elif grayscale_setting is False:
+            setting_str = "rgb"
+        else:
+            setting_str = "auto"
+
+        if shape_channels == 1:
+            shape_str = "grayscale"
+        elif shape_channels == 3:
+            shape_str = "rgb"
+        elif shape_channels == 4:
+            shape_str = "rgba"
+        elif shape_channels:
+            shape_str = f"{shape_channels}ch"
+        else:
+            shape_str = "unknown"
+
+        # Check for mismatches
+        mismatch = False
+        if grayscale_setting is True and shape_channels and shape_channels > 1:
+            mismatch = True
+        elif grayscale_setting is False and shape_channels == 1:
+            mismatch = True
+
+        results.append(
+            {
+                "filename": video.filename,
+                "grayscale_setting": grayscale_setting,
+                "shape_channels": shape_channels,
+                "setting_str": setting_str,
+                "shape_str": shape_str,
+                "mismatch": mismatch,
+            }
+        )
+    return results
+
+
 @cli.command()
 @click.argument(
     "input_arg",
@@ -3136,6 +3189,15 @@ def _analyze_skeletons(
     metavar="OLD NEW",
     help="Replace OLD filename with NEW.",
 )
+@click.option(
+    "--video-color",
+    "video_color_mode",
+    type=click.Choice(["grayscale", "rgb", "auto"]),
+    default=None,
+    help="Set video color mode for all videos. "
+    "'grayscale' forces 1-channel, 'rgb' forces 3-channel, "
+    "'auto' resets to autodetection.",
+)
 # Mode options
 @click.option(
     "--dry-run",
@@ -3167,6 +3229,7 @@ def fix(
     remove_unlabeled_videos: bool,
     prefix_map: tuple[tuple[str, str], ...],
     filename_map: tuple[tuple[str, str], ...],
+    video_color_mode: str | None,
     dry_run: bool,
     verbose: bool,
 ):
@@ -3178,6 +3241,7 @@ def fix(
     • [bold]Multiple skeletons[/]: Removes unused or prediction-only skeletons
     • [bold]Predictions[/]: Optionally removes all or untracked predictions
     • [bold]Path fixes[/]: Updates video paths with --prefix or --map
+    • [bold]Video color[/]: Sets video color mode (grayscale/rgb/auto)
     • [bold]Cleanup[/]: Removes empty frames, unused tracks, etc.
 
     [dim]Examples:[/]
@@ -3189,6 +3253,7 @@ def fix(
         $ sio fix labels.slp --remove-untracked-predictions  # Surgical removal
         $ sio fix labels.slp --consolidate-skeletons # Force single skeleton
         $ sio fix labels.slp --prefix "C:\\data" /mnt/data
+        $ sio fix labels.slp --video-color grayscale # Force grayscale mode
     """
     # Resolve input
     input_path = _resolve_input(input_arg, input_opt, "input labels file")
@@ -3317,6 +3382,29 @@ def fix(
     else:
         console.print(f"[green]✓ Skeletons:[/] {n_skeletons} skeleton(s), all in use")
 
+    # Video color section
+    video_color_analysis = _analyze_video_colors(labels)
+    has_color_mismatches = any(v["mismatch"] for v in video_color_analysis)
+
+    if has_color_mismatches:
+        console.print("[yellow]⚠ Video Color:[/] Found mismatches")
+    else:
+        console.print("[green]✓ Video Color:[/] All videos consistent")
+
+    if verbose or has_color_mismatches:
+        for v in video_color_analysis:
+            name = Path(v["filename"]).name
+            if v["mismatch"]:
+                console.print(
+                    f"  [yellow]⚠ {name}: setting={v['setting_str']}, "
+                    f"shape={v['shape_str']} [MISMATCH][/]"
+                )
+            else:
+                console.print(
+                    f"  [dim]{name}: setting={v['setting_str']}, "
+                    f"shape={v['shape_str']}[/]"
+                )
+
     # Predictions section
     if n_predictions > 0:
         untracked_info = ""
@@ -3368,6 +3456,12 @@ def fix(
     # Filename changes
     if has_filename_opts:
         actions.append("Update video filenames")
+
+    # Video color mode
+    if video_color_mode is not None:
+        actions.append(
+            f"Set video color mode to '{video_color_mode}' for {n_videos} video(s)"
+        )
 
     # Cleanup actions (these happen after other modifications)
     if remove_empty_instances:
@@ -3481,7 +3575,11 @@ def fix(
         except ValueError as e:
             raise click.ClickException(f"Failed to update filenames: {e}")
 
-    # 7. Cleanup (order: empty instances -> tracks -> unlabeled videos -> frames)
+    # 7. Apply video color mode
+    if video_color_mode is not None:
+        labels.set_video_color_mode(video_color_mode)
+
+    # 8. Cleanup (order: empty instances -> tracks -> unlabeled videos -> frames)
     # Empty instances first (may create empty frames)
     if remove_empty_instances:
         labels.clean(
