@@ -4318,6 +4318,94 @@ def test_labels_match_result_import():
     assert isinstance(result.track_map, dict)
 
 
+def test_labels_match_with_matcher_objects():
+    """Test Labels.match with actual Matcher objects (not strings)."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    video_pred = Video(filename="/output/video.mp4", open_backend=False)
+    track_gt = Track("animal_1")
+    track_pred = Track("animal_1")
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton], tracks=[track_gt])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton], tracks=[track_pred])
+
+    # Pass actual Matcher objects instead of strings
+    from sleap_io.model.matching import (
+        SkeletonMatcher,
+        SkeletonMatchMethod,
+        TrackMatcher,
+        TrackMatchMethod,
+        VideoMatcher,
+        VideoMatchMethod,
+    )
+
+    skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
+
+    result = gt_labels.match(
+        pred_labels,
+        skeleton=skeleton_matcher,
+        video=video_matcher,
+        track=track_matcher,
+    )
+
+    assert result.all_videos_matched
+    assert result.all_skeletons_matched
+    assert result.all_tracks_matched
+
+
+def test_labels_match_summary_many_unmatched():
+    """Test MatchResult.summary() with more than 5 unmatched videos."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Create GT with one video
+    video_gt = Video(filename="/data/video_gt.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+
+    # Create predictions with 7 videos that don't match (different basenames)
+    pred_videos = [
+        Video(filename=f"/output/pred_{i}.mp4", open_backend=False) for i in range(7)
+    ]
+    pred_labels = Labels(videos=pred_videos, skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # All 7 should be unmatched (different basenames from GT)
+    assert len(result.unmatched_videos) == 7
+
+    summary = result.summary()
+    assert "Videos: 0/7 matched" in summary
+    assert "Unmatched videos:" in summary
+    assert "... and 2 more" in summary  # 7 - 5 = 2 more
+
+
+def test_labels_match_summary_image_video():
+    """Test MatchResult.summary() with ImageVideo (filename is a list)."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Create GT with a regular video
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+
+    # Create predictions with an ImageVideo (list of filenames)
+    video_pred = Video(
+        filename=["/output/frame001.png", "/output/frame002.png"],
+        open_backend=False,
+    )
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # Should not match (different type)
+    assert len(result.unmatched_videos) == 1
+
+    # Summary should handle list filename
+    summary = result.summary()
+    assert "Unmatched videos:" in summary
+    assert "/output/frame001.png" in summary  # First filename from list
+
+
 def test_labels_copy_basic(slp_minimal):
     """Test basic copy creates independent object."""
     labels = load_slp(slp_minimal)
