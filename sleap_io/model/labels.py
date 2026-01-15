@@ -2307,7 +2307,12 @@ class Labels:
 
                 else:
                     # All other methods: use find_match() for the full matching cascade
-                    matched_video = video_matcher.find_match(other_video, self.videos)
+                    matched_video = video_matcher.find_match(
+                        other_video,
+                        self.videos,
+                        labels_incoming=other,
+                        labels_base=self,
+                    )
                     if matched_video is not None:
                         video_map[other_video] = matched_video
                         matched = True

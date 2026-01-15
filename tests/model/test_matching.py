@@ -1512,3 +1512,1255 @@ class TestVideoMatcherCoverageGaps:
 
         # Same source dataset → same videos
         assert is_same_file(embedded1, embedded3)
+
+
+class TestLeafPathMatchingFix:
+    """Tests for the leaf-path matching bug fix."""
+
+    def test_get_path_parts_uses_root_for_embedded(self):
+        """Leaf-path matching should use root video path for embedded videos."""
+        from sleap_io.model.matching import _get_root_video
+
+        # Create a video with source_video chain
+        root_video = Video(filename="/original/path/video.mp4", open_backend=False)
+        embedded_video = Video(
+            filename="/embedded/file.pkg.slp",
+            source_video=root_video,
+            open_backend=False,
+        )
+
+        # The root should be the original video
+        assert _get_root_video(embedded_video).filename == "/original/path/video.mp4"
+
+    def test_find_match_uses_root_path_for_embedded(self):
+        """find_match should use root video path when matching embedded videos."""
+        # Create embedded videos with same root path but different embedded paths
+        root1 = Video(filename="/data/exp/CHR/video.mp4", open_backend=False)
+        root1.backend_metadata["shape"] = (100, 480, 640, 3)
+        embedded1 = Video(
+            filename="/linux/path/train.pkg.slp",
+            source_video=root1,
+            open_backend=False,
+        )
+        embedded1.backend_metadata["shape"] = (100, 480, 640, 3)
+
+        root2 = Video(filename="X:/data/exp/CHR/video.mp4", open_backend=False)
+        root2.backend_metadata["shape"] = (100, 480, 640, 3)
+        embedded2 = Video(
+            filename="Y:/windows/path/val.pkg.slp",
+            source_video=root2,
+            open_backend=False,
+        )
+        embedded2.backend_metadata["shape"] = (100, 480, 640, 3)
+
+        matcher = VideoMatcher(method=VideoMatchMethod.AUTO)
+        result = matcher.find_match(embedded2, [embedded1])
+
+        # Should match because root video paths share leaf "CHR/video.mp4"
+        assert result is embedded1
+
+
+class TestProvenanceConflictFallthrough:
+    """Tests for provenance conflict fall-through behavior."""
+
+    def test_no_conflict_when_files_dont_exist(self):
+        """Don't reject when neither provenance file exists."""
+        from sleap_io.model.matching import original_videos_conflict
+
+        video1_root = Video(filename="/nonexistent/path1/video.mp4", open_backend=False)
+        video1 = Video(
+            filename="/pkg1.slp", source_video=video1_root, open_backend=False
+        )
+
+        video2_root = Video(filename="/nonexistent/path2/video.mp4", open_backend=False)
+        video2 = Video(
+            filename="/pkg2.slp", source_video=video2_root, open_backend=False
+        )
+
+        # Both have provenance, but files don't exist
+        # Should NOT conflict (allow fall-through)
+        assert not original_videos_conflict(video1, video2)
+
+    def test_file_exists_helper(self, tmp_path):
+        """Test _file_exists helper function."""
+        from sleap_io.model.matching import _file_exists
+
+        # Nonexistent file
+        assert not _file_exists("/definitely/not/a/real/path.mp4")
+
+        # Existing file
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test")
+        assert _file_exists(str(test_file))
+
+        # List of files
+        test_file2 = tmp_path / "test2.txt"
+        test_file2.write_text("test2")
+        assert _file_exists([str(test_file), str(test_file2)])
+
+        # List with nonexistent file
+        assert not _file_exists([str(test_file), "/nonexistent.txt"])
+
+    def test_conflict_when_one_file_exists(self, tmp_path):
+        """Reject when one file exists and paths differ."""
+        from sleap_io.model.matching import original_videos_conflict
+
+        # Create an actual file
+        real_file = tmp_path / "real_video.mp4"
+        real_file.write_text("fake video content")
+
+        video1_root = Video(filename=str(real_file), open_backend=False)
+        video1 = Video(
+            filename=str(real_file), source_video=video1_root, open_backend=False
+        )
+
+        video2_root = Video(
+            filename="/nonexistent/different/video.mp4", open_backend=False
+        )
+        video2 = Video(
+            filename="/other.slp", source_video=video2_root, open_backend=False
+        )
+
+        # One file exists and paths differ - should conflict
+        assert original_videos_conflict(video1, video2)
+
+
+class TestPoseMatching:
+    """Tests for pose-based video matching helpers."""
+
+    def test_poses_identical_exact_match(self):
+        """Identical poses should match."""
+        from sleap_io.model.matching import _poses_identical
+
+        pts = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        assert _poses_identical(pts, pts.copy())
+
+    def test_poses_identical_different_values(self):
+        """Different poses should not match."""
+        from sleap_io.model.matching import _poses_identical
+
+        pts1 = np.array([[1.0, 2.0], [3.0, 4.0]])
+        pts2 = np.array([[1.0, 2.0], [3.0, 5.0]])  # One value different
+        assert not _poses_identical(pts1, pts2)
+
+    def test_poses_identical_nan_handling(self):
+        """NaN values should be handled correctly."""
+        from sleap_io.model.matching import _poses_identical
+
+        pts1 = np.array([[1.0, 2.0], [np.nan, np.nan]])
+        pts2 = np.array([[1.0, 2.0], [np.nan, np.nan]])
+        assert _poses_identical(pts1, pts2)
+
+        # Different NaN patterns should not match
+        pts3 = np.array([[1.0, np.nan], [3.0, 4.0]])
+        assert not _poses_identical(pts1, pts3)
+
+    def test_poses_identical_shape_mismatch(self):
+        """Different shapes should not match."""
+        from sleap_io.model.matching import _poses_identical
+
+        pts1 = np.array([[1.0, 2.0]])
+        pts2 = np.array([[1.0, 2.0], [3.0, 4.0]])
+        assert not _poses_identical(pts1, pts2)
+
+    def test_poses_identical_all_nan(self):
+        """All-NaN poses should not match (no valid points)."""
+        from sleap_io.model.matching import _poses_identical
+
+        pts1 = np.array([[np.nan, np.nan], [np.nan, np.nan]])
+        pts2 = np.array([[np.nan, np.nan], [np.nan, np.nan]])
+        assert not _poses_identical(pts1, pts2)
+
+    def test_frame_has_matching_pose(self):
+        """Test frame-level pose matching."""
+        from sleap_io import Instance, Skeleton
+        from sleap_io.model.matching import _frame_has_matching_pose
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a"), Node("b")])
+
+        inst1 = Instance.from_numpy(np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton)
+        inst2 = Instance.from_numpy(np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton)
+        inst3 = Instance.from_numpy(np.array([[5.0, 6.0], [7.0, 8.0]]), skeleton)
+
+        # Same poses should match
+        assert _frame_has_matching_pose([inst1], [inst2])
+
+        # Different poses should not match
+        assert not _frame_has_matching_pose([inst1], [inst3])
+
+        # ANY match is enough
+        assert _frame_has_matching_pose([inst1, inst3], [inst2])
+
+    def test_sample_frame_indices(self):
+        """Test frame index sampling."""
+        from sleap_io.model.matching import _sample_frame_indices
+
+        # Less than max_samples - return all
+        indices = {0, 5, 10}
+        result = _sample_frame_indices(indices, max_samples=10)
+        assert result == [0, 5, 10]
+
+        # More than max_samples - sample evenly
+        indices = set(range(100))
+        result = _sample_frame_indices(indices, max_samples=5)
+        assert len(result) == 5
+        assert result[0] == 0
+        assert result[-1] == 80  # Evenly spaced
+
+
+class TestVideoMatcherPoseMatching:
+    """Integration tests for VideoMatcher with pose matching."""
+
+    def test_match_by_poses_identical(self):
+        """Videos with identical poses should match."""
+        from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a"), Node("b")])
+        pts = np.array([[10.0, 20.0], [30.0, 40.0]])
+
+        video1 = Video(filename="/path1/video.mp4", open_backend=False)
+        video1.backend_metadata["shape"] = (100, 480, 640, 3)
+        video2 = Video(filename="/path2/video.mp4", open_backend=False)
+        video2.backend_metadata["shape"] = (100, 480, 640, 3)
+
+        labels1 = Labels(
+            videos=[video1],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video1,
+                    frame_idx=0,
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+                LabeledFrame(
+                    video=video1,
+                    frame_idx=10,
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+                LabeledFrame(
+                    video=video1,
+                    frame_idx=20,
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+            ],
+        )
+
+        labels2 = Labels(
+            videos=[video2],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video2,
+                    frame_idx=0,
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+                LabeledFrame(
+                    video=video2,
+                    frame_idx=10,
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+                LabeledFrame(
+                    video=video2,
+                    frame_idx=20,
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+            ],
+        )
+
+        matcher = VideoMatcher(method="auto", content_frames=3)
+        match = matcher.find_match(
+            incoming=video2,
+            candidates=[video1],
+            labels_incoming=labels2,
+            labels_base=labels1,
+        )
+
+        assert match is video1
+
+    def test_match_by_poses_different(self):
+        """Videos with different poses should not match."""
+        from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a"), Node("b")])
+
+        # Use different basenames to avoid path matching
+        video1 = Video(filename="/path1/video_A.mp4", open_backend=False)
+        video1.backend_metadata["shape"] = (100, 480, 640, 3)
+        video2 = Video(filename="/path2/video_B.mp4", open_backend=False)
+        video2.backend_metadata["shape"] = (100, 480, 640, 3)
+
+        labels1 = Labels(
+            videos=[video1],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video1,
+                    frame_idx=0,
+                    instances=[
+                        Instance.from_numpy(
+                            np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton
+                        )
+                    ],
+                ),
+            ],
+        )
+
+        labels2 = Labels(
+            videos=[video2],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video2,
+                    frame_idx=0,
+                    instances=[
+                        Instance.from_numpy(
+                            np.array([[100.0, 200.0], [300.0, 400.0]]), skeleton
+                        )
+                    ],
+                ),
+            ],
+        )
+
+        matcher = VideoMatcher(method="auto")
+        match = matcher.find_match(
+            incoming=video2,
+            candidates=[video1],
+            labels_incoming=labels2,
+            labels_base=labels1,
+        )
+
+        assert match is None
+
+    def test_match_by_poses_no_common_frames(self):
+        """Videos with no common frame indices should not match via poses."""
+        from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a"), Node("b")])
+        pts = np.array([[10.0, 20.0], [30.0, 40.0]])
+
+        # Use different basenames to avoid path matching
+        video1 = Video(filename="/path1/video_A.mp4", open_backend=False)
+        video1.backend_metadata["shape"] = (100, 480, 640, 3)
+        video2 = Video(filename="/path2/video_B.mp4", open_backend=False)
+        video2.backend_metadata["shape"] = (100, 480, 640, 3)
+
+        labels1 = Labels(
+            videos=[video1],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video1,
+                    frame_idx=0,
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+            ],
+        )
+
+        labels2 = Labels(
+            videos=[video2],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video2,
+                    frame_idx=50,  # Different frame
+                    instances=[Instance.from_numpy(pts, skeleton)],
+                ),
+            ],
+        )
+
+        matcher = VideoMatcher(method="auto")
+        match = matcher.find_match(
+            incoming=video2,
+            candidates=[video1],
+            labels_incoming=labels2,
+            labels_base=labels1,
+        )
+
+        assert match is None
+
+    def test_match_by_poses_no_annotations(self):
+        """Video with no annotations should fall through to None."""
+        from sleap_io import Labels, Skeleton, Video
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a")])
+
+        # Use different basenames to avoid path matching
+        video1 = Video(filename="/path1/video_A.mp4", open_backend=False)
+        video1.backend_metadata["shape"] = (100, 480, 640, 3)
+        video2 = Video(filename="/path2/video_B.mp4", open_backend=False)
+        video2.backend_metadata["shape"] = (100, 480, 640, 3)
+
+        labels1 = Labels(videos=[video1], skeletons=[skeleton], labeled_frames=[])
+        labels2 = Labels(videos=[video2], skeletons=[skeleton], labeled_frames=[])
+
+        matcher = VideoMatcher(method="auto")
+        match = matcher.find_match(
+            incoming=video2,
+            candidates=[video1],
+            labels_incoming=labels2,
+            labels_base=labels1,
+        )
+
+        assert match is None
+
+
+class TestComparePredictionsAuto:
+    """Tests for compare_predictions='auto' behavior."""
+
+    def test_auto_excludes_predictions_when_user_exists(self):
+        """With user instances present, predictions should be excluded."""
+        from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
+        from sleap_io.model.instance import PredictedInstance
+        from sleap_io.model.matching import _resolve_compare_predictions
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a")])
+        video = Video(filename="/video.mp4", open_backend=False)
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video,
+                    frame_idx=0,
+                    instances=[
+                        Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton),
+                        PredictedInstance.from_numpy(
+                            np.array([[3.0, 4.0]]), skeleton, score=0.9
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = _resolve_compare_predictions("auto", labels, video)
+        assert result is False  # Has user instances, exclude predictions
+
+    def test_auto_includes_predictions_when_only_predictions(self):
+        """With only predictions, should include them."""
+        from sleap_io import LabeledFrame, Labels, Skeleton, Video
+        from sleap_io.model.instance import PredictedInstance
+        from sleap_io.model.matching import _resolve_compare_predictions
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a")])
+        video = Video(filename="/video.mp4", open_backend=False)
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video,
+                    frame_idx=0,
+                    instances=[
+                        PredictedInstance.from_numpy(
+                            np.array([[1.0, 2.0]]), skeleton, score=0.9
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = _resolve_compare_predictions("auto", labels, video)
+        assert result is True  # Only predictions, include them
+
+    def test_explicit_true_always_includes(self):
+        """compare_predictions=True should always include predictions."""
+        from sleap_io import Instance, LabeledFrame, Labels, Skeleton, Video
+        from sleap_io.model.matching import _resolve_compare_predictions
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a")])
+        video = Video(filename="/video.mp4", open_backend=False)
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video,
+                    frame_idx=0,
+                    instances=[Instance.from_numpy(np.array([[1.0, 2.0]]), skeleton)],
+                ),
+            ],
+        )
+
+        result = _resolve_compare_predictions(True, labels, video)
+        assert result is True
+
+    def test_explicit_false_always_excludes(self):
+        """compare_predictions=False should always exclude predictions."""
+        from sleap_io import LabeledFrame, Labels, Skeleton, Video
+        from sleap_io.model.instance import PredictedInstance
+        from sleap_io.model.matching import _resolve_compare_predictions
+        from sleap_io.model.skeleton import Node
+
+        skeleton = Skeleton(nodes=[Node("a")])
+        video = Video(filename="/video.mp4", open_backend=False)
+        labels = Labels(
+            videos=[video],
+            skeletons=[skeleton],
+            labeled_frames=[
+                LabeledFrame(
+                    video=video,
+                    frame_idx=0,
+                    instances=[
+                        PredictedInstance.from_numpy(
+                            np.array([[1.0, 2.0]]), skeleton, score=0.9
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = _resolve_compare_predictions(False, labels, video)
+        assert result is False
+
+
+class TestImageMatching:
+    """Tests for image-based video matching helpers."""
+
+    def test_get_embedded_frame_indices_no_backend(self):
+        """Video without backend should return None."""
+        from sleap_io.model.matching import _get_embedded_frame_indices
+
+        video = Video(filename="/video.mp4", open_backend=False)
+        result = _get_embedded_frame_indices(video)
+        assert result is None
+
+    def test_get_common_embedded_indices_no_indices(self):
+        """Videos without embedded indices should return empty set."""
+        from sleap_io.model.matching import _get_common_embedded_indices
+
+        video1 = Video(filename="/video1.mp4", open_backend=False)
+        video2 = Video(filename="/video2.mp4", open_backend=False)
+        result = _get_common_embedded_indices(video1, video2)
+        assert result == set()
+
+    def test_to_grayscale_float_2d(self):
+        """Test grayscale conversion for 2D array."""
+        from sleap_io.model.matching import _to_grayscale_float
+
+        frame = np.array([[0, 128, 255], [64, 192, 32]], dtype=np.uint8)
+        result = _to_grayscale_float(frame)
+        assert result.shape == (2, 3)
+        assert result.dtype == np.float32
+        assert np.allclose(result[0, 0], 0.0)
+        assert np.allclose(result[0, 2], 1.0)
+
+    def test_to_grayscale_float_3d_single_channel(self):
+        """Test grayscale conversion for 3D array with single channel."""
+        from sleap_io.model.matching import _to_grayscale_float
+
+        frame = np.array([[[0], [128]], [[255], [64]]], dtype=np.uint8)
+        result = _to_grayscale_float(frame)
+        assert result.shape == (2, 2)
+
+    def test_to_grayscale_float_3d_rgb(self):
+        """Test grayscale conversion for 3D RGB array."""
+        from sleap_io.model.matching import _to_grayscale_float
+
+        # Pure red
+        frame = np.array([[[255, 0, 0]]], dtype=np.uint8)
+        result = _to_grayscale_float(frame)
+        expected = 0.299  # Red coefficient
+        assert np.allclose(result[0, 0], expected, atol=0.01)
+
+    def test_to_grayscale_float_invalid_shape(self):
+        """Test grayscale conversion with invalid shape raises error."""
+        import pytest
+
+        from sleap_io.model.matching import _to_grayscale_float
+
+        frame = np.array([[[[1]]]], dtype=np.uint8)  # 4D
+        with pytest.raises(ValueError, match="Unexpected frame shape"):
+            _to_grayscale_float(frame)
+
+    def test_to_grayscale_float_2_channels(self):
+        """Test grayscale conversion for 3D array with 2 channels (edge case)."""
+        from sleap_io.model.matching import _to_grayscale_float
+
+        # 2 channels - hits the else branch at line 430
+        frame = np.array([[[0, 128], [255, 64]]], dtype=np.uint8)
+        result = _to_grayscale_float(frame)
+        # Should use first channel only
+        assert result.shape == (1, 2)
+        assert np.allclose(result[0, 0], 0.0)
+        assert np.allclose(result[0, 1], 1.0)
+
+    def test_frames_similar_by_image_identical(self):
+        """Test _frames_similar_by_image with identical frames."""
+        from unittest.mock import patch
+
+        from sleap_io.model.matching import _frames_similar_by_image
+        from sleap_io.model.video import Video
+
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        frame = np.full((10, 10), 128, dtype=np.uint8)
+
+        # Patch at class level since attrs uses slots
+        with patch.object(Video, "__getitem__", return_value=frame):
+            assert _frames_similar_by_image(video1, video2, 0, 0.05)
+
+    def test_frames_similar_by_image_different(self):
+        """Test _frames_similar_by_image with very different frames."""
+        from unittest.mock import patch
+
+        from sleap_io.model.matching import _frames_similar_by_image
+        from sleap_io.model.video import Video
+
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        frame1 = np.full((10, 10), 0, dtype=np.uint8)
+        frame2 = np.full((10, 10), 255, dtype=np.uint8)
+
+        # Patch at class level with side_effect to return different frames
+        def get_frame(self, idx):
+            if self is video1:
+                return frame1
+            return frame2
+
+        with patch.object(Video, "__getitem__", get_frame):
+            assert not _frames_similar_by_image(video1, video2, 0, 0.05)
+
+    def test_frames_similar_by_image_different_shapes(self):
+        """Test _frames_similar_by_image with different frame shapes."""
+        from unittest.mock import patch
+
+        from sleap_io.model.matching import _frames_similar_by_image
+        from sleap_io.model.video import Video
+
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        frame1 = np.full((10, 10), 128, dtype=np.uint8)
+        frame2 = np.full((20, 20), 128, dtype=np.uint8)
+
+        def get_frame(self, idx):
+            if self is video1:
+                return frame1
+            return frame2
+
+        with patch.object(Video, "__getitem__", get_frame):
+            assert _frames_similar_by_image(video1, video2, 0, 0.05) is False
+
+    def test_frames_similar_by_image_exception(self):
+        """Test _frames_similar_by_image returns False on exception."""
+        from sleap_io.model.matching import _frames_similar_by_image
+        from sleap_io.model.video import Video
+
+        # Videos without backends will raise when accessing frames
+        video1 = Video(filename="/nonexistent.mp4", open_backend=False)
+        video2 = Video(filename="/nonexistent.mp4", open_backend=False)
+
+        assert _frames_similar_by_image(video1, video2, 0, 0.05) is False
+
+    def test_get_embedded_frame_indices_with_embedded_frame_inds(self):
+        """Test _get_embedded_frame_indices with embedded_frame_inds attribute."""
+        from unittest.mock import MagicMock
+
+        import attrs
+
+        from sleap_io.model.matching import _get_embedded_frame_indices
+        from sleap_io.model.video import Video
+
+        # Create mock backend with embedded_frame_inds
+        mock_backend = MagicMock()
+        mock_backend.embedded_frame_inds = [0, 5, 10, 15]
+
+        # Create video with mocked backend using attrs.evolve
+        video = Video(filename="/video.mp4", open_backend=False)
+        video = attrs.evolve(video, backend=mock_backend)
+
+        result = _get_embedded_frame_indices(video)
+        assert result == [0, 5, 10, 15]
+
+    def test_get_embedded_frame_indices_with_frame_map(self):
+        """Test _get_embedded_frame_indices with frame_map attribute."""
+        from unittest.mock import MagicMock
+
+        import attrs
+
+        from sleap_io.model.matching import _get_embedded_frame_indices
+        from sleap_io.model.video import Video
+
+        # Create mock backend with frame_map but no embedded_frame_inds
+        mock_backend = MagicMock()
+        mock_backend.embedded_frame_inds = None
+        mock_backend.frame_map = {0: "frame0", 5: "frame5", 10: "frame10"}
+
+        video = Video(filename="/video.mp4", open_backend=False)
+        video = attrs.evolve(video, backend=mock_backend)
+
+        result = _get_embedded_frame_indices(video)
+        assert set(result) == {0, 5, 10}
+
+    def test_get_common_embedded_indices_with_overlap(self):
+        """Test _get_common_embedded_indices with overlapping indices."""
+        from unittest.mock import MagicMock
+
+        import attrs
+
+        from sleap_io.model.matching import _get_common_embedded_indices
+        from sleap_io.model.video import Video
+
+        mock_backend1 = MagicMock()
+        mock_backend1.embedded_frame_inds = [0, 5, 10, 15]
+
+        mock_backend2 = MagicMock()
+        mock_backend2.embedded_frame_inds = [5, 10, 20, 25]
+
+        video1 = Video(filename="/video1.mp4", open_backend=False)
+        video1 = attrs.evolve(video1, backend=mock_backend1)
+
+        video2 = Video(filename="/video2.mp4", open_backend=False)
+        video2 = attrs.evolve(video2, backend=mock_backend2)
+
+        result = _get_common_embedded_indices(video1, video2)
+        assert result == {5, 10}
+
+
+class TestVideoMatcherNewAttributes:
+    """Tests for new VideoMatcher attributes."""
+
+    def test_default_values(self):
+        """Test default attribute values."""
+        matcher = VideoMatcher()
+        assert matcher.content_frames == 3
+        assert matcher.compare_predictions == "auto"
+        assert matcher.compare_images is False
+        assert matcher.image_similarity_threshold == 0.05
+
+    def test_custom_values(self):
+        """Test custom attribute values."""
+        matcher = VideoMatcher(
+            content_frames=5,
+            compare_predictions=True,
+            compare_images=True,
+            image_similarity_threshold=0.1,
+        )
+        assert matcher.content_frames == 5
+        assert matcher.compare_predictions is True
+        assert matcher.compare_images is True
+        assert matcher.image_similarity_threshold == 0.1
+
+    def test_string_method_conversion(self):
+        """Test string method is converted to enum."""
+        matcher = VideoMatcher(method="auto")
+        assert matcher.method == VideoMatchMethod.AUTO
+
+
+class TestVideoMatcherImageMatching:
+    """Tests for VideoMatcher._match_by_images method."""
+
+    def test_match_by_images_identical_frames(self):
+        """Test _match_by_images finds match with identical embedded frames."""
+        from unittest.mock import MagicMock, patch
+
+        import attrs
+
+        # Create videos with mocked backends that have embedded frame indices
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        mock_backend1 = MagicMock()
+        mock_backend1.embedded_frame_inds = [0]
+        video1 = attrs.evolve(video1, backend=mock_backend1)
+
+        mock_backend2 = MagicMock()
+        mock_backend2.embedded_frame_inds = [0]
+        video2 = attrs.evolve(video2, backend=mock_backend2)
+
+        frame = np.full((10, 10), 128, dtype=np.uint8)
+
+        # Patch frame access at class level
+        with patch.object(Video, "__getitem__", return_value=frame):
+            matcher = VideoMatcher(compare_images=True, content_frames=1)
+            result = matcher._match_by_images(video1, [video2])
+            assert result is video2
+
+    def test_match_by_images_different_frames(self):
+        """Test _match_by_images returns None with very different frames."""
+        from unittest.mock import MagicMock, patch
+
+        import attrs
+
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        mock_backend1 = MagicMock()
+        mock_backend1.embedded_frame_inds = [0]
+        video1 = attrs.evolve(video1, backend=mock_backend1)
+
+        mock_backend2 = MagicMock()
+        mock_backend2.embedded_frame_inds = [0]
+        video2 = attrs.evolve(video2, backend=mock_backend2)
+
+        frame1 = np.full((10, 10), 0, dtype=np.uint8)
+        frame2 = np.full((10, 10), 255, dtype=np.uint8)
+
+        def get_frame(self, idx):
+            if self is video1:
+                return frame1
+            return frame2
+
+        with patch.object(Video, "__getitem__", get_frame):
+            matcher = VideoMatcher(compare_images=True, content_frames=1)
+            result = matcher._match_by_images(video1, [video2])
+            assert result is None
+
+    def test_match_by_images_no_common_indices(self):
+        """Test _match_by_images returns None with no common frame indices."""
+        from unittest.mock import MagicMock
+
+        import attrs
+
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        mock_backend1 = MagicMock()
+        mock_backend1.embedded_frame_inds = [0, 1, 2]
+        video1 = attrs.evolve(video1, backend=mock_backend1)
+
+        mock_backend2 = MagicMock()
+        mock_backend2.embedded_frame_inds = [10, 11, 12]  # No overlap
+        video2 = attrs.evolve(video2, backend=mock_backend2)
+
+        matcher = VideoMatcher(compare_images=True, content_frames=1)
+        result = matcher._match_by_images(video1, [video2])
+        assert result is None
+
+    def test_match_by_images_multiple_candidates(self):
+        """Test _match_by_images with multiple candidates."""
+        from unittest.mock import MagicMock, patch
+
+        import attrs
+
+        # Incoming video
+        video_incoming = Video(filename="/incoming.mp4", open_backend=False)
+        mock_backend_in = MagicMock()
+        mock_backend_in.embedded_frame_inds = [0]
+        video_incoming = attrs.evolve(video_incoming, backend=mock_backend_in)
+
+        # Candidate 1 - different content
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        mock_backend1 = MagicMock()
+        mock_backend1.embedded_frame_inds = [0]
+        video1 = attrs.evolve(video1, backend=mock_backend1)
+
+        # Candidate 2 - similar content
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+        mock_backend2 = MagicMock()
+        mock_backend2.embedded_frame_inds = [0]
+        video2 = attrs.evolve(video2, backend=mock_backend2)
+
+        incoming_frame = np.full((10, 10), 100, dtype=np.uint8)
+        frame1 = np.full((10, 10), 0, dtype=np.uint8)  # Different
+        frame2 = np.full((10, 10), 100, dtype=np.uint8)  # Same as incoming
+
+        def get_frame(self, idx):
+            if self is video_incoming:
+                return incoming_frame
+            elif self is video1:
+                return frame1
+            return frame2
+
+        with patch.object(Video, "__getitem__", get_frame):
+            matcher = VideoMatcher(compare_images=True, content_frames=1)
+            result = matcher._match_by_images(video_incoming, [video1, video2])
+            assert result is video2
+
+
+class TestVideoMatcherFindMatchLeafPath:
+    """Tests for VideoMatcher.find_match leaf path matching edge cases."""
+
+    def test_find_match_incoming_shorter_path(self):
+        """Test find_match when incoming path is shorter than candidate."""
+        # Create videos with different path depths
+        video_incoming = Video(filename="/short/video.mp4", open_backend=False)
+        video_candidate = Video(
+            filename="/very/long/path/to/video.mp4", open_backend=False
+        )
+
+        matcher = VideoMatcher(method="auto")
+        # Should not match because leaf paths differ at higher depth
+        result = matcher.find_match(video_incoming, [video_candidate])
+        # Paths don't match at depth=1 (video.mp4 vs video.mp4 would match if unique)
+        # But since basenames are same and that's the only candidate, it should match
+        assert result is video_candidate
+
+    def test_find_match_candidate_shorter_path(self):
+        """Test find_match when candidate path is shorter than incoming."""
+        video_incoming = Video(
+            filename="/very/long/path/to/video.mp4", open_backend=False
+        )
+        video_candidate = Video(filename="/short/video.mp4", open_backend=False)
+
+        matcher = VideoMatcher(method="auto")
+        result = matcher.find_match(video_incoming, [video_candidate])
+        assert result is video_candidate
+
+    def test_find_match_leaf_uniqueness_disambiguation(self):
+        """Test find_match disambiguates by leaf path at increasing depth."""
+        # Two candidates with same basename but different parent directories
+        video_incoming = Video(filename="/data/exp1/fly.mp4", open_backend=False)
+        video_candidate1 = Video(filename="/other/exp1/fly.mp4", open_backend=False)
+        video_candidate2 = Video(filename="/other/exp2/fly.mp4", open_backend=False)
+
+        matcher = VideoMatcher(method="auto")
+        result = matcher.find_match(
+            video_incoming, [video_candidate1, video_candidate2]
+        )
+        # At depth=1 (fly.mp4), both match
+        # At depth=2 (exp1/fly.mp4 vs exp2/fly.mp4), only candidate1 matches
+        assert result is video_candidate1
+
+    def test_find_match_no_match_at_any_depth(self):
+        """Test find_match returns None when no leaf path matches."""
+        video_incoming = Video(filename="/data/unique_name.mp4", open_backend=False)
+        video_candidate = Video(
+            filename="/other/different_name.mp4", open_backend=False
+        )
+
+        matcher = VideoMatcher(method="auto")
+        result = matcher.find_match(video_incoming, [video_candidate])
+        # Should return None because basenames don't match
+        assert result is None
+
+
+class TestVideoMatcherMatchByPosesNoMatch:
+    """Tests for VideoMatcher._match_by_poses returning None."""
+
+    def test_match_by_poses_no_common_frames_returns_none(self):
+        """Test _match_by_poses returns None when no common frames."""
+        from sleap_io.model.instance import Instance
+        from sleap_io.model.labels import Labels
+        from sleap_io.model.skeleton import Skeleton
+
+        skeleton = Skeleton(["A", "B"])
+
+        # Video 1 with frame at index 0
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        inst1 = Instance.from_numpy(
+            np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+        )
+        lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+        labels1 = Labels(videos=[video1], skeletons=[skeleton], labeled_frames=[lf1])
+
+        # Video 2 with frame at index 100 (no overlap)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+        inst2 = Instance.from_numpy(
+            np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+        )
+        lf2 = LabeledFrame(video=video2, frame_idx=100, instances=[inst2])
+        labels2 = Labels(videos=[video2], skeletons=[skeleton], labeled_frames=[lf2])
+
+        matcher = VideoMatcher(method="auto", content_frames=1)
+        result = matcher._match_by_poses(video1, [video2], labels1, labels2)
+        assert result is None
+
+    def test_match_by_poses_poses_differ_returns_none(self):
+        """Test _match_by_poses returns None when poses don't match."""
+        from sleap_io.model.instance import Instance
+        from sleap_io.model.labels import Labels
+        from sleap_io.model.skeleton import Skeleton
+
+        skeleton = Skeleton(["A", "B"])
+
+        # Video 1 with specific pose
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        inst1 = Instance.from_numpy(
+            np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+        )
+        lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+        labels1 = Labels(videos=[video1], skeletons=[skeleton], labeled_frames=[lf1])
+
+        # Video 2 with different pose at same frame
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+        inst2 = Instance.from_numpy(
+            np.array([[100.0, 200.0], [300.0, 400.0]]), skeleton=skeleton
+        )
+        lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+        labels2 = Labels(videos=[video2], skeletons=[skeleton], labeled_frames=[lf2])
+
+        matcher = VideoMatcher(method="auto", content_frames=1)
+        result = matcher._match_by_poses(video1, [video2], labels1, labels2)
+        assert result is None
+
+
+class TestHelperFunctionsCoverage:
+    """Additional tests for helper function coverage."""
+
+    def test_get_frame_instances_multiple_videos(self):
+        """Test _get_frame_instances skips frames from other videos."""
+        from sleap_io.model.instance import Instance
+        from sleap_io.model.labels import Labels
+        from sleap_io.model.matching import _get_frame_instances
+        from sleap_io.model.skeleton import Skeleton
+
+        skeleton = Skeleton(["A", "B"])
+
+        # Create two videos with frames
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        inst1 = Instance.from_numpy(
+            np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+        )
+        inst2 = Instance.from_numpy(
+            np.array([[5.0, 6.0], [7.0, 8.0]]), skeleton=skeleton
+        )
+
+        lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+        lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+        labels = Labels(
+            videos=[video1, video2],
+            skeletons=[skeleton],
+            labeled_frames=[lf1, lf2],
+        )
+
+        # Get instances for video1 - should skip video2's frames
+        result = _get_frame_instances(labels, video1, include_predictions=True)
+        assert len(result) == 1
+        assert 0 in result
+        # The frame from video2 should not be included (covers line 202 continue)
+
+    def test_video_has_user_instances_multiple_videos(self):
+        """Test _video_has_user_instances skips frames from other videos."""
+        from sleap_io.model.instance import Instance
+        from sleap_io.model.labels import Labels
+        from sleap_io.model.matching import _video_has_user_instances
+        from sleap_io.model.skeleton import Skeleton
+
+        skeleton = Skeleton(["A", "B"])
+
+        # Create two videos
+        video1 = Video(filename="/v1.mp4", open_backend=False)
+        video2 = Video(filename="/v2.mp4", open_backend=False)
+
+        # Video2 has a user instance, video1 has none
+        inst = Instance.from_numpy(
+            np.array([[1.0, 2.0], [3.0, 4.0]]), skeleton=skeleton
+        )
+        lf = LabeledFrame(video=video2, frame_idx=0, instances=[inst])
+
+        labels = Labels(
+            videos=[video1, video2],
+            skeletons=[skeleton],
+            labeled_frames=[lf],
+        )
+
+        # Check video1 - should return False (covers line 229)
+        assert _video_has_user_instances(labels, video1) is False
+        # Check video2 - should return True
+        assert _video_has_user_instances(labels, video2) is True
+
+    def test_get_embedded_frame_indices_backend_no_attrs(self):
+        """Test _get_embedded_frame_indices when backend has neither attr."""
+        from unittest.mock import MagicMock
+
+        import attrs
+
+        from sleap_io.model.matching import _get_embedded_frame_indices
+        from sleap_io.model.video import Video
+
+        # Create backend with neither embedded_frame_inds nor frame_map
+        mock_backend = MagicMock(spec=[])  # Empty spec = no attributes
+
+        video = Video(filename="/video.mp4", open_backend=False)
+        video = attrs.evolve(video, backend=mock_backend)
+
+        # Should return None (covers line 351)
+        result = _get_embedded_frame_indices(video)
+        assert result is None
+
+
+class TestFindMatchLeafPathEdgeCases:
+    """Test edge cases in find_match leaf path matching."""
+
+    def test_find_match_incoming_path_shorter_than_depth(self):
+        """Test when incoming path is shorter than search depth."""
+        # Create incoming with short path (2 parts)
+        video_incoming = Video(filename="/fly.mp4", open_backend=False)
+        # Create two candidates with same basename but different deep paths
+        # This forces iteration to deeper depths to disambiguate
+        video_candidate1 = Video(filename="/a/b/c/exp1/fly.mp4", open_backend=False)
+        video_candidate2 = Video(filename="/a/b/c/exp2/fly.mp4", open_backend=False)
+
+        matcher = VideoMatcher(method="auto")
+        # At depth=1: both match "fly.mp4" (ambiguous)
+        # At depth=2: both have different parents (exp1 vs exp2) but incoming
+        #             has len=2 which < depth=2, so continue should be hit (line 1015)
+        result = matcher.find_match(
+            video_incoming, [video_candidate1, video_candidate2]
+        )
+        # Should return None since incoming path is too short to disambiguate
+        assert result is None  # Should still match at shallow depth
+
+    def test_find_match_candidate_path_shorter_than_depth(self):
+        """Test when candidate path is shorter than search depth."""
+        # Create incoming with long path
+        video_incoming = Video(filename="/a/b/c/d/e/fly.mp4", open_backend=False)
+        # Create candidate with shorter path
+        video_candidate = Video(filename="/fly.mp4", open_backend=False)
+
+        matcher = VideoMatcher(method="auto")
+        # This should exercise the len(parts) < depth continue (line 1019-1020)
+        result = matcher.find_match(video_incoming, [video_candidate])
+        assert result is video_candidate  # Should match at shallow depth
+
+    def test_find_match_no_viable_candidates(self):
+        """Test find_match when all candidates are filtered out."""
+        # Create videos with incompatible shapes
+        video_incoming = Video(filename="/v1.mp4", open_backend=False)
+        video_candidate = Video(filename="/v2.mp4", open_backend=False)
+
+        # Mock shapes to be incompatible - force shape rejection
+        from unittest.mock import patch
+
+        with patch("sleap_io.model.matching.shapes_compatible", return_value=False):
+            matcher = VideoMatcher(method="auto")
+            result = matcher.find_match(video_incoming, [video_candidate])
+            assert result is None
+
+
+class TestFindMatchWithLabels:
+    """Tests for VideoMatcher.find_match with labels for pose/image matching."""
+
+    def test_find_match_with_pose_matching_success(self):
+        """Test find_match returns match via pose matching when paths are ambiguous."""
+        from sleap_io.model.instance import Instance
+        from sleap_io.model.labels import Labels
+        from sleap_io.model.skeleton import Skeleton
+
+        skeleton = Skeleton(["A", "B"])
+
+        # Create incoming video
+        video_incoming = Video(filename="/data/video.mp4", open_backend=False)
+
+        # Create two candidates with same basename but different paths (ambiguous)
+        video_candidate1 = Video(filename="/exp1/video.mp4", open_backend=False)
+        video_candidate2 = Video(filename="/exp2/video.mp4", open_backend=False)
+
+        # Only candidate1 has matching pose with incoming
+        pose_match = np.array([[10.0, 20.0], [30.0, 40.0]])
+        pose_diff = np.array([[100.0, 200.0], [300.0, 400.0]])
+
+        inst_incoming = Instance.from_numpy(pose_match, skeleton=skeleton)
+        inst_candidate1 = Instance.from_numpy(
+            pose_match, skeleton=skeleton
+        )  # Same pose
+        inst_candidate2 = Instance.from_numpy(
+            pose_diff, skeleton=skeleton
+        )  # Different pose
+
+        lf_incoming = LabeledFrame(
+            video=video_incoming, frame_idx=0, instances=[inst_incoming]
+        )
+        lf_candidate1 = LabeledFrame(
+            video=video_candidate1, frame_idx=0, instances=[inst_candidate1]
+        )
+        lf_candidate2 = LabeledFrame(
+            video=video_candidate2, frame_idx=0, instances=[inst_candidate2]
+        )
+
+        labels_incoming = Labels(
+            videos=[video_incoming],
+            skeletons=[skeleton],
+            labeled_frames=[lf_incoming],
+        )
+        labels_base = Labels(
+            videos=[video_candidate1, video_candidate2],
+            skeletons=[skeleton],
+            labeled_frames=[lf_candidate1, lf_candidate2],
+        )
+
+        matcher = VideoMatcher(method="auto", content_frames=1)
+        # Call find_match with labels - leaf path matching can't disambiguate
+        # (both have basename "video.mp4"), so pose matching is needed
+        result = matcher.find_match(
+            video_incoming,
+            [video_candidate1, video_candidate2],
+            labels_incoming=labels_incoming,
+            labels_base=labels_base,
+        )
+        # Should match candidate1 via pose (covers line 1015: return match)
+        assert result is video_candidate1
+
+    def test_find_match_with_image_matching_success(self):
+        """Test find_match returns match via image matching when paths are ambiguous."""
+        from unittest.mock import MagicMock, patch
+
+        import attrs
+
+        # Create incoming video
+        video_incoming = Video(filename="/data/video.mp4", open_backend=False)
+
+        # Create two candidates with same basename (ambiguous leaf paths)
+        video_candidate1 = Video(filename="/exp1/video.mp4", open_backend=False)
+        video_candidate2 = Video(filename="/exp2/video.mp4", open_backend=False)
+
+        # Set up backends with embedded frame indices and matching shapes
+        mock_backend_in = MagicMock()
+        mock_backend_in.embedded_frame_inds = [0]
+        mock_backend_in.shape = (100, 10, 10, 1)
+        video_incoming = attrs.evolve(video_incoming, backend=mock_backend_in)
+
+        mock_backend1 = MagicMock()
+        mock_backend1.embedded_frame_inds = [0]
+        mock_backend1.shape = (100, 10, 10, 1)
+        video_candidate1 = attrs.evolve(video_candidate1, backend=mock_backend1)
+
+        mock_backend2 = MagicMock()
+        mock_backend2.embedded_frame_inds = [0]
+        mock_backend2.shape = (100, 10, 10, 1)
+        video_candidate2 = attrs.evolve(video_candidate2, backend=mock_backend2)
+
+        # Mock frame access - candidate1 matches incoming, candidate2 doesn't
+        frame_incoming = np.full((10, 10), 128, dtype=np.uint8)
+        frame_match = np.full((10, 10), 128, dtype=np.uint8)  # Same as incoming
+        frame_diff = np.full((10, 10), 0, dtype=np.uint8)  # Different
+
+        def get_frame(self, idx):
+            if self is video_incoming:
+                return frame_incoming
+            elif self is video_candidate1:
+                return frame_match
+            return frame_diff
+
+        with patch.object(Video, "__getitem__", get_frame):
+            matcher = VideoMatcher(method="auto", compare_images=True, content_frames=1)
+            # Leaf path can't disambiguate, image matching finds candidate1
+            result = matcher.find_match(
+                video_incoming, [video_candidate1, video_candidate2]
+            )
+            # Should match candidate1 via image (covers lines 1019-1021)
+            assert result is video_candidate1
+
+    def test_find_match_non_auto_method(self):
+        """Test find_match with non-AUTO method uses pairwise match()."""
+        video_incoming = Video(filename="/video.mp4", open_backend=False)
+        video_candidate = Video(filename="/video.mp4", open_backend=False)
+
+        matcher = VideoMatcher(method="path")
+        result = matcher.find_match(video_incoming, [video_candidate])
+        # Should match via path (covers lines 1028-1031)
+        assert result is video_candidate
+
+    def test_find_match_non_auto_no_match(self):
+        """Test find_match with non-AUTO method returns None when no match."""
+        video_incoming = Video(filename="/v1.mp4", open_backend=False)
+        video_candidate = Video(filename="/v2.mp4", open_backend=False)
+
+        matcher = VideoMatcher(method="path", strict=True)
+        result = matcher.find_match(video_incoming, [video_candidate])
+        # Should return None since paths don't match (covers line 1030)
+        assert result is None

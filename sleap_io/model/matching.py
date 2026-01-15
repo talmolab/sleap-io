@@ -17,7 +17,7 @@ automatic strategies.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import attrs
 import numpy as np
@@ -26,6 +26,9 @@ from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
+
+if TYPE_CHECKING:
+    from sleap_io.model.labels import Labels
 
 
 class SkeletonMatchMethod(str, Enum):
@@ -158,6 +161,277 @@ def _get_root_video(video: Video) -> Video:
 
     # No chain - this video IS the root
     return video
+
+
+def _file_exists(filename: str | list[str]) -> bool:
+    """Check if file(s) exist on disk.
+
+    Args:
+        filename: Single file path or list of file paths.
+
+    Returns:
+        True if the file (or all files in the list) exist.
+    """
+    from pathlib import Path
+
+    if isinstance(filename, list):
+        return all(Path(f).exists() for f in filename)
+    return Path(filename).exists()
+
+
+def _get_frame_instances(
+    labels: "Labels",
+    video: "Video",
+    include_predictions: bool,
+) -> dict[int, list["Instance"]]:
+    """Get frame_idx -> instances mapping for a video.
+
+    Args:
+        labels: Labels object containing the video's annotations.
+        video: Video to get instances for.
+        include_predictions: Whether to include PredictedInstance objects.
+
+    Returns:
+        Dictionary mapping frame indices to lists of instances.
+    """
+    from sleap_io.model.instance import PredictedInstance
+
+    result: dict[int, list] = {}
+    for lf in labels.labeled_frames:
+        if lf.video is not video:
+            continue
+
+        instances = []
+        for inst in lf.instances:
+            if include_predictions or not isinstance(inst, PredictedInstance):
+                instances.append(inst)
+
+        if instances:
+            result[lf.frame_idx] = instances
+
+    return result
+
+
+def _video_has_user_instances(labels: "Labels", video: "Video") -> bool:
+    """Check if video has any user (non-predicted) instances.
+
+    Args:
+        labels: Labels object containing the video's annotations.
+        video: Video to check for user instances.
+
+    Returns:
+        True if the video has at least one non-predicted instance.
+    """
+    from sleap_io.model.instance import PredictedInstance
+
+    for lf in labels.labeled_frames:
+        if lf.video is not video:
+            continue
+        for inst in lf.instances:
+            if not isinstance(inst, PredictedInstance):
+                return True
+    return False
+
+
+def _resolve_compare_predictions(
+    compare_predictions: str | bool,
+    labels: "Labels",
+    video: "Video",
+) -> bool:
+    """Resolve 'auto' compare_predictions to boolean.
+
+    "auto" means: include predictions only if video has NO user instances.
+
+    Args:
+        compare_predictions: The compare_predictions setting ("auto", True, or False).
+        labels: Labels object containing the video's annotations.
+        video: Video to check for user instances.
+
+    Returns:
+        True if predictions should be included, False otherwise.
+    """
+    if compare_predictions == "auto":
+        return not _video_has_user_instances(labels, video)
+    return bool(compare_predictions)
+
+
+def _frame_has_matching_pose(
+    instances_a: list["Instance"],
+    instances_b: list["Instance"],
+) -> bool:
+    """Check if ANY pair of instances has identical poses.
+
+    Args:
+        instances_a: List of instances from the first frame.
+        instances_b: List of instances from the second frame.
+
+    Returns:
+        True if at least one instance from A exactly matches at least one
+        instance from B (0 coordinate difference).
+    """
+    for inst_a in instances_a:
+        pts_a = inst_a.numpy()
+        for inst_b in instances_b:
+            pts_b = inst_b.numpy()
+            if _poses_identical(pts_a, pts_b):
+                return True
+    return False
+
+
+def _poses_identical(pts_a: "np.ndarray", pts_b: "np.ndarray") -> bool:
+    """Check if two pose arrays are exactly identical.
+
+    Handles NaN values by requiring same NaN pattern and exact match
+    on all valid (non-NaN) coordinates.
+
+    Args:
+        pts_a: First pose array of shape (n_nodes, 2).
+        pts_b: Second pose array of shape (n_nodes, 2).
+
+    Returns:
+        True if the poses are exactly identical (with NaN handling).
+    """
+    import numpy as np
+
+    if pts_a.shape != pts_b.shape:
+        return False
+
+    valid_a = ~np.isnan(pts_a)
+    valid_b = ~np.isnan(pts_b)
+
+    # Must have same NaN pattern
+    if not np.array_equal(valid_a, valid_b):
+        return False
+
+    # Must have at least some valid points
+    if not np.any(valid_a):
+        return False
+
+    # Valid points must be exactly equal
+    return np.array_equal(pts_a[valid_a], pts_b[valid_b])
+
+
+def _sample_frame_indices(indices: set[int], max_samples: int) -> list[int]:
+    """Sample frame indices evenly if too many, otherwise return all.
+
+    Args:
+        indices: Set of frame indices to sample from.
+        max_samples: Maximum number of samples to return.
+
+    Returns:
+        List of sampled frame indices (sorted).
+    """
+    indices_list = sorted(indices)
+    if len(indices_list) <= max_samples:
+        return indices_list
+
+    step = len(indices_list) / max_samples
+    return [indices_list[int(i * step)] for i in range(max_samples)]
+
+
+def _get_embedded_frame_indices(video: "Video") -> list[int] | None:
+    """Get frame indices embedded in video, or None if not available.
+
+    Args:
+        video: Video to get embedded frame indices from.
+
+    Returns:
+        List of frame indices if available, None otherwise.
+    """
+    backend = video.backend
+    if backend is None:
+        return None
+    if (
+        hasattr(backend, "embedded_frame_inds")
+        and backend.embedded_frame_inds is not None
+    ):
+        return list(backend.embedded_frame_inds)
+    if hasattr(backend, "frame_map") and backend.frame_map:
+        return list(backend.frame_map.keys())
+    return None
+
+
+def _get_common_embedded_indices(video1: "Video", video2: "Video") -> set[int]:
+    """Get frame indices embedded in both videos.
+
+    Args:
+        video1: First video.
+        video2: Second video.
+
+    Returns:
+        Set of frame indices embedded in both videos.
+    """
+    inds1 = _get_embedded_frame_indices(video1)
+    inds2 = _get_embedded_frame_indices(video2)
+
+    if inds1 is None or inds2 is None:
+        return set()
+
+    return set(inds1) & set(inds2)
+
+
+def _frames_similar_by_image(
+    video1: "Video",
+    video2: "Video",
+    frame_idx: int,
+    threshold: float,
+) -> bool:
+    """Check if frames are similar by image content.
+
+    Args:
+        video1: First video.
+        video2: Second video.
+        frame_idx: Frame index to compare.
+        threshold: Maximum mean pixel difference (0-1 scale, normalized by 255).
+
+    Returns:
+        True if images are within threshold similarity.
+    """
+    import numpy as np
+
+    try:
+        frame1 = video1[frame_idx]
+        frame2 = video2[frame_idx]
+
+        gray1 = _to_grayscale_float(frame1)
+        gray2 = _to_grayscale_float(frame2)
+
+        if gray1.shape != gray2.shape:
+            return False
+
+        diff = np.abs(gray1 - gray2).mean()
+        return diff <= threshold
+
+    except Exception:
+        return False
+
+
+def _to_grayscale_float(frame: "np.ndarray") -> "np.ndarray":
+    """Convert frame to grayscale float in range [0, 1].
+
+    Args:
+        frame: Input frame array.
+
+    Returns:
+        Grayscale float array in range [0, 1].
+    """
+    import numpy as np
+
+    if frame.ndim == 2:
+        gray = frame.astype(np.float32)
+    elif frame.ndim == 3:
+        if frame.shape[2] == 1:
+            gray = frame[:, :, 0].astype(np.float32)
+        elif frame.shape[2] >= 3:
+            gray = (
+                0.299 * frame[:, :, 0] + 0.587 * frame[:, :, 1] + 0.114 * frame[:, :, 2]
+            ).astype(np.float32)
+        else:
+            gray = frame[:, :, 0].astype(np.float32)
+    else:
+        raise ValueError(f"Unexpected frame shape: {frame.shape}")
+
+    return gray / 255.0
 
 
 def _is_same_file_direct(video1: Video, video2: Video) -> bool:
@@ -321,21 +595,26 @@ def original_videos_conflict(video1: Video, video2: Video) -> bool:
     """Check if two videos have conflicting original_video references.
 
     This is used for REJECTION in video matching. If both videos have
-    provenance info but point to different root files, they definitely
+    provenance info pointing to verifiably different files, they definitely
     don't match (even if shapes are identical).
+
+    Returns True only if both videos have provenance pointing to verifiably
+    different files. If files don't exist and can't be verified, returns False
+    to allow fall-through to other matching strategies (pose, image).
 
     Args:
         video1: First video to compare.
         video2: Second video to compare.
 
     Returns:
-        True if both have provenance AND their roots point to different files.
-        False otherwise (including if either or both have no provenance).
+        True if both have provenance AND their roots point to verifiably
+        different files. False otherwise (including if either or both have
+        no provenance, or if files don't exist and can't be verified).
 
     Example:
         Two videos with identical basenames and shapes but from different
         directories would conflict if both have original_video set to their
-        respective source paths.
+        respective source paths AND those files exist on disk.
     """
     root1 = _get_root_video(video1)
     root2 = _get_root_video(video2)
@@ -354,7 +633,15 @@ def original_videos_conflict(video1: Video, video2: Video) -> bool:
         return False
 
     # Both have provenance - check if roots are the same file
-    return not _is_same_file_direct(root1, root2)
+    if _is_same_file_direct(root1, root2):
+        return False  # Definitely same - no conflict
+
+    # If neither file exists, we can't verify - don't reject
+    if not _file_exists(root1.filename) and not _file_exists(root2.filename):
+        return False  # Can't verify, allow fall-through to other matching
+
+    # At least one file exists and they don't match - conflict
+    return True
 
 
 @attrs.define
@@ -514,6 +801,18 @@ class VideoMatcher:
             When True, paths must be exactly identical. When False, paths
             are normalized before comparison. Only used when method is PATH.
             Default is False.
+        content_frames: Minimum number of matching frames required for pose/image
+            matching to confirm a match. If fewer common frames exist, requires
+            all of them to match. Default 3.
+        compare_predictions: Whether to include predicted instances in pose matching.
+            "auto" (default): Include only if video has 100% predictions (no user
+            instances). True: Always include predictions. False: Never include
+            predictions (user instances only).
+        compare_images: Whether to compare frame images via pixel similarity.
+            Expensive operation requiring frame decoding. Default False.
+        image_similarity_threshold: Maximum mean pixel difference (0-1 scale,
+            normalized by 255) for images to be considered matching.
+            Only used when compare_images=True. Default 0.05 (~13/255 pixels).
 
     Notes:
         For AUTO method, use find_match() when matching against a list of
@@ -526,6 +825,29 @@ class VideoMatcher:
         converter=lambda x: VideoMatchMethod(x) if isinstance(x, str) else x,
     )
     strict: bool = False
+    content_frames: int = 3
+    compare_predictions: str | bool = "auto"
+    compare_images: bool = False
+    image_similarity_threshold: float = 0.05
+    _frame_cache: dict = attrs.field(factory=dict, init=False, repr=False)
+
+    def _get_cached_frame_instances(
+        self,
+        labels: "Labels",
+        video: "Video",
+        include_predictions: bool,
+    ) -> dict[int, list["Instance"]]:
+        """Get frame instances with caching for performance.
+
+        Caches the result to avoid recomputing for the same video multiple times
+        during merge operations.
+        """
+        cache_key = (id(labels), id(video), include_predictions)
+        if cache_key not in self._frame_cache:
+            self._frame_cache[cache_key] = _get_frame_instances(
+                labels, video, include_predictions
+            )
+        return self._frame_cache[cache_key]
 
     def match(self, video1: Video, video2: Video) -> bool:
         """Check if two videos match according to the configured method.
@@ -578,6 +900,8 @@ class VideoMatcher:
         self,
         incoming: Video,
         candidates: list[Video],
+        labels_incoming: "Labels | None" = None,
+        labels_base: "Labels | None" = None,
     ) -> Video | None:
         """Find a matching video from candidates using the configured method.
 
@@ -587,6 +911,10 @@ class VideoMatcher:
         Args:
             incoming: The video to find a match for.
             candidates: List of existing videos to search for matches.
+            labels_incoming: Labels object containing the incoming video's
+                annotations. Used for pose-based matching in AUTO mode.
+            labels_base: Labels object containing the candidates' annotations.
+                Used for pose-based matching in AUTO mode.
 
         Returns:
             The matched video, or None if no match found.
@@ -598,6 +926,8 @@ class VideoMatcher:
             3. Definitive file identity (is_same_file)
             4. Strict path match
             5. Leaf uniqueness matching at increasing depths
+            6. Pose-based matching (if labels provided)
+            7. Image-based matching (if compare_images=True)
 
             Shape is for REJECTION only - compatible shapes don't imply a match.
         """
@@ -637,8 +967,9 @@ class VideoMatcher:
             if viable:
 
                 def get_path_parts(video: Video) -> tuple[str, ...]:
-                    """Get path parts for comparison."""
-                    fn = video.filename
+                    """Get path parts for comparison, using root video for embedded."""
+                    root = _get_root_video(video)
+                    fn = root.filename
                     if isinstance(fn, list):
                         fn = fn[0]  # Use first for ImageVideo
                     return Path(sanitize_filename(fn)).parts
@@ -675,6 +1006,20 @@ class VideoMatcher:
                     # If no matches, try deeper
                     # If multiple matches, continue deeper to disambiguate
 
+            # POSE MATCHING: Compare pose annotations (default in AUTO)
+            if labels_incoming is not None and labels_base is not None:
+                match = self._match_by_poses(
+                    incoming, viable, labels_incoming, labels_base
+                )
+                if match is not None:
+                    return match
+
+            # IMAGE MATCHING: Compare frame images (opt-in)
+            if self.compare_images:
+                match = self._match_by_images(incoming, viable)
+                if match is not None:
+                    return match
+
             # No match found
             return None
 
@@ -684,6 +1029,101 @@ class VideoMatcher:
                 if self.match(candidate, incoming):
                     return candidate
             return None
+
+    def _match_by_poses(
+        self,
+        incoming: "Video",
+        candidates: list["Video"],
+        labels_incoming: "Labels",
+        labels_base: "Labels",
+    ) -> "Video | None":
+        """Try to match video by comparing pose annotations.
+
+        Returns matched video if poses match on enough common frames.
+        """
+        # Resolve whether to include predictions for incoming video
+        include_preds = _resolve_compare_predictions(
+            self.compare_predictions, labels_incoming, incoming
+        )
+
+        # Get incoming video's frame -> instances map (cached)
+        incoming_frames = self._get_cached_frame_instances(
+            labels_incoming, incoming, include_preds
+        )
+        if not incoming_frames:
+            return None  # No annotations to compare
+
+        for candidate in candidates:
+            # Get candidate's frame -> instances map (cached for performance)
+            # Use same prediction setting resolved for candidate
+            include_preds_cand = _resolve_compare_predictions(
+                self.compare_predictions, labels_base, candidate
+            )
+            candidate_frames = self._get_cached_frame_instances(
+                labels_base, candidate, include_preds_cand
+            )
+            if not candidate_frames:
+                continue
+
+            # Find common frame indices
+            common_indices = set(incoming_frames.keys()) & set(candidate_frames.keys())
+            if not common_indices:
+                continue
+
+            # Determine required matches
+            required_matches = min(self.content_frames, len(common_indices))
+
+            # Sample frames if too many (performance)
+            sample_indices = _sample_frame_indices(
+                common_indices, max_samples=self.content_frames * 2
+            )
+
+            # Count matching frames
+            matching_frames = 0
+            for frame_idx in sample_indices:
+                if _frame_has_matching_pose(
+                    incoming_frames[frame_idx], candidate_frames[frame_idx]
+                ):
+                    matching_frames += 1
+                    if matching_frames >= required_matches:
+                        return candidate  # Found match!
+
+        return None
+
+    def _match_by_images(
+        self,
+        incoming: "Video",
+        candidates: list["Video"],
+    ) -> "Video | None":
+        """Try to match video by comparing image content.
+
+        Only used when compare_images=True. Expensive operation.
+        Returns matched video if images match on enough common frames.
+        """
+        for candidate in candidates:
+            # Get common embedded frame indices
+            common_indices = _get_common_embedded_indices(incoming, candidate)
+            if not common_indices:
+                continue
+
+            required_matches = min(self.content_frames, len(common_indices))
+
+            # Sample frames
+            sample_indices = _sample_frame_indices(
+                common_indices, max_samples=self.content_frames * 2
+            )
+
+            # Count matching frames
+            matching_frames = 0
+            for frame_idx in sample_indices:
+                if _frames_similar_by_image(
+                    incoming, candidate, frame_idx, self.image_similarity_threshold
+                ):
+                    matching_frames += 1
+                    if matching_frames >= required_matches:
+                        return candidate
+
+        return None
 
 
 # Pre-configured matchers for common use cases

@@ -550,20 +550,28 @@ class Video:
         other_is_hdf5 = isinstance(other.backend, HDF5Video)
 
         if self_is_hdf5 and other_is_hdf5:
-            # Both are HDF5 videos - match by source_filename first
+            # Both are HDF5 videos - must match by BOTH source_filename AND dataset
+            # to distinguish different videos embedded in the same pkg.slp file
             self_source = self.backend.source_filename
             other_source = other.backend.source_filename
-
-            if self_source is not None and other_source is not None:
-                if strict:
-                    return Path(self_source).resolve() == Path(other_source).resolve()
-                else:
-                    return Path(self_source).name == Path(other_source).name
-
-            # Fall back to dataset name matching if source_filename is not available
             self_dataset = self.backend.dataset
             other_dataset = other.backend.dataset
 
+            # If both have datasets, they must match
+            if self_dataset is not None and other_dataset is not None:
+                if self_dataset != other_dataset:
+                    return False  # Different datasets = different videos
+
+            # If both have source_filenames, compare them
+            if self_source is not None and other_source is not None:
+                if strict:
+                    # For HDF5 videos, just compare normalized path strings
+                    # (avoid slow resolve() on network paths)
+                    return Path(self_source).as_posix() == Path(other_source).as_posix()
+                else:
+                    return Path(self_source).name == Path(other_source).name
+
+            # If only datasets available (no source_filename), they must match
             if self_dataset is not None and other_dataset is not None:
                 return self_dataset == other_dataset
 
@@ -583,9 +591,19 @@ class Video:
             # One is image sequence, other is single file
             return False
         else:
-            # Both are single files
+            # Both are single files - use resolve() for symlink handling
             if strict:
-                return Path(self.filename).resolve() == Path(other.filename).resolve()
+                p1, p2 = Path(self.filename), Path(other.filename)
+                # Fast string comparison first
+                if p1.as_posix() == p2.as_posix():
+                    return True
+                # Only resolve if both exist locally (avoid slow network timeouts)
+                try:
+                    if p1.exists() and p2.exists():
+                        return p1.resolve() == p2.resolve()
+                except OSError:
+                    pass
+                return False
             else:
                 return Path(self.filename).name == Path(other.filename).name
 
