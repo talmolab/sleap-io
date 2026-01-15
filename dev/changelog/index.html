@@ -380,6 +380,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v062" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.2
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v061" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -692,17 +703,6 @@
     <span class="md-ellipsis">
       
         v0.0.12
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v0011" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.11
       
     </span>
   </a>
@@ -2766,6 +2766,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v062" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.2
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v061" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3084,17 +3095,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v0011" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.11
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3114,6 +3114,466 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v062"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.2">v0.6.2</a><a class="headerlink" href="#v062" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.6.2 Release Notes</h1>
+<h2>Summary</h2>
+<p>This release introduces <strong>content-based video matching</strong> - a major enhancement that uses pose annotations and image pixels to match videos even when file paths differ completely. Key highlights:</p>
+<ul>
+<li><strong>Pose-Based Video Matching</strong>: Videos are automatically matched when they share identical pose annotations, enabling reliable cross-platform merges</li>
+<li><strong>Image-Based Video Matching</strong>: Optional pixel comparison for matching videos without annotations</li>
+<li><strong>New <code>Labels.match()</code> API</strong>: Inspect matching results without merging - ideal for evaluation workflows</li>
+<li><strong>Video Color Mode Control</strong>: New <code>Labels.set_video_color_mode()</code> method and <code>sio fix --video-color</code> CLI option</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.6.2 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;
+
+# Upgrade existing project dependency
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync
+
+# Or with pip
+pip install --upgrade &quot;sleap-io[all]&quot;"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.6.2 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync
+
+<span class="pl-c"><span class="pl-c">#</span> Or with pip</span>
+pip install --upgrade <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span></pre></div>
+<p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
+<hr>
+<h2>New Features</h2>
+<h3>Content-Based Video Matching (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3816224267" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/336" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/336/hovercard" href="https://github.com/talmolab/sleap-io/pull/336">#336</a>)</h3>
+<p>A major enhancement to the AUTO video matching algorithm that adds <strong>two new matching signals</strong> based on video content rather than file paths. This dramatically improves merge reliability when file paths differ between systems.</p>
+<h4>Pose-Based Matching (Default)</h4>
+<p>Videos with identical pose annotations on common frames are now automatically matched, even when file paths differ completely. This is the <strong>key enabler for cross-platform merges</strong>.</p>
+<p><strong>How it works:</strong></p>
+<ol>
+<li>Find common frame indices between two videos (frames that both have annotations)</li>
+<li>For each common frame, compare pose coordinates between all instance pairs</li>
+<li>If at least one instance pair has <strong>exactly identical coordinates</strong> (0 difference, with NaN handling)</li>
+<li>And this holds for at least 3 frames (configurable), the videos are considered a match</li>
+</ol>
+<p><strong>Why this is reliable:</strong> Pose coordinates are stored as floats with high precision. The probability of two unrelated videos having identical pose coordinates on multiple frames is essentially zero - this is a strong cryptographic-like signal without requiring any hashing.</p>
+<p><strong>Example - Cross-Platform Merge:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Labels from Linux workstation (paths like /mnt/data/fly.mp4)
+linux_labels = sio.load_slp(&quot;annotations_linux.pkg.slp&quot;)
+
+# Labels from Windows workstation (paths like X:\data\fly.mp4)
+windows_labels = sio.load_slp(&quot;annotations_windows.pkg.slp&quot;)
+
+# Automatically matches videos by pose content!
+linux_labels.merge(windows_labels)  # video=&quot;auto&quot; (default)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Labels from Linux workstation (paths like /mnt/data/fly.mp4)</span>
+<span class="pl-s1">linux_labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"annotations_linux.pkg.slp"</span>)
+
+<span class="pl-c"># Labels from Windows workstation (paths like X:\data\fly.mp4)</span>
+<span class="pl-s1">windows_labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"annotations_windows.pkg.slp"</span>)
+
+<span class="pl-c"># Automatically matches videos by pose content!</span>
+<span class="pl-s1">linux_labels</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">windows_labels</span>)  <span class="pl-c"># video="auto" (default)</span></pre></div>
+<p><strong>When this helps:</strong></p>
+<ul>
+<li>Cross-platform merges (Linux ↔ Windows ↔ macOS)</li>
+<li>Embedded videos in <code>.pkg.slp</code> files where original files aren't accessible</li>
+<li>Videos that have been moved or renamed</li>
+<li>Combining predictions from different machines</li>
+</ul>
+<hr>
+<h4>Image-Based Matching (Opt-in)</h4>
+<p>For videos without annotation overlap, you can enable <strong>pixel-based content matching</strong>. This compares actual frame pixels to identify identical videos.</p>
+<p><strong>How it works:</strong></p>
+<ol>
+<li>Find common embedded frame indices between videos</li>
+<li>Decode frames and convert to grayscale float (0-1 scale)</li>
+<li>Compute mean absolute pixel difference between frames</li>
+<li>If difference is below threshold (default: 0.05 ≈ 13/255 pixel difference) on enough frames, match</li>
+</ol>
+<p><strong>Example:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="from sleap_io.model.matching import VideoMatcher
+
+# Enable image comparison for videos without pose overlap
+base.merge(other, video=VideoMatcher(
+    method=&quot;auto&quot;,
+    compare_images=True,                 # Enable pixel comparison
+    image_similarity_threshold=0.05,     # Max mean pixel diff (0-1 scale)
+    content_frames=3,                    # Require 3 matching frames
+))"><pre><span class="pl-k">from</span> <span class="pl-s1">sleap_io</span>.<span class="pl-s1">model</span>.<span class="pl-s1">matching</span> <span class="pl-k">import</span> <span class="pl-v">VideoMatcher</span>
+
+<span class="pl-c"># Enable image comparison for videos without pose overlap</span>
+<span class="pl-s1">base</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">other</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-en">VideoMatcher</span>(
+    <span class="pl-s1">method</span><span class="pl-c1">=</span><span class="pl-s">"auto"</span>,
+    <span class="pl-s1">compare_images</span><span class="pl-c1">=</span><span class="pl-c1">True</span>,                 <span class="pl-c"># Enable pixel comparison</span>
+    <span class="pl-s1">image_similarity_threshold</span><span class="pl-c1">=</span><span class="pl-c1">0.05</span>,     <span class="pl-c"># Max mean pixel diff (0-1 scale)</span>
+    <span class="pl-s1">content_frames</span><span class="pl-c1">=</span><span class="pl-c1">3</span>,                    <span class="pl-c"># Require 3 matching frames</span>
+))</pre></div>
+<p><strong>Threshold guidance:</strong></p>
+<ul>
+<li><code>0.05</code> (default): ~13/255 pixel difference - good for reencoded videos</li>
+<li><code>0.01</code>: Very strict (~3/255 pixels) - for exact copies</li>
+<li><code>0.1</code>: Lenient (~26/255 pixels) - for videos with minor processing differences</li>
+</ul>
+<p><strong>Note:</strong> Image matching requires decoding video frames, which is computationally expensive. It's disabled by default and runs only when pose matching doesn't find a match.</p>
+<hr>
+<h4>Controlling Content Matching</h4>
+<p>The <code>VideoMatcher</code> class provides fine-grained control:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="from sleap_io.model.matching import VideoMatcher
+
+matcher = VideoMatcher(
+    method=&quot;auto&quot;,
+    # Pose matching options
+    content_frames=3,              # Min matching frames required (default: 3)
+    compare_predictions=&quot;auto&quot;,    # Include predictions: &quot;auto&quot;, True, False
+
+    # Image matching options (disabled by default)
+    compare_images=False,          # Enable pixel comparison
+    image_similarity_threshold=0.05,  # Max mean pixel diff (0-1)
+)
+
+# Use with merge
+base.merge(other, video=matcher)
+
+# Use with match (new API)
+result = base.match(other, video=matcher)"><pre><span class="pl-k">from</span> <span class="pl-s1">sleap_io</span>.<span class="pl-s1">model</span>.<span class="pl-s1">matching</span> <span class="pl-k">import</span> <span class="pl-v">VideoMatcher</span>
+
+<span class="pl-s1">matcher</span> <span class="pl-c1">=</span> <span class="pl-en">VideoMatcher</span>(
+    <span class="pl-s1">method</span><span class="pl-c1">=</span><span class="pl-s">"auto"</span>,
+    <span class="pl-c"># Pose matching options</span>
+    <span class="pl-s1">content_frames</span><span class="pl-c1">=</span><span class="pl-c1">3</span>,              <span class="pl-c"># Min matching frames required (default: 3)</span>
+    <span class="pl-s1">compare_predictions</span><span class="pl-c1">=</span><span class="pl-s">"auto"</span>,    <span class="pl-c"># Include predictions: "auto", True, False</span>
+
+    <span class="pl-c"># Image matching options (disabled by default)</span>
+    <span class="pl-s1">compare_images</span><span class="pl-c1">=</span><span class="pl-c1">False</span>,          <span class="pl-c"># Enable pixel comparison</span>
+    <span class="pl-s1">image_similarity_threshold</span><span class="pl-c1">=</span><span class="pl-c1">0.05</span>,  <span class="pl-c"># Max mean pixel diff (0-1)</span>
+)
+
+<span class="pl-c"># Use with merge</span>
+<span class="pl-s1">base</span>.<span class="pl-c1">merge</span>(<span class="pl-s1">other</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">matcher</span>)
+
+<span class="pl-c"># Use with match (new API)</span>
+<span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">base</span>.<span class="pl-c1">match</span>(<span class="pl-s1">other</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">matcher</span>)</pre></div>
+<p><strong><code>compare_predictions</code> modes:</strong></p>
+<ul>
+<li><code>"auto"</code> (default): Include predictions only if video has NO user instances (100% predictions)</li>
+<li><code>True</code>: Always include predictions in pose comparison</li>
+<li><code>False</code>: Only compare user-labeled instances (strictest)</li>
+</ul>
+<hr>
+<h4>AUTO Matching Cascade (Updated)</h4>
+<p>The <code>video="auto"</code> algorithm now includes content matching in its cascade:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Check</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Shape incompatible (frames, H, W differ)</td>
+<td><strong>Reject</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Provenance conflict (different <code>original_video</code>, verifiable)</td>
+<td><strong>Reject</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Same physical file (<code>os.path.samefile</code>)</td>
+<td><strong>Match</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Exact path string match</td>
+<td><strong>Match</strong></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Unique basename/parent suffix match</td>
+<td><strong>Match</strong></td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Pose matching</strong> (identical annotations)</td>
+<td><strong>Match</strong> ← NEW</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Image matching</strong> (pixel similarity, if enabled)</td>
+<td><strong>Match</strong> ← NEW</td>
+</tr>
+<tr>
+<td>8</td>
+<td>No match found</td>
+<td>Add as new</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3><code>Labels.match()</code> API - Matching Without Merging (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3818355874" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/337" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/337/hovercard" href="https://github.com/talmolab/sleap-io/pull/337">#337</a>, <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3818847432" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/338" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/338/hovercard" href="https://github.com/talmolab/sleap-io/pull/338">#338</a>)</h3>
+<p>A new API for inspecting matching results without actually merging datasets. This is particularly useful for evaluation workflows where you need to align predictions with ground truth before computing metrics.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+gt_labels = sio.load_slp(&quot;ground_truth.slp&quot;)
+pred_labels = sio.load_slp(&quot;predictions.slp&quot;)
+
+# Match predictions to ground truth (doesn't modify either dataset)
+result = gt_labels.match(pred_labels)
+
+# Check matching results
+print(result.summary())
+# Videos: 2/2 matched
+# Skeletons: 1/1 matched
+# Tracks: 0/0 matched
+
+# Inspect specific matches
+if not result.all_videos_matched:
+    for video in result.unmatched_videos:
+        print(f&quot;Warning: Could not match {video.filename}&quot;)
+
+# Iterate through matched videos
+for pred_video, gt_video in result.video_map.items():
+    if gt_video is not None:
+        print(f&quot;{pred_video.filename} -&gt; {gt_video.filename}&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-s1">gt_labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"ground_truth.slp"</span>)
+<span class="pl-s1">pred_labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_slp</span>(<span class="pl-s">"predictions.slp"</span>)
+
+<span class="pl-c"># Match predictions to ground truth (doesn't modify either dataset)</span>
+<span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">gt_labels</span>.<span class="pl-c1">match</span>(<span class="pl-s1">pred_labels</span>)
+
+<span class="pl-c"># Check matching results</span>
+<span class="pl-en">print</span>(<span class="pl-s1">result</span>.<span class="pl-c1">summary</span>())
+<span class="pl-c"># Videos: 2/2 matched</span>
+<span class="pl-c"># Skeletons: 1/1 matched</span>
+<span class="pl-c"># Tracks: 0/0 matched</span>
+
+<span class="pl-c"># Inspect specific matches</span>
+<span class="pl-k">if</span> <span class="pl-c1">not</span> <span class="pl-s1">result</span>.<span class="pl-c1">all_videos_matched</span>:
+    <span class="pl-k">for</span> <span class="pl-s1">video</span> <span class="pl-c1">in</span> <span class="pl-s1">result</span>.<span class="pl-c1">unmatched_videos</span>:
+        <span class="pl-en">print</span>(<span class="pl-s">f"Warning: Could not match <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">video</span>.<span class="pl-c1">filename</span><span class="pl-kos">}</span></span>"</span>)
+
+<span class="pl-c"># Iterate through matched videos</span>
+<span class="pl-k">for</span> <span class="pl-s1">pred_video</span>, <span class="pl-s1">gt_video</span> <span class="pl-c1">in</span> <span class="pl-s1">result</span>.<span class="pl-c1">video_map</span>.<span class="pl-c1">items</span>():
+    <span class="pl-k">if</span> <span class="pl-s1">gt_video</span> <span class="pl-c1"><span class="pl-c1">is</span> <span class="pl-c1">not</span></span> <span class="pl-c1">None</span>:
+        <span class="pl-en">print</span>(<span class="pl-s">f"<span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">pred_video</span>.<span class="pl-c1">filename</span><span class="pl-kos">}</span></span> -&gt; <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">gt_video</span>.<span class="pl-c1">filename</span><span class="pl-kos">}</span></span>"</span>)</pre></div>
+<p>The <code>MatchResult</code> object provides:</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>video_map</code></td>
+<td><code>dict[Video, Video | None]</code></td>
+<td>Maps other's videos to self's videos</td>
+</tr>
+<tr>
+<td><code>skeleton_map</code></td>
+<td><code>dict[Skeleton, Skeleton | None]</code></td>
+<td>Maps skeletons</td>
+</tr>
+<tr>
+<td><code>track_map</code></td>
+<td><code>dict[Track, Track | None]</code></td>
+<td>Maps tracks</td>
+</tr>
+<tr>
+<td><code>unmatched_videos</code></td>
+<td><code>list[Video]</code></td>
+<td>Videos with no match</td>
+</tr>
+<tr>
+<td><code>all_videos_matched</code></td>
+<td><code>bool</code></td>
+<td>True if all videos matched</td>
+</tr>
+<tr>
+<td><code>n_videos_matched</code></td>
+<td><code>int</code></td>
+<td>Count of matched videos</td>
+</tr>
+<tr>
+<td><code>summary()</code></td>
+<td><code>str</code></td>
+<td>Human-readable summary</td>
+</tr>
+</tbody>
+</table>
+<p><code>MatchResult</code> is exported directly from <code>sleap_io</code>:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="from sleap_io import MatchResult"><pre><span class="pl-k">from</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">import</span> <span class="pl-v">MatchResult</span></pre></div>
+<hr>
+<h3>Video Color Mode Control (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3814821327" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/335" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/335/hovercard" href="https://github.com/talmolab/sleap-io/pull/335">#335</a>)</h3>
+<p>New API to batch-configure video color mode (grayscale/RGB) for all videos in a dataset. This is useful when auto-detection fails due to compression artifacts or videos with very similar color channels.</p>
+<p><strong>Python API:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+labels = sio.load_file(&quot;labels.slp&quot;)
+
+# Force grayscale (single-channel) output
+labels.set_video_color_mode(&quot;grayscale&quot;)
+
+# Force RGB (three-channel) output
+labels.set_video_color_mode(&quot;rgb&quot;)
+
+# Reset to auto-detection (default)
+labels.set_video_color_mode(&quot;auto&quot;)
+
+labels.save(&quot;labels_fixed.slp&quot;)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"labels.slp"</span>)
+
+<span class="pl-c"># Force grayscale (single-channel) output</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">set_video_color_mode</span>(<span class="pl-s">"grayscale"</span>)
+
+<span class="pl-c"># Force RGB (three-channel) output</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">set_video_color_mode</span>(<span class="pl-s">"rgb"</span>)
+
+<span class="pl-c"># Reset to auto-detection (default)</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">set_video_color_mode</span>(<span class="pl-s">"auto"</span>)
+
+<span class="pl-s1">labels</span>.<span class="pl-c1">save</span>(<span class="pl-s">"labels_fixed.slp"</span>)</pre></div>
+<p><strong>CLI:</strong></p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Fix video color mode issues
+sio fix labels.slp -o fixed.slp --video-color grayscale
+sio fix labels.slp -o fixed.slp --video-color rgb
+sio fix labels.slp -o fixed.slp --video-color auto"><pre><span class="pl-c"><span class="pl-c">#</span> Fix video color mode issues</span>
+sio fix labels.slp -o fixed.slp --video-color grayscale
+sio fix labels.slp -o fixed.slp --video-color rgb
+sio fix labels.slp -o fixed.slp --video-color auto</pre></div>
+<p>The <code>sio fix</code> command now also reports video color mode analysis, showing mismatches between settings and actual video channels.</p>
+<hr>
+<h2>Bug Fixes</h2>
+<h3>HDF5 Dataset Matching (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3816224267" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/336" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/336/hovercard" href="https://github.com/talmolab/sleap-io/pull/336">#336</a>)</h3>
+<p>Fixed bug where different videos embedded in the same <code>.pkg.slp</code> file could incorrectly match each other. The matcher now correctly checks the HDF5 <code>dataset</code> path to distinguish videos.</p>
+<p><strong>Before:</strong> <code>Video.matches_path()</code> compared only <code>source_filename</code>, but all embedded videos in the same pkg.slp share the same <code>source_filename</code>.</p>
+<p><strong>After:</strong> Different HDF5 datasets are correctly recognized as different videos.</p>
+<hr>
+<h3>Provenance Conflict Logic (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3816224267" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/336" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/336/hovercard" href="https://github.com/talmolab/sleap-io/pull/336">#336</a>)</h3>
+<p>Fixed <code>original_videos_conflict()</code> to allow fall-through when source files can't be verified on disk. Previously, embedded videos with different <code>original_video</code> paths were rejected even when the files couldn't be checked. Now content-based matching can proceed for embedded videos.</p>
+<hr>
+<h3>Video Color Mode Propagation (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3814821327" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/335" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/335/hovercard" href="https://github.com/talmolab/sleap-io/pull/335">#335</a>)</h3>
+<p>Fixed issue where setting video color mode on embedded videos (<code>.pkg.slp</code>) would be lost when unembedding. The setting now propagates through the entire <code>source_video</code> chain.</p>
+<hr>
+<h2>Documentation</h2>
+<h3>Merging Guide - Matching Without Merging (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3818847432" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/338" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/338/hovercard" href="https://github.com/talmolab/sleap-io/pull/338">#338</a>)</h3>
+<p>Added new section to the <a href="https://io.sleap.ai/latest/merging/" rel="nofollow">merging documentation</a> explaining the <code>Labels.match()</code> API with comprehensive examples for evaluation workflows.</p>
+<hr>
+<h2>API Changes</h2>
+<h3>New Symbols</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Name</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Method</td>
+<td><code>Labels.match()</code></td>
+<td><code>sleap_io.model.labels</code></td>
+</tr>
+<tr>
+<td>Method</td>
+<td><code>Labels.set_video_color_mode()</code></td>
+<td><code>sleap_io.model.labels</code></td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>MatchResult</code></td>
+<td><code>sleap_io.model.matching</code></td>
+</tr>
+</tbody>
+</table>
+<h3>New CLI Options</h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Option</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sio fix</code></td>
+<td><code>--video-color {grayscale,rgb,auto}</code></td>
+<td>Set video color mode for all videos</td>
+</tr>
+</tbody>
+</table>
+<h3>VideoMatcher Enhancements</h3>
+<p>New parameters for content-based video matching:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>content_frames</code></td>
+<td>3</td>
+<td>Minimum matching frames for pose/image confirmation</td>
+</tr>
+<tr>
+<td><code>compare_predictions</code></td>
+<td><code>"auto"</code></td>
+<td>Include predictions in matching: <code>"auto"</code>, <code>True</code>, <code>False</code></td>
+</tr>
+<tr>
+<td><code>compare_images</code></td>
+<td><code>False</code></td>
+<td>Enable pixel-based matching (expensive)</td>
+</tr>
+<tr>
+<td><code>image_similarity_threshold</code></td>
+<td>0.05</td>
+<td>Max mean pixel difference (0-1 scale)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3814821327" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/335" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/335/hovercard" href="https://github.com/talmolab/sleap-io/pull/335">#335</a>: feat: Add video color mode toggling (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3816224267" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/336" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/336/hovercard" href="https://github.com/talmolab/sleap-io/pull/336">#336</a>: fix(matching): Add pose-based video matching and fix HDF5 dataset matching for cross-platform merges (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3818355874" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/337" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/337/hovercard" href="https://github.com/talmolab/sleap-io/pull/337">#337</a>: feat(matching): Add Labels.match() API for matching without merging (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3818847432" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/338" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/338/hovercard" href="https://github.com/talmolab/sleap-io/pull/338">#338</a>: docs(merging): Add documentation for Labels.match() API (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.6.1...v0.6.2"><tt>v0.6.1...v0.6.2</tt></a></p>
 <h2 id="v061"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.1">v0.6.1</a><a class="headerlink" href="#v061" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.6.1 Release Notes</h1>
 <h2>Summary</h2>
@@ -6712,13 +7172,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/SkepticRaven/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/SkepticRaven">@SkepticRaven</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1875818744" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/63" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/63/hovercard" href="https://github.com/talmolab/sleap-io/pull/63">#63</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.11...v0.0.12"><tt>v0.0.11...v0.0.12</tt></a></p>
-<h2 id="v0011"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.11">v0.0.11</a><a class="headerlink" href="#v0011" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Video handle persistence by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1892731669" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/64" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/64/hovercard" href="https://github.com/talmolab/sleap-io/pull/64">#64</a></li>
-<li>Bump to 0.0.11 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1893462191" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/66" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/66/hovercard" href="https://github.com/talmolab/sleap-io/pull/66">#66</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.10...v0.0.11"><tt>v0.0.10...v0.0.11</tt></a></p>
 
 
 
