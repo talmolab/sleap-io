@@ -107,13 +107,17 @@ For each incoming video, AUTO runs these checks in order:
 | Step | Check | Result |
 |------|-------|--------|
 | 1 | Shape incompatible (frames, H, W differ) | Reject |
-| 2 | Provenance conflict (different `original_video`) | Reject |
+| 2 | Provenance conflict (different `original_video`, verifiable) | Reject |
 | 3 | Same physical file (`os.path.samefile`) | **Match** |
 | 4 | Exact path string match | **Match** |
 | 5 | Unique basename/parent suffix match | **Match** |
-| 6 | No match found | Add as new |
+| 6 | Pose matching (identical annotations on common frames) | **Match** |
+| 7 | Image matching (pixel similarity, if enabled) | **Match** |
+| 8 | No match found | Add as new |
 
 **Shape is for rejection only.** Same resolution does NOT imply a match—it just means the videos aren't rejected. This prevents matching unrelated videos that happen to have the same dimensions.
+
+**Provenance conflict checking** only rejects when files can be verified on disk. If neither file exists (e.g., embedded videos in `.pkg.slp` files), the check is skipped to allow fall-through to content-based matching.
 
 ### Examples
 
@@ -143,6 +147,62 @@ Result: NOT MATCH — shape rejection (different frame counts)
 Base: project.slp with /data/fly.mp4
 Other: predictions.pkg.slp (embedded, original_video=/data/fly.mp4)
 Result: MATCH — provenance chain links to same file
+```
+
+**Cross-platform embedded videos (pose matching):**
+```
+Base: valence.pkg.slp (Linux, original_video=/snlkt/.../CHR/fly.mp4)
+Other: stress.pkg.slp (Windows, original_video=X:/.../CHR/fly.mp4)
+Result: MATCH — poses on common frames are identical
+```
+
+### Content-based matching {#content-based-matching}
+
+AUTO mode includes pose-based matching as a default step. When videos have overlapping labeled frames, the matcher compares pose coordinates to identify identical videos even when file paths differ.
+
+#### How pose matching works
+
+1. Find common frame indices between videos
+2. For each common frame, check if ANY instance pair has identical poses
+3. If enough frames match (default: 3), consider it a match
+
+This is particularly useful for:
+- Cross-platform merges (Linux ↔ Windows paths)
+- Embedded videos in `.pkg.slp` files that can't be verified on disk
+- Videos that have been moved or renamed
+
+#### VideoMatcher parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `content_frames` | 3 | Minimum matching frames for confident match |
+| `compare_predictions` | `"auto"` | Include predictions: `"auto"`, `True`, or `False` |
+| `compare_images` | `False` | Enable image comparison (expensive) |
+| `image_similarity_threshold` | 0.05 | Max pixel difference (0-1 scale) |
+
+#### compare_predictions modes
+
+- `"auto"` (default): Include predictions only if the video has NO user instances
+- `True`: Always include predictions in comparison
+- `False`: Only compare user-labeled instances
+
+#### Image similarity threshold
+
+When `compare_images=True`, frames are compared by mean pixel difference:
+
+- `0.05` (default): ~13/255 pixel difference allowed
+- `0.01`: Very strict (~3/255 pixels)
+- `0.1`: Lenient (~26/255 pixels)
+
+```python
+# Enable image comparison with custom threshold
+from sleap_io.model.matching import VideoMatcher
+
+base.merge(other, video=VideoMatcher(
+    method="auto",
+    compare_images=True,
+    image_similarity_threshold=0.1,  # More lenient
+))
 ```
 
 ### String configuration
