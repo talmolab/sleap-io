@@ -43,6 +43,75 @@ base.merge(predictions, video="auto", frame="auto")  # Explicit defaults
 
 ---
 
+## Matching without merging {#matching-without-merging}
+
+Sometimes you need to inspect matching results without actually merging datasets. This is useful for:
+
+- **Evaluation workflows**: Aligning predictions with ground truth to compute metrics
+- **Debugging**: Understanding why videos/skeletons aren't matching as expected
+- **Validation**: Checking matches before committing to a merge
+
+Use [`Labels.match()`](#sleap_io.model.labels.Labels.match) to build correspondence maps without modifying either dataset:
+
+```python
+import sleap_io as sio
+
+gt_labels = sio.load_slp("ground_truth.slp")
+pred_labels = sio.load_slp("predictions.slp")
+
+# Match predictions to ground truth (doesn't modify either)
+result = gt_labels.match(pred_labels)
+
+# Inspect results
+print(result.summary())
+# Videos: 2/2 matched
+# Skeletons: 1/1 matched
+# Tracks: 0/0 matched
+
+# Check if all videos matched
+if not result.all_videos_matched:
+    print("Unmatched videos:")
+    for video in result.unmatched_videos:
+        print(f"  - {video.filename}")
+
+# Iterate through matched videos
+for pred_video, gt_video in result.video_map.items():
+    if gt_video is not None:
+        print(f"{pred_video.filename} -> {gt_video.filename}")
+```
+
+### MatchResult properties
+
+The [`MatchResult`](#sleap_io.model.matching.MatchResult) object contains:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `video_map` | `dict[Video, Video \| None]` | Maps other's videos to self's videos |
+| `skeleton_map` | `dict[Skeleton, Skeleton \| None]` | Maps other's skeletons to self's skeletons |
+| `track_map` | `dict[Track, Track \| None]` | Maps other's tracks to self's tracks |
+| `unmatched_videos` | `list[Video]` | Videos from other with no match |
+| `unmatched_skeletons` | `list[Skeleton]` | Skeletons from other with no match |
+| `unmatched_tracks` | `list[Track]` | Tracks from other with no match |
+| `all_videos_matched` | `bool` | True if all videos matched |
+| `n_videos_matched` | `int` | Count of matched videos |
+
+### Customizing matching
+
+`Labels.match()` accepts the same matching parameters as `merge()`:
+
+```python
+# Use specific video matching method
+result = gt_labels.match(pred_labels, video="basename")
+
+# Use custom matchers
+from sleap_io.model.matching import VideoMatcher, VideoMatchMethod
+
+matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+result = gt_labels.match(pred_labels, video=matcher)
+```
+
+---
+
 ## Step 1: Skeleton matching {#skeleton-matching}
 
 Before merging can proceed, skeletons from both datasets must be matched. Each skeleton in the incoming dataset is compared against skeletons in the base dataset to find correspondence.

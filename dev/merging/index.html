@@ -566,6 +566,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#matching-without-merging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matching without merging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#skeleton-matching" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2559,6 +2570,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#matching-without-merging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matching without merging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#skeleton-matching" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2718,6 +2740,104 @@
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>  <span class="c1"># Explicit defaults</span>
 </code></pre></div>
 <hr />
+<h2 id="matching-without-merging">Matching without merging<a class="headerlink" href="#matching-without-merging" title="Permanent link">&para;</a></h2>
+<p>Sometimes you need to inspect matching results without actually merging datasets. This is useful for:</p>
+<ul>
+<li><strong>Evaluation workflows</strong>: Aligning predictions with ground truth to compute metrics</li>
+<li><strong>Debugging</strong>: Understanding why videos/skeletons aren't matching as expected</li>
+<li><strong>Validation</strong>: Checking matches before committing to a merge</li>
+</ul>
+<p>Use <a href="#sleap_io.model.labels.Labels.match"><code>Labels.match()</code></a> to build correspondence maps without modifying either dataset:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">gt_labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;ground_truth.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">pred_labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;predictions.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Match predictions to ground truth (doesn&#39;t modify either)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">result</span> <span class="o">=</span> <span class="n">gt_labels</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">pred_labels</span><span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># Inspect results</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Videos: 2/2 matched</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># Skeletons: 1/1 matched</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># Tracks: 0/0 matched</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Check if all videos matched</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="o">.</span><span class="n">all_videos_matched</span><span class="p">:</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Unmatched videos:&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="k">for</span> <span class="n">video</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">unmatched_videos</span><span class="p">:</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">video</span><span class="o">.</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># Iterate through matched videos</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="k">for</span> <span class="n">pred_video</span><span class="p">,</span> <span class="n">gt_video</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">video_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="k">if</span> <span class="n">gt_video</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pred_video</span><span class="o">.</span><span class="n">filename</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">gt_video</span><span class="o">.</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="matchresult-properties">MatchResult properties<a class="headerlink" href="#matchresult-properties" title="Permanent link">&para;</a></h3>
+<p>The <a href="#sleap_io.model.matching.MatchResult"><code>MatchResult</code></a> object contains:</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>video_map</code></td>
+<td><code>dict[Video, Video \| None]</code></td>
+<td>Maps other's videos to self's videos</td>
+</tr>
+<tr>
+<td><code>skeleton_map</code></td>
+<td><code>dict[Skeleton, Skeleton \| None]</code></td>
+<td>Maps other's skeletons to self's skeletons</td>
+</tr>
+<tr>
+<td><code>track_map</code></td>
+<td><code>dict[Track, Track \| None]</code></td>
+<td>Maps other's tracks to self's tracks</td>
+</tr>
+<tr>
+<td><code>unmatched_videos</code></td>
+<td><code>list[Video]</code></td>
+<td>Videos from other with no match</td>
+</tr>
+<tr>
+<td><code>unmatched_skeletons</code></td>
+<td><code>list[Skeleton]</code></td>
+<td>Skeletons from other with no match</td>
+</tr>
+<tr>
+<td><code>unmatched_tracks</code></td>
+<td><code>list[Track]</code></td>
+<td>Tracks from other with no match</td>
+</tr>
+<tr>
+<td><code>all_videos_matched</code></td>
+<td><code>bool</code></td>
+<td>True if all videos matched</td>
+</tr>
+<tr>
+<td><code>n_videos_matched</code></td>
+<td><code>int</code></td>
+<td>Count of matched videos</td>
+</tr>
+</tbody>
+</table>
+<h3 id="customizing-matching">Customizing matching<a class="headerlink" href="#customizing-matching" title="Permanent link">&para;</a></h3>
+<p><code>Labels.match()</code> accepts the same matching parameters as <code>merge()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Use specific video matching method</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">result</span> <span class="o">=</span> <span class="n">gt_labels</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">pred_labels</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;basename&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Use custom matchers</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">VideoMatcher</span><span class="p">,</span> <span class="n">VideoMatchMethod</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">VideoMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="n">VideoMatchMethod</span><span class="o">.</span><span class="n">BASENAME</span><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">result</span> <span class="o">=</span> <span class="n">gt_labels</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">pred_labels</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
+</code></pre></div>
+<hr />
 <h2 id="skeleton-matching">Step 1: Skeleton matching<a class="headerlink" href="#skeleton-matching" title="Permanent link">&para;</a></h2>
 <p>Before merging can proceed, skeletons from both datasets must be matched. Each skeleton in the incoming dataset is compared against skeletons in the base dataset to find correspondence.</p>
 <h3 id="matching-methods">Matching methods<a class="headerlink" href="#matching-methods" title="Permanent link">&para;</a></h3>
@@ -2754,22 +2874,22 @@
 </table>
 <p>If no match is found, the skeleton is added as new to the base dataset.</p>
 <h3 id="string-configuration">String configuration<a class="headerlink" href="#string-configuration" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Default: match by structure (same nodes, any order)</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="s2">&quot;structure&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Allow partial matches (incoming can have fewer nodes)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="s2">&quot;subset&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Exact match required (nodes and edges must be identical)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="s2">&quot;exact&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Default: match by structure (same nodes, any order)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="s2">&quot;structure&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Allow partial matches (incoming can have fewer nodes)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="s2">&quot;subset&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Exact match required (nodes and edges must be identical)</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="s2">&quot;exact&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="object-configuration">Object configuration<a class="headerlink" href="#object-configuration" title="Permanent link">&para;</a></h3>
 <p>For advanced control, use <a href="#sleap_io.model.matching.SkeletonMatcher"><code>SkeletonMatcher</code></a>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">SkeletonMatcher</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Overlap matching with custom threshold (70% of nodes must match)</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">SkeletonMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;overlap&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">SkeletonMatcher</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Overlap matching with custom threshold (70% of nodes must match)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">SkeletonMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;overlap&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">skeleton</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="video-matching">Step 2: Video matching<a class="headerlink" href="#video-matching" title="Permanent link">&para;</a></h2>
@@ -2855,29 +2975,29 @@
 <p><strong>Provenance conflict checking</strong> only rejects when files can be verified on disk. If neither file exists (e.g., embedded videos in <code>.pkg.slp</code> files), the check is skipped to allow fall-through to content-based matching.</p>
 <h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
 <p><strong>Cross-platform paths with unique basenames:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Base:  C:/Users/alice/data/fly.mp4
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Other: /home/bob/data/fly.mp4
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>Result: MATCH — &quot;fly.mp4&quot; is unique in both sets
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Base:  C:/Users/alice/data/fly.mp4
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Other: /home/bob/data/fly.mp4
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>Result: MATCH — &quot;fly.mp4&quot; is unique in both sets
 </code></pre></div></p>
 <p><strong>Ambiguous basenames, parent disambiguates:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Base:  /data/exp1/fly.mp4, /data/exp2/fly.mp4
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>Other: /remote/exp2/fly.mp4
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Result: MATCH to exp2/fly.mp4 — parent directory disambiguates
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Base:  /data/exp1/fly.mp4, /data/exp2/fly.mp4
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Other: /remote/exp2/fly.mp4
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>Result: MATCH to exp2/fly.mp4 — parent directory disambiguates
 </code></pre></div></p>
 <p><strong>Same basename, different content:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Base:  fly.mp4 (1000 frames)
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Other: fly.mp4 (500 frames)
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>Result: NOT MATCH — shape rejection (different frame counts)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Base:  fly.mp4 (1000 frames)
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Other: fly.mp4 (500 frames)
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>Result: NOT MATCH — shape rejection (different frame counts)
 </code></pre></div></p>
 <p><strong>PKG.SLP predictions to external video:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Base: project.slp with /data/fly.mp4
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Other: predictions.pkg.slp (embedded, original_video=/data/fly.mp4)
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>Result: MATCH — provenance chain links to same file
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Base: project.slp with /data/fly.mp4
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>Other: predictions.pkg.slp (embedded, original_video=/data/fly.mp4)
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>Result: MATCH — provenance chain links to same file
 </code></pre></div></p>
 <p><strong>Cross-platform embedded videos (pose matching):</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Base: valence.pkg.slp (Linux, original_video=/snlkt/.../CHR/fly.mp4)
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Other: stress.pkg.slp (Windows, original_video=X:/.../CHR/fly.mp4)
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>Result: MATCH — poses on common frames are identical
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Base: valence.pkg.slp (Linux, original_video=/snlkt/.../CHR/fly.mp4)
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>Other: stress.pkg.slp (Windows, original_video=X:/.../CHR/fly.mp4)
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>Result: MATCH — poses on common frames are identical
 </code></pre></div></p>
 <h3 id="content-based-matching">Content-based matching<a class="headerlink" href="#content-based-matching" title="Permanent link">&para;</a></h3>
 <p>AUTO mode includes pose-based matching as a default step. When videos have overlapping labeled frames, the matcher compares pose coordinates to identify identical videos even when file paths differ.</p>
@@ -2936,32 +3056,32 @@
 <li><code>0.01</code>: Very strict (~3/255 pixels)</li>
 <li><code>0.1</code>: Lenient (~26/255 pixels)</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Enable image comparison with custom threshold</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">VideoMatcher</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">VideoMatcher</span><span class="p">(</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">compare_images</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="n">image_similarity_threshold</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>  <span class="c1"># More lenient</span>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="p">))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Enable image comparison with custom threshold</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">VideoMatcher</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">VideoMatcher</span><span class="p">(</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="n">compare_images</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="n">image_similarity_threshold</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>  <span class="c1"># More lenient</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="p">))</span>
 </code></pre></div>
 <h3 id="string-configuration_1">String configuration<a class="headerlink" href="#string-configuration_1" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Default: safe AUTO cascade</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Exact path match only</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;path&quot;</span><span class="p">)</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Match by filename only (ignores directory)</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;basename&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Default: safe AUTO cascade</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Exact path match only</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;path&quot;</span><span class="p">)</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Match by filename only (ignores directory)</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;basename&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="object-configuration_1">Object configuration<a class="headerlink" href="#object-configuration_1" title="Permanent link">&para;</a></h3>
 <p>For advanced control, use <a href="#sleap_io.model.matching.VideoMatcher"><code>VideoMatcher</code></a>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">VideoMatcher</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Strict path matching (paths must be identical, no normalization)</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">VideoMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;path&quot;</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">VideoMatcher</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Strict path matching (paths must be identical, no normalization)</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">VideoMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;path&quot;</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="other-video-matching-methods">Other video matching methods<a class="headerlink" href="#other-video-matching-methods" title="Permanent link">&para;</a></h3>
 <table>
@@ -3008,53 +3128,53 @@
 <h3 id="handling-false-negatives">Handling false negatives<a class="headerlink" href="#handling-false-negatives" title="Permanent link">&para;</a></h3>
 <p>If AUTO doesn't match videos that ARE the same, you have a <strong>false negative</strong>. This is safe—the video was added as new rather than corrupting data. Here's how to detect and fix it:</p>
 <p><strong>Step 1: Detect</strong> — Check video count after merge:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">base</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;base.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">other</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;other.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Before: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2"> videos&quot;</span><span class="p">)</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;After: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2"> videos&quot;</span><span class="p">)</span>
-<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
-<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># If count increased unexpectedly, videos weren&#39;t matched</span>
-<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">:</span>
-<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">v</span><span class="o">.</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">base</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;base.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">other</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;other.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Before: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2"> videos&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;After: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2"> videos&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># If count increased unexpectedly, videos weren&#39;t matched</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">:</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">v</span><span class="o">.</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div></p>
 <p><strong>Step 2: Verify</strong> — Confirm the videos ARE the same:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Check shapes match</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">video_a</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">video_b</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># The one that should have matched</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Video A: </span><span class="si">{</span><span class="n">video_a</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># e.g., (1000, 480, 640, 3)</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Video B: </span><span class="si">{</span><span class="n">video_b</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># If files exist, check content</span>
-<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="k">if</span> <span class="n">video_a</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">video_b</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>    <span class="c1"># Compare first frame visually or by hash</span>
-<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="n">frame_a</span> <span class="o">=</span> <span class="n">video_a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>    <span class="n">frame_b</span> <span class="o">=</span> <span class="n">video_b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Check shapes match</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">video_a</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">video_b</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># The one that should have matched</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Video A: </span><span class="si">{</span><span class="n">video_a</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># e.g., (1000, 480, 640, 3)</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Video B: </span><span class="si">{</span><span class="n">video_b</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># If files exist, check content</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="k">if</span> <span class="n">video_a</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">video_b</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>    <span class="c1"># Compare first frame visually or by hash</span>
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>    <span class="n">frame_a</span> <span class="o">=</span> <span class="n">video_a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>    <span class="n">frame_b</span> <span class="o">=</span> <span class="n">video_b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </code></pre></div></p>
 <p><strong>Step 3: Fix</strong> — Use <a href="#sleap_io.model.labels.Labels.replace_filenames"><code>replace_filenames</code></a> before merging:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Reload and fix paths before merge</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">base</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;base.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">other</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;other.slp&quot;</span><span class="p">)</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Option A: Map the specific file</span>
-<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="n">other</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">filename_map</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="s2">&quot;/remote/path/fly.mp4&quot;</span><span class="p">:</span> <span class="s2">&quot;/local/path/fly.mp4&quot;</span>
-<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="p">})</span>
-<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
-<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Option B: Map by prefix (for multiple videos)</span>
-<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="n">other</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">prefix_map</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>    <span class="s2">&quot;/remote/data&quot;</span><span class="p">:</span> <span class="s2">&quot;/local/data&quot;</span>
-<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="p">})</span>
-<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
-<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Now merge</span>
-<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="n">result</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
-<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Videos after fix: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># Should match original count</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Reload and fix paths before merge</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">base</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;base.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">other</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="s2">&quot;other.slp&quot;</span><span class="p">)</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Option A: Map the specific file</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="n">other</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">filename_map</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="s2">&quot;/remote/path/fly.mp4&quot;</span><span class="p">:</span> <span class="s2">&quot;/local/path/fly.mp4&quot;</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="p">})</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># Option B: Map by prefix (for multiple videos)</span>
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="n">other</span><span class="o">.</span><span class="n">replace_filenames</span><span class="p">(</span><span class="n">prefix_map</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>    <span class="s2">&quot;/remote/data&quot;</span><span class="p">:</span> <span class="s2">&quot;/local/data&quot;</span>
+<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="p">})</span>
+<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>
+<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Now merge</span>
+<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="n">result</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+<a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Videos after fix: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">videos</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># Should match original count</span>
 </code></pre></div></p>
 <p><strong>Alternative: Force match with explicit matcher:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Only use this if you&#39;re CERTAIN the videos are the same</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;basename&quot;</span><span class="p">)</span>  <span class="c1"># Match by filename only</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Only use this if you&#39;re CERTAIN the videos are the same</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="s2">&quot;basename&quot;</span><span class="p">)</span>  <span class="c1"># Match by filename only</span>
 </code></pre></div></p>
 <hr />
 <h2 id="track-matching">Step 3: Track matching<a class="headerlink" href="#track-matching" title="Permanent link">&para;</a></h2>
@@ -3083,19 +3203,19 @@
 </table>
 <p>If no match is found, the track is added as new to the base dataset.</p>
 <h3 id="string-configuration_2">String configuration<a class="headerlink" href="#string-configuration_2" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Default: match by track name</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Match by object identity (same Track instance)</span>
-<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="s2">&quot;identity&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Default: match by track name</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Match by object identity (same Track instance)</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="s2">&quot;identity&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="object-configuration_2">Object configuration<a class="headerlink" href="#object-configuration_2" title="Permanent link">&para;</a></h3>
 <p>For advanced control, use <a href="#sleap_io.model.matching.TrackMatcher"><code>TrackMatcher</code></a>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrackMatcher</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Explicit name matching</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">TrackMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrackMatcher</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># Explicit name matching</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">TrackMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">track</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="frame-strategies">Step 4: Frame strategies<a class="headerlink" href="#frame-strategies" title="Permanent link">&para;</a></h2>
@@ -3134,13 +3254,13 @@
 </tbody>
 </table>
 <p>Unmatched instances from <code>other</code> are added.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Typical HITL workflow: merge predictions into labeled project</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">)</span>  <span class="c1"># Uses auto by default</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Typical HITL workflow: merge predictions into labeled project</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">)</span>  <span class="c1"># Uses auto by default</span>
 </code></pre></div>
 <h3 id="replace_predictions"><code>replace_predictions</code><a class="headerlink" href="#replace_predictions" title="Permanent link">&para;</a></h3>
 <p>Replace all predictions in base with predictions from other. User labels are preserved.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Re-ran inference, want to update predictions</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">new_predictions</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;replace_predictions&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Re-ran inference, want to update predictions</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">new_predictions</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;replace_predictions&quot;</span><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -3195,17 +3315,17 @@
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Keep only the original annotations</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;keep_original&quot;</span><span class="p">)</span>
-<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
-<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Replace with new annotations</span>
-<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;keep_new&quot;</span><span class="p">)</span>
-<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
-<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Keep everything (may create duplicates)</span>
-<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;keep_both&quot;</span><span class="p">)</span>
-<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>
-<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># Update track assignments without changing poses</span>
-<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;update_tracks&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Keep only the original annotations</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;keep_original&quot;</span><span class="p">)</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Replace with new annotations</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;keep_new&quot;</span><span class="p">)</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Keep everything (may create duplicates)</span>
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;keep_both&quot;</span><span class="p">)</span>
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>
+<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># Update track assignments without changing poses</span>
+<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">frame</span><span class="o">=</span><span class="s2">&quot;update_tracks&quot;</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="instance-matching">Step 5: Instance matching<a class="headerlink" href="#instance-matching" title="Permanent link">&para;</a></h2>
@@ -3238,26 +3358,26 @@
 </tbody>
 </table>
 <h3 id="string-configuration_3">String configuration<a class="headerlink" href="#string-configuration_3" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Default: spatial matching with 5px threshold</span>
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="s2">&quot;spatial&quot;</span><span class="p">)</span>
-<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
-<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Match by track identity</span>
-<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="s2">&quot;identity&quot;</span><span class="p">)</span>
-<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>
-<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="c1"># Match by bounding box overlap</span>
-<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="s2">&quot;iou&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Default: spatial matching with 5px threshold</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="s2">&quot;spatial&quot;</span><span class="p">)</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># Match by track identity</span>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="s2">&quot;identity&quot;</span><span class="p">)</span>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="c1"># Match by bounding box overlap</span>
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="s2">&quot;iou&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="object-configuration_3">Object configuration<a class="headerlink" href="#object-configuration_3" title="Permanent link">&para;</a></h3>
 <p>For advanced control, use <a href="#sleap_io.model.matching.InstanceMatcher"><code>InstanceMatcher</code></a>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstanceMatcher</span>
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Tighter spatial matching (2px threshold)</span>
-<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">InstanceMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;spatial&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
-<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
-<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
-<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># IoU matching with 50% overlap threshold</span>
-<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">InstanceMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;iou&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
-<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstanceMatcher</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Tighter spatial matching (2px threshold)</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">InstanceMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;spatial&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="c1"># IoU matching with 50% overlap threshold</span>
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="n">matcher</span> <span class="o">=</span> <span class="n">InstanceMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;iou&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">matcher</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -3272,8 +3392,8 @@
 </ol>
 <h3 id="duplicate-instances-after-merge">Duplicate instances after merge<a class="headerlink" href="#duplicate-instances-after-merge" title="Permanent link">&para;</a></h3>
 <p>Use <code>auto</code> instead of <code>keep_both</code>, or tighten the instance match threshold:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstanceMatcher</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">InstanceMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;spatial&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2.0</span><span class="p">))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.model.matching</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstanceMatcher</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">InstanceMatcher</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;spatial&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2.0</span><span class="p">))</span>
 </code></pre></div>
 <hr />
 <h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h2>
@@ -5772,7 +5892,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.VideoMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f43b7a6ca40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fd2226d0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -6946,7 +7066,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.SkeletonMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f43b7a6ca40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fd2226d0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -7765,7 +7885,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.TrackMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f43b7a6ca40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fd2226d0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -8652,7 +8772,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.InstanceMatcher.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f43b7a6ca40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fd2226d0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -9648,7 +9768,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h5 id="sleap_io.model.matching.MergeResult.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7f43b7a6ca40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">UNHASHABLE</span><span class="p">:</span> <span class="s1">&#39;unhashable&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fd2226d0a40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
