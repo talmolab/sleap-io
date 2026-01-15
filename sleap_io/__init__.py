@@ -75,6 +75,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "model.labeled_frame": ["LabeledFrame"],
         "model.labels": ["Labels"],
         "model.labels_set": ["LabelsSet"],
+        "model.matching": ["MatchResult"],
         "model.skeleton": ["Edge", "Node", "Skeleton", "Symmetry"],
         "model.suggestions": ["SuggestionFrame"],
         "model.video": ["Video"],

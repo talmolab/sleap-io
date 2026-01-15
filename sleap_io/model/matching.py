@@ -1239,6 +1239,100 @@ class MergeResult:
         return "\n".join(lines)
 
 
+@attrs.define
+class MatchResult:
+    """Result of matching two Labels objects.
+
+    This class holds correspondence maps between items in two Labels objects,
+    without modifying either. Useful for evaluation workflows where you need
+    to align predictions with ground truth without merging them.
+
+    Attributes:
+        video_map: Dictionary mapping videos from the `other` Labels to videos in
+            `self`. Values are None if no match was found.
+        skeleton_map: Dictionary mapping skeletons from `other` to `self`.
+        track_map: Dictionary mapping tracks from `other` to `self`.
+
+    Example:
+        Match prediction videos to ground truth for evaluation::
+
+            >>> gt_labels = sio.load_slp("ground_truth.slp")
+            >>> pred_labels = sio.load_slp("predictions.slp")
+            >>> result = gt_labels.match(pred_labels)
+            >>> for pred_video, gt_video in result.video_map.items():
+            ...     if gt_video is not None:
+            ...         print(f"{pred_video.filename} -> {gt_video.filename}")
+    """
+
+    video_map: dict[Video, Video | None] = attrs.field(factory=dict)
+    skeleton_map: dict[Skeleton, Skeleton | None] = attrs.field(factory=dict)
+    track_map: dict[Track, Track | None] = attrs.field(factory=dict)
+
+    @property
+    def unmatched_videos(self) -> list[Video]:
+        """Videos from other Labels that had no match in self."""
+        return [v for v, match in self.video_map.items() if match is None]
+
+    @property
+    def unmatched_skeletons(self) -> list[Skeleton]:
+        """Skeletons from other Labels that had no match in self."""
+        return [s for s, match in self.skeleton_map.items() if match is None]
+
+    @property
+    def unmatched_tracks(self) -> list[Track]:
+        """Tracks from other Labels that had no match in self."""
+        return [t for t, match in self.track_map.items() if match is None]
+
+    @property
+    def all_videos_matched(self) -> bool:
+        """True if all videos from other were matched."""
+        return len(self.unmatched_videos) == 0
+
+    @property
+    def all_skeletons_matched(self) -> bool:
+        """True if all skeletons from other were matched."""
+        return len(self.unmatched_skeletons) == 0
+
+    @property
+    def all_tracks_matched(self) -> bool:
+        """True if all tracks from other were matched."""
+        return len(self.unmatched_tracks) == 0
+
+    @property
+    def n_videos_matched(self) -> int:
+        """Number of videos that were successfully matched."""
+        return sum(1 for v in self.video_map.values() if v is not None)
+
+    @property
+    def n_skeletons_matched(self) -> int:
+        """Number of skeletons that were successfully matched."""
+        return sum(1 for s in self.skeleton_map.values() if s is not None)
+
+    @property
+    def n_tracks_matched(self) -> int:
+        """Number of tracks that were successfully matched."""
+        return sum(1 for t in self.track_map.values() if t is not None)
+
+    def summary(self) -> str:
+        """Generate a human-readable summary of the match result."""
+        lines = []
+        lines.append(f"Videos: {self.n_videos_matched}/{len(self.video_map)} matched")
+        lines.append(
+            f"Skeletons: {self.n_skeletons_matched}/{len(self.skeleton_map)} matched"
+        )
+        lines.append(f"Tracks: {self.n_tracks_matched}/{len(self.track_map)} matched")
+
+        if self.unmatched_videos:
+            lines.append("Unmatched videos:")
+            for v in self.unmatched_videos[:5]:
+                fn = v.filename if isinstance(v.filename, str) else v.filename[0]
+                lines.append(f"  - {fn}")
+            if len(self.unmatched_videos) > 5:
+                lines.append(f"  ... and {len(self.unmatched_videos) - 5} more")
+
+        return "\n".join(lines)
+
+
 class MergeProgressBar:
     """Context manager for merge progress tracking using tqdm.
 

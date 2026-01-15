@@ -4135,6 +4135,277 @@ def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
             )
 
 
+def test_labels_match_basic():
+    """Test basic Labels.match functionality."""
+    # Create ground truth labels
+    skeleton_gt = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/experiment/video.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton_gt])
+
+    # Create prediction labels with different path but same basename
+    skeleton_pred = Skeleton(["head", "tail"])
+    video_pred = Video(filename="/output/model/video.mp4", open_backend=False)
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton_pred])
+
+    # Match predictions to ground truth
+    result = gt_labels.match(pred_labels)
+
+    # Check video matching (should match by basename)
+    assert len(result.video_map) == 1
+    assert video_pred in result.video_map
+    assert result.video_map[video_pred] is video_gt
+
+    # Check skeleton matching (should match by structure)
+    assert len(result.skeleton_map) == 1
+    assert skeleton_pred in result.skeleton_map
+    assert result.skeleton_map[skeleton_pred] is skeleton_gt
+
+    # Check convenience properties
+    assert result.all_videos_matched
+    assert result.all_skeletons_matched
+    assert result.n_videos_matched == 1
+    assert result.n_skeletons_matched == 1
+    assert len(result.unmatched_videos) == 0
+    assert len(result.unmatched_skeletons) == 0
+
+
+def test_labels_match_unmatched_videos():
+    """Test Labels.match with videos that don't match."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video_a.mp4", open_backend=False)
+    video_pred = Video(filename="/data/video_b.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # Video should not match (different basenames)
+    assert not result.all_videos_matched
+    assert len(result.unmatched_videos) == 1
+    assert result.video_map[video_pred] is None
+
+    # Skeleton should still match
+    assert result.all_skeletons_matched
+
+
+def test_labels_match_multiple_videos():
+    """Test Labels.match with multiple videos."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Ground truth with 2 videos
+    video_gt_1 = Video(filename="/data/video1.mp4", open_backend=False)
+    video_gt_2 = Video(filename="/data/video2.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt_1, video_gt_2], skeletons=[skeleton])
+
+    # Predictions with 3 videos (2 match, 1 doesn't)
+    video_pred_1 = Video(filename="/output/video1.mp4", open_backend=False)
+    video_pred_2 = Video(filename="/output/video2.mp4", open_backend=False)
+    video_pred_3 = Video(filename="/output/video3.mp4", open_backend=False)
+    pred_labels = Labels(
+        videos=[video_pred_1, video_pred_2, video_pred_3], skeletons=[skeleton]
+    )
+
+    result = gt_labels.match(pred_labels)
+
+    # Check matches
+    assert result.n_videos_matched == 2
+    assert len(result.unmatched_videos) == 1
+    assert video_pred_3 in result.unmatched_videos
+    assert result.video_map[video_pred_1] is video_gt_1
+    assert result.video_map[video_pred_2] is video_gt_2
+    assert result.video_map[video_pred_3] is None
+
+
+def test_labels_match_track_matching():
+    """Test Labels.match with track matching."""
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="/data/video.mp4", open_backend=False)
+
+    track_gt = Track("animal_1")
+    track_pred = Track("animal_1")  # Same name, different object
+
+    gt_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_gt])
+    pred_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_pred])
+
+    result = gt_labels.match(pred_labels)
+
+    # Track should match by name
+    assert result.all_tracks_matched
+    assert result.track_map[track_pred] is track_gt
+
+
+def test_labels_match_string_method():
+    """Test Labels.match with string method arguments."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    video_pred = Video(filename="/output/video.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    # Test with string methods
+    result = gt_labels.match(pred_labels, video="basename", skeleton="structure")
+
+    assert result.all_videos_matched
+    assert result.all_skeletons_matched
+
+
+def test_labels_match_custom_matchers():
+    """Test Labels.match with custom matcher objects."""
+    # For SUBSET matching, skeleton1 must be a subset of skeleton2
+    # Since match() is called with (self_skel, other_skel) = (gt, pred),
+    # gt nodes must be subset of pred nodes for match to succeed
+    skeleton_gt = Skeleton(["head", "tail"])
+    skeleton_pred = Skeleton(["head", "body", "tail"])  # GT nodes are subset of pred
+    video = Video(filename="/data/video.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video], skeletons=[skeleton_gt])
+    pred_labels = Labels(videos=[video], skeletons=[skeleton_pred])
+
+    # Structure matching should fail (different nodes)
+    result_struct = gt_labels.match(pred_labels, skeleton="structure")
+    assert not result_struct.all_skeletons_matched
+
+    # Subset matching should succeed (gt nodes are subset of pred nodes)
+    result_subset = gt_labels.match(pred_labels, skeleton="subset")
+    assert result_subset.all_skeletons_matched
+
+
+def test_labels_match_empty():
+    """Test Labels.match with empty Labels."""
+    gt_labels = Labels()
+    pred_labels = Labels()
+
+    result = gt_labels.match(pred_labels)
+
+    assert len(result.video_map) == 0
+    assert len(result.skeleton_map) == 0
+    assert len(result.track_map) == 0
+    assert result.all_videos_matched  # Vacuously true
+    assert result.all_skeletons_matched
+    assert result.all_tracks_matched
+
+
+def test_labels_match_summary():
+    """Test MatchResult.summary() output."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    video_pred = Video(filename="/output/different.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    summary = result.summary()
+    assert "Videos: 0/1 matched" in summary
+    assert "Skeletons: 1/1 matched" in summary
+    assert "Unmatched videos:" in summary
+
+
+def test_labels_match_result_import():
+    """Test that MatchResult can be imported from sleap_io."""
+    import sleap_io as sio
+
+    # Should be importable directly
+    assert hasattr(sio, "MatchResult")
+
+    # Should be usable for type hints
+    result = sio.MatchResult()
+    assert isinstance(result.video_map, dict)
+    assert isinstance(result.skeleton_map, dict)
+    assert isinstance(result.track_map, dict)
+
+
+def test_labels_match_with_matcher_objects():
+    """Test Labels.match with actual Matcher objects (not strings)."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    video_pred = Video(filename="/output/video.mp4", open_backend=False)
+    track_gt = Track("animal_1")
+    track_pred = Track("animal_1")
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton], tracks=[track_gt])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton], tracks=[track_pred])
+
+    # Pass actual Matcher objects instead of strings
+    from sleap_io.model.matching import (
+        SkeletonMatcher,
+        SkeletonMatchMethod,
+        TrackMatcher,
+        TrackMatchMethod,
+        VideoMatcher,
+        VideoMatchMethod,
+    )
+
+    skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
+
+    result = gt_labels.match(
+        pred_labels,
+        skeleton=skeleton_matcher,
+        video=video_matcher,
+        track=track_matcher,
+    )
+
+    assert result.all_videos_matched
+    assert result.all_skeletons_matched
+    assert result.all_tracks_matched
+
+
+def test_labels_match_summary_many_unmatched():
+    """Test MatchResult.summary() with more than 5 unmatched videos."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Create GT with one video
+    video_gt = Video(filename="/data/video_gt.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+
+    # Create predictions with 7 videos that don't match (different basenames)
+    pred_videos = [
+        Video(filename=f"/output/pred_{i}.mp4", open_backend=False) for i in range(7)
+    ]
+    pred_labels = Labels(videos=pred_videos, skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # All 7 should be unmatched (different basenames from GT)
+    assert len(result.unmatched_videos) == 7
+
+    summary = result.summary()
+    assert "Videos: 0/7 matched" in summary
+    assert "Unmatched videos:" in summary
+    assert "... and 2 more" in summary  # 7 - 5 = 2 more
+
+
+def test_labels_match_summary_image_video():
+    """Test MatchResult.summary() with ImageVideo (filename is a list)."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Create GT with a regular video
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+
+    # Create predictions with an ImageVideo (list of filenames)
+    video_pred = Video(
+        filename=["/output/frame001.png", "/output/frame002.png"],
+        open_backend=False,
+    )
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # Should not match (different type)
+    assert len(result.unmatched_videos) == 1
+
+    # Summary should handle list filename
+    summary = result.summary()
+    assert "Unmatched videos:" in summary
+    assert "/output/frame001.png" in summary  # First filename from list
+
+
 def test_labels_copy_basic(slp_minimal):
     """Test basic copy creates independent object."""
     labels = load_slp(slp_minimal)

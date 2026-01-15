@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.matching import (
         InstanceMatcher,
+        MatchResult,
         MergeResult,
         SkeletonMatcher,
         TrackMatcher,
@@ -2029,6 +2030,135 @@ class Labels:
 
         # Make sure everything is properly linked
         self.update()
+
+    def match(
+        self,
+        other: "Labels",
+        video: "str | VideoMatcher | None" = None,
+        skeleton: "str | SkeletonMatcher | None" = None,
+        track: "str | TrackMatcher | None" = None,
+    ) -> "MatchResult":
+        """Match videos, skeletons, and tracks between this Labels and another.
+
+        This method builds correspondence maps without modifying either Labels object.
+        Useful for evaluation workflows where you need to align predictions with
+        ground truth without merging them.
+
+        Args:
+            other: Another Labels object to match against.
+            video: Video matching method. Can be a string ("auto", "path",
+                "basename", "content", "shape", "image_dedup") or a VideoMatcher
+                object for advanced configuration. Default is "auto".
+            skeleton: Skeleton matching method. Can be a string ("structure",
+                "subset", "overlap", "exact") or a SkeletonMatcher object.
+                Default is "structure".
+            track: Track matching method. Can be a string ("name", "identity") or
+                a TrackMatcher object. Default is "name".
+
+        Returns:
+            MatchResult object containing correspondence maps.
+
+        Example:
+            Match prediction videos to ground truth for evaluation::
+
+                >>> gt_labels = sio.load_slp("ground_truth.slp")
+                >>> pred_labels = sio.load_slp("predictions.slp")
+                >>> result = gt_labels.match(pred_labels)
+                >>> for pred_video, gt_video in result.video_map.items():
+                ...     if gt_video is not None:
+                ...         print(f"{pred_video.filename} -> {gt_video.filename}")
+
+            Check if all videos were matched::
+
+                >>> if not result.all_videos_matched:
+                ...     print(f"Warning: {len(result.unmatched_videos)} unmatched")
+
+        Notes:
+            For video matching with the AUTO method (default), the matching cascade
+            uses multiple strategies in order:
+
+            1. Shape rejection (filter obviously incompatible candidates)
+            2. original_video conflict rejection
+            3. Definitive file identity (is_same_file)
+            4. Strict path match
+            5. Leaf uniqueness matching at increasing depths
+            6. Pose-based matching (compares annotations between labels)
+
+            The match result maps `other`'s items to `self`'s items. For eval
+            workflows, typically `self` is ground truth and `other` is predictions.
+        """
+        from sleap_io.model.matching import (
+            MatchResult,
+            SkeletonMatcher,
+            SkeletonMatchMethod,
+            TrackMatcher,
+            TrackMatchMethod,
+            VideoMatcher,
+            VideoMatchMethod,
+        )
+
+        # Coerce string arguments to Matcher objects
+        if skeleton is None:
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
+        elif isinstance(skeleton, str):
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod(skeleton))
+        else:
+            skeleton_matcher = skeleton
+
+        if video is None:
+            video_matcher = VideoMatcher()
+        elif isinstance(video, str):
+            video_matcher = VideoMatcher(method=VideoMatchMethod(video))
+        else:
+            video_matcher = video
+
+        if track is None:
+            track_matcher = TrackMatcher()
+        elif isinstance(track, str):
+            track_matcher = TrackMatcher(method=TrackMatchMethod(track))
+        else:
+            track_matcher = track
+
+        # Initialize result
+        result = MatchResult()
+
+        # Match skeletons
+        for other_skel in other.skeletons:
+            matched_skel = None
+            for self_skel in self.skeletons:
+                if skeleton_matcher.match(self_skel, other_skel):
+                    matched_skel = self_skel
+                    break
+            result.skeleton_map[other_skel] = matched_skel
+
+        # Match videos
+        # Use find_match for AUTO method to get full matching cascade
+        for other_video in other.videos:
+            if video_matcher.method == VideoMatchMethod.AUTO:
+                matched_video = video_matcher.find_match(
+                    other_video,
+                    self.videos,
+                    labels_incoming=other,
+                    labels_base=self,
+                )
+            else:
+                matched_video = None
+                for self_video in self.videos:
+                    if video_matcher.match(self_video, other_video):
+                        matched_video = self_video
+                        break
+            result.video_map[other_video] = matched_video
+
+        # Match tracks
+        for other_track in other.tracks:
+            matched_track = None
+            for self_track in self.tracks:
+                if track_matcher.match(self_track, other_track):
+                    matched_track = self_track
+                    break
+            result.track_map[other_track] = matched_track
+
+        return result
 
     def merge(
         self,
