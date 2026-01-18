@@ -4895,6 +4895,58 @@ def test_fix_preserves_embedded_frames_hdf5(tmp_path, slp_real_data):
     assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
 
 
+def test_fix_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that fix preserves embedded videos from regular .slp files (not .pkg.slp).
+
+    This is a regression test for a bug where embedded images in regular .slp files
+    were stripped because _should_preserve_embedded() only checked for .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # Create a regular .slp (not .pkg.slp) with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    input_size = embedded_path.stat().st_size
+
+    # Run fix command on regular .slp with embedded images
+    output_path = tmp_path / "fixed.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(embedded_path), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify file size is similar (images weren't stripped)
+    output_size = output_path.stat().st_size
+    # Allow some variation due to re-encoding, but should be same order of magnitude
+    assert output_size > input_size * 0.5, (
+        f"Output file too small ({output_size} vs {input_size}), images may have been stripped"
+    )
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
+
+
 def test_fix_consolidate_skeletons(tmp_path):
     """Test fix --consolidate-skeletons keeps most frequent skeleton."""
     import numpy as np
