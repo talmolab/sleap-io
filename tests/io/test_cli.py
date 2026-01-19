@@ -4948,15 +4948,15 @@ def test_fix_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
 
 
 def test_fix_consolidate_skeletons(tmp_path):
-    """Test fix --consolidate-skeletons keeps most frequent skeleton."""
+    """Test fix --consolidate-skeletons deletes instances from incompatible skeletons."""
     import numpy as np
 
     from sleap_io.model.instance import Instance
     from sleap_io.model.labeled_frame import LabeledFrame
 
-    # Create labels with two skeletons that both have user instances
+    # Create labels with two INCOMPATIBLE skeletons (different nodes)
     skel1 = Skeleton(["head", "tail"], name="frequent")
-    skel2 = Skeleton(["a", "b"], name="rare")
+    skel2 = Skeleton(["a", "b"], name="rare")  # Different nodes - incompatible
 
     video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
     labels = Labels(skeletons=[skel1, skel2], videos=[video])
@@ -4982,7 +4982,7 @@ def test_fix_consolidate_skeletons(tmp_path):
     labels.save(str(input_path))
     assert len(labels.skeletons) == 2
 
-    # Run fix without consolidate - should warn but not change
+    # Run fix without consolidate - should warn about incompatible skeletons
     runner = CliRunner()
     dry_run_result = runner.invoke(
         cli,
@@ -4991,7 +4991,8 @@ def test_fix_consolidate_skeletons(tmp_path):
     assert dry_run_result.exit_code == 0, dry_run_result.output
     output = _strip_ansi(dry_run_result.output)
     assert "WARNING: Multiple skeletons" in output
-    assert "--consolidate-skeletons" in output
+    # Incompatible skeletons warn about deletion
+    assert "incompatible skeletons will be deleted" in output
 
     # Run fix with consolidate
     output_path = tmp_path / "consolidated.slp"
@@ -5018,6 +5019,85 @@ def test_fix_consolidate_skeletons(tmp_path):
     assert fixed_labels.skeletons[0].name == "frequent"
     # Should have 5 frames (rare skeleton instances deleted, frames cleaned)
     assert len(fixed_labels.labeled_frames) == 5
+
+
+def test_fix_consolidate_skeletons_reassigns_compatible(tmp_path):
+    """Test fix --consolidate-skeletons reassigns instances from compatible skeletons."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    # Create labels with two COMPATIBLE skeletons (same nodes, different objects)
+    skel1 = Skeleton(["head", "tail"], name="mouse")
+    skel2 = Skeleton(["head", "tail"], name="mouse")  # Same nodes - compatible!
+
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    labels = Labels(skeletons=[skel1, skel2], videos=[video])
+
+    # Add 5 instances using skel1 (frequent)
+    for i in range(5):
+        frame = LabeledFrame(video=video, frame_idx=i)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skel1)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Add 2 instances using skel2 (rare) - these should be REASSIGNED, not deleted
+    for i in range(5, 7):
+        frame = LabeledFrame(video=video, frame_idx=i)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skel2)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "multi_skel.slp"
+    labels.save(str(input_path))
+    assert len(labels.skeletons) == 2
+    assert len(labels.labeled_frames) == 7
+
+    # Run fix without consolidate - should suggest reassignment
+    runner = CliRunner()
+    dry_run_result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run"],
+    )
+    assert dry_run_result.exit_code == 0, dry_run_result.output
+    output = _strip_ansi(dry_run_result.output)
+    assert "WARNING: Multiple skeletons" in output
+    # Compatible skeletons should suggest reassignment
+    assert "reassign" in output.lower()
+
+    # Run fix with consolidate
+    output_path = tmp_path / "consolidated.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--consolidate-skeletons",
+            "--no-remove-empty-frames",  # Don't remove frames
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention reassignment
+    assert "Reassigned" in output
+
+    # Verify only one skeleton remains
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.skeletons) == 1
+    assert fixed_labels.skeletons[0].name == "mouse"
+    # Should have ALL 7 frames (instances were reassigned, not deleted!)
+    assert len(fixed_labels.labeled_frames) == 7
+    # All 7 instances should be preserved
+    total_instances = sum(len(lf.instances) for lf in fixed_labels.labeled_frames)
+    assert total_instances == 7
 
 
 def test_fix_remove_untracked_predictions(tmp_path):
