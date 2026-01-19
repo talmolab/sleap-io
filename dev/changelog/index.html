@@ -380,6 +380,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v063" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.3
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v062" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -692,17 +703,6 @@
     <span class="md-ellipsis">
       
         v0.0.13
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v0012" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.12
       
     </span>
   </a>
@@ -2766,6 +2766,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v063" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.3
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v062" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3084,17 +3095,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v0012" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.12
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3114,6 +3114,271 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v063"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.3">v0.6.3</a><a class="headerlink" href="#v063" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.6.3 Release Notes</h1>
+<h2>Summary</h2>
+<p>This release adds <strong>negative frame support</strong> for training data and fixes critical bugs in the CLI commands that were causing embedded image data loss.</p>
+<ul>
+<li><strong>Negative Frames</strong>: Mark frames as containing no instances (pure background) for better model training</li>
+<li><strong>Embedded Image Preservation</strong>: CLI commands (<code>sio fix</code>, <code>sio convert</code>, <code>sio merge</code>, <code>sio unsplit</code>) now preserve embedded images by default</li>
+<li><strong>Smart Skeleton Consolidation</strong>: The <code>--consolidate-skeletons</code> flag now reassigns compatible instances instead of deleting them</li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.6.3 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;
+
+# Upgrade existing project dependency
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.6.3 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync</pre></div>
+<p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
+<hr>
+<h2>New Features</h2>
+<h3>Negative Frames Support (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3827876932" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/341" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/341/hovercard" href="https://github.com/talmolab/sleap-io/pull/341">#341</a>)</h3>
+<p>A new feature to mark frames as explicitly containing no instances (pure background). This is valuable for training pose estimation models as it helps models learn what backgrounds look like without any animals present.</p>
+<p><strong>Key distinction:</strong> Negative frames are different from "empty frames" (frames where instances were deleted). Negative frames represent intentional user annotation indicating "there is nothing to label here."</p>
+<h4>Creating Negative Frames</h4>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Create a labeled frame marked as negative
+lf = sio.LabeledFrame(
+    video=video,
+    frame_idx=42,
+    instances=[],  # No instances
+    is_negative=True  # Explicitly marked as negative
+)
+
+# Add to labels
+labels.append(lf)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Create a labeled frame marked as negative</span>
+<span class="pl-s1">lf</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">LabeledFrame</span>(
+    <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>,
+    <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">42</span>,
+    <span class="pl-s1">instances</span><span class="pl-c1">=</span>[],  <span class="pl-c"># No instances</span>
+    <span class="pl-s1">is_negative</span><span class="pl-c1">=</span><span class="pl-c1">True</span>  <span class="pl-c"># Explicitly marked as negative</span>
+)
+
+<span class="pl-c"># Add to labels</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">append</span>(<span class="pl-s1">lf</span>)</pre></div>
+<h4>Checking Frame Status</h4>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Check if a frame is explicitly negative
+if lf.is_negative:
+    print(f&quot;Frame {lf.frame_idx} is a negative/background frame&quot;)
+
+# Check if a frame represents user annotation (instances OR negative)
+if lf.is_user_labeled:
+    print(f&quot;Frame {lf.frame_idx} was intentionally annotated by user&quot;)"><pre><span class="pl-c"># Check if a frame is explicitly negative</span>
+<span class="pl-k">if</span> <span class="pl-s1">lf</span>.<span class="pl-c1">is_negative</span>:
+    <span class="pl-en">print</span>(<span class="pl-s">f"Frame <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">lf</span>.<span class="pl-c1">frame_idx</span><span class="pl-kos">}</span></span> is a negative/background frame"</span>)
+
+<span class="pl-c"># Check if a frame represents user annotation (instances OR negative)</span>
+<span class="pl-k">if</span> <span class="pl-s1">lf</span>.<span class="pl-c1">is_user_labeled</span>:
+    <span class="pl-en">print</span>(<span class="pl-s">f"Frame <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">lf</span>.<span class="pl-c1">frame_idx</span><span class="pl-kos">}</span></span> was intentionally annotated by user"</span>)</pre></div>
+<h4>Accessing Negative Frames</h4>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Get all negative frames from a Labels object
+negative_frames = labels.negative_frames
+print(f&quot;Found {len(negative_frames)} negative frames&quot;)
+
+# Negative frames are included in user_labeled_frames for training
+training_frames = labels.user_labeled_frames
+# Includes: frames with user instances + negative frames"><pre><span class="pl-c"># Get all negative frames from a Labels object</span>
+<span class="pl-s1">negative_frames</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">negative_frames</span>
+<span class="pl-en">print</span>(<span class="pl-s">f"Found <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-en">len</span>(<span class="pl-s1">negative_frames</span>)<span class="pl-kos">}</span></span> negative frames"</span>)
+
+<span class="pl-c"># Negative frames are included in user_labeled_frames for training</span>
+<span class="pl-s1">training_frames</span> <span class="pl-c1">=</span> <span class="pl-s1">labels</span>.<span class="pl-c1">user_labeled_frames</span>
+<span class="pl-c"># Includes: frames with user instances + negative frames</span></pre></div>
+<h4>Cleaning Labels</h4>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# clean() preserves negative frames when removing empty frames
+labels.clean(frames=True)
+# Empty non-negative frames are removed
+# Negative frames are preserved even though they have no instances"><pre><span class="pl-c"># clean() preserves negative frames when removing empty frames</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">clean</span>(<span class="pl-s1">frames</span><span class="pl-c1">=</span><span class="pl-c1">True</span>)
+<span class="pl-c"># Empty non-negative frames are removed</span>
+<span class="pl-c"># Negative frames are preserved even though they have no instances</span></pre></div>
+<h4>HDF5 Storage Format</h4>
+<p>Negative frames are stored in a new optional HDF5 dataset:</p>
+<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="file.slp
+├── /frames
+├── /instances
+├── /points
+├── /pred_points
+└── /negative_frames   # NEW - optional dataset"><pre class="notranslate"><code>file.slp
+├── /frames
+├── /instances
+├── /points
+├── /pred_points
+└── /negative_frames   # NEW - optional dataset
+</code></pre></div>
+<p>The dataset stores <code>(video_id, frame_idx)</code> tuples using sparse video IDs for consistency with the <code>/frames</code> dataset.</p>
+<p><strong>Backwards Compatibility:</strong></p>
+<ul>
+<li>Old sleap-io versions can open new files (negative frame info simply won't be loaded)</li>
+<li>New sleap-io can open old files (all frames default to <code>is_negative=False</code>)</li>
+</ul>
+<hr>
+<h2>Bug Fixes</h2>
+<h3>Embedded Images Now Preserved in CLI Commands (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3827372230" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/340" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/340/hovercard" href="https://github.com/talmolab/sleap-io/pull/340">#340</a>)</h3>
+<p><strong>Fixed:</strong> CLI commands (<code>sio fix</code>, <code>sio convert</code>, <code>sio merge</code>, <code>sio unsplit</code>) were silently stripping embedded images from regular <code>.slp</code> files that had embedded videos via HDF5 datasets.</p>
+<p><strong>Symptom:</strong> Opening an SLP file with embedded images, making changes, and saving would cause:</p>
+<ol>
+<li>Warnings about missing image file paths during save</li>
+<li>Complete data loss upon reopening (images could not be loaded)</li>
+<li>Significantly decreased file size (embedded data removed)</li>
+</ol>
+<p><strong>Root Cause:</strong> The embedded detection logic only recognized <code>.pkg.slp</code> files, not regular <code>.slp</code> files with embedded videos.</p>
+<p><strong>Fix:</strong> All affected commands now use <code>embed=None</code> by default, which preserves whatever embedding state exists in the input file.</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# These commands now preserve embedded images by default:
+sio fix labels.slp -o fixed.slp
+sio convert embedded.slp -o converted.slp
+sio merge file1.slp file2.slp -o merged.slp
+sio unsplit train.slp val.slp -o combined.slp"><pre><span class="pl-c"><span class="pl-c">#</span> These commands now preserve embedded images by default:</span>
+sio fix labels.slp -o fixed.slp
+sio convert embedded.slp -o converted.slp
+sio merge file1.slp file2.slp -o merged.slp
+sio unsplit train.slp val.slp -o combined.slp</pre></div>
+<hr>
+<h3>Smart Skeleton Consolidation (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3827372230" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/340" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/340/hovercard" href="https://github.com/talmolab/sleap-io/pull/340">#340</a>)</h3>
+<p><strong>Fixed:</strong> The <code>--consolidate-skeletons</code> flag in <code>sio fix</code> was deleting all instances from non-primary skeletons, even when those skeletons were structurally identical.</p>
+<p><strong>Before:</strong> All instances from duplicate skeletons were deleted.</p>
+<p><strong>After:</strong></p>
+<ul>
+<li><strong>Compatible skeletons</strong> (same nodes): Instances are <strong>reassigned</strong> to the most frequent skeleton</li>
+<li><strong>Incompatible skeletons</strong> (different structure): Instances are deleted (with warning)</li>
+</ul>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Skeleton consolidation with smart reassignment:
+sio fix labels.slp --consolidate-skeletons -o fixed.slp
+# Output: &quot;Reassigned 258 instances from 2 compatible skeleton(s).&quot;"><pre><span class="pl-c"><span class="pl-c">#</span> Skeleton consolidation with smart reassignment:</span>
+sio fix labels.slp --consolidate-skeletons -o fixed.slp
+<span class="pl-c"><span class="pl-c">#</span> Output: "Reassigned 258 instances from 2 compatible skeleton(s)."</span></pre></div>
+<hr>
+<h3>Related Fix: SLEAP Issue #2546</h3>
+<p>This release resolves the root cause of <a href="https://github.com/talmolab/sleap/issues/2546" data-hovercard-type="issue" data-hovercard-url="/talmolab/sleap/issues/2546/hovercard">SLEAP issue #2546</a> where embedded images were being stripped after save operations in the SLEAP GUI.</p>
+<hr>
+<h2>API Changes</h2>
+<h3>New Symbols</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Name</th>
+<th>Location</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attribute</td>
+<td><code>LabeledFrame.is_negative</code></td>
+<td><code>sleap_io.model.labeled_frame</code></td>
+<td><code>bool</code> - If <code>True</code>, frame is marked as containing no instances (background)</td>
+</tr>
+<tr>
+<td>Property</td>
+<td><code>LabeledFrame.is_user_labeled</code></td>
+<td><code>sleap_io.model.labeled_frame</code></td>
+<td><code>bool</code> - Returns <code>True</code> if frame has user instances OR is negative</td>
+</tr>
+<tr>
+<td>Property</td>
+<td><code>Labels.negative_frames</code></td>
+<td><code>sleap_io.model.labels</code></td>
+<td><code>list[LabeledFrame]</code> - All frames marked as negative</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>write_negative_frames()</code></td>
+<td><code>sleap_io.io.slp</code></td>
+<td>Writes negative frame markers to SLP file</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>read_negative_frames()</code></td>
+<td><code>sleap_io.io.slp</code></td>
+<td>Reads negative frame markers from SLP file</td>
+</tr>
+</tbody>
+</table>
+<h3>Modified Behavior</h3>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Labels.user_labeled_frames</code></td>
+<td>Now includes negative frames (frames with <code>is_negative=True</code>)</td>
+</tr>
+<tr>
+<td><code>Labels.clean(frames=True)</code></td>
+<td>Preserves negative frames when removing empty frames</td>
+</tr>
+<tr>
+<td><code>sio fix</code></td>
+<td>Uses <code>embed=None</code> by default (preserves embedded images)</td>
+</tr>
+<tr>
+<td><code>sio convert</code></td>
+<td>Uses <code>embed=None</code> for SLP→SLP conversions</td>
+</tr>
+<tr>
+<td><code>sio merge</code></td>
+<td>Uses <code>embed=None</code> by default</td>
+</tr>
+<tr>
+<td><code>sio unsplit</code></td>
+<td>Uses <code>embed=None</code> by default</td>
+</tr>
+<tr>
+<td><code>--consolidate-skeletons</code></td>
+<td>Reassigns compatible instances instead of deleting</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Coordination Notes</h2>
+<h3>For SLEAP</h3>
+<ul>
+<li>Upgrading to sleap-io ≥0.6.3 will resolve issue #2546 (embedded images stripped after save)</li>
+<li>The SLEAP GUI will need updates to allow users to mark frames as negative</li>
+<li>Negative frames should be included when exporting training data</li>
+</ul>
+<h3>For sleap-nn</h3>
+<ul>
+<li>Training data pipelines should include negative frames from <code>labels.user_labeled_frames</code></li>
+<li>Data loaders may need updates to handle frames with zero instances (use for background classification)</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3827372230" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/340" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/340/hovercard" href="https://github.com/talmolab/sleap-io/pull/340">#340</a>: fix(cli): Preserve embedded images and reassign instances in <code>sio fix</code> (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3827876932" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/341" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/341/hovercard" href="https://github.com/talmolab/sleap-io/pull/341">#341</a>: feat(model): Add support for negative frames (pure background) (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.6.2...v0.6.3"><tt>v0.6.2...v0.6.3</tt></a></p>
 <h2 id="v062"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.2">v0.6.2</a><a class="headerlink" href="#v062" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.6.2 Release Notes</h1>
 <h2>Summary</h2>
@@ -7161,17 +7426,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Add sdist build by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2156994545" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/74" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/74/hovercard" href="https://github.com/talmolab/sleap-io/pull/74">#74</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.12...v0.0.13"><tt>v0.0.12...v0.0.13</tt></a></p>
-<h2 id="v0012"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.12">v0.0.12</a><a class="headerlink" href="#v0012" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Add support for the Kumar Lab's JABS format by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/SkepticRaven/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/SkepticRaven">@SkepticRaven</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1875818744" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/63" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/63/hovercard" href="https://github.com/talmolab/sleap-io/pull/63">#63</a></li>
-<li>Fix multi-video serialization in SLP by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2077384511" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/72" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/72/hovercard" href="https://github.com/talmolab/sleap-io/pull/72">#72</a></li>
-</ul>
-<h2>New Contributors</h2>
-<ul>
-<li><a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/SkepticRaven/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/SkepticRaven">@SkepticRaven</a> made their first contribution in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1875818744" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/63" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/63/hovercard" href="https://github.com/talmolab/sleap-io/pull/63">#63</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.11...v0.0.12"><tt>v0.0.11...v0.0.12</tt></a></p>
 
 
 
