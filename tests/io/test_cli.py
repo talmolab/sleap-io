@@ -5059,8 +5059,9 @@ def test_fix_preserves_embedded_frames_hdf5(tmp_path, slp_real_data):
 def test_fix_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
     """Test that fix preserves embedded videos from regular .slp files (not .pkg.slp).
 
-    This is a regression test for a bug where embedded images in regular .slp files
-    were stripped because _should_preserve_embedded() only checked for .pkg.slp extension.
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
     """
     import h5py
 
@@ -5098,7 +5099,8 @@ def test_fix_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
     output_size = output_path.stat().st_size
     # Allow some variation due to re-encoding, but should be same order of magnitude
     assert output_size > input_size * 0.5, (
-        f"Output file too small ({output_size} vs {input_size}), images may have been stripped"
+        f"Output file too small ({output_size} vs {input_size}), "
+        "images may have been stripped"
     )
 
     # Verify the output file is usable
@@ -5109,7 +5111,7 @@ def test_fix_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
 
 
 def test_fix_consolidate_skeletons(tmp_path):
-    """Test fix --consolidate-skeletons deletes instances from incompatible skeletons."""
+    """Test fix --consolidate-skeletons deletes incompatible skeleton instances."""
     import numpy as np
 
     from sleap_io.model.instance import Instance
@@ -5183,7 +5185,7 @@ def test_fix_consolidate_skeletons(tmp_path):
 
 
 def test_fix_consolidate_skeletons_reassigns_compatible(tmp_path):
-    """Test fix --consolidate-skeletons reassigns instances from compatible skeletons."""
+    """Test fix --consolidate-skeletons reassigns compatible skeleton instances."""
     import numpy as np
 
     from sleap_io.model.instance import Instance
