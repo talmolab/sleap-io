@@ -1880,6 +1880,61 @@ def test_convert_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     assert output_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
+def test_convert_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that convert preserves embedded videos from regular .slp files.
+
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # Create a regular .slp (not .pkg.slp) with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    input_size = embedded_path.stat().st_size
+
+    # Convert regular .slp -> regular .slp (without explicit --embed flag)
+    # This should preserve embedded videos
+    output_path = tmp_path / "converted.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", str(embedded_path), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify file size is similar (images weren't stripped)
+    output_size = output_path.stat().st_size
+    # Allow some variation due to re-encoding, but should be same order of magnitude
+    assert output_size > input_size * 0.5, (
+        f"Output file too small ({output_size} vs {input_size}), "
+        "images may have been stripped"
+    )
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
+
+
 def test_convert_save_failure_invalid_path(tmp_path, slp_typical):
     """Test convert error when save fails due to invalid output path."""
     runner = CliRunner()
@@ -2776,6 +2831,59 @@ def test_unsplit_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     assert merged_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
+def test_unsplit_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that unsplit preserves embedded videos from regular .slp files.
+
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # First, create a regular .slp with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    # Create a second embedded file for unsplit
+    embedded_path2 = tmp_path / "embedded2.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path2), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Unsplit regular .slp -> regular .slp (without explicit --embed flag)
+    # This should preserve embedded videos
+    output_path = tmp_path / "merged.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["unsplit", str(embedded_path), str(embedded_path2), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
+
+
 # ============================================================================
 # merge command tests
 # ============================================================================
@@ -3212,6 +3320,59 @@ def test_merge_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     merged_labels = load_slp(str(merged_path))
     # backend_metadata indicates embedding
     assert merged_labels.videos[0].backend_metadata.get("has_embedded_images", False)
+
+
+def test_merge_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that merge preserves embedded videos from regular .slp files.
+
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # First, create a regular .slp with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    # Create a second embedded file for merge
+    embedded_path2 = tmp_path / "embedded2.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path2), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Merge regular .slp -> regular .slp (without explicit --embed flag)
+    # This should preserve embedded videos
+    output_path = tmp_path / "merged.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["merge", str(embedded_path), str(embedded_path2), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
 
 
 # ============================================================================

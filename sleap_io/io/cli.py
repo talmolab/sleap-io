@@ -1569,14 +1569,14 @@ def convert(
     # Save the output file
     try:
         save_kwargs: dict = {"format": resolved_output_format}
-        # Check for pkg.slp to pkg.slp preservation
-        if resolved_output_format == "slp" and _should_preserve_embedded(
-            input_path, output_path, embed
-        ):
-            # Preserve existing embedded videos from pkg.slp input
-            save_kwargs["embed"] = None
-        elif embed is not None:
-            save_kwargs["embed"] = embed
+        # For SLP output, preserve existing embedded videos by default.
+        # Use embed=None (preserve state) unless user explicitly specified --embed.
+        if resolved_output_format == "slp":
+            if embed is not None:
+                save_kwargs["embed"] = embed
+            else:
+                # Preserve any existing embedded images
+                save_kwargs["embed"] = None
         # Handle CSV-specific options
         if resolved_output_format == "csv":
             io_main.save_csv(
@@ -1982,12 +1982,14 @@ def unsplit(
     click.echo(f"Saving: {output_path}")
 
     try:
+        # Preserve existing embedded videos by default.
+        # Use embed=None (preserve state) unless user explicitly specified --embed.
         save_kwargs: dict = {}
-        if _should_preserve_embedded(expanded_files, output_path, embed):
-            # Preserve existing embedded videos from pkg.slp inputs
-            save_kwargs["embed"] = None
-        elif embed is not None:
+        if embed is not None:
             save_kwargs["embed"] = embed
+        else:
+            # Preserve any existing embedded images
+            save_kwargs["embed"] = None
         io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
@@ -2218,12 +2220,14 @@ def merge(
     click.echo(f"Saving: {output_path}")
 
     try:
+        # Preserve existing embedded videos by default.
+        # Use embed=None (preserve state) unless user explicitly specified --embed.
         save_kwargs: dict = {}
-        if _should_preserve_embedded(expanded_files, output_path, embed):
-            # Preserve existing embedded videos from pkg.slp inputs
-            save_kwargs["embed"] = None
-        elif embed is not None:
+        if embed is not None:
             save_kwargs["embed"] = embed
+        else:
+            # Preserve any existing embedded images
+            save_kwargs["embed"] = None
         io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
