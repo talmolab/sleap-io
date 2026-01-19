@@ -1023,7 +1023,9 @@ class Labels:
         """Remove empty frames, unused skeletons, tracks and videos.
 
         Args:
-            frames: If `True` (the default), remove empty frames.
+            frames: If `True` (the default), remove empty frames. Note that negative
+                frames (frames explicitly marked as containing no instances via
+                `is_negative=True`) are preserved even when empty.
             empty_instances: If `True` (NOT default), remove instances that have no
                 visible points.
             skeletons: If `True` (the default), remove unused skeletons.
@@ -1042,7 +1044,7 @@ class Labels:
             if empty_instances:
                 lf.remove_empty_instances()
 
-            if frames and len(lf) == 0:
+            if frames and len(lf) == 0 and not lf.is_negative:
                 continue
 
             if videos and lf.video not in used_videos:
@@ -1104,11 +1106,31 @@ class Labels:
 
     @property
     def user_labeled_frames(self) -> list[LabeledFrame]:
-        """Return all labeled frames with user (non-predicted) instances."""
+        """Return all labeled frames with user instances OR marked as negative.
+
+        This includes:
+        - Frames with at least one user-labeled Instance
+        - Frames explicitly marked as negative/background (is_negative=True)
+
+        This property is used for training data export and embedding.
+        """
         if self.is_lazy:
             indices = self._lazy_store.get_user_frame_indices()
             return [self._lazy_store.materialize_frame(i) for i in indices]
-        return [lf for lf in self.labeled_frames if lf.has_user_instances]
+        return [lf for lf in self.labeled_frames if lf.is_user_labeled]
+
+    @property
+    def negative_frames(self) -> list[LabeledFrame]:
+        """Return all frames explicitly marked as negative/background.
+
+        These are frames where the user has indicated there are no instances
+        present (pure background), as opposed to frames that are simply empty
+        (e.g., instances were deleted).
+
+        Returns:
+            A list of `LabeledFrame` objects where `is_negative` is True.
+        """
+        return [lf for lf in self.labeled_frames if lf.is_negative]
 
     @property
     def instances(self) -> Iterator[Instance]:

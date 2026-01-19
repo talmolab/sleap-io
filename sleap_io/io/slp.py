@@ -1191,6 +1191,77 @@ def write_suggestions(
         f.create_dataset("suggestions_json", data=suggestions_json, maxshape=(None,))
 
 
+def write_negative_frames(labels_path: str, labels: Labels):
+    """Write negative frame markers to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object containing negative frames to write.
+
+    Notes:
+        Uses sparse video IDs (same as /frames dataset) for consistency when videos
+        are embedded or reordered. The /negative_frames dataset stores (video_id,
+        frame_idx) tuples identifying which frames are explicitly marked as negative
+        (pure background, no instances).
+    """
+    # Build video index to sparse ID mapping (reuse pattern from write_lfs)
+    video_idx_id_map = {}
+    for video_idx, video in enumerate(labels.videos):
+        # Default to sequential index
+        video_idx_id_map[video_idx] = video_idx
+
+        # Check if this is an embedded video with a sparse video ID
+        if (
+            hasattr(video, "backend")
+            and video.backend is not None
+            and hasattr(video.backend, "dataset")
+            and video.backend.dataset is not None
+        ):
+            dataset = video.backend.dataset
+            # Extract video ID from dataset name (e.g., "video15/video" → 15)
+            try:
+                video_group = dataset.split("/")[0]
+                if video_group.startswith("video"):
+                    video_id = int(video_group[5:])  # Remove "video" prefix and convert
+                    video_idx_id_map[video_idx] = video_id
+            except (ValueError, IndexError):
+                # If parsing fails, keep the default sequential index
+                pass
+
+    # Collect negative frames
+    negative_data = []
+    for lf in labels.labeled_frames:
+        if lf.is_negative:
+            video_idx = labels.videos.index(lf.video)
+            sparse_video_id = video_idx_id_map[video_idx]
+            negative_data.append((sparse_video_id, lf.frame_idx))
+
+    if negative_data:
+        dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
+        data = np.array(negative_data, dtype=dtype)
+        with h5py.File(labels_path, "a") as f:
+            if "negative_frames" in f:
+                del f["negative_frames"]  # Replace if exists
+            f.create_dataset("negative_frames", data=data)
+
+
+def read_negative_frames(labels_path: str) -> set[tuple[int, int]]:
+    """Read negative frame markers from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+
+    Returns:
+        A set of (sparse_video_id, frame_idx) tuples identifying negative frames.
+        Returns empty set if no negative frames dataset exists.
+    """
+    try:
+        data = read_hdf5_dataset(labels_path, "negative_frames")
+        return {(int(row["video_id"]), int(row["frame_idx"])) for row in data}
+    except KeyError:
+        return set()
+
+
 def read_metadata(labels_path: str) -> dict:
     """Read metadata from a SLEAP labels file.
 
@@ -2285,6 +2356,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     provenance = metadata.get("provenance", dict())
 
     frames = read_hdf5_dataset(labels_path, "frames")
+    negative_markers = read_negative_frames(labels_path)
 
     # Check if video IDs in frames are sequential list indices (0, 1, 2, ..., n-1)
     # or sparse embedded IDs (e.g., 0, 15, 29, 47, ...) that need remapping
@@ -2333,11 +2405,15 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         # Map sparse video_id to sequential list index
         video_index = video_id_to_index.get(video_id, video_id)
 
+        # Check if this frame is marked as negative (using sparse video_id)
+        is_negative = (int(video_id), int(frame_idx)) in negative_markers
+
         labeled_frames.append(
             LabeledFrame(
                 video=videos[video_index],
                 frame_idx=int(frame_idx),
                 instances=instances[instance_id_start:instance_id_end],
+                is_negative=is_negative,
             )
         )
 
@@ -2638,3 +2714,4 @@ def write_labels(
     write_sessions(labels_path, labels.sessions, labels.videos, labels.labeled_frames)
     write_metadata(labels_path, labels)
     write_lfs(labels_path, labels)
+    write_negative_frames(labels_path, labels)

@@ -398,6 +398,94 @@ def test_write_labels(centered_pair, slp_real_data, tmp_path):
         assert len(saved_labels.suggestions) == len(labels.suggestions)
 
 
+def test_negative_frames_roundtrip(tmp_path):
+    """Test that negative frames survive save/load cycle."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    # Save
+    path = tmp_path / "test.slp"
+    write_labels(str(path), labels)
+
+    # Verify dataset was created
+    with h5py.File(path, "r") as f:
+        assert "negative_frames" in f
+        data = f["negative_frames"][:]
+        assert len(data) == 1
+        assert data[0]["video_id"] == 0
+        assert data[0]["frame_idx"] == 1
+
+    # Load and verify
+    loaded = read_labels(str(path))
+
+    assert len(loaded.negative_frames) == 1
+    assert loaded.labeled_frames[0].is_negative is False  # frame 0
+    assert loaded.labeled_frames[1].is_negative is True  # frame 1
+    assert loaded.labeled_frames[2].is_negative is False  # frame 2
+
+
+def test_negative_frames_no_dataset_when_empty(tmp_path):
+    """Test no negative_frames dataset is created when there are none."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+
+    labels = Labels(labeled_frames=[lf], videos=[video], skeletons=[skel])
+
+    path = tmp_path / "test.slp"
+    write_labels(str(path), labels)
+
+    # Verify no dataset was created
+    with h5py.File(path, "r") as f:
+        assert "negative_frames" not in f
+
+    # Load should still work with is_negative=False
+    loaded = read_labels(str(path))
+    assert loaded.labeled_frames[0].is_negative is False
+
+
+def test_read_negative_frames_missing_dataset(tmp_path):
+    """Test read_negative_frames returns empty set when dataset doesn't exist."""
+    from sleap_io.io.slp import read_negative_frames
+
+    # Create a minimal HDF5 file without negative_frames
+    path = tmp_path / "test.h5"
+    with h5py.File(path, "w") as f:
+        f.create_dataset("dummy", data=[1, 2, 3])
+
+    result = read_negative_frames(str(path))
+    assert result == set()
+
+
 def test_write_sessions(slp_multiview, tmp_path):
     labels = read_labels(slp_multiview)
     sessions = labels.sessions

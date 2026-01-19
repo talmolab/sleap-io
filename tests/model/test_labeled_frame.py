@@ -33,6 +33,58 @@ def test_labeled_frame():
     assert lf.has_user_instances
 
 
+def test_labeled_frame_is_negative():
+    """Test is_negative attribute of LabeledFrame."""
+    video = Video(filename="test")
+    skeleton = Skeleton(["A", "B"])
+
+    # Default is_negative is False
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[])
+    assert lf.is_negative is False
+
+    # Can be set to True
+    lf_negative = LabeledFrame(video=video, frame_idx=1, instances=[], is_negative=True)
+    assert lf_negative.is_negative is True
+
+    # Negative frame can still have instances (e.g., predictions)
+    pred_inst = PredictedInstance([[0, 1], [2, 3]], skeleton=skeleton)
+    lf_negative_with_pred = LabeledFrame(
+        video=video, frame_idx=2, instances=[pred_inst], is_negative=True
+    )
+    assert lf_negative_with_pred.is_negative is True
+    assert len(lf_negative_with_pred) == 1
+
+
+def test_labeled_frame_is_user_labeled():
+    """Test is_user_labeled property of LabeledFrame."""
+    video = Video(filename="test")
+    skeleton = Skeleton(["A", "B"])
+
+    # Frame with user instances is user labeled
+    user_inst = Instance([[0, 1], [2, 3]], skeleton=skeleton)
+    lf_with_user = LabeledFrame(video=video, frame_idx=0, instances=[user_inst])
+    assert lf_with_user.is_user_labeled is True
+
+    # Negative frame (empty) is user labeled
+    lf_negative = LabeledFrame(video=video, frame_idx=1, instances=[], is_negative=True)
+    assert lf_negative.is_user_labeled is True
+
+    # Empty non-negative frame is NOT user labeled
+    lf_empty = LabeledFrame(video=video, frame_idx=2, instances=[])
+    assert lf_empty.is_user_labeled is False
+
+    # Frame with only predictions is NOT user labeled
+    pred_inst = PredictedInstance([[0, 1], [2, 3]], skeleton=skeleton)
+    lf_pred_only = LabeledFrame(video=video, frame_idx=3, instances=[pred_inst])
+    assert lf_pred_only.is_user_labeled is False
+
+    # Negative frame with predictions is user labeled (negative takes precedence)
+    lf_negative_with_pred = LabeledFrame(
+        video=video, frame_idx=4, instances=[pred_inst], is_negative=True
+    )
+    assert lf_negative_with_pred.is_user_labeled is True
+
+
 def test_remove_predictions():
     """Test removing predictions from `LabeledFrame`."""
     inst = Instance([[0, 1], [2, 3]], skeleton=Skeleton(["A", "B"]))
