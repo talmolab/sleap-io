@@ -31,6 +31,7 @@ file.slp
 ├── /instances                   # Dataset: Instance metadata (structured array)
 ├── /points                      # Dataset: User-labeled points (structured array)
 ├── /pred_points                 # Dataset: Predicted points (structured array)
+├── /negative_frames             # Dataset: Negative frame markers (optional)
 │
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
     ├── /video                   # Dataset: Embedded image data
@@ -553,6 +554,66 @@ frame_dtype = np.dtype([
 ### Video ID Mapping
 
 Modern SLP files use sequential video indices (0, 1, 2, ...), but legacy files may contain sparse video IDs derived from the embedded video group names (e.g., 0, 15, 29). The reader handles both cases transparently.
+
+## Negative Frames
+
+Negative frames are frames explicitly marked as containing no instances (pure background). They are valuable for training, helping models learn what backgrounds look like without any animals present. Negative frames are distinct from "empty frames" which had instances that were deleted.
+
+### Storage
+
+Negative frames are stored in two places:
+
+1. **`/frames` dataset**: Like all labeled frames, negative frames have a row in the `/frames` dataset. They have `instance_id_start == instance_id_end` (empty instance range).
+
+2. **`/negative_frames` dataset**: A sidecar dataset that marks which empty frames are intentionally negative vs accidentally empty.
+
+### Negative Frames Dtype
+
+```python
+negative_frames_dtype = np.dtype([
+    ("video_id", "u4"),   # Sparse video ID (same as in /frames)
+    ("frame_idx", "u8"),  # Frame index within video
+])
+```
+
+### Example
+
+```python
+# A file with two negative frames
+negative_frames = [
+    (0, 42),   # Video 0, frame 42 is negative
+    (0, 100),  # Video 0, frame 100 is negative
+]
+```
+
+### Data Model Integration
+
+When loading SLP files, the `is_negative` attribute is set on [`LabeledFrame`][sleap_io.LabeledFrame] objects:
+
+```python
+import sleap_io as sio
+
+labels = sio.load_slp("labels.slp")
+
+# Access negative frames
+negative = labels.negative_frames  # List of LabeledFrames with is_negative=True
+
+# Check if a frame is negative
+for lf in labels:
+    if lf.is_negative:
+        print(f"Frame {lf.frame_idx} is a negative frame")
+
+# Negative frames are included in user_labeled_frames for training export
+user_frames = labels.user_labeled_frames  # Includes negative frames
+```
+
+### clean() Behavior
+
+When calling [`Labels.clean(frames=True)`][sleap_io.Labels.clean], negative frames are preserved even though they have no instances. Only non-negative empty frames are removed.
+
+### Optional Dataset
+
+The `/negative_frames` dataset is optional. Files without negative frames will not contain this dataset, and all frames will have `is_negative=False`.
 
 ## Lazy Loading
 
