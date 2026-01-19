@@ -1569,14 +1569,14 @@ def convert(
     # Save the output file
     try:
         save_kwargs: dict = {"format": resolved_output_format}
-        # Check for pkg.slp to pkg.slp preservation
-        if resolved_output_format == "slp" and _should_preserve_embedded(
-            input_path, output_path, embed
-        ):
-            # Preserve existing embedded videos from pkg.slp input
-            save_kwargs["embed"] = None
-        elif embed is not None:
-            save_kwargs["embed"] = embed
+        # For SLP output, preserve existing embedded videos by default.
+        # Use embed=None (preserve state) unless user explicitly specified --embed.
+        if resolved_output_format == "slp":
+            if embed is not None:
+                save_kwargs["embed"] = embed
+            else:
+                # Preserve any existing embedded images
+                save_kwargs["embed"] = None
         # Handle CSV-specific options
         if resolved_output_format == "csv":
             io_main.save_csv(
@@ -1982,12 +1982,14 @@ def unsplit(
     click.echo(f"Saving: {output_path}")
 
     try:
+        # Preserve existing embedded videos by default.
+        # Use embed=None (preserve state) unless user explicitly specified --embed.
         save_kwargs: dict = {}
-        if _should_preserve_embedded(expanded_files, output_path, embed):
-            # Preserve existing embedded videos from pkg.slp inputs
-            save_kwargs["embed"] = None
-        elif embed is not None:
+        if embed is not None:
             save_kwargs["embed"] = embed
+        else:
+            # Preserve any existing embedded images
+            save_kwargs["embed"] = None
         io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
@@ -2218,12 +2220,14 @@ def merge(
     click.echo(f"Saving: {output_path}")
 
     try:
+        # Preserve existing embedded videos by default.
+        # Use embed=None (preserve state) unless user explicitly specified --embed.
         save_kwargs: dict = {}
-        if _should_preserve_embedded(expanded_files, output_path, embed):
-            # Preserve existing embedded videos from pkg.slp inputs
-            save_kwargs["embed"] = None
-        elif embed is not None:
+        if embed is not None:
             save_kwargs["embed"] = embed
+        else:
+            # Preserve any existing embedded images
+            save_kwargs["embed"] = None
         io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
@@ -3367,18 +3371,28 @@ def fix(
                 "[yellow]⚠  WARNING: Multiple skeletons have user instances![/]"
             )
             if most_frequent_skeleton:
-                other_counts = [
-                    (s, u) for s, u, _ in all_skel_usage if s in other_user_skeletons
-                ]
-                total_other = sum(u for _, u in other_counts)
-                console.print(
-                    f"    Use --consolidate-skeletons to keep "
-                    f"'{most_frequent_skeleton.name}' and remove {total_other} "
-                    f"instances."
+                compatible_instances = sum(
+                    u
+                    for s, u, _ in all_skel_usage
+                    if s in other_user_skeletons and s.matches(most_frequent_skeleton)
                 )
-                console.print(
-                    "    This is irreversible - review carefully before proceeding."
+                incompatible_instances = sum(
+                    u
+                    for s, u, _ in all_skel_usage
+                    if s in other_user_skeletons
+                    and not s.matches(most_frequent_skeleton)
                 )
+                if compatible_instances > 0:
+                    console.print(
+                        f"    Use --consolidate-skeletons to reassign "
+                        f"{compatible_instances} instances to "
+                        f"'{most_frequent_skeleton.name}'."
+                    )
+                if incompatible_instances > 0:
+                    console.print(
+                        f"    [red]WARNING: {incompatible_instances} instances from "
+                        f"incompatible skeletons will be deleted.[/]"
+                    )
     else:
         console.print(f"[green]✓ Skeletons:[/] {n_skeletons} skeleton(s), all in use")
 
@@ -3439,13 +3453,27 @@ def fix(
 
     # Skeleton consolidation
     if consolidate_skeletons and has_multi_user_skeletons:
-        other_instance_count = sum(
-            u for s, u, _ in all_skel_usage if s in other_user_skeletons
+        # Check which skeletons are compatible (can be reassigned)
+        compatible_count = sum(
+            u
+            for s, u, _ in all_skel_usage
+            if s in other_user_skeletons and s.matches(most_frequent_skeleton)
         )
-        actions.append(
-            f"[red]CONSOLIDATE: Keep '{most_frequent_skeleton.name}', "
-            f"DELETE {other_instance_count} instances from other skeletons[/]"
+        incompatible_count = sum(
+            u
+            for s, u, _ in all_skel_usage
+            if s in other_user_skeletons and not s.matches(most_frequent_skeleton)
         )
+        if compatible_count > 0:
+            actions.append(
+                f"[green]CONSOLIDATE: Reassign {compatible_count} instances "
+                f"to '{most_frequent_skeleton.name}'[/]"
+            )
+        if incompatible_count > 0:
+            actions.append(
+                f"[red]CONSOLIDATE: DELETE {incompatible_count} instances "
+                f"from incompatible skeletons[/]"
+            )
 
     # Prediction removal
     if remove_predictions and n_predictions > 0:
@@ -3508,29 +3536,57 @@ def fix(
     # 2. Skeleton consolidation (before other skeleton operations)
     if consolidate_skeletons and has_multi_user_skeletons:
         console.print()
-        console.print("[red bold]CONSOLIDATING SKELETONS (destructive operation)[/]")
+        console.print("[bold]CONSOLIDATING SKELETONS[/]")
         console.print(f"    Keeping: '{most_frequent_skeleton.name}'")
 
+        # Separate compatible vs incompatible skeletons
+        compatible_skeletons = []
+        incompatible_skeletons = []
+        for skel in other_user_skeletons:
+            if skel.matches(most_frequent_skeleton):
+                compatible_skeletons.append(skel)
+            else:
+                incompatible_skeletons.append(skel)
+
+        # Reassign instances from compatible skeletons
+        reassigned_count = 0
+        for lf in labels.labeled_frames:
+            for inst in lf.instances:
+                if inst.skeleton in compatible_skeletons:
+                    inst.skeleton = most_frequent_skeleton
+                    reassigned_count += 1
+
+        if reassigned_count > 0:
+            console.print(
+                f"    [green]Reassigned {reassigned_count} instances from "
+                f"{len(compatible_skeletons)} compatible skeleton(s).[/]"
+            )
+
+        # Delete instances from incompatible skeletons (different structure)
         deleted_count = 0
         frames_affected = 0
-        for lf in labels.labeled_frames:
-            instances_to_remove = [
-                inst for inst in lf.instances if inst.skeleton in other_user_skeletons
-            ]
-            if instances_to_remove:
-                frames_affected += 1
-                deleted_count += len(instances_to_remove)
-                for inst in instances_to_remove:
-                    lf.instances.remove(inst)
+        if incompatible_skeletons:
+            for lf in labels.labeled_frames:
+                instances_to_remove = [
+                    inst
+                    for inst in lf.instances
+                    if inst.skeleton in incompatible_skeletons
+                ]
+                if instances_to_remove:
+                    frames_affected += 1
+                    deleted_count += len(instances_to_remove)
+                    for inst in instances_to_remove:
+                        lf.instances.remove(inst)
+
+            console.print(
+                f"    [red]Deleted {deleted_count} instances from "
+                f"{len(incompatible_skeletons)} incompatible skeleton(s).[/]"
+            )
 
         # Remove the other skeletons
         for skel in other_user_skeletons:
             if skel in labels.skeletons:
                 labels.skeletons.remove(skel)
-
-        console.print(
-            f"    Deleted {deleted_count} instances from {frames_affected} frames."
-        )
 
     # 3. Remove unused skeletons (completely unused)
     if remove_unused_skeletons:
@@ -3625,11 +3681,9 @@ def fix(
     # ==========================================================================
 
     try:
-        save_kwargs: dict = {}
-        if _should_preserve_embedded(input_path, output_path, embed=None):
-            # Preserve existing embedded videos from pkg.slp input
-            save_kwargs["embed"] = None
-        io_main.save_file(labels, str(output_path), **save_kwargs)
+        # Always use embed=None to preserve any existing embedded images.
+        # The fix command should clean up labels, not change video embedding state.
+        io_main.save_file(labels, str(output_path), embed=None)
     except Exception as e:
         raise click.ClickException(f"Failed to save output file: {e}")
 

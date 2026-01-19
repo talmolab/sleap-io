@@ -1880,6 +1880,61 @@ def test_convert_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     assert output_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
+def test_convert_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that convert preserves embedded videos from regular .slp files.
+
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # Create a regular .slp (not .pkg.slp) with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    input_size = embedded_path.stat().st_size
+
+    # Convert regular .slp -> regular .slp (without explicit --embed flag)
+    # This should preserve embedded videos
+    output_path = tmp_path / "converted.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", str(embedded_path), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify file size is similar (images weren't stripped)
+    output_size = output_path.stat().st_size
+    # Allow some variation due to re-encoding, but should be same order of magnitude
+    assert output_size > input_size * 0.5, (
+        f"Output file too small ({output_size} vs {input_size}), "
+        "images may have been stripped"
+    )
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
+
+
 def test_convert_save_failure_invalid_path(tmp_path, slp_typical):
     """Test convert error when save fails due to invalid output path."""
     runner = CliRunner()
@@ -2776,6 +2831,59 @@ def test_unsplit_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     assert merged_labels.videos[0].backend_metadata.get("has_embedded_images", False)
 
 
+def test_unsplit_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that unsplit preserves embedded videos from regular .slp files.
+
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # First, create a regular .slp with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    # Create a second embedded file for unsplit
+    embedded_path2 = tmp_path / "embedded2.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path2), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Unsplit regular .slp -> regular .slp (without explicit --embed flag)
+    # This should preserve embedded videos
+    output_path = tmp_path / "merged.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["unsplit", str(embedded_path), str(embedded_path2), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
+
+
 # ============================================================================
 # merge command tests
 # ============================================================================
@@ -3212,6 +3320,59 @@ def test_merge_preserves_embedded_from_pkg_slp(tmp_path, slp_real_data):
     merged_labels = load_slp(str(merged_path))
     # backend_metadata indicates embedding
     assert merged_labels.videos[0].backend_metadata.get("has_embedded_images", False)
+
+
+def test_merge_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that merge preserves embedded videos from regular .slp files.
+
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # First, create a regular .slp with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    # Create a second embedded file for merge
+    embedded_path2 = tmp_path / "embedded2.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path2), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Merge regular .slp -> regular .slp (without explicit --embed flag)
+    # This should preserve embedded videos
+    output_path = tmp_path / "merged.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["merge", str(embedded_path), str(embedded_path2), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
 
 
 # ============================================================================
@@ -4895,16 +5056,70 @@ def test_fix_preserves_embedded_frames_hdf5(tmp_path, slp_real_data):
     assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
 
 
+def test_fix_preserves_embedded_from_regular_slp(tmp_path, slp_real_data):
+    """Test that fix preserves embedded videos from regular .slp files (not .pkg.slp).
+
+    This is a regression test for a bug where embedded images in regular .slp
+    files were stripped because _should_preserve_embedded() only checked for
+    .pkg.slp extension.
+    """
+    import h5py
+
+    runner = CliRunner()
+
+    # Create a regular .slp (not .pkg.slp) with embedded videos
+    embedded_path = tmp_path / "embedded.slp"  # Note: NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_real_data, "-o", str(embedded_path), "--embed", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify input has embedded videos in HDF5
+    with h5py.File(embedded_path, "r") as f:
+        assert "video0/video" in f
+        input_video_shape = f["video0/video"].shape
+
+    input_size = embedded_path.stat().st_size
+
+    # Run fix command on regular .slp with embedded images
+    output_path = tmp_path / "fixed.slp"  # Also NOT .pkg.slp
+    result = runner.invoke(
+        cli,
+        ["fix", "-i", str(embedded_path), "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+
+    # Verify output HDF5 has video data preserved
+    with h5py.File(output_path, "r") as f:
+        assert "video0/video" in f, "Embedded video dataset missing from output"
+        assert f["video0/video"].shape == input_video_shape, "Video data shape mismatch"
+
+    # Verify file size is similar (images weren't stripped)
+    output_size = output_path.stat().st_size
+    # Allow some variation due to re-encoding, but should be same order of magnitude
+    assert output_size > input_size * 0.5, (
+        f"Output file too small ({output_size} vs {input_size}), "
+        "images may have been stripped"
+    )
+
+    # Verify the output file is usable
+    output_labels = load_slp(str(output_path), open_videos=True)
+    assert output_labels.videos[0].backend is not None
+    frame = output_labels.videos[0][0]
+    assert frame.shape[0] > 0, "Could not read frame from preserved embedded video"
+
+
 def test_fix_consolidate_skeletons(tmp_path):
-    """Test fix --consolidate-skeletons keeps most frequent skeleton."""
+    """Test fix --consolidate-skeletons deletes incompatible skeleton instances."""
     import numpy as np
 
     from sleap_io.model.instance import Instance
     from sleap_io.model.labeled_frame import LabeledFrame
 
-    # Create labels with two skeletons that both have user instances
+    # Create labels with two INCOMPATIBLE skeletons (different nodes)
     skel1 = Skeleton(["head", "tail"], name="frequent")
-    skel2 = Skeleton(["a", "b"], name="rare")
+    skel2 = Skeleton(["a", "b"], name="rare")  # Different nodes - incompatible
 
     video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
     labels = Labels(skeletons=[skel1, skel2], videos=[video])
@@ -4930,7 +5145,7 @@ def test_fix_consolidate_skeletons(tmp_path):
     labels.save(str(input_path))
     assert len(labels.skeletons) == 2
 
-    # Run fix without consolidate - should warn but not change
+    # Run fix without consolidate - should warn about incompatible skeletons
     runner = CliRunner()
     dry_run_result = runner.invoke(
         cli,
@@ -4939,7 +5154,8 @@ def test_fix_consolidate_skeletons(tmp_path):
     assert dry_run_result.exit_code == 0, dry_run_result.output
     output = _strip_ansi(dry_run_result.output)
     assert "WARNING: Multiple skeletons" in output
-    assert "--consolidate-skeletons" in output
+    # Incompatible skeletons warn about deletion
+    assert "incompatible skeletons will be deleted" in output
 
     # Run fix with consolidate
     output_path = tmp_path / "consolidated.slp"
@@ -4966,6 +5182,85 @@ def test_fix_consolidate_skeletons(tmp_path):
     assert fixed_labels.skeletons[0].name == "frequent"
     # Should have 5 frames (rare skeleton instances deleted, frames cleaned)
     assert len(fixed_labels.labeled_frames) == 5
+
+
+def test_fix_consolidate_skeletons_reassigns_compatible(tmp_path):
+    """Test fix --consolidate-skeletons reassigns compatible skeleton instances."""
+    import numpy as np
+
+    from sleap_io.model.instance import Instance
+    from sleap_io.model.labeled_frame import LabeledFrame
+
+    # Create labels with two COMPATIBLE skeletons (same nodes, different objects)
+    skel1 = Skeleton(["head", "tail"], name="mouse")
+    skel2 = Skeleton(["head", "tail"], name="mouse")  # Same nodes - compatible!
+
+    video = _make_test_video(filename="/data/video.mp4", shape=(100, 480, 640, 1))
+    labels = Labels(skeletons=[skel1, skel2], videos=[video])
+
+    # Add 5 instances using skel1 (frequent)
+    for i in range(5):
+        frame = LabeledFrame(video=video, frame_idx=i)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skel1)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Add 2 instances using skel2 (rare) - these should be REASSIGNED, not deleted
+    for i in range(5, 7):
+        frame = LabeledFrame(video=video, frame_idx=i)
+        points = np.random.rand(2, 2) * 100
+        inst = Instance.from_numpy(points, skeleton=skel2)
+        frame.instances = [inst]
+        labels.labeled_frames.append(frame)
+
+    # Save input
+    input_path = tmp_path / "multi_skel.slp"
+    labels.save(str(input_path))
+    assert len(labels.skeletons) == 2
+    assert len(labels.labeled_frames) == 7
+
+    # Run fix without consolidate - should suggest reassignment
+    runner = CliRunner()
+    dry_run_result = runner.invoke(
+        cli,
+        ["fix", "-i", str(input_path), "--dry-run"],
+    )
+    assert dry_run_result.exit_code == 0, dry_run_result.output
+    output = _strip_ansi(dry_run_result.output)
+    assert "WARNING: Multiple skeletons" in output
+    # Compatible skeletons should suggest reassignment
+    assert "reassign" in output.lower()
+
+    # Run fix with consolidate
+    output_path = tmp_path / "consolidated.slp"
+    result = runner.invoke(
+        cli,
+        [
+            "fix",
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--consolidate-skeletons",
+            "--no-remove-empty-frames",  # Don't remove frames
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Should mention reassignment
+    assert "Reassigned" in output
+
+    # Verify only one skeleton remains
+    fixed_labels = load_slp(str(output_path), open_videos=False)
+    assert len(fixed_labels.skeletons) == 1
+    assert fixed_labels.skeletons[0].name == "mouse"
+    # Should have ALL 7 frames (instances were reassigned, not deleted!)
+    assert len(fixed_labels.labeled_frames) == 7
+    # All 7 instances should be preserved
+    total_instances = sum(len(lf.instances) for lf in fixed_labels.labeled_frames)
+    assert total_instances == 7
 
 
 def test_fix_remove_untracked_predictions(tmp_path):
