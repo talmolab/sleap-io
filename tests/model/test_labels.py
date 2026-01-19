@@ -371,6 +371,126 @@ def test_labels_clean_frames(slp_real_data):
     assert len(labels[0]) == 2
 
 
+def test_labels_negative_frames():
+    """Test negative_frames property returns only negative frames."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    negative = labels.negative_frames
+    assert len(negative) == 1
+    assert negative[0].frame_idx == 1
+    assert negative[0].is_negative is True
+
+
+def test_labels_user_labeled_frames_includes_negative():
+    """Test user_labeled_frames includes negative frames."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+    lf_pred_only = LabeledFrame(
+        video=video,
+        frame_idx=3,
+        instances=[PredictedInstance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty, lf_pred_only],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    user_frames = labels.user_labeled_frames
+    # Should include frame 0 (has user instances) and frame 1 (is negative)
+    # Should NOT include frame 2 (empty, not negative) or frame 3 (pred only)
+    assert len(user_frames) == 2
+    frame_indices = {lf.frame_idx for lf in user_frames}
+    assert frame_indices == {0, 1}
+
+
+def test_labels_clean_preserves_negative_frames():
+    """Test that clean() preserves negative frames but removes empty non-negative."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    assert len(labels) == 3
+
+    labels.clean(frames=True, skeletons=False, tracks=False, videos=False)
+
+    # Should keep frame 0 (has instances) and frame 1 (is negative)
+    # Should remove frame 2 (empty, not negative)
+    assert len(labels) == 2
+    frame_indices = {lf.frame_idx for lf in labels.labeled_frames}
+    assert frame_indices == {0, 1}
+
+    # Verify negative frame is preserved
+    assert any(lf.is_negative for lf in labels.labeled_frames)
+
+
 def test_labels_clean_empty_instances(slp_real_data):
     labels = load_slp(slp_real_data)
     assert labels[0].frame_idx == 0

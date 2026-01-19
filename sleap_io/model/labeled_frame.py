@@ -26,6 +26,9 @@ class LabeledFrame:
         video: The `Video` associated with this `LabeledFrame`.
         frame_idx: The index of the `LabeledFrame` in the `Video`.
         instances: List of `Instance` objects associated with this `LabeledFrame`.
+        is_negative: If True, this frame is explicitly marked as containing no
+            instances (a "negative" or background frame for training). This is
+            distinct from frames that are simply empty (e.g., instances were deleted).
 
     Notes:
         Instances of this class are hashed by identity, not by value. This means that
@@ -36,6 +39,7 @@ class LabeledFrame:
     video: Video
     frame_idx: int = field(converter=int)
     instances: list[Instance | PredictedInstance] = field(factory=list)
+    is_negative: bool = field(default=False)
 
     def __len__(self) -> int:
         """Return the number of instances in the frame."""
@@ -61,6 +65,16 @@ class LabeledFrame:
             if type(inst) is Instance:
                 return True
         return False
+
+    @property
+    def is_user_labeled(self) -> bool:
+        """Return True if frame has user instances OR is explicitly negative.
+
+        This property indicates whether the frame represents intentional user
+        annotation, either through labeled instances or explicit marking as a
+        negative/background frame.
+        """
+        return self.has_user_instances or self.is_negative
 
     @property
     def predicted_instances(self) -> list[Instance]:
