@@ -3291,17 +3291,8 @@ def test_polars_pandas_equivalence():
         df_pandas = df_pandas[sorted(df_pandas.columns)]
         df_polars_pd = df_polars_pd[sorted(df_polars_pd.columns)]
 
-        # Check same columns
-        assert set(df_pandas.columns) == set(df_polars_pd.columns), f"Format {fmt}"
-
-        # Check same values (with tolerance for floats)
-        for col in df_pandas.columns:
-            pd_vals = df_pandas[col].values
-            pl_vals = df_polars_pd[col].values
-            if np.issubdtype(pd_vals.dtype, np.floating):
-                np.testing.assert_array_almost_equal(pd_vals, pl_vals)
-            else:
-                np.testing.assert_array_equal(pd_vals, pl_vals)
+        # Check same columns and values
+        pd.testing.assert_frame_equal(df_pandas, df_polars_pd)
 
 
 def test_polars_native_iter_values():
