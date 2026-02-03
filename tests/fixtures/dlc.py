@@ -119,7 +119,7 @@ def dlc_multiple_datasets_video1():
     This file:
     - Contains labeled data for video1 in multi-dataset setup
     - Has 2 animals (Animal1, Animal2) with 3 bodyparts each (A, B, C)
-    - Contains 3 labeled frames (img000-img002.jpg)
+    - Contains 2 labeled frames (img000-img001.jpg)
     - Some annotations are missing (empty cells)
     - Part of a multi-video dataset structure
     """
@@ -133,7 +133,7 @@ def dlc_multiple_datasets_video2():
     This file:
     - Contains labeled data for video2 in multi-dataset setup
     - Has 2 animals (Animal1, Animal2) with 3 bodyparts each (A, B, C)
-    - Contains 3 labeled frames (img000-img002.jpg)
+    - Contains 1 labeled frames (img002.jpg)
     - Part of a multi-video dataset structure
     """
     return "tests/data/dlc_multiple_datasets/video2/dlc_dataset_2.csv"

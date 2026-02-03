@@ -68,17 +68,24 @@ def load_dlc(
         # Try multi-animal format first (header rows 1-3, skipping scorer row)
         df = pd.read_csv(filename, header=[1, 2, 3], nrows=2)
         is_multianimal = df.columns[0][0] == "individuals"
+        is_multiindex = df.iloc[0, 0] == "labeled-data"
     except Exception:
         # Fall back to single-animal format
         is_multianimal = False
+        is_multiindex = False
 
-    # Read full file with appropriate header levels
-    if is_multianimal:
-        # Multi-animal format: skip scorer row, use individuals/bodyparts/coords
-        df = pd.read_csv(filename, header=[1, 2, 3], index_col=0)
-    else:
-        # Single-animal format: use scorer/bodyparts/coords
-        df = pd.read_csv(filename, header=[0, 1, 2], index_col=0)
+    # Older DLC versions store image paths with OS-specific path separators
+    # Newer versions store paths without separators as MultiIndex
+    index_col = [0, 1, 2] if is_multiindex else 0
+
+    # Multi-animal format: skip scorer row, use individuals/bodyparts/coords
+    # Single-animal format: use scorer/bodyparts/coords
+    header = [1, 2, 3] if is_multianimal else [0, 1, 2]
+
+    df = pd.read_csv(filename, header=header, index_col=index_col)
+    # Flatten MultiIndex to match older DLC format
+    if is_multiindex:
+        df.index = df.index.map("/".join)
 
     # Parse structure based on format
     if is_multianimal:
