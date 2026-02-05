@@ -116,6 +116,9 @@ def to_dataframe(
     instance_id: Literal["index", "track"] = "index",
     untracked: Literal["error", "ignore"] = "error",
     backend: Literal["pandas", "polars"] = "pandas",
+    all_frames: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
 ) -> pd.DataFrame | "pl.DataFrame":
     """Convert Labels to a DataFrame.
 
@@ -146,6 +149,13 @@ def to_dataframe(
         backend: "pandas" or "polars". Polars requires the polars package.
             When using polars, DataFrames are constructed natively without
             going through pandas, providing better performance for large datasets.
+        all_frames: If True, include rows for frames without instances (filled with
+            NaN values). If False (default), only include frames that have instances.
+            Only applies to "frames" and "instances" formats.
+        start_frame: Start frame index (inclusive) for frame padding. If None, starts
+            from 0 when all_frames=True, or from first labeled frame otherwise.
+        end_frame: End frame index (exclusive) for frame padding. If None, ends at
+            last labeled frame + 1.
 
     Returns:
         DataFrame in the specified format. Type depends on backend parameter.
@@ -285,6 +295,10 @@ def to_dataframe(
             include_video=include_video,
             video_id=video_id,
             backend=backend,
+            video_filter_idx=video_filter_idx,
+            all_frames=all_frames,
+            start_frame=start_frame,
+            end_frame=end_frame,
         )
     elif format == DataFrameFormat.FRAMES:
         df = _to_frames_df(
@@ -299,6 +313,10 @@ def to_dataframe(
             instance_id=instance_id,
             untracked=untracked,
             backend=backend,
+            video_filter_idx=video_filter_idx,
+            all_frames=all_frames,
+            start_frame=start_frame,
+            end_frame=end_frame,
         )
     elif format == DataFrameFormat.MULTI_INDEX:
         df = _to_multi_index_df(
@@ -1016,7 +1034,7 @@ def _to_points_df(
     return _create_dataframe_from_rows(rows, backend)
 
 
-def _to_instances_df(
+def _to_instances_df(  # noqa: D417
     labels: Labels,
     labeled_frames: list,
     *,
@@ -1027,15 +1045,39 @@ def _to_instances_df(
     include_video: bool = True,
     video_id: str = "path",
     backend: str = "pandas",
+    video_filter_idx: int | None = None,
+    all_frames: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
 ) -> "pd.DataFrame | pl.DataFrame":
     """Convert to instances format (one row per instance).
+
+    Args:
+        video_filter_idx: Video filter index from parent function.
+        all_frames: If True, include rows for empty frames (with NaN instance data).
+        start_frame: Start frame index (inclusive) for padding.
+        end_frame: End frame index (exclusive) for padding.
+
+    Other parameters mirror to_dataframe().
 
     Column structure:
         frame_idx | video | track | track_score | score | {node}.x/y/score
     """
     rows = []
 
+    # Track which (video, frame_idx) pairs we've seen
+    seen_frames = set()
+
     for lf in labeled_frames:
+        # Skip frames outside the specified range
+        if start_frame is not None and lf.frame_idx < start_frame:
+            continue
+        if end_frame is not None and lf.frame_idx >= end_frame:
+            continue
+
+        # Track this frame as seen
+        seen_frames.add((lf.video, lf.frame_idx))
+
         # Collect instances to include
         instances_to_process = []
 
@@ -1086,6 +1128,66 @@ def _to_instances_df(
                     row[f"{node.name}.score"] = float(point["score"])
 
             rows.append(row)
+
+    # Add empty frame rows if all_frames=True
+    if all_frames and labeled_frames:
+        # Get skeleton for column names
+        skeleton = labels.skeletons[0] if labels.skeletons else None
+
+        # Determine which videos to pad
+        if video_filter_idx is not None:
+            videos_to_pad = [labels.videos[video_filter_idx]]
+        else:
+            videos_to_pad = labels.videos
+
+        for vid in videos_to_pad:
+            # Get existing frame indices for this video
+            vid_frame_idxs = [frame_idx for (v, frame_idx) in seen_frames if v == vid]
+
+            if not vid_frame_idxs:
+                # No labeled frames for this video - skip padding
+                continue
+
+            # Determine range
+            first = start_frame if start_frame is not None else 0
+            last = end_frame if end_frame is not None else max(vid_frame_idxs) + 1
+
+            # Add empty rows for missing frames
+            for frame_idx in range(first, last):
+                key = (vid, frame_idx)
+                if key not in seen_frames:
+                    row = {"frame_idx": int(frame_idx)}
+
+                    if include_metadata:
+                        if include_video:
+                            video_value = _format_video(vid, labels, video_id)
+                            if video_id == "index":
+                                row["video_idx"] = video_value
+                            elif video_id == "object":
+                                row["video"] = video_value
+                            else:
+                                row["video_path"] = video_value
+
+                        row["track"] = None
+                        row["track_score"] = None
+                        row["score"] = None
+
+                    # Add NaN columns for each node
+                    if skeleton:
+                        for node in skeleton.nodes:
+                            row[f"{node.name}.x"] = np.nan
+                            row[f"{node.name}.y"] = np.nan
+                            if include_score:
+                                row[f"{node.name}.score"] = np.nan
+
+                    rows.append(row)
+
+        # Sort rows by video then frame_idx for consistent output
+        def sort_key(r):
+            vid_key = r.get("video_path", r.get("video_idx", r.get("video", "")))
+            return (vid_key, r["frame_idx"])
+
+        rows.sort(key=sort_key)
 
     return _create_dataframe_from_rows(rows, backend)
 
@@ -1355,6 +1457,10 @@ def _to_frames_df(  # noqa: D417
     instance_id: str = "index",
     untracked: str = "error",
     backend: str = "pandas",
+    video_filter_idx: int | None = None,
+    all_frames: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
 ) -> "pd.DataFrame | pl.DataFrame":
     """Convert to frames format (one row per frame, wide format).
 
@@ -1368,6 +1474,12 @@ def _to_frames_df(  # noqa: D417
         untracked: Behavior when encountering untracked instances in track mode.
             - "error": Raise error if any instance lacks a track.
             - "ignore": Skip untracked instances silently.
+        video_filter_idx: Video filter index from parent function.
+        all_frames: If True, include rows for empty frames in the specified range.
+        start_frame: Start frame index (inclusive) for padding. Default: 0 if
+            all_frames=True, else first labeled frame.
+        end_frame: End frame index (exclusive) for padding. Default: last labeled
+            frame + 1.
 
     Column structure (instance_id="index"):
         frame_idx | video | inst0.track | inst0.track_score | inst0.score |
@@ -1395,6 +1507,12 @@ def _to_frames_df(  # noqa: D417
         all_tracks = [t.name for t in labels.tracks]
 
     for lf in labeled_frames:
+        # Skip frames outside the specified range
+        if start_frame is not None and lf.frame_idx < start_frame:
+            continue
+        if end_frame is not None and lf.frame_idx >= end_frame:
+            continue
+
         # Collect instances to include
         instances_to_process = []
 
@@ -1422,10 +1540,43 @@ def _to_frames_df(  # noqa: D417
         frame_data[key] = instances_to_process
         max_instances = max(max_instances, len(instances_to_process))
 
-    # Build rows
-    rows = []
+    # Add empty frames if all_frames=True
+    if all_frames and labeled_frames:
+        # Determine which videos to pad
+        if video_filter_idx is not None:
+            videos_to_pad = [labels.videos[video_filter_idx]]
+        else:
+            videos_to_pad = labels.videos
 
-    for (video, frame_idx), instances in frame_data.items():
+        for vid in videos_to_pad:
+            # Get existing frame indices for this video
+            vid_frame_idxs = [
+                frame_idx for (v, frame_idx) in frame_data.keys() if v == vid
+            ]
+
+            if not vid_frame_idxs:
+                # No labeled frames for this video - skip padding
+                continue
+
+            # Determine range
+            first = start_frame if start_frame is not None else 0
+            last = end_frame if end_frame is not None else max(vid_frame_idxs) + 1
+
+            # Add empty entries for missing frames
+            for frame_idx in range(first, last):
+                key = (vid, frame_idx)
+                if key not in frame_data:
+                    frame_data[key] = []  # Empty list = no instances
+
+    # Build rows (sorted by video index then frame_idx for consistent output)
+    rows = []
+    sorted_keys = sorted(
+        frame_data.keys(),
+        key=lambda k: (labels.videos.index(k[0]) if k[0] in labels.videos else 0, k[1]),
+    )
+
+    for video, frame_idx in sorted_keys:
+        instances = frame_data[(video, frame_idx)]
         row = {"frame_idx": int(frame_idx)}
 
         if include_video:

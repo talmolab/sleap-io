@@ -628,3 +628,178 @@ class TestAdditionalCoverage:
             skeleton=simple_skeleton,
         )
         assert loaded.videos[0].filename == "some/video.mp4"
+
+
+# =============================================================================
+# Tests for include_empty, start_frame, end_frame parameters
+# =============================================================================
+
+
+class TestIncludeEmpty:
+    """Tests for the include_empty parameter in CSV export."""
+
+    @pytest.fixture
+    def sparse_labels(self, tmp_path):
+        """Labels with instances only in frames 0 and 3 (sparse)."""
+        skeleton = Skeleton(nodes=["nose", "tail"], edges=[("nose", "tail")])
+        video = Video(str(tmp_path / "sparse.mp4"))
+
+        labeled_frames = []
+        for frame_idx in [0, 3]:
+            inst = Instance(
+                points={"nose": [100.0 + frame_idx, 200.0], "tail": [150.0, 250.0]},
+                skeleton=skeleton,
+            )
+            labeled_frames.append(
+                LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+            )
+
+        return Labels(labeled_frames=labeled_frames)
+
+    def test_include_empty_false_default(self, tmp_path, sparse_labels):
+        """Test include_empty=False (default) only exports labeled frames."""
+        csv_path = tmp_path / "sparse.csv"
+        csv.write_labels(sparse_labels, csv_path, format="frames", include_empty=False)
+
+        df = pd.read_csv(csv_path)
+        assert list(df["frame_idx"]) == [0, 3]
+
+    def test_include_empty_true_pads_frames(self, tmp_path, sparse_labels):
+        """Test include_empty=True pads missing frames with NaN."""
+        csv_path = tmp_path / "padded.csv"
+        csv.write_labels(sparse_labels, csv_path, format="frames", include_empty=True)
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 0, 1, 2, 3 (from 0 to last labeled frame)
+        assert list(df["frame_idx"]) == [0, 1, 2, 3]
+
+        # Frames 1 and 2 should have NaN values
+        row_1 = df[df["frame_idx"] == 1].iloc[0]
+        assert pd.isna(row_1["inst0.nose.x"])
+
+    def test_include_empty_with_frame_range(self, tmp_path, sparse_labels):
+        """Test include_empty with start_frame and end_frame."""
+        csv_path = tmp_path / "range.csv"
+        csv.write_labels(
+            sparse_labels,
+            csv_path,
+            format="frames",
+            include_empty=True,
+            start_frame=1,
+            end_frame=5,
+        )
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 1, 2, 3, 4 (start=1, end=5 exclusive)
+        assert list(df["frame_idx"]) == [1, 2, 3, 4]
+
+        # Frame 3 has data, others should be NaN
+        row_3 = df[df["frame_idx"] == 3].iloc[0]
+        assert not pd.isna(row_3["inst0.nose.x"])
+
+        row_2 = df[df["frame_idx"] == 2].iloc[0]
+        assert pd.isna(row_2["inst0.nose.x"])
+
+    def test_include_empty_instances_format(self, tmp_path, sparse_labels):
+        """Test include_empty with instances format."""
+        csv_path = tmp_path / "instances.csv"
+        csv.write_labels(
+            sparse_labels, csv_path, format="instances", include_empty=True
+        )
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 0, 1, 2, 3
+        assert set(df["frame_idx"]) == {0, 1, 2, 3}
+
+        # Frame 1 should have NaN coordinates
+        row_1 = df[df["frame_idx"] == 1].iloc[0]
+        assert pd.isna(row_1["nose.x"])
+
+    def test_include_empty_sleap_format(self, tmp_path, sparse_labels):
+        """Test include_empty with sleap format (uses frames under the hood)."""
+        csv_path = tmp_path / "sleap.csv"
+        csv.write_labels(sparse_labels, csv_path, format="sleap", include_empty=True)
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 0, 1, 2, 3
+        assert list(df["frame_idx"]) == [0, 1, 2, 3]
+
+
+# =============================================================================
+# Chunked Writing Tests
+# =============================================================================
+
+
+class TestChunkedWriting:
+    """Tests for memory-efficient chunked CSV writing."""
+
+    def test_chunked_frames_format(self, tmp_path, simple_labels):
+        """Test chunked writing with frames format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="frames", chunk_size=1)
+
+        # Should produce same output as non-chunked
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2
+        assert list(df["frame_idx"]) == [0, 1]
+        assert "inst0.head.x" in df.columns
+
+    def test_chunked_instances_format(self, tmp_path, simple_labels):
+        """Test chunked writing with instances format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="instances", chunk_size=1)
+
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2
+        assert "head.x" in df.columns
+
+    def test_chunked_points_format(self, tmp_path, simple_labels):
+        """Test chunked writing with points format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="points", chunk_size=2)
+
+        df = pd.read_csv(csv_path)
+        # 2 frames * 1 instance * 2 nodes = 4 rows
+        assert len(df) == 4
+        assert "node" in df.columns
+
+    def test_chunked_sleap_format(self, tmp_path, simple_labels):
+        """Test chunked writing with SLEAP format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="sleap", chunk_size=1)
+
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2
+        # SLEAP format has instance.score column
+        assert "instance.score" in df.columns or "head.x" in df.columns
+
+    def test_chunked_matches_non_chunked(self, tmp_path, simple_labels):
+        """Test that chunked writing produces same output as non-chunked."""
+        non_chunked_path = tmp_path / "non_chunked.csv"
+        chunked_path = tmp_path / "chunked.csv"
+
+        csv.write_labels(simple_labels, non_chunked_path, format="frames")
+        csv.write_labels(simple_labels, chunked_path, format="frames", chunk_size=1)
+
+        df_non_chunked = pd.read_csv(non_chunked_path)
+        df_chunked = pd.read_csv(chunked_path)
+
+        pd.testing.assert_frame_equal(df_non_chunked, df_chunked)
+
+    def test_chunked_dlc_not_supported(self, tmp_path, simple_labels):
+        """Test that chunked writing with DLC format raises error."""
+        csv_path = tmp_path / "dlc.csv"
+
+        with pytest.raises(ValueError, match="Chunked writing is not supported"):
+            csv.write_labels(
+                simple_labels, csv_path, format="dlc", chunk_size=100, scorer="test"
+            )
+
+    def test_chunked_with_large_chunk_size(self, tmp_path, simple_labels):
+        """Test chunked writing with chunk_size larger than data."""
+        csv_path = tmp_path / "chunked.csv"
+        # chunk_size of 1000 is much larger than our 2 frames
+        csv.write_labels(simple_labels, csv_path, format="frames", chunk_size=1000)
+
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2

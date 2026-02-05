@@ -101,7 +101,16 @@ INPUT_FORMATS = [
     "ultralytics",
     "leap",
 ]
-OUTPUT_FORMATS = ["slp", "nwb", "coco", "labelstudio", "jabs", "ultralytics", "csv"]
+OUTPUT_FORMATS = [
+    "slp",
+    "nwb",
+    "coco",
+    "labelstudio",
+    "jabs",
+    "ultralytics",
+    "csv",
+    "analysis_h5",
+]
 
 # Extensions that require explicit --from format
 AMBIGUOUS_EXTENSIONS = {".json", ".h5"}
@@ -120,6 +129,8 @@ OUTPUT_EXTENSION_TO_FORMAT = {
     ".nwb": "nwb",
     ".json": "labelstudio",  # Default JSON output to labelstudio
     ".csv": "csv",
+    ".h5": "analysis_h5",  # Default .h5 output to analysis HDF5
+    ".hdf5": "analysis_h5",
 }
 
 
@@ -153,6 +164,64 @@ def _resolve_input(
         )
 
     return input_path
+
+
+def _resolve_video_spec(
+    labels: "Labels",
+    video_spec: str | None,
+    output_path: Path,
+) -> list[tuple["Video", Path]]:
+    """Resolve video specification to list of (video, output_path) tuples.
+
+    Args:
+        labels: Labels object with videos.
+        video_spec: Video specification: None, integer string, or "all".
+        output_path: Base output path.
+
+    Returns:
+        List of (video, output_path) tuples to export.
+
+    Raises:
+        click.ClickException: If multi-video file and no video specified.
+    """
+    n_videos = len(labels.videos)
+
+    # Single video file - no spec needed
+    if n_videos == 1:
+        return [(labels.videos[0], output_path)]
+
+    # Multi-video file - spec required
+    if video_spec is None:
+        raise click.ClickException(
+            f"Multiple videos found ({n_videos}). "
+            "Use -v <index> to export a specific video, or -v all to export all."
+        )
+
+    # Export all videos to separate files
+    if video_spec.lower() == "all":
+        stem = output_path.stem
+        suffix = output_path.suffix
+        return [
+            (video, output_path.parent / f"{stem}.video{i}{suffix}")
+            for i, video in enumerate(labels.videos)
+        ]
+
+    # Export specific video by index
+    try:
+        video_idx = int(video_spec)
+    except ValueError:
+        raise click.ClickException(
+            f"Invalid video specification: {video_spec!r}. "
+            "Use an integer index or 'all'."
+        )
+
+    if video_idx < 0 or video_idx >= n_videos:
+        raise click.ClickException(
+            f"Video index {video_idx} out of range. "
+            f"File has {n_videos} videos (indices 0-{n_videos - 1})."
+        )
+
+    return [(labels.videos[video_idx], output_path)]
 
 
 def _get_package_version(package: str) -> str:
@@ -1472,6 +1541,19 @@ def _infer_output_format(path: Path) -> str | None:
     default=False,
     help="Save JSON metadata file for round-trip support (CSV only).",
 )
+@click.option(
+    "--h5-dim-order",
+    "h5_dim_order",
+    type=click.Choice(["matlab", "standard"]),
+    default="matlab",
+    help="HDF5 axis ordering: matlab (SLEAP-compatible) or standard. analysis_h5 only.",
+)
+@click.option(
+    "--min-occupancy",
+    type=float,
+    default=0.0,
+    help="Filter tracks with occupancy below this ratio (0-1). analysis_h5 only.",
+)
 def convert(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -1482,6 +1564,8 @@ def convert(
     csv_format: str,
     scorer: str,
     save_metadata: bool,
+    h5_dim_order: str,
+    min_occupancy: float,
 ):
     """Convert between pose data formats.
 
@@ -1493,7 +1577,7 @@ def convert(
     slp, nwb, coco, labelstudio, alphatracker, jabs, dlc, ultralytics, leap
 
     [bold]Supported output formats:[/]
-    slp, nwb, coco, labelstudio, jabs, ultralytics
+    slp, nwb, coco, labelstudio, jabs, ultralytics, csv, analysis_h5
 
     [dim]Examples:[/]
 
@@ -1502,6 +1586,8 @@ def convert(
         $ sio convert annotations.json -o labels.slp --from coco
         $ sio convert labels.slp -o labels.pkg.slp --embed user
         $ sio convert labels.slp -o dataset/ --to ultralytics
+        $ sio convert labels.slp -o analysis.h5 --to analysis_h5
+        $ sio convert labels.slp -o output.csv --csv-format frames
     """
     # Resolve input from positional arg or -i option
     input_path = _resolve_input(input_arg, input_opt, "input file")
@@ -1586,6 +1672,13 @@ def convert(
                 scorer=scorer,
                 save_metadata=save_metadata,
             )
+        elif resolved_output_format == "analysis_h5":
+            io_main.save_analysis_h5(
+                labels,
+                str(output_path),
+                preset=h5_dim_order,
+                min_occupancy=min_occupancy,
+            )
         else:
             io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
@@ -1600,6 +1693,254 @@ def convert(
         click.echo(f"CSV format: {csv_format}")
         if save_metadata:
             click.echo("Metadata saved: yes")
+    if resolved_output_format == "analysis_h5":
+        click.echo(f"HDF5 dim order: {h5_dim_order}")
+
+
+# =============================================================================
+# Export Command
+# =============================================================================
+
+
+@cli.command()
+@click.argument(
+    "input_arg",
+    required=False,
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_opt",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    help="Input file path. Can also be passed as positional argument.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output file path.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["csv", "h5"]),
+    default=None,
+    help="Output format. Inferred from extension if not specified.",
+)
+@click.option(
+    "--csv-format",
+    type=click.Choice(["sleap", "dlc", "points", "instances", "frames"]),
+    default="frames",
+    help="CSV layout format. Default: frames.",
+)
+@click.option(
+    "--scorer",
+    default="sleap-io",
+    help="Scorer name for DLC CSV output.",
+)
+@click.option(
+    "--save-metadata/--no-metadata",
+    "save_metadata",
+    default=False,
+    help="Save JSON metadata alongside CSV for round-trip support.",
+)
+@click.option(
+    "--video-id",
+    type=click.Choice(["path", "index", "name"]),
+    default="path",
+    help="How to identify videos in CSV output. Default: path.",
+)
+@click.option(
+    "--h5-dim-order",
+    "h5_dim_order",
+    type=click.Choice(["matlab", "standard"]),
+    default="matlab",
+    help="HDF5 axis ordering: matlab (SLEAP-compatible) or standard (frame-first).",
+)
+@click.option(
+    "--min-occupancy",
+    type=float,
+    default=0.0,
+    help="Filter tracks with occupancy below this ratio (0-1). HDF5 only.",
+)
+@click.option(
+    "--h5-metadata/--no-h5-metadata",
+    "h5_save_metadata",
+    default=True,
+    help="Save extended metadata in HDF5 for round-trip support. Default: yes.",
+)
+@click.option(
+    "-v",
+    "--video",
+    "video_spec",
+    default=None,
+    help="Video to export: index (0, 1, ...) or 'all' for batch export. "
+    "Required for multi-video files.",
+)
+@click.option(
+    "--empty-frames/--no-empty-frames",
+    "include_empty",
+    default=True,
+    help="Include empty frames with NaN values. Default: --empty-frames.",
+)
+@click.option(
+    "--start",
+    "start_frame",
+    type=int,
+    default=None,
+    help="Start frame index (inclusive).",
+)
+@click.option(
+    "--end",
+    "end_frame",
+    type=int,
+    default=None,
+    help="End frame index (exclusive).",
+)
+@click.option(
+    "--include-scores/--no-scores",
+    "include_scores",
+    default=True,
+    help="Include confidence scores. Default: yes.",
+)
+@click.option(
+    "--chunk-size",
+    "chunk_size",
+    type=int,
+    default=None,
+    help="Write CSV in chunks of N rows for memory-efficient export. "
+    "Not supported for DLC or HDF5 formats.",
+)
+def export(
+    input_arg: Path | None,
+    input_opt: Path | None,
+    output_path: Path,
+    output_format: str | None,
+    csv_format: str,
+    scorer: str,
+    save_metadata: bool,
+    video_id: str,
+    h5_dim_order: str,
+    min_occupancy: float,
+    h5_save_metadata: bool,
+    video_spec: str | None,
+    include_empty: bool,
+    start_frame: int | None,
+    end_frame: int | None,
+    include_scores: bool,
+    chunk_size: int | None,
+) -> None:
+    """Export pose data for analysis.
+
+    Unlike 'convert' which transforms between label formats, 'export' creates
+    analysis-ready outputs (CSV, HDF5) with full control over frame padding,
+    video selection, and output structure.
+
+    [bold]Examples:[/]
+
+        # Export all frames as CSV (pads missing frames with NaN)
+        $ sio export predictions.slp -o analysis.csv
+
+        # Export only frames with instances (sparse)
+        $ sio export labels.slp -o sparse.csv --no-empty-frames
+
+        # Export to Analysis HDF5
+        $ sio export predictions.slp -o analysis.h5
+
+        # Export specific video with frame range
+        $ sio export multi.slp -o vid0.csv -v 0 --start 100 --end 500
+
+        # Export all videos from multi-video file
+        $ sio export multi.slp -o export.csv -v all
+        # Creates: export.video0.csv, export.video1.csv, ...
+
+        # Memory-efficient chunked export for large files
+        $ sio export large.slp -o analysis.csv --chunk-size 10000
+    """
+    from sleap_io.model.labels import Labels
+
+    # Resolve input
+    input_path = _resolve_input(input_arg, input_opt, "input file")
+
+    # Infer output format from extension if not specified
+    if output_format is None:
+        suffix = output_path.suffix.lower()
+        if suffix == ".csv":
+            output_format = "csv"
+        elif suffix in (".h5", ".hdf5"):
+            output_format = "h5"
+        else:
+            raise click.ClickException(
+                f"Cannot infer output format from '{output_path.name}'. "
+                "Please specify --format csv or --format h5."
+            )
+
+    # Validate chunk_size with output format
+    if chunk_size is not None and output_format == "h5":
+        raise click.ClickException(
+            "Chunked writing (--chunk-size) is not supported for HDF5 format. "
+            "Use CSV format for memory-efficient export of large datasets."
+        )
+
+    # Load input file
+    try:
+        labels = io_main.load_file(str(input_path))
+    except Exception as e:
+        raise click.ClickException(f"Failed to load input file: {e}")
+
+    if not isinstance(labels, Labels):
+        raise click.ClickException(
+            f"Input file is not a labels file (got {type(labels).__name__})."
+        )
+
+    # Resolve video specification
+    video_outputs = _resolve_video_spec(labels, video_spec, output_path)
+
+    # Export each video
+    for video, out_path in video_outputs:
+        try:
+            if output_format == "csv":
+                io_main.save_csv(
+                    labels,
+                    str(out_path),
+                    format=csv_format,
+                    video=video,
+                    include_score=include_scores,
+                    include_empty=include_empty,
+                    start_frame=start_frame,
+                    end_frame=end_frame,
+                    scorer=scorer,
+                    save_metadata=save_metadata,
+                    chunk_size=chunk_size,
+                    video_id=video_id,
+                )
+            else:  # h5
+                io_main.save_analysis_h5(
+                    labels,
+                    str(out_path),
+                    video=video,
+                    all_frames=include_empty,
+                    min_occupancy=min_occupancy,
+                    preset=h5_dim_order,
+                    save_metadata=h5_save_metadata,
+                )
+            click.echo(f"Exported: {out_path}")
+        except Exception as e:
+            raise click.ClickException(f"Failed to export to {out_path}: {e}")
+
+    # Summary
+    if len(video_outputs) > 1:
+        click.echo(f"Exported {len(video_outputs)} videos.")
+
+
+# =============================================================================
+# Info and Inspection Commands
+# =============================================================================
 
 
 @cli.command()

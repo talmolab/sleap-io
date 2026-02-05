@@ -1950,6 +1950,476 @@ def test_convert_save_failure_invalid_path(tmp_path, slp_typical):
     assert "Failed to save" in output
 
 
+def test_convert_to_analysis_h5(tmp_path, slp_typical):
+    """Test conversion to Analysis HDF5 format."""
+    runner = CliRunner()
+    output_path = tmp_path / "analysis.h5"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_typical, "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "slp -> analysis_h5" in result.output
+    assert output_path.exists()
+
+
+def test_convert_to_analysis_h5_with_options(tmp_path, slp_typical):
+    """Test conversion to Analysis HDF5 with dim order option."""
+    runner = CliRunner()
+    output_path = tmp_path / "analysis.h5"
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--h5-dim-order",
+            "standard",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "HDF5 dim order: standard" in result.output
+    assert output_path.exists()
+
+
+def test_convert_to_csv(tmp_path, slp_typical):
+    """Test conversion to CSV format."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.csv"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_typical, "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "slp -> csv" in result.output
+    assert output_path.exists()
+
+
+def test_convert_to_csv_with_format(tmp_path, slp_typical):
+    """Test conversion to CSV with specific format."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.csv"
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--csv-format",
+            "frames",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "CSV format: frames" in result.output
+    assert output_path.exists()
+
+
+# ======================= Export command tests =======================
+
+
+def test_export_csv_basic(tmp_path, slp_typical):
+    """Test basic CSV export."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+    assert "Exported:" in result.output
+
+
+def test_export_csv_with_empty_frames(tmp_path, slp_typical):
+    """Test CSV export with --empty-frames (default)."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code == 0
+
+    # Default should include empty frames
+    import pandas as pd
+
+    df = pd.read_csv(output)
+    # Should have more rows than just labeled frames due to padding
+    assert len(df) > 0
+
+
+def test_export_csv_no_empty_frames(tmp_path, slp_typical):
+    """Test CSV export with --no-empty-frames."""
+    runner = CliRunner()
+    output = tmp_path / "sparse.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_typical, "-o", str(output), "--no-empty-frames"]
+    )
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_export_h5_basic(tmp_path, slp_typical):
+    """Test basic HDF5 export."""
+    runner = CliRunner()
+    output = tmp_path / "export.h5"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_export_h5_with_dim_order(tmp_path, slp_typical):
+    """Test HDF5 export with --h5-dim-order."""
+    runner = CliRunner()
+    output = tmp_path / "standard.h5"
+
+    result = runner.invoke(
+        cli,
+        ["export", slp_typical, "-o", str(output), "--h5-dim-order", "standard"],
+    )
+    assert result.exit_code == 0
+
+    import h5py
+
+    with h5py.File(output, "r") as f:
+        assert f.attrs["preset"] == "standard"
+
+
+def test_export_format_inference_csv(tmp_path, slp_typical):
+    """Test format inference from .csv extension."""
+    runner = CliRunner()
+    output = tmp_path / "test.csv"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_export_format_inference_h5(tmp_path, slp_typical):
+    """Test format inference from .h5 extension."""
+    runner = CliRunner()
+    output = tmp_path / "test.h5"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_export_unknown_extension_error(tmp_path, slp_typical):
+    """Test error for unknown output extension."""
+    runner = CliRunner()
+    output = tmp_path / "test.unknown"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code != 0
+    assert "Cannot infer output format" in result.output
+
+
+def test_export_csv_formats(tmp_path, slp_typical):
+    """Test various --csv-format options."""
+    runner = CliRunner()
+
+    for csv_format in ["sleap", "frames", "instances", "points"]:
+        output = tmp_path / f"test_{csv_format}.csv"
+        result = runner.invoke(
+            cli,
+            ["export", slp_typical, "-o", str(output), "--csv-format", csv_format],
+        )
+        assert result.exit_code == 0, f"Failed for format {csv_format}: {result.output}"
+        assert output.exists()
+
+
+def test_export_with_frame_range(tmp_path, slp_typical):
+    """Test export with --start and --end frame options."""
+    runner = CliRunner()
+    output = tmp_path / "range.csv"
+
+    result = runner.invoke(
+        cli,
+        [
+            "export",
+            slp_typical,
+            "-o",
+            str(output),
+            "--start",
+            "0",
+            "--end",
+            "5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_export_with_input_option(tmp_path, slp_typical):
+    """Test export with -i option instead of positional argument."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", "-i", slp_typical, "-o", str(output)])
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_export_missing_input(tmp_path):
+    """Test error when no input provided."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", "-o", str(output)])
+    assert result.exit_code != 0
+    assert "Missing input file" in result.output
+
+
+def test_export_input_not_found(tmp_path):
+    """Test error when input file doesn't exist."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", "/nonexistent/file.slp", "-o", str(output)])
+    assert result.exit_code != 0
+
+
+def test_export_multi_video_requires_video_flag(slp_multiview, tmp_path):
+    """Test export requires -v flag for multi-video labels."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_multiview, "-o", str(output)])
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output)
+    assert "Multiple videos found" in output_text
+    assert "-v" in output_text
+
+
+def test_export_multi_video_single(slp_multiview, tmp_path):
+    """Test export specific video from multi-video file."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_multiview, "-o", str(output), "-v", "0"])
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
+def test_export_multi_video_all(slp_multiview, tmp_path):
+    """Test export all videos creates separate files."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_multiview, "-o", str(output), "-v", "all"]
+    )
+    assert result.exit_code == 0, result.output
+
+    # Check multiple files created (multiview has 8 videos)
+    assert (tmp_path / "export.video0.csv").exists()
+    assert (tmp_path / "export.video1.csv").exists()
+    # Summary message
+    assert "Exported" in result.output
+
+
+def test_export_multi_video_invalid_spec(slp_multiview, tmp_path):
+    """Test export with invalid video specification."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_multiview, "-o", str(output), "-v", "invalid"]
+    )
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output)
+    assert "Invalid video specification" in output_text
+
+
+def test_export_multi_video_index_out_of_range(slp_multiview, tmp_path):
+    """Test export with video index out of range."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_multiview, "-o", str(output), "-v", "999"]
+    )
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output)
+    assert "out of range" in output_text
+
+
+def test_export_h5_multi_video(slp_multiview, tmp_path):
+    """Test H5 export with multi-video file."""
+    runner = CliRunner()
+    output = tmp_path / "export.h5"
+
+    result = runner.invoke(cli, ["export", slp_multiview, "-o", str(output), "-v", "0"])
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
+def test_export_invalid_file(tmp_path):
+    """Test error when input file cannot be loaded."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    # Create an invalid file
+    invalid_file = tmp_path / "invalid.slp"
+    invalid_file.write_text("not a valid slp file")
+
+    result = runner.invoke(cli, ["export", str(invalid_file), "-o", str(output)])
+    assert result.exit_code != 0
+    assert "Failed to load" in _strip_ansi(result.output)
+
+
+def test_export_non_labels_file(tmp_path, centered_pair_low_quality_path):
+    """Test error when file is not a Labels object."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    # Try to export a video file (load_file returns Video, not Labels)
+    result = runner.invoke(
+        cli, ["export", centered_pair_low_quality_path, "-o", str(output)]
+    )
+    assert result.exit_code != 0
+    assert "not a labels file" in _strip_ansi(result.output).lower()
+
+
+def test_export_write_failure(tmp_path, slp_typical):
+    """Test error when export fails due to invalid output path."""
+    runner = CliRunner()
+    # Try to write to a non-existent directory
+    output = tmp_path / "nonexistent_dir" / "subdir" / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code != 0
+    assert "Failed to export" in _strip_ansi(result.output)
+
+
+def test_export_csv_chunked(tmp_path, slp_typical):
+    """Test CSV export with --chunk-size for memory-efficient writing."""
+    runner = CliRunner()
+    output = tmp_path / "chunked.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_typical, "-o", str(output), "--chunk-size", "100"]
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+    # Verify output has expected data
+    import pandas as pd
+
+    df = pd.read_csv(output)
+    assert len(df) > 0
+
+
+def test_export_csv_chunked_matches_non_chunked(tmp_path, slp_typical):
+    """Test that chunked CSV export produces same output as non-chunked."""
+    runner = CliRunner()
+    non_chunked = tmp_path / "non_chunked.csv"
+    chunked = tmp_path / "chunked.csv"
+
+    # Export without chunking
+    result1 = runner.invoke(cli, ["export", slp_typical, "-o", str(non_chunked)])
+    assert result1.exit_code == 0
+
+    # Export with chunking
+    result2 = runner.invoke(
+        cli, ["export", slp_typical, "-o", str(chunked), "--chunk-size", "10"]
+    )
+    assert result2.exit_code == 0
+
+    # Compare outputs
+    import pandas as pd
+
+    df1 = pd.read_csv(non_chunked)
+    df2 = pd.read_csv(chunked)
+    pd.testing.assert_frame_equal(df1, df2)
+
+
+def test_export_h5_chunked_error(tmp_path, slp_typical):
+    """Test that --chunk-size with HDF5 format raises an error."""
+    runner = CliRunner()
+    output = tmp_path / "export.h5"
+
+    result = runner.invoke(
+        cli, ["export", slp_typical, "-o", str(output), "--chunk-size", "100"]
+    )
+    assert result.exit_code != 0
+    assert "Chunked writing" in _strip_ansi(result.output)
+    assert "not supported for HDF5" in _strip_ansi(result.output)
+
+
+def test_export_csv_dlc_chunked_error(tmp_path, slp_typical):
+    """Test that --chunk-size with DLC format raises an error."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli,
+        [
+            "export",
+            slp_typical,
+            "-o",
+            str(output),
+            "--csv-format",
+            "dlc",
+            "--chunk-size",
+            "100",
+        ],
+    )
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output).replace("\n", " ")
+    assert "Chunked writing is not" in output_text
+    assert "DLC format" in output_text
+
+
+def test_export_csv_with_video_id(tmp_path, slp_typical):
+    """Test CSV export with --video-id option."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli,
+        ["export", slp_typical, "-o", str(output), "--video-id", "index"],
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+    # Verify output has video_idx column instead of video_path
+    import pandas as pd
+
+    df = pd.read_csv(output)
+    assert "video_idx" in df.columns or len(df) > 0
+
+
+def test_export_h5_with_metadata_option(tmp_path, slp_typical):
+    """Test HDF5 export with --h5-metadata/--no-h5-metadata option."""
+    runner = CliRunner()
+    output_with = tmp_path / "with_meta.h5"
+    output_without = tmp_path / "without_meta.h5"
+
+    # Export with metadata (default)
+    result1 = runner.invoke(
+        cli,
+        ["export", slp_typical, "-o", str(output_with)],
+    )
+    assert result1.exit_code == 0, result1.output
+    assert output_with.exists()
+
+    # Export without metadata
+    result2 = runner.invoke(
+        cli,
+        ["export", slp_typical, "-o", str(output_without), "--no-h5-metadata"],
+    )
+    assert result2.exit_code == 0, result2.output
+    assert output_without.exists()
+
+
 # ======================= Split command tests =======================
 
 

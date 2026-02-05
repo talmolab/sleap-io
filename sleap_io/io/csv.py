@@ -125,6 +125,10 @@ def write_labels(
     include_empty: bool = False,
     scorer: str = "sleap-io",
     save_metadata: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
+    chunk_size: int | None = None,
+    video_id: Literal["path", "index", "name"] = "path",
 ) -> None:
     """Write Labels to CSV file.
 
@@ -140,13 +144,25 @@ def write_labels(
         video: Video to filter to. Can be a Video object or integer index.
             If None, includes all videos.
         include_score: Include confidence scores in output. Default True.
-        include_empty: Include frames with no instances. Default False.
+        include_empty: Include frames with no instances (filled with NaN values).
+            Default False. Only applies to "frames" and "instances" formats.
         scorer: Scorer/model name for DLC format. Default "sleap-io".
         save_metadata: Save a JSON metadata file alongside the CSV that enables
             full round-trip reconstruction of the Labels object. The metadata
             file contains video paths, skeleton definitions (including edges
             and symmetries), track names, suggestions, and provenance.
             Default False.
+        start_frame: Start frame index (inclusive) for output. If None, starts
+            from 0 when include_empty=True, or from first labeled frame otherwise.
+        end_frame: End frame index (exclusive) for output. If None, ends at
+            last labeled frame + 1.
+        chunk_size: Number of rows per chunk for memory-efficient writing. If None
+            (default), writes entire DataFrame at once. Useful for large datasets
+            that don't fit in memory. Not supported for DLC format.
+        video_id: How to represent videos in the DataFrame. Options:
+            - "path": Full filename/path (default).
+            - "index": Integer video index.
+            - "name": Just the video filename (basename).
 
     See Also:
         read_labels: Read Labels from CSV file.
@@ -155,6 +171,12 @@ def write_labels(
 
     # Dispatch to format-specific writers
     if format == "dlc":
+        if chunk_size is not None:
+            raise ValueError(
+                "Chunked writing is not supported for DLC format due to its "
+                "multi-row header structure. Use 'sleap', 'points', 'instances', "
+                "or 'frames' format instead."
+            )
         _write_dlc(
             labels,
             filename,
@@ -168,6 +190,11 @@ def write_labels(
             filename,
             video=video,
             include_score=include_score,
+            all_frames=include_empty,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            chunk_size=chunk_size,
+            video_id=video_id,
         )
     elif format in ("points", "instances", "frames"):
         _write_codec_format(
@@ -176,6 +203,11 @@ def write_labels(
             format=format,
             video=video,
             include_score=include_score,
+            all_frames=include_empty,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            chunk_size=chunk_size,
+            video_id=video_id,
         )
     else:
         raise ValueError(f"Unknown CSV format: {format}")
@@ -303,23 +335,59 @@ def _write_sleap(
     filename: Path,
     video: Video | int | None = None,
     include_score: bool = True,
+    all_frames: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
+    chunk_size: int | None = None,
+    video_id: Literal["path", "index", "name"] = "path",
 ) -> None:
     """Write SLEAP Analysis CSV format.
 
     Output columns:
         track, frame_idx, instance.score, {node}.x, {node}.y, {node}.score, ...
     """
-    from sleap_io.codecs import to_dataframe
+    from sleap_io.codecs import to_dataframe, to_dataframe_iter
 
-    # Use instances format from codec
-    df = to_dataframe(
-        labels,
-        format="instances",
-        video=video,
-        include_score=include_score,
-        include_metadata=True,
-    )
+    if chunk_size is None:
+        # Non-chunked: materialize entire DataFrame at once
+        df = to_dataframe(
+            labels,
+            format="instances",
+            video=video,
+            include_score=include_score,
+            include_metadata=True,
+            all_frames=all_frames,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            video_id=video_id,
+        )
+        df = _transform_to_sleap_format(df)
+        df.to_csv(filename, index=False, na_rep="")
+    else:
+        # Chunked: iterate and write incrementally
+        first_chunk = True
+        for chunk in to_dataframe_iter(
+            labels,
+            format="instances",
+            chunk_size=chunk_size,
+            video=video,
+            include_score=include_score,
+            include_metadata=True,
+            video_id=video_id,
+        ):
+            chunk = _transform_to_sleap_format(chunk)
+            chunk.to_csv(
+                filename,
+                mode="w" if first_chunk else "a",
+                header=first_chunk,
+                index=False,
+                na_rep="",
+            )
+            first_chunk = False
 
+
+def _transform_to_sleap_format(df: pd.DataFrame) -> pd.DataFrame:
+    """Transform instances DataFrame to SLEAP Analysis CSV format."""
     # Rename columns to match SLEAP Analysis format
     rename_map = {"score": "instance.score"}
     df = df.rename(columns=rename_map)
@@ -333,10 +401,7 @@ def _write_sleap(
     node_cols = [c for c in df.columns if c not in exclude_cols]
     node_cols = sorted(node_cols)  # Alphabetical order for consistency
 
-    df = df[base_cols + node_cols]
-
-    # Handle NaN -> empty string for SLEAP compatibility
-    df.to_csv(filename, index=False, na_rep="")
+    return df[base_cols + node_cols]
 
 
 # =============================================================================
@@ -500,18 +565,48 @@ def _write_codec_format(
     format: str,
     video: Video | int | None = None,
     include_score: bool = True,
+    all_frames: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
+    chunk_size: int | None = None,
+    video_id: Literal["path", "index", "name"] = "path",
 ) -> None:
     """Write CSV in codec format (points, instances, frames)."""
-    from sleap_io.codecs import to_dataframe
+    from sleap_io.codecs import to_dataframe, to_dataframe_iter
 
-    df = to_dataframe(
-        labels,
-        format=format,
-        video=video,
-        include_score=include_score,
-        include_metadata=True,
-    )
-    df.to_csv(filename, index=False)
+    if chunk_size is None:
+        # Non-chunked: materialize entire DataFrame at once
+        df = to_dataframe(
+            labels,
+            format=format,
+            video=video,
+            include_score=include_score,
+            include_metadata=True,
+            all_frames=all_frames,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            video_id=video_id,
+        )
+        df.to_csv(filename, index=False)
+    else:
+        # Chunked: iterate and write incrementally
+        first_chunk = True
+        for chunk in to_dataframe_iter(
+            labels,
+            format=format,
+            chunk_size=chunk_size,
+            video=video,
+            include_score=include_score,
+            include_metadata=True,
+            video_id=video_id,
+        ):
+            chunk.to_csv(
+                filename,
+                mode="w" if first_chunk else "a",
+                header=first_chunk,
+                index=False,
+            )
+            first_chunk = False
 
 
 # =============================================================================

@@ -60,6 +60,7 @@ sio convert labels.slp -o labels.nwb
 sio --help
 sio show --help
 sio convert --help
+sio export --help
 sio split --help
 sio unsplit --help
 sio merge --help
@@ -460,24 +461,27 @@ sio convert annotations.json -o labels.slp --from coco
 | `--csv-format` | CSV output format: `sleap`, `dlc`, `points`, `instances`, `frames` |
 | `--scorer` | Scorer name for DLC CSV output (default: `sleap-io`) |
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
+| `--h5-dim-order` | HDF5 axis ordering: `matlab` or `standard` (analysis_h5 only) |
+| `--min-occupancy` | Filter tracks below this occupancy ratio (analysis_h5 only) |
 
 ### Supported Formats
 
 **Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `ultralytics`, `leap`
 
-**Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`
+**Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`, `analysis_h5`
 
 ### Format Detection
 
 The CLI automatically detects formats from file extensions:
 
-| Extension | Format |
-|-----------|--------|
-| `.slp` | SLEAP |
-| `.nwb` | NWB |
-| `.mat` | LEAP |
-| `.csv` | DeepLabCut |
-| Directory with `data.yaml` | Ultralytics |
+| Extension | Input Format | Output Format |
+|-----------|--------------|---------------|
+| `.slp` | SLEAP | SLEAP |
+| `.nwb` | NWB | NWB |
+| `.mat` | LEAP | - |
+| `.csv` | DeepLabCut | CSV |
+| `.h5` / `.hdf5` | (ambiguous) | Analysis HDF5 |
+| Directory with `data.yaml` | Ultralytics | Ultralytics |
 
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:
 
@@ -536,7 +540,7 @@ yolo_dataset/
 
 ### Export to CSV
 
-Export pose data to CSV format for use with spreadsheet tools or custom analysis pipelines:
+Export pose data to CSV format for use with spreadsheet tools or custom analysis pipelines. See [CSV Format](formats/csv.md) for detailed column specifications.
 
 ```bash
 # Export to SLEAP Analysis CSV (default)
@@ -565,6 +569,198 @@ sio convert labels.slp -o output.csv --save-metadata
 - **`points`**: One row per point (most normalized)
 - **`instances`**: One row per instance with node coordinates as columns
 - **`frames`**: One row per frame with all instances multiplexed
+
+### Export to Analysis HDF5
+
+Export pose data to SLEAP Analysis HDF5 format for use with MATLAB or numerical analysis. See [Analysis HDF5 Format](formats/analysis_h5.md) for dataset layout and usage examples.
+
+```bash
+# Export to Analysis HDF5 (MATLAB-compatible ordering)
+sio convert labels.slp -o analysis.h5
+
+# Export with Python-native axis ordering
+sio convert labels.slp -o analysis.h5 --h5-dim-order standard
+
+# Filter tracks by occupancy
+sio convert labels.slp -o analysis.h5 --min-occupancy 0.5
+```
+
+#### HDF5 Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--h5-dim-order` | `matlab` | Axis ordering: `matlab` (SLEAP-compatible) or `standard` |
+| `--min-occupancy` | `0.0` | Filter tracks below this occupancy ratio (0-1) |
+
+---
+
+## `sio export`
+
+Export pose data to analysis-ready formats ([CSV](formats/csv.md), [Analysis HDF5](formats/analysis_h5.md)) with full control over frame padding, video selection, and output structure.
+
+```bash
+sio export <input> -o <output> [options]
+sio export -i <input> -o <output> [options]
+```
+
+!!! tip "Export vs Convert"
+    Use `sio export` when you need analysis-ready outputs with control over frame padding and structure. Use `sio convert` when transforming between label file formats (SLP, NWB, COCO, etc.).
+
+### Basic Usage
+
+```bash
+# Export to CSV (includes all frames, pads missing with NaN)
+sio export predictions.slp -o analysis.csv
+
+# Export to Analysis HDF5
+sio export predictions.slp -o analysis.h5
+
+# Export only frames with instances (sparse, no padding)
+sio export predictions.slp -o sparse.csv --no-empty-frames
+
+# Export specific frame range
+sio export predictions.slp -o clip.csv --start 100 --end 500
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-i, --input` | (required) | Input labels file (can also pass as positional argument) |
+| `-o, --output` | (required) | Output file path (.csv or .h5) |
+| `--format` | (inferred) | Output format: `csv` or `h5`. Inferred from extension if not specified |
+
+#### CSV Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--csv-format` | `frames` | CSV layout: `sleap`, `dlc`, `points`, `instances`, `frames` |
+| `--scorer` | `sleap-io` | Scorer name for DLC format |
+| `--save-metadata/--no-metadata` | off | Save JSON metadata alongside CSV |
+| `--video-id` | `path` | How to identify videos: `path`, `index`, `name` |
+| `--chunk-size` | (none) | Write CSV in chunks of N rows for memory-efficient export |
+
+#### HDF5 Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--h5-dim-order` | `matlab` | Axis ordering: `matlab` (SLEAP-compatible) or `standard` (frame-first) |
+| `--min-occupancy` | `0.0` | Filter tracks below this occupancy ratio (0-1) |
+| `--h5-metadata/--no-h5-metadata` | on | Save extended metadata for round-trip support |
+
+#### Frame Selection
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--empty-frames/--no-empty-frames` | on | Include frames with no instances (padded with NaN) |
+| `--start` | (none) | Start frame index (inclusive) |
+| `--end` | (none) | End frame index (exclusive) |
+| `--include-scores/--no-scores` | on | Include confidence scores in output |
+
+#### Video Selection
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-v, --video` | (none) | Video to export: index (0, 1, ...) or `all` for batch export |
+
+### Multi-Video Files
+
+For labels with multiple videos, you must specify which video to export:
+
+```bash
+# Export specific video by index
+sio export multi.slp -o video0.csv -v 0
+sio export multi.slp -o video1.csv -v 1
+
+# Export all videos to separate files
+sio export multi.slp -o analysis.csv -v all
+# Creates: analysis.video0.csv, analysis.video1.csv, ...
+```
+
+Without `-v`, exporting a multi-video file will show an error with instructions.
+
+### CSV Formats
+
+The `--csv-format` option controls the structure of CSV output:
+
+| Format | Description | Rows |
+|--------|-------------|------|
+| `frames` | One row per frame, all instances as columns | Frame-centric |
+| `instances` | One row per instance | Instance-centric |
+| `points` | One row per point | Most normalized |
+| `sleap` | SLEAP Analysis CSV format | Instance-centric |
+| `dlc` | DeepLabCut format (multi-header) | Frame-centric |
+
+```bash
+# Frame-centric (default) - good for time series analysis
+sio export labels.slp -o frames.csv --csv-format frames
+
+# Point-centric - good for database imports
+sio export labels.slp -o points.csv --csv-format points
+
+# DeepLabCut compatible
+sio export labels.slp -o dlc.csv --csv-format dlc --scorer MyModel
+```
+
+### HDF5 Axis Ordering
+
+The `--h5-dim-order` option controls the array axis ordering:
+
+| Preset | tracks shape | Description |
+|--------|--------------|-------------|
+| `matlab` | `(tracks, 2, nodes, frames)` | SLEAP-compatible, optimized for MATLAB |
+| `standard` | `(frames, tracks, nodes, 2)` | Python-native, intuitive indexing |
+
+```bash
+# MATLAB-compatible (default, matches SLEAP's export)
+sio export predictions.slp -o analysis.h5
+
+# Python-native ordering
+sio export predictions.slp -o analysis.h5 --h5-dim-order standard
+```
+
+### Memory-Efficient Export for Large Datasets
+
+For labels with millions of frames, use `--chunk-size` to write CSV incrementally without loading the entire DataFrame into memory:
+
+```bash
+# Write in chunks of 10,000 rows
+sio export large_predictions.slp -o analysis.csv --chunk-size 10000
+
+# Combine with other options
+sio export large_predictions.slp -o sparse.csv \
+    --csv-format points \
+    --no-empty-frames \
+    --chunk-size 50000
+```
+
+!!! note "Chunked Writing Limitations"
+    - **CSV only**: HDF5 export currently requires full materialization in memory
+    - **Not supported for DLC format**: DLC format's multi-row header structure is not compatible with chunked writing
+
+### Examples
+
+```bash
+# Full export with all options
+sio export predictions.slp -o analysis.csv \
+    --csv-format frames \
+    --empty-frames \
+    --start 0 --end 1000 \
+    --include-scores \
+    --video-id path
+
+# Sparse export (only labeled frames)
+sio export predictions.slp -o sparse.csv --no-empty-frames
+
+# HDF5 with track filtering
+sio export predictions.slp -o filtered.h5 --min-occupancy 0.5
+
+# Batch export all videos
+sio export multi_video.slp -o export.csv -v all
+
+# Memory-efficient export for large files
+sio export large.slp -o analysis.csv --chunk-size 10000
+```
 
 ---
 

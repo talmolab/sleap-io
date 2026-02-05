@@ -12,7 +12,7 @@ Format features:
 Dataset Shapes and Dimensions
 -----------------------------
 
-The format stores pose data in dense numpy arrays. The `preset` parameter
+The format stores pose data in dense numpy arrays. The ``preset`` parameter
 controls the axis ordering. Two presets are available:
 
 **preset="standard" (Python-native, intuitive indexing):**
@@ -136,7 +136,8 @@ def _get_axis_order(
     """Resolve axis ordering from preset or explicit dimensions.
 
     Args:
-        preset: Preset name ("matlab" or "standard"), or None if using explicit dims.
+        preset: Dimension ordering preset ("matlab" or "standard"), or None if
+            using explicit dims.
         frame_dim: Position of frame dimension (0-3), or None.
         track_dim: Position of track dimension (0-3), or None.
         node_dim: Position of node dimension (0-3), or None.

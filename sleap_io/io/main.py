@@ -540,8 +540,13 @@ def save_csv(
     format: str = "sleap",
     video: "Video | int | None" = None,
     include_score: bool = True,
+    include_empty: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
     scorer: str = "sleap-io",
     save_metadata: bool = False,
+    chunk_size: int | None = None,
+    video_id: str = "path",
 ) -> None:
     """Save pose data to a CSV file.
 
@@ -553,9 +558,20 @@ def save_csv(
         video: Video to filter to. Can be Video object or integer index.
             If None, includes all videos.
         include_score: Include confidence scores in output. Default True.
+        include_empty: Include frames with no instances (filled with NaN values).
+            Default False. Only applies to "frames" and "instances" formats.
+        start_frame: Start frame index (inclusive) for output. If None, starts
+            from 0 when include_empty=True, or from first labeled frame otherwise.
+        end_frame: End frame index (exclusive) for output. If None, ends at
+            last labeled frame + 1.
         scorer: Scorer name for DLC format. Default "sleap-io".
         save_metadata: Save JSON metadata file alongside CSV that enables
             full round-trip reconstruction. Default False.
+        chunk_size: Number of rows per chunk for memory-efficient writing. If None
+            (default), writes entire DataFrame at once. Useful for large datasets.
+            Not supported for DLC format.
+        video_id: How to represent videos in the CSV. Options: "path" (default),
+            "index", or "name".
 
     See Also:
         load_csv: Load Labels from CSV file.
@@ -568,8 +584,13 @@ def save_csv(
         format=format,
         video=video,
         include_score=include_score,
+        include_empty=include_empty,
+        start_frame=start_frame,
+        end_frame=end_frame,
         scorer=scorer,
         save_metadata=save_metadata,
+        chunk_size=chunk_size,
+        video_id=video_id,
     )
 
 
