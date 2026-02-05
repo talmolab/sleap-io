@@ -540,7 +540,7 @@ yolo_dataset/
 
 ### Export to CSV
 
-Export pose data to CSV format for use with spreadsheet tools or custom analysis pipelines:
+Export pose data to CSV format for use with spreadsheet tools or custom analysis pipelines. See [CSV Format](formats/csv.md) for detailed column specifications.
 
 ```bash
 # Export to SLEAP Analysis CSV (default)
@@ -572,7 +572,7 @@ sio convert labels.slp -o output.csv --save-metadata
 
 ### Export to Analysis HDF5
 
-Export pose data to SLEAP Analysis HDF5 format for use with MATLAB or numerical analysis:
+Export pose data to SLEAP Analysis HDF5 format for use with MATLAB or numerical analysis. See [Analysis HDF5 Format](formats/analysis_h5.md) for dataset layout and usage examples.
 
 ```bash
 # Export to Analysis HDF5 (MATLAB-compatible ordering)
@@ -596,7 +596,7 @@ sio convert labels.slp -o analysis.h5 --min-occupancy 0.5
 
 ## `sio export`
 
-Export pose data to analysis-ready formats (CSV, HDF5) with full control over frame padding, video selection, and output structure.
+Export pose data to analysis-ready formats ([CSV](formats/csv.md), [Analysis HDF5](formats/analysis_h5.md)) with full control over frame padding, video selection, and output structure.
 
 ```bash
 sio export <input> -o <output> [options]
