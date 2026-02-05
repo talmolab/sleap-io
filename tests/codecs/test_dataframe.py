@@ -4073,3 +4073,94 @@ def test_to_dataframe_all_frames_with_video_filter():
 
     # Should only have frames 0, 1, 2 (video1's range)
     assert list(df["frame_idx"]) == [0, 1, 2]
+
+
+def test_to_dataframe_instances_all_frames_with_video_options():
+    """Test all_frames with include_video and different video_id options."""
+    skeleton = Skeleton(["nose"])
+    video = Video(filename="test.mp4")
+
+    # Create labels with gap at frame 1
+    labeled_frames = [
+        LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(np.array([[100.0, 200.0]]), skeleton=skeleton)
+            ],
+        ),
+        LabeledFrame(
+            video=video,
+            frame_idx=2,
+            instances=[
+                Instance.from_numpy(np.array([[100.0, 200.0]]), skeleton=skeleton)
+            ],
+        ),
+    ]
+
+    labels = Labels(labeled_frames=labeled_frames)
+
+    # Test with video_id="path" (default)
+    df = to_dataframe(
+        labels, format="instances", all_frames=True, include_video=True, video_id="path"
+    )
+    assert "video_path" in df.columns
+    assert set(df["frame_idx"]) == {0, 1, 2}
+
+    # Test with video_id="index"
+    df = to_dataframe(
+        labels,
+        format="instances",
+        all_frames=True,
+        include_video=True,
+        video_id="index",
+    )
+    assert "video_idx" in df.columns
+    assert set(df["frame_idx"]) == {0, 1, 2}
+
+    # Test with video_id="object"
+    df = to_dataframe(
+        labels,
+        format="instances",
+        all_frames=True,
+        include_video=True,
+        video_id="object",
+    )
+    assert "video" in df.columns
+    assert set(df["frame_idx"]) == {0, 1, 2}
+
+
+def test_to_dataframe_frames_all_frames_multi_video_with_empty():
+    """Test all_frames with multi-video where one video has no frames."""
+    skeleton = Skeleton(["nose"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")  # This video will have no frames
+
+    # Create labels with frames only in video1
+    labeled_frames = [
+        LabeledFrame(
+            video=video1,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(np.array([[100.0, 200.0]]), skeleton=skeleton)
+            ],
+        ),
+        LabeledFrame(
+            video=video1,
+            frame_idx=2,
+            instances=[
+                Instance.from_numpy(np.array([[100.0, 200.0]]), skeleton=skeleton)
+            ],
+        ),
+    ]
+
+    # Add video2 to labels but with no labeled frames
+    labels = Labels(videos=[video1, video2], labeled_frames=labeled_frames)
+
+    # all_frames=True should pad video1 but skip video2 (no frames to pad around)
+    df = to_dataframe(labels, format="frames", all_frames=True, include_video=True)
+
+    # Should have frames 0, 1, 2 only from video1
+    assert list(df["frame_idx"]) == [0, 1, 2]
+    # All rows should be from video1
+    assert all(df["video_path"] == "video1.mp4")
