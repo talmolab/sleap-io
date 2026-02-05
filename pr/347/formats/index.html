@@ -734,6 +734,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="csv/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSV Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="analysis_h5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis HDF5
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4976,7 +5032,7 @@ Labels context.</p>
 
 
 <h2 id="sleap_io.io.main.save_analysis_h5" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">save_analysis_h5</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">labels_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">all_frames</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">min_occupancy</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">dim_order</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">frame_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">track_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">node_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">xy_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">save_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">save_analysis_h5</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">labels_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">all_frames</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">min_occupancy</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">preset</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">frame_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">track_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">node_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">xy_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">save_metadata</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 <a href="#sleap_io.io.main.save_analysis_h5" class="headerlink" title="Permanent link">&para;</a></h2>
 
@@ -5099,7 +5155,7 @@ Default True.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>dim_order</code>
+                <code>preset</code>
             </td>
             <td>
                   <code><span title="str">str</span> | None</code>
@@ -5218,7 +5274,7 @@ Default True.</p>
 <a id="__codelineno-0-250" name="__codelineno-0-250"></a><a href="#__codelineno-0-250"><span class="linenos" data-linenos="250 "></span></a>    <span class="n">labels_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-251" name="__codelineno-0-251"></a><a href="#__codelineno-0-251"><span class="linenos" data-linenos="251 "></span></a>    <span class="n">all_frames</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-252" name="__codelineno-0-252"></a><a href="#__codelineno-0-252"><span class="linenos" data-linenos="252 "></span></a>    <span class="n">min_occupancy</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a>    <span class="n">dim_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><a href="#__codelineno-0-253"><span class="linenos" data-linenos="253 "></span></a>    <span class="n">preset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-254" name="__codelineno-0-254"></a><a href="#__codelineno-0-254"><span class="linenos" data-linenos="254 "></span></a>    <span class="n">frame_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-255" name="__codelineno-0-255"></a><a href="#__codelineno-0-255"><span class="linenos" data-linenos="255 "></span></a>    <span class="n">track_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-256" name="__codelineno-0-256"></a><a href="#__codelineno-0-256"><span class="linenos" data-linenos="256 "></span></a>    <span class="n">node_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5238,7 +5294,7 @@ Default True.</p>
 <a id="__codelineno-0-270" name="__codelineno-0-270"></a><a href="#__codelineno-0-270"><span class="linenos" data-linenos="270 "></span></a><span class="sd">        min_occupancy: Minimum track occupancy ratio (0-1) to keep.</span>
 <a id="__codelineno-0-271" name="__codelineno-0-271"></a><a href="#__codelineno-0-271"><span class="linenos" data-linenos="271 "></span></a><span class="sd">            0 = keep all non-empty tracks (SLEAP default).</span>
 <a id="__codelineno-0-272" name="__codelineno-0-272"></a><a href="#__codelineno-0-272"><span class="linenos" data-linenos="272 "></span></a><span class="sd">            0.5 = keep tracks with &gt;50% occupancy.</span>
-<a id="__codelineno-0-273" name="__codelineno-0-273"></a><a href="#__codelineno-0-273"><span class="linenos" data-linenos="273 "></span></a><span class="sd">        dim_order: Axis ordering preset. Options:</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><a href="#__codelineno-0-273"><span class="linenos" data-linenos="273 "></span></a><span class="sd">        preset: Axis ordering preset. Options:</span>
 <a id="__codelineno-0-274" name="__codelineno-0-274"></a><a href="#__codelineno-0-274"><span class="linenos" data-linenos="274 "></span></a><span class="sd">            - &quot;matlab&quot; (default): SLEAP-compatible ordering for MATLAB.</span>
 <a id="__codelineno-0-275" name="__codelineno-0-275"></a><a href="#__codelineno-0-275"><span class="linenos" data-linenos="275 "></span></a><span class="sd">              tracks shape: (n_tracks, 2, n_nodes, n_frames)</span>
 <a id="__codelineno-0-276" name="__codelineno-0-276"></a><a href="#__codelineno-0-276"><span class="linenos" data-linenos="276 "></span></a><span class="sd">            - &quot;standard&quot;: Intuitive Python ordering.</span>
@@ -5263,7 +5319,7 @@ Default True.</p>
 <a id="__codelineno-0-295" name="__codelineno-0-295"></a><a href="#__codelineno-0-295"><span class="linenos" data-linenos="295 "></span></a>        <span class="n">labels_path</span><span class="o">=</span><span class="n">labels_path</span><span class="p">,</span>
 <a id="__codelineno-0-296" name="__codelineno-0-296"></a><a href="#__codelineno-0-296"><span class="linenos" data-linenos="296 "></span></a>        <span class="n">all_frames</span><span class="o">=</span><span class="n">all_frames</span><span class="p">,</span>
 <a id="__codelineno-0-297" name="__codelineno-0-297"></a><a href="#__codelineno-0-297"><span class="linenos" data-linenos="297 "></span></a>        <span class="n">min_occupancy</span><span class="o">=</span><span class="n">min_occupancy</span><span class="p">,</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a><a href="#__codelineno-0-298"><span class="linenos" data-linenos="298 "></span></a>        <span class="n">dim_order</span><span class="o">=</span><span class="n">dim_order</span><span class="p">,</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><a href="#__codelineno-0-298"><span class="linenos" data-linenos="298 "></span></a>        <span class="n">preset</span><span class="o">=</span><span class="n">preset</span><span class="p">,</span>
 <a id="__codelineno-0-299" name="__codelineno-0-299"></a><a href="#__codelineno-0-299"><span class="linenos" data-linenos="299 "></span></a>        <span class="n">frame_dim</span><span class="o">=</span><span class="n">frame_dim</span><span class="p">,</span>
 <a id="__codelineno-0-300" name="__codelineno-0-300"></a><a href="#__codelineno-0-300"><span class="linenos" data-linenos="300 "></span></a>        <span class="n">track_dim</span><span class="o">=</span><span class="n">track_dim</span><span class="p">,</span>
 <a id="__codelineno-0-301" name="__codelineno-0-301"></a><a href="#__codelineno-0-301"><span class="linenos" data-linenos="301 "></span></a>        <span class="n">node_dim</span><span class="o">=</span><span class="n">node_dim</span><span class="p">,</span>
