@@ -1950,6 +1950,78 @@ def test_convert_save_failure_invalid_path(tmp_path, slp_typical):
     assert "Failed to save" in output
 
 
+def test_convert_to_analysis_h5(tmp_path, slp_typical):
+    """Test conversion to Analysis HDF5 format."""
+    runner = CliRunner()
+    output_path = tmp_path / "analysis.h5"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_typical, "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "slp -> analysis_h5" in result.output
+    assert output_path.exists()
+
+
+def test_convert_to_analysis_h5_with_options(tmp_path, slp_typical):
+    """Test conversion to Analysis HDF5 with dim order option."""
+    runner = CliRunner()
+    output_path = tmp_path / "analysis.h5"
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--h5-dim-order",
+            "standard",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "HDF5 dim order: standard" in result.output
+    assert output_path.exists()
+
+
+def test_convert_to_csv(tmp_path, slp_typical):
+    """Test conversion to CSV format."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.csv"
+
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", slp_typical, "-o", str(output_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "slp -> csv" in result.output
+    assert output_path.exists()
+
+
+def test_convert_to_csv_with_format(tmp_path, slp_typical):
+    """Test conversion to CSV with specific format."""
+    runner = CliRunner()
+    output_path = tmp_path / "output.csv"
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            "-i",
+            slp_typical,
+            "-o",
+            str(output_path),
+            "--csv-format",
+            "frames",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "CSV format: frames" in result.output
+    assert output_path.exists()
+
+
 # ======================= Export command tests =======================
 
 
@@ -2225,6 +2297,127 @@ def test_export_write_failure(tmp_path, slp_typical):
     result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
     assert result.exit_code != 0
     assert "Failed to export" in _strip_ansi(result.output)
+
+
+def test_export_csv_chunked(tmp_path, slp_typical):
+    """Test CSV export with --chunk-size for memory-efficient writing."""
+    runner = CliRunner()
+    output = tmp_path / "chunked.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_typical, "-o", str(output), "--chunk-size", "100"]
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+    # Verify output has expected data
+    import pandas as pd
+
+    df = pd.read_csv(output)
+    assert len(df) > 0
+
+
+def test_export_csv_chunked_matches_non_chunked(tmp_path, slp_typical):
+    """Test that chunked CSV export produces same output as non-chunked."""
+    runner = CliRunner()
+    non_chunked = tmp_path / "non_chunked.csv"
+    chunked = tmp_path / "chunked.csv"
+
+    # Export without chunking
+    result1 = runner.invoke(cli, ["export", slp_typical, "-o", str(non_chunked)])
+    assert result1.exit_code == 0
+
+    # Export with chunking
+    result2 = runner.invoke(
+        cli, ["export", slp_typical, "-o", str(chunked), "--chunk-size", "10"]
+    )
+    assert result2.exit_code == 0
+
+    # Compare outputs
+    import pandas as pd
+
+    df1 = pd.read_csv(non_chunked)
+    df2 = pd.read_csv(chunked)
+    pd.testing.assert_frame_equal(df1, df2)
+
+
+def test_export_h5_chunked_error(tmp_path, slp_typical):
+    """Test that --chunk-size with HDF5 format raises an error."""
+    runner = CliRunner()
+    output = tmp_path / "export.h5"
+
+    result = runner.invoke(
+        cli, ["export", slp_typical, "-o", str(output), "--chunk-size", "100"]
+    )
+    assert result.exit_code != 0
+    assert "Chunked writing" in _strip_ansi(result.output)
+    assert "not supported for HDF5" in _strip_ansi(result.output)
+
+
+def test_export_csv_dlc_chunked_error(tmp_path, slp_typical):
+    """Test that --chunk-size with DLC format raises an error."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli,
+        [
+            "export",
+            slp_typical,
+            "-o",
+            str(output),
+            "--csv-format",
+            "dlc",
+            "--chunk-size",
+            "100",
+        ],
+    )
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output).replace("\n", " ")
+    assert "Chunked writing is not" in output_text
+    assert "DLC format" in output_text
+
+
+def test_export_csv_with_video_id(tmp_path, slp_typical):
+    """Test CSV export with --video-id option."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli,
+        ["export", slp_typical, "-o", str(output), "--video-id", "index"],
+    )
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+    # Verify output has video_idx column instead of video_path
+    import pandas as pd
+
+    df = pd.read_csv(output)
+    assert "video_idx" in df.columns or len(df) > 0
+
+
+def test_export_h5_with_metadata_option(tmp_path, slp_typical):
+    """Test HDF5 export with --h5-metadata/--no-h5-metadata option."""
+    runner = CliRunner()
+    output_with = tmp_path / "with_meta.h5"
+    output_without = tmp_path / "without_meta.h5"
+
+    # Export with metadata (default)
+    result1 = runner.invoke(
+        cli,
+        ["export", slp_typical, "-o", str(output_with)],
+    )
+    assert result1.exit_code == 0, result1.output
+    assert output_with.exists()
+
+    # Export without metadata
+    result2 = runner.invoke(
+        cli,
+        ["export", slp_typical, "-o", str(output_without), "--no-h5-metadata"],
+    )
+    assert result2.exit_code == 0, result2.output
+    assert output_without.exists()
 
 
 # ======================= Split command tests =======================

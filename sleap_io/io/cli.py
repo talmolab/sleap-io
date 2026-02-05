@@ -101,7 +101,16 @@ INPUT_FORMATS = [
     "ultralytics",
     "leap",
 ]
-OUTPUT_FORMATS = ["slp", "nwb", "coco", "labelstudio", "jabs", "ultralytics", "csv"]
+OUTPUT_FORMATS = [
+    "slp",
+    "nwb",
+    "coco",
+    "labelstudio",
+    "jabs",
+    "ultralytics",
+    "csv",
+    "analysis_h5",
+]
 
 # Extensions that require explicit --from format
 AMBIGUOUS_EXTENSIONS = {".json", ".h5"}
@@ -120,6 +129,8 @@ OUTPUT_EXTENSION_TO_FORMAT = {
     ".nwb": "nwb",
     ".json": "labelstudio",  # Default JSON output to labelstudio
     ".csv": "csv",
+    ".h5": "analysis_h5",  # Default .h5 output to analysis HDF5
+    ".hdf5": "analysis_h5",
 }
 
 
@@ -1530,6 +1541,19 @@ def _infer_output_format(path: Path) -> str | None:
     default=False,
     help="Save JSON metadata file for round-trip support (CSV only).",
 )
+@click.option(
+    "--h5-dim-order",
+    "h5_dim_order",
+    type=click.Choice(["matlab", "standard"]),
+    default="matlab",
+    help="HDF5 axis ordering: matlab (SLEAP-compatible) or standard. analysis_h5 only.",
+)
+@click.option(
+    "--min-occupancy",
+    type=float,
+    default=0.0,
+    help="Filter tracks with occupancy below this ratio (0-1). analysis_h5 only.",
+)
 def convert(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -1540,6 +1564,8 @@ def convert(
     csv_format: str,
     scorer: str,
     save_metadata: bool,
+    h5_dim_order: str,
+    min_occupancy: float,
 ):
     """Convert between pose data formats.
 
@@ -1551,7 +1577,7 @@ def convert(
     slp, nwb, coco, labelstudio, alphatracker, jabs, dlc, ultralytics, leap
 
     [bold]Supported output formats:[/]
-    slp, nwb, coco, labelstudio, jabs, ultralytics
+    slp, nwb, coco, labelstudio, jabs, ultralytics, csv, analysis_h5
 
     [dim]Examples:[/]
 
@@ -1560,6 +1586,8 @@ def convert(
         $ sio convert annotations.json -o labels.slp --from coco
         $ sio convert labels.slp -o labels.pkg.slp --embed user
         $ sio convert labels.slp -o dataset/ --to ultralytics
+        $ sio convert labels.slp -o analysis.h5 --to analysis_h5
+        $ sio convert labels.slp -o output.csv --csv-format frames
     """
     # Resolve input from positional arg or -i option
     input_path = _resolve_input(input_arg, input_opt, "input file")
@@ -1644,6 +1672,13 @@ def convert(
                 scorer=scorer,
                 save_metadata=save_metadata,
             )
+        elif resolved_output_format == "analysis_h5":
+            io_main.save_analysis_h5(
+                labels,
+                str(output_path),
+                preset=h5_dim_order,
+                min_occupancy=min_occupancy,
+            )
         else:
             io_main.save_file(labels, str(output_path), **save_kwargs)
     except Exception as e:
@@ -1658,6 +1693,8 @@ def convert(
         click.echo(f"CSV format: {csv_format}")
         if save_metadata:
             click.echo("Metadata saved: yes")
+    if resolved_output_format == "analysis_h5":
+        click.echo(f"HDF5 dim order: {h5_dim_order}")
 
 
 # =============================================================================
@@ -1732,6 +1769,12 @@ def convert(
     help="Filter tracks with occupancy below this ratio (0-1). HDF5 only.",
 )
 @click.option(
+    "--h5-metadata/--no-h5-metadata",
+    "h5_save_metadata",
+    default=True,
+    help="Save extended metadata in HDF5 for round-trip support. Default: yes.",
+)
+@click.option(
     "-v",
     "--video",
     "video_spec",
@@ -1765,6 +1808,14 @@ def convert(
     default=True,
     help="Include confidence scores. Default: yes.",
 )
+@click.option(
+    "--chunk-size",
+    "chunk_size",
+    type=int,
+    default=None,
+    help="Write CSV in chunks of N rows for memory-efficient export. "
+    "Not supported for DLC or HDF5 formats.",
+)
 def export(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -1776,11 +1827,13 @@ def export(
     video_id: str,
     h5_dim_order: str,
     min_occupancy: float,
+    h5_save_metadata: bool,
     video_spec: str | None,
     include_empty: bool,
     start_frame: int | None,
     end_frame: int | None,
     include_scores: bool,
+    chunk_size: int | None,
 ) -> None:
     """Export pose data for analysis.
 
@@ -1805,6 +1858,9 @@ def export(
         # Export all videos from multi-video file
         $ sio export multi.slp -o export.csv -v all
         # Creates: export.video0.csv, export.video1.csv, ...
+
+        # Memory-efficient chunked export for large files
+        $ sio export large.slp -o analysis.csv --chunk-size 10000
     """
     from sleap_io.model.labels import Labels
 
@@ -1823,6 +1879,13 @@ def export(
                 f"Cannot infer output format from '{output_path.name}'. "
                 "Please specify --format csv or --format h5."
             )
+
+    # Validate chunk_size with output format
+    if chunk_size is not None and output_format == "h5":
+        raise click.ClickException(
+            "Chunked writing (--chunk-size) is not supported for HDF5 format. "
+            "Use CSV format for memory-efficient export of large datasets."
+        )
 
     # Load input file
     try:
@@ -1853,6 +1916,8 @@ def export(
                     end_frame=end_frame,
                     scorer=scorer,
                     save_metadata=save_metadata,
+                    chunk_size=chunk_size,
+                    video_id=video_id,
                 )
             else:  # h5
                 io_main.save_analysis_h5(
@@ -1862,6 +1927,7 @@ def export(
                     all_frames=include_empty,
                     min_occupancy=min_occupancy,
                     preset=h5_dim_order,
+                    save_metadata=h5_save_metadata,
                 )
             click.echo(f"Exported: {out_path}")
         except Exception as e:

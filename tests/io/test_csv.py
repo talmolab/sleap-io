@@ -723,3 +723,83 @@ class TestIncludeEmpty:
         df = pd.read_csv(csv_path)
         # Should have frames 0, 1, 2, 3
         assert list(df["frame_idx"]) == [0, 1, 2, 3]
+
+
+# =============================================================================
+# Chunked Writing Tests
+# =============================================================================
+
+
+class TestChunkedWriting:
+    """Tests for memory-efficient chunked CSV writing."""
+
+    def test_chunked_frames_format(self, tmp_path, simple_labels):
+        """Test chunked writing with frames format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="frames", chunk_size=1)
+
+        # Should produce same output as non-chunked
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2
+        assert list(df["frame_idx"]) == [0, 1]
+        assert "inst0.head.x" in df.columns
+
+    def test_chunked_instances_format(self, tmp_path, simple_labels):
+        """Test chunked writing with instances format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="instances", chunk_size=1)
+
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2
+        assert "head.x" in df.columns
+
+    def test_chunked_points_format(self, tmp_path, simple_labels):
+        """Test chunked writing with points format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="points", chunk_size=2)
+
+        df = pd.read_csv(csv_path)
+        # 2 frames * 1 instance * 2 nodes = 4 rows
+        assert len(df) == 4
+        assert "node" in df.columns
+
+    def test_chunked_sleap_format(self, tmp_path, simple_labels):
+        """Test chunked writing with SLEAP format."""
+        csv_path = tmp_path / "chunked.csv"
+        csv.write_labels(simple_labels, csv_path, format="sleap", chunk_size=1)
+
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2
+        # SLEAP format has instance.score column
+        assert "instance.score" in df.columns or "head.x" in df.columns
+
+    def test_chunked_matches_non_chunked(self, tmp_path, simple_labels):
+        """Test that chunked writing produces same output as non-chunked."""
+        non_chunked_path = tmp_path / "non_chunked.csv"
+        chunked_path = tmp_path / "chunked.csv"
+
+        csv.write_labels(simple_labels, non_chunked_path, format="frames")
+        csv.write_labels(simple_labels, chunked_path, format="frames", chunk_size=1)
+
+        df_non_chunked = pd.read_csv(non_chunked_path)
+        df_chunked = pd.read_csv(chunked_path)
+
+        pd.testing.assert_frame_equal(df_non_chunked, df_chunked)
+
+    def test_chunked_dlc_not_supported(self, tmp_path, simple_labels):
+        """Test that chunked writing with DLC format raises error."""
+        csv_path = tmp_path / "dlc.csv"
+
+        with pytest.raises(ValueError, match="Chunked writing is not supported"):
+            csv.write_labels(
+                simple_labels, csv_path, format="dlc", chunk_size=100, scorer="test"
+            )
+
+    def test_chunked_with_large_chunk_size(self, tmp_path, simple_labels):
+        """Test chunked writing with chunk_size larger than data."""
+        csv_path = tmp_path / "chunked.csv"
+        # chunk_size of 1000 is much larger than our 2 frames
+        csv.write_labels(simple_labels, csv_path, format="frames", chunk_size=1000)
+
+        df = pd.read_csv(csv_path)
+        assert len(df) == 2

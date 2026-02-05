@@ -461,24 +461,27 @@ sio convert annotations.json -o labels.slp --from coco
 | `--csv-format` | CSV output format: `sleap`, `dlc`, `points`, `instances`, `frames` |
 | `--scorer` | Scorer name for DLC CSV output (default: `sleap-io`) |
 | `--save-metadata` | Save JSON metadata file for CSV round-trip support |
+| `--h5-dim-order` | HDF5 axis ordering: `matlab` or `standard` (analysis_h5 only) |
+| `--min-occupancy` | Filter tracks below this occupancy ratio (analysis_h5 only) |
 
 ### Supported Formats
 
 **Input formats:** `slp`, `nwb`, `coco`, `labelstudio`, `alphatracker`, `jabs`, `dlc`, `csv`, `ultralytics`, `leap`
 
-**Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`
+**Output formats:** `slp`, `nwb`, `coco`, `labelstudio`, `jabs`, `ultralytics`, `csv`, `analysis_h5`
 
 ### Format Detection
 
 The CLI automatically detects formats from file extensions:
 
-| Extension | Format |
-|-----------|--------|
-| `.slp` | SLEAP |
-| `.nwb` | NWB |
-| `.mat` | LEAP |
-| `.csv` | DeepLabCut |
-| Directory with `data.yaml` | Ultralytics |
+| Extension | Input Format | Output Format |
+|-----------|--------------|---------------|
+| `.slp` | SLEAP | SLEAP |
+| `.nwb` | NWB | NWB |
+| `.mat` | LEAP | - |
+| `.csv` | DeepLabCut | CSV |
+| `.h5` / `.hdf5` | (ambiguous) | Analysis HDF5 |
+| Directory with `data.yaml` | Ultralytics | Ultralytics |
 
 **Ambiguous extensions** (`.json`, `.h5`) require explicit `--from`:
 
@@ -567,6 +570,28 @@ sio convert labels.slp -o output.csv --save-metadata
 - **`instances`**: One row per instance with node coordinates as columns
 - **`frames`**: One row per frame with all instances multiplexed
 
+### Export to Analysis HDF5
+
+Export pose data to SLEAP Analysis HDF5 format for use with MATLAB or numerical analysis:
+
+```bash
+# Export to Analysis HDF5 (MATLAB-compatible ordering)
+sio convert labels.slp -o analysis.h5
+
+# Export with Python-native axis ordering
+sio convert labels.slp -o analysis.h5 --h5-dim-order standard
+
+# Filter tracks by occupancy
+sio convert labels.slp -o analysis.h5 --min-occupancy 0.5
+```
+
+#### HDF5 Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--h5-dim-order` | `matlab` | Axis ordering: `matlab` (SLEAP-compatible) or `standard` |
+| `--min-occupancy` | `0.0` | Filter tracks below this occupancy ratio (0-1) |
+
 ---
 
 ## `sio export`
@@ -613,6 +638,7 @@ sio export predictions.slp -o clip.csv --start 100 --end 500
 | `--scorer` | `sleap-io` | Scorer name for DLC format |
 | `--save-metadata/--no-metadata` | off | Save JSON metadata alongside CSV |
 | `--video-id` | `path` | How to identify videos: `path`, `index`, `name` |
+| `--chunk-size` | (none) | Write CSV in chunks of N rows for memory-efficient export |
 
 #### HDF5 Options
 
@@ -620,6 +646,7 @@ sio export predictions.slp -o clip.csv --start 100 --end 500
 |--------|---------|-------------|
 | `--h5-dim-order` | `matlab` | Axis ordering: `matlab` (SLEAP-compatible) or `standard` (frame-first) |
 | `--min-occupancy` | `0.0` | Filter tracks below this occupancy ratio (0-1) |
+| `--h5-metadata/--no-h5-metadata` | on | Save extended metadata for round-trip support |
 
 #### Frame Selection
 
@@ -692,6 +719,25 @@ sio export predictions.slp -o analysis.h5
 sio export predictions.slp -o analysis.h5 --h5-dim-order standard
 ```
 
+### Memory-Efficient Export for Large Datasets
+
+For labels with millions of frames, use `--chunk-size` to write CSV incrementally without loading the entire DataFrame into memory:
+
+```bash
+# Write in chunks of 10,000 rows
+sio export large_predictions.slp -o analysis.csv --chunk-size 10000
+
+# Combine with other options
+sio export large_predictions.slp -o sparse.csv \
+    --csv-format points \
+    --no-empty-frames \
+    --chunk-size 50000
+```
+
+!!! note "Chunked Writing Limitations"
+    - **CSV only**: HDF5 export currently requires full materialization in memory
+    - **Not supported for DLC format**: DLC format's multi-row header structure is not compatible with chunked writing
+
 ### Examples
 
 ```bash
@@ -711,6 +757,9 @@ sio export predictions.slp -o filtered.h5 --min-occupancy 0.5
 
 # Batch export all videos
 sio export multi_video.slp -o export.csv -v all
+
+# Memory-efficient export for large files
+sio export large.slp -o analysis.csv --chunk-size 10000
 ```
 
 ---

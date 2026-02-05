@@ -545,6 +545,8 @@ def save_csv(
     end_frame: int | None = None,
     scorer: str = "sleap-io",
     save_metadata: bool = False,
+    chunk_size: int | None = None,
+    video_id: str = "path",
 ) -> None:
     """Save pose data to a CSV file.
 
@@ -565,6 +567,11 @@ def save_csv(
         scorer: Scorer name for DLC format. Default "sleap-io".
         save_metadata: Save JSON metadata file alongside CSV that enables
             full round-trip reconstruction. Default False.
+        chunk_size: Number of rows per chunk for memory-efficient writing. If None
+            (default), writes entire DataFrame at once. Useful for large datasets.
+            Not supported for DLC format.
+        video_id: How to represent videos in the CSV. Options: "path" (default),
+            "index", or "name".
 
     See Also:
         load_csv: Load Labels from CSV file.
@@ -582,6 +589,8 @@ def save_csv(
         end_frame=end_frame,
         scorer=scorer,
         save_metadata=save_metadata,
+        chunk_size=chunk_size,
+        video_id=video_id,
     )
 
 
