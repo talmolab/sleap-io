@@ -3237,7 +3237,7 @@ Labels context including skeleton edges, symmetries, and provenance.</p>
 
 
 <h3 id="sleap_io.io.main.save_csv" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sleap&#39;</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_score</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_empty</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">start_frame</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">end_frame</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scorer</span><span class="o">=</span><span class="s1">&#39;sleap-io&#39;</span><span class="p">,</span> <span class="n">save_metadata</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sleap_io</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">main</span><span class="o">.</span><span class="n">save_csv</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sleap&#39;</span><span class="p">,</span> <span class="n">video</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_score</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_empty</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">start_frame</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">end_frame</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scorer</span><span class="o">=</span><span class="s1">&#39;sleap-io&#39;</span><span class="p">,</span> <span class="n">save_metadata</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">video_id</span><span class="o">=</span><span class="s1">&#39;path&#39;</span><span class="p">)</span></code>
 
 <a href="#sleap_io.io.main.save_csv" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3424,6 +3424,41 @@ full round-trip reconstruction. Default False.</p>
                   <code>False</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>chunk_size</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of rows per chunk for memory-efficient writing. If None
+(default), writes entire DataFrame at once. Useful for large datasets.
+Not supported for DLC format.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>video_id</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How to represent videos in the CSV. Options: "path" (default),
+"index", or "name".</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;path&#39;</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -3446,44 +3481,53 @@ full round-trip reconstruction. Default False.</p>
 <a id="__codelineno-0-545" name="__codelineno-0-545"></a><a href="#__codelineno-0-545"><span class="linenos" data-linenos="545 "></span></a>    <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-546" name="__codelineno-0-546"></a><a href="#__codelineno-0-546"><span class="linenos" data-linenos="546 "></span></a>    <span class="n">scorer</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sleap-io&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-547" name="__codelineno-0-547"></a><a href="#__codelineno-0-547"><span class="linenos" data-linenos="547 "></span></a>    <span class="n">save_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-548" name="__codelineno-0-548"></a><a href="#__codelineno-0-548"><span class="linenos" data-linenos="548 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-549" name="__codelineno-0-549"></a><a href="#__codelineno-0-549"><span class="linenos" data-linenos="549 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save pose data to a CSV file.</span>
-<a id="__codelineno-0-550" name="__codelineno-0-550"></a><a href="#__codelineno-0-550"><span class="linenos" data-linenos="550 "></span></a>
-<a id="__codelineno-0-551" name="__codelineno-0-551"></a><a href="#__codelineno-0-551"><span class="linenos" data-linenos="551 "></span></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-552" name="__codelineno-0-552"></a><a href="#__codelineno-0-552"><span class="linenos" data-linenos="552 "></span></a><span class="sd">        labels: Labels to save.</span>
-<a id="__codelineno-0-553" name="__codelineno-0-553"></a><a href="#__codelineno-0-553"><span class="linenos" data-linenos="553 "></span></a><span class="sd">        filename: Output path.</span>
-<a id="__codelineno-0-554" name="__codelineno-0-554"></a><a href="#__codelineno-0-554"><span class="linenos" data-linenos="554 "></span></a><span class="sd">        format: CSV format. One of &quot;sleap&quot; (default), &quot;dlc&quot;, &quot;points&quot;,</span>
-<a id="__codelineno-0-555" name="__codelineno-0-555"></a><a href="#__codelineno-0-555"><span class="linenos" data-linenos="555 "></span></a><span class="sd">            &quot;instances&quot;, &quot;frames&quot;.</span>
-<a id="__codelineno-0-556" name="__codelineno-0-556"></a><a href="#__codelineno-0-556"><span class="linenos" data-linenos="556 "></span></a><span class="sd">        video: Video to filter to. Can be Video object or integer index.</span>
-<a id="__codelineno-0-557" name="__codelineno-0-557"></a><a href="#__codelineno-0-557"><span class="linenos" data-linenos="557 "></span></a><span class="sd">            If None, includes all videos.</span>
-<a id="__codelineno-0-558" name="__codelineno-0-558"></a><a href="#__codelineno-0-558"><span class="linenos" data-linenos="558 "></span></a><span class="sd">        include_score: Include confidence scores in output. Default True.</span>
-<a id="__codelineno-0-559" name="__codelineno-0-559"></a><a href="#__codelineno-0-559"><span class="linenos" data-linenos="559 "></span></a><span class="sd">        include_empty: Include frames with no instances (filled with NaN values).</span>
-<a id="__codelineno-0-560" name="__codelineno-0-560"></a><a href="#__codelineno-0-560"><span class="linenos" data-linenos="560 "></span></a><span class="sd">            Default False. Only applies to &quot;frames&quot; and &quot;instances&quot; formats.</span>
-<a id="__codelineno-0-561" name="__codelineno-0-561"></a><a href="#__codelineno-0-561"><span class="linenos" data-linenos="561 "></span></a><span class="sd">        start_frame: Start frame index (inclusive) for output. If None, starts</span>
-<a id="__codelineno-0-562" name="__codelineno-0-562"></a><a href="#__codelineno-0-562"><span class="linenos" data-linenos="562 "></span></a><span class="sd">            from 0 when include_empty=True, or from first labeled frame otherwise.</span>
-<a id="__codelineno-0-563" name="__codelineno-0-563"></a><a href="#__codelineno-0-563"><span class="linenos" data-linenos="563 "></span></a><span class="sd">        end_frame: End frame index (exclusive) for output. If None, ends at</span>
-<a id="__codelineno-0-564" name="__codelineno-0-564"></a><a href="#__codelineno-0-564"><span class="linenos" data-linenos="564 "></span></a><span class="sd">            last labeled frame + 1.</span>
-<a id="__codelineno-0-565" name="__codelineno-0-565"></a><a href="#__codelineno-0-565"><span class="linenos" data-linenos="565 "></span></a><span class="sd">        scorer: Scorer name for DLC format. Default &quot;sleap-io&quot;.</span>
-<a id="__codelineno-0-566" name="__codelineno-0-566"></a><a href="#__codelineno-0-566"><span class="linenos" data-linenos="566 "></span></a><span class="sd">        save_metadata: Save JSON metadata file alongside CSV that enables</span>
-<a id="__codelineno-0-567" name="__codelineno-0-567"></a><a href="#__codelineno-0-567"><span class="linenos" data-linenos="567 "></span></a><span class="sd">            full round-trip reconstruction. Default False.</span>
-<a id="__codelineno-0-568" name="__codelineno-0-568"></a><a href="#__codelineno-0-568"><span class="linenos" data-linenos="568 "></span></a>
-<a id="__codelineno-0-569" name="__codelineno-0-569"></a><a href="#__codelineno-0-569"><span class="linenos" data-linenos="569 "></span></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-570" name="__codelineno-0-570"></a><a href="#__codelineno-0-570"><span class="linenos" data-linenos="570 "></span></a><span class="sd">        load_csv: Load Labels from CSV file.</span>
-<a id="__codelineno-0-571" name="__codelineno-0-571"></a><a href="#__codelineno-0-571"><span class="linenos" data-linenos="571 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572"></a><a href="#__codelineno-0-572"><span class="linenos" data-linenos="572 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">csv</span>
-<a id="__codelineno-0-573" name="__codelineno-0-573"></a><a href="#__codelineno-0-573"><span class="linenos" data-linenos="573 "></span></a>
-<a id="__codelineno-0-574" name="__codelineno-0-574"></a><a href="#__codelineno-0-574"><span class="linenos" data-linenos="574 "></span></a>    <span class="n">csv</span><span class="o">.</span><span class="n">write_labels</span><span class="p">(</span>
-<a id="__codelineno-0-575" name="__codelineno-0-575"></a><a href="#__codelineno-0-575"><span class="linenos" data-linenos="575 "></span></a>        <span class="n">labels</span><span class="p">,</span>
-<a id="__codelineno-0-576" name="__codelineno-0-576"></a><a href="#__codelineno-0-576"><span class="linenos" data-linenos="576 "></span></a>        <span class="n">filename</span><span class="p">,</span>
-<a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a>        <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">,</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a>        <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
-<a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a>        <span class="n">include_score</span><span class="o">=</span><span class="n">include_score</span><span class="p">,</span>
-<a id="__codelineno-0-580" name="__codelineno-0-580"></a><a href="#__codelineno-0-580"><span class="linenos" data-linenos="580 "></span></a>        <span class="n">include_empty</span><span class="o">=</span><span class="n">include_empty</span><span class="p">,</span>
-<a id="__codelineno-0-581" name="__codelineno-0-581"></a><a href="#__codelineno-0-581"><span class="linenos" data-linenos="581 "></span></a>        <span class="n">start_frame</span><span class="o">=</span><span class="n">start_frame</span><span class="p">,</span>
-<a id="__codelineno-0-582" name="__codelineno-0-582"></a><a href="#__codelineno-0-582"><span class="linenos" data-linenos="582 "></span></a>        <span class="n">end_frame</span><span class="o">=</span><span class="n">end_frame</span><span class="p">,</span>
-<a id="__codelineno-0-583" name="__codelineno-0-583"></a><a href="#__codelineno-0-583"><span class="linenos" data-linenos="583 "></span></a>        <span class="n">scorer</span><span class="o">=</span><span class="n">scorer</span><span class="p">,</span>
-<a id="__codelineno-0-584" name="__codelineno-0-584"></a><a href="#__codelineno-0-584"><span class="linenos" data-linenos="584 "></span></a>        <span class="n">save_metadata</span><span class="o">=</span><span class="n">save_metadata</span><span class="p">,</span>
-<a id="__codelineno-0-585" name="__codelineno-0-585"></a><a href="#__codelineno-0-585"><span class="linenos" data-linenos="585 "></span></a>    <span class="p">)</span>
+<a id="__codelineno-0-548" name="__codelineno-0-548"></a><a href="#__codelineno-0-548"><span class="linenos" data-linenos="548 "></span></a>    <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-549" name="__codelineno-0-549"></a><a href="#__codelineno-0-549"><span class="linenos" data-linenos="549 "></span></a>    <span class="n">video_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;path&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-550" name="__codelineno-0-550"></a><a href="#__codelineno-0-550"><span class="linenos" data-linenos="550 "></span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-551" name="__codelineno-0-551"></a><a href="#__codelineno-0-551"><span class="linenos" data-linenos="551 "></span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save pose data to a CSV file.</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552"></a><a href="#__codelineno-0-552"><span class="linenos" data-linenos="552 "></span></a>
+<a id="__codelineno-0-553" name="__codelineno-0-553"></a><a href="#__codelineno-0-553"><span class="linenos" data-linenos="553 "></span></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-554" name="__codelineno-0-554"></a><a href="#__codelineno-0-554"><span class="linenos" data-linenos="554 "></span></a><span class="sd">        labels: Labels to save.</span>
+<a id="__codelineno-0-555" name="__codelineno-0-555"></a><a href="#__codelineno-0-555"><span class="linenos" data-linenos="555 "></span></a><span class="sd">        filename: Output path.</span>
+<a id="__codelineno-0-556" name="__codelineno-0-556"></a><a href="#__codelineno-0-556"><span class="linenos" data-linenos="556 "></span></a><span class="sd">        format: CSV format. One of &quot;sleap&quot; (default), &quot;dlc&quot;, &quot;points&quot;,</span>
+<a id="__codelineno-0-557" name="__codelineno-0-557"></a><a href="#__codelineno-0-557"><span class="linenos" data-linenos="557 "></span></a><span class="sd">            &quot;instances&quot;, &quot;frames&quot;.</span>
+<a id="__codelineno-0-558" name="__codelineno-0-558"></a><a href="#__codelineno-0-558"><span class="linenos" data-linenos="558 "></span></a><span class="sd">        video: Video to filter to. Can be Video object or integer index.</span>
+<a id="__codelineno-0-559" name="__codelineno-0-559"></a><a href="#__codelineno-0-559"><span class="linenos" data-linenos="559 "></span></a><span class="sd">            If None, includes all videos.</span>
+<a id="__codelineno-0-560" name="__codelineno-0-560"></a><a href="#__codelineno-0-560"><span class="linenos" data-linenos="560 "></span></a><span class="sd">        include_score: Include confidence scores in output. Default True.</span>
+<a id="__codelineno-0-561" name="__codelineno-0-561"></a><a href="#__codelineno-0-561"><span class="linenos" data-linenos="561 "></span></a><span class="sd">        include_empty: Include frames with no instances (filled with NaN values).</span>
+<a id="__codelineno-0-562" name="__codelineno-0-562"></a><a href="#__codelineno-0-562"><span class="linenos" data-linenos="562 "></span></a><span class="sd">            Default False. Only applies to &quot;frames&quot; and &quot;instances&quot; formats.</span>
+<a id="__codelineno-0-563" name="__codelineno-0-563"></a><a href="#__codelineno-0-563"><span class="linenos" data-linenos="563 "></span></a><span class="sd">        start_frame: Start frame index (inclusive) for output. If None, starts</span>
+<a id="__codelineno-0-564" name="__codelineno-0-564"></a><a href="#__codelineno-0-564"><span class="linenos" data-linenos="564 "></span></a><span class="sd">            from 0 when include_empty=True, or from first labeled frame otherwise.</span>
+<a id="__codelineno-0-565" name="__codelineno-0-565"></a><a href="#__codelineno-0-565"><span class="linenos" data-linenos="565 "></span></a><span class="sd">        end_frame: End frame index (exclusive) for output. If None, ends at</span>
+<a id="__codelineno-0-566" name="__codelineno-0-566"></a><a href="#__codelineno-0-566"><span class="linenos" data-linenos="566 "></span></a><span class="sd">            last labeled frame + 1.</span>
+<a id="__codelineno-0-567" name="__codelineno-0-567"></a><a href="#__codelineno-0-567"><span class="linenos" data-linenos="567 "></span></a><span class="sd">        scorer: Scorer name for DLC format. Default &quot;sleap-io&quot;.</span>
+<a id="__codelineno-0-568" name="__codelineno-0-568"></a><a href="#__codelineno-0-568"><span class="linenos" data-linenos="568 "></span></a><span class="sd">        save_metadata: Save JSON metadata file alongside CSV that enables</span>
+<a id="__codelineno-0-569" name="__codelineno-0-569"></a><a href="#__codelineno-0-569"><span class="linenos" data-linenos="569 "></span></a><span class="sd">            full round-trip reconstruction. Default False.</span>
+<a id="__codelineno-0-570" name="__codelineno-0-570"></a><a href="#__codelineno-0-570"><span class="linenos" data-linenos="570 "></span></a><span class="sd">        chunk_size: Number of rows per chunk for memory-efficient writing. If None</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a><a href="#__codelineno-0-571"><span class="linenos" data-linenos="571 "></span></a><span class="sd">            (default), writes entire DataFrame at once. Useful for large datasets.</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a><a href="#__codelineno-0-572"><span class="linenos" data-linenos="572 "></span></a><span class="sd">            Not supported for DLC format.</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a><a href="#__codelineno-0-573"><span class="linenos" data-linenos="573 "></span></a><span class="sd">        video_id: How to represent videos in the CSV. Options: &quot;path&quot; (default),</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a><a href="#__codelineno-0-574"><span class="linenos" data-linenos="574 "></span></a><span class="sd">            &quot;index&quot;, or &quot;name&quot;.</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a><a href="#__codelineno-0-575"><span class="linenos" data-linenos="575 "></span></a>
+<a id="__codelineno-0-576" name="__codelineno-0-576"></a><a href="#__codelineno-0-576"><span class="linenos" data-linenos="576 "></span></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a><a href="#__codelineno-0-577"><span class="linenos" data-linenos="577 "></span></a><span class="sd">        load_csv: Load Labels from CSV file.</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a><a href="#__codelineno-0-578"><span class="linenos" data-linenos="578 "></span></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a><a href="#__codelineno-0-579"><span class="linenos" data-linenos="579 "></span></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">sleap_io.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">csv</span>
+<a id="__codelineno-0-580" name="__codelineno-0-580"></a><a href="#__codelineno-0-580"><span class="linenos" data-linenos="580 "></span></a>
+<a id="__codelineno-0-581" name="__codelineno-0-581"></a><a href="#__codelineno-0-581"><span class="linenos" data-linenos="581 "></span></a>    <span class="n">csv</span><span class="o">.</span><span class="n">write_labels</span><span class="p">(</span>
+<a id="__codelineno-0-582" name="__codelineno-0-582"></a><a href="#__codelineno-0-582"><span class="linenos" data-linenos="582 "></span></a>        <span class="n">labels</span><span class="p">,</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a><a href="#__codelineno-0-583"><span class="linenos" data-linenos="583 "></span></a>        <span class="n">filename</span><span class="p">,</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a><a href="#__codelineno-0-584"><span class="linenos" data-linenos="584 "></span></a>        <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">,</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a><a href="#__codelineno-0-585"><span class="linenos" data-linenos="585 "></span></a>        <span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586"></a><a href="#__codelineno-0-586"><span class="linenos" data-linenos="586 "></span></a>        <span class="n">include_score</span><span class="o">=</span><span class="n">include_score</span><span class="p">,</span>
+<a id="__codelineno-0-587" name="__codelineno-0-587"></a><a href="#__codelineno-0-587"><span class="linenos" data-linenos="587 "></span></a>        <span class="n">include_empty</span><span class="o">=</span><span class="n">include_empty</span><span class="p">,</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a><a href="#__codelineno-0-588"><span class="linenos" data-linenos="588 "></span></a>        <span class="n">start_frame</span><span class="o">=</span><span class="n">start_frame</span><span class="p">,</span>
+<a id="__codelineno-0-589" name="__codelineno-0-589"></a><a href="#__codelineno-0-589"><span class="linenos" data-linenos="589 "></span></a>        <span class="n">end_frame</span><span class="o">=</span><span class="n">end_frame</span><span class="p">,</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a><a href="#__codelineno-0-590"><span class="linenos" data-linenos="590 "></span></a>        <span class="n">scorer</span><span class="o">=</span><span class="n">scorer</span><span class="p">,</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591"></a><a href="#__codelineno-0-591"><span class="linenos" data-linenos="591 "></span></a>        <span class="n">save_metadata</span><span class="o">=</span><span class="n">save_metadata</span><span class="p">,</span>
+<a id="__codelineno-0-592" name="__codelineno-0-592"></a><a href="#__codelineno-0-592"><span class="linenos" data-linenos="592 "></span></a>        <span class="n">chunk_size</span><span class="o">=</span><span class="n">chunk_size</span><span class="p">,</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a><a href="#__codelineno-0-593"><span class="linenos" data-linenos="593 "></span></a>        <span class="n">video_id</span><span class="o">=</span><span class="n">video_id</span><span class="p">,</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a><a href="#__codelineno-0-594"><span class="linenos" data-linenos="594 "></span></a>    <span class="p">)</span>
 </code></pre></div>
             </details>
     </div>
