@@ -1707,14 +1707,18 @@ class TestRenderVideo:
             video=video,
             frame_idx=0,
             instances=[
-                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+                sio.Instance.from_numpy(
+                    np.array([[32, 20], [32, 44]]), skeleton=skeleton
+                )
             ],
         )
         lf5 = sio.LabeledFrame(
             video=video,
             frame_idx=5,
             instances=[
-                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+                sio.Instance.from_numpy(
+                    np.array([[32, 20], [32, 44]]), skeleton=skeleton
+                )
             ],
         )
         labels = sio.Labels(
@@ -1757,14 +1761,18 @@ class TestRenderVideo:
             video=video,
             frame_idx=0,
             instances=[
-                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+                sio.Instance.from_numpy(
+                    np.array([[32, 20], [32, 44]]), skeleton=skeleton
+                )
             ],
         )
         lf5 = sio.LabeledFrame(
             video=video,
             frame_idx=5,
             instances=[
-                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+                sio.Instance.from_numpy(
+                    np.array([[32, 20], [32, 44]]), skeleton=skeleton
+                )
             ],
         )
         labels = sio.Labels(
@@ -1782,6 +1790,144 @@ class TestRenderVideo:
             end=6,
             include_unlabeled=True,
             background="black",  # Use solid background
+            show_progress=False,
+        )
+
+        assert output_path.exists()
+        assert isinstance(result, sio.Video)
+
+    def test_render_video_include_unlabeled_return_list(self, tmp_path):
+        """Test include_unlabeled=True without save_path returns frame list."""
+        import numpy as np
+
+        import sleap_io as sio
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Create a small test video
+        video_path = tmp_path / "test_video.mp4"
+        frames = [np.zeros((64, 64, 3), dtype=np.uint8) for _ in range(10)]
+        sio.save_video(frames, video_path)
+        video = sio.Video.from_filename(str(video_path))
+
+        # Create labeled frames with gaps - only frames 0 and 5 have labels
+        pts = np.array([[32, 20], [32, 44]])
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        lf5 = sio.LabeledFrame(
+            video=video,
+            frame_idx=5,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(
+            labeled_frames=[lf0, lf5], videos=[video], skeletons=[skeleton]
+        )
+
+        # Render without save_path - returns list (covers line 1176)
+        result = render_video(
+            labels,
+            save_path=None,  # No file output, return list
+            start=0,
+            end=6,
+            include_unlabeled=True,
+            show_progress=False,
+        )
+
+        # Should return list of frames (labeled + unlabeled = 6 frames: 0-5)
+        assert isinstance(result, list)
+        assert len(result) == 6
+        assert all(isinstance(f, np.ndarray) for f in result)
+
+    def test_render_video_skip_unlabeled(self, tmp_path):
+        """Test include_unlabeled=False skips frames without labels."""
+        import numpy as np
+
+        import sleap_io as sio
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Create a small test video
+        video_path = tmp_path / "test_video.mp4"
+        frames = [np.zeros((64, 64, 3), dtype=np.uint8) for _ in range(10)]
+        sio.save_video(frames, video_path)
+        video = sio.Video.from_filename(str(video_path))
+
+        # Create labeled frames with gaps - only frames 0 and 5 have labels
+        pts = np.array([[32, 20], [32, 44]])
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        lf5 = sio.LabeledFrame(
+            video=video,
+            frame_idx=5,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(
+            labeled_frames=[lf0, lf5], videos=[video], skeletons=[skeleton]
+        )
+
+        # Render with include_unlabeled=False (covers line 1118)
+        result = render_video(
+            labels,
+            save_path=None,
+            start=0,
+            end=6,
+            include_unlabeled=False,  # Skip unlabeled frames
+            show_progress=False,
+        )
+
+        # Should only return 2 frames (the labeled ones: 0 and 5)
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_render_video_unlabeled_with_crop(self, tmp_path):
+        """Test include_unlabeled with crop_bounds exercises crop path."""
+        import numpy as np
+
+        import sleap_io as sio
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Create a small test video
+        video_path = tmp_path / "test_video.mp4"
+        frames = [np.zeros((64, 64, 3), dtype=np.uint8) for _ in range(10)]
+        sio.save_video(frames, video_path)
+        video = sio.Video.from_filename(str(video_path))
+
+        # Create labeled frames with gaps
+        pts = np.array([[32, 20], [32, 44]])
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        lf5 = sio.LabeledFrame(
+            video=video,
+            frame_idx=5,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(
+            labeled_frames=[lf0, lf5], videos=[video], skeletons=[skeleton]
+        )
+
+        output_path = tmp_path / "crop_unlabeled.mp4"
+
+        # Render with crop_bounds and include_unlabeled (covers line 1145)
+        result = render_video(
+            labels,
+            output_path,
+            start=0,
+            end=6,
+            include_unlabeled=True,
+            crop=(10, 10, 50, 50),  # Crop bounds
             show_progress=False,
         )
 
