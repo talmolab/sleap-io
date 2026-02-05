@@ -2114,6 +2114,81 @@ def test_export_input_not_found(tmp_path):
     assert result.exit_code != 0
 
 
+def test_export_multi_video_requires_video_flag(slp_multiview, tmp_path):
+    """Test export requires -v flag for multi-video labels."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_multiview, "-o", str(output)])
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output)
+    assert "Multiple videos found" in output_text
+    assert "-v" in output_text
+
+
+def test_export_multi_video_single(slp_multiview, tmp_path):
+    """Test export specific video from multi-video file."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_multiview, "-o", str(output), "-v", "0"])
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
+def test_export_multi_video_all(slp_multiview, tmp_path):
+    """Test export all videos creates separate files."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_multiview, "-o", str(output), "-v", "all"]
+    )
+    assert result.exit_code == 0, result.output
+
+    # Check multiple files created (multiview has 8 videos)
+    assert (tmp_path / "export.video0.csv").exists()
+    assert (tmp_path / "export.video1.csv").exists()
+    # Summary message
+    assert "Exported" in result.output
+
+
+def test_export_multi_video_invalid_spec(slp_multiview, tmp_path):
+    """Test export with invalid video specification."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_multiview, "-o", str(output), "-v", "invalid"]
+    )
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output)
+    assert "Invalid video specification" in output_text
+
+
+def test_export_multi_video_index_out_of_range(slp_multiview, tmp_path):
+    """Test export with video index out of range."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    result = runner.invoke(
+        cli, ["export", slp_multiview, "-o", str(output), "-v", "999"]
+    )
+    assert result.exit_code != 0
+    output_text = _strip_ansi(result.output)
+    assert "out of range" in output_text
+
+
+def test_export_h5_multi_video(slp_multiview, tmp_path):
+    """Test H5 export with multi-video file."""
+    runner = CliRunner()
+    output = tmp_path / "export.h5"
+
+    result = runner.invoke(cli, ["export", slp_multiview, "-o", str(output), "-v", "0"])
+    assert result.exit_code == 0, result.output
+    assert output.exists()
+
+
 # ======================= Split command tests =======================
 
 
