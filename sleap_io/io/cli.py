@@ -1861,7 +1861,7 @@ def export(
                     video=video,
                     all_frames=include_empty,
                     min_occupancy=min_occupancy,
-                    dim_order=h5_dim_order,
+                    preset=h5_dim_order,
                 )
             click.echo(f"Exported: {out_path}")
         except Exception as e:

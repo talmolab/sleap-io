@@ -250,7 +250,7 @@ def save_analysis_h5(
     labels_path: str | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
-    dim_order: str | None = None,
+    preset: str | None = None,
     frame_dim: int | None = None,
     track_dim: int | None = None,
     node_dim: int | None = None,
@@ -270,7 +270,7 @@ def save_analysis_h5(
         min_occupancy: Minimum track occupancy ratio (0-1) to keep.
             0 = keep all non-empty tracks (SLEAP default).
             0.5 = keep tracks with >50% occupancy.
-        dim_order: Axis ordering preset. Options:
+        preset: Axis ordering preset. Options:
             - "matlab" (default): SLEAP-compatible ordering for MATLAB.
               tracks shape: (n_tracks, 2, n_nodes, n_frames)
             - "standard": Intuitive Python ordering.
@@ -295,7 +295,7 @@ def save_analysis_h5(
         labels_path=labels_path,
         all_frames=all_frames,
         min_occupancy=min_occupancy,
-        dim_order=dim_order,
+        preset=preset,
         frame_dim=frame_dim,
         track_dim=track_dim,
         node_dim=node_dim,

@@ -12,10 +12,10 @@ Format features:
 Dataset Shapes and Dimensions
 -----------------------------
 
-The format stores pose data in dense numpy arrays. The ``dim_order`` parameter
+The format stores pose data in dense numpy arrays. The ``preset`` parameter
 controls the axis ordering. Two presets are available:
 
-**dim_order="standard" (Python-native, intuitive indexing):**
+**preset="standard" (Python-native, intuitive indexing):**
 
 Arrays are stored with frame as the first axis, enabling natural indexing
 like ``tracks[frame, track, node, :]`` to get (x, y) coordinates.
@@ -33,7 +33,7 @@ like ``tracks[frame, track, node, :]`` to get (x, y) coordinates.
     tracking_scores:  (n_frames, n_tracks)
                       dims: ("frame", "track")
 
-**dim_order="matlab" (default, SLEAP-compatible):**
+**preset="matlab" (default, SLEAP-compatible):**
 
 Arrays are stored in the order used by SLEAP's original analysis export,
 which is optimized for MATLAB's column-major memory layout.
@@ -63,7 +63,7 @@ Custom Axis Ordering
 
 For advanced use cases, you can specify explicit dimension positions using
 the ``frame_dim``, ``track_dim``, ``node_dim``, and ``xy_dim`` parameters.
-These are mutually exclusive with ``dim_order``.
+These are mutually exclusive with ``preset``.
 
 HDF5 Attributes
 ---------------
@@ -82,7 +82,7 @@ Example:
     >>> labels_loaded = sio.load_analysis_h5("predictions.analysis.h5")
 
     To save with Python-native ordering:
-    >>> sio.save_analysis_h5(labels, "output.h5", dim_order="standard")
+    >>> sio.save_analysis_h5(labels, "output.h5", preset="standard")
 
     To inspect stored dimensions:
     >>> import h5py
@@ -127,16 +127,16 @@ PRESETS: dict[str, dict[str, int]] = {
 
 
 def _get_axis_order(
-    dim_order: str | None,
+    preset: str | None,
     frame_dim: int | None,
     track_dim: int | None,
     node_dim: int | None,
     xy_dim: int | None,
 ) -> tuple[dict[str, int], str]:
-    """Resolve axis ordering from dim_order preset or explicit dimensions.
+    """Resolve axis ordering from preset or explicit dimensions.
 
     Args:
-        dim_order: Dimension ordering preset ("matlab" or "standard"), or None if
+        preset: Dimension ordering preset ("matlab" or "standard"), or None if
             using explicit dims.
         frame_dim: Position of frame dimension (0-3), or None.
         track_dim: Position of track dimension (0-3), or None.
@@ -147,15 +147,15 @@ def _get_axis_order(
         Tuple of (axis_order dict, preset_name string).
 
     Raises:
-        ValueError: If both dim_order and explicit dims are specified, or if
+        ValueError: If both preset and explicit dims are specified, or if
             explicit dims are incomplete/invalid.
     """
     explicit_dims = [frame_dim, track_dim, node_dim, xy_dim]
     has_explicit = any(d is not None for d in explicit_dims)
 
-    if dim_order is not None and has_explicit:
+    if preset is not None and has_explicit:
         raise ValueError(
-            "Cannot specify both 'dim_order' and explicit dimension positions "
+            "Cannot specify both 'preset' and explicit dimension positions "
             "(frame_dim, track_dim, node_dim, xy_dim). Use one or the other."
         )
 
@@ -177,13 +177,13 @@ def _get_axis_order(
             "custom",
         )
 
-    # Use dim_order (default to "matlab" for backwards compatibility)
-    dim_order = dim_order or "matlab"
-    if dim_order not in PRESETS:
+    # Use preset (default to "matlab" for backwards compatibility)
+    preset = preset or "matlab"
+    if preset not in PRESETS:
         raise ValueError(
-            f"Unknown dim_order '{dim_order}'. Available: {list(PRESETS.keys())}"
+            f"Unknown preset '{preset}'. Available: {list(PRESETS.keys())}"
         )
-    return PRESETS[dim_order], dim_order
+    return PRESETS[preset], preset
 
 
 def _get_transpose_axes(
@@ -625,7 +625,7 @@ def write_labels(
     labels_path: str | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
-    dim_order: str | None = None,
+    preset: str | None = None,
     frame_dim: int | None = None,
     track_dim: int | None = None,
     node_dim: int | None = None,
@@ -645,7 +645,7 @@ def write_labels(
         min_occupancy: Minimum track occupancy ratio (0-1) to keep.
             0 = keep all non-empty tracks (SLEAP default).
             0.5 = keep tracks with >50% occupancy.
-        dim_order: Axis ordering preset. Options:
+        preset: Axis ordering preset. Options:
 
             - ``"matlab"`` (default): SLEAP-compatible ordering for MATLAB.
               tracks shape: (n_tracks, 2, n_nodes, n_frames)
@@ -655,13 +655,13 @@ def write_labels(
             Mutually exclusive with explicit dimension parameters.
 
         frame_dim: Position of the frame dimension (0-3). Mutually exclusive
-            with ``dim_order``.
+            with ``preset``.
         track_dim: Position of the track dimension (0-3). Mutually exclusive
-            with ``dim_order``.
+            with ``preset``.
         node_dim: Position of the node dimension (0-3). Mutually exclusive
-            with ``dim_order``.
+            with ``preset``.
         xy_dim: Position of the xy dimension (0-3). Mutually exclusive
-            with ``dim_order``.
+            with ``preset``.
         save_metadata: Store extended metadata for full round-trip.
             Default True. Includes skeleton symmetries and video backend metadata.
 
@@ -679,7 +679,7 @@ def write_labels(
 
         Save with Python-native ordering::
 
-            >>> sio.save_analysis_h5(labels, "output.h5", dim_order="standard")
+            >>> sio.save_analysis_h5(labels, "output.h5", preset="standard")
 
         Save with custom axis ordering::
 
@@ -695,7 +695,7 @@ def write_labels(
 
     # Resolve axis ordering
     axis_order, preset_name = _get_axis_order(
-        dim_order, frame_dim, track_dim, node_dim, xy_dim
+        preset, frame_dim, track_dim, node_dim, xy_dim
     )
 
     # Resolve video

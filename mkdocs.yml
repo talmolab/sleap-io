@@ -159,5 +159,7 @@ nav:
     - Formats:
       - formats/index.md
       - SLP Format: formats/slp.md
+      - CSV Format: formats/csv.md
+      - Analysis HDF5: formats/analysis_h5.md
     - CLI: cli.md
     - Full API: reference/
