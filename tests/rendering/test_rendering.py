@@ -1681,31 +1681,112 @@ class TestRenderVideo:
 
         assert len(frames) == 1
 
-    def test_render_video_include_unlabeled_to_file(self, labels_predictions, tmp_path):
-        """Test render_video with include_unlabeled streams to file correctly."""
+    def test_render_video_include_unlabeled_to_file(self, tmp_path):
+        """Test render_video with include_unlabeled streams unlabeled frames to file.
+
+        This test ensures the streaming write path works for frames without labels.
+        Creates a labels object with gaps (only frames 0 and 5 labeled) and renders
+        the full range 0-6, which includes unlabeled frames 1-4.
+        """
+        import numpy as np
+
+        import sleap_io as sio
         from sleap_io.rendering import render_video
+
+        # Create skeleton
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Create a small test video
+        video_path = tmp_path / "test_video.mp4"
+        frames = [np.zeros((64, 64, 3), dtype=np.uint8) for _ in range(10)]
+        sio.save_video(frames, video_path)
+        video = sio.Video.from_filename(str(video_path))
+
+        # Create labeled frames with gaps - only frames 0 and 5 have labels
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[
+                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+            ],
+        )
+        lf5 = sio.LabeledFrame(
+            video=video,
+            frame_idx=5,
+            instances=[
+                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+            ],
+        )
+        labels = sio.Labels(
+            labeled_frames=[lf0, lf5], videos=[video], skeletons=[skeleton]
+        )
 
         output_path = tmp_path / "unlabeled_rendered.mp4"
 
-        # Get labeled frame indices
-        labeled_indices = [lf.frame_idx for lf in labels_predictions.labeled_frames[:2]]
-        # Request a range that includes gaps (unlabeled frames)
-        start = min(labeled_indices)
-        end = max(labeled_indices) + 1
-
+        # Render frames 0-6, which includes unlabeled frames 1-4
         result = render_video(
-            labels_predictions,
+            labels,
             output_path,
-            start=start,
-            end=end,
-            include_unlabeled=True,
+            start=0,
+            end=6,
+            include_unlabeled=True,  # This renders frames 1-4 without poses
             show_progress=False,
         )
 
         assert output_path.exists()
-        from sleap_io.model.video import Video
+        assert isinstance(result, sio.Video)
 
-        assert isinstance(result, Video)
+    def test_render_video_include_unlabeled_with_background(self, tmp_path):
+        """Test include_unlabeled with background color covers unlabeled frame path."""
+        import numpy as np
+
+        import sleap_io as sio
+        from sleap_io.rendering import render_video
+
+        # Create skeleton
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Create a small test video
+        video_path = tmp_path / "test_video.mp4"
+        frames = [np.zeros((64, 64, 3), dtype=np.uint8) for _ in range(10)]
+        sio.save_video(frames, video_path)
+        video = sio.Video.from_filename(str(video_path))
+
+        # Create labeled frames with gaps - only frames 0 and 5 have labels
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[
+                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+            ],
+        )
+        lf5 = sio.LabeledFrame(
+            video=video,
+            frame_idx=5,
+            instances=[
+                sio.Instance.from_numpy(np.array([[32, 20], [32, 44]]), skeleton=skeleton)
+            ],
+        )
+        labels = sio.Labels(
+            labeled_frames=[lf0, lf5], videos=[video], skeletons=[skeleton]
+        )
+
+        output_path = tmp_path / "unlabeled_bg.mp4"
+
+        # Render with background color - exercises the background_color path
+        # for unlabeled frames (frames 1-4)
+        result = render_video(
+            labels,
+            output_path,
+            start=0,
+            end=6,
+            include_unlabeled=True,
+            background="black",  # Use solid background
+            show_progress=False,
+        )
+
+        assert output_path.exists()
+        assert isinstance(result, sio.Video)
 
 
 # ============================================================================
