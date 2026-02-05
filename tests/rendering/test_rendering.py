@@ -1681,6 +1681,32 @@ class TestRenderVideo:
 
         assert len(frames) == 1
 
+    def test_render_video_include_unlabeled_to_file(self, labels_predictions, tmp_path):
+        """Test render_video with include_unlabeled streams to file correctly."""
+        from sleap_io.rendering import render_video
+
+        output_path = tmp_path / "unlabeled_rendered.mp4"
+
+        # Get labeled frame indices
+        labeled_indices = [lf.frame_idx for lf in labels_predictions.labeled_frames[:2]]
+        # Request a range that includes gaps (unlabeled frames)
+        start = min(labeled_indices)
+        end = max(labeled_indices) + 1
+
+        result = render_video(
+            labels_predictions,
+            output_path,
+            start=start,
+            end=end,
+            include_unlabeled=True,
+            show_progress=False,
+        )
+
+        assert output_path.exists()
+        from sleap_io.model.video import Video
+
+        assert isinstance(result, Video)
+
 
 # ============================================================================
 # Labels.render() Method Tests
