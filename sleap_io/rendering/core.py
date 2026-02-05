@@ -1083,34 +1083,134 @@ def render_video(
     else:
         iterator = render_indices
 
-    # Render frames
-    rendered_frames = []
+    # Setup video writer for streaming output (memory optimization)
+    # When save_path is provided, write frames directly instead of accumulating
+    writer = None
+    if save_path is not None:
+        from sleap_io.io.video_writing import VideoWriter
+
+        save_path_ = Path(save_path)
+        save_path_.parent.mkdir(parents=True, exist_ok=True)
+        writer = VideoWriter(
+            filename=save_path_,
+            fps=fps,
+            codec=codec,
+            crf=crf,
+            preset=x264_preset,
+        )
+
+    # Only accumulate frames if returning as list (no save_path)
+    rendered_frames: list[np.ndarray] = []
     total_frames = len(render_indices)
 
-    for i, fidx in enumerate(iterator):
-        # Check for cancellation
-        if progress_callback is not None:
-            if progress_callback(i, total_frames) is False:
-                break
+    try:
+        for i, fidx in enumerate(iterator):
+            # Check for cancellation
+            if progress_callback is not None:
+                if progress_callback(i, total_frames) is False:
+                    break
 
-        lf = frame_idx_to_lf.get(fidx)
+            lf = frame_idx_to_lf.get(fidx)
 
-        # Handle frames without LabeledFrame
-        if lf is None:
-            if not include_unlabeled:
+            # Handle frames without LabeledFrame
+            if lf is None:
+                if not include_unlabeled:
+                    continue
+                # Render just the video frame without poses
+                if background_color is not None:
+                    # Solid color background - skip video loading entirely
+                    if (
+                        hasattr(target_video, "shape")
+                        and target_video.shape is not None
+                    ):
+                        h, w = target_video.shape[1:3]
+                    else:
+                        # No video metadata and no points - use minimum default
+                        h, w = 64, 64
+                    image = _create_blank_frame(h, w, background_color)[:, :, :3]
+                else:
+                    try:
+                        image = target_video[fidx]
+                        if image is None:
+                            raise ValueError("No image")
+                    except Exception:
+                        raise ValueError(
+                            f"Video unavailable at frame {fidx}. "
+                            "Specify a background color to render without video."
+                        )
+
+                # Apply cropping if specified
+                render_image_data = image
+                if crop_bounds is not None:
+                    render_image_data, _, _ = _apply_crop(image, [], crop_bounds)
+
+                # Render frame without poses
+                rendered = render_frame(
+                    frame=render_image_data,
+                    instances_points=[],
+                    edge_inds=edge_inds,
+                    node_names=node_names,
+                    color_by=resolved_scheme,
+                    palette=palette,
+                    marker_shape=marker_shape,
+                    marker_size=marker_size,
+                    line_width=line_width,
+                    alpha=alpha,
+                    show_nodes=show_nodes,
+                    show_edges=show_edges,
+                    scale=scale,
+                    track_indices=None,
+                    n_tracks=n_tracks,
+                    pre_render_callback=pre_render_callback,
+                    post_render_callback=post_render_callback,
+                    per_instance_callback=None,
+                    frame_idx=fidx,
+                    instance_metadata=[],
+                    crop_offset=crop_offset,
+                )
+
+                # Stream to file or accumulate for return
+                if writer is not None:
+                    writer(rendered)
+                else:
+                    rendered_frames.append(rendered)
                 continue
-            # Render just the video frame without poses
+
+            instances = list(lf.instances)
+            instances_points = [inst.numpy() for inst in instances]
+
+            # Get track indices
+            track_indices = None
+            if labels is not None and has_tracks:
+                track_indices = []
+                for inst in instances:
+                    if inst.track is not None and inst.track in labels.tracks:
+                        track_indices.append(labels.tracks.index(inst.track))
+                    else:
+                        track_indices.append(0)
+
+            # Build instance metadata
+            instance_metadata = []
+            for inst in instances:
+                meta = {}
+                if hasattr(inst, "track") and inst.track is not None:
+                    meta["track_name"] = inst.track.name
+                if hasattr(inst, "score"):
+                    meta["confidence"] = inst.score
+                instance_metadata.append(meta)
+
+            # Get image
             if background_color is not None:
                 # Solid color background - skip video loading entirely
                 if hasattr(target_video, "shape") and target_video.shape is not None:
                     h, w = target_video.shape[1:3]
                 else:
-                    # No video metadata and no points - use minimum default
-                    h, w = 64, 64
+                    # Estimate from points
+                    h, w = _estimate_frame_size(instances_points)
                 image = _create_blank_frame(h, w, background_color)[:, :, :3]
             else:
                 try:
-                    image = target_video[fidx]
+                    image = lf.image
                     if image is None:
                         raise ValueError("No image")
                 except Exception:
@@ -1121,13 +1221,16 @@ def render_video(
 
             # Apply cropping if specified
             render_image_data = image
+            render_points = instances_points
             if crop_bounds is not None:
-                render_image_data, _, _ = _apply_crop(image, [], crop_bounds)
+                render_image_data, render_points, _ = _apply_crop(
+                    image, instances_points, crop_bounds
+                )
 
-            # Render frame without poses
+            # Render frame
             rendered = render_frame(
                 frame=render_image_data,
-                instances_points=[],
+                instances_points=render_points,
                 edge_inds=edge_inds,
                 node_names=node_names,
                 color_by=resolved_scheme,
@@ -1139,114 +1242,29 @@ def render_video(
                 show_nodes=show_nodes,
                 show_edges=show_edges,
                 scale=scale,
-                track_indices=None,
+                track_indices=track_indices,
                 n_tracks=n_tracks,
                 pre_render_callback=pre_render_callback,
                 post_render_callback=post_render_callback,
-                per_instance_callback=None,
+                per_instance_callback=per_instance_callback,
                 frame_idx=fidx,
-                instance_metadata=[],
+                instance_metadata=instance_metadata,
                 crop_offset=crop_offset,
             )
-            rendered_frames.append(rendered)
-            continue
 
-        instances = list(lf.instances)
-        instances_points = [inst.numpy() for inst in instances]
-
-        # Get track indices
-        track_indices = None
-        if labels is not None and has_tracks:
-            track_indices = []
-            for inst in instances:
-                if inst.track is not None and inst.track in labels.tracks:
-                    track_indices.append(labels.tracks.index(inst.track))
-                else:
-                    track_indices.append(0)
-
-        # Build instance metadata
-        instance_metadata = []
-        for inst in instances:
-            meta = {}
-            if hasattr(inst, "track") and inst.track is not None:
-                meta["track_name"] = inst.track.name
-            if hasattr(inst, "score"):
-                meta["confidence"] = inst.score
-            instance_metadata.append(meta)
-
-        # Get image
-        if background_color is not None:
-            # Solid color background - skip video loading entirely
-            if hasattr(target_video, "shape") and target_video.shape is not None:
-                h, w = target_video.shape[1:3]
+            # Stream to file or accumulate for return
+            if writer is not None:
+                writer(rendered)
             else:
-                # Estimate from points
-                h, w = _estimate_frame_size(instances_points)
-            image = _create_blank_frame(h, w, background_color)[:, :, :3]
-        else:
-            try:
-                image = lf.image
-                if image is None:
-                    raise ValueError("No image")
-            except Exception:
-                raise ValueError(
-                    f"Video unavailable at frame {fidx}. "
-                    "Specify a background color to render without video."
-                )
+                rendered_frames.append(rendered)
 
-        # Apply cropping if specified
-        render_image_data = image
-        render_points = instances_points
-        if crop_bounds is not None:
-            render_image_data, render_points, _ = _apply_crop(
-                image, instances_points, crop_bounds
-            )
+    finally:
+        # Ensure writer is closed even if an exception occurs
+        if writer is not None:
+            writer.close()
 
-        # Render frame
-        rendered = render_frame(
-            frame=render_image_data,
-            instances_points=render_points,
-            edge_inds=edge_inds,
-            node_names=node_names,
-            color_by=resolved_scheme,
-            palette=palette,
-            marker_shape=marker_shape,
-            marker_size=marker_size,
-            line_width=line_width,
-            alpha=alpha,
-            show_nodes=show_nodes,
-            show_edges=show_edges,
-            scale=scale,
-            track_indices=track_indices,
-            n_tracks=n_tracks,
-            pre_render_callback=pre_render_callback,
-            post_render_callback=post_render_callback,
-            per_instance_callback=per_instance_callback,
-            frame_idx=fidx,
-            instance_metadata=instance_metadata,
-            crop_offset=crop_offset,
-        )
-
-        rendered_frames.append(rendered)
-
-    # Write video or return frames
+    # Return Video object or frame list
     if save_path is not None:
-        from sleap_io.io.video_writing import VideoWriter
-
-        save_path_ = Path(save_path)
-        save_path_.parent.mkdir(parents=True, exist_ok=True)
-
-        with VideoWriter(
-            filename=save_path_,
-            fps=fps,
-            codec=codec,
-            crf=crf,
-            preset=x264_preset,
-        ) as writer:
-            for frame in rendered_frames:
-                writer(frame)
-
-        # Return Video object pointing to output
         return VideoModel.from_filename(str(save_path_))
 
     return rendered_frames
