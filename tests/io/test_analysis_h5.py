@@ -252,7 +252,7 @@ class TestWriteLabels:
         """Test write with standard preset (Python-native ordering)."""
         h5_path = tmp_path / "standard.analysis.h5"
 
-        analysis_h5.write_labels(simple_labels, h5_path, preset="standard")
+        analysis_h5.write_labels(simple_labels, h5_path, dim_order="standard")
 
         with h5py.File(h5_path, "r") as f:
             assert f.attrs["preset"] == "standard"
@@ -265,7 +265,7 @@ class TestWriteLabels:
         """Test write with explicit matlab preset."""
         h5_path = tmp_path / "matlab.analysis.h5"
 
-        analysis_h5.write_labels(simple_labels, h5_path, preset="matlab")
+        analysis_h5.write_labels(simple_labels, h5_path, dim_order="matlab")
 
         with h5py.File(h5_path, "r") as f:
             assert f.attrs["preset"] == "matlab"
@@ -325,7 +325,7 @@ class TestWriteLabels:
         """Test that dimension names are stored correctly for matlab preset."""
         h5_path = tmp_path / "dims_matlab.analysis.h5"
 
-        analysis_h5.write_labels(simple_labels, h5_path, preset="matlab")
+        analysis_h5.write_labels(simple_labels, h5_path, dim_order="matlab")
 
         with h5py.File(h5_path, "r") as f:
             # Check dimension attributes (matlab order: track first)
@@ -362,7 +362,7 @@ class TestWriteLabels:
         - tracking_scores:  (tracks, frames)
         """
         h5_path = tmp_path / "sleap_compat.analysis.h5"
-        analysis_h5.write_labels(multi_animal_labels, h5_path, preset="matlab")
+        analysis_h5.write_labels(multi_animal_labels, h5_path, dim_order="matlab")
 
         # Expected dimensions: 3 frames, 2 tracks, 2 nodes
         n_frames, n_tracks, n_nodes = 3, 2, 2
@@ -379,7 +379,7 @@ class TestWriteLabels:
         """Test dimension names for standard preset."""
         h5_path = tmp_path / "dims_standard.analysis.h5"
 
-        analysis_h5.write_labels(simple_labels, h5_path, preset="standard")
+        analysis_h5.write_labels(simple_labels, h5_path, dim_order="standard")
 
         with h5py.File(h5_path, "r") as f:
             # Check dimension attributes (standard order)
@@ -430,15 +430,15 @@ class TestWriteLabels:
             assert len(symmetries) == 1
             assert set(symmetries[0]) == {"left_ear", "right_ear"}
 
-    def test_write_preset_and_dims_mutually_exclusive(self, simple_labels, tmp_path):
-        """Test that preset and explicit dims cannot be used together."""
+    def test_write_dim_order_and_dims_mutually_exclusive(self, simple_labels, tmp_path):
+        """Test that dim_order and explicit dims cannot be used together."""
         h5_path = tmp_path / "error.analysis.h5"
 
         with pytest.raises(ValueError, match="Cannot specify both"):
             analysis_h5.write_labels(
                 simple_labels,
                 h5_path,
-                preset="matlab",
+                dim_order="matlab",
                 frame_dim=0,
                 track_dim=1,
                 node_dim=2,
@@ -596,7 +596,7 @@ class TestRoundTrip:
     def test_round_trip_points_matlab(self, simple_labels, tmp_path):
         """Test that point coordinates survive round-trip with matlab preset."""
         h5_path = tmp_path / "roundtrip_matlab.analysis.h5"
-        analysis_h5.write_labels(simple_labels, h5_path, preset="matlab")
+        analysis_h5.write_labels(simple_labels, h5_path, dim_order="matlab")
 
         loaded = analysis_h5.read_labels(h5_path)
 
@@ -609,7 +609,7 @@ class TestRoundTrip:
     def test_round_trip_points_standard(self, simple_labels, tmp_path):
         """Test that point coordinates survive round-trip with standard preset."""
         h5_path = tmp_path / "roundtrip_standard.analysis.h5"
-        analysis_h5.write_labels(simple_labels, h5_path, preset="standard")
+        analysis_h5.write_labels(simple_labels, h5_path, dim_order="standard")
 
         loaded = analysis_h5.read_labels(h5_path)
 
@@ -689,11 +689,11 @@ class TestMainAPI:
 
         assert len(loaded) == len(simple_labels)
 
-    def test_sio_save_with_preset(self, simple_labels, tmp_path):
-        """Test sio.save_analysis_h5 with preset parameter."""
-        h5_path = tmp_path / "api_preset.analysis.h5"
+    def test_sio_save_with_dim_order(self, simple_labels, tmp_path):
+        """Test sio.save_analysis_h5 with dim_order parameter."""
+        h5_path = tmp_path / "api_dim_order.analysis.h5"
 
-        sio.save_analysis_h5(simple_labels, str(h5_path), preset="standard")
+        sio.save_analysis_h5(simple_labels, str(h5_path), dim_order="standard")
         loaded = sio.load_analysis_h5(str(h5_path))
 
         assert len(loaded) == len(simple_labels)
@@ -816,12 +816,12 @@ class TestEdgeCases:
         with h5py.File(h5_path, "r") as f:
             assert "video2.mp4" in f["video_path"][()].decode()
 
-    def test_invalid_preset(self, simple_labels, tmp_path):
-        """Test that invalid preset raises ValueError."""
-        h5_path = tmp_path / "invalid_preset.analysis.h5"
+    def test_invalid_dim_order(self, simple_labels, tmp_path):
+        """Test that invalid dim_order raises ValueError."""
+        h5_path = tmp_path / "invalid_dim_order.analysis.h5"
 
-        with pytest.raises(ValueError, match="Unknown preset"):
-            analysis_h5.write_labels(simple_labels, h5_path, preset="invalid")
+        with pytest.raises(ValueError, match="Unknown dim_order"):
+            analysis_h5.write_labels(simple_labels, h5_path, dim_order="invalid")
 
     def test_legacy_file_without_dims(self, simple_skeleton, tmp_path):
         """Test reading legacy file without dims attributes (transpose=True)."""
@@ -980,7 +980,7 @@ class TestRealData:
         labels = sio.load_slp(centered_pair)
 
         h5_path = tmp_path / "centered_pair_standard.analysis.h5"
-        sio.save_analysis_h5(labels, str(h5_path), preset="standard")
+        sio.save_analysis_h5(labels, str(h5_path), dim_order="standard")
 
         loaded = sio.load_analysis_h5(str(h5_path))
 

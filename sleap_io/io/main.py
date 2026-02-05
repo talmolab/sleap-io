@@ -250,7 +250,7 @@ def save_analysis_h5(
     labels_path: str | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
-    preset: str | None = None,
+    dim_order: str | None = None,
     frame_dim: int | None = None,
     track_dim: int | None = None,
     node_dim: int | None = None,
@@ -270,7 +270,7 @@ def save_analysis_h5(
         min_occupancy: Minimum track occupancy ratio (0-1) to keep.
             0 = keep all non-empty tracks (SLEAP default).
             0.5 = keep tracks with >50% occupancy.
-        preset: Axis ordering preset. Options:
+        dim_order: Axis ordering preset. Options:
             - "matlab" (default): SLEAP-compatible ordering for MATLAB.
               tracks shape: (n_tracks, 2, n_nodes, n_frames)
             - "standard": Intuitive Python ordering.
@@ -295,7 +295,7 @@ def save_analysis_h5(
         labels_path=labels_path,
         all_frames=all_frames,
         min_occupancy=min_occupancy,
-        preset=preset,
+        dim_order=dim_order,
         frame_dim=frame_dim,
         track_dim=track_dim,
         node_dim=node_dim,
@@ -540,6 +540,9 @@ def save_csv(
     format: str = "sleap",
     video: "Video | int | None" = None,
     include_score: bool = True,
+    include_empty: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
     scorer: str = "sleap-io",
     save_metadata: bool = False,
 ) -> None:
@@ -553,6 +556,12 @@ def save_csv(
         video: Video to filter to. Can be Video object or integer index.
             If None, includes all videos.
         include_score: Include confidence scores in output. Default True.
+        include_empty: Include frames with no instances (filled with NaN values).
+            Default False. Only applies to "frames" and "instances" formats.
+        start_frame: Start frame index (inclusive) for output. If None, starts
+            from 0 when include_empty=True, or from first labeled frame otherwise.
+        end_frame: End frame index (exclusive) for output. If None, ends at
+            last labeled frame + 1.
         scorer: Scorer name for DLC format. Default "sleap-io".
         save_metadata: Save JSON metadata file alongside CSV that enables
             full round-trip reconstruction. Default False.
@@ -568,6 +577,9 @@ def save_csv(
         format=format,
         video=video,
         include_score=include_score,
+        include_empty=include_empty,
+        start_frame=start_frame,
+        end_frame=end_frame,
         scorer=scorer,
         save_metadata=save_metadata,
     )

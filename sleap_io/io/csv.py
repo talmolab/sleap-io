@@ -125,6 +125,8 @@ def write_labels(
     include_empty: bool = False,
     scorer: str = "sleap-io",
     save_metadata: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
 ) -> None:
     """Write Labels to CSV file.
 
@@ -140,13 +142,18 @@ def write_labels(
         video: Video to filter to. Can be a Video object or integer index.
             If None, includes all videos.
         include_score: Include confidence scores in output. Default True.
-        include_empty: Include frames with no instances. Default False.
+        include_empty: Include frames with no instances (filled with NaN values).
+            Default False. Only applies to "frames" and "instances" formats.
         scorer: Scorer/model name for DLC format. Default "sleap-io".
         save_metadata: Save a JSON metadata file alongside the CSV that enables
             full round-trip reconstruction of the Labels object. The metadata
             file contains video paths, skeleton definitions (including edges
             and symmetries), track names, suggestions, and provenance.
             Default False.
+        start_frame: Start frame index (inclusive) for output. If None, starts
+            from 0 when include_empty=True, or from first labeled frame otherwise.
+        end_frame: End frame index (exclusive) for output. If None, ends at
+            last labeled frame + 1.
 
     See Also:
         read_labels: Read Labels from CSV file.
@@ -168,6 +175,9 @@ def write_labels(
             filename,
             video=video,
             include_score=include_score,
+            all_frames=include_empty,
+            start_frame=start_frame,
+            end_frame=end_frame,
         )
     elif format in ("points", "instances", "frames"):
         _write_codec_format(
@@ -176,6 +186,9 @@ def write_labels(
             format=format,
             video=video,
             include_score=include_score,
+            all_frames=include_empty,
+            start_frame=start_frame,
+            end_frame=end_frame,
         )
     else:
         raise ValueError(f"Unknown CSV format: {format}")
@@ -303,6 +316,9 @@ def _write_sleap(
     filename: Path,
     video: Video | int | None = None,
     include_score: bool = True,
+    all_frames: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
 ) -> None:
     """Write SLEAP Analysis CSV format.
 
@@ -318,6 +334,9 @@ def _write_sleap(
         video=video,
         include_score=include_score,
         include_metadata=True,
+        all_frames=all_frames,
+        start_frame=start_frame,
+        end_frame=end_frame,
     )
 
     # Rename columns to match SLEAP Analysis format
@@ -500,6 +519,9 @@ def _write_codec_format(
     format: str,
     video: Video | int | None = None,
     include_score: bool = True,
+    all_frames: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
 ) -> None:
     """Write CSV in codec format (points, instances, frames)."""
     from sleap_io.codecs import to_dataframe
@@ -510,6 +532,9 @@ def _write_codec_format(
         video=video,
         include_score=include_score,
         include_metadata=True,
+        all_frames=all_frames,
+        start_frame=start_frame,
+        end_frame=end_frame,
     )
     df.to_csv(filename, index=False)
 

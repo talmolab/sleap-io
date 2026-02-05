@@ -628,3 +628,98 @@ class TestAdditionalCoverage:
             skeleton=simple_skeleton,
         )
         assert loaded.videos[0].filename == "some/video.mp4"
+
+
+# =============================================================================
+# Tests for include_empty, start_frame, end_frame parameters
+# =============================================================================
+
+
+class TestIncludeEmpty:
+    """Tests for the include_empty parameter in CSV export."""
+
+    @pytest.fixture
+    def sparse_labels(self, tmp_path):
+        """Labels with instances only in frames 0 and 3 of a conceptual 5-frame video."""
+        skeleton = Skeleton(nodes=["nose", "tail"], edges=[("nose", "tail")])
+        video = Video(str(tmp_path / "sparse.mp4"))
+
+        labeled_frames = []
+        for frame_idx in [0, 3]:
+            inst = Instance(
+                points={"nose": [100.0 + frame_idx, 200.0], "tail": [150.0, 250.0]},
+                skeleton=skeleton,
+            )
+            labeled_frames.append(
+                LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+            )
+
+        return Labels(labeled_frames=labeled_frames)
+
+    def test_include_empty_false_default(self, tmp_path, sparse_labels):
+        """Test include_empty=False (default) only exports labeled frames."""
+        csv_path = tmp_path / "sparse.csv"
+        csv.write_labels(sparse_labels, csv_path, format="frames", include_empty=False)
+
+        df = pd.read_csv(csv_path)
+        assert list(df["frame_idx"]) == [0, 3]
+
+    def test_include_empty_true_pads_frames(self, tmp_path, sparse_labels):
+        """Test include_empty=True pads missing frames with NaN."""
+        csv_path = tmp_path / "padded.csv"
+        csv.write_labels(sparse_labels, csv_path, format="frames", include_empty=True)
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 0, 1, 2, 3 (from 0 to last labeled frame)
+        assert list(df["frame_idx"]) == [0, 1, 2, 3]
+
+        # Frames 1 and 2 should have NaN values
+        row_1 = df[df["frame_idx"] == 1].iloc[0]
+        assert pd.isna(row_1["inst0.nose.x"])
+
+    def test_include_empty_with_frame_range(self, tmp_path, sparse_labels):
+        """Test include_empty with start_frame and end_frame."""
+        csv_path = tmp_path / "range.csv"
+        csv.write_labels(
+            sparse_labels,
+            csv_path,
+            format="frames",
+            include_empty=True,
+            start_frame=1,
+            end_frame=5,
+        )
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 1, 2, 3, 4 (start=1, end=5 exclusive)
+        assert list(df["frame_idx"]) == [1, 2, 3, 4]
+
+        # Frame 3 has data, others should be NaN
+        row_3 = df[df["frame_idx"] == 3].iloc[0]
+        assert not pd.isna(row_3["inst0.nose.x"])
+
+        row_2 = df[df["frame_idx"] == 2].iloc[0]
+        assert pd.isna(row_2["inst0.nose.x"])
+
+    def test_include_empty_instances_format(self, tmp_path, sparse_labels):
+        """Test include_empty with instances format."""
+        csv_path = tmp_path / "instances.csv"
+        csv.write_labels(
+            sparse_labels, csv_path, format="instances", include_empty=True
+        )
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 0, 1, 2, 3
+        assert set(df["frame_idx"]) == {0, 1, 2, 3}
+
+        # Frame 1 should have NaN coordinates
+        row_1 = df[df["frame_idx"] == 1].iloc[0]
+        assert pd.isna(row_1["nose.x"])
+
+    def test_include_empty_sleap_format(self, tmp_path, sparse_labels):
+        """Test include_empty with sleap format (uses frames under the hood)."""
+        csv_path = tmp_path / "sleap.csv"
+        csv.write_labels(sparse_labels, csv_path, format="sleap", include_empty=True)
+
+        df = pd.read_csv(csv_path)
+        # Should have frames 0, 1, 2, 3
+        assert list(df["frame_idx"]) == [0, 1, 2, 3]

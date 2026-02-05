@@ -3905,3 +3905,171 @@ def test_to_dataframe_lazy_with_video_filter(slp_typical):
     df_eager = to_dataframe(labels_eager, format="points", video=0)
 
     assert df_eager.shape == df_lazy.shape
+
+
+# =============================================================================
+# Tests for all_frames, start_frame, end_frame parameters
+# =============================================================================
+
+
+def test_to_dataframe_frames_all_frames_pads_missing():
+    """Test all_frames=True includes rows for frames without instances."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="sparse.mp4")
+
+    # Create labels with gaps: frames 0, 2, 4 only
+    labeled_frames = []
+    for frame_idx in [0, 2, 4]:
+        inst = Instance.from_numpy(
+            np.array([[100.0 + frame_idx, 200.0], [150.0 + frame_idx, 250.0]]),
+            skeleton=skeleton,
+        )
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+        )
+
+    labels = Labels(labeled_frames=labeled_frames)
+
+    # Default: only labeled frames
+    df_sparse = to_dataframe(labels, format="frames", all_frames=False)
+    assert list(df_sparse["frame_idx"]) == [0, 2, 4]
+
+    # all_frames=True: pad from 0 to last labeled frame
+    df_padded = to_dataframe(labels, format="frames", all_frames=True)
+    assert list(df_padded["frame_idx"]) == [0, 1, 2, 3, 4]
+
+    # Check that padded frames have NaN values
+    row_1 = df_padded[df_padded["frame_idx"] == 1].iloc[0]
+    assert pd.isna(row_1["inst0.nose.x"])
+    assert pd.isna(row_1["inst0.tail.y"])
+
+
+def test_to_dataframe_frames_all_frames_with_start_end():
+    """Test all_frames with start_frame and end_frame parameters."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Create labels with frames 0, 5, 10
+    labeled_frames = []
+    for frame_idx in [0, 5, 10]:
+        inst = Instance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]),
+            skeleton=skeleton,
+        )
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+        )
+
+    labels = Labels(labeled_frames=labeled_frames)
+
+    # Pad only frames 3-8 (exclusive end)
+    df = to_dataframe(
+        labels, format="frames", all_frames=True, start_frame=3, end_frame=8
+    )
+    assert list(df["frame_idx"]) == [3, 4, 5, 6, 7]
+
+    # Frame 5 has data, others should be NaN
+    row_5 = df[df["frame_idx"] == 5].iloc[0]
+    assert not pd.isna(row_5["inst0.nose.x"])
+
+    row_4 = df[df["frame_idx"] == 4].iloc[0]
+    assert pd.isna(row_4["inst0.nose.x"])
+
+
+def test_to_dataframe_instances_all_frames_pads_missing():
+    """Test all_frames=True includes rows for frames without instances in instances format."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Create labels with gaps: frames 0, 2 only
+    labeled_frames = []
+    for frame_idx in [0, 2]:
+        inst = Instance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]),
+            skeleton=skeleton,
+        )
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+        )
+
+    labels = Labels(labeled_frames=labeled_frames)
+
+    # Default: only labeled frames
+    df_sparse = to_dataframe(labels, format="instances", all_frames=False)
+    assert set(df_sparse["frame_idx"]) == {0, 2}
+
+    # all_frames=True: includes frame 1
+    df_padded = to_dataframe(labels, format="instances", all_frames=True)
+    assert set(df_padded["frame_idx"]) == {0, 1, 2}
+
+    # Check frame 1 has NaN values
+    row_1 = df_padded[df_padded["frame_idx"] == 1].iloc[0]
+    assert pd.isna(row_1["nose.x"])
+    assert pd.isna(row_1["tail.y"])
+
+
+def test_to_dataframe_points_ignores_all_frames():
+    """Test that points format ignores all_frames (no padding for point-centric format)."""
+    skeleton = Skeleton(["nose", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Create labels with gaps: frames 0, 2 only
+    labeled_frames = []
+    for frame_idx in [0, 2]:
+        inst = Instance.from_numpy(
+            np.array([[100.0, 200.0], [150.0, 250.0]]),
+            skeleton=skeleton,
+        )
+        labeled_frames.append(
+            LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
+        )
+
+    labels = Labels(labeled_frames=labeled_frames)
+
+    # Points format should not pad - it's point-centric
+    df_with_flag = to_dataframe(labels, format="points", all_frames=True)
+    df_without_flag = to_dataframe(labels, format="points", all_frames=False)
+
+    # Both should have same frames (only 0 and 2, no padding)
+    assert set(df_with_flag["frame_idx"]) == {0, 2}
+    assert set(df_without_flag["frame_idx"]) == {0, 2}
+
+
+def test_to_dataframe_all_frames_with_video_filter():
+    """Test all_frames respects video filter."""
+    skeleton = Skeleton(["nose"])
+    video1 = Video(filename="video1.mp4")
+    video2 = Video(filename="video2.mp4")
+
+    # Create labels with different frames per video
+    labeled_frames = [
+        LabeledFrame(
+            video=video1,
+            frame_idx=0,
+            instances=[
+                Instance.from_numpy(np.array([[100.0, 200.0]]), skeleton=skeleton)
+            ],
+        ),
+        LabeledFrame(
+            video=video1,
+            frame_idx=2,
+            instances=[
+                Instance.from_numpy(np.array([[100.0, 200.0]]), skeleton=skeleton)
+            ],
+        ),
+        LabeledFrame(
+            video=video2,
+            frame_idx=5,
+            instances=[
+                Instance.from_numpy(np.array([[100.0, 200.0]]), skeleton=skeleton)
+            ],
+        ),
+    ]
+
+    labels = Labels(labeled_frames=labeled_frames)
+
+    # Filter to video1 with all_frames
+    df = to_dataframe(labels, format="frames", video=0, all_frames=True)
+
+    # Should only have frames 0, 1, 2 (video1's range)
+    assert list(df["frame_idx"]) == [0, 1, 2]
