@@ -1934,6 +1934,178 @@ class TestRenderVideo:
         assert output_path.exists()
         assert isinstance(result, sio.Video)
 
+    def test_render_video_skip_unlabeled_with_frame_inds(self):
+        """Test include_unlabeled=False skips unlabeled frames via continue."""
+        import sleap_io as sio
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Video with no backend (shape=None, no file needed)
+        video = Video(filename="dummy.mp4", backend=None, open_backend=False)
+
+        # Create labeled frames at indices 0 and 3 only
+        pts = np.array([[10, 20], [30, 40]], dtype=np.float32)
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        lf3 = sio.LabeledFrame(
+            video=video,
+            frame_idx=3,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(
+            labeled_frames=[lf0, lf3], videos=[video], skeletons=[skeleton]
+        )
+
+        # Pass frame_inds that include unlabeled indices (1, 2)
+        # With include_unlabeled=False, those frames hit lf is None -> continue
+        result = render_video(
+            labels,
+            save_path=None,
+            frame_inds=[0, 1, 2, 3],
+            include_unlabeled=False,
+            background="black",
+            fps=30,
+            show_progress=False,
+        )
+
+        # Only labeled frames 0 and 3 should be rendered
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_render_video_unlabeled_bg_color_no_video_shape(self):
+        """Test unlabeled frame with background_color and video with no shape."""
+        import sleap_io as sio
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Video with no backend -> shape is None
+        video = Video(filename="dummy.mp4", backend=None, open_backend=False)
+
+        # Only frame 0 is labeled
+        pts = np.array([[10, 20], [30, 40]], dtype=np.float32)
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(labeled_frames=[lf0], videos=[video], skeletons=[skeleton])
+
+        # frame_inds includes unlabeled frame 1
+        # background_color set, video has no shape -> h, w = 64, 64 fallback
+        result = render_video(
+            labels,
+            save_path=None,
+            frame_inds=[0, 1],
+            include_unlabeled=True,
+            background="black",
+            fps=30,
+            show_progress=False,
+        )
+
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_render_video_unlabeled_video_unavailable(self):
+        """Test unlabeled frame raises ValueError when video can't be read."""
+        import sleap_io as sio
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Video with no backend -> reading frames raises
+        video = Video(filename="dummy.mp4", backend=None, open_backend=False)
+
+        pts = np.array([[10, 20], [30, 40]], dtype=np.float32)
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(labeled_frames=[lf0], videos=[video], skeletons=[skeleton])
+
+        # frame_inds only includes unlabeled frame 1, no background_color
+        # Video can't be read -> ValueError
+        with pytest.raises(ValueError, match="Video unavailable at frame 1"):
+            render_video(
+                labels,
+                save_path=None,
+                frame_inds=[1],
+                include_unlabeled=True,
+                background="video",
+                fps=30,
+                show_progress=False,
+            )
+
+    def test_render_video_labeled_bg_color_no_video_shape(self):
+        """Test labeled frame with background_color and video with no shape."""
+        import sleap_io as sio
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Video with no backend -> shape is None
+        video = Video(filename="dummy.mp4", backend=None, open_backend=False)
+
+        pts = np.array([[10, 20], [30, 40]], dtype=np.float32)
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(labeled_frames=[lf0], videos=[video], skeletons=[skeleton])
+
+        # background_color set, video has no shape -> _estimate_frame_size fallback
+        result = render_video(
+            labels,
+            save_path=None,
+            frame_inds=[0],
+            background="black",
+            fps=30,
+            show_progress=False,
+        )
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+
+    def test_render_video_labeled_image_unavailable(self):
+        """Test labeled frame raises ValueError when image can't be read."""
+        import sleap_io as sio
+        from sleap_io.model.video import Video
+        from sleap_io.rendering import render_video
+
+        skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+
+        # Video with no backend -> lf.image raises
+        video = Video(filename="dummy.mp4", backend=None, open_backend=False)
+
+        pts = np.array([[10, 20], [30, 40]], dtype=np.float32)
+        lf0 = sio.LabeledFrame(
+            video=video,
+            frame_idx=0,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labels = sio.Labels(labeled_frames=[lf0], videos=[video], skeletons=[skeleton])
+
+        # No background_color -> tries to read lf.image -> fails
+        with pytest.raises(ValueError, match="Video unavailable at frame 0"):
+            render_video(
+                labels,
+                save_path=None,
+                frame_inds=[0],
+                background="video",
+                fps=30,
+                show_progress=False,
+            )
+
 
 # ============================================================================
 # Labels.render() Method Tests

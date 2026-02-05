@@ -1131,9 +1131,9 @@ def render_video(
                 else:
                     try:
                         image = target_video[fidx]
-                        if image is None:
-                            raise ValueError("No image")
                     except Exception:
+                        image = None
+                    if image is None:
                         raise ValueError(
                             f"Video unavailable at frame {fidx}. "
                             "Specify a background color to render without video."
@@ -1211,9 +1211,9 @@ def render_video(
             else:
                 try:
                     image = lf.image
-                    if image is None:
-                        raise ValueError("No image")
                 except Exception:
+                    image = None
+                if image is None:
                     raise ValueError(
                         f"Video unavailable at frame {fidx}. "
                         "Specify a background color to render without video."
