@@ -2189,6 +2189,44 @@ def test_export_h5_multi_video(slp_multiview, tmp_path):
     assert output.exists()
 
 
+def test_export_invalid_file(tmp_path):
+    """Test error when input file cannot be loaded."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    # Create an invalid file
+    invalid_file = tmp_path / "invalid.slp"
+    invalid_file.write_text("not a valid slp file")
+
+    result = runner.invoke(cli, ["export", str(invalid_file), "-o", str(output)])
+    assert result.exit_code != 0
+    assert "Failed to load" in _strip_ansi(result.output)
+
+
+def test_export_non_labels_file(tmp_path, centered_pair_low_quality_path):
+    """Test error when file is not a Labels object."""
+    runner = CliRunner()
+    output = tmp_path / "export.csv"
+
+    # Try to export a video file (load_file returns Video, not Labels)
+    result = runner.invoke(
+        cli, ["export", centered_pair_low_quality_path, "-o", str(output)]
+    )
+    assert result.exit_code != 0
+    assert "not a labels file" in _strip_ansi(result.output).lower()
+
+
+def test_export_write_failure(tmp_path, slp_typical):
+    """Test error when export fails due to invalid output path."""
+    runner = CliRunner()
+    # Try to write to a non-existent directory
+    output = tmp_path / "nonexistent_dir" / "subdir" / "export.csv"
+
+    result = runner.invoke(cli, ["export", slp_typical, "-o", str(output)])
+    assert result.exit_code != 0
+    assert "Failed to export" in _strip_ansi(result.output)
+
+
 # ======================= Split command tests =======================
 
 
