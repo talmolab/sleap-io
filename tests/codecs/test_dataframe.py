@@ -3977,7 +3977,7 @@ def test_to_dataframe_frames_all_frames_with_start_end():
 
 
 def test_to_dataframe_instances_all_frames_pads_missing():
-    """Test all_frames=True includes rows for frames without instances in instances format."""
+    """Test all_frames=True includes rows for frames without instances."""
     skeleton = Skeleton(["nose", "tail"])
     video = Video(filename="test.mp4")
 
@@ -4009,7 +4009,7 @@ def test_to_dataframe_instances_all_frames_pads_missing():
 
 
 def test_to_dataframe_points_ignores_all_frames():
-    """Test that points format ignores all_frames (no padding for point-centric format)."""
+    """Test that points format ignores all_frames (point-centric, no padding)."""
     skeleton = Skeleton(["nose", "tail"])
     video = Video(filename="test.mp4")
 

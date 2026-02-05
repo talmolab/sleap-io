@@ -640,7 +640,7 @@ class TestIncludeEmpty:
 
     @pytest.fixture
     def sparse_labels(self, tmp_path):
-        """Labels with instances only in frames 0 and 3 of a conceptual 5-frame video."""
+        """Labels with instances only in frames 0 and 3 (sparse)."""
         skeleton = Skeleton(nodes=["nose", "tail"], edges=[("nose", "tail")])
         video = Video(str(tmp_path / "sparse.mp4"))
 
