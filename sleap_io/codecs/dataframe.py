@@ -1142,9 +1142,7 @@ def _to_instances_df(  # noqa: D417
 
         for vid in videos_to_pad:
             # Get existing frame indices for this video
-            vid_frame_idxs = [
-                frame_idx for (v, frame_idx) in seen_frames if v == vid
-            ]
+            vid_frame_idxs = [frame_idx for (v, frame_idx) in seen_frames if v == vid]
 
             if not vid_frame_idxs:
                 # No labeled frames for this video - skip padding
@@ -1577,7 +1575,7 @@ def _to_frames_df(  # noqa: D417
         key=lambda k: (labels.videos.index(k[0]) if k[0] in labels.videos else 0, k[1]),
     )
 
-    for (video, frame_idx) in sorted_keys:
+    for video, frame_idx in sorted_keys:
         instances = frame_data[(video, frame_idx)]
         row = {"frame_idx": int(frame_idx)}
 

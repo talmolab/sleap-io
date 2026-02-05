@@ -2110,9 +2110,7 @@ def test_export_input_not_found(tmp_path):
     runner = CliRunner()
     output = tmp_path / "export.csv"
 
-    result = runner.invoke(
-        cli, ["export", "/nonexistent/file.slp", "-o", str(output)]
-    )
+    result = runner.invoke(cli, ["export", "/nonexistent/file.slp", "-o", str(output)])
     assert result.exit_code != 0
 
 
