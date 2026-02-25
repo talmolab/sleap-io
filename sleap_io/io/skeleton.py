@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import simplejson as json
 
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 
 
-def decode_skeleton(data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
+def decode_skeleton(data: str | dict) -> Skeleton | list[Skeleton]:
     """Decode skeleton(s) from JSON data using the default decoder.
 
     Args:
@@ -22,7 +22,7 @@ def decode_skeleton(data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
     return decoder.decode(data)
 
 
-def encode_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+def encode_skeleton(skeletons: Skeleton | list[Skeleton]) -> str:
     """Encode skeleton(s) to JSON string using the default encoder.
 
     Args:
@@ -35,7 +35,7 @@ def encode_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
     return encoder.encode(skeletons)
 
 
-def decode_yaml_skeleton(yaml_data: str) -> Union[Skeleton, List[Skeleton]]:
+def decode_yaml_skeleton(yaml_data: str) -> Skeleton | list[Skeleton]:
     """Decode skeleton(s) from YAML data.
 
     Args:
@@ -48,7 +48,7 @@ def decode_yaml_skeleton(yaml_data: str) -> Union[Skeleton, List[Skeleton]]:
     return decoder.decode(yaml_data)
 
 
-def encode_yaml_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+def encode_yaml_skeleton(skeletons: Skeleton | list[Skeleton]) -> str:
     """Encode skeleton(s) to YAML string.
 
     Args:
@@ -61,7 +61,7 @@ def encode_yaml_skeleton(skeletons: Union[Skeleton, List[Skeleton]]) -> str:
     return encoder.encode(skeletons)
 
 
-def decode_training_config(data: dict) -> Union[Skeleton, List[Skeleton]]:
+def decode_training_config(data: dict) -> Skeleton | list[Skeleton]:
     """Decode skeleton(s) from training config data.
 
     Args:
@@ -86,7 +86,7 @@ def decode_training_config(data: dict) -> Union[Skeleton, List[Skeleton]]:
     )
 
 
-def load_skeleton_from_json(json_data: str) -> Union[Skeleton, List[Skeleton]]:
+def load_skeleton_from_json(json_data: str) -> Skeleton | list[Skeleton]:
     """Load skeleton(s) from JSON data, with automatic training config detection.
 
     Args:
@@ -120,11 +120,11 @@ class SkeletonDecoder:
 
     def __init__(self):
         """Initialize the decoder."""
-        self.decoded_objects: List[
+        self.decoded_objects: list[
             Any
         ] = []  # List of decoded objects indexed by py/id - 1
 
-    def decode(self, data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
+    def decode(self, data: str | dict) -> Skeleton | list[Skeleton]:
         """Decode skeleton(s) from JSON data.
 
         Args:
@@ -145,7 +145,7 @@ class SkeletonDecoder:
         else:
             return self._decode_skeleton(data)
 
-    def _decode_skeleton(self, data: Dict) -> Skeleton:
+    def _decode_skeleton(self, data: dict) -> Skeleton:
         """Decode a single skeleton from dictionary data.
 
         Args:
@@ -266,7 +266,7 @@ class SkeletonDecoder:
 
         return Skeleton(nodes=nodes, edges=edges, symmetries=symmetries, name=name)
 
-    def _resolve_link_ref(self, node_ref: Union[Dict, int]) -> Node:
+    def _resolve_link_ref(self, node_ref: dict | int) -> Node:
         """Resolve a node reference.
 
         Args:
@@ -298,7 +298,7 @@ class SkeletonDecoder:
 
         raise ValueError(f"Unknown node reference format: {node_ref}")
 
-    def _resolve_edge_type_ref(self, type_data: Dict) -> int:
+    def _resolve_edge_type_ref(self, type_data: dict) -> int:
         """Resolve edge type reference.
 
         Args:
@@ -331,7 +331,7 @@ class SkeletonDecoder:
             # Default to regular edge
             return 1
 
-    def _decode_node(self, data: Dict) -> Node:
+    def _decode_node(self, data: dict) -> Node:
         """Decode a node from jsonpickle format.
 
         Args:
@@ -366,10 +366,10 @@ class SkeletonEncoder:
 
     def __init__(self):
         """Initialize the encoder."""
-        self._object_to_id: Dict[int, int] = {}  # id(object) -> py/id
+        self._object_to_id: dict[int, int] = {}  # id(object) -> py/id
         self._next_id = 1
 
-    def encode(self, skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+    def encode(self, skeletons: Skeleton | list[Skeleton]) -> str:
         """Encode skeleton(s) to JSON string.
 
         Args:
@@ -393,7 +393,7 @@ class SkeletonEncoder:
 
         return json.dumps(data, separators=(", ", ": "))
 
-    def _encode_skeleton(self, skeleton: Skeleton) -> Dict:
+    def _encode_skeleton(self, skeleton: Skeleton) -> dict:
         """Encode a single skeleton to dictionary format.
 
         Args:
@@ -452,7 +452,7 @@ class SkeletonEncoder:
             "nodes": nodes,
         }
 
-    def _encode_edge(self, edge: Edge, edge_idx: int, edge_type: int) -> Dict:
+    def _encode_edge(self, edge: Edge, edge_idx: int, edge_type: int) -> dict:
         """Encode an edge to jsonpickle format.
 
         Args:
@@ -496,7 +496,7 @@ class SkeletonEncoder:
             "type": type_dict,
         }
 
-    def _encode_symmetry(self, symmetry: Symmetry, edge_type: int) -> Dict:
+    def _encode_symmetry(self, symmetry: Symmetry, edge_type: int) -> dict:
         """Encode a symmetry to jsonpickle format.
 
         Args:
@@ -526,7 +526,7 @@ class SkeletonEncoder:
             "type": type_dict,
         }
 
-    def _encode_node(self, node: Node) -> Dict:
+    def _encode_node(self, node: Node) -> dict:
         """Encode a node to jsonpickle format.
 
         Args:
@@ -776,7 +776,7 @@ class SkeletonYAMLDecoder:
     than the jsonpickle format.
     """
 
-    def decode(self, data: Union[str, Dict]) -> Union[Skeleton, List[Skeleton]]:
+    def decode(self, data: str | dict) -> Skeleton | list[Skeleton]:
         """Decode skeleton(s) from YAML data.
 
         Args:
@@ -808,7 +808,7 @@ class SkeletonYAMLDecoder:
 
         raise ValueError(f"Unexpected data format: {type(data)}")
 
-    def decode_dict(self, skeleton_data: Dict, name: str = "Skeleton") -> Skeleton:
+    def decode_dict(self, skeleton_data: dict, name: str = "Skeleton") -> Skeleton:
         """Decode a single skeleton from a dictionary.
 
         This is useful when the skeleton data is embedded in a larger YAML structure.
@@ -822,7 +822,7 @@ class SkeletonYAMLDecoder:
         """
         return self._decode_skeleton(skeleton_data, name)
 
-    def _decode_skeleton(self, data: Dict, name: Optional[str] = None) -> Skeleton:
+    def _decode_skeleton(self, data: dict, name: str | None = None) -> Skeleton:
         """Decode a single skeleton from dictionary data.
 
         Args:
@@ -871,7 +871,7 @@ class SkeletonYAMLEncoder:
     edit manually than the jsonpickle format.
     """
 
-    def encode(self, skeletons: Union[Skeleton, List[Skeleton]]) -> str:
+    def encode(self, skeletons: Skeleton | list[Skeleton]) -> str:
         """Encode skeleton(s) to YAML string.
 
         Args:
@@ -892,7 +892,7 @@ class SkeletonYAMLEncoder:
 
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
 
-    def encode_dict(self, skeleton: Skeleton) -> Dict:
+    def encode_dict(self, skeleton: Skeleton) -> dict:
         """Encode a single skeleton to a dictionary.
 
         This is useful when embedding skeleton data in a larger YAML structure.

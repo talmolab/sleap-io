@@ -45,3 +45,48 @@ div.doc-contents:not(.first) {
   .highlight .gp, .highlight .go { /* Generic.Prompt, Generic.Output */
     user-select: none;
 }
+
+/* CLI command entries in TOC - style as code/monospace */
+.md-nav__link[href="#sio-show"],
+.md-nav__link[href="#sio-convert"],
+.md-nav__link[href="#sio-split"],
+.md-nav__link[href="#sio-unsplit"],
+.md-nav__link[href="#sio-merge"],
+.md-nav__link[href="#sio-embed"],
+.md-nav__link[href="#sio-unembed"],
+.md-nav__link[href="#sio-filenames"],
+.md-nav__link[href="#sio-fix"],
+.md-nav__link[href="#sio-render"],
+.md-nav__link[href="#sio-trim"],
+.md-nav__link[href="#sio-reencode"] {
+    font-family: var(--md-code-font, "Roboto Mono"), SFMono-Regular, Consolas, Menlo, monospace;
+    font-size: 0.85em;
+}
+
+/* Markdown source link button - positioned in top-right like Material action buttons */
+.md-source-file {
+    float: right;
+    margin: 0 0 0.5em 0.5em;
+}
+
+.md-source-file a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2em;
+    height: 2em;
+    border-radius: 0.2em;
+    color: var(--md-default-fg-color--light);
+    transition: color 0.25s, background-color 0.25s;
+}
+
+.md-source-file a:hover {
+    color: var(--md-accent-fg-color);
+    background-color: var(--md-accent-fg-color--transparent);
+}
+
+.md-source-file svg {
+    width: 1.2em;
+    height: 1.2em;
+    fill: currentColor;
+}

@@ -116,7 +116,7 @@ class CameraGroup:
         metadata: Dictionary of metadata.
     """
 
-    cameras: list[Camera] = field(factory=list, validator=instance_of(list))
+    cameras: "list[Camera]" = field(factory=list, validator=instance_of(list))
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     def __repr__(self):
@@ -140,19 +140,19 @@ class RecordingSession:
     camera_group: CameraGroup = field(
         factory=CameraGroup, validator=instance_of(CameraGroup)
     )
-    _video_by_camera: dict[Camera, Video] = field(
+    _video_by_camera: "dict[Camera, Video]" = field(
         factory=dict, validator=instance_of(dict)
     )
-    _camera_by_video: dict[Video, Camera] = field(
+    _camera_by_video: "dict[Video, Camera]" = field(
         factory=dict, validator=instance_of(dict)
     )
-    _frame_group_by_frame_idx: dict[int, FrameGroup] = field(
+    _frame_group_by_frame_idx: "dict[int, FrameGroup]" = field(
         factory=dict, validator=instance_of(dict)
     )
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
-    def frame_groups(self) -> dict[int, FrameGroup]:
+    def frame_groups(self) -> "dict[int, FrameGroup]":
         """Get dictionary of `FrameGroup` objects by frame index.
 
         Returns:
@@ -170,7 +170,7 @@ class RecordingSession:
         return list(self._video_by_camera.values())
 
     @property
-    def cameras(self) -> list[Camera]:
+    def cameras(self) -> "list[Camera]":
         """Get list of `Camera` objects linked to `Video`s in the `RecordingSession`.
 
         Returns:
@@ -178,7 +178,7 @@ class RecordingSession:
         """
         return list(self._video_by_camera.keys())
 
-    def get_camera(self, video: Video) -> Camera | None:
+    def get_camera(self, video: Video) -> "Camera | None":
         """Get `Camera` associated with `video`.
 
         Args:
@@ -189,7 +189,7 @@ class RecordingSession:
         """
         return self._camera_by_video.get(video, None)
 
-    def get_video(self, camera: Camera) -> Video | None:
+    def get_video(self, camera: "Camera") -> Video | None:
         """Get `Video` associated with `camera`.
 
         Args:
@@ -200,7 +200,7 @@ class RecordingSession:
         """
         return self._video_by_camera.get(camera, None)
 
-    def add_video(self, video: Video, camera: Camera):
+    def add_video(self, video: Video, camera: "Camera"):
         """Add `video` to `RecordingSession` and mapping to `camera`.
 
         Args:
@@ -477,7 +477,7 @@ class InstanceGroup:
         return list(self._instance_by_camera.values())
 
     @property
-    def cameras(self) -> list[Camera]:
+    def cameras(self) -> "list[Camera]":
         """List of `Camera` objects."""
         return list(self._instance_by_camera.keys())
 
@@ -535,7 +535,7 @@ class FrameGroup:
         return self._instance_groups
 
     @property
-    def cameras(self) -> list[Camera]:
+    def cameras(self) -> "list[Camera]":
         """List of `Camera` objects."""
         return list(self._labeled_frame_by_camera.keys())
 

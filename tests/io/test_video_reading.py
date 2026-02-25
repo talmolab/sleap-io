@@ -168,6 +168,110 @@ def test_hdf5video_embedded(slp_minimal_pkg):
     assert backend.has_embedded_images
 
 
+def test_hdf5video_get_frame_raw_bytes(slp_minimal_pkg):
+    """Test get_frame_raw_bytes() method of HDF5Video for fast path copying."""
+    backend = VideoBackend.from_filename(slp_minimal_pkg)
+    assert type(backend) is HDF5Video
+    assert backend.has_embedded_images
+
+    # Get raw bytes for frame 0
+    raw_bytes = backend.get_frame_raw_bytes(0)
+
+    # Should return int8 numpy array with PNG bytes
+    assert raw_bytes is not None
+    assert isinstance(raw_bytes, np.ndarray)
+    assert raw_bytes.dtype == np.int8
+
+    # Verify PNG magic bytes (137, 80, 78, 71 = \x89PNG)
+    # These are stored as int8, so 137 becomes -119
+    png_magic = raw_bytes[:4].view(np.uint8)
+    assert list(png_magic) == [137, 80, 78, 71]
+
+    # Raw bytes should decode to the same image as normal read
+    decoded_via_backend = backend[0]
+    import cv2
+
+    decoded_from_raw = cv2.imdecode(raw_bytes.view(np.uint8), cv2.IMREAD_UNCHANGED)
+    if decoded_from_raw.ndim == 2:
+        decoded_from_raw = np.expand_dims(decoded_from_raw, axis=-1)
+    assert decoded_via_backend.shape == decoded_from_raw.shape
+    np.testing.assert_array_equal(decoded_via_backend, decoded_from_raw)
+
+
+def test_hdf5video_get_frame_raw_bytes_unavailable_frame(slp_minimal_pkg):
+    """Test get_frame_raw_bytes() returns None for unavailable frames."""
+    backend = VideoBackend.from_filename(slp_minimal_pkg)
+    assert type(backend) is HDF5Video
+
+    # Frame 999 doesn't exist (only frame 0 is embedded)
+    raw_bytes = backend.get_frame_raw_bytes(999)
+    assert raw_bytes is None
+
+
+def test_hdf5video_get_frame_raw_bytes_non_embedded(tmpdir):
+    """Test get_frame_raw_bytes() returns None for non-embedded HDF5 videos."""
+    # Create an HDF5 file with raw image data (not encoded)
+    h5_path = str(tmpdir / "raw_video.h5")
+    with h5py.File(h5_path, "w") as f:
+        ds = f.create_dataset("video", data=np.zeros((5, 64, 64, 1), dtype=np.uint8))
+        ds.attrs["format"] = "hdf5"  # Raw format, not encoded
+
+    backend = HDF5Video(filename=h5_path, dataset="video")
+    assert not backend.has_embedded_images
+
+    # Should return None because images are not encoded
+    raw_bytes = backend.get_frame_raw_bytes(0)
+    assert raw_bytes is None
+
+
+def test_hdf5video_get_frame_raw_bytes_keep_open_false(slp_minimal_pkg):
+    """Test get_frame_raw_bytes() works with keep_open=False."""
+    backend = HDF5Video.from_filename(slp_minimal_pkg, keep_open=False)
+    assert type(backend) is HDF5Video
+    assert backend.keep_open is False
+
+    # Get raw bytes for frame 0 - should work with keep_open=False
+    raw_bytes = backend.get_frame_raw_bytes(0)
+
+    # Should still return valid PNG bytes
+    assert raw_bytes is not None
+    assert isinstance(raw_bytes, np.ndarray)
+
+    # Verify PNG magic bytes
+    png_magic = raw_bytes[:4].view(np.uint8)
+    assert list(png_magic) == [137, 80, 78, 71]
+
+
+def test_hdf5video_get_frame_raw_bytes_fixed_length(tmpdir):
+    """Test get_frame_raw_bytes() with fixed-length dataset (strips trailing zeros)."""
+    import cv2
+
+    # Create a test image and encode it to PNG
+    test_img = np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".png", test_img)
+    png_bytes = encoded.flatten().astype(np.int8)
+
+    # Create HDF5 with fixed-length dataset (padded with zeros)
+    h5_path = str(tmpdir / "fixed_length.h5")
+    max_size = len(png_bytes) + 1000  # Add padding space
+    with h5py.File(h5_path, "w") as f:
+        ds = f.create_dataset("video", shape=(1, max_size), dtype=np.int8)
+        ds[0, : len(png_bytes)] = png_bytes  # Rest is zeros (padding)
+        ds.attrs["format"] = "png"
+        ds.attrs["imgformat"] = "png"
+
+    # Read back with get_frame_raw_bytes - should strip trailing zeros
+    backend = HDF5Video(filename=h5_path, dataset="video", keep_open=False)
+    assert backend.has_embedded_images is True
+
+    raw_bytes = backend.get_frame_raw_bytes(0)
+    assert raw_bytes is not None
+
+    # Should have stripped trailing zeros - length should match original
+    assert len(raw_bytes) == len(png_bytes)
+    np.testing.assert_array_equal(raw_bytes, png_bytes)
+
+
 def test_imagevideo(centered_pair_frame_paths):
     backend = VideoBackend.from_filename(centered_pair_frame_paths)
     assert type(backend) is ImageVideo
@@ -994,7 +1098,7 @@ def test_installation_instructions():
     assert "pip install sleap-io[opencv]" in opencv_instructions
 
     ffmpeg_instructions = sio.get_installation_instructions("FFMPEG")
-    assert "pip install sleap-io[ffmpeg]" in ffmpeg_instructions
+    assert "Included by default" in ffmpeg_instructions
 
     pyav_instructions = sio.get_installation_instructions("pyav")
     assert "pip install sleap-io[pyav]" in pyav_instructions
@@ -1097,11 +1201,10 @@ def test_no_video_backends_error(monkeypatch):
 
         # Check error message contains helpful installation instructions
         error_msg = str(exc_info.value)
-        assert "No video backend plugins are installed" in error_msg
+        assert "No video backend plugins are available" in error_msg
+        assert "bundled imageio-ffmpeg should be available" in error_msg
         assert "pip install sleap-io[opencv]" in error_msg
-        assert "pip install sleap-io[ffmpeg]" in error_msg
         assert "pip install sleap-io[pyav]" in error_msg
-        assert "pip install sleap-io[all]" in error_msg
         assert "io.sleap.ai" in error_msg
 
     finally:
@@ -1155,3 +1258,119 @@ def test_no_image_backends_warning(centered_pair_frame_paths, monkeypatch):
         # Restore original state
         sio.set_default_image_plugin(original)
         video_reading._AVAILABLE_IMAGE_BACKENDS = original_backends
+
+
+def test_mediavideo_fps(centered_pair_low_quality_path):
+    """Test FPS property on MediaVideo backend."""
+    # Test with FFMPEG backend
+    backend = VideoBackend.from_filename(
+        centered_pair_low_quality_path, plugin="FFMPEG"
+    )
+    assert isinstance(backend, MediaVideo)
+    assert backend.fps == 15.0
+
+    # Test with OpenCV backend
+    backend = VideoBackend.from_filename(
+        centered_pair_low_quality_path, plugin="opencv"
+    )
+    assert isinstance(backend, MediaVideo)
+    assert backend.fps == 15.0
+
+    # Test that FPS can be overridden
+    backend.fps = 30.0
+    assert backend.fps == 30.0
+
+    # Test that None resets to reading from file
+    backend.fps = None
+    assert backend.fps == 15.0
+
+
+def test_fps_setter_validation():
+    """Test that FPS setter validates input."""
+    backend = ImageVideo.__new__(ImageVideo)
+    backend._fps = None
+
+    # Valid values
+    backend.fps = 30.0
+    assert backend.fps == 30.0
+
+    backend.fps = 0.5
+    assert backend.fps == 0.5
+
+    backend.fps = None
+    assert backend.fps is None
+
+    # Invalid values
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        backend.fps = 0
+
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        backend.fps = -10.0
+
+
+def test_imagevideo_fps(centered_pair_frame_paths):
+    """Test FPS property on ImageVideo backend."""
+    backend = VideoBackend.from_filename(centered_pair_frame_paths)
+    assert isinstance(backend, ImageVideo)
+
+    # ImageVideo has no inherent FPS
+    assert backend.fps is None
+
+    # Can set FPS explicitly
+    backend.fps = 25.0
+    assert backend.fps == 25.0
+
+
+def test_hdf5video_fps_from_attrs(tmp_path):
+    """Test FPS property on HDF5Video with fps attribute."""
+    # Create HDF5 file with fps attribute
+    h5_path = tmp_path / "test_fps.h5"
+    with h5py.File(h5_path, "w") as f:
+        grp = f.create_group("video0")
+        ds = grp.create_dataset("video", shape=(5, 100, 100, 3), dtype="uint8")
+        ds.attrs["format"] = "hdf5"
+        ds.attrs["fps"] = 24.0
+        ds.attrs["height"] = 100
+        ds.attrs["width"] = 100
+        ds.attrs["channels"] = 3
+
+    backend = VideoBackend.from_filename(h5_path, dataset="video0/video")
+    assert isinstance(backend, HDF5Video)
+    assert backend.fps == 24.0
+
+
+def test_hdf5video_fps_explicit(tmp_path, centered_pair_low_quality_path):
+    """Test explicit FPS setting on HDF5Video."""
+    # Create simple HDF5 video without fps attribute
+    source = VideoBackend.from_filename(centered_pair_low_quality_path)
+    imgs = source[:3]
+
+    h5_path = tmp_path / "test.h5"
+    with h5py.File(h5_path, "w") as f:
+        f.create_dataset("images", data=imgs)
+
+    backend = VideoBackend.from_filename(h5_path)
+    assert isinstance(backend, HDF5Video)
+    assert backend.fps is None
+
+    # Set FPS explicitly
+    backend.fps = 30.0
+    assert backend.fps == 30.0
+
+
+def test_tiffvideo_fps(tmp_path):
+    """Test FPS property on TiffVideo backend."""
+    # Create multi-page TIFF
+    tiff_path = tmp_path / "test.tif"
+    frames = np.random.randint(0, 255, (5, 100, 100), dtype=np.uint8)
+    iio.imwrite(tiff_path, frames)
+
+    backend = VideoBackend.from_filename(tiff_path)
+    assert isinstance(backend, TiffVideo)
+
+    # TiffVideo has no inherent FPS
+    assert backend.fps is None
+
+    # Can set FPS explicitly
+    backend.fps = 10.0
+    assert backend.fps == 10.0

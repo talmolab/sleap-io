@@ -15,7 +15,7 @@ import multiprocessing
 import warnings
 from multiprocessing import Pool
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import imageio.v3 as iio
 import numpy as np
@@ -35,8 +35,8 @@ if TYPE_CHECKING:
 def read_labels(
     dataset_path: str,
     split: str = "train",
-    skeleton: Optional[Skeleton] = None,
-    image_size: Tuple[int, int] = (480, 640),
+    skeleton: Skeleton | None = None,
+    image_size: tuple[int, int] = (480, 640),
 ) -> Labels:
     """Read Ultralytics YOLO pose dataset and return a `Labels` object.
 
@@ -128,9 +128,9 @@ def read_labels(
 
 def read_labels_set(
     dataset_path: str,
-    splits: Optional[List[str]] = None,
-    skeleton: Optional[Skeleton] = None,
-    image_size: Tuple[int, int] = (480, 640),
+    splits: list[str] | None = None,
+    skeleton: Skeleton | None = None,
+    image_size: tuple[int, int] = (480, 640),
 ) -> LabelsSet:
     """Read multiple splits from an Ultralytics dataset as a LabelsSet.
 
@@ -223,7 +223,7 @@ def read_labels_set(
     return LabelsSet(labels=labels_dict)
 
 
-def _save_frame_image(args: Tuple[dict, str, Optional[int]]) -> Optional[str]:
+def _save_frame_image(args: tuple[dict, str, int | None]) -> str | None:
     """Worker function to save a single frame image.
 
     Args:
@@ -273,13 +273,13 @@ def _save_frame_image(args: Tuple[dict, str, Optional[int]]) -> Optional[str]:
 def write_labels(
     labels: Labels,
     dataset_path: str,
-    split_ratios: Dict[str, float] = {"train": 0.8, "val": 0.2},
+    split_ratios: dict[str, float] = {"train": 0.8, "val": 0.2},
     class_id: int = 0,
     image_format: str = "png",
-    image_quality: Optional[int] = None,
+    image_quality: int | None = None,
     verbose: bool = True,
     use_multiprocessing: bool = False,
-    n_workers: Optional[int] = None,
+    n_workers: int | None = None,
     **kwargs,
 ) -> None:
     """Write Labels to Ultralytics YOLO pose format.
@@ -442,14 +442,14 @@ def write_labels(
                     continue
 
 
-def parse_data_yaml(yaml_path: Path) -> Dict:
+def parse_data_yaml(yaml_path: Path) -> dict:
     """Parse Ultralytics data.yaml configuration file."""
     with open(yaml_path, "r") as f:
         config = yaml.safe_load(f)
     return config
 
 
-def create_skeleton_from_config(config: Dict) -> Skeleton:
+def create_skeleton_from_config(config: dict) -> Skeleton:
     """Create a Skeleton object from Ultralytics configuration."""
     kpt_shape = config.get("kpt_shape", [1, 3])
     num_keypoints = kpt_shape[0]
@@ -471,8 +471,8 @@ def create_skeleton_from_config(config: Dict) -> Skeleton:
 
 
 def parse_label_file(
-    label_path: Path, skeleton: Skeleton, image_shape: Tuple[int, int]
-) -> List[Instance]:
+    label_path: Path, skeleton: Skeleton, image_shape: tuple[int, int]
+) -> list[Instance]:
     """Parse a single Ultralytics label file and return instances."""
     instances = []
 
@@ -549,7 +549,7 @@ def write_label_file(
     label_path: Path,
     frame: LabeledFrame,
     skeleton: Skeleton,
-    image_shape: Tuple[int, int],
+    image_shape: tuple[int, int],
     class_id: int = 0,
 ) -> None:
     """Write a single Ultralytics label file for a frame."""
@@ -618,7 +618,7 @@ def write_label_file(
 
 
 def create_data_yaml(
-    yaml_path: Path, skeleton: Skeleton, split_ratios: Dict[str, float]
+    yaml_path: Path, skeleton: Skeleton, split_ratios: dict[str, float]
 ) -> None:
     """Create Ultralytics data.yaml configuration file."""
     # Build skeleton connections
@@ -649,8 +649,8 @@ def create_data_yaml(
 
 
 def create_splits_from_labels(
-    labels: Labels, split_ratios: Dict[str, float]
-) -> Dict[str, Labels]:
+    labels: Labels, split_ratios: dict[str, float]
+) -> dict[str, Labels]:
     """Create dataset splits from Labels using the built-in splitting functionality."""
     split_names = list(split_ratios.keys())
 
@@ -684,8 +684,8 @@ def create_splits_from_labels(
 
 
 def normalize_coordinates(
-    instance: Instance, image_shape: Tuple[int, int]
-) -> List[Tuple[float, float, int]]:
+    instance: Instance, image_shape: tuple[int, int]
+) -> list[tuple[float, float, int]]:
     """Normalize instance point coordinates to [0,1] range."""
     height, width = image_shape
     normalized = []
@@ -707,7 +707,7 @@ def normalize_coordinates(
 
 
 def denormalize_coordinates(
-    normalized_points: List[Tuple[float, float, int]], image_shape: Tuple[int, int]
+    normalized_points: list[tuple[float, float, int]], image_shape: tuple[int, int]
 ) -> np.ndarray:
     """Denormalize coordinates from [0,1] range to pixel coordinates.
 

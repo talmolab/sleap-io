@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from enum import Enum, IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Callable
 
 import h5py
 import imageio.v3 as iio
@@ -74,10 +74,46 @@ class InstanceType(IntEnum):
     PREDICTED = 1
 
 
+class ExportCancelled(Exception):
+    """Raised when an export operation is cancelled by the user."""
+
+    pass
+
+
+def _is_embedded_video_metadata(video: Video) -> bool:
+    """Check if a video has embedded frames based on metadata.
+
+    This function detects embedded videos even when the video backend is not open
+    (i.e., when loaded with open_backend=False). It checks the backend_metadata
+    for indicators that the video contains embedded frames.
+
+    Args:
+        video: Video object to check.
+
+    Returns:
+        True if the video appears to have embedded frames based on its metadata.
+    """
+    meta = video.backend_metadata
+    if not meta:
+        return False
+
+    # Embedded videos have filename="." and a dataset like "video0/video"
+    if meta.get("filename") == ".":
+        return True
+
+    # Also check if dataset name indicates embedded video
+    dataset = meta.get("dataset", "")
+    if dataset and "/" in dataset and dataset.endswith("/video"):
+        return True
+
+    return False
+
+
 def make_video(
     labels_path: str,
     video_json: dict,
     open_backend: bool = True,
+    _hdf5_file: h5py.File | None = None,
 ) -> Video:
     """Create a `Video` object from a JSON dictionary.
 
@@ -87,6 +123,8 @@ def make_video(
         open_backend: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
+        _hdf5_file: Optional already-open HDF5 file handle. For internal use to avoid
+            repeatedly opening the same file when loading many embedded videos.
     """
     backend_metadata = video_json["backend"]
 
@@ -108,10 +146,14 @@ def make_video(
     # Basic path resolution.
     video_path = Path(sanitize_filename(video_path))
 
-    original_video = None
     if is_embedded:
-        # Try to recover the source video and original video from HDF5 attrs.
-        with h5py.File(labels_path, "r") as f:
+        # Try to recover the source video from HDF5 attrs.
+        # Use provided file handle if available to avoid repeated file opens.
+        # Note: original_video is now a computed property derived from source_video,
+        # so we only load source_video. Legacy files with original_video but no
+        # source_video are handled by using original_video as source_video.
+        def _read_embedded_video_metadata(f: h5py.File):
+            nonlocal source_video
             dataset = backend_metadata["dataset"]
             if dataset.endswith("/video"):
                 dataset = dataset[:-6]
@@ -125,18 +167,27 @@ def make_video(
                     labels_path,
                     source_video_json,
                     open_backend=open_backend,
+                    _hdf5_file=f,
                 )
 
-            # Load original_video metadata
-            if f"{dataset}/original_video" in f:
+            # Legacy compatibility: if original_video exists but source_video doesn't,
+            # use original_video as source_video (they're equivalent for single-level)
+            if source_video is None and f"{dataset}/original_video" in f:
                 original_video_json = json.loads(
                     f[f"{dataset}/original_video"].attrs["json"]
                 )
-                original_video = make_video(
+                source_video = make_video(
                     labels_path,
                     original_video_json,
                     open_backend=False,  # Original videos are often not available
+                    _hdf5_file=f,
                 )
+
+        if _hdf5_file is not None:
+            _read_embedded_video_metadata(_hdf5_file)
+        else:
+            with h5py.File(labels_path, "r") as f:
+                _read_embedded_video_metadata(f)
     else:
         # For non-embedded videos, check if metadata is in videos_json
         if "source_video" in video_json:
@@ -146,17 +197,28 @@ def make_video(
                 open_backend=open_backend,
             )
 
-        if "original_video" in video_json:
-            original_video = make_video(
+        # Legacy compatibility: if original_video exists but source_video doesn't,
+        # use original_video as source_video
+        if source_video is None and "original_video" in video_json:
+            source_video = make_video(
                 labels_path,
                 video_json["original_video"],
                 open_backend=False,  # Original videos are often not available
             )
 
+    # Handle ImageVideo filenames - always expand to full list regardless of
+    # open_backend. This ensures Video.filename is consistently a list for image
+    # sequences.
+    if "filenames" in backend_metadata:
+        # This is an ImageVideo.
+        # TODO: Path resolution.
+        video_path = backend_metadata["filenames"]
+        video_path = [Path(sanitize_filename(p)) for p in video_path]
+
     backend = None
     if open_backend:
         try:
-            if not is_file_accessible(video_path):
+            if not isinstance(video_path, list) and not is_file_accessible(video_path):
                 # Check for the same filename in the same directory as the labels file.
                 candidate_video_path = Path(labels_path).parent / video_path.name
                 if is_file_accessible(candidate_video_path):
@@ -168,14 +230,9 @@ def make_video(
         except (OSError, PermissionError, FileNotFoundError):
             pass
 
-        # Convert video path to string.
-        video_path = video_path.as_posix()
-
-        if "filenames" in backend_metadata:
-            # This is an ImageVideo.
-            # TODO: Path resolution.
-            video_path = backend_metadata["filenames"]
-            video_path = [Path(sanitize_filename(p)) for p in video_path]
+        # Convert video path to string (only if not already a list for ImageVideo).
+        if isinstance(video_path, Path):
+            video_path = video_path.as_posix()
 
         try:
             grayscale = None
@@ -190,21 +247,29 @@ def make_video(
                 input_format=backend_metadata.get("input_format", None),
                 format=backend_metadata.get("format", None),
             )
+
+            # Restore FPS from metadata for backends that don't read it from file
+            # (ImageVideo, HDF5Video, TiffVideo). MediaVideo reads from container.
+            fps = backend_metadata.get("fps")
+            if fps is not None and not isinstance(backend, MediaVideo):
+                backend._fps = fps
         except Exception:
             backend = None
 
-    # Ensure video_path is a string (not Path) when creating the Video object
-    # If open_backend was True, it's already been converted at line 172
-    # If open_backend was False, it's still a Path object, so convert it
+    # Ensure video_path is a string or list of strings (not Path) for the Video object
     if isinstance(video_path, Path):
         video_path = sanitize_filename(video_path)
+    elif isinstance(video_path, list):
+        # ImageVideo: convert list of Paths to list of strings
+        video_path = [
+            sanitize_filename(p) if isinstance(p, Path) else p for p in video_path
+        ]
 
     return Video(
         filename=video_path,
         backend=backend,
         backend_metadata=backend_metadata,
         source_video=source_video,
-        original_video=original_video,
         open_backend=open_backend,
     )
 
@@ -222,15 +287,20 @@ def read_videos(labels_path: str, open_backend: bool = True) -> list[Video]:
         A list of `Video` objects.
     """
     videos = []
-    videos_metadata = read_hdf5_dataset(labels_path, "videos_json")
-    for video_data in videos_metadata:
-        video_json = json.loads(video_data)
-        video = make_video(labels_path, video_json, open_backend=open_backend)
-        videos.append(video)
+    # Open file once and pass handle to make_video to avoid repeated opens
+    # for embedded videos (which would otherwise open the file per video).
+    with h5py.File(labels_path, "r") as f:
+        videos_metadata = f["videos_json"][:]
+        for video_data in videos_metadata:
+            video_json = json.loads(video_data)
+            video = make_video(
+                labels_path, video_json, open_backend=open_backend, _hdf5_file=f
+            )
+            videos.append(video)
     return videos
 
 
-def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
+def video_to_dict(video: Video, labels_path: str | None = None) -> dict:
     """Convert a `Video` object to a JSON-compatible dictionary.
 
     Args:
@@ -261,6 +331,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "bgr": True,
             "dataset": "",
             "input_format": "",
+            "fps": video.fps,
         }
     elif type(video.backend) is HDF5Video:
         # Determine if we should use self-reference or external reference
@@ -280,6 +351,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "convert_range": False,
             "has_embedded_images": video.backend.has_embedded_images,
             "grayscale": video.grayscale,
+            "fps": video.fps,
         }
     elif type(video.backend) is ImageVideo:
         if video.shape is not None:
@@ -295,6 +367,7 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "width_": width,
             "channels_": channels,
             "grayscale": video.grayscale,
+            "fps": video.fps,
         }
     elif type(video.backend) is TiffVideo:
         result["backend"] = {
@@ -304,15 +377,15 @@ def video_to_dict(video: Video, labels_path: Optional[str] = None) -> dict:
             "grayscale": video.grayscale,
             "keep_open": video.backend.keep_open,
             "format": video.backend.format,
+            "fps": video.fps,
         }
 
     # Add source_video metadata if present
     if hasattr(video, "source_video") and video.source_video is not None:
         result["source_video"] = video_to_dict(video.source_video, labels_path)
 
-    # Add original_video metadata if present
-    if hasattr(video, "original_video") and video.original_video is not None:
-        result["original_video"] = video_to_dict(video.original_video, labels_path)
+    # Note: original_video is now a computed property derived from source_video,
+    # so we don't store it. Legacy files with original_video are handled on load.
 
     return result
 
@@ -366,13 +439,50 @@ def prepare_frames_to_embed(
     return frames_metadata
 
 
+def can_use_fast_path(video: Video, frame_idx: int, target_format: str) -> bool:
+    """Check if fast path copy is possible for a frame.
+
+    The fast path allows copying raw encoded bytes directly from an embedded
+    HDF5 video without decoding and re-encoding, which is faster and avoids
+    quality degradation for lossy formats like JPEG.
+
+    Args:
+        video: Video object to check.
+        frame_idx: Frame index to check.
+        target_format: Target image format ("png", "jpg", etc.)
+
+    Returns:
+        True if the frame can be copied directly without decode/encode cycle.
+    """
+    from sleap_io.io.video_reading import HDF5Video
+
+    # Must have an HDF5Video backend
+    if video.backend is None or not isinstance(video.backend, HDF5Video):
+        return False
+
+    # Must have embedded images
+    if not video.backend.has_embedded_images:
+        return False
+
+    # Format must match
+    if video.backend.image_format != target_format:
+        return False
+
+    # Frame must be available
+    if not video.backend.has_frame(frame_idx):
+        return False
+
+    return True
+
+
 def process_and_embed_frames(
     labels_path: str,
     frames_metadata: list[dict],
     image_format: str = "png",
     fixed_length: bool = True,
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ) -> dict[Video, Video]:
     """Process and embed frames into a SLEAP labels file.
 
@@ -393,9 +503,17 @@ def process_and_embed_frames(
         plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
             If None, uses the global default from `get_default_image_plugin()`.
             If no global default is set, auto-detects based on available packages.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments (1-based current frame index and total
+            frame count). If it returns `False`, the operation is cancelled and
+            `ExportCancelled` is raised. When provided, tqdm progress bar is disabled
+            in favor of the callback.
 
     Returns:
         A dictionary mapping original Video objects to their embedded versions.
+
+    Raises:
+        ExportCancelled: If the progress_callback returns `False`.
     """
     # Determine which plugin to use for encoding
     from sleap_io.io.video_reading import get_default_image_plugin
@@ -408,14 +526,17 @@ def process_and_embed_frames(
 
     # Initialize a dictionary to store data by group
     data_by_group = {}
+    total_frames = len(frames_metadata)
 
-    # Process all frames in a single flat loop with progress bar if verbose
+    # Use tqdm only if verbose AND no callback (CLI mode)
+    use_tqdm = verbose and progress_callback is None
     frame_iter = (
-        tqdm(frames_metadata, desc="Embedding frames", disable=not verbose)
-        if verbose
+        tqdm(frames_metadata, desc="Embedding frames", disable=not use_tqdm)
+        if use_tqdm
         else frames_metadata
     )
-    for frame_meta in frame_iter:
+
+    for i, frame_meta in enumerate(frame_iter):
         video = frame_meta["video"]
         frame_idx = frame_meta["frame_idx"]
         group = frame_meta["group"]
@@ -429,7 +550,24 @@ def process_and_embed_frames(
                 "channel_order": None,  # Track channel order: "RGB" or "BGR"
             }
 
-        # Load the frame
+        # Fast path: Copy raw bytes directly if formats match (avoids decode/encode)
+        # This is faster and prevents quality degradation for lossy formats like JPEG
+        if can_use_fast_path(video, frame_idx, image_format):
+            raw_bytes = video.backend.get_frame_raw_bytes(frame_idx)
+            if raw_bytes is not None:
+                data_by_group[group]["imgs_data"].append(raw_bytes)
+                data_by_group[group]["frame_inds"].append(frame_idx)
+                # Preserve original channel order from source
+                if data_by_group[group]["channel_order"] is None:
+                    data_by_group[group]["channel_order"] = video.backend.channel_order
+
+                # Report progress via callback
+                if progress_callback is not None:
+                    if not progress_callback(i + 1, total_frames):
+                        raise ExportCancelled("Export cancelled by user")
+                continue
+
+        # Slow path: Load and encode the frame
         frame = video[frame_idx]
 
         # Encode the frame
@@ -458,6 +596,11 @@ def process_and_embed_frames(
         # Store frame data in the appropriate group
         data_by_group[group]["imgs_data"].append(img_data)
         data_by_group[group]["frame_inds"].append(frame_idx)
+
+        # Report progress via callback
+        if progress_callback is not None:
+            if not progress_callback(i + 1, total_frames):
+                raise ExportCancelled("Export cancelled by user")
 
     # Write all frame data to the HDF5 file
     replaced_videos = {}
@@ -505,6 +648,10 @@ def process_and_embed_frames(
                 ds.attrs["channels"],
             ) = video_shape
 
+            # Store FPS if available (inherited from source video)
+            if video.fps is not None:
+                ds.attrs["fps"] = video.fps
+
             # Store frame indices
             f.create_dataset(f"{group}/frame_numbers", data=frame_inds)
 
@@ -538,13 +685,84 @@ def process_and_embed_frames(
     return replaced_videos
 
 
+def _create_empty_embedded_video(
+    labels_path: str,
+    video: Video,
+    video_ind: int,
+) -> Video:
+    """Create an empty embedded video reference for a video without frames.
+
+    This is used when exporting package files to ensure all videos point to
+    the package file rather than external paths, even if they have no frames.
+
+    Args:
+        labels_path: Path to the labels file being written.
+        video: The original Video object.
+        video_ind: The index of this video in labels.videos.
+
+    Returns:
+        A new Video object with an empty HDF5Video backend pointing to the
+        labels file, with source_video set to the original video.
+    """
+    group = f"video{video_ind}"
+
+    # Determine source video (preserve chain if already embedded)
+    source_video = video.source_video if video.source_video is not None else video
+
+    # Write empty video group with source_video metadata to HDF5
+    with h5py.File(labels_path, "a") as f:
+        grp = f.require_group(group)
+
+        # Store empty frame_numbers dataset
+        if "frame_numbers" not in grp:
+            f.create_dataset(f"{group}/frame_numbers", data=[])
+
+        # Create empty video dataset with metadata so HDF5Video recognizes it
+        if "video" not in grp:
+            ds = f.create_dataset(f"{group}/video", shape=(0,), dtype="int8")
+            ds.attrs["format"] = "png"
+            ds.attrs["channel_order"] = "RGB"
+            # Store video shape metadata from the source video
+            video_shape = video.shape
+            ds.attrs["frames"] = video_shape[0]
+            ds.attrs["height"] = video_shape[1]
+            ds.attrs["width"] = video_shape[2]
+            ds.attrs["channels"] = video_shape[3]
+            # Store FPS if available
+            if video.fps is not None:
+                ds.attrs["fps"] = video.fps
+
+        # Store source video metadata for restoration
+        source_grp = f.require_group(f"{group}/source_video")
+        source_grp.attrs["json"] = json.dumps(
+            video_to_dict(source_video, labels_path), separators=(",", ":")
+        )
+
+    # Create the embedded video object using VideoBackend.from_filename
+    # This ensures the HDF5Video is properly initialized with the dataset metadata
+    embedded_video = Video(
+        filename=labels_path,
+        backend=VideoBackend.from_filename(
+            labels_path,
+            dataset=f"{group}/video",
+            grayscale=video.grayscale if video.grayscale is not None else False,
+            keep_open=False,
+        ),
+        source_video=source_video,
+    )
+
+    return embedded_video
+
+
 def embed_frames(
     labels_path: str,
     labels: Labels,
     embed: list[tuple[Video, int]],
     image_format: str = "png",
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
+    embed_all_videos: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Embed frames in a SLEAP labels file.
 
@@ -558,6 +776,13 @@ def embed_frames(
             process.
         plugin: Image plugin to use for encoding. One of "opencv" or "imageio".
             If None, uses the global default from `get_default_image_plugin()`.
+        embed_all_videos: If `True` (the default), all videos in the labels will be
+            converted to embedded references, even if they have no frames to embed.
+            This ensures package files are portable. If `False`, only videos with
+            frames to embed are converted.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised.
 
     Notes:
         This function will embed the frames in the labels file and update the `Videos`
@@ -570,7 +795,18 @@ def embed_frames(
         image_format=image_format,
         verbose=verbose,
         plugin=plugin,
+        progress_callback=progress_callback,
     )
+
+    # Handle videos without any frames to embed.
+    # These still need embedded references so the package is portable.
+    if embed_all_videos:
+        videos_with_frames = {fm["video"] for fm in frames_metadata}
+        for video_ind, video in enumerate(labels.videos):
+            if video not in videos_with_frames and video not in replaced_videos:
+                replaced_videos[video] = _create_empty_embedded_video(
+                    labels_path, video, video_ind
+                )
 
     if len(replaced_videos) > 0:
         labels.replace_videos(video_map=replaced_videos)
@@ -581,7 +817,9 @@ def embed_videos(
     labels: Labels,
     embed: bool | str | list[tuple[Video, int]],
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
+    embed_all_videos: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Embed videos in a SLEAP labels file.
 
@@ -606,6 +844,13 @@ def embed_videos(
             will be restored if available.
 
             This argument is only valid for the SLP backend.
+        embed_all_videos: If `True` (the default), all videos in the labels will be
+            converted to embedded references, even if they have no frames to embed.
+            This ensures package files are portable. If `False`, only videos with
+            frames to embed are converted.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised.
     """
     if embed is True:
         embed = "all"
@@ -626,14 +871,22 @@ def embed_videos(
     else:
         raise ValueError(f"Invalid value for embed: {embed}")
 
-    embed_frames(labels_path, labels, embed, verbose=verbose, plugin=plugin)
+    embed_frames(
+        labels_path,
+        labels,
+        embed,
+        verbose=verbose,
+        plugin=plugin,
+        embed_all_videos=embed_all_videos,
+        progress_callback=progress_callback,
+    )
 
 
 def write_videos(
     labels_path: str,
     videos: list[Video],
     restore_source: bool = False,
-    reference_mode: Optional[VideoReferenceMode] = None,
+    reference_mode: VideoReferenceMode | None = None,
     original_videos: list[Video] | None = None,
     verbose: bool = True,
 ):
@@ -663,10 +916,20 @@ def write_videos(
 
     videos_to_embed = []
     videos_to_write = []
+    videos_to_copy = []  # For embedded videos without backend (raw HDF5 copy)
 
     # First determine which videos need embedding
     for video_ind, video in enumerate(videos):
-        if type(video.backend) is HDF5Video and video.backend.has_embedded_images:
+        # Check if video has an open backend with embedded images
+        has_backend_with_embedded = (
+            type(video.backend) is HDF5Video and video.backend.has_embedded_images
+        )
+        # Also detect embedded videos via metadata (when backend is None)
+        has_embedded_via_metadata = (
+            video.backend is None and _is_embedded_video_metadata(video)
+        )
+
+        if has_backend_with_embedded:
             if reference_mode == VideoReferenceMode.RESTORE_ORIGINAL:
                 if video.source_video is None:
                     # No source video available, reference the current embedded video
@@ -693,6 +956,27 @@ def write_videos(
                         (video, frame_idx) for frame_idx in video.backend.source_inds
                     ]
                     videos_to_embed.append((video_ind, video, frames_to_embed))
+        elif has_embedded_via_metadata:
+            # Video has embedded frames but backend is not open (open_videos=False)
+            if reference_mode == VideoReferenceMode.RESTORE_ORIGINAL:
+                if video.source_video is None:
+                    videos_to_write.append((video_ind, video))
+                else:
+                    videos_to_write.append((video_ind, video.source_video))
+            elif reference_mode == VideoReferenceMode.PRESERVE_SOURCE:
+                videos_to_write.append((video_ind, video))
+            else:  # EMBED mode
+                # Check if already embedded in destination
+                already_embedded = False
+                if Path(labels_path).exists():
+                    with h5py.File(labels_path, "r") as f:
+                        already_embedded = f"video{video_ind}/video" in f
+
+                if already_embedded:
+                    videos_to_write.append((video_ind, video))
+                else:
+                    # Need to copy raw HDF5 data from source file
+                    videos_to_copy.append((video_ind, video))
         else:
             videos_to_write.append((video_ind, video))
 
@@ -728,6 +1012,45 @@ def write_videos(
             if video in replaced_videos:
                 videos_to_write.append((video_ind, replaced_videos[video]))
 
+    # Copy raw HDF5 data for embedded videos without backends
+    if videos_to_copy:
+        for video_ind, video in videos_to_copy:
+            # Get the source file path (video.filename points to the source pkg.slp)
+            source_path = video.filename
+            if not Path(source_path).exists():
+                # Can't copy if source doesn't exist, just write metadata
+                videos_to_write.append((video_ind, video))
+                continue
+
+            # Get the source dataset name from backend_metadata
+            meta = video.backend_metadata
+            source_dataset = meta.get("dataset", "") if meta else ""
+            if not source_dataset:
+                videos_to_write.append((video_ind, video))
+                continue
+
+            # Extract the video group name (e.g., "video0" from "video0/video")
+            source_group = source_dataset.split("/")[0] if "/" in source_dataset else ""
+            if not source_group:
+                videos_to_write.append((video_ind, video))
+                continue
+
+            # Destination group name uses the current video index
+            dest_group = f"video{video_ind}"
+
+            # Copy the entire video group from source to destination
+            with h5py.File(source_path, "r") as src_f:
+                if source_group not in src_f:
+                    videos_to_write.append((video_ind, video))
+                    continue
+
+                with h5py.File(labels_path, "a") as dst_f:
+                    # Copy the video group with all its datasets and attributes
+                    src_f.copy(source_group, dst_f, name=dest_group)
+
+            # Add to videos_to_write - the metadata will reference the copied data
+            videos_to_write.append((video_ind, video))
+
     # Write video metadata
     video_jsons = []
     for video_ind, video in sorted(videos_to_write, key=lambda x: x[0]):
@@ -738,80 +1061,44 @@ def write_videos(
         if "videos_json" not in f:
             f.create_dataset("videos_json", data=video_jsons, maxshape=(None,))
 
-    # Save lineage metadata in a separate pass to ensure video groups exist
+    # Save source_video lineage metadata in a separate pass to ensure video groups exist
+    # Note: original_video is now a computed property derived from source_video chain,
+    # so we only need to store source_video (immediate parent).
     with h5py.File(labels_path, "a") as f:
         for video_ind, video in enumerate(videos):
             dataset = f"video{video_ind}"
 
             # If original_videos is provided (e.g., during embedding), use those
-            original_video = original_videos[video_ind] if original_videos else video
+            pre_embed_video = original_videos[video_ind] if original_videos else video
 
-            # Determine what metadata to save based on reference mode and video
-            # structure
-            original_to_save = None
+            # Determine source_video to save based on reference mode
             source_to_save = None
-
-            # Handle original_video metadata
-            if reference_mode != VideoReferenceMode.RESTORE_ORIGINAL:
-                if original_video.original_video:
-                    original_to_save = original_video.original_video
-                elif (
-                    original_video.source_video is not None
-                    and hasattr(original_video.source_video, "original_video")
-                    and original_video.source_video.original_video is not None
-                ):
-                    # If source_video has original_video, use that (it's the true
-                    # original)
-                    original_to_save = original_video.source_video.original_video
-                elif (
-                    original_video.source_video is not None
-                    and reference_mode == VideoReferenceMode.EMBED
-                ):
-                    # For embed mode, if we only have source_video, that becomes the
-                    # original
-                    original_to_save = original_video.source_video
-
-            # Handle source_video metadata
             if reference_mode != VideoReferenceMode.PRESERVE_SOURCE:
                 if reference_mode == VideoReferenceMode.EMBED and original_videos:
-                    # For embed mode, save the original video as source (it's the
-                    # .pkg.slp)
-                    source_to_save = original_video
-                elif original_video.source_video is not None:
-                    source_to_save = original_video.source_video
+                    # For embed mode, save the pre-embedding video as source
+                    source_to_save = pre_embed_video
+                elif pre_embed_video.source_video is not None:
+                    source_to_save = pre_embed_video.source_video
 
-            # Write metadata as datasets in the video group
-            if dataset in f:
+            # Write source_video metadata to the video group
+            if dataset in f and source_to_save is not None:
                 video_group = f[dataset]
 
-                if original_to_save is not None:
-                    # Store original_video metadata as a group (consistent with
-                    # source_video)
-                    original_grp = video_group.require_group("original_video")
-                    original_json = video_to_dict(original_to_save, labels_path)
-                    original_grp.attrs["json"] = json.dumps(
-                        original_json, separators=(",", ":")
+                # For EMBED mode with original_videos, we need to overwrite
+                # source_video because embed_videos saves the wrong metadata
+                if (
+                    reference_mode == VideoReferenceMode.EMBED
+                    and original_videos
+                    and "source_video" in video_group
+                ):
+                    del video_group["source_video"]
+
+                if "source_video" not in video_group:
+                    source_grp = video_group.require_group("source_video")
+                    source_json = video_to_dict(source_to_save, labels_path)
+                    source_grp.attrs["json"] = json.dumps(
+                        source_json, separators=(",", ":")
                     )
-
-                if source_to_save is not None:
-                    # For EMBED mode with original_videos, we need to overwrite
-                    # source_video
-                    # because embed_videos saves the wrong metadata
-                    if (
-                        reference_mode == VideoReferenceMode.EMBED
-                        and original_videos
-                        and "source_video" in video_group
-                    ):
-                        # Remove the existing source_video group
-                        del video_group["source_video"]
-
-                    if "source_video" not in video_group:
-                        # Create source_video group
-                        source_grp = video_group.require_group("source_video")
-                        source_json = video_to_dict(source_to_save, labels_path)
-                        source_grp.attrs["json"] = json.dumps(
-                            source_json, separators=(",", ":")
-                        )
 
 
 def read_tracks(labels_path: str) -> list[Track]:
@@ -902,6 +1189,77 @@ def write_suggestions(
 
     with h5py.File(labels_path, "a") as f:
         f.create_dataset("suggestions_json", data=suggestions_json, maxshape=(None,))
+
+
+def write_negative_frames(labels_path: str, labels: Labels):
+    """Write negative frame markers to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        labels: A `Labels` object containing negative frames to write.
+
+    Notes:
+        Uses sparse video IDs (same as /frames dataset) for consistency when videos
+        are embedded or reordered. The /negative_frames dataset stores (video_id,
+        frame_idx) tuples identifying which frames are explicitly marked as negative
+        (pure background, no instances).
+    """
+    # Build video index to sparse ID mapping (reuse pattern from write_lfs)
+    video_idx_id_map = {}
+    for video_idx, video in enumerate(labels.videos):
+        # Default to sequential index
+        video_idx_id_map[video_idx] = video_idx
+
+        # Check if this is an embedded video with a sparse video ID
+        if (
+            hasattr(video, "backend")
+            and video.backend is not None
+            and hasattr(video.backend, "dataset")
+            and video.backend.dataset is not None
+        ):
+            dataset = video.backend.dataset
+            # Extract video ID from dataset name (e.g., "video15/video" → 15)
+            try:
+                video_group = dataset.split("/")[0]
+                if video_group.startswith("video"):
+                    video_id = int(video_group[5:])  # Remove "video" prefix and convert
+                    video_idx_id_map[video_idx] = video_id
+            except (ValueError, IndexError):
+                # If parsing fails, keep the default sequential index
+                pass
+
+    # Collect negative frames
+    negative_data = []
+    for lf in labels.labeled_frames:
+        if lf.is_negative:
+            video_idx = labels.videos.index(lf.video)
+            sparse_video_id = video_idx_id_map[video_idx]
+            negative_data.append((sparse_video_id, lf.frame_idx))
+
+    if negative_data:
+        dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
+        data = np.array(negative_data, dtype=dtype)
+        with h5py.File(labels_path, "a") as f:
+            if "negative_frames" in f:
+                del f["negative_frames"]  # Replace if exists
+            f.create_dataset("negative_frames", data=data)
+
+
+def read_negative_frames(labels_path: str) -> set[tuple[int, int]]:
+    """Read negative frame markers from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+
+    Returns:
+        A set of (sparse_video_id, frame_idx) tuples identifying negative frames.
+        Returns empty set if no negative frames dataset exists.
+    """
+    try:
+        data = read_hdf5_dataset(labels_path, "negative_frames")
+        return {(int(row["video_id"]), int(row["frame_idx"])) for row in data}
+    except KeyError:
+        return set()
 
 
 def read_metadata(labels_path: str) -> dict:
@@ -1031,7 +1389,7 @@ def _points_from_hdf5_data(
     pts_data: np.ndarray,
     skeleton: Skeleton,
     is_predicted: bool = False,
-) -> Union["PointsArray", "PredictedPointsArray"]:
+) -> "PointsArray | PredictedPointsArray":
     """Build PointsArray directly from HDF5 structured array data.
 
     This is a fast path that avoids column_stack and intermediate array creation
@@ -1073,7 +1431,7 @@ def read_instances(
     points: np.ndarray,
     pred_points: np.ndarray,
     format_id: float,
-) -> list[Union[Instance, PredictedInstance]]:
+) -> list[Instance | PredictedInstance]:
     """Read `Instance` dataset in a SLEAP labels file.
 
     Args:
@@ -1903,6 +2261,75 @@ def write_sessions(
         f.create_dataset("sessions_json", data=sessions_json, maxshape=(None,))
 
 
+def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
+    """Read SLP file with lazy loading.
+
+    This function reads raw HDF5 arrays into memory but defers creation of
+    LabeledFrame and Instance objects until they are accessed.
+
+    Args:
+        labels_path: Path to .slp file.
+        open_videos: Whether to open video backends.
+
+    Returns:
+        Labels with LazyFrameList for labeled_frames.
+    """
+    from sleap_io.io.slp_lazy import LazyDataStore, LazyFrameList
+
+    # Read raw arrays
+    frames_data = read_hdf5_dataset(labels_path, "frames")
+    instances_data = read_hdf5_dataset(labels_path, "instances")
+    points_data = read_points(labels_path)
+    pred_points_data = read_pred_points(labels_path)
+
+    # Read format ID
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+
+    # Read metadata eagerly (these are small and needed for lazy access)
+    videos = read_videos(labels_path, open_backend=open_videos)
+    skeletons = read_skeletons(labels_path)
+    tracks = read_tracks(labels_path)
+    suggestions = read_suggestions(labels_path, videos)
+    metadata = read_metadata(labels_path)
+    provenance = metadata.get("provenance", dict())
+
+    # Read sessions (small, no need for lazy loading)
+    # Note: sessions require labeled_frames for full linking, but for lazy loading
+    # we pass an empty list since we don't have materialized frames yet
+    sessions = read_sessions(labels_path, videos, [])
+
+    # Create LazyDataStore
+    lazy_store = LazyDataStore(
+        frames_data=frames_data,
+        instances_data=instances_data,
+        pred_points_data=pred_points_data,
+        points_data=points_data,
+        videos=videos,
+        skeletons=skeletons,
+        tracks=tracks,
+        format_id=format_id,
+        source_path=str(labels_path),
+    )
+
+    # Create LazyFrameList
+    lazy_frames = LazyFrameList(lazy_store)
+
+    # Create Labels with lazy state
+    labels = Labels(
+        labeled_frames=lazy_frames,
+        videos=videos,
+        skeletons=skeletons,
+        tracks=tracks,
+        suggestions=suggestions,
+        sessions=sessions,
+        provenance=provenance,
+        lazy_store=lazy_store,
+    )
+    labels.provenance["filename"] = labels_path
+
+    return labels
+
+
 def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     """Read a SLEAP labels file.
 
@@ -1928,44 +2355,65 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     metadata = read_metadata(labels_path)
     provenance = metadata.get("provenance", dict())
 
-    # Build mapping from sparse video IDs to list indices
-    # This handles files from old SLEAP where video IDs can be sparse
-    # (e.g., 0, 15, 29, 47, ...) rather than sequential (0, 1, 2, 3, ...)
-    video_id_to_index = {}
-    for i, video in enumerate(videos):
-        # For embedded videos, extract the video ID from backend.dataset
-        if (
-            hasattr(video, "backend")
-            and video.backend is not None
-            and hasattr(video.backend, "dataset")
-            and video.backend.dataset is not None
-        ):
-            dataset = video.backend.dataset
-            # Extract video ID from dataset name (e.g., "video15/video" → 15)
-            if "/" in dataset:
-                video_group = dataset.split("/")[0]
-                if video_group.startswith("video"):
-                    video_id_str = video_group[5:]  # Remove "video" prefix
-                    if video_id_str.isdigit():
-                        video_id = int(video_id_str)
-                        video_id_to_index[video_id] = i
-                        continue
-
-        # For non-embedded videos or videos without extractable IDs,
-        # assume sequential indexing (backwards compatible behavior)
-        video_id_to_index[i] = i
-
     frames = read_hdf5_dataset(labels_path, "frames")
+    negative_markers = read_negative_frames(labels_path)
+
+    # Check if video IDs in frames are sequential list indices (0, 1, 2, ..., n-1)
+    # or sparse embedded IDs (e.g., 0, 15, 29, 47, ...) that need remapping
+    frame_video_ids = set(int(frame[1]) for frame in frames)
+    max_frame_video_id = max(frame_video_ids) if frame_video_ids else 0
+
+    # If max video ID == len(videos) - 1 and IDs are contiguous, they're list indices
+    # In this case, use identity mapping (backwards compatible behavior)
+    frames_use_list_indices = (
+        len(frame_video_ids) == len(videos) and max_frame_video_id == len(videos) - 1
+    )
+
+    if frames_use_list_indices:
+        # Video IDs are sequential list indices - use identity mapping
+        video_id_to_index = {i: i for i in range(len(videos))}
+    else:
+        # Build mapping from sparse video IDs to list indices
+        # This handles files from old SLEAP where video IDs can be sparse
+        # (e.g., 0, 15, 29, 47, ...) rather than sequential (0, 1, 2, 3, ...)
+        video_id_to_index = {}
+        for i, video in enumerate(videos):
+            # For embedded videos, extract the video ID from backend.dataset
+            if (
+                hasattr(video, "backend")
+                and video.backend is not None
+                and hasattr(video.backend, "dataset")
+                and video.backend.dataset is not None
+            ):
+                dataset = video.backend.dataset
+                # Extract video ID from dataset name (e.g., "video15/video" → 15)
+                if "/" in dataset:
+                    video_group = dataset.split("/")[0]
+                    if video_group.startswith("video"):
+                        video_id_str = video_group[5:]  # Remove "video" prefix
+                        if video_id_str.isdigit():
+                            video_id = int(video_id_str)
+                            video_id_to_index[video_id] = i
+                            continue
+
+            # For non-embedded videos or videos without extractable IDs,
+            # assume sequential indexing (backwards compatible behavior)
+            video_id_to_index[i] = i
+
     labeled_frames = []
     for _, video_id, frame_idx, instance_id_start, instance_id_end in frames:
         # Map sparse video_id to sequential list index
         video_index = video_id_to_index.get(video_id, video_id)
+
+        # Check if this frame is marked as negative (using sparse video_id)
+        is_negative = (int(video_id), int(frame_idx)) in negative_markers
 
         labeled_frames.append(
             LabeledFrame(
                 video=videos[video_index],
                 frame_idx=int(frame_idx),
                 instances=instances[instance_id_start:instance_id_end],
+                is_negative=is_negative,
             )
         )
 
@@ -1986,9 +2434,9 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
 
 
 def read_labels_set(
-    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
+    path: str | Path | list[str | Path] | dict[str, str | Path],
     open_videos: bool = True,
-) -> LabelsSet:
+) -> "LabelsSet":
     """Load a LabelsSet from multiple SLP files.
 
     Args:
@@ -2047,13 +2495,100 @@ def read_labels_set(
     return LabelsSet(labels=labels_dict)
 
 
-def write_labels(
+def _write_labels_lazy(
     labels_path: str,
     labels: Labels,
     embed: bool | str | list[tuple[Video, int]] | None = None,
     restore_original_videos: bool = True,
     verbose: bool = True,
-    plugin: Optional[str] = None,
+) -> None:
+    """Write lazy Labels to SLP file using fast path.
+
+    This function copies raw HDF5 arrays directly without materializing
+    LabeledFrame or Instance objects, providing significant performance
+    improvement for save operations on lazy-loaded labels.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file to save.
+        labels: A lazy `Labels` object to save (must have is_lazy=True).
+        embed: Embedding mode. For lazy labels, only `None`, `False`, and
+            `"source"` are supported without materialization. Other values
+            will trigger materialization.
+        restore_original_videos: If `True` (default) and `embed=False`, use original
+            video files.
+        verbose: If `True` (the default), display progress information.
+
+    Raises:
+        ValueError: If labels is not lazy.
+    """
+    if not labels.is_lazy:
+        raise ValueError("_write_labels_lazy requires lazy Labels")
+
+    lazy_store = labels._lazy_store
+
+    # Delete existing file if it exists
+    if Path(labels_path).exists():
+        Path(labels_path).unlink()
+
+    # Determine reference mode based on parameters
+    if embed == "source" or (embed is False and restore_original_videos):
+        reference_mode = VideoReferenceMode.RESTORE_ORIGINAL
+    elif embed is False and not restore_original_videos:
+        reference_mode = VideoReferenceMode.PRESERVE_SOURCE
+    else:
+        reference_mode = VideoReferenceMode.EMBED
+
+    # Write videos metadata (uses labels.videos which may have been modified)
+    write_videos(
+        labels_path,
+        labels.videos,
+        reference_mode=reference_mode,
+        original_videos=None,
+        verbose=verbose,
+    )
+
+    # Write other metadata
+    write_tracks(labels_path, labels.tracks)
+    write_suggestions(labels_path, labels.suggestions, labels.videos)
+    # For sessions, pass empty list since we don't have materialized frames
+    # (consistent with lazy load behavior)
+    write_sessions(labels_path, labels.sessions, labels.videos, [])
+    write_metadata(labels_path, labels)
+
+    # Write raw arrays directly from lazy store (fast path)
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset(
+            "points",
+            data=lazy_store.points_data,
+            dtype=lazy_store.points_data.dtype,
+        )
+        f.create_dataset(
+            "pred_points",
+            data=lazy_store.pred_points_data,
+            dtype=lazy_store.pred_points_data.dtype,
+        )
+        f.create_dataset(
+            "instances",
+            data=lazy_store.instances_data,
+            dtype=lazy_store.instances_data.dtype,
+        )
+        f.create_dataset(
+            "frames",
+            data=lazy_store.frames_data,
+            dtype=lazy_store.frames_data.dtype,
+        )
+
+
+def write_labels(
+    labels_path: str,
+    labels: Labels,
+    embed: bool | str | list[tuple[Video, int]] | None = None,
+    restore_original_videos: bool = True,
+    embed_inplace: bool = False,
+    verbose: bool = True,
+    plugin: str | None = None,
+    embed_all_videos: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Write a SLEAP labels file.
 
@@ -2077,21 +2612,87 @@ def write_labels(
         restore_original_videos: If `True` (default) and `embed=False`, use original
             video files. If `False` and `embed=False`, keep references to source
             `.pkg.slp` files. Only applies when `embed=False`.
+        embed_inplace: If `False` (default), a copy of the labels is made before
+            embedding to avoid modifying the in-memory labels. If `True`, the
+            labels will be modified in-place to point to the embedded videos,
+            which is faster but mutates the input. Only applies when embedding.
         verbose: If `True` (the default), display a progress bar when embedding frames.
         plugin: Image plugin to use for encoding embedded frames. One of "opencv"
             or "imageio". If None, uses the global default from
             `get_default_image_plugin()`. If no global default is set, auto-detects
             based on available packages.
+        embed_all_videos: If `True` (the default), all videos in the labels will be
+            converted to embedded references, even if they have no frames to embed.
+            This ensures package files are portable. If `False`, only videos with
+            frames to embed are converted.
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised.
     """
+    # Fast path for lazy labels (avoids materializing frames/instances)
+    # Supported for simple embed modes: None, False, "source"
+    if labels.is_lazy:
+        # Check if embed mode requires materialization
+        needs_materialization = (
+            embed is True
+            or embed
+            in (
+                "all",
+                "user",
+                "suggestions",
+                "user+suggestions",
+            )
+            or isinstance(embed, list)
+        )
+
+        if needs_materialization:
+            # Materialize to support embedding
+            labels = labels.materialize()
+        else:
+            # Use fast path - copy raw arrays directly
+            _write_labels_lazy(
+                labels_path,
+                labels,
+                embed=embed,
+                restore_original_videos=restore_original_videos,
+                verbose=verbose,
+            )
+            return
+
     if Path(labels_path).exists():
         Path(labels_path).unlink()
+
+    # Make a copy to avoid mutating the input labels when embedding
+    if embed and not embed_inplace:
+        original_labels = labels
+        labels = labels.copy(open_videos=True)
+
+        # If embed is a list of (video, frame_idx) tuples, remap videos to the copy
+        if isinstance(embed, list):
+            # Create mapping from original videos to copied videos
+            video_map = {
+                orig: copied
+                for orig, copied in zip(original_labels.videos, labels.videos)
+            }
+            # Remap the embed list to use copied video objects
+            embed = [
+                (video_map.get(video, video), frame_idx) for video, frame_idx in embed
+            ]
 
     # Store original videos before embedding modifies them
     # We need to make a copy of the actual video objects, not just the list
     original_videos = [v for v in labels.videos] if embed else None
 
     if embed:
-        embed_videos(labels_path, labels, embed, verbose=verbose, plugin=plugin)
+        embed_videos(
+            labels_path,
+            labels,
+            embed,
+            verbose=verbose,
+            plugin=plugin,
+            embed_all_videos=embed_all_videos,
+            progress_callback=progress_callback,
+        )
 
     # Determine reference mode based on parameters
     if embed == "source" or (embed is False and restore_original_videos):
@@ -2113,3 +2714,4 @@ def write_labels(
     write_sessions(labels_path, labels.sessions, labels.videos, labels.labeled_frames)
     write_metadata(labels_path, labels)
     write_lfs(labels_path, labels)
+    write_negative_frames(labels_path, labels)

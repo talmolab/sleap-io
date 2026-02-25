@@ -1,6 +1,12 @@
 site_name: sleap-io documentation
 site_url: https://io.sleap.ai/
 repo_url: https://github.com/talmolab/sleap-io
+edit_uri: edit/main/docs/
+strict: false
+
+# Custom hooks
+hooks:
+  - hooks/copy_source_markdown.py  # Publish .md sources alongside HTML
 
 theme:
   name: material
@@ -67,10 +73,12 @@ plugins:
           options:
             summary: true
             show_root_heading: true
+            show_root_toc_entry: true
             docstring_options:
               returns_multiple_items: false
             docstring_section_style: table  # table, list, spacy
             force_inspection: true  # Use dynamic imports for lazy-loaded modules
+            allow_inspection: true
   
 
 
@@ -129,17 +137,29 @@ extra:
 extra_css:
   - css/mkdocstrings.css
 
+extra_javascript:
+  - js/toc-code-style.js
+
 copyright: >
-  Copyright &copy; 2022 - 2025 Talmo Lab
+  Copyright &copy; 2022 - 2026 Talmo Lab
 
 nav:
   - Overview: index.md
+  - Installation: install.md
   - Changelog: changelog.md
   - Releases: https://github.com/talmolab/sleap-io/releases
   - Guides:
     - Examples: examples.md
+    - Codecs: codecs.md
     - Merging: merging.md
+    - Rendering: rendering.md
+    - Transforms: transforms.md
   - Reference:
     - Model: model.md
-    - Formats: formats.md
+    - Formats:
+      - formats/index.md
+      - SLP Format: formats/slp.md
+      - CSV Format: formats/csv.md
+      - Analysis HDF5: formats/analysis_h5.md
+    - CLI: cli.md
     - Full API: reference/

@@ -144,3 +144,8 @@ dmypy.json
 # Temporary test files
 tmp/
 scratch/
+.obsidian/
+
+# Playwright
+.playwright/
+.playwright-mcp/

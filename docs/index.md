@@ -5,7 +5,6 @@
 [![Release](https://img.shields.io/github/v/release/talmolab/sleap-io?label=Latest)](https://github.com/talmolab/sleap-io/releases/)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/sleap-io)
 [![PyPI](https://img.shields.io/pypi/v/sleap-io?label=PyPI)](https://pypi.org/project/sleap-io)
-[![conda-forge](https://img.shields.io/conda/vn/conda-forge/sleap-io.svg)](https://anaconda.org/conda-forge/sleap-io/)
 
 Standalone utilities for working with animal pose tracking data.
 
@@ -17,11 +16,11 @@ have any functionality related to labeling, training, or inference.
 ## Features
 
 The main purpose of this library is to provide utilities to load/save from different
-[formats](formats.md) for pose data and standardize them into our common [Data Model](model.md).
+[formats](formats/) for pose data and standardize them into our common [Data Model](model.md).
 
-- Read/write labels in [SLP](formats.md#sleap_io.load_slp), [NWB](formats.md#sleap_io.load_nwb), [AlphaTracker](formats.md#sleap_io.load_alphatracker), [DeepLabCut](formats.md#sleap_io.load_dlc), [JABS](formats.md#sleap_io.load_jabs), [LabelStudio](formats.md#sleap_io.load_labelstudio), [LEAP](formats.md#sleap_io.load_leap) and [Ultralytics YOLO](formats.md#sleap_io.load_ultralytics) formats.
+- Read/write labels in [SLP](formats/#sleap_io.load_slp), [NWB](formats/#sleap_io.load_nwb), [AlphaTracker](formats/#sleap_io.load_alphatracker), [DeepLabCut](formats/#sleap_io.load_dlc), [JABS](formats/#sleap_io.load_jabs), [LabelStudio](formats/#sleap_io.load_labelstudio), [LEAP](formats/#sleap_io.load_leap), [CSV](formats/#csv-format-csv) and [Ultralytics YOLO](formats/#sleap_io.load_ultralytics) formats.
 - Support for [LabelsSet](model.md#sleap_io.LabelsSet) to manage multiple dataset splits (train/val/test) and export to different formats.
-- [Read videos in any format](formats.md#sleap_io.load_video), work them in a [numpy-like interface](model.md#sleap_io.Video) whether the video files are accessible or not, and [easily save them out](formats.md#sleap_io.save_video).
+- [Read videos in any format](formats/#sleap_io.load_video), work them in a [numpy-like interface](model.md#sleap_io.Video) whether the video files are accessible or not, and [easily save them out](formats/#sleap_io.save_video).
 
 This enables ease-of-use through format-agnostic operations that make it easy to work
 with pose data, including utilities for common tasks. Some of these include:
@@ -56,13 +55,12 @@ pip install git+https://github.com/talmolab/sleap-io.git@main
 
 ### Optional Dependencies
 
-For video backend support, install with extras:
+Video support is included by default via imageio-ffmpeg. For faster video backends or additional format support:
 ```
 pip install sleap-io[opencv]  # For OpenCV backend (fastest)
-pip install sleap-io[ffmpeg]   # For FFMPEG backend (most reliable)
-pip install sleap-io[pyav]     # For PyAV backend (balanced)
+pip install sleap-io[pyav]     # For PyAV backend (balanced speed/features)
 pip install sleap-io[mat]      # For LEAP .mat file support
-pip install sleap-io[all]      # For all backends and formats
+pip install sleap-io[all]      # All optional backends and formats
 ```
 
 ### Development Installation

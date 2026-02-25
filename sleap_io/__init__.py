@@ -11,12 +11,14 @@ from sleap_io.version import __version__
 # Lazy load everything else using lazy_loader
 __getattr__, __dir__, __all__ = lazy.attach(
     __name__,
-    submodules=["io", "model"],
+    submodules=["io", "model", "codecs"],
     submod_attrs={
         # I/O functions from sleap_io.io.main
         "io.main": [
             "load_alphatracker",
+            "load_analysis_h5",
             "load_coco",
+            "load_csv",
             "load_dlc",
             "load_file",
             "load_jabs",
@@ -28,7 +30,9 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "load_slp",
             "load_ultralytics",
             "load_video",
+            "save_analysis_h5",
             "save_coco",
+            "save_csv",
             "save_file",
             "save_jabs",
             "save_labelstudio",
@@ -51,6 +55,10 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         # Video writing from sleap_io.io.video_writing
         "io.video_writing": ["VideoWriter"],
+        # Rendering from sleap_io.rendering
+        "rendering.core": ["render_video", "render_image"],
+        "rendering.colors": ["get_palette"],
+        "rendering.callbacks": ["RenderContext", "InstanceContext"],
         # Model classes from sleap_io.model.*
         "model.camera": [
             "Camera",
@@ -67,9 +75,13 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "model.labeled_frame": ["LabeledFrame"],
         "model.labels": ["Labels"],
         "model.labels_set": ["LabelsSet"],
+        "model.matching": ["MatchResult"],
         "model.skeleton": ["Edge", "Node", "Skeleton", "Symmetry"],
         "model.suggestions": ["SuggestionFrame"],
         "model.video": ["Video"],
+        # Transform module
+        "transform.core": ["Transform"],
+        "transform.video": ["transform_labels", "transform_video"],
     },
 )
 
@@ -81,7 +93,10 @@ __all__ = ["__version__"] + __all__
 # - tests/conftest.py (for pytest)
 # - .github/workflows/docs.yml (for docs build)
 # This ensures griffe/mkdocstrings can find all documented symbols
-if os.getenv("EAGER_IMPORT"):
+#
+# Also auto-detect mkdocs runs (mkdocs imports griffe which imports us)
+_is_mkdocs = "mkdocs" in sys.modules or "griffe" in sys.modules
+if os.getenv("EAGER_IMPORT") or _is_mkdocs:
     # Trigger all lazy imports and add them to __dict__ for griffe/mkdocstrings
     _current_module = sys.modules[__name__]
     for _attr in list(__all__):

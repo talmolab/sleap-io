@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sleap_io.model.labels_set import LabelsSet
 
 
-def load_slp(filename: str, open_videos: bool = True) -> Labels:
+def load_slp(filename: str, open_videos: bool = True, lazy: bool = False) -> Labels:
     """Load a SLEAP dataset.
 
     Args:
@@ -30,12 +30,21 @@ def load_slp(filename: str, open_videos: bool = True) -> Labels:
         open_videos: If `True` (the default), attempt to open the video backend for
             I/O. If `False`, the backend will not be opened (useful for reading metadata
             when the video files are not available).
+        lazy: If `True`, defer instance materialization for faster loading.
+            Lazy-loaded Labels support read operations and fast numpy/save.
+            To modify, call `labels.materialize()` first. Default is `False`.
 
     Returns:
         The dataset as a `Labels` object.
+
+    See Also:
+        Labels.is_lazy: Check if Labels is lazy-loaded.
+        Labels.materialize: Convert lazy Labels to eager.
     """
     from sleap_io.io import slp
 
+    if lazy:
+        return slp._read_labels_lazy(filename, open_videos=open_videos)
     return slp.read_labels(filename, open_videos=open_videos)
 
 
@@ -44,8 +53,10 @@ def save_slp(
     filename: str,
     embed: bool | str | list[tuple[Video, int]] | None = False,
     restore_original_videos: bool = True,
+    embed_inplace: bool = False,
     verbose: bool = True,
-    plugin: Optional[str] = None,
+    plugin: str | None = None,
+    progress_callback: Callable[[int, int], bool] | None = None,
 ):
     """Save a SLEAP dataset to a `.slp` file.
 
@@ -69,11 +80,19 @@ def save_slp(
         restore_original_videos: If `True` (default) and `embed=False`, use original
             video files. If `False` and `embed=False`, keep references to source
             `.pkg.slp` files. Only applies when `embed=False`.
+        embed_inplace: If `False` (default), a copy of the labels is made before
+            embedding to avoid modifying the in-memory labels. If `True`, the
+            labels will be modified in-place to point to the embedded videos,
+            which is faster but mutates the input. Only applies when embedding.
         verbose: If `True` (the default), display a progress bar when embedding frames.
         plugin: Image plugin to use for encoding embedded frames. One of "opencv"
             or "imageio". If None, uses the global default from
             `get_default_image_plugin()`. If no global default is set, auto-detects
             based on available packages (opencv preferred, then imageio).
+        progress_callback: Optional callback function called during frame embedding
+            with `(current, total)` arguments. If it returns `False`, the operation
+            is cancelled and `ExportCancelled` is raised. When provided, tqdm
+            progress bar is disabled in favor of the callback.
     """
     from sleap_io.io import slp
 
@@ -82,8 +101,10 @@ def save_slp(
         labels,
         embed=embed,
         restore_original_videos=restore_original_videos,
+        embed_inplace=embed_inplace,
         verbose=verbose,
         plugin=plugin,
+        progress_callback=progress_callback,
     )
 
 
@@ -103,7 +124,7 @@ def load_nwb(filename: str) -> Labels:
 
 def save_nwb(
     labels: Labels,
-    filename: Union[str, Path],
+    filename: str | Path,
     nwb_format: str = "auto",
     append: bool = False,
 ) -> None:
@@ -134,7 +155,7 @@ def save_nwb(
 
 
 def load_labelstudio(
-    filename: str, skeleton: Optional[Union[Skeleton, list[str]]] = None
+    filename: str, skeleton: Skeleton | list[str] | None = None
 ) -> Labels:
     """Read Label Studio-style annotations from a file and return a `Labels` object.
 
@@ -179,7 +200,7 @@ def load_alphatracker(filename: str) -> Labels:
     return alphatracker.read_labels(filename)
 
 
-def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
+def load_jabs(filename: str, skeleton: Skeleton | None = None) -> Labels:
     """Read JABS-style predictions from a file and return a `Labels` object.
 
     Args:
@@ -194,7 +215,96 @@ def load_jabs(filename: str, skeleton: Optional[Skeleton] = None) -> Labels:
     return jabs.read_labels(filename, skeleton=skeleton)
 
 
-def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = None):
+def load_analysis_h5(
+    filename: str,
+    video: "Video | str | None" = None,
+) -> Labels:
+    """Load SLEAP Analysis HDF5 file.
+
+    Args:
+        filename: Path to Analysis HDF5 file.
+        video: Video to associate with data. If None, uses video_path stored
+            in the file. Can be a Video object or path string.
+
+    Returns:
+        Labels object with loaded pose data.
+
+    Notes:
+        If the file contains extended metadata (skeleton symmetries, video
+        backend metadata, etc.), it will be used to reconstruct the full
+        Labels context.
+
+    See Also:
+        save_analysis_h5: Save Labels to Analysis HDF5 file.
+    """
+    from sleap_io.io import analysis_h5
+
+    return analysis_h5.read_labels(filename, video=video)
+
+
+def save_analysis_h5(
+    labels: Labels,
+    filename: str,
+    *,
+    video: "Video | int | None" = None,
+    labels_path: str | None = None,
+    all_frames: bool = True,
+    min_occupancy: float = 0.0,
+    preset: str | None = None,
+    frame_dim: int | None = None,
+    track_dim: int | None = None,
+    node_dim: int | None = None,
+    xy_dim: int | None = None,
+    save_metadata: bool = True,
+) -> None:
+    """Save Labels to SLEAP Analysis HDF5 file.
+
+    Args:
+        labels: Labels to export.
+        filename: Output file path.
+        video: Video to export. If None, uses first video. Can be a Video
+            object or an integer index.
+        labels_path: Source labels path (stored as metadata).
+        all_frames: Include all frames from 0 to last labeled frame.
+            Default True.
+        min_occupancy: Minimum track occupancy ratio (0-1) to keep.
+            0 = keep all non-empty tracks (SLEAP default).
+            0.5 = keep tracks with >50% occupancy.
+        preset: Axis ordering preset. Options:
+            - "matlab" (default): SLEAP-compatible ordering for MATLAB.
+              tracks shape: (n_tracks, 2, n_nodes, n_frames)
+            - "standard": Intuitive Python ordering.
+              tracks shape: (n_frames, n_tracks, n_nodes, 2)
+            Mutually exclusive with explicit dimension parameters.
+        frame_dim: Position of the frame dimension (0-3).
+        track_dim: Position of the track dimension (0-3).
+        node_dim: Position of the node dimension (0-3).
+        xy_dim: Position of the xy dimension (0-3).
+        save_metadata: Store extended metadata for full round-trip.
+            Default True.
+
+    See Also:
+        load_analysis_h5: Load Labels from Analysis HDF5 file.
+    """
+    from sleap_io.io import analysis_h5
+
+    analysis_h5.write_labels(
+        labels,
+        filename,
+        video=video,
+        labels_path=labels_path,
+        all_frames=all_frames,
+        min_occupancy=min_occupancy,
+        preset=preset,
+        frame_dim=frame_dim,
+        track_dim=track_dim,
+        node_dim=node_dim,
+        xy_dim=xy_dim,
+        save_metadata=save_metadata,
+    )
+
+
+def save_jabs(labels: Labels, pose_version: int, root_folder: str | None = None):
     """Save a SLEAP dataset to JABS pose file format.
 
     Args:
@@ -211,7 +321,7 @@ def save_jabs(labels: Labels, pose_version: int, root_folder: Optional[str] = No
 
 
 def load_dlc(
-    filename: str, video_search_paths: Optional[List[Union[str, Path]]] = None, **kwargs
+    filename: str, video_search_paths: list[str | Path] | None = None, **kwargs
 ) -> Labels:
     """Read DeepLabCut annotations from a CSV file and return a `Labels` object.
 
@@ -231,7 +341,7 @@ def load_dlc(
 def load_ultralytics(
     dataset_path: str,
     split: str = "train",
-    skeleton: Optional[Skeleton] = None,
+    skeleton: Skeleton | None = None,
     **kwargs,
 ) -> Labels:
     """Load an Ultralytics YOLO pose dataset as a SLEAP `Labels` object.
@@ -374,7 +484,7 @@ def _detect_coco_format(json_path: str) -> bool:
 
 def load_leap(
     filename: str,
-    skeleton: Optional[Skeleton] = None,
+    skeleton: Skeleton | None = None,
     **kwargs,
 ) -> Labels:
     """Load a LEAP dataset from a .mat file.
@@ -393,9 +503,100 @@ def load_leap(
     return leap.read_labels(filename, skeleton=skeleton)
 
 
+def load_csv(
+    filename: str,
+    format: str = "auto",
+    video: "Video | str | None" = None,
+    skeleton: "Skeleton | None" = None,
+) -> "Labels":
+    """Load pose data from a CSV file.
+
+    Args:
+        filename: Path to CSV file.
+        format: CSV format. One of "auto", "sleap", "dlc", "points", "instances",
+            "frames". Default "auto" detects format from file content.
+        video: Video to associate with data. Can be Video object or path string.
+        skeleton: Skeleton to use. If None, inferred from columns or metadata.
+
+    Returns:
+        Labels object.
+
+    Notes:
+        If a metadata JSON file exists alongside the CSV (same base name with
+        .json extension), it will be automatically loaded to restore full
+        Labels context including skeleton edges, symmetries, and provenance.
+
+    See Also:
+        save_csv: Save Labels to CSV file.
+    """
+    from sleap_io.io import csv
+
+    return csv.read_labels(filename, format=format, video=video, skeleton=skeleton)
+
+
+def save_csv(
+    labels: "Labels",
+    filename: str,
+    format: str = "sleap",
+    video: "Video | int | None" = None,
+    include_score: bool = True,
+    include_empty: bool = False,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
+    scorer: str = "sleap-io",
+    save_metadata: bool = False,
+    chunk_size: int | None = None,
+    video_id: str = "path",
+) -> None:
+    """Save pose data to a CSV file.
+
+    Args:
+        labels: Labels to save.
+        filename: Output path.
+        format: CSV format. One of "sleap" (default), "dlc", "points",
+            "instances", "frames".
+        video: Video to filter to. Can be Video object or integer index.
+            If None, includes all videos.
+        include_score: Include confidence scores in output. Default True.
+        include_empty: Include frames with no instances (filled with NaN values).
+            Default False. Only applies to "frames" and "instances" formats.
+        start_frame: Start frame index (inclusive) for output. If None, starts
+            from 0 when include_empty=True, or from first labeled frame otherwise.
+        end_frame: End frame index (exclusive) for output. If None, ends at
+            last labeled frame + 1.
+        scorer: Scorer name for DLC format. Default "sleap-io".
+        save_metadata: Save JSON metadata file alongside CSV that enables
+            full round-trip reconstruction. Default False.
+        chunk_size: Number of rows per chunk for memory-efficient writing. If None
+            (default), writes entire DataFrame at once. Useful for large datasets.
+            Not supported for DLC format.
+        video_id: How to represent videos in the CSV. Options: "path" (default),
+            "index", or "name".
+
+    See Also:
+        load_csv: Load Labels from CSV file.
+    """
+    from sleap_io.io import csv
+
+    csv.write_labels(
+        labels,
+        filename,
+        format=format,
+        video=video,
+        include_score=include_score,
+        include_empty=include_empty,
+        start_frame=start_frame,
+        end_frame=end_frame,
+        scorer=scorer,
+        save_metadata=save_metadata,
+        chunk_size=chunk_size,
+        video_id=video_id,
+    )
+
+
 def load_coco(
     json_path: str,
-    dataset_root: Optional[str] = None,
+    dataset_root: str | None = None,
     grayscale: bool = False,
     **kwargs,
 ) -> Labels:
@@ -420,7 +621,7 @@ def load_coco(
 def save_coco(
     labels: Labels,
     json_path: str,
-    image_filenames: Optional[Union[str, List[str]]] = None,
+    image_filenames: str | list[str] | None = None,
     visibility_encoding: str = "ternary",
 ):
     """Save a SLEAP dataset to COCO-style JSON annotation format.
@@ -564,15 +765,16 @@ def save_video(
 
 
 def load_file(
-    filename: str | Path, format: Optional[str] = None, **kwargs
-) -> Union[Labels, Video]:
+    filename: str | Path, format: str | None = None, **kwargs
+) -> Labels | Video:
     """Load a file and return the appropriate object.
 
     Args:
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "alphatracker",
-            "labelstudio", "coco", "jabs", "dlc", "ultralytics", "leap", and "video".
+            "labelstudio", "coco", "jabs", "analysis_h5", "dlc", "ultralytics", "leap",
+            and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
@@ -587,6 +789,8 @@ def load_file(
               If False, load as RGB (3 channels). Default is False.
             - For "jabs" format: skeleton (Optional[Skeleton]): Skeleton to use for
               the labels.
+            - For "analysis_h5" format: video (Optional[Video | str]): Video to
+              associate with data. If None, uses video_path stored in the file.
             - For "dlc" format: video_search_paths (Optional[List[str]]): Paths to
               search for video files.
             - For "ultralytics" format: See `load_ultralytics` for supported arguments.
@@ -614,7 +818,13 @@ def load_file(
             else:
                 format = "json"
         elif filename.lower().endswith(".h5"):
-            format = "jabs"
+            # Check if this is Analysis HDF5 or JABS
+            from sleap_io.io import analysis_h5
+
+            if analysis_h5.is_analysis_h5_file(filename):
+                format = "analysis_h5"
+            else:
+                format = "jabs"
         elif filename.endswith("data.yaml") or (
             Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
         ):
@@ -624,6 +834,8 @@ def load_file(
 
             if dlc.is_dlc_file(filename):
                 format = "dlc"
+            else:
+                format = "csv"
         else:
             for vid_ext in Video.EXTS:
                 if filename.lower().endswith(vid_ext.lower()):
@@ -646,9 +858,14 @@ def load_file(
         else:
             return load_labelstudio(filename, **kwargs)
     elif filename.lower().endswith(".h5"):
-        return load_jabs(filename, **kwargs)
+        if format == "analysis_h5":
+            return load_analysis_h5(filename, **kwargs)
+        else:
+            return load_jabs(filename, **kwargs)
     elif format == "dlc":
         return load_dlc(filename, **kwargs)
+    elif format == "csv":
+        return load_csv(filename, **kwargs)
     elif format == "ultralytics":
         return load_ultralytics(filename, **kwargs)
     elif format == "video":
@@ -658,8 +875,9 @@ def load_file(
 def save_file(
     labels: Labels,
     filename: str | Path,
-    format: Optional[str] = None,
+    format: str | None = None,
     verbose: bool = True,
+    progress_callback: Callable[[int, int], bool] | None = None,
     **kwargs,
 ):
     """Save a file based on the extension.
@@ -669,15 +887,20 @@ def save_file(
         filename: Path to save labels to.
         format: Optional format to save as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "labelstudio", "coco",
-            "jabs", and "ultralytics".
+            "jabs", "analysis_h5", and "ultralytics".
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
+        progress_callback: Optional callback function called during frame embedding
+            (SLP format only) with `(current, total)` arguments. If it returns `False`,
+            the operation is cancelled and `ExportCancelled` is raised.
         **kwargs: Additional arguments passed to the format-specific saving function:
             - For "slp" format: embed (bool | str | list[tuple[Video, int]] |
               None): Frames
               to embed in the saved labels file. One of None, True, "all", "user",
               "suggestions", "user+suggestions", "source" or list of tuples of
               (video, frame_idx). If False (the default), no frames are embedded.
+              embed_inplace (bool): If False (default), copy labels before embedding
+              to avoid mutating the input. If True, modify labels in-place.
             - For "nwb" format: pose_estimation_metadata (dict): Metadata to store
               in the
               NWB file. append (bool): If True, append to existing NWB file.
@@ -687,6 +910,7 @@ def save_file(
               "ternary" (default).
             - For "jabs" format: pose_version (int): JABS pose format version (1-6).
               root_folder (Optional[str]): Root folder for JABS project structure.
+            - For "analysis_h5" format: See `save_analysis_h5` for supported arguments.
             - For "ultralytics" format: See `save_ultralytics` for supported arguments.
     """
     if isinstance(filename, Path):
@@ -703,13 +927,30 @@ def save_file(
                 format = "coco"
             else:
                 format = "labelstudio"
+        elif filename.lower().endswith(".h5") or filename.lower().endswith(
+            ".analysis.h5"
+        ):
+            # Analysis HDF5 can be detected by extension pattern or kwargs
+            if "min_occupancy" in kwargs or filename.lower().endswith(".analysis.h5"):
+                format = "analysis_h5"
+            elif "pose_version" in kwargs:
+                format = "jabs"
+            else:
+                # Default to analysis_h5 for .h5 extension without specific jabs kwargs
+                format = "analysis_h5"
         elif "pose_version" in kwargs:
             format = "jabs"
         elif "split_ratios" in kwargs or Path(filename).is_dir():
             format = "ultralytics"
 
     if format == "slp":
-        save_slp(labels, filename, verbose=verbose, **kwargs)
+        save_slp(
+            labels,
+            filename,
+            verbose=verbose,
+            progress_callback=progress_callback,
+            **kwargs,
+        )
     elif format == "nwb":
         save_nwb(labels, filename, **kwargs)
     elif format == "labelstudio":
@@ -720,13 +961,42 @@ def save_file(
         pose_version = kwargs.pop("pose_version", 5)
         root_folder = kwargs.pop("root_folder", filename)
         save_jabs(labels, pose_version=pose_version, root_folder=root_folder)
+    elif format == "analysis_h5":
+        # Filter kwargs to those accepted by save_analysis_h5
+        analysis_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k
+            in (
+                "video",
+                "labels_path",
+                "all_frames",
+                "min_occupancy",
+                "preset",
+                "frame_dim",
+                "track_dim",
+                "node_dim",
+                "xy_dim",
+                "save_metadata",
+            )
+        }
+        save_analysis_h5(labels, filename, **analysis_kwargs)
     elif format == "ultralytics":
         save_ultralytics(labels, filename, **kwargs)
+    elif format == "csv" or filename.lower().endswith(".csv"):
+        csv_format = kwargs.pop("csv_format", "sleap")
+        # Filter kwargs to only those accepted by save_csv
+        csv_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k in ("video", "include_score", "scorer", "save_metadata")
+        }
+        save_csv(labels, filename, format=csv_format, **csv_kwargs)
     else:
         raise ValueError(f"Unknown format '{format}' for filename: '{filename}'.")
 
 
-def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
+def load_skeleton(filename: str | Path) -> Skeleton | list[Skeleton]:
     """Load skeleton(s) from a JSON, YAML, or SLP file.
 
     Args:
@@ -768,11 +1038,11 @@ def load_skeleton(filename: str | Path) -> Union[Skeleton, List[Skeleton]]:
 
 
 def load_labels_set(
-    path: Union[str, Path, list[Union[str, Path]], dict[str, Union[str, Path]]],
-    format: Optional[str] = None,
+    path: str | Path | list[str | Path] | dict[str, str | Path],
+    format: str | None = None,
     open_videos: bool = True,
     **kwargs,
-) -> LabelsSet:
+) -> "LabelsSet":
     """Load a LabelsSet from multiple files.
 
     Args:
@@ -856,7 +1126,7 @@ def load_labels_set(
         )
 
 
-def save_skeleton(skeleton: Union[Skeleton, List[Skeleton]], filename: str | Path):
+def save_skeleton(skeleton: Skeleton | list[Skeleton], filename: str | Path):
     """Save skeleton(s) to a JSON or YAML file.
 
     Args:

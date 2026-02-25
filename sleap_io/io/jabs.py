@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 import warnings
-from typing import List, Optional, Union
 
 import h5py
 import numpy as np
@@ -62,7 +61,7 @@ JABS_DEFAULT_SKELETON = Skeleton(
 
 
 def read_labels(
-    labels_path: str, skeleton: Optional[Skeleton] = JABS_DEFAULT_SKELETON
+    labels_path: str, skeleton: Skeleton | None = JABS_DEFAULT_SKELETON
 ) -> Labels:
     """Read JABS style pose from a file and return a `Labels` object.
 
@@ -78,7 +77,7 @@ def read_labels(
     Returns:
         Parsed labels as a `Labels` instance.
     """
-    frames: List[LabeledFrame] = []
+    frames: list[LabeledFrame] = []
     # Video name is the pose file minus the suffix
     video_name = re.sub(r"(_pose_est_v[2-6])?\.h5", ".avi", labels_path)
     video = Video.from_filename(video_name)
@@ -187,7 +186,7 @@ def make_simple_skeleton(name: str, num_points: int) -> Skeleton:
 
 
 def prediction_to_instance(
-    data: Union[np.ndarray[np.uint16], np.ndarray[np.float32]],
+    data: np.ndarray[np.uint16] | np.ndarray[np.float32],
     confidence: np.ndarray[np.float32],
     skeleton: Skeleton,
     track: Track = None,
@@ -224,7 +223,7 @@ def prediction_to_instance(
         return Instance(points, skeleton=skeleton, track=track)
 
 
-def get_max_ids_in_video(labels: List[Labels], key: str = "Mouse") -> int:
+def get_max_ids_in_video(labels: list[Labels], key: str = "Mouse") -> int:
     """Determine the maximum number of identities that exist at the same time.
 
     Args:

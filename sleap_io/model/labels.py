@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal
 
 import numpy as np
 from attrs import define, field
@@ -29,9 +29,11 @@ from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.matching import (
         InstanceMatcher,
+        MatchResult,
         MergeResult,
         SkeletonMatcher,
         TrackMatcher,
@@ -69,8 +71,200 @@ class Labels:
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
 
+    # Internal lazy state (private, not part of public API)
+    _lazy_store: "LazyDataStore | None" = field(
+        default=None, repr=False, eq=False, alias="lazy_store"
+    )
+
+    @property
+    def is_lazy(self) -> bool:
+        """Whether this Labels uses lazy loading.
+
+        Returns:
+            True if loaded with lazy=True and not yet materialized.
+        """
+        return self._lazy_store is not None
+
+    def _check_not_lazy(self, operation: str) -> None:
+        """Raise if Labels is lazy-loaded.
+
+        Args:
+            operation: Description of blocked operation for error message.
+
+        Raises:
+            RuntimeError: If is_lazy is True.
+        """
+        if self.is_lazy:
+            raise RuntimeError(
+                f"Cannot {operation} on lazy-loaded Labels.\n\n"
+                f"To modify, first create a materialized copy:\n"
+                f"    labels = labels.materialize()\n"
+                f"    labels.{operation}(...)"
+            )
+
+    @property
+    def n_user_instances(self) -> int:
+        """Total number of user-labeled instances across all frames.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Total count of user instances.
+        """
+        if self.is_lazy:
+            from sleap_io.io.slp import InstanceType
+
+            store = self.labeled_frames._store
+            mask = store.instances_data["instance_type"] == InstanceType.USER
+            return int(mask.sum())
+        return sum(len(lf.user_instances) for lf in self.labeled_frames)
+
+    @property
+    def n_pred_instances(self) -> int:
+        """Total number of predicted instances across all frames.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Total count of predicted instances.
+        """
+        if self.is_lazy:
+            from sleap_io.io.slp import InstanceType
+
+            store = self.labeled_frames._store
+            return int(
+                (store.instances_data["instance_type"] == InstanceType.PREDICTED).sum()
+            )
+        return sum(len(lf.predicted_instances) for lf in self.labeled_frames)
+
+    @property
+    def n_user_frames(self) -> int:
+        """Number of labeled frames containing at least one user instance.
+
+        When lazy-loaded, this uses a fast path that queries the raw data
+        directly without materializing LabeledFrame objects.
+
+        Returns:
+            Count of frames with user-labeled instances.
+        """
+        if self.is_lazy:
+            return len(self._lazy_store.get_user_frame_indices())
+        return sum(1 for lf in self.labeled_frames if lf.has_user_instances)
+
+    def n_frames_per_video(self) -> dict["Video", int]:
+        """Get the number of labeled frames for each video.
+
+        When lazy-loaded, this uses a fast path that queries the raw frame
+        data directly without materializing LabeledFrame objects.
+
+        Returns:
+            Dictionary mapping Video objects to their labeled frame counts.
+        """
+        if self.is_lazy:
+            store = self.labeled_frames._store
+            counts = np.bincount(store.frames_data["video"], minlength=len(self.videos))
+            return {v: int(counts[i]) for i, v in enumerate(self.videos)}
+
+        counts: dict[Video, int] = {}
+        for lf in self.labeled_frames:
+            counts[lf.video] = counts.get(lf.video, 0) + 1
+        return counts
+
+    def n_instances_per_track(self) -> dict["Track", int]:
+        """Get the number of instances for each track.
+
+        When lazy-loaded, this uses a fast path that queries the raw instance
+        data directly without materializing LabeledFrame or Instance objects.
+
+        Returns:
+            Dictionary mapping Track objects to their instance counts.
+            Untracked instances are not included.
+        """
+        if self.is_lazy:
+            store = self.labeled_frames._store
+            track_ids = store.instances_data["track"]
+            # Filter out untracked instances (track == -1)
+            valid_mask = track_ids >= 0
+            if not np.any(valid_mask):
+                return {t: 0 for t in self.tracks}
+            counts = np.bincount(track_ids[valid_mask], minlength=len(self.tracks))
+            return {t: int(counts[i]) for i, t in enumerate(self.tracks)}
+
+        counts: dict[Track, int] = {t: 0 for t in self.tracks}
+        for lf in self.labeled_frames:
+            for inst in lf.instances:
+                if inst.track is not None and inst.track in counts:
+                    counts[inst.track] += 1
+        return counts
+
+    def materialize(self) -> "Labels":
+        """Create a fully materialized (non-lazy) copy.
+
+        If already non-lazy, returns self unchanged.
+
+        This converts a lazy-loaded Labels into a regular Labels with all
+        LabeledFrame and Instance objects created. Use this when you need
+        to modify the Labels.
+
+        Returns:
+            A new Labels with all frames/instances as Python objects and
+            deep-copied metadata (videos, skeletons, tracks). The returned
+            Labels is fully independent from the original lazy Labels.
+
+        Example:
+            >>> lazy = sio.load_slp("file.slp", lazy=True)
+            >>> eager = lazy.materialize()
+            >>> eager.append(new_frame)  # Now mutations work
+        """
+        if not self.is_lazy:
+            return self
+
+        # Deep copy metadata to ensure full independence
+        new_videos = [deepcopy(v) for v in self.videos]
+        new_skeletons = [deepcopy(s) for s in self.skeletons]
+        new_tracks = [deepcopy(t) for t in self.tracks]
+
+        # Build mappings from old to new objects for relinking
+        video_map = {id(old): new for old, new in zip(self.videos, new_videos)}
+        skeleton_map = {id(old): new for old, new in zip(self.skeletons, new_skeletons)}
+        track_map = {id(old): new for old, new in zip(self.tracks, new_tracks)}
+
+        # Materialize frames and relink to new metadata objects
+        labeled_frames = []
+        for lf in self._lazy_store.materialize_all():
+            # Relink video
+            lf.video = video_map.get(id(lf.video), lf.video)
+            # Relink instances
+            for inst in lf.instances:
+                inst.skeleton = skeleton_map.get(id(inst.skeleton), inst.skeleton)
+                if inst.track is not None:
+                    inst.track = track_map.get(id(inst.track), inst.track)
+            labeled_frames.append(lf)
+
+        # Deep copy suggestions and relink videos
+        new_suggestions = []
+        for s in self.suggestions:
+            new_s = deepcopy(s)
+            new_s.video = video_map.get(id(s.video), new_s.video)
+            new_suggestions.append(new_s)
+
+        return Labels(
+            labeled_frames=labeled_frames,
+            videos=new_videos,
+            skeletons=new_skeletons,
+            tracks=new_tracks,
+            suggestions=new_suggestions,
+            provenance=dict(self.provenance),
+            # _lazy_store is None (not lazy)
+        )
+
     def __attrs_post_init__(self):
         """Append videos, skeletons, and tracks seen in `labeled_frames` to `Labels`."""
+        # Skip update for lazy Labels - metadata is already set from HDF5
+        if self.is_lazy:
+            return
         self.update()
 
     def update(self):
@@ -145,6 +339,18 @@ class Labels:
 
     def __repr__(self) -> str:
         """Return a readable representation of the labels."""
+        if self.is_lazy:
+            return (
+                "Labels("
+                "lazy=True, "
+                f"labeled_frames={len(self)}, "
+                f"videos={len(self.videos)}, "
+                f"skeletons={len(self.skeletons)}, "
+                f"tracks={len(self.tracks)}, "
+                f"suggestions={len(self.suggestions)}, "
+                f"sessions={len(self.sessions)}"
+                ")"
+            )
         return (
             "Labels("
             f"labeled_frames={len(self.labeled_frames)}, "
@@ -160,6 +366,73 @@ class Labels:
         """Return a readable representation of the labels."""
         return self.__repr__()
 
+    def copy(self, *, open_videos: bool | None = None) -> "Labels":
+        """Create a deep copy of the Labels object.
+
+        Args:
+            open_videos: Controls video backend auto-opening in the copy:
+
+                - `None` (default): Preserve each video's current setting.
+                - `True`: Enable auto-opening for all videos.
+                - `False`: Disable auto-opening and close any open backends.
+
+        Returns:
+            A new Labels object with deep copied data. If lazy, the copy is
+            also lazy with independent array copies.
+
+        Notes:
+            Video backends are not copied (file handles cannot be duplicated).
+            The `open_videos` parameter controls whether backends will auto-open
+            when frames are accessed.
+
+        See also: `Labels.extract`, `Labels.remove_predictions`
+
+        Examples:
+            >>> labels_copy = labels.copy()  # Preserves original settings
+
+            >>> # Prevent auto-opening to avoid file handles
+            >>> labels_copy = labels.copy(open_videos=False)
+
+            >>> # Copy and filter predictions separately
+            >>> labels_copy = labels.copy()
+            >>> labels_copy.remove_predictions()
+        """
+        if self.is_lazy:
+            # Lazy-aware copy: deep copy the lazy store with independent arrays
+            from sleap_io.io.slp_lazy import LazyFrameList
+
+            new_store = self._lazy_store.copy()
+            # Update store's video/skeleton/track references to new copies
+            new_videos = [deepcopy(v) for v in self.videos]
+            new_skeletons = [deepcopy(s) for s in self.skeletons]
+            new_tracks = [deepcopy(t) for t in self.tracks]
+
+            # Update store references
+            new_store.videos = new_videos
+            new_store.skeletons = new_skeletons
+            new_store.tracks = new_tracks
+
+            labels_copy = Labels(
+                labeled_frames=LazyFrameList(new_store),
+                videos=new_videos,
+                skeletons=new_skeletons,
+                tracks=new_tracks,
+                suggestions=[deepcopy(s) for s in self.suggestions],
+                sessions=[deepcopy(s) for s in self.sessions],
+                provenance=dict(self.provenance),
+                lazy_store=new_store,
+            )
+        else:
+            labels_copy = deepcopy(self)
+
+        if open_videos is not None:
+            for video in labels_copy.videos:
+                video.open_backend = open_videos
+                if not open_videos:
+                    video.close()
+
+        return labels_copy
+
     def append(self, lf: LabeledFrame, update: bool = True):
         """Append a labeled frame to the labels.
 
@@ -167,7 +440,11 @@ class Labels:
             lf: A labeled frame to add to the labels.
             update: If `True` (the default), update list of videos, tracks and
                 skeletons from the contents.
+
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
         """
+        self._check_not_lazy("append")
         self.labeled_frames.append(lf)
 
         if update:
@@ -182,13 +459,17 @@ class Labels:
                     self.tracks.append(inst.track)
 
     def extend(self, lfs: list[LabeledFrame], update: bool = True):
-        """Append a labeled frame to the labels.
+        """Append labeled frames to the labels.
 
         Args:
             lfs: A list of labeled frames to add to the labels.
             update: If `True` (the default), update list of videos, tracks and
                 skeletons from the contents.
+
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
         """
+        self._check_not_lazy("extend")
         self.labeled_frames.extend(lfs)
 
         if update:
@@ -205,7 +486,7 @@ class Labels:
 
     def numpy(
         self,
-        video: Optional[Union[Video, int]] = None,
+        video: Video | int | None = None,
         untracked: bool = False,
         return_confidence: bool = False,
         user_instances: bool = True,
@@ -241,146 +522,202 @@ class Labels:
         Notes:
             This method assumes that instances have tracks assigned and is intended to
             function primarily for single-video prediction results.
+
+            When lazy-loaded, uses an optimized path that avoids creating Python
+            objects. This method now delegates to `sleap_io.codecs.numpy.to_numpy()`.
+            See that function for implementation details.
         """
-        # Get labeled frames for specified video.
-        if video is None:
-            video = 0
-        if type(video) is int:
-            video = self.videos[video]
-        lfs = [lf for lf in self.labeled_frames if lf.video == video]
-
-        # Figure out frame index range.
-        first_frame, last_frame = 0, 0
-        for lf in lfs:
-            first_frame = min(first_frame, lf.frame_idx)
-            last_frame = max(last_frame, lf.frame_idx)
-
-        # Figure out the number of tracks based on number of instances in each frame.
-        # Check the max number of instances (predicted or user, depending on settings)
-        n_instances = 0
-        for lf in lfs:
-            if user_instances:
-                # Count max of either user or predicted instances per frame (not sum)
-                n_frame_instances = max(
-                    len(lf.user_instances), len(lf.predicted_instances)
-                )
+        # Fast path for lazy-loaded Labels
+        if self.is_lazy:
+            # Resolve video argument
+            if video is None:
+                resolved_video = None  # Will default to first video
+            elif isinstance(video, int):
+                resolved_video = self.videos[video]
             else:
-                n_frame_instances = len(lf.predicted_instances)
-            n_instances = max(n_instances, n_frame_instances)
+                resolved_video = video
 
-        # Case 1: We don't care about order because there's only 1 instance per frame,
-        # or we're considering untracked instances.
-        is_single_instance = n_instances == 1
-        untracked = untracked or is_single_instance
-        if untracked:
-            n_tracks = n_instances
-        else:
-            # Case 2: We're considering only tracked instances.
-            n_tracks = len(self.tracks)
+            return self._lazy_store.to_numpy(
+                video=resolved_video,
+                untracked=untracked,
+                return_confidence=return_confidence,
+                user_instances=user_instances,
+            )
 
-        n_frames = int(last_frame - first_frame + 1)
-        skeleton = self.skeletons[-1]  # Assume project only uses last skeleton
-        n_nodes = len(skeleton.nodes)
+        from sleap_io.codecs.numpy import to_numpy
 
-        if return_confidence:
-            tracks = np.full((n_frames, n_tracks, n_nodes, 3), np.nan, dtype="float32")
-        else:
-            tracks = np.full((n_frames, n_tracks, n_nodes, 2), np.nan, dtype="float32")
+        return to_numpy(
+            self,
+            video=video,
+            untracked=untracked,
+            return_confidence=return_confidence,
+            user_instances=user_instances,
+        )
 
-        for lf in lfs:
-            i = int(lf.frame_idx - first_frame)
+    def to_dict(
+        self,
+        *,
+        video: Video | int | None = None,
+        skip_empty_frames: bool = False,
+    ) -> dict:
+        """Convert labels to a JSON-serializable dictionary.
 
-            if untracked:
-                # For untracked instances, fill them in arbitrary order
-                j = 0
-                instances_to_include = []
+        Args:
+            video: Optional video filter. If specified, only frames from this video
+                are included. Can be a Video object or integer index.
+            skip_empty_frames: If True, exclude frames with no instances.
 
-                # If user instances are preferred, add them first
-                if user_instances and lf.has_user_instances:
-                    # First collect all user instances
-                    for inst in lf.user_instances:
-                        instances_to_include.append(inst)
+        Returns:
+            Dictionary with structure containing skeletons, videos, tracks,
+            labeled_frames, suggestions, and provenance. All values are
+            JSON-serializable primitives.
 
-                    # For the trivial case (single instance per frame), if we found
-                    # user instances, we shouldn't include any predicted instances
-                    if is_single_instance and len(instances_to_include) > 0:
-                        pass  # Skip adding predicted instances
-                    else:
-                        # Add predicted instances that don't have a corresponding
-                        # user instance
-                        for inst in lf.predicted_instances:
-                            skip = False
-                            for user_inst in lf.user_instances:
-                                # Skip if this predicted instance is linked to a user
-                                # instance via from_predicted
-                                if (
-                                    hasattr(user_inst, "from_predicted")
-                                    and user_inst.from_predicted == inst
-                                ):
-                                    skip = True
-                                    break
-                                # Skip if user and predicted instances share same track
-                                if (
-                                    user_inst.track is not None
-                                    and inst.track is not None
-                                    and user_inst.track == inst.track
-                                ):
-                                    skip = True
-                                    break
-                            if not skip:
-                                instances_to_include.append(inst)
-                else:
-                    # If user_instances=False, only include predicted instances
-                    instances_to_include = lf.predicted_instances
+        Examples:
+            >>> d = labels.to_dict()
+            >>> import json
+            >>> json.dumps(d)  # Fully serializable!
 
-                # Now process all the instances we want to include
-                for inst in instances_to_include:
-                    if j < n_tracks:
-                        if return_confidence:
-                            if isinstance(inst, PredictedInstance):
-                                tracks[i, j] = inst.numpy(scores=True)
-                            else:
-                                # For user instances, set confidence to 1.0
-                                points_data = inst.numpy()
-                                confidence = np.ones(
-                                    (points_data.shape[0], 1), dtype="float32"
-                                )
-                                tracks[i, j] = np.hstack((points_data, confidence))
-                        else:
-                            tracks[i, j] = inst.numpy()
-                        j += 1
-            else:  # untracked is False
-                # For tracked instances, organize by track ID
+            >>> # Filter to specific video
+            >>> d = labels.to_dict(video=0)
 
-                # Create mapping from track to best instance for this frame
-                track_to_instance = {}
+        Notes:
+            This method delegates to `sleap_io.codecs.dictionary.to_dict()`.
+            See that function for implementation details.
+        """
+        from sleap_io.codecs.dictionary import to_dict
 
-                # First, add predicted instances to the mapping
-                for inst in lf.predicted_instances:
-                    if inst.track is not None:
-                        track_to_instance[inst.track] = inst
+        return to_dict(self, video=video, skip_empty_frames=skip_empty_frames)
 
-                # Then, add user instances to the mapping (if user_instances=True)
-                if user_instances:
-                    for inst in lf.user_instances:
-                        if inst.track is not None:
-                            track_to_instance[inst.track] = inst
+    def to_dataframe(
+        self,
+        format: str = "points",
+        *,
+        video: Video | int | None = None,
+        include_metadata: bool = True,
+        include_score: bool = True,
+        include_user_instances: bool = True,
+        include_predicted_instances: bool = True,
+        video_id: str = "path",
+        include_video: bool | None = None,
+        backend: str = "pandas",
+    ):
+        """Convert labels to a pandas or polars DataFrame.
 
-                # Process the preferred instances for each track
-                for track in track_to_instance:
-                    inst = track_to_instance[track]
-                    j = self.tracks.index(track)
+        Args:
+            format: Output format. One of "points", "instances", "frames",
+                "multi_index".
+            video: Optional video filter. If specified, only frames from this video
+                are included. Can be a Video object or integer index.
+            include_metadata: Include skeleton, track, video information in columns.
+            include_score: Include confidence scores for predicted instances.
+            include_user_instances: Include user-labeled instances.
+            include_predicted_instances: Include predicted instances.
+            video_id: How to represent videos ("path", "index", "name", "object").
+            include_video: Whether to include video information. If None, auto-detects
+                based on number of videos.
+            backend: "pandas" or "polars".
 
-                    if type(inst) is PredictedInstance:
-                        tracks[i, j] = inst.numpy(scores=return_confidence)
-                    elif type(inst) is Instance:
-                        tracks[i, j, :, :2] = inst.numpy()
+        Returns:
+            DataFrame in the specified format.
 
-                        # If return_confidence is True, add dummy confidence scores
-                        if return_confidence:
-                            tracks[i, j, :, 2] = 1.0
+        Examples:
+            >>> df = labels.to_dataframe(format="points")
+            >>> df.to_csv("predictions.csv")
 
-        return tracks
+            >>> # Get instances format for ML
+            >>> df = labels.to_dataframe(format="instances")
+
+        Notes:
+            This method delegates to `sleap_io.codecs.dataframe.to_dataframe()`.
+            See that function for implementation details on formats and options.
+        """
+        from sleap_io.codecs.dataframe import to_dataframe
+
+        return to_dataframe(
+            self,
+            format=format,
+            video=video,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            video_id=video_id,
+            include_video=include_video,
+            backend=backend,
+        )
+
+    def to_dataframe_iter(
+        self,
+        format: str = "points",
+        *,
+        chunk_size: int | None = None,
+        video: Video | int | None = None,
+        include_metadata: bool = True,
+        include_score: bool = True,
+        include_user_instances: bool = True,
+        include_predicted_instances: bool = True,
+        video_id: str = "path",
+        include_video: bool | None = None,
+        instance_id: str = "index",
+        untracked: str = "error",
+        backend: str = "pandas",
+    ):
+        """Iterate over labels data, yielding DataFrames in chunks.
+
+        This is a memory-efficient alternative to `to_dataframe()` for large datasets.
+        Instead of materializing the entire DataFrame at once, it yields smaller
+        DataFrames (chunks) that can be processed incrementally.
+
+        Args:
+            format: Output format. One of "points", "instances", "frames",
+                "multi_index".
+            chunk_size: Number of rows per chunk. If None, yields entire DataFrame.
+                The meaning of "row" depends on the format:
+                - points: One point (node) per row
+                - instances: One instance per row
+                - frames/multi_index: One frame per row
+            video: Optional video filter.
+            include_metadata: Include track, video information in columns.
+            include_score: Include confidence scores for predicted instances.
+            include_user_instances: Include user-labeled instances.
+            include_predicted_instances: Include predicted instances.
+            video_id: How to represent videos ("path", "index", "name", "object").
+            include_video: Whether to include video information.
+            instance_id: How to name instance columns ("index" or "track").
+            untracked: Behavior for untracked instances ("error" or "ignore").
+            backend: "pandas" or "polars".
+
+        Yields:
+            DataFrames, each containing up to `chunk_size` rows.
+
+        Examples:
+            >>> for chunk in labels.to_dataframe_iter(chunk_size=10000):
+            ...     chunk.to_parquet("output.parquet", append=True)
+
+            >>> # Memory-efficient processing
+            >>> import pandas as pd
+            >>> df = pd.concat(labels.to_dataframe_iter(chunk_size=1000))
+
+        Notes:
+            This method delegates to `sleap_io.codecs.dataframe.to_dataframe_iter()`.
+        """
+        from sleap_io.codecs.dataframe import to_dataframe_iter
+
+        return to_dataframe_iter(
+            self,
+            format=format,
+            chunk_size=chunk_size,
+            video=video,
+            include_metadata=include_metadata,
+            include_score=include_score,
+            include_user_instances=include_user_instances,
+            include_predicted_instances=include_predicted_instances,
+            video_id=video_id,
+            include_video=include_video,
+            instance_id=instance_id,
+            untracked=untracked,
+            backend=backend,
+        )
 
     @classmethod
     def from_numpy(
@@ -433,127 +770,21 @@ class Labels:
             >>> skeleton = Skeleton(["head", "tail"])
             >>> # Create labels from the array
             >>> labels = Labels.from_numpy(arr, videos=[video], skeletons=[skeleton])
+
+        Notes:
+            This method now delegates to `sleap_io.codecs.numpy.from_numpy()`.
+            See that function for implementation details.
         """
-        # Check dimensions
-        if len(tracks_arr.shape) != 4:
-            raise ValueError(
-                f"Array must have 4 dimensions (n_frames, n_tracks, n_nodes, 2 or 3), "
-                f"but got {tracks_arr.shape}"
-            )
+        from sleap_io.codecs.numpy import from_numpy
 
-        # Validate videos
-        if not videos:
-            raise ValueError("At least one video must be provided")
-        video = videos[0]  # Use the first video for creating labeled frames
-
-        # Process skeletons input
-        if skeletons is None:
-            raise ValueError("At least one skeleton must be provided")
-        elif isinstance(skeletons, Skeleton):
-            skeletons = [skeletons]
-        elif not skeletons:  # Check for empty list
-            raise ValueError("At least one skeleton must be provided")
-
-        skeleton = skeletons[0]  # Use the first skeleton for creating instances
-        n_nodes = len(skeleton.nodes)
-
-        # Check if tracks_arr contains confidence scores
-        has_confidence = tracks_arr.shape[-1] == 3 or return_confidence
-
-        # Get dimensions
-        n_frames, n_tracks_arr, _ = tracks_arr.shape[:3]
-
-        # Create or validate tracks
-        if tracks is None:
-            # Auto-create tracks if not provided
-            tracks = [Track(f"track_{i}") for i in range(n_tracks_arr)]
-        elif len(tracks) < n_tracks_arr:
-            # Add missing tracks if needed
-            original_len = len(tracks)
-            for i in range(n_tracks_arr - original_len):
-                tracks.append(Track(f"track_{i}"))
-
-        # Create a new empty Labels object
-        labels = cls()
-        labels.videos = list(videos)
-        labels.skeletons = list(skeletons)
-        labels.tracks = list(tracks)
-
-        # Create labeled frames and instances from the array data
-        for i in range(n_frames):
-            frame_idx = i + first_frame
-
-            # Check if this frame has any valid data across all tracks
-            frame_has_valid_data = False
-            for j in range(n_tracks_arr):
-                track_data = tracks_arr[i, j]
-                # Check if at least one node in this track has valid xy coordinates
-                if np.any(~np.isnan(track_data[:, 0])):
-                    frame_has_valid_data = True
-                    break
-
-            # Skip creating a frame if there's no valid data
-            if not frame_has_valid_data:
-                continue
-
-            # Create a new labeled frame
-            labeled_frame = LabeledFrame(video=video, frame_idx=frame_idx)
-            frame_has_valid_instances = False
-
-            # Process each track in this frame
-            for j in range(n_tracks_arr):
-                track = tracks[j]
-                track_data = tracks_arr[i, j]
-
-                # Check if there's any valid data for this track at this frame
-                valid_points = ~np.isnan(track_data[:, 0])
-                if not np.any(valid_points):
-                    continue
-
-                # Create points from numpy data
-                points = track_data[:, :2].copy()
-
-                # Create new instance
-                if has_confidence:
-                    # Get confidence scores
-                    if tracks_arr.shape[-1] == 3:
-                        scores = track_data[:, 2].copy()
-                    else:
-                        scores = np.ones(n_nodes)
-
-                    # Fix NaN scores
-                    scores = np.where(np.isnan(scores), 1.0, scores)
-
-                    # Create instance with confidence scores
-                    new_instance = PredictedInstance.from_numpy(
-                        points_data=points,
-                        skeleton=skeleton,
-                        point_scores=scores,
-                        score=1.0,
-                        track=track,
-                    )
-                else:
-                    # Create instance with default scores
-                    new_instance = PredictedInstance.from_numpy(
-                        points_data=points,
-                        skeleton=skeleton,
-                        point_scores=np.ones(n_nodes),
-                        score=1.0,
-                        track=track,
-                    )
-
-                # Add to frame
-                labeled_frame.instances.append(new_instance)
-                frame_has_valid_instances = True
-
-            # Only add frames that have instances
-            if frame_has_valid_instances:
-                labels.append(labeled_frame, update=False)
-
-        # Update internal references
-        labels.update()
-
-        return labels
+        return from_numpy(
+            tracks_array=tracks_arr,
+            videos=videos,
+            skeletons=skeletons,
+            tracks=tracks,
+            first_frame=first_frame,
+            return_confidence=return_confidence,
+        )
 
     @property
     def video(self) -> Video:
@@ -606,6 +837,47 @@ class Labels:
         """
         results = []
 
+        # Lazy fast path: scan raw arrays directly
+        if self.is_lazy:
+            try:
+                video_id = self.videos.index(video)
+            except ValueError:
+                # Video not in labels
+                if return_new and frame_idx is not None:
+                    if np.isscalar(frame_idx):
+                        frame_idx = np.array(frame_idx).reshape(-1)
+                    return [
+                        LabeledFrame(video=video, frame_idx=int(fi)) for fi in frame_idx
+                    ]
+                return []
+
+            frames_data = self._lazy_store.frames_data
+
+            if frame_idx is None:
+                # Return all frames for this video
+                video_mask = frames_data["video"] == video_id
+                matching_indices = np.where(video_mask)[0]
+                return [
+                    self._lazy_store.materialize_frame(int(i)) for i in matching_indices
+                ]
+
+            if np.isscalar(frame_idx):
+                frame_idx = np.array(frame_idx).reshape(-1)
+
+            for frame_ind in frame_idx:
+                # Find matching frame in raw data
+                matches = np.where(
+                    (frames_data["video"] == video_id)
+                    & (frames_data["frame_idx"] == frame_ind)
+                )[0]
+                if len(matches) > 0:
+                    results.append(self._lazy_store.materialize_frame(int(matches[0])))
+                elif return_new:
+                    results.append(LabeledFrame(video=video, frame_idx=int(frame_ind)))
+
+            return results
+
+        # Eager path
         if frame_idx is None:
             for lf in self.labeled_frames:
                 if lf.video == video:
@@ -630,9 +902,10 @@ class Labels:
     def save(
         self,
         filename: str,
-        format: Optional[str] = None,
+        format: str | None = None,
         embed: bool | str | list[tuple[Video, int]] | None = False,
         restore_original_videos: bool = True,
+        embed_inplace: bool = False,
         verbose: bool = True,
         **kwargs,
     ):
@@ -660,6 +933,10 @@ class Labels:
             restore_original_videos: If `True` (default) and `embed=False`, use original
                 video files. If `False` and `embed=False`, keep references to source
                 `.pkg.slp` files. Only applies when `embed=False`.
+            embed_inplace: If `False` (default), a copy of the labels is made before
+                embedding to avoid modifying the in-memory labels. If `True`, the
+                labels will be modified in-place to point to the embedded videos,
+                which is faster but mutates the input. Only applies when embedding.
             verbose: If `True` (the default), display a progress bar when embedding
                 frames.
             **kwargs: Additional format-specific arguments passed to the save function.
@@ -697,9 +974,43 @@ class Labels:
             format=format,
             embed=embed,
             restore_original_videos=restore_original_videos,
+            embed_inplace=embed_inplace,
             verbose=verbose,
             **kwargs,
         )
+
+    def render(
+        self,
+        save_path: str | Path | None = None,
+        **kwargs,
+    ) -> "Video | list":
+        """Render video with pose overlays.
+
+        Convenience method that delegates to `sleap_io.render_video()`.
+        See that function for full parameter documentation.
+
+        Args:
+            save_path: Output video path. If None, returns list of rendered arrays.
+            **kwargs: Additional arguments passed to `render_video()`.
+
+        Returns:
+            If save_path provided: Video object pointing to output file.
+            If save_path is None: List of rendered numpy arrays (H, W, 3) uint8.
+
+        Raises:
+            ImportError: If rendering dependencies are not installed.
+
+        Example:
+            >>> labels.render("output.mp4")
+            >>> labels.render("preview.mp4", preset="preview")
+            >>> frames = labels.render()  # Returns arrays
+
+        Note:
+            Requires optional dependencies. Install with: pip install sleap-io[all]
+        """
+        from sleap_io.rendering import render_video
+
+        return render_video(self, save_path, **kwargs)
 
     def clean(
         self,
@@ -712,13 +1023,19 @@ class Labels:
         """Remove empty frames, unused skeletons, tracks and videos.
 
         Args:
-            frames: If `True` (the default), remove empty frames.
+            frames: If `True` (the default), remove empty frames. Note that negative
+                frames (frames explicitly marked as containing no instances via
+                `is_negative=True`) are preserved even when empty.
             empty_instances: If `True` (NOT default), remove instances that have no
                 visible points.
             skeletons: If `True` (the default), remove unused skeletons.
             tracks: If `True` (the default), remove unused tracks.
             videos: If `True` (NOT default), remove videos that have no labeled frames.
+
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
         """
+        self._check_not_lazy("clean")
         used_skeletons = []
         used_tracks = []
         used_videos = []
@@ -727,7 +1044,7 @@ class Labels:
             if empty_instances:
                 lf.remove_empty_instances()
 
-            if frames and len(lf) == 0:
+            if frames and len(lf) == 0 and not lf.is_negative:
                 continue
 
             if videos and lf.video not in used_videos:
@@ -769,8 +1086,12 @@ class Labels:
                 tracks and skeletons. It does NOT remove videos that have no labeled
                 frames or instances with no visible points.
 
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
+
         See also: `Labels.clean`
         """
+        self._check_not_lazy("remove_predictions")
         for lf in self.labeled_frames:
             lf.remove_predictions()
 
@@ -785,8 +1106,31 @@ class Labels:
 
     @property
     def user_labeled_frames(self) -> list[LabeledFrame]:
-        """Return all labeled frames with user (non-predicted) instances."""
-        return [lf for lf in self.labeled_frames if lf.has_user_instances]
+        """Return all labeled frames with user instances OR marked as negative.
+
+        This includes:
+        - Frames with at least one user-labeled Instance
+        - Frames explicitly marked as negative/background (is_negative=True)
+
+        This property is used for training data export and embedding.
+        """
+        if self.is_lazy:
+            indices = self._lazy_store.get_user_frame_indices()
+            return [self._lazy_store.materialize_frame(i) for i in indices]
+        return [lf for lf in self.labeled_frames if lf.is_user_labeled]
+
+    @property
+    def negative_frames(self) -> list[LabeledFrame]:
+        """Return all frames explicitly marked as negative/background.
+
+        These are frames where the user has indicated there are no instances
+        present (pure background), as opposed to frames that are simply empty
+        (e.g., instances were deleted).
+
+        Returns:
+            A list of `LabeledFrame` objects where `is_negative` is True.
+        """
+        return [lf for lf in self.labeled_frames if lf.is_negative]
 
     @property
     def instances(self) -> Iterator[Instance]:
@@ -976,6 +1320,37 @@ class Labels:
         # Replace the skeleton in the labels.
         self.skeletons[self.skeletons.index(old_skeleton)] = new_skeleton
 
+    def add_video(self, video: Video) -> Video:
+        """Add a video to the labels, preventing duplicates.
+
+        This method provides safe video addition by checking if a video with
+        the same file identity already exists. Unlike direct list append, this
+        prevents duplicate videos even when different Video objects point to
+        the same underlying file.
+
+        Args:
+            video: The video to add.
+
+        Returns:
+            The video that should be used. If a duplicate was detected, returns
+            the existing video; otherwise returns the input video.
+
+        Notes:
+            This method uses is_same_file() for duplicate detection, which:
+            - Considers source_video for embedded videos (PKG.SLP)
+            - Uses strict path comparison (same basename in different dirs != same)
+            - Handles ImageVideo lists correctly
+
+            Use this instead of `labels.videos.append(video)` to prevent duplicates.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        for existing in self.videos:
+            if is_same_file(existing, video):
+                return existing
+        self.videos.append(video)
+        return video
+
     def replace_videos(
         self,
         old_videos: list[Video] | None = None,
@@ -1152,7 +1527,7 @@ class Labels:
 
     def extract(
         self, inds: list[int] | list[tuple[Video, int]] | np.ndarray, copy: bool = True
-    ) -> Labels:
+    ) -> "Labels":
         """Extract a set of frames into a new Labels object.
 
         Args:
@@ -1275,7 +1650,7 @@ class Labels:
         save_dir: str | Path | None = None,
         seed: int | None = None,
         embed: bool = True,
-    ) -> LabelsSet:
+    ) -> "LabelsSet":
         """Make splits for training with embedded images.
 
         Args:
@@ -1376,7 +1751,7 @@ class Labels:
         frame_inds: list[int] | np.ndarray,
         video: Video | int | None = None,
         video_kwargs: dict[str, Any] | None = None,
-    ) -> Labels:
+    ) -> "Labels":
         """Trim the labels to a subset of frames and videos accordingly.
 
         Args:
@@ -1425,10 +1800,21 @@ class Labels:
         trimmed_labels = self.extract(inds, copy=True)
 
         # Adjust video and frame indices.
+        # Convert fidx0 to Python int to avoid numpy int64 serialization issues.
+        fidx0 = int(fidx0)
         trimmed_labels.videos = [new_video]
         for lf in trimmed_labels:
             lf.video = new_video
             lf.frame_idx = lf.frame_idx - fidx0
+
+        # Adjust suggestions video references and frame indices.
+        updated_suggestions = []
+        for sf in trimmed_labels.suggestions:
+            if sf.frame_idx >= fidx0 and sf.frame_idx <= fidx1:
+                sf.video = new_video
+                sf.frame_idx = sf.frame_idx - fidx0
+                updated_suggestions.append(sf)
+        trimmed_labels.suggestions = updated_suggestions
 
         # Save.
         trimmed_labels.save(save_path)
@@ -1438,8 +1824,8 @@ class Labels:
     def update_from_numpy(
         self,
         tracks_arr: np.ndarray,
-        video: Optional[Union[Video, int]] = None,
-        tracks: Optional[list[Track]] = None,
+        video: Video | int | None = None,
+        tracks: list[Track] | None = None,
         create_missing: bool = True,
     ):
         """Update instances from a numpy array of tracks.
@@ -1667,35 +2053,165 @@ class Labels:
         # Make sure everything is properly linked
         self.update()
 
+    def match(
+        self,
+        other: "Labels",
+        video: "str | VideoMatcher | None" = None,
+        skeleton: "str | SkeletonMatcher | None" = None,
+        track: "str | TrackMatcher | None" = None,
+    ) -> "MatchResult":
+        """Match videos, skeletons, and tracks between this Labels and another.
+
+        This method builds correspondence maps without modifying either Labels object.
+        Useful for evaluation workflows where you need to align predictions with
+        ground truth without merging them.
+
+        Args:
+            other: Another Labels object to match against.
+            video: Video matching method. Can be a string ("auto", "path",
+                "basename", "content", "shape", "image_dedup") or a VideoMatcher
+                object for advanced configuration. Default is "auto".
+            skeleton: Skeleton matching method. Can be a string ("structure",
+                "subset", "overlap", "exact") or a SkeletonMatcher object.
+                Default is "structure".
+            track: Track matching method. Can be a string ("name", "identity") or
+                a TrackMatcher object. Default is "name".
+
+        Returns:
+            MatchResult object containing correspondence maps.
+
+        Example:
+            Match prediction videos to ground truth for evaluation::
+
+                >>> gt_labels = sio.load_slp("ground_truth.slp")
+                >>> pred_labels = sio.load_slp("predictions.slp")
+                >>> result = gt_labels.match(pred_labels)
+                >>> for pred_video, gt_video in result.video_map.items():
+                ...     if gt_video is not None:
+                ...         print(f"{pred_video.filename} -> {gt_video.filename}")
+
+            Check if all videos were matched::
+
+                >>> if not result.all_videos_matched:
+                ...     print(f"Warning: {len(result.unmatched_videos)} unmatched")
+
+        Notes:
+            For video matching with the AUTO method (default), the matching cascade
+            uses multiple strategies in order:
+
+            1. Shape rejection (filter obviously incompatible candidates)
+            2. original_video conflict rejection
+            3. Definitive file identity (is_same_file)
+            4. Strict path match
+            5. Leaf uniqueness matching at increasing depths
+            6. Pose-based matching (compares annotations between labels)
+
+            The match result maps `other`'s items to `self`'s items. For eval
+            workflows, typically `self` is ground truth and `other` is predictions.
+        """
+        from sleap_io.model.matching import (
+            MatchResult,
+            SkeletonMatcher,
+            SkeletonMatchMethod,
+            TrackMatcher,
+            TrackMatchMethod,
+            VideoMatcher,
+            VideoMatchMethod,
+        )
+
+        # Coerce string arguments to Matcher objects
+        if skeleton is None:
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
+        elif isinstance(skeleton, str):
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod(skeleton))
+        else:
+            skeleton_matcher = skeleton
+
+        if video is None:
+            video_matcher = VideoMatcher()
+        elif isinstance(video, str):
+            video_matcher = VideoMatcher(method=VideoMatchMethod(video))
+        else:
+            video_matcher = video
+
+        if track is None:
+            track_matcher = TrackMatcher()
+        elif isinstance(track, str):
+            track_matcher = TrackMatcher(method=TrackMatchMethod(track))
+        else:
+            track_matcher = track
+
+        # Initialize result
+        result = MatchResult()
+
+        # Match skeletons
+        for other_skel in other.skeletons:
+            matched_skel = None
+            for self_skel in self.skeletons:
+                if skeleton_matcher.match(self_skel, other_skel):
+                    matched_skel = self_skel
+                    break
+            result.skeleton_map[other_skel] = matched_skel
+
+        # Match videos
+        # Use find_match for AUTO method to get full matching cascade
+        for other_video in other.videos:
+            if video_matcher.method == VideoMatchMethod.AUTO:
+                matched_video = video_matcher.find_match(
+                    other_video,
+                    self.videos,
+                    labels_incoming=other,
+                    labels_base=self,
+                )
+            else:
+                matched_video = None
+                for self_video in self.videos:
+                    if video_matcher.match(self_video, other_video):
+                        matched_video = self_video
+                        break
+            result.video_map[other_video] = matched_video
+
+        # Match tracks
+        for other_track in other.tracks:
+            matched_track = None
+            for self_track in self.tracks:
+                if track_matcher.match(self_track, other_track):
+                    matched_track = self_track
+                    break
+            result.track_map[other_track] = matched_track
+
+        return result
+
     def merge(
         self,
         other: "Labels",
-        instance_matcher: Optional["InstanceMatcher"] = None,
-        skeleton_matcher: Optional["SkeletonMatcher"] = None,
-        video_matcher: Optional["VideoMatcher"] = None,
-        track_matcher: Optional["TrackMatcher"] = None,
-        frame_strategy: str = "smart",
+        skeleton: "str | SkeletonMatcher | None" = None,
+        video: "str | VideoMatcher | None" = None,
+        track: "str | TrackMatcher | None" = None,
+        frame: str = "auto",
+        instance: "str | InstanceMatcher | None" = None,
         validate: bool = True,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
         error_mode: str = "continue",
     ) -> "MergeResult":
         """Merge another Labels object into this one.
 
         Args:
             other: Another Labels object to merge into this one.
-            instance_matcher: Matcher for comparing instances. If None, uses default
-                spatial matching with 5px tolerance.
-            skeleton_matcher: Matcher for comparing skeletons. If None, uses structure
-                matching.
-            video_matcher: Matcher for comparing videos. If None, uses auto matching.
-            track_matcher: Matcher for comparing tracks. If None, uses name matching.
-            frame_strategy: Strategy for merging frames:
-                - "smart": Keep user labels, update predictions
-                - "keep_original": Keep original frames
-                - "keep_new": Replace with new frames
-                - "keep_both": Keep all frames
-                - "update_tracks": Update track and score of the original instances
-                    from the new instances.
+            skeleton: Skeleton matching method. Can be a string ("structure",
+                "subset", "overlap", "exact") or a SkeletonMatcher object for
+                advanced configuration. Default is "structure".
+            video: Video matching method. Can be a string ("auto", "path",
+                "basename", "content", "shape", "image_dedup") or a VideoMatcher
+                object for advanced configuration. Default is "auto".
+            track: Track matching method. Can be a string ("name", "identity") or
+                a TrackMatcher object. Default is "name".
+            frame: Frame merge strategy. One of "auto", "keep_original",
+                "keep_new", "keep_both", "update_tracks", "replace_predictions".
+                Default is "auto".
+            instance: Instance matching method for spatial frame strategies. Can be
+                a string ("spatial", "identity", "iou") or an InstanceMatcher object.
+                Default is "spatial" with 5px tolerance.
             validate: If True, validate for conflicts before merging.
             progress_callback: Optional callback for progress updates.
                 Should accept (current, total, message) arguments.
@@ -1707,36 +2223,73 @@ class Labels:
         Returns:
             MergeResult object with statistics and any errors/conflicts.
 
+        Raises:
+            RuntimeError: If Labels is lazy-loaded.
+
         Notes:
             This method modifies the Labels object in place. The merge is designed to
             handle common workflows like merging predictions back into a project.
+
+            Provenance tracking: Each merge operation appends a record to
+            ``self.provenance["merge_history"]`` containing:
+
+            - ``timestamp``: ISO format timestamp of the merge
+            - ``source_filename``: Path from source's provenance (``None`` if in-memory)
+            - ``target_filename``: Path from target's provenance (``None`` if in-memory)
+            - ``source_labels``: Statistics about the source Labels
+            - ``strategy``: The frame strategy used
+            - ``sleap_io_version``: Version of sleap-io that performed the merge
+            - ``result``: Merge statistics (frames_merged, instances_added, conflicts)
         """
+        self._check_not_lazy("merge")
         from datetime import datetime
         from pathlib import Path
 
+        import sleap_io
         from sleap_io.model.matching import (
             ConflictResolution,
             ErrorMode,
             InstanceMatcher,
+            InstanceMatchMethod,
             MergeError,
             MergeResult,
             SkeletonMatcher,
             SkeletonMatchMethod,
             SkeletonMismatchError,
             TrackMatcher,
+            TrackMatchMethod,
             VideoMatcher,
             VideoMatchMethod,
         )
 
-        # Initialize matchers with defaults if not provided
-        if instance_matcher is None:
-            instance_matcher = InstanceMatcher()
-        if skeleton_matcher is None:
+        # Coerce string arguments to Matcher objects
+        if skeleton is None:
             skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
-        if video_matcher is None:
+        elif isinstance(skeleton, str):
+            skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod(skeleton))
+        else:
+            skeleton_matcher = skeleton
+
+        if video is None:
             video_matcher = VideoMatcher()
-        if track_matcher is None:
+        elif isinstance(video, str):
+            video_matcher = VideoMatcher(method=VideoMatchMethod(video))
+        else:
+            video_matcher = video
+
+        if track is None:
             track_matcher = TrackMatcher()
+        elif isinstance(track, str):
+            track_matcher = TrackMatcher(method=TrackMatchMethod(track))
+        else:
+            track_matcher = track
+
+        if instance is None:
+            instance_matcher = InstanceMatcher()
+        elif isinstance(instance, str):
+            instance_matcher = InstanceMatcher(method=InstanceMatchMethod(instance))
+        else:
+            instance_matcher = instance
 
         # Parse error mode
         error_mode_enum = ErrorMode(error_mode)
@@ -1750,13 +2303,16 @@ class Labels:
 
         merge_record = {
             "timestamp": datetime.now().isoformat(),
+            "source_filename": other.provenance.get("filename"),
+            "target_filename": self.provenance.get("filename"),
             "source_labels": {
                 "n_frames": len(other.labeled_frames),
                 "n_videos": len(other.videos),
                 "n_skeletons": len(other.skeletons),
                 "n_tracks": len(other.tracks),
             },
-            "strategy": frame_strategy,
+            "strategy": frame,
+            "sleap_io_version": sleap_io.__version__,
         }
 
         try:
@@ -1791,42 +2347,14 @@ class Labels:
                 matched = False
                 matched_video = None
 
-                # Special handling for AUTO to prefer basename over content
-                if video_matcher.method == VideoMatchMethod.AUTO:
-                    # Collect all matches and categorize by match quality
-                    basename_matches = []
-                    content_only_matches = []
-
-                    for self_video in self.videos:
-                        # Check strict path match
-                        if self_video.matches_path(other_video, strict=True):
-                            # Exact path match - use immediately
-                            matched_video = self_video
-                            break
-                        # Check basename match
-                        if self_video.matches_path(other_video, strict=False):
-                            basename_matches.append(self_video)
-                        # Check content-only match (no path match)
-                        elif self_video.matches_content(other_video):
-                            content_only_matches.append(self_video)
-
-                    # Pick best match: prefer basename over content-only
-                    if matched_video is None:
-                        if basename_matches:
-                            matched_video = basename_matches[0]
-                        elif content_only_matches:
-                            matched_video = content_only_matches[0]
-
-                    if matched_video is not None:
-                        video_map[other_video] = matched_video
-                        matched = True
-
-                # For non-AUTO methods, use original first-match logic
-                if not matched:
+                # IMAGE_DEDUP and SHAPE need special post-match processing
+                if video_matcher.method in (
+                    VideoMatchMethod.IMAGE_DEDUP,
+                    VideoMatchMethod.SHAPE,
+                ):
                     for self_video in self.videos:
                         if video_matcher.match(self_video, other_video):
                             matched_video = self_video
-                            # Special handling for different match methods
                             if video_matcher.method == VideoMatchMethod.IMAGE_DEDUP:
                                 # Deduplicate images from other_video
                                 deduped_video = other_video.deduplicate_with(self_video)
@@ -1926,11 +2454,20 @@ class Labels:
                                                 merged_video,
                                                 new_idx,
                                             )
-                            else:
-                                # Regular matching, no special handling
-                                video_map[other_video] = self_video
                             matched = True
                             break
+
+                else:
+                    # All other methods: use find_match() for the full matching cascade
+                    matched_video = video_matcher.find_match(
+                        other_video,
+                        self.videos,
+                        labels_incoming=other,
+                        labels_base=self,
+                    )
+                    if matched_video is not None:
+                        video_map[other_video] = matched_video
+                        matched = True
 
                 if not matched:
                     # Add new video if no match
@@ -2000,8 +2537,8 @@ class Labels:
                     # Merge instances using frame-level merge
                     merged_instances, conflicts = self_frame.merge(
                         other_frame,
-                        instance_matcher=instance_matcher,
-                        strategy=frame_strategy,
+                        instance=instance_matcher,
+                        frame=frame,
                     )
 
                     # Remap skeleton and track references for instances from other frame
@@ -2089,10 +2626,10 @@ class Labels:
 
     def _map_instance(
         self,
-        instance: Union[Instance, PredictedInstance],
+        instance: Instance | PredictedInstance,
         skeleton_map: dict[Skeleton, Skeleton],
         track_map: dict[Track, Track],
-    ) -> Union[Instance, PredictedInstance]:
+    ) -> Instance | PredictedInstance:
         """Map an instance to use mapped skeleton and track.
 
         Args:
@@ -2142,3 +2679,44 @@ class Labels:
         for video in self.videos:
             if video.filename.endswith(MediaVideo.EXTS):
                 video.set_video_plugin(plugin)
+
+    def set_video_color_mode(
+        self, mode: Literal["grayscale", "rgb", "auto"] = "auto"
+    ) -> None:
+        """Set video color mode for all videos in this dataset.
+
+        This controls how video frames are read - either forcing grayscale
+        (single channel), RGB (three channels), or auto-detecting from the
+        video content.
+
+        Args:
+            mode: Color mode for video output.
+                - "grayscale": Force single-channel (1ch) output
+                - "rgb": Force three-channel (3ch) output
+                - "auto": Autodetect from video content (default)
+
+        Note:
+            This is useful when auto-detection fails due to compression
+            artifacts or videos with very similar color channels.
+
+            For embedded videos (in .pkg.slp files), this also sets the color
+            mode on the source video chain, ensuring the setting persists if
+            the video is later restored/unembedded.
+
+        Examples:
+            >>> labels.set_video_color_mode("grayscale")
+            >>> labels.set_video_color_mode("rgb")
+            >>> labels.set_video_color_mode("auto")
+
+        See Also:
+            Video.grayscale: The underlying property this method sets.
+            set_video_plugin: Similar method for setting video backend plugin.
+        """
+        grayscale_value = {"grayscale": True, "rgb": False, "auto": None}[mode]
+        for video in self.videos:
+            video.grayscale = grayscale_value
+            # Also set on source_video chain so setting persists through restore
+            source = video.source_video
+            while source is not None:
+                source.grayscale = grayscale_value
+                source = source.source_video

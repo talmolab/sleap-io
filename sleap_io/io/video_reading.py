@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Tuple
 
 import attrs
 import h5py
@@ -43,7 +42,7 @@ _AVAILABLE_IMAGE_BACKENDS = {
 
 
 # Global default video plugin
-_default_video_plugin: Optional[str] = None
+_default_video_plugin: str | None = None
 
 
 def normalize_plugin_name(plugin: str) -> str:
@@ -81,7 +80,7 @@ def normalize_plugin_name(plugin: str) -> str:
     return aliases[plugin_lower]
 
 
-def set_default_video_plugin(plugin: Optional[str]) -> None:
+def set_default_video_plugin(plugin: str | None) -> None:
     """Set the default video plugin for all subsequently loaded videos.
 
     Args:
@@ -102,7 +101,7 @@ def set_default_video_plugin(plugin: Optional[str]) -> None:
     _default_video_plugin = plugin
 
 
-def get_default_video_plugin() -> Optional[str]:
+def get_default_video_plugin() -> str | None:
     """Get the current default video plugin.
 
     Returns:
@@ -120,7 +119,7 @@ def get_default_video_plugin() -> Optional[str]:
 
 
 # Global default image plugin for encoding/decoding embedded images
-_default_image_plugin: Optional[str] = None
+_default_image_plugin: str | None = None
 
 
 def normalize_image_plugin_name(plugin: str) -> str:
@@ -155,7 +154,7 @@ def normalize_image_plugin_name(plugin: str) -> str:
     return aliases[plugin_lower]
 
 
-def set_default_image_plugin(plugin: Optional[str]) -> None:
+def set_default_image_plugin(plugin: str | None) -> None:
     """Set the default image plugin for encoding/decoding embedded images.
 
     Args:
@@ -176,7 +175,7 @@ def set_default_image_plugin(plugin: Optional[str]) -> None:
     _default_image_plugin = plugin
 
 
-def get_default_image_plugin() -> Optional[str]:
+def get_default_image_plugin() -> str | None:
     """Get the current default image plugin.
 
     Returns:
@@ -228,7 +227,7 @@ def get_available_image_backends() -> list[str]:
 
 
 def get_installation_instructions(
-    plugin: Optional[str] = None, backend_type: str = "video"
+    plugin: str | None = None, backend_type: str = "video"
 ) -> str:
     """Get installation instructions for backend plugins.
 
@@ -248,15 +247,14 @@ def get_installation_instructions(
 
         >>> print(sio.get_installation_instructions())
         Video backend installation options:
+          FFMPEG (bundled):        Included by default
           opencv (fastest):        pip install sleap-io[opencv]
-          FFMPEG (most reliable):  pip install sleap-io[ffmpeg]
           pyav (balanced):         pip install sleap-io[pyav]
-          all backends:            pip install sleap-io[all]
     """
     if backend_type == "video":
         instructions = {
             "opencv": "pip install sleap-io[opencv]",
-            "FFMPEG": "pip install sleap-io[ffmpeg]",
+            "FFMPEG": "Included by default (imageio-ffmpeg)",
             "pyav": "pip install sleap-io[pyav]",
         }
 
@@ -266,10 +264,9 @@ def get_installation_instructions(
         else:
             return (
                 "Video backend installation options:\n"
+                "  FFMPEG (bundled):        Included by default\n"
                 "  opencv (fastest):        pip install sleap-io[opencv]\n"
-                "  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]\n"
-                "  pyav (balanced):         pip install sleap-io[pyav]\n"
-                "  all backends:            pip install sleap-io[all]"
+                "  pyav (balanced):         pip install sleap-io[pyav]"
             )
     else:
         instructions = {
@@ -308,23 +305,55 @@ class VideoBackend:
             If False, will close the reader after each call. If True (the default), it
             will keep the reader open and cache it for subsequent calls which may
             enhance the performance of reading multiple frames.
+        fps: Frames per second of the video. For MediaVideo, this is read from container
+            metadata. For other backends (ImageVideo, HDF5Video, TiffVideo), this must
+            be set explicitly or will be None.
     """
 
     filename: str | Path | list[str] | list[Path]
-    grayscale: Optional[bool] = None
+    grayscale: bool | None = None
     keep_open: bool = True
-    _cached_shape: Optional[Tuple[int, int, int, int]] = None
-    _open_reader: Optional[object] = None
+    _cached_shape: tuple[int, int, int, int] | None = None
+    _open_reader: object | None = None
+    _fps: float | None = None
+
+    @property
+    def fps(self) -> float | None:
+        """Frames per second of the video.
+
+        Returns:
+            The FPS if known, or None if unavailable/unknown.
+
+        Notes:
+            For MediaVideo, this is read from container metadata.
+            For ImageVideo, HDF5Video, and TiffVideo, this must be set explicitly
+            or inherited from source_video.
+        """
+        return self._fps
+
+    @fps.setter
+    def fps(self, value: float | None) -> None:
+        """Set the FPS.
+
+        Args:
+            value: Frames per second. Must be positive if not None.
+
+        Raises:
+            ValueError: If value is not positive.
+        """
+        if value is not None and value <= 0:
+            raise ValueError(f"FPS must be positive, got {value}")
+        self._fps = value
 
     @classmethod
     def from_filename(
         cls,
         filename: str | list[str],
-        dataset: Optional[str] = None,
-        grayscale: Optional[bool] = None,
+        dataset: str | None = None,
+        grayscale: bool | None = None,
         keep_open: bool = True,
         **kwargs,
-    ) -> VideoBackend:
+    ) -> "VideoBackend":
         """Create a VideoBackend from a filename.
 
         Args:
@@ -453,7 +482,7 @@ class VideoBackend:
         raise NotImplementedError
 
     @property
-    def img_shape(self) -> Tuple[int, int, int]:
+    def img_shape(self) -> tuple[int, int, int]:
         """Shape of a single frame in the video."""
         height, width, channels = self.read_test_frame().shape
         if self.grayscale is None:
@@ -465,7 +494,7 @@ class VideoBackend:
         return int(height), int(width), int(channels)
 
     @property
-    def shape(self) -> Tuple[int, int, int, int]:
+    def shape(self) -> tuple[int, int, int, int]:
         """Shape of the video as a tuple of `(frames, height, width, channels)`.
 
         On first call, this will defer to `num_frames` and `img_shape` to determine the
@@ -667,12 +696,13 @@ class MediaVideo(VideoBackend):
         else:
             # Enhanced error message with installation instructions
             raise ImportError(
-                "No video backend plugins are installed.\n\n"
-                "Available options:\n"
-                "  opencv (fastest):        pip install sleap-io[opencv]\n"
-                "  FFMPEG (most reliable):  pip install sleap-io[ffmpeg]\n"
-                "  pyav (balanced):         pip install sleap-io[pyav]\n"
-                "  all backends:            pip install sleap-io[all]\n\n"
+                "No video backend plugins are available.\n\n"
+                "The bundled imageio-ffmpeg should be available by default.\n"
+                "If you see this error, try reinstalling sleap-io:\n"
+                "  pip install --force-reinstall sleap-io\n\n"
+                "Alternative backends:\n"
+                "  opencv (fastest):  pip install sleap-io[opencv]\n"
+                "  pyav (balanced):   pip install sleap-io[pyav]\n\n"
                 "For more information, see: https://io.sleap.ai"
             )
 
@@ -708,6 +738,58 @@ class MediaVideo(VideoBackend):
                 # defer evaluation of this or give the user control over it.
                 n_frames = legacy_reader.count_frames()
             return n_frames
+
+    @property
+    def fps(self) -> float | None:
+        """Frames per second from video container metadata.
+
+        Returns:
+            The FPS from the video container, or None if it cannot be determined.
+
+        Notes:
+            This reads the FPS from the video file metadata using the appropriate
+            method for the current plugin:
+            - OpenCV: cv2.CAP_PROP_FPS
+            - FFMPEG/pyav: imageio metadata
+        """
+        # Return cached/explicit value if set
+        if self._fps is not None:
+            return self._fps
+
+        # Read from container metadata
+        try:
+            if self.plugin == "opencv":
+                fps = self.reader.get(cv2.CAP_PROP_FPS)
+                return fps if fps > 0 else None
+            else:
+                # Use imageio v2 API to get metadata (v3 improps doesn't include fps)
+                import imageio.v2 as iio_v2
+
+                reader = iio_v2.get_reader(self.filename, format="FFMPEG")
+                meta = reader.get_meta_data()
+                reader.close()
+                fps = meta.get("fps")
+                return float(fps) if fps is not None else None
+        except Exception:
+            return None
+
+    @fps.setter
+    def fps(self, value: float | None) -> None:
+        """Set an explicit FPS override.
+
+        Args:
+            value: Frames per second. Must be positive if not None.
+
+        Raises:
+            ValueError: If value is not positive.
+
+        Notes:
+            Setting FPS on MediaVideo overrides the value from container metadata.
+            This can be useful when the container metadata is incorrect or missing.
+        """
+        if value is not None and value <= 0:
+            raise ValueError(f"FPS must be positive, got {value}")
+        self._fps = value
 
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
@@ -853,17 +935,17 @@ class HDF5Video(VideoBackend):
             since PyAV doesn't support image decoding.
     """
 
-    dataset: Optional[str] = None
+    dataset: str | None = None
     input_format: str = attrs.field(
         default="channels_last",
         validator=attrs.validators.in_(["channels_last", "channels_first"]),
     )
     frame_map: dict[int, int] = attrs.field(init=False, default=attrs.Factory(dict))
-    source_filename: Optional[str] = None
-    source_inds: Optional[np.ndarray] = None
+    source_filename: str | None = None
+    source_inds: np.ndarray | None = None
     image_format: str = "hdf5"
     channel_order: str = "RGB"
-    plugin: Optional[str] = None
+    plugin: str | None = None
 
     EXTS = ("h5", "hdf5", "slp")
 
@@ -933,6 +1015,12 @@ class HDF5Video(VideoBackend):
                     ds.parent["source_video"].attrs["json"]
                 )["backend"]["filename"]
 
+            # Read FPS from attributes if present
+            if "fps" in ds.attrs:
+                self._fps = float(ds.attrs["fps"])
+            elif "fps" in ds.parent.attrs:
+                self._fps = float(ds.parent.attrs["fps"])
+
         f.close()
 
         # Set default plugin if not specified (use image plugin, not video plugin)
@@ -953,7 +1041,7 @@ class HDF5Video(VideoBackend):
             return f[self.dataset].shape[0]
 
     @property
-    def img_shape(self) -> Tuple[int, int, int]:
+    def img_shape(self) -> tuple[int, int, int]:
         """Shape of a single frame in the video as `(height, width, channels)`."""
         with h5py.File(self.filename, "r") as f:
             ds = f[self.dataset]
@@ -1049,6 +1137,62 @@ class HDF5Video(VideoBackend):
             return frame_idx in self.frame_map
         else:
             return frame_idx < len(self)
+
+    def get_frame_raw_bytes(self, frame_idx: int) -> np.ndarray | None:
+        """Get raw encoded bytes for a frame without decoding.
+
+        This method reads the raw compressed image data (PNG/JPEG bytes) directly
+        from the HDF5 dataset without decoding it. This is useful for fast copying
+        of embedded images when the target format matches the source format.
+
+        Args:
+            frame_idx: Index of the frame to read.
+
+        Returns:
+            Raw encoded bytes as int8 numpy array, or None if:
+            - The backend doesn't have embedded images (including "hdf5" format which
+              stores raw numpy arrays, not encoded images)
+            - The frame index is not available
+
+        Notes:
+            For variable-length datasets, returns the raw bytes directly.
+            For fixed-length datasets, returns bytes with trailing zeros stripped.
+        """
+        if not self.has_embedded_images:
+            return None
+
+        if not self.has_frame(frame_idx):
+            return None
+
+        # Get the internal index (handle frame_map)
+        internal_idx = (
+            self.frame_map.get(frame_idx, frame_idx) if self.frame_map else frame_idx
+        )
+
+        # Read directly from dataset
+        if self.keep_open:
+            if self._open_reader is None:
+                self._open_reader = h5py.File(self.filename, "r")
+            f = self._open_reader
+        else:
+            f = h5py.File(self.filename, "r")
+
+        ds = f[self.dataset]
+        raw_bytes = ds[internal_idx]
+
+        # Handle fixed-length padding (strip trailing zeros)
+        is_vlen = h5py.check_vlen_dtype(ds.dtype) is not None
+        if not is_vlen:
+            # Find last non-zero byte
+            non_zero_mask = raw_bytes != 0
+            if non_zero_mask.any():
+                last_non_zero = np.where(non_zero_mask)[0][-1]
+                raw_bytes = raw_bytes[: last_non_zero + 1]
+
+        if not self.keep_open:
+            f.close()
+
+        return raw_bytes
 
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the video.
@@ -1243,7 +1387,7 @@ class TiffVideo(VideoBackend):
     """
 
     EXTS = ("tif", "tiff")
-    format: Optional[str] = None
+    format: str | None = None
 
     @staticmethod
     def is_multipage(filename: str) -> bool:

@@ -1,12 +1,13 @@
 """Tests for methods in the sleap_io.model.video file."""
 
+import copy
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from sleap_io import Video
-from sleap_io.io.video_reading import ImageVideo, MediaVideo
+from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 
 
 def test_video_class():
@@ -464,11 +465,139 @@ def test_video_matches_path_image_sequences_strict_false():
     assert not video_seq1.matches_path(video_seq4, strict=False)
 
 
+def test_video_matches_path_hdf5_source_filename():
+    """Test Video.matches_path() for HDF5 backends requires matching datasets.
+
+    For HDF5 videos, different datasets always mean different videos, even if
+    they share the same source_filename. This is important for pkg.slp files
+    where all embedded videos may share the same intermediate source_filename.
+    """
+    # Create two HDF5 videos with same source_filename but different datasets
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = "/original/path/video_a.mp4"
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = "/original/path/video_a.mp4"
+    video2.backend.dataset = "video1/video"
+
+    # Same source_filename AND same dataset = match
+    video1_copy = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1_copy.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1_copy.backend.source_filename = "/original/path/video_a.mp4"
+    video1_copy.backend.dataset = "video0/video"
+
+    assert video1.matches_path(video1_copy, strict=False)
+    assert video1.matches_path(video1_copy, strict=True)
+
+    # Same source_filename but different datasets = NO match (different videos)
+    assert not video1.matches_path(video2, strict=False)
+    assert not video1.matches_path(video2, strict=True)
+
+    # Different source_filenames should NOT match
+    video3 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video3.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video3.backend.source_filename = "/original/path/video_b.mp4"
+    video3.backend.dataset = "video2/video"
+
+    assert not video1.matches_path(video3, strict=False)
+    assert not video1.matches_path(video3, strict=True)
+
+
+def test_video_matches_path_hdf5_source_filename_basename():
+    """Test basename matching for HDF5 source_filename when strict=False.
+
+    For HDF5 videos, datasets must match first. Then source_filename is compared
+    (basename only for strict=False, full path for strict=True).
+    """
+    # Videos with same dataset and same source_filename basename
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = "/original/path/video.mp4"
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = "/different/path/video.mp4"
+    video2.backend.dataset = "video0/video"  # Same dataset
+
+    # Same dataset + same basename = match when strict=False
+    assert video1.matches_path(video2, strict=False)
+
+    # Same dataset + different full path = no match when strict=True
+    assert not video1.matches_path(video2, strict=True)
+
+    # Different datasets = no match, regardless of source_filename
+    video3 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video3.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video3.backend.source_filename = "/original/path/video.mp4"
+    video3.backend.dataset = "video1/video"  # Different dataset
+
+    assert not video1.matches_path(video3, strict=False)
+    assert not video1.matches_path(video3, strict=True)
+
+
+def test_video_matches_path_hdf5_fallback_to_dataset():
+    """Test fallback to dataset matching when source_filename is None."""
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = None
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = None
+    video2.backend.dataset = "video0/video"
+
+    video3 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video3.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video3.backend.source_filename = None
+    video3.backend.dataset = "video1/video"
+
+    # Same dataset should match when source_filename is None
+    assert video1.matches_path(video2, strict=False)
+    assert video1.matches_path(video2, strict=True)
+
+    # Different datasets should NOT match
+    assert not video1.matches_path(video3, strict=False)
+    assert not video1.matches_path(video3, strict=True)
+
+
+def test_video_matches_path_hdf5_no_source_or_dataset():
+    """Test returns False when neither source_filename nor dataset is available."""
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = None
+    video1.backend.dataset = None
+
+    video2 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video2.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video2.backend.source_filename = None
+    video2.backend.dataset = None
+
+    # Should return False when neither source_filename nor dataset is available
+    assert not video1.matches_path(video2, strict=False)
+    assert not video1.matches_path(video2, strict=True)
+
+
+def test_video_matches_path_hdf5_mixed_with_non_hdf5():
+    """Test Video.matches_path() with one HDF5 and one non-HDF5 video."""
+    video1 = Video(filename="/path/to/labels.slp", open_backend=False)
+    video1.backend = HDF5Video(filename="/path/to/labels.slp", grayscale=False)
+    video1.backend.source_filename = "/original/path/video.mp4"
+    video1.backend.dataset = "video0/video"
+
+    video2 = Video(filename="/path/to/video.mp4", open_backend=False)
+    # No backend (or non-HDF5 backend), so it uses default filename matching
+
+    # Should use default filename matching (basenames don't match)
+    assert not video1.matches_path(video2, strict=False)
+
+
 def test_video_matches_content_backend_edge_cases():
     """Test Video.matches_content() backend comparison edge cases."""
-    # Test backend comparison edge cases (lines 491-494 in video.py)
-    from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
-
     video1 = Video(filename="test1.mp4", open_backend=False)
     video2 = Video(filename="test2.mp4", open_backend=False)
 
@@ -510,3 +639,339 @@ def test_video_matches_content_backend_edge_cases():
 
     assert not video5.matches_content(video7)  # MediaVideo vs ImageVideo
     assert not video6.matches_content(video7)  # HDF5Video vs ImageVideo
+
+
+def test_video_deepcopy_preserves_source_video_chain():
+    """Test that Video.__deepcopy__() preserves source_video chain.
+
+    The source_video attribute (and the computed original_video property) is used
+    for provenance tracking during merge operations. If source_video is not
+    preserved during deepcopy, the provenance chain breaks and _get_root_video()
+    in matching.py cannot correctly identify related videos.
+
+    Note: original_video is now a computed property that traverses source_video chain.
+    """
+    # Create a chain: original -> source -> video
+    original = Video(filename="/data/original.mp4", open_backend=False)
+    source = Video(
+        filename="/embedded/source.slp", source_video=original, open_backend=False
+    )
+    video = Video(
+        filename="/current/video.mp4",
+        source_video=source,
+        open_backend=False,
+    )
+
+    # Verify original_video is computed correctly from chain
+    assert video.original_video is original
+
+    # Deepcopy should preserve source_video chain
+    video_copy = copy.deepcopy(video)
+
+    assert video_copy.filename == video.filename
+    assert video_copy.source_video is video.source_video
+    # original_video (computed) should give same result through the chain
+    assert video_copy.original_video is video.original_video
+    assert video_copy.original_video is original
+
+
+# =============================================================================
+# Tests for is_same_file() - Function in matching module
+# =============================================================================
+# These tests document expected behavior for the is_same_file() function
+# that definitively checks if two Video objects reference the same underlying file.
+
+
+class TestVideoIsSameFile:
+    """Tests for is_same_file() function from sleap_io.model.matching.
+
+    This function is needed to prevent duplicate video creation and enable
+    correct video matching during merge operations. It differs from
+    Video.matches_path() in that it:
+
+    1. Uses os.path.samefile() when files are accessible (handles symlinks)
+    2. Resolves paths before comparison (handles relative vs absolute)
+    3. Checks source_video for embedded/PKG.SLP videos
+    4. Handles ImageVideo list comparison correctly
+
+    Background: The Video class uses eq=False for identity-based comparison,
+    but this causes duplicate video creation when the same file is added
+    multiple times as different Video objects. The is_same_file() function
+    provides definitive file identity checking.
+    """
+
+    def test_is_same_file_same_path_different_objects(self):
+        """Two Video objects with identical paths should be same file.
+
+        Use case: User accidentally adds the same video twice via GUI.
+        The GUI uses `video not in labels.videos` which fails because
+        Video uses identity comparison (eq=False). is_same_file() should
+        correctly identify these as the same file.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(filename="/data/video.mp4", open_backend=False)
+        video2 = Video(filename="/data/video.mp4", open_backend=False)
+
+        # Identity comparison fails (this is expected)
+        assert video1 is not video2
+
+        # is_same_file should recognize they're the same file
+        assert is_same_file(video1, video2)
+        assert is_same_file(video2, video1)  # Symmetric
+
+    def test_is_same_file_different_paths(self):
+        """Videos with different paths should not be same file."""
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(filename="/data/video_a.mp4", open_backend=False)
+        video2 = Video(filename="/data/video_b.mp4", open_backend=False)
+
+        assert not is_same_file(video1, video2)
+        assert not is_same_file(video2, video1)
+
+    def test_is_same_file_source_video_match(self):
+        """Embedded video with source_video pointing to external should match.
+
+        Use case (UC3): Merging predictions from PKG.SLP back into parent SLP.
+        The PKG.SLP has embedded frames with source_video pointing to the
+        original external video. The AUTO matcher should recognize these
+        as the same video by checking source_video.
+
+        This is a CRITICAL gap identified in the merge red-team investigation:
+        The current AUTO matcher does NOT check source_video, causing
+        predictions to be attributed to wrong videos or creating duplicates.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        # External video in base labels
+        external = Video(filename="/data/recordings/video.mp4", open_backend=False)
+
+        # Embedded video from PKG.SLP with source_video
+        source = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        embedded = Video(
+            filename="predictions.pkg.slp", source_video=source, open_backend=False
+        )
+
+        # is_same_file(embedded, external) should return True
+        # because embedded.source_video points to external
+        assert is_same_file(embedded, external)
+        assert is_same_file(external, embedded)
+
+    def test_is_same_file_nested_source_video(self):
+        """Provenance chain: embedded → intermediate → original.
+
+        Real-world example from Tiernon dataset: A PKG.SLP may have been
+        created from another PKG.SLP, creating a 3-level provenance chain.
+        is_same_file() should traverse the chain to find the original.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        # Original external video
+        original = Video(filename="/data/video.mp4", open_backend=False)
+
+        # First embedding (intermediate)
+        intermediate = Video(
+            filename="intermediate.pkg.slp", source_video=original, open_backend=False
+        )
+
+        # Second embedding (final)
+        final = Video(
+            filename="final.pkg.slp", source_video=intermediate, open_backend=False
+        )
+
+        # final should be recognized as same file as original
+        assert is_same_file(final, original)
+        assert is_same_file(original, final)
+
+    def test_is_same_file_imagevideo_same_images(self):
+        """ImageVideo with same image list should be same file.
+
+        ImageVideo uses a list of paths. Two ImageVideos with the same
+        image list should be recognized as the same file.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        paths = ["/data/img_000.jpg", "/data/img_001.jpg", "/data/img_002.jpg"]
+        video1 = Video(filename=paths.copy(), open_backend=False)
+        video2 = Video(filename=paths.copy(), open_backend=False)
+
+        assert is_same_file(video1, video2)
+
+    def test_is_same_file_imagevideo_different_order(self):
+        """ImageVideo with same images in different order - NOT same file.
+
+        Frame indices are tied to image order, so different ordering
+        means different frame indexing = different video.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(
+            filename=["/data/img_000.jpg", "/data/img_001.jpg"], open_backend=False
+        )
+        video2 = Video(
+            filename=["/data/img_001.jpg", "/data/img_000.jpg"], open_backend=False
+        )
+
+        assert not is_same_file(video1, video2)
+
+    def test_is_same_file_cross_platform_paths(self):
+        """Cross-platform paths with same basename should NOT auto-match.
+
+        is_same_file() should be conservative - different absolute paths
+        on different operating systems should NOT be considered the same
+        file unless we can verify they point to the same file (which
+        requires file access or explicit path mapping).
+
+        This differs from matches_path(strict=False) which only checks
+        basenames and can incorrectly match different files.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        windows_path = Video(filename=r"C:\data\video.mp4", open_backend=False)
+        linux_path = Video(filename="/home/user/data/video.mp4", open_backend=False)
+
+        # is_same_file should be conservative - can't verify across systems
+        assert not is_same_file(windows_path, linux_path)
+
+    def test_is_same_file_same_basename_different_dir(self):
+        """Same basename in different directories should NOT match.
+
+        This is a critical safety check: two files with the same name
+        but in different directories are different files.
+
+        Real-world example from Sky Shi dataset: Multiple experiments
+        may have `fly.mp4` in different directories. These should never
+        be confused.
+        """
+        from sleap_io.model.matching import is_same_file
+
+        video1 = Video(filename="/data/exp1/fly.mp4", open_backend=False)
+        video2 = Video(filename="/data/exp2/fly.mp4", open_backend=False)
+
+        assert not is_same_file(video1, video2)
+
+
+def test_video_fps_from_mediavideo(centered_pair_low_quality_path):
+    """Test FPS property on Video with MediaVideo backend."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert isinstance(video.backend, MediaVideo)
+
+    # Should read FPS from video container
+    assert video.fps == 15.0
+
+
+def test_video_fps_explicit_set(centered_pair_low_quality_path):
+    """Test setting FPS explicitly on Video."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+
+    # Override FPS
+    video.fps = 30.0
+    assert video.fps == 30.0
+
+    # Reset to container value
+    video.fps = None
+    assert video.fps == 15.0
+
+
+def test_video_fps_backend_metadata(centered_pair_low_quality_path):
+    """Test FPS is cached in backend_metadata on close."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Close the backend
+    video.close()
+    assert video.backend is None
+
+    # FPS should still be available from backend_metadata
+    assert video.fps == 15.0
+    assert video.backend_metadata.get("fps") == 15.0
+
+
+def test_video_fps_imagevideo(centered_pair_frame_paths):
+    """Test FPS property on Video with ImageVideo backend."""
+    video = Video.from_filename(centered_pair_frame_paths)
+    assert isinstance(video.backend, ImageVideo)
+
+    # ImageVideo has no inherent FPS
+    assert video.fps is None
+
+    # Can set FPS explicitly
+    video.fps = 24.0
+    assert video.fps == 24.0
+    assert video.backend_metadata.get("fps") == 24.0
+
+
+def test_video_fps_validation():
+    """Test FPS setter validates input."""
+    video = Video(filename="test.mp4", open_backend=False)
+
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        video.fps = 0
+
+    with pytest.raises(ValueError, match="FPS must be positive"):
+        video.fps = -5.0
+
+
+def test_video_frame_to_seconds(centered_pair_low_quality_path):
+    """Test frame_to_seconds conversion."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Test conversion
+    assert video.frame_to_seconds(0) == 0.0
+    assert video.frame_to_seconds(15) == 1.0
+    assert video.frame_to_seconds(30) == 2.0
+    assert video.frame_to_seconds(150) == 10.0
+
+    # Test with fractional results
+    assert abs(video.frame_to_seconds(1) - 1 / 15) < 1e-10
+
+
+def test_video_seconds_to_frame(centered_pair_low_quality_path):
+    """Test seconds_to_frame conversion."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Test conversion
+    assert video.seconds_to_frame(0.0) == 0
+    assert video.seconds_to_frame(1.0) == 15
+    assert video.seconds_to_frame(2.0) == 30
+    assert video.seconds_to_frame(10.0) == 150
+
+    # Test rounding down
+    assert video.seconds_to_frame(0.5) == 7  # 0.5 * 15 = 7.5 -> 7
+
+
+def test_video_timestamp_with_no_fps():
+    """Test timestamp conversion returns None when FPS is unknown."""
+    video = Video(filename="test.mp4", open_backend=False)
+    assert video.fps is None
+
+    assert video.frame_to_seconds(10) is None
+    assert video.seconds_to_frame(1.0) is None
+
+
+def test_video_save_preserves_fps(centered_pair_low_quality_path, tmp_path):
+    """Test that Video.save() preserves FPS from source video."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+    assert video.fps == 15.0
+
+    # Save a subset of frames
+    output_path = tmp_path / "output.mp4"
+    new_video = video.save(output_path, frame_inds=[0, 1, 2])
+
+    # New video should have same FPS
+    assert new_video.fps == 15.0
+
+
+def test_video_save_custom_fps(centered_pair_low_quality_path, tmp_path):
+    """Test that Video.save() can use custom FPS."""
+    video = Video.from_filename(centered_pair_low_quality_path)
+
+    # Save with custom FPS
+    output_path = tmp_path / "output.mp4"
+    new_video = video.save(output_path, frame_inds=[0, 1, 2], fps=30.0)
+
+    # New video should have custom FPS
+    assert new_video.fps == 30.0

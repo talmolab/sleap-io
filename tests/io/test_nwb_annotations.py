@@ -15,6 +15,7 @@ from sleap_io import Labels as SleapLabels
 from sleap_io import Skeleton as SleapSkeleton
 from sleap_io import Video as SleapVideo
 from sleap_io.io.nwb_annotations import (
+    MULTISUBJECTS_AVAILABLE,
     FrameInfo,
     FrameMap,
     create_nwb_to_slp_skeleton_map,
@@ -23,6 +24,7 @@ from sleap_io.io.nwb_annotations import (
     create_slp_to_nwb_video_map,
     export_labeled_frames,
     export_labels,
+    extract_unique_subjects,
     load_labels,
     nwb_image_series_to_sleap_video,
     nwb_pose_training_to_sleap_labels,
@@ -40,7 +42,20 @@ from sleap_io.io.nwb_annotations import (
     sleap_video_to_nwb_image_series,
     sleap_videos_to_nwb_source_videos,
 )
+
+# Conditionally import multisubjects functions (requires Python 3.9+)
+if MULTISUBJECTS_AVAILABLE:
+    from sleap_io.io.nwb_annotations import create_subjects_table
+
 from sleap_io.io.utils import sanitize_filename
+from sleap_io.model.instance import Track
+from sleap_io.model.labeled_frame import LabeledFrame
+
+# Skip marker for tests requiring multisubjects (Python 3.9+)
+requires_multisubjects = pytest.mark.skipif(
+    not MULTISUBJECTS_AVAILABLE,
+    reason="ndx-multisubjects requires Python 3.9+",
+)
 
 
 def test_sleap_skeleton_to_nwb_skeleton_basic():
@@ -1198,3 +1213,322 @@ def test_non_external_image_series_format():
     # Try to convert to sleap-io Video - should raise ValueError
     with pytest.raises(ValueError, match="Unsupported ImageSeries format: raw"):
         nwb_image_series_to_sleap_video(image_series)
+
+
+# ==================== Multi-Subject Tests ====================
+
+
+@requires_multisubjects
+def test_extract_unique_subjects_basic():
+    """Test extracting subjects from labels with tracks."""
+    skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = SleapVideo(filename="test.mp4", open_backend=False)
+
+    # Create tracks
+    track1 = Track(name="mouse1")
+    track2 = Track(name="mouse2")
+
+    # Create instances with tracks
+    inst1 = SleapInstance(
+        skeleton=skeleton,
+        points={"a": [0, 0], "b": [1, 1]},
+        track=track1,
+    )
+    inst2 = SleapInstance(
+        skeleton=skeleton,
+        points={"a": [2, 2], "b": [3, 3]},
+        track=track2,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst1, inst2])
+    labels = SleapLabels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+    subjects_data, track_to_index = extract_unique_subjects(labels)
+
+    assert len(subjects_data) == 2
+    assert subjects_data[0]["subject_id"] == "mouse1"
+    assert subjects_data[1]["subject_id"] == "mouse2"
+    assert track_to_index[track1] == 0
+    assert track_to_index[track2] == 1
+
+
+@requires_multisubjects
+def test_extract_unique_subjects_no_tracks():
+    """Test with labels that have no tracks - should return empty."""
+    skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = SleapVideo(filename="test.mp4", open_backend=False)
+
+    inst = SleapInstance(
+        skeleton=skeleton,
+        points={"a": [0, 0], "b": [1, 1]},
+        track=None,  # No track
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = SleapLabels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+    subjects_data, track_to_index = extract_unique_subjects(labels)
+
+    assert len(subjects_data) == 0
+    assert len(track_to_index) == 0
+
+
+@requires_multisubjects
+def test_extract_unique_subjects_unnamed_tracks():
+    """Test tracks with no name get 'unknown' as subject_id."""
+    skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = SleapVideo(filename="test.mp4", open_backend=False)
+
+    track = Track(name=None)  # Unnamed track
+
+    inst = SleapInstance(
+        skeleton=skeleton,
+        points={"a": [0, 0], "b": [1, 1]},
+        track=track,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = SleapLabels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+    subjects_data, track_to_index = extract_unique_subjects(labels)
+
+    assert len(subjects_data) == 1
+    assert subjects_data[0]["subject_id"] == "unknown"
+
+
+@requires_multisubjects
+def test_extract_unique_subjects_same_track_multiple_frames():
+    """Test that same Track object maps to same subject across frames."""
+    skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = SleapVideo(filename="test.mp4", open_backend=False)
+
+    track = Track(name="mouse1")
+
+    # Same track in multiple frames
+    inst1 = SleapInstance(
+        skeleton=skeleton, points={"a": [0, 0], "b": [1, 1]}, track=track
+    )
+    inst2 = SleapInstance(
+        skeleton=skeleton, points={"a": [2, 2], "b": [3, 3]}, track=track
+    )
+
+    lf1 = LabeledFrame(video=video, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video, frame_idx=1, instances=[inst2])
+    labels = SleapLabels(
+        videos=[video], skeletons=[skeleton], labeled_frames=[lf1, lf2]
+    )
+
+    subjects_data, track_to_index = extract_unique_subjects(labels)
+
+    # Should only have one subject (same track)
+    assert len(subjects_data) == 1
+    assert subjects_data[0]["subject_id"] == "mouse1"
+
+
+@requires_multisubjects
+def test_create_subjects_table_basic():
+    """Test creating SubjectsTable with minimal data and default values."""
+    subjects_data = [{"subject_id": "mouse1"}, {"subject_id": "mouse2"}]
+
+    table = create_subjects_table(subjects_data)
+
+    assert len(table) == 2
+    assert table["subject_id"][0] == "mouse1"
+    assert table["subject_id"][1] == "mouse2"
+    # Check required fields have defaults
+    assert table["sex"][0] == "U"  # Unknown
+    assert table["species"][0] == "unknown"
+
+
+@requires_multisubjects
+def test_create_subjects_table_with_metadata():
+    """Test creating SubjectsTable with full metadata."""
+    subjects_data = [{"subject_id": "mouse1"}, {"subject_id": "mouse2"}]
+    metadata = [
+        {"sex": "M", "species": "Mus musculus", "age": "P30D"},
+        {"sex": "F", "species": "Mus musculus", "age": "P45D"},
+    ]
+
+    table = create_subjects_table(subjects_data, subjects_metadata=metadata)
+
+    assert len(table) == 2
+    assert table["sex"][0] == "M"
+    assert table["sex"][1] == "F"
+    assert table["species"][0] == "Mus musculus"
+    assert table["age"][0] == "P30D"
+
+
+@requires_multisubjects
+def test_save_labels_multisubjects_no_tracks(tmp_path):
+    """Test error when use_multisubjects=True but no tracks exist."""
+    skeleton = SleapSkeleton(nodes=["a", "b"], edges=[("a", "b")], name="skeleton")
+    video = SleapVideo(filename=str(tmp_path / "test.mp4"), open_backend=False)
+
+    # Create instance without track
+    inst = SleapInstance(
+        skeleton=skeleton,
+        points={"a": [0, 0], "b": [1, 1]},
+        track=None,
+    )
+
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = SleapLabels(videos=[video], skeletons=[skeleton], labeled_frames=[lf])
+
+    # Create a dummy video file
+    (tmp_path / "test.mp4").touch()
+
+    nwb_path = tmp_path / "test.nwb"
+
+    with pytest.raises(ValueError, match="No tracked instances found"):
+        save_labels(labels, str(nwb_path), use_multisubjects=True)
+
+
+@requires_multisubjects
+def test_save_labels_multisubjects_partial_tracks_warning(slp_real_data, tmp_path):
+    """Test warning when some instances have tracks and some don't."""
+    import warnings
+
+    # Load real data with working video backends
+    original_labels = sio.load_slp(slp_real_data)
+
+    # Use first frame and add one tracked + one untracked instance
+    track = Track(name="tracked_mouse")
+
+    # Get instances from first frame, add track to first, leave second untracked
+    lf = original_labels.labeled_frames[0]
+    if len(lf.instances) >= 2:
+        lf.instances[0].track = track
+        lf.instances[1].track = None  # Ensure second is untracked
+    else:
+        # Create a second instance if needed
+        inst2 = SleapInstance(
+            skeleton=lf.instances[0].skeleton,
+            points={n.name: [0, 0] for n in lf.instances[0].skeleton.nodes},
+            track=None,
+        )
+        lf.instances[0].track = track
+        lf.instances.append(inst2)
+
+    labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=[lf],
+    )
+
+    nwb_path = tmp_path / "test.nwb"
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        save_labels(labels, str(nwb_path), use_multisubjects=True)
+
+        # Check that warning was raised about untracked instances
+        warning_messages = [str(warning.message) for warning in w]
+        untracked_warning = [m for m in warning_messages if "do not have tracks" in m]
+        assert len(untracked_warning) == 1
+
+
+@requires_multisubjects
+def test_multisubjects_save_load_roundtrip(slp_real_data, tmp_path):
+    """Test that pose data survives multi-subject roundtrip with correct linkage."""
+    from pynwb import NWBHDF5IO
+
+    # Load real data with working video backends
+    original_labels = sio.load_slp(slp_real_data)
+
+    # Create tracks
+    track1 = Track(name="mouse1")
+    track2 = Track(name="mouse2")
+
+    # Assign tracks to instances in first two frames
+    limited_frames = original_labels.labeled_frames[:2]
+    for lf in limited_frames:
+        for i, inst in enumerate(lf.instances):
+            inst.track = track1 if i % 2 == 0 else track2
+
+    labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=limited_frames,
+    )
+
+    nwb_path = tmp_path / "test.nwb"
+
+    # Save with multisubjects
+    save_labels(labels, str(nwb_path), use_multisubjects=True)
+
+    # Verify the NWB file structure
+    with NWBHDF5IO(str(nwb_path), "r") as io:
+        nwbfile = io.read()
+
+        # Check SubjectsTable exists
+        assert hasattr(nwbfile, "subjects_table")
+        assert nwbfile.subjects_table is not None
+        assert len(nwbfile.subjects_table) == 2
+
+        # Check subject IDs
+        subject_ids = list(nwbfile.subjects_table["subject_id"][:])
+        assert "mouse1" in subject_ids
+        assert "mouse2" in subject_ids
+
+        # Check SkeletonInstance IDs match SubjectsTable row indices
+        pose_training = nwbfile.processing["behavior"]["PoseTraining"]
+        training_frames = pose_training.training_frames
+        frame = training_frames["frame_0"]
+
+        # Get instance IDs
+        instance_ids = []
+        for inst_name in frame.skeleton_instances.skeleton_instances:
+            inst = frame.skeleton_instances.skeleton_instances[inst_name]
+            instance_ids.append(inst.id)
+
+        # Instance IDs should be valid SubjectsTable indices
+        for inst_id in instance_ids:
+            assert 0 <= inst_id < len(subject_ids)
+
+    # Load and verify pose data is preserved
+    loaded_labels = load_labels(str(nwb_path))
+
+    assert len(loaded_labels.labeled_frames) == len(limited_frames)
+    assert len(loaded_labels.skeletons) == len(labels.skeletons)
+
+
+@requires_multisubjects
+def test_multisubjects_skeleton_instance_id_linkage(slp_real_data, tmp_path):
+    """Test that SkeletonInstance.id correctly links to SubjectsTable row."""
+    from pynwb import NWBHDF5IO
+
+    # Load real data with working video backends
+    original_labels = sio.load_slp(slp_real_data)
+
+    # Create 3 tracks
+    tracks = [Track(name=f"subject_{i}") for i in range(3)]
+
+    # Assign tracks to instances across multiple frames
+    limited_frames = original_labels.labeled_frames[:2]
+    for lf in limited_frames:
+        for i, inst in enumerate(lf.instances):
+            inst.track = tracks[i % len(tracks)]
+
+    labels = SleapLabels(
+        skeletons=original_labels.skeletons,
+        videos=original_labels.videos,
+        labeled_frames=limited_frames,
+    )
+
+    nwb_path = tmp_path / "test.nwb"
+    save_labels(labels, str(nwb_path), use_multisubjects=True)
+
+    # Verify linkage
+    with NWBHDF5IO(str(nwb_path), "r") as io:
+        nwbfile = io.read()
+
+        # Get subject_id to row index mapping
+        subject_ids = list(nwbfile.subjects_table["subject_id"][:])
+
+        pose_training = nwbfile.processing["behavior"]["PoseTraining"]
+
+        # Check each frame
+        for frame in pose_training.training_frames.training_frames.values():
+            for inst in frame.skeleton_instances.skeleton_instances.values():
+                # The instance ID should be a valid row index in SubjectsTable
+                assert 0 <= inst.id < len(subject_ids)

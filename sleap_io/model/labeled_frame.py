@@ -6,7 +6,7 @@ The `LabeledFrame` class is a data structure that contains `Instance`s and
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from attrs import define, field
@@ -26,6 +26,9 @@ class LabeledFrame:
         video: The `Video` associated with this `LabeledFrame`.
         frame_idx: The index of the `LabeledFrame` in the `Video`.
         instances: List of `Instance` objects associated with this `LabeledFrame`.
+        is_negative: If True, this frame is explicitly marked as containing no
+            instances (a "negative" or background frame for training). This is
+            distinct from frames that are simply empty (e.g., instances were deleted).
 
     Notes:
         Instances of this class are hashed by identity, not by value. This means that
@@ -35,13 +38,14 @@ class LabeledFrame:
 
     video: Video
     frame_idx: int = field(converter=int)
-    instances: list[Union[Instance, PredictedInstance]] = field(factory=list)
+    instances: list[Instance | PredictedInstance] = field(factory=list)
+    is_negative: bool = field(default=False)
 
     def __len__(self) -> int:
         """Return the number of instances in the frame."""
         return len(self.instances)
 
-    def __getitem__(self, key: int) -> Union[Instance, PredictedInstance]:
+    def __getitem__(self, key: int) -> Instance | PredictedInstance:
         """Return the `Instance` at `key` index in the `instances` list."""
         return self.instances[key]
 
@@ -61,6 +65,16 @@ class LabeledFrame:
             if type(inst) is Instance:
                 return True
         return False
+
+    @property
+    def is_user_labeled(self) -> bool:
+        """Return True if frame has user instances OR is explicitly negative.
+
+        This property indicates whether the frame represents intentional user
+        annotation, either through labeled instances or explicit marking as a
+        negative/background frame.
+        """
+        return self.has_user_instances or self.is_negative
 
     @property
     def predicted_instances(self) -> list[Instance]:
@@ -222,22 +236,25 @@ class LabeledFrame:
     def merge(
         self,
         other: "LabeledFrame",
-        instance_matcher: Optional["InstanceMatcher"] = None,
-        strategy: str = "smart",
+        instance: "InstanceMatcher | None" = None,
+        frame: str = "auto",
     ) -> tuple[list[Instance], list[tuple[Instance, Instance, str]]]:
         """Merge instances from another frame into this frame.
 
         Args:
             other: Another LabeledFrame to merge instances from.
-            instance_matcher: Matcher to use for finding duplicate instances.
+            instance: Matcher to use for finding duplicate instances.
                 If None, uses default spatial matching with 5px tolerance.
-            strategy: Merge strategy:
-                - "smart": Keep user labels, update predictions only if no user label
+            frame: Merge strategy:
+                - "auto": Keep user labels, update predictions only if no user label
                 - "keep_original": Keep all original instances, ignore new ones
                 - "keep_new": Replace with new instances
                 - "keep_both": Keep all instances from both frames
                 - "update_tracks": Update track and score of the original instances
                     from the new instances.
+                - "replace_predictions": Keep all user instances from original frame,
+                    remove all predictions from original frame, add only predictions
+                    from the incoming frame. No spatial matching is performed.
 
         Returns:
             A tuple of (merged_instances, conflicts) where:
@@ -250,20 +267,22 @@ class LabeledFrame:
         """
         from sleap_io.model.matching import InstanceMatcher, InstanceMatchMethod
 
-        if instance_matcher is None:
+        if instance is None:
             instance_matcher = InstanceMatcher(
                 method=InstanceMatchMethod.SPATIAL, threshold=5.0
             )
+        else:
+            instance_matcher = instance
 
         conflicts = []
 
-        if strategy == "keep_original":
+        if frame == "keep_original":
             return self.instances.copy(), conflicts
-        elif strategy == "keep_new":
+        elif frame == "keep_new":
             return other.instances.copy(), conflicts
-        elif strategy == "keep_both":
+        elif frame == "keep_both":
             return self.instances + other.instances, conflicts
-        elif strategy == "update_tracks":
+        elif frame == "update_tracks":
             # match instances and update .track and tracking score of the old instances
             matches = instance_matcher.find_matches(self.instances, other.instances)
             for self_idx, other_idx, score in matches:
@@ -272,8 +291,17 @@ class LabeledFrame:
                     other_idx
                 ].tracking_score
             return self.instances, conflicts
+        elif frame == "replace_predictions":
+            # Keep all user instances from original frame
+            merged = [inst for inst in self.instances if type(inst) is Instance]
+            # Add only predictions from incoming frame (not user instances)
+            merged.extend(
+                inst for inst in other.instances if type(inst) is PredictedInstance
+            )
+            # No conflicts to report - this is a clean replacement
+            return merged, []
 
-        # Smart merging strategy
+        # Auto merging strategy
         merged_instances = []
         used_indices = set()
 

@@ -7,7 +7,7 @@ a video and its components used in SLEAP.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import attrs
 import h5py
@@ -75,13 +75,33 @@ class Video:
     """
 
     filename: str | list[str]
-    backend: Optional[VideoBackend] = None
+    backend: VideoBackend | None = None
     backend_metadata: dict[str, any] = attrs.field(factory=dict)
-    source_video: Optional[Video] = None
-    original_video: Optional[Video] = None
+    source_video: "Video | None" = None
     open_backend: bool = True
 
     EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
+
+    @property
+    def original_video(self) -> "Video | None":
+        """The root video in the provenance chain.
+
+        For embedded videos, this returns the ultimate source video by
+        traversing the source_video chain. Returns None if this video
+        has no source_video (i.e., it IS an original).
+
+        This property is computed by following the source_video chain to find
+        the root. For a single-level embedding (A embeds from B), original_video
+        returns B. For multi-level embedding (A <- B <- C), it returns C.
+        """
+        if self.source_video is None:
+            return None  # This IS the original
+
+        # Traverse to root
+        v = self.source_video
+        while v.source_video is not None:
+            v = v.source_video
+        return v
 
     def __attrs_post_init__(self):
         """Post init syntactic sugar."""
@@ -106,7 +126,7 @@ class Video:
         new_video = Video(
             filename=self.filename,
             backend=None,
-            backend_metadata=self.backend_metadata,
+            backend_metadata=self.backend_metadata.copy(),
             source_video=self.source_video,
             open_backend=self.open_backend,
         )
@@ -122,10 +142,10 @@ class Video:
     def from_filename(
         cls,
         filename: str | list[str],
-        dataset: Optional[str] = None,
-        grayscale: Optional[bool] = None,
+        dataset: str | None = None,
+        grayscale: bool | None = None,
         keep_open: bool = True,
-        source_video: Optional[Video] = None,
+        source_video: "Video | None" = None,
         **kwargs,
     ) -> VideoBackend:
         """Create a Video from a filename.
@@ -169,7 +189,7 @@ class Video:
         )
 
     @property
-    def shape(self) -> Tuple[int, int, int, int] | None:
+    def shape(self) -> tuple[int, int, int, int] | None:
         """Return the shape of the video as (num_frames, height, width, channels).
 
         If the video backend is not set or it cannot determine the shape of the video,
@@ -177,7 +197,7 @@ class Video:
         """
         return self._get_shape()
 
-    def _get_shape(self) -> Tuple[int, int, int, int] | None:
+    def _get_shape(self) -> tuple[int, int, int, int] | None:
         """Return the shape of the video as (num_frames, height, width, channels).
 
         This suppresses errors related to querying the backend for the video shape, such
@@ -214,6 +234,72 @@ class Video:
             self.backend._cached_shape = None
 
         self.backend_metadata["grayscale"] = value
+
+    @property
+    def fps(self) -> float | None:
+        """Return the frames per second of the video.
+
+        For MediaVideo backends, this reads FPS from the video container metadata.
+        For other backends (ImageVideo, HDF5Video, TiffVideo), this returns the
+        explicitly set value or None if not set.
+
+        Returns:
+            The FPS if known, or None if unavailable/unknown.
+        """
+        if self.backend is not None:
+            return self.backend.fps
+        return self.backend_metadata.get("fps")
+
+    @fps.setter
+    def fps(self, value: float | None):
+        """Set the frames per second.
+
+        Args:
+            value: Frames per second. Must be positive if not None.
+
+        Raises:
+            ValueError: If value is not positive.
+
+        Notes:
+            For MediaVideo backends, setting FPS overrides the value from container
+            metadata. For other backends, this sets the FPS directly.
+        """
+        if value is not None and value <= 0:
+            raise ValueError(f"FPS must be positive, got {value}")
+
+        if self.backend is not None:
+            self.backend.fps = value
+        self.backend_metadata["fps"] = value
+
+    def frame_to_seconds(self, frame_idx: int) -> float | None:
+        """Convert a frame index to timestamp in seconds.
+
+        Args:
+            frame_idx: Zero-indexed frame number.
+
+        Returns:
+            Time in seconds, or None if FPS is unknown.
+
+        Notes:
+            This assumes constant frame rate. For variable frame rate videos,
+            the returned timestamp may be approximate.
+        """
+        if self.fps is None or self.fps <= 0:
+            return None
+        return frame_idx / self.fps
+
+    def seconds_to_frame(self, seconds: float) -> int | None:
+        """Convert a timestamp in seconds to frame index.
+
+        Args:
+            seconds: Time in seconds from video start.
+
+        Returns:
+            Zero-indexed frame number (rounded down), or None if FPS unknown.
+        """
+        if self.fps is None or self.fps <= 0:
+            return None
+        return int(seconds * self.fps)
 
     def __len__(self) -> int:
         """Return the length of the video as the number of frames."""
@@ -313,11 +399,11 @@ class Video:
 
     def open(
         self,
-        filename: Optional[str] = None,
-        dataset: Optional[str] = None,
-        grayscale: Optional[str] = None,
+        filename: str | None = None,
+        dataset: str | None = None,
+        grayscale: str | None = None,
         keep_open: bool = True,
-        plugin: Optional[str] = None,
+        plugin: str | None = None,
     ):
         """Open the video backend for reading.
 
@@ -407,6 +493,7 @@ class Video:
                     self.backend, "grayscale", None
                 )
                 self.backend_metadata["shape"] = getattr(self.backend, "shape", None)
+                self.backend_metadata["fps"] = getattr(self.backend, "fps", None)
             except Exception:
                 pass
 
@@ -450,7 +537,47 @@ class Video:
 
         Returns:
             True if the videos have matching paths, False otherwise.
+
+        Notes:
+            For HDF5 video backends (e.g., embedded videos in .pkg.slp files),
+            matching prioritizes the source_filename attribute since multiple
+            videos can share the same HDF5 file path but reference different
+            source videos. Falls back to dataset name matching if source_filename
+            is not available.
         """
+        # Handle HDF5 backends specially - prioritize source_filename matching
+        self_is_hdf5 = isinstance(self.backend, HDF5Video)
+        other_is_hdf5 = isinstance(other.backend, HDF5Video)
+
+        if self_is_hdf5 and other_is_hdf5:
+            # Both are HDF5 videos - must match by BOTH source_filename AND dataset
+            # to distinguish different videos embedded in the same pkg.slp file
+            self_source = self.backend.source_filename
+            other_source = other.backend.source_filename
+            self_dataset = self.backend.dataset
+            other_dataset = other.backend.dataset
+
+            # If both have datasets, they must match
+            if self_dataset is not None and other_dataset is not None:
+                if self_dataset != other_dataset:
+                    return False  # Different datasets = different videos
+
+            # If both have source_filenames, compare them
+            if self_source is not None and other_source is not None:
+                if strict:
+                    # For HDF5 videos, just compare normalized path strings
+                    # (avoid slow resolve() on network paths)
+                    return Path(self_source).as_posix() == Path(other_source).as_posix()
+                else:
+                    return Path(self_source).name == Path(other_source).name
+
+            # If only datasets available (no source_filename), they must match
+            if self_dataset is not None and other_dataset is not None:
+                return self_dataset == other_dataset
+
+            # If neither source_filename nor dataset available, cannot match
+            return False
+
         if isinstance(self.filename, list) and isinstance(other.filename, list):
             # Both are image sequences
             if strict:
@@ -464,9 +591,19 @@ class Video:
             # One is image sequence, other is single file
             return False
         else:
-            # Both are single files
+            # Both are single files - use resolve() for symlink handling
             if strict:
-                return Path(self.filename).resolve() == Path(other.filename).resolve()
+                p1, p2 = Path(self.filename), Path(other.filename)
+                # Fast string comparison first
+                if p1.as_posix() == p2.as_posix():
+                    return True
+                # Only resolve if both exist locally (avoid slow network timeouts)
+                try:
+                    if p1.exists() and p2.exists():
+                        return p1.resolve() == p2.resolve()
+                except OSError:
+                    pass
+                return False
             else:
                 return Path(self.filename).name == Path(other.filename).name
 
@@ -642,22 +779,31 @@ class Video:
         self,
         save_path: str | Path,
         frame_inds: list[int] | np.ndarray | None = None,
+        fps: float | None = None,
         video_kwargs: dict[str, Any] | None = None,
-    ) -> Video:
+    ) -> "Video":
         """Save video frames to a new video file.
 
         Args:
             save_path: Path to the new video file. Should end in MP4.
             frame_inds: Frame indices to save. Can be specified as a list or array of
                 frame integers. If not specified, saves all video frames.
+            fps: Frames per second for the output video. If not specified, uses the
+                source video's FPS if available, otherwise defaults to 30.
             video_kwargs: A dictionary of keyword arguments to provide to
                 `sio.save_video` for video compression.
 
         Returns:
             A new `Video` object pointing to the new video file.
         """
-        video_kwargs = {} if video_kwargs is None else video_kwargs
+        video_kwargs = {} if video_kwargs is None else video_kwargs.copy()
         frame_inds = np.arange(len(self)) if frame_inds is None else frame_inds
+
+        # Use source video FPS if not explicitly specified
+        if fps is None:
+            fps = self.fps
+        if fps is not None and "fps" not in video_kwargs:
+            video_kwargs["fps"] = fps
 
         with VideoWriter(save_path, **video_kwargs) as vw:
             for frame_ind in frame_inds:

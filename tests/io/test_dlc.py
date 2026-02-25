@@ -1,6 +1,7 @@
 """Tests for DeepLabCut I/O operations."""
 
 import numpy as np
+import pytest
 
 import sleap_io as sio
 from sleap_io.io import dlc
@@ -16,9 +17,16 @@ def test_is_dlc_file(dlc_maudlc_testdata, dlc_testdata):
     assert not dlc.is_dlc_file("tests/data/slp/minimal_instance.slp")
 
 
-def test_load_maudlc_testdata(dlc_maudlc_testdata):
+@pytest.mark.parametrize(
+    "dlc_fixture",
+    [
+        "dlc_maudlc_testdata",
+        "dlc_maudlc_testdata_v2",
+    ],
+)
+def test_load_maudlc_testdata(dlc_fixture, request):
     """Test loading multi-animal DLC data with individual tracking (MAUDLC)."""
-    labels = sio.load_file(dlc_maudlc_testdata)
+    labels = sio.load_file(request.getfixturevalue(dlc_fixture))
 
     assert isinstance(labels, sio.Labels)
     assert len(labels.skeletons) == 1
@@ -43,9 +51,16 @@ def test_load_maudlc_testdata(dlc_maudlc_testdata):
     assert len(labels.labeled_frames[2].instances) == 2  # Frame 3: 2 instances
 
 
-def test_load_madlc_testdata(dlc_madlc_testdata):
+@pytest.mark.parametrize(
+    "dlc_fixture",
+    [
+        "dlc_madlc_testdata",
+        "dlc_madlc_testdata_v2",
+    ],
+)
+def test_load_madlc_testdata(dlc_fixture, request):
     """Test loading multi-animal DLC data (MADLC)."""
-    labels = sio.load_file(dlc_madlc_testdata)
+    labels = sio.load_file(request.getfixturevalue(dlc_fixture))
 
     assert isinstance(labels, sio.Labels)
     assert len(labels.skeletons) == 1
@@ -65,9 +80,16 @@ def test_load_madlc_testdata(dlc_madlc_testdata):
     assert len(labels.labeled_frames[2].instances) == 1  # Frame 3: 1 instance
 
 
-def test_load_sadlc_testdata(dlc_testdata):
+@pytest.mark.parametrize(
+    "dlc_fixture",
+    [
+        "dlc_testdata",
+        "dlc_testdata_v2",
+    ],
+)
+def test_load_sadlc_testdata(dlc_fixture, request):
     """Test loading single-animal DLC data (SADLC)."""
-    labels = sio.load_file(dlc_testdata)
+    labels = sio.load_file(request.getfixturevalue(dlc_fixture))
 
     assert isinstance(labels, sio.Labels)
     assert len(labels.skeletons) == 1

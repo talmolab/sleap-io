@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_equal
 
+import sleap_io
 from sleap_io import (
     Instance,
     LabeledFrame,
@@ -370,6 +371,126 @@ def test_labels_clean_frames(slp_real_data):
     assert len(labels[0]) == 2
 
 
+def test_labels_negative_frames():
+    """Test negative_frames property returns only negative frames."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    negative = labels.negative_frames
+    assert len(negative) == 1
+    assert negative[0].frame_idx == 1
+    assert negative[0].is_negative is True
+
+
+def test_labels_user_labeled_frames_includes_negative():
+    """Test user_labeled_frames includes negative frames."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+    lf_pred_only = LabeledFrame(
+        video=video,
+        frame_idx=3,
+        instances=[PredictedInstance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty, lf_pred_only],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    user_frames = labels.user_labeled_frames
+    # Should include frame 0 (has user instances) and frame 1 (is negative)
+    # Should NOT include frame 2 (empty, not negative) or frame 3 (pred only)
+    assert len(user_frames) == 2
+    frame_indices = {lf.frame_idx for lf in user_frames}
+    assert frame_indices == {0, 1}
+
+
+def test_labels_clean_preserves_negative_frames():
+    """Test that clean() preserves negative frames but removes empty non-negative."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    assert len(labels) == 3
+
+    labels.clean(frames=True, skeletons=False, tracks=False, videos=False)
+
+    # Should keep frame 0 (has instances) and frame 1 (is negative)
+    # Should remove frame 2 (empty, not negative)
+    assert len(labels) == 2
+    frame_indices = {lf.frame_idx for lf in labels.labeled_frames}
+    assert frame_indices == {0, 1}
+
+    # Verify negative frame is preserved
+    assert any(lf.is_negative for lf in labels.labeled_frames)
+
+
 def test_labels_clean_empty_instances(slp_real_data):
     labels = load_slp(slp_real_data)
     assert labels[0].frame_idx == 0
@@ -456,6 +577,88 @@ def test_replace_videos(slp_real_data):
         assert sf.video.filename == "fake.mp4"
 
     assert labels.video.filename == "fake.mp4"
+
+
+def test_set_video_color_mode_grayscale(slp_minimal):
+    """Test setting all videos to grayscale mode."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode("grayscale")
+    for video in labels.videos:
+        assert video.grayscale is True
+
+
+def test_set_video_color_mode_rgb(slp_minimal):
+    """Test setting all videos to RGB mode."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode("rgb")
+    for video in labels.videos:
+        assert video.grayscale is False
+
+
+def test_set_video_color_mode_auto(slp_minimal):
+    """Test resetting all videos to auto-detection."""
+    labels = load_slp(slp_minimal)
+    # First set to grayscale
+    labels.set_video_color_mode("grayscale")
+    # Then reset to auto
+    labels.set_video_color_mode("auto")
+    for video in labels.videos:
+        assert video.grayscale is None
+
+
+def test_set_video_color_mode_default_is_auto(slp_minimal):
+    """Test that default mode is 'auto'."""
+    labels = load_slp(slp_minimal)
+    labels.set_video_color_mode()  # No argument
+    for video in labels.videos:
+        assert video.grayscale is None
+
+
+def test_set_video_color_mode_propagates_to_source_video():
+    """Test that color mode propagates through source_video chain."""
+    # Create a video with source_video chain (simulating embedded video)
+    source_video = Video(filename="original.mp4", open_backend=False)
+    source_video.backend_metadata["shape"] = (100, 480, 640, 3)
+
+    embedded_video = Video(filename="embedded.pkg.slp", open_backend=False)
+    embedded_video.backend_metadata["shape"] = (10, 480, 640, 3)
+    embedded_video.source_video = source_video
+
+    skeleton = Skeleton(["head", "tail"])
+    labels = Labels(skeletons=[skeleton], videos=[embedded_video])
+
+    # Set color mode
+    labels.set_video_color_mode("grayscale")
+
+    # Both embedded and source should have the setting
+    assert embedded_video.backend_metadata.get("grayscale") is True
+    assert source_video.backend_metadata.get("grayscale") is True
+
+
+def test_set_video_color_mode_propagates_multi_level_chain():
+    """Test that color mode propagates through multi-level source_video chain."""
+    # Create multi-level chain: embedded <- intermediate <- original
+    original = Video(filename="original.mp4", open_backend=False)
+    original.backend_metadata["shape"] = (100, 480, 640, 3)
+
+    intermediate = Video(filename="intermediate.pkg.slp", open_backend=False)
+    intermediate.backend_metadata["shape"] = (50, 480, 640, 3)
+    intermediate.source_video = original
+
+    embedded = Video(filename="final.pkg.slp", open_backend=False)
+    embedded.backend_metadata["shape"] = (10, 480, 640, 3)
+    embedded.source_video = intermediate
+
+    skeleton = Skeleton(["head", "tail"])
+    labels = Labels(skeletons=[skeleton], videos=[embedded])
+
+    # Set color mode
+    labels.set_video_color_mode("rgb")
+
+    # All levels should have the setting
+    assert embedded.backend_metadata.get("grayscale") is False
+    assert intermediate.backend_metadata.get("grayscale") is False
+    assert original.backend_metadata.get("grayscale") is False
 
 
 def test_replace_filenames():
@@ -824,8 +1027,8 @@ def test_split(slp_real_data, tmp_path):
         == "tests/data/videos/centered_pair_low_quality.mp4"
     )
 
-    split1.save(tmp_path / "split1.pkg.slp", embed=True)
-    split2.save(tmp_path / "split2.pkg.slp", embed=True)
+    split1.save(tmp_path / "split1.pkg.slp", embed=True, embed_inplace=True)
+    split2.save(tmp_path / "split2.pkg.slp", embed=True, embed_inplace=True)
     assert pkg.video.filename == (tmp_path / "test.pkg.slp").as_posix()
     assert (
         Path(split1.video.filename).as_posix()
@@ -1158,6 +1361,34 @@ def test_labels_trim(centered_pair, tmpdir):
         labels.trim(new_path, np.arange(100, 200))
 
     labels.trim(new_path, np.arange(100, 200), video=0)
+
+
+def test_labels_trim_with_suggestions(slp_real_data, tmp_path):
+    """Test that Labels.trim() correctly handles suggestions."""
+    labels = load_slp(slp_real_data)
+
+    # Check that we have suggestions
+    assert len(labels.suggestions) > 0, "Test requires labels with suggestions"
+
+    # Define frame range
+    start_frame = 200
+    end_frame = 800
+
+    # Trim to a range that should include some suggestions
+    new_path = tmp_path / "trimmed.slp"
+    trimmed_labels = labels.trim(new_path, np.arange(start_frame, end_frame))
+
+    # Verify trimmed labels saved successfully
+    assert new_path.exists()
+    assert new_path.with_suffix(".mp4").exists()
+
+    # Verify suggestions are filtered and adjusted
+    for sf in trimmed_labels.suggestions:
+        # All suggestions should reference the new video
+        assert sf.video == trimmed_labels.video
+        # Frame indices should be adjusted (original - start_frame)
+        assert sf.frame_idx >= 0
+        assert sf.frame_idx < (end_frame - start_frame)
 
 
 def test_labels_sessions():
@@ -2813,7 +3044,7 @@ def test_labels_merge_basic():
 
     # Merge labels2 into labels1 with explicit video matcher to ensure no matching
     video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
 
     # Check result
     assert result.successful
@@ -2929,7 +3160,7 @@ def test_labels_merge_video_not_matched():
 
     # Merge with strict path matching to ensure videos are not matched
     video_matcher = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
 
     assert result.successful
     assert len(labels1.videos) == 2
@@ -2978,7 +3209,7 @@ def test_labels_merge_track_matching():
 
     # Merge with track name matching
     track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
-    result = labels1.merge(labels2, track_matcher=track_matcher)
+    result = labels1.merge(labels2, track=track_matcher)
 
     assert result.successful
     assert len(labels1.tracks) == 1  # Tracks should be matched by name
@@ -3028,9 +3259,7 @@ def test_labels_merge_conflict_resolution():
     instance_matcher = InstanceMatcher(
         method=InstanceMatchMethod.SPATIAL, threshold=5.0
     )
-    result = labels1.merge(
-        labels2, instance_matcher=instance_matcher, frame_strategy="smart"
-    )
+    result = labels1.merge(labels2, instance=instance_matcher, frame="auto")
 
     assert result.successful
     assert result.frames_merged == 1
@@ -3067,7 +3296,7 @@ def test_labels_merge_frame_strategies():
 
     # Merge with keep_original
     original_instances = len(labels1.labeled_frames[0].instances)
-    result = labels1.merge(labels2, frame_strategy="keep_original")
+    result = labels1.merge(labels2, frame="keep_original")
 
     assert result.successful
     assert (
@@ -3132,7 +3361,86 @@ def test_labels_merge_provenance_tracking():
     assert merge_record["source_labels"]["n_frames"] == 3
     assert merge_record["source_labels"]["n_videos"] == 1
     assert merge_record["source_labels"]["n_skeletons"] == 1
-    assert merge_record["strategy"] == "smart"
+    assert merge_record["strategy"] == "auto"
+    # Verify new provenance fields
+    assert "source_filename" in merge_record
+    assert "target_filename" in merge_record
+    assert "sleap_io_version" in merge_record
+    # In-memory labels have None for filenames
+    assert merge_record["source_filename"] is None
+    assert merge_record["target_filename"] is None
+    # Version should match current version
+    assert merge_record["sleap_io_version"] == sleap_io.__version__
+
+
+def test_labels_merge_provenance_with_filenames():
+    """Test that merge history captures filenames from provenance."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Create labels with filenames in provenance
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    labels1.provenance["filename"] = "/path/to/base_labels.slp"
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+    labels2.provenance["filename"] = "/path/to/source_predictions.slp"
+
+    # Add a frame to labels2
+    frame = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels2.append(frame)
+
+    # Merge
+    result = labels1.merge(labels2)
+
+    assert result.successful
+    merge_record = labels1.provenance["merge_history"][0]
+
+    # Verify filenames are captured
+    assert merge_record["source_filename"] == "/path/to/source_predictions.slp"
+    assert merge_record["target_filename"] == "/path/to/base_labels.slp"
+    assert merge_record["sleap_io_version"] == sleap_io.__version__
+
+
+def test_labels_merge_provenance_mixed_filenames():
+    """Test merge provenance when only one Labels has a filename."""
+    skel = Skeleton(nodes=["head", "tail"])
+    video = Video(filename="test.mp4")
+
+    # Target has filename, source does not
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video)
+    labels1.provenance["filename"] = "/path/to/base_labels.slp"
+
+    labels2 = Labels()  # In-memory, no filename
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video)
+
+    # Add a frame to labels2
+    frame = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance.from_numpy(np.array([[10, 10], [20, 20]]), skeleton=skel)],
+    )
+    labels2.append(frame)
+
+    # Merge
+    result = labels1.merge(labels2)
+
+    assert result.successful
+    merge_record = labels1.provenance["merge_history"][0]
+
+    # Source is in-memory (None), target has filename
+    assert merge_record["source_filename"] is None
+    assert merge_record["target_filename"] == "/path/to/base_labels.slp"
 
 
 def test_labels_merge_custom_matchers():
@@ -3164,14 +3472,54 @@ def test_labels_merge_custom_matchers():
     # Merge with custom matchers
     result = labels1.merge(
         labels2,
-        skeleton_matcher=skeleton_matcher,
-        video_matcher=video_matcher,
-        track_matcher=track_matcher,
+        skeleton=skeleton_matcher,
+        video=video_matcher,
+        track=track_matcher,
     )
 
     assert result.successful
     assert len(labels1.videos) == 1  # Videos matched by basename
     assert len(labels1.tracks) == 2  # Tracks not matched (identity matching)
+
+
+def test_labels_merge_string_api():
+    """Test merge with string arguments for matchers (no imports needed)."""
+    # Create labels
+    skel = Skeleton(nodes=["head", "thorax", "abdomen"])
+    video1 = Video(filename="/path/to/video.mp4")
+    video2 = Video(filename="/different/path/video.mp4")  # Same basename
+    track1 = Track(name="ant1")
+    track2 = Track(name="ant1")  # Same name
+
+    labels1 = Labels()
+    labels1.skeletons.append(skel)
+    labels1.videos.append(video1)
+    labels1.tracks.append(track1)
+
+    labels2 = Labels()
+    labels2.skeletons.append(skel)
+    labels2.videos.append(video2)
+    labels2.tracks.append(track2)
+
+    # Add frame to labels2
+    inst = Instance.from_numpy(np.array([[10, 10], [20, 20], [30, 30]]), skeleton=skel)
+    frame = LabeledFrame(video=video2, frame_idx=0, instances=[inst])
+    labels2.append(frame)
+
+    # Merge using STRING arguments instead of Matcher objects
+    result = labels1.merge(
+        labels2,
+        skeleton="structure",  # String instead of SkeletonMatcher
+        video="basename",  # String instead of VideoMatcher
+        track="name",  # String instead of TrackMatcher
+        frame="auto",  # String (already was string)
+        instance="spatial",  # String instead of InstanceMatcher
+    )
+
+    assert result.successful
+    assert len(labels1.videos) == 1  # Videos matched by basename
+    assert len(labels1.tracks) == 1  # Tracks matched by name
+    assert len(labels1.labeled_frames) == 1
 
 
 def test_labels_merge_empty():
@@ -3340,7 +3688,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
 
     # Test 1: Without fallback, videos don't match (different paths)
     video_matcher_no_fallback = VideoMatcher(method=VideoMatchMethod.PATH, strict=True)
-    result_no_match = loaded_a.merge(loaded_b, video_matcher=video_matcher_no_fallback)
+    result_no_match = loaded_a.merge(loaded_b, video=video_matcher_no_fallback)
     assert result_no_match.successful
     assert len(loaded_a.videos) == 2  # Both videos added (no match)
 
@@ -3352,7 +3700,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
     # The videos have same basename so they should match
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = loaded_a.merge(loaded_b, video_matcher=video_matcher)
+    result = loaded_a.merge(loaded_b, video=video_matcher)
     assert result.successful
     # Videos match because recording.mp4 exists in fallback directory
     assert len(loaded_a.videos) == 1  # Videos matched via fallback
@@ -3384,7 +3732,7 @@ def test_labels_merge_video_basename_with_fallback_dirs(tmp_path):
     labels_d.skeletons.append(skel)
     labels_d.videos.append(Video(filename=str(project_a / "videos" / "recording.mp4")))
 
-    result3 = labels_d.merge(labels_c, video_matcher=video_matcher)
+    result3 = labels_d.merge(labels_c, video=video_matcher)
     assert result3.successful
     assert len(labels_d.videos) == 2  # recording.mp4 matched, other.mp4 added
 
@@ -3448,7 +3796,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
     # BASENAME method does filename-based matching ignoring directory paths
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = labels1.merge(labels2, video_matcher=video_matcher)
+    result = labels1.merge(labels2, video=video_matcher)
     assert result.successful
     # Videos match because they have the same basename (experiment.mp4)
     assert len(labels1.videos) == 1  # Videos matched via base_path lookup
@@ -3475,7 +3823,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
 
         # The merge will attempt relative_to() which will raise ValueError
         # This tests the exception handling
-        result2 = labels3.merge(labels4, video_matcher=video_matcher2)
+        result2 = labels3.merge(labels4, video=video_matcher2)
         assert result2.successful
 
     # Test 3: Test when base_path contains the video file directly
@@ -3499,7 +3847,7 @@ def test_labels_merge_video_basename_matching(tmp_path):
     labels6.skeletons.append(skel)
     labels6.videos.append(video1)  # Full path to subdir1/experiment.mp4
 
-    result3 = labels6.merge(labels5, video_matcher=video_matcher3)
+    result3 = labels6.merge(labels5, video=video_matcher3)
     assert result3.successful
     # Videos should match because experiment.mp4 exists in base_path
     assert len(labels6.videos) == 1  # Videos matched via base_path
@@ -3604,7 +3952,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     # Create a video matcher using BASENAME (filename-based matching)
     video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
 
-    result = loaded1.merge(loaded2, video_matcher=video_matcher)
+    result = loaded1.merge(loaded2, video=video_matcher)
 
     assert result.successful
     assert result.frames_merged == 2  # frame2 and frame3
@@ -3629,7 +3977,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     video3 = Video(filename="orphan.mp4")
     labels3.videos.append(video3)
 
-    result2 = loaded1.merge(labels3, video_matcher=video_matcher_bad)
+    result2 = loaded1.merge(labels3, video=video_matcher_bad)
     assert result2.successful  # Should not crash even with bad paths
 
     # Test 5: Test priority order - direct match should take precedence
@@ -3644,7 +3992,7 @@ def test_labels_merge_video_basename_complex_scenario(tmp_path):
     labels6.videos.append(video6)
 
     # Should match based on path even before trying resolve strategies
-    result4 = labels5.merge(labels6, video_matcher=video_matcher)
+    result4 = labels5.merge(labels6, video=video_matcher)
     assert result4.successful
     assert len(labels5.videos) == 1  # Should match and not duplicate
 
@@ -3880,7 +4228,7 @@ def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
     assert skeleton1.matches(skeleton2)
 
     # Merge labels2 into labels1
-    result = labels1.merge(labels2, frame_strategy="keep_both")
+    result = labels1.merge(labels2, frame="keep_both")
 
     assert result.successful
     assert len(labels1.skeletons) == 1  # Should reuse existing skeleton
@@ -3905,3 +4253,1063 @@ def test_labels_merge_skeleton_remapping_for_existing_frames(tmp_path):
             assert instance.skeleton in labels1.skeletons, (
                 "Instance skeleton not in labels.skeletons list"
             )
+
+
+def test_labels_match_basic():
+    """Test basic Labels.match functionality."""
+    # Create ground truth labels
+    skeleton_gt = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/experiment/video.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton_gt])
+
+    # Create prediction labels with different path but same basename
+    skeleton_pred = Skeleton(["head", "tail"])
+    video_pred = Video(filename="/output/model/video.mp4", open_backend=False)
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton_pred])
+
+    # Match predictions to ground truth
+    result = gt_labels.match(pred_labels)
+
+    # Check video matching (should match by basename)
+    assert len(result.video_map) == 1
+    assert video_pred in result.video_map
+    assert result.video_map[video_pred] is video_gt
+
+    # Check skeleton matching (should match by structure)
+    assert len(result.skeleton_map) == 1
+    assert skeleton_pred in result.skeleton_map
+    assert result.skeleton_map[skeleton_pred] is skeleton_gt
+
+    # Check convenience properties
+    assert result.all_videos_matched
+    assert result.all_skeletons_matched
+    assert result.n_videos_matched == 1
+    assert result.n_skeletons_matched == 1
+    assert len(result.unmatched_videos) == 0
+    assert len(result.unmatched_skeletons) == 0
+
+
+def test_labels_match_unmatched_videos():
+    """Test Labels.match with videos that don't match."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video_a.mp4", open_backend=False)
+    video_pred = Video(filename="/data/video_b.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # Video should not match (different basenames)
+    assert not result.all_videos_matched
+    assert len(result.unmatched_videos) == 1
+    assert result.video_map[video_pred] is None
+
+    # Skeleton should still match
+    assert result.all_skeletons_matched
+
+
+def test_labels_match_multiple_videos():
+    """Test Labels.match with multiple videos."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Ground truth with 2 videos
+    video_gt_1 = Video(filename="/data/video1.mp4", open_backend=False)
+    video_gt_2 = Video(filename="/data/video2.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt_1, video_gt_2], skeletons=[skeleton])
+
+    # Predictions with 3 videos (2 match, 1 doesn't)
+    video_pred_1 = Video(filename="/output/video1.mp4", open_backend=False)
+    video_pred_2 = Video(filename="/output/video2.mp4", open_backend=False)
+    video_pred_3 = Video(filename="/output/video3.mp4", open_backend=False)
+    pred_labels = Labels(
+        videos=[video_pred_1, video_pred_2, video_pred_3], skeletons=[skeleton]
+    )
+
+    result = gt_labels.match(pred_labels)
+
+    # Check matches
+    assert result.n_videos_matched == 2
+    assert len(result.unmatched_videos) == 1
+    assert video_pred_3 in result.unmatched_videos
+    assert result.video_map[video_pred_1] is video_gt_1
+    assert result.video_map[video_pred_2] is video_gt_2
+    assert result.video_map[video_pred_3] is None
+
+
+def test_labels_match_track_matching():
+    """Test Labels.match with track matching."""
+    skeleton = Skeleton(["head", "tail"])
+    video = Video(filename="/data/video.mp4", open_backend=False)
+
+    track_gt = Track("animal_1")
+    track_pred = Track("animal_1")  # Same name, different object
+
+    gt_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_gt])
+    pred_labels = Labels(videos=[video], skeletons=[skeleton], tracks=[track_pred])
+
+    result = gt_labels.match(pred_labels)
+
+    # Track should match by name
+    assert result.all_tracks_matched
+    assert result.track_map[track_pred] is track_gt
+
+
+def test_labels_match_string_method():
+    """Test Labels.match with string method arguments."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    video_pred = Video(filename="/output/video.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    # Test with string methods
+    result = gt_labels.match(pred_labels, video="basename", skeleton="structure")
+
+    assert result.all_videos_matched
+    assert result.all_skeletons_matched
+
+
+def test_labels_match_custom_matchers():
+    """Test Labels.match with custom matcher objects."""
+    # For SUBSET matching, skeleton1 must be a subset of skeleton2
+    # Since match() is called with (self_skel, other_skel) = (gt, pred),
+    # gt nodes must be subset of pred nodes for match to succeed
+    skeleton_gt = Skeleton(["head", "tail"])
+    skeleton_pred = Skeleton(["head", "body", "tail"])  # GT nodes are subset of pred
+    video = Video(filename="/data/video.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video], skeletons=[skeleton_gt])
+    pred_labels = Labels(videos=[video], skeletons=[skeleton_pred])
+
+    # Structure matching should fail (different nodes)
+    result_struct = gt_labels.match(pred_labels, skeleton="structure")
+    assert not result_struct.all_skeletons_matched
+
+    # Subset matching should succeed (gt nodes are subset of pred nodes)
+    result_subset = gt_labels.match(pred_labels, skeleton="subset")
+    assert result_subset.all_skeletons_matched
+
+
+def test_labels_match_empty():
+    """Test Labels.match with empty Labels."""
+    gt_labels = Labels()
+    pred_labels = Labels()
+
+    result = gt_labels.match(pred_labels)
+
+    assert len(result.video_map) == 0
+    assert len(result.skeleton_map) == 0
+    assert len(result.track_map) == 0
+    assert result.all_videos_matched  # Vacuously true
+    assert result.all_skeletons_matched
+    assert result.all_tracks_matched
+
+
+def test_labels_match_summary():
+    """Test MatchResult.summary() output."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    video_pred = Video(filename="/output/different.mp4", open_backend=False)
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    summary = result.summary()
+    assert "Videos: 0/1 matched" in summary
+    assert "Skeletons: 1/1 matched" in summary
+    assert "Unmatched videos:" in summary
+
+
+def test_labels_match_result_import():
+    """Test that MatchResult can be imported from sleap_io."""
+    import sleap_io as sio
+
+    # Should be importable directly
+    assert hasattr(sio, "MatchResult")
+
+    # Should be usable for type hints
+    result = sio.MatchResult()
+    assert isinstance(result.video_map, dict)
+    assert isinstance(result.skeleton_map, dict)
+    assert isinstance(result.track_map, dict)
+
+
+def test_labels_match_with_matcher_objects():
+    """Test Labels.match with actual Matcher objects (not strings)."""
+    skeleton = Skeleton(["head", "tail"])
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    video_pred = Video(filename="/output/video.mp4", open_backend=False)
+    track_gt = Track("animal_1")
+    track_pred = Track("animal_1")
+
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton], tracks=[track_gt])
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton], tracks=[track_pred])
+
+    # Pass actual Matcher objects instead of strings
+    from sleap_io.model.matching import (
+        SkeletonMatcher,
+        SkeletonMatchMethod,
+        TrackMatcher,
+        TrackMatchMethod,
+        VideoMatcher,
+        VideoMatchMethod,
+    )
+
+    skeleton_matcher = SkeletonMatcher(method=SkeletonMatchMethod.STRUCTURE)
+    video_matcher = VideoMatcher(method=VideoMatchMethod.BASENAME)
+    track_matcher = TrackMatcher(method=TrackMatchMethod.NAME)
+
+    result = gt_labels.match(
+        pred_labels,
+        skeleton=skeleton_matcher,
+        video=video_matcher,
+        track=track_matcher,
+    )
+
+    assert result.all_videos_matched
+    assert result.all_skeletons_matched
+    assert result.all_tracks_matched
+
+
+def test_labels_match_summary_many_unmatched():
+    """Test MatchResult.summary() with more than 5 unmatched videos."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Create GT with one video
+    video_gt = Video(filename="/data/video_gt.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+
+    # Create predictions with 7 videos that don't match (different basenames)
+    pred_videos = [
+        Video(filename=f"/output/pred_{i}.mp4", open_backend=False) for i in range(7)
+    ]
+    pred_labels = Labels(videos=pred_videos, skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # All 7 should be unmatched (different basenames from GT)
+    assert len(result.unmatched_videos) == 7
+
+    summary = result.summary()
+    assert "Videos: 0/7 matched" in summary
+    assert "Unmatched videos:" in summary
+    assert "... and 2 more" in summary  # 7 - 5 = 2 more
+
+
+def test_labels_match_summary_image_video():
+    """Test MatchResult.summary() with ImageVideo (filename is a list)."""
+    skeleton = Skeleton(["head", "tail"])
+
+    # Create GT with a regular video
+    video_gt = Video(filename="/data/video.mp4", open_backend=False)
+    gt_labels = Labels(videos=[video_gt], skeletons=[skeleton])
+
+    # Create predictions with an ImageVideo (list of filenames)
+    video_pred = Video(
+        filename=["/output/frame001.png", "/output/frame002.png"],
+        open_backend=False,
+    )
+    pred_labels = Labels(videos=[video_pred], skeletons=[skeleton])
+
+    result = gt_labels.match(pred_labels)
+
+    # Should not match (different type)
+    assert len(result.unmatched_videos) == 1
+
+    # Summary should handle list filename
+    summary = result.summary()
+    assert "Unmatched videos:" in summary
+    assert "/output/frame001.png" in summary  # First filename from list
+
+
+def test_labels_copy_basic(slp_minimal):
+    """Test basic copy creates independent object."""
+    labels = load_slp(slp_minimal)
+    labels_copy = labels.copy()
+
+    # Assert independence
+    assert labels_copy is not labels
+    assert labels_copy.labeled_frames is not labels.labeled_frames
+    assert labels_copy.videos is not labels.videos
+    assert labels_copy.skeletons is not labels.skeletons
+    assert labels_copy.tracks is not labels.tracks
+
+    # Assert equivalence
+    assert len(labels_copy) == len(labels)
+    assert len(labels_copy.videos) == len(labels.videos)
+    assert len(labels_copy.skeletons) == len(labels.skeletons)
+    assert len(labels_copy.tracks) == len(labels.tracks)
+
+
+def test_labels_copy_independence(slp_real_data):
+    """Test modifications to copy don't affect original."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Store original value
+    original_point = labels.labeled_frames[0].instances[0].points["xy"][0].copy()
+
+    # Modify copy
+    labels_copy.labeled_frames[0].instances[0].points["xy"][0] = [999.0, 999.0]
+
+    # Assert original unchanged
+    assert np.array_equal(
+        labels.labeled_frames[0].instances[0].points["xy"][0], original_point
+    )
+    assert not np.array_equal(
+        labels.labeled_frames[0].instances[0].points["xy"][0], [999.0, 999.0]
+    )
+
+
+def test_labels_copy_preserves_video_references(slp_real_data):
+    """Test object references are preserved within copy."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Get video reference from first frame
+    video_from_frame = labels_copy.labeled_frames[0].video
+    # Same video should be in videos list (by identity)
+    assert video_from_frame in labels_copy.videos
+
+    # But should not be same object as original
+    original_video = labels.labeled_frames[0].video
+    assert video_from_frame is not original_video
+
+
+def test_labels_copy_preserves_skeleton_references(slp_minimal):
+    """Test skeleton references are preserved within copy."""
+    labels = load_slp(slp_minimal)
+    labels_copy = labels.copy()
+
+    # Check skeleton references
+    skeleton_from_inst = labels_copy.labeled_frames[0].instances[0].skeleton
+    assert skeleton_from_inst in labels_copy.skeletons
+
+    # Skeleton should be copied
+    original_skeleton = labels.labeled_frames[0].instances[0].skeleton
+    assert skeleton_from_inst is not original_skeleton
+
+
+def test_labels_copy_video_backend(centered_pair_low_quality_video):
+    """Test video backends are properly handled in copy."""
+    labels = Labels([LabeledFrame(video=centered_pair_low_quality_video, frame_idx=0)])
+
+    # Open backend
+    _ = labels.videos[0][0]
+    assert labels.videos[0].backend is not None
+
+    # Copy
+    labels_copy = labels.copy()
+
+    # Backend should work in copy
+    frame = labels_copy.videos[0][0]
+    assert frame is not None
+    assert frame.shape[0] > 0  # Should have valid frame data
+
+
+def test_labels_copy_tracks(centered_pair):
+    """Test track references are preserved."""
+    labels = load_slp(centered_pair)
+    labels_copy = labels.copy()
+
+    # Find instance with track in copy
+    inst_with_track = None
+    for lf in labels_copy.labeled_frames:
+        for inst in lf.instances:
+            if inst.track is not None:
+                inst_with_track = inst
+                break
+        if inst_with_track:
+            break
+
+    # Should have found at least one
+    assert inst_with_track is not None
+
+    # Track should be in tracks list
+    assert inst_with_track.track in labels_copy.tracks
+
+    # But should be copied
+    original_inst = None
+    for lf in labels.labeled_frames:
+        for inst in lf.instances:
+            if inst.track is not None:
+                original_inst = inst
+                break
+        if original_inst:
+            break
+
+    assert inst_with_track.track is not original_inst.track
+
+
+def test_labels_copy_suggestions(slp_real_data):
+    """Test suggestion frames are copied."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Independent lists
+    assert labels_copy.suggestions is not labels.suggestions
+    assert len(labels_copy.suggestions) == len(labels.suggestions)
+
+    # Video references preserved within copy
+    for sf in labels_copy.suggestions:
+        assert sf.video in labels_copy.videos
+
+    # But should be independent from original
+    for sf_copy, sf_orig in zip(labels_copy.suggestions, labels.suggestions):
+        assert sf_copy is not sf_orig
+        assert sf_copy.video is not sf_orig.video
+
+
+def test_labels_copy_sessions(slp_multiview):
+    """Test recording sessions are copied."""
+    labels = load_slp(slp_multiview)
+    labels_copy = labels.copy()
+
+    assert labels_copy.sessions is not labels.sessions
+    assert len(labels_copy.sessions) == len(labels.sessions)
+
+    # Sessions should be independent
+    for session_copy, session_orig in zip(labels_copy.sessions, labels.sessions):
+        assert session_copy is not session_orig
+
+    # Check camera-video mappings preserved in copy
+    if len(labels_copy.sessions) > 0:
+        session = labels_copy.sessions[0]
+        for camera, video in session._video_by_camera.items():
+            assert video in labels_copy.videos
+
+
+def test_labels_copy_provenance(slp_real_data):
+    """Test provenance dict is copied."""
+    labels = load_slp(slp_real_data)
+    labels.provenance["test_key"] = "test_value"
+
+    labels_copy = labels.copy()
+
+    # Independent dict
+    assert labels_copy.provenance is not labels.provenance
+    assert labels_copy.provenance["test_key"] == "test_value"
+
+    # Mutation test
+    labels_copy.provenance["new_key"] = "new_value"
+    assert "new_key" not in labels.provenance
+
+
+def test_labels_copy_numpy_arrays(slp_minimal):
+    """Test numpy arrays are properly copied."""
+    labels = load_slp(slp_minimal)
+    labels_copy = labels.copy()
+
+    # Get points from both
+    orig_points = labels.labeled_frames[0].instances[0].points
+    copy_points = labels_copy.labeled_frames[0].instances[0].points
+
+    # Different arrays
+    assert orig_points is not copy_points
+
+    # Same values
+    assert np.array_equal(orig_points["xy"], copy_points["xy"])
+    assert np.array_equal(orig_points["visible"], copy_points["visible"])
+
+    # Independence - modify copy
+    original_xy = orig_points["xy"][0].copy()
+    copy_points["xy"][0] = [999.0, 999.0]
+    assert np.array_equal(orig_points["xy"][0], original_xy)
+    assert not np.array_equal(orig_points["xy"][0], [999.0, 999.0])
+
+
+def test_labels_copy_skeleton_structure(slp_real_data):
+    """Test skeleton edges and symmetries are copied."""
+    labels = load_slp(slp_real_data)
+    labels_copy = labels.copy()
+
+    # Independent objects
+    assert labels_copy.skeletons[0] is not labels.skeletons[0]
+
+    # Same structure
+    assert len(labels_copy.skeletons[0].nodes) == len(labels.skeletons[0].nodes)
+    assert len(labels_copy.skeletons[0].edges) == len(labels.skeletons[0].edges)
+
+
+def test_labels_copy_empty():
+    """Test copying empty labels."""
+    labels = Labels()
+    labels_copy = labels.copy()
+
+    assert len(labels_copy) == 0
+    assert labels_copy is not labels
+
+
+def test_labels_copy_backend_metadata():
+    """Test backend_metadata dict is copied (PR #243 regression test)."""
+    video = Video(filename="test.mp4", backend_metadata={"key": "value"})
+    labels = Labels(videos=[video])
+    labels_copy = labels.copy()
+
+    # Modify copy metadata
+    labels_copy.videos[0].backend_metadata["new_key"] = "new_value"
+
+    # Original unchanged
+    assert "new_key" not in labels.videos[0].backend_metadata
+    assert labels.videos[0].backend_metadata == {"key": "value"}
+
+
+def test_labels_copy_open_videos_default(centered_pair_low_quality_video):
+    """Test default open_videos=None preserves original settings."""
+    # Create labels with mixed open_backend settings
+    video1 = Video(filename="test1.mp4", open_backend=True)
+    video2 = Video(filename="test2.mp4", open_backend=False)
+    labels = Labels(videos=[video1, video2])
+
+    labels_copy = labels.copy()
+
+    # Settings preserved per-video
+    assert labels_copy.videos[0].open_backend is True
+    assert labels_copy.videos[1].open_backend is False
+
+
+def test_labels_copy_open_videos_true():
+    """Test open_videos=True enables auto-opening for all videos."""
+    video1 = Video(filename="test1.mp4", open_backend=True)
+    video2 = Video(filename="test2.mp4", open_backend=False)
+    labels = Labels(videos=[video1, video2])
+
+    labels_copy = labels.copy(open_videos=True)
+
+    # All videos have open_backend=True
+    assert labels_copy.videos[0].open_backend is True
+    assert labels_copy.videos[1].open_backend is True
+
+    # Originals unchanged
+    assert labels.videos[0].open_backend is True
+    assert labels.videos[1].open_backend is False
+
+
+def test_labels_copy_open_videos_false(centered_pair_low_quality_video):
+    """Test open_videos=False disables auto-opening for all videos."""
+    labels = Labels([LabeledFrame(video=centered_pair_low_quality_video, frame_idx=0)])
+
+    # Verify original has auto-open enabled
+    assert labels.videos[0].open_backend is True
+
+    labels_copy = labels.copy(open_videos=False)
+
+    # Copy has auto-open disabled
+    assert labels_copy.videos[0].open_backend is False
+    # Backend should not open on copy
+    assert labels_copy.videos[0].backend is None
+
+    # Original unchanged
+    assert labels.videos[0].open_backend is True
+
+
+def test_labels_copy_performance_profile(
+    slp_minimal, slp_real_data, centered_pair, slp_multiview
+):
+    """Profile copy performance on various fixture sizes.
+
+    This test measures and reports performance characteristics of the copy operation
+    across different dataset sizes. It does not enforce strict performance limits,
+    but documents expected performance ranges.
+    """
+    import time
+
+    fixtures = {
+        "minimal": load_slp(slp_minimal),
+        "real_data": load_slp(slp_real_data),
+        "centered_pair": load_slp(centered_pair),
+        "multiview": load_slp(slp_multiview),
+    }
+
+    results = {}
+    for name, labels in fixtures.items():
+        # Gather metadata
+        n_frames = len(labels.labeled_frames)
+        n_instances = sum(len(lf.instances) for lf in labels.labeled_frames)
+        n_points = sum(
+            inst.points.shape[0]
+            for lf in labels.labeled_frames
+            for inst in lf.instances
+        )
+
+        # Warm up (first copy may be slower due to caching)
+        _ = labels.copy()
+
+        # Benchmark with multiple runs for stability
+        times = []
+        for _ in range(5):
+            start = time.perf_counter()
+            labels_copy = labels.copy()
+            elapsed = time.perf_counter() - start
+            times.append(elapsed)
+
+            # Verify copy worked
+            assert labels_copy is not labels
+
+        # Use median time for stability
+        median_time = sorted(times)[len(times) // 2]
+
+        results[name] = {
+            "frames": n_frames,
+            "instances": n_instances,
+            "points": n_points,
+            "time_ms": median_time * 1000,
+            "time_per_instance_us": (median_time * 1e6) / max(n_instances, 1),
+        }
+
+    # Print report (helpful for development and CI logs)
+    print("\n\nLabels.copy() Performance Profile")
+    print("=" * 80)
+    for name, stats in results.items():
+        print(f"\n{name}:")
+        print(f"  Frames: {stats['frames']}")
+        print(f"  Instances: {stats['instances']}")
+        print(f"  Total points: {stats['points']}")
+        print(f"  Copy time: {stats['time_ms']:.2f} ms")
+        print(f"  Time per instance: {stats['time_per_instance_us']:.2f} µs")
+    print("=" * 80)
+
+    # Sanity check: copy should complete in reasonable time
+    # These are very generous limits just to catch major performance regressions
+    assert results["minimal"]["time_ms"] < 100, "Minimal dataset copy too slow"
+    assert results["centered_pair"]["time_ms"] < 5000, "Large dataset copy too slow"
+
+    # Performance should scale roughly linearly with instance count
+    # (this is a loose check, not a strict requirement)
+    cp_instances = results["centered_pair"]["instances"]
+    min_instances = results["minimal"]["instances"]
+    if cp_instances > 0 and min_instances > 0:
+        scale_factor = cp_instances / min_instances
+        time_ratio = results["centered_pair"]["time_ms"] / max(
+            results["minimal"]["time_ms"], 0.001
+        )
+
+        # Time ratio shouldn't be more than 100x the scale factor
+        # (allows for some overhead that's not purely linear)
+        assert time_ratio < scale_factor * 100, (
+            f"Copy performance doesn't scale well: "
+            f"{scale_factor:.1f}x more instances but {time_ratio:.1f}x slower"
+        )
+
+
+# =======================
+# Fast Stats Tests
+# =======================
+
+
+def test_n_user_instances_basic():
+    """Test n_user_instances returns correct count for eager-loaded Labels."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    PredictedInstance([[4, 5], [6, 7]], skeleton=skel),
+                ],
+            ),
+            LabeledFrame(
+                video=vid,
+                frame_idx=1,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    Instance([[4, 5], [6, 7]], skeleton=skel),
+                    PredictedInstance([[8, 9], [10, 11]], skeleton=skel),
+                ],
+            ),
+        ]
+    )
+
+    # 1 user instance in frame 0 + 2 user instances in frame 1 = 3 total
+    assert labels.n_user_instances == 3
+
+
+def test_n_pred_instances_basic():
+    """Test n_pred_instances returns correct count for eager-loaded Labels."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    PredictedInstance([[4, 5], [6, 7]], skeleton=skel),
+                ],
+            ),
+            LabeledFrame(
+                video=vid,
+                frame_idx=1,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel),
+                    PredictedInstance([[4, 5], [6, 7]], skeleton=skel),
+                    PredictedInstance([[8, 9], [10, 11]], skeleton=skel),
+                ],
+            ),
+        ]
+    )
+
+    # 1 predicted instance in frame 0 + 2 predicted instances in frame 1 = 3 total
+    assert labels.n_pred_instances == 3
+
+
+def test_n_user_instances_empty():
+    """Test n_user_instances returns 0 for empty Labels."""
+    labels = Labels()
+    assert labels.n_user_instances == 0
+
+
+def test_n_pred_instances_empty():
+    """Test n_pred_instances returns 0 for empty Labels."""
+    labels = Labels()
+    assert labels.n_pred_instances == 0
+
+
+def test_n_user_instances_lazy(centered_pair):
+    """Test n_user_instances with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    assert lazy.n_user_instances == eager.n_user_instances
+    # centered_pair has 0 user instances
+    assert lazy.n_user_instances == 0
+
+
+def test_n_pred_instances_lazy(centered_pair):
+    """Test n_pred_instances with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    assert lazy.n_pred_instances == eager.n_pred_instances
+    # centered_pair has 2274 predicted instances
+    assert lazy.n_pred_instances == 2274
+
+
+def test_n_frames_per_video_basic():
+    """Test n_frames_per_video returns correct counts."""
+    vid1 = Video(filename="video1")
+    vid2 = Video(filename="video2")
+    labels = Labels(
+        [
+            LabeledFrame(video=vid1, frame_idx=0, instances=[]),
+            LabeledFrame(video=vid1, frame_idx=1, instances=[]),
+            LabeledFrame(video=vid1, frame_idx=2, instances=[]),
+            LabeledFrame(video=vid2, frame_idx=0, instances=[]),
+        ]
+    )
+
+    frame_counts = labels.n_frames_per_video()
+    assert frame_counts[vid1] == 3
+    assert frame_counts[vid2] == 1
+
+
+def test_n_frames_per_video_empty():
+    """Test n_frames_per_video returns empty dict for empty Labels."""
+    labels = Labels()
+    assert labels.n_frames_per_video() == {}
+
+
+def test_n_frames_per_video_lazy(centered_pair):
+    """Test n_frames_per_video with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    lazy_counts = lazy.n_frames_per_video()
+    eager_counts = eager.n_frames_per_video()
+
+    # Should have same videos and counts
+    for vid in eager.videos:
+        lazy_vid = lazy.videos[eager.videos.index(vid)]
+        assert lazy_counts[lazy_vid] == eager_counts[vid]
+
+
+def test_n_instances_per_track_basic():
+    """Test n_instances_per_track returns correct counts."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    track1 = Track("track1")
+    track2 = Track("track2")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel, track=track1),
+                    Instance([[4, 5], [6, 7]], skeleton=skel, track=track2),
+                ],
+            ),
+            LabeledFrame(
+                video=vid,
+                frame_idx=1,
+                instances=[
+                    Instance([[0, 1], [2, 3]], skeleton=skel, track=track1),
+                    Instance([[4, 5], [6, 7]], skeleton=skel),  # No track
+                ],
+            ),
+        ],
+        tracks=[track1, track2],
+    )
+
+    track_counts = labels.n_instances_per_track()
+    assert track_counts[track1] == 2  # 2 instances with track1
+    assert track_counts[track2] == 1  # 1 instance with track2
+
+
+def test_n_instances_per_track_empty():
+    """Test n_instances_per_track returns empty dict for empty Labels."""
+    labels = Labels()
+    assert labels.n_instances_per_track() == {}
+
+
+def test_n_instances_per_track_no_tracks():
+    """Test n_instances_per_track with Labels that have no tracks defined."""
+    skel = Skeleton(["A", "B"])
+    vid = Video(filename="test")
+    labels = Labels(
+        [
+            LabeledFrame(
+                video=vid,
+                frame_idx=0,
+                instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+            ),
+        ]
+    )
+
+    # No tracks defined, should return empty dict
+    assert labels.n_instances_per_track() == {}
+
+
+def test_n_instances_per_track_lazy(centered_pair):
+    """Test n_instances_per_track with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    lazy_counts = lazy.n_instances_per_track()
+    eager_counts = eager.n_instances_per_track()
+
+    # Should have same tracks and counts
+    for track in eager.tracks:
+        lazy_track = lazy.tracks[eager.tracks.index(track)]
+        assert lazy_counts[lazy_track] == eager_counts[track]
+
+
+def test_n_user_frames_basic():
+    """Test n_user_frames returns correct count for eager-loaded Labels."""
+    video = Video(filename="test")
+    skeleton = Skeleton(["A", "B"])
+
+    # Create a mix of user and predicted frames
+    user_inst = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]]),
+        skeleton=skeleton,
+    )
+    pred_inst = PredictedInstance.from_numpy(
+        np.array([[10, 20], [30, 40]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.8]),
+        score=0.85,
+    )
+
+    labels = Labels(
+        [
+            # Frame 0: user instance only
+            LabeledFrame(video=video, frame_idx=0, instances=[user_inst]),
+            # Frame 1: predicted instance only
+            LabeledFrame(video=video, frame_idx=1, instances=[pred_inst]),
+            # Frame 2: user instance only
+            LabeledFrame(video=video, frame_idx=2, instances=[user_inst]),
+            # Frame 3: both user and predicted
+            LabeledFrame(video=video, frame_idx=3, instances=[user_inst, pred_inst]),
+        ]
+    )
+
+    # Frames 0, 2, and 3 have user instances
+    assert labels.n_user_frames == 3
+    # Total frames is 4
+    assert len(labels.labeled_frames) == 4
+
+
+def test_n_user_frames_empty():
+    """Test n_user_frames returns 0 for empty Labels."""
+    labels = Labels()
+    assert labels.n_user_frames == 0
+
+
+def test_n_user_frames_no_user_instances():
+    """Test n_user_frames returns 0 when only predicted instances exist."""
+    video = Video(filename="test")
+    skeleton = Skeleton(["A", "B"])
+    pred_inst = PredictedInstance.from_numpy(
+        np.array([[10, 20], [30, 40]]),
+        skeleton=skeleton,
+        point_scores=np.array([0.9, 0.8]),
+        score=0.85,
+    )
+
+    labels = Labels(
+        [
+            LabeledFrame(video=video, frame_idx=0, instances=[pred_inst]),
+            LabeledFrame(video=video, frame_idx=1, instances=[pred_inst]),
+        ]
+    )
+
+    assert labels.n_user_frames == 0
+
+
+def test_n_user_frames_lazy(centered_pair):
+    """Test n_user_frames with lazy-loaded Labels matches eager."""
+    lazy = load_slp(centered_pair, lazy=True)
+    eager = load_slp(centered_pair, lazy=False)
+
+    assert lazy.n_user_frames == eager.n_user_frames
+    # centered_pair has 0 user instances, so 0 user frames
+    assert lazy.n_user_frames == 0
+
+
+def test_n_user_frames_lazy_with_user_instances(slp_real_data):
+    """Test n_user_frames with lazy-loaded Labels that has user instances."""
+    lazy = load_slp(slp_real_data, lazy=True)
+    eager = load_slp(slp_real_data, lazy=False)
+
+    # Should match eager
+    assert lazy.n_user_frames == eager.n_user_frames
+    # slp_real_data has user instances
+    assert lazy.n_user_frames > 0
+
+
+# =============================================================================
+# Tests for Labels.add_video() - PROPOSED NEW METHOD
+# =============================================================================
+# These tests document expected behavior for a new method that safely adds
+# videos while preventing duplicates.
+# Current implementation: Method does not exist (tests will fail with AttributeError).
+
+
+class TestLabelsAddVideo:
+    """Tests for Labels.add_video() method.
+
+    This method is needed to prevent duplicate video creation when adding
+    videos to Labels. The current pattern of `labels.videos.append(video)`
+    or `video not in labels.videos` fails to detect duplicates because
+    Video uses identity comparison (eq=False).
+
+    Background (from merge investigation):
+    The GUI uses `video not in context.labels.videos` to check for duplicates,
+    but this always returns True for new Video objects even if they point to
+    the same file. This leads to:
+    1. Duplicate videos in the Labels.videos list
+    2. Downstream deletion bugs (remove_video deletes frames from ALL matching videos)
+    3. Data corruption when merging predictions
+    """
+
+    def test_add_video_new_video(self):
+        """Adding a new video should append it to the list.
+
+        Basic case: Adding a video that doesn't exist in Labels should
+        add it and return the same video object.
+        """
+        labels = Labels()
+        video = Video(filename="/data/video.mp4", open_backend=False)
+
+        result = labels.add_video(video)
+
+        assert result is video
+        assert len(labels.videos) == 1
+        assert labels.videos[0] is video
+
+    def test_add_video_prevents_duplicate_same_path(self):
+        """Adding video with same path should return existing video.
+
+        Use case: User accidentally adds the same video twice via GUI.
+        Instead of creating a duplicate, add_video should recognize the
+        existing video and return it.
+        """
+        labels = Labels()
+        video1 = Video(filename="/data/video.mp4", open_backend=False)
+        labels.add_video(video1)
+
+        # Create a NEW Video object with the SAME path
+        video2 = Video(filename="/data/video.mp4", open_backend=False)
+        result = labels.add_video(video2)
+
+        # Should return the existing video, not add a duplicate
+        assert result is video1
+        assert len(labels.videos) == 1
+        assert labels.videos[0] is video1
+
+    def test_add_video_source_video_match(self):
+        """Adding embedded video should match external video with same source.
+
+        Use case (UC3): After loading predictions from PKG.SLP, the prediction
+        video has source_video pointing to the original. When iterating through
+        frames and adding videos, we should recognize the source_video match.
+        """
+        labels = Labels()
+        external = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        labels.add_video(external)
+
+        # Embedded video from PKG.SLP with source_video pointing to external
+        source = Video(filename="/data/recordings/video.mp4", open_backend=False)
+        embedded = Video(
+            filename="predictions.pkg.slp", source_video=source, open_backend=False
+        )
+        result = labels.add_video(embedded)
+
+        # Should recognize as same file via source_video and return external
+        assert result is external
+        assert len(labels.videos) == 1
+
+    def test_add_video_different_videos(self):
+        """Adding different videos should add all of them."""
+        labels = Labels()
+        video1 = Video(filename="/data/video_a.mp4", open_backend=False)
+        video2 = Video(filename="/data/video_b.mp4", open_backend=False)
+
+        result1 = labels.add_video(video1)
+        result2 = labels.add_video(video2)
+
+        assert result1 is video1
+        assert result2 is video2
+        assert len(labels.videos) == 2
+
+    def test_add_video_same_basename_different_dir(self):
+        """Videos with same basename but different directories are different.
+
+        This tests that add_video doesn't incorrectly deduplicate videos
+        that happen to have the same filename but are in different directories.
+
+        Real-world example: Multiple experiments may have `fly.mp4` in
+        different directories (exp1/fly.mp4, exp2/fly.mp4).
+        """
+        labels = Labels()
+        video1 = Video(filename="/data/exp1/fly.mp4", open_backend=False)
+        video2 = Video(filename="/data/exp2/fly.mp4", open_backend=False)
+
+        labels.add_video(video1)
+        result = labels.add_video(video2)
+
+        assert result is video2
+        assert len(labels.videos) == 2
+
+    def test_add_video_imagevideo(self):
+        """Adding ImageVideo with same image list should detect duplicate."""
+        labels = Labels()
+        paths = ["/data/img_000.jpg", "/data/img_001.jpg", "/data/img_002.jpg"]
+        video1 = Video(filename=paths.copy(), open_backend=False)
+        labels.add_video(video1)
+
+        # Create a new ImageVideo with the same paths
+        video2 = Video(filename=paths.copy(), open_backend=False)
+        result = labels.add_video(video2)
+
+        assert result is video1
+        assert len(labels.videos) == 1

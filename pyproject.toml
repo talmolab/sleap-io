@@ -10,12 +10,10 @@ authors = [
     {name = "David Samy", email = "davidasamy@gmail.com"},
     {name = "Talmo Pereira", email = "talmo@salk.edu"}]
 description="Standalone utilities for working with pose data from SLEAP and other tools."
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 keywords = ["sleap", "pose tracking", "pose estimation", "behavior"]
 license = {text = "BSD-3-Clause"}
 classifiers = [
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -26,14 +24,18 @@ dependencies = [
     "h5py>=3.8.0",
     "pynwb",
     "ndx-pose>=0.2.1",
+    "ndx-multisubjects>=0.1.1",
     "pandas",
     "simplejson",
     "imageio",
+    "imageio-ffmpeg>=0.5.0",
     "tifffile",
     "tqdm",
     "pyyaml",
     "rich_click",
-    "lazy-loader>=0.4"]
+    "lazy-loader>=0.4",
+    "skia-python>=87.0",
+    "colorcet>=3.0"]
 dynamic = ["version", "readme"]
 
 [tool.setuptools.dynamic]
@@ -45,8 +47,8 @@ readme = {file = ["README.md"], content-type="text/markdown"}
 opencv = ["opencv-python"]
 pyav = ["av<16.0.0"]
 mat = ["pymatreader"]
-ffmpeg = ["imageio-ffmpeg>=0.5.0"]
-all = ["opencv-python", "av<16.0.0", "pymatreader", "imageio-ffmpeg>=0.5.0"]
+polars = ["polars", "pyarrow"]
+all = ["opencv-python", "av<16.0.0", "pymatreader", "polars", "pyarrow"]
 
 [dependency-groups]
 # PEP 735: Dev-only dependencies (`dev` is installed automatically by `uv`)
@@ -81,7 +83,7 @@ exclude = ["site"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py38"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [

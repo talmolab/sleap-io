@@ -3,20 +3,17 @@
 This page provides practical examples for common tasks with sleap-io. Each example includes working code that you can copy and adapt for your needs.
 
 !!! info "Prerequisites"
-    
-    All examples assume you have sleap-io installed:
+
+    All examples assume you have sleap-io installed. See the **[Installation Guide](install.md)** for options including `uv`, `pip`, and development setup.
+
+    Quick start with [`uv`](https://docs.astral.sh/uv/) (recommended):
     ```bash
-    pip install sleap-io
-    ```
-    
-    Or run any example script directly with [`uv`](https://docs.astral.sh/uv/):
-    ```bash
-    # Save any example to a file (e.g., example.py)
+    # Run any example script directly (no install needed)
     uv run --with sleap-io example.py
     ```
-    
+
     This automatically handles dependencies without needing to manage environments.
-    
+
     Most examples use `import sleap_io as sio` for brevity.
 
 ## Basics
@@ -124,7 +121,7 @@ labels.save("predictions.nwb")
 
 !!! note "See also"
     - [`Labels.save`](model.md#sleap_io.Labels.save): Save method with format options
-    - [Formats](formats.md): Complete list of supported formats
+    - [Formats](formats/): Complete list of supported formats
 
 ### Working with NWB files
 
@@ -277,9 +274,9 @@ nwb_labels.save("converted.slp")
     - Video metadata (when using `annotations_export`)
 
 !!! note "See also"
-    - [NWB Format Documentation](formats.md#nwb-format-nwb): Complete NWB format reference
-    - [`load_nwb`](formats.md#sleap_io.load_nwb): NWB loading function
-    - [`save_nwb`](formats.md#sleap_io.save_nwb): NWB saving function with format options
+    - [NWB Format Documentation](formats/#nwb-format-nwb): Complete NWB format reference
+    - [`load_nwb`](formats/#sleap_io.load_nwb): NWB loading function
+    - [`save_nwb`](formats/#sleap_io.save_nwb): NWB saving function with format options
 
 ### Convert to Ultralytics YOLO format
 
@@ -309,7 +306,7 @@ labels_set.save("yolo_dataset/", format="ultralytics")
 
 !!! note "See also"
     - [`LabelsSet`](model.md#sleap_io.LabelsSet): LabelsSet class documentation
-    - [`load_labels_set`](formats.md#sleap_io.load_labels_set): Loading function for label sets
+    - [`load_labels_set`](formats/#sleap_io.load_labels_set): Loading function for label sets
 
 ### Export to COCO format
 
@@ -355,9 +352,9 @@ sio.save_coco(
     - Integration with COCO-compatible evaluation tools
 
 !!! note "See also"
-    - [`save_coco`](formats.md#sleap_io.save_coco): Full COCO export documentation
-    - [`load_coco`](formats.md#sleap_io.load_coco): COCO import documentation
-    - [COCO Format](formats.md#coco-format-json): COCO format details
+    - [`save_coco`](formats/#sleap_io.save_coco): Full COCO export documentation
+    - [`load_coco`](formats/#sleap_io.load_coco): COCO import documentation
+    - [COCO Format](formats/#coco-format-json): COCO format details
 
 ## Editing labels data
 
@@ -389,6 +386,44 @@ labels.save("labels.v002.slp")
 
 !!! note "See also"
     [`Labels.replace_filenames`](model.md#sleap_io.Labels.replace_filenames): Additional path manipulation options
+
+### Copy labels
+
+Create deep copies of labels with control over video backend behavior.
+
+```python title="copy_labels.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_file("labels.slp")
+
+# Default: preserves each video's current open_backend setting
+labels_copy = labels.copy()
+
+# Prevent file handles from being created (useful for batch processing)
+labels_copy = labels.copy(open_videos=False)
+
+# Force all videos to auto-open when frames are accessed
+labels_copy = labels.copy(open_videos=True)
+
+# Filtering done separately (cleaner separation of concerns)
+labels_copy = labels.copy()
+labels_copy.remove_predictions()
+labels_copy.suggestions = []
+```
+
+!!! tip "Non-mutating save"
+    By default, save operations don't mutate the original `Labels` object:
+    ```python
+    # Original labels are NOT modified (safer)
+    labels.save("output.pkg.slp", embed="user")
+    assert labels.videos[0].filename != "output.pkg.slp"  # Still points to original
+
+    # With embed_inplace=True: original labels ARE modified (faster)
+    labels.save("output.pkg.slp", embed="user", embed_inplace=True)
+    ```
+
+!!! note "See also"
+    [`Labels.copy`](model.md#sleap_io.Labels.copy): Full documentation of copy options
 
 ### Replace skeleton
 
@@ -488,6 +523,48 @@ labels.save("labels.v001.pkg.slp", embed="user+suggestions")
 !!! note "See also"
     [`Labels.save`](model.md#sleap_io.Labels.save): Complete save options including embedding
 
+### Advanced embedding options
+
+**Progress callback for GUI integration:**
+
+```python title="embed_with_progress.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_file("labels.slp")
+
+def on_progress(current, total):
+    print(f"Embedding frame {current}/{total}")
+    return True  # Return False to cancel
+
+labels.save("labels.pkg.slp", embed="user", progress_callback=on_progress)
+```
+
+**Cancellation support:**
+
+```python title="embed_with_cancel.py" linenums="1"
+from sleap_io.io.slp import ExportCancelled
+
+cancelled = False
+
+def on_progress(current, total):
+    return not cancelled  # Return False to cancel
+
+try:
+    labels.save("output.pkg.slp", embed="user", progress_callback=on_progress)
+except ExportCancelled:
+    print("Export was cancelled")
+```
+
+**Control video embedding for videos without labels:**
+
+```python title="embed_control.py" linenums="1"
+# Default: all videos converted to embedded references (portable)
+labels.save("output.pkg.slp", embed="user")
+
+# Selective: only embed specific frames, keep other videos as external paths
+labels.save("output.pkg.slp", embed="user", embed_all_videos=False)
+```
+
 ### Trim labels and video
 
 Extract a subset of frames with corresponding labels.
@@ -578,10 +655,7 @@ last_frame = video[-1]
     Video backends are optional. Install the backend you need:
 
     ```bash
-    pip install sleap-io[opencv]  # OpenCV backend (fastest)
-    pip install sleap-io[ffmpeg]   # FFMPEG backend (most reliable, auto-selected)
-    pip install sleap-io[pyav]     # PyAV backend (balanced)
-    pip install sleap-io[all]      # All backends
+    # imageio-ffmpeg is included by default
     ```
 
     To check which backends are available or get installation help:
@@ -593,7 +667,7 @@ last_frame = video[-1]
     ```
 
 !!! note "See also"
-    - [`sio.load_video`](formats.md#sleap_io.load_video): Video loading function
+    - [`sio.load_video`](formats/#sleap_io.load_video): Video loading function
     - [`Video`](model.md#sleap_io.Video): Video class documentation
 
 ### Re-encode video
@@ -610,7 +684,7 @@ sio.save_video(sio.load_video("input.mp4"), "output.mp4")
     Some video formats are not readily seekable at frame-level accuracy. Re-encoding with default settings ensures reliable seeking with minimal quality loss.
 
 !!! note "See also"
-    [`save_video`](formats.md#sleap_io.save_video): Video saving options and codec settings
+    [`save_video`](formats/#sleap_io.save_video): Video saving options and codec settings
 
 ### Switch video and image backends
 
@@ -627,7 +701,7 @@ import sleap_io as sio
 sio.set_default_video_plugin("opencv")
 video = sio.load_video("test.mp4")
 
-# Or use imageio-ffmpeg (default, always available)
+# Or use imageio-ffmpeg (bundled, always available)
 sio.set_default_video_plugin("FFMPEG")
 video = sio.load_video("test.mp4")
 
@@ -642,10 +716,8 @@ print(sio.get_default_video_plugin())  # "FFMPEG"
     - ✅ Generally faster for frame reading
     - ❌ May have compatibility issues on some platforms
     - ❌ Frame seeking may be less accurate for some codecs
-    - 📦 Requires: `pip install sleap-io[opencv]` or `sleap-io[all]`
 
-    **imageio-ffmpeg** (`FFMPEG`):
-
+    - ✅ Works out of the box (bundled with sleap-io)
     - ✅ More reliable and cross-platform
     - ✅ Better seeking accuracy
     - ✅ Always installed with sleap-io (default)
@@ -654,9 +726,6 @@ print(sio.get_default_video_plugin())  # "FFMPEG"
     **PyAV** (`pyav`):
 
     - ✅ Alternative FFMPEG wrapper with different performance characteristics
-    - 📦 Requires: `pip install sleap-io[pyav]` or `sleap-io[all]`
-
-#### Image encoding backends for embedded frames
 
 Choose which backend to use when encoding frames in `.pkg.slp` files with `sio.save_slp()`.
 
@@ -688,9 +757,6 @@ print(sio.get_default_image_plugin())  # "opencv"
 
     - ✅ Generally faster encoding
     - Encodes in BGR channel order
-    - 📦 Requires: `pip install sleap-io[opencv]` or `sleap-io[all]`
-
-    **imageio** (`imageio`):
 
     - ✅ Always installed with sleap-io (default)
     - ✅ More reliable and cross-platform
@@ -702,7 +768,35 @@ print(sio.get_default_image_plugin())  # "opencv"
     - Both can be set via `set_default_*_plugin()` functions
 
 !!! note "See also"
-    - [`set_default_video_plugin`](formats.md#sleap_io.set_default_video_plugin): Set video reading backend
-    - [`set_default_image_plugin`](formats.md#sleap_io.set_default_image_plugin): Set image encoding backend
-    - [`get_default_video_plugin`](formats.md#sleap_io.get_default_video_plugin): Get current video backend
-    - [`get_default_image_plugin`](formats.md#sleap_io.get_default_image_plugin): Get current image backend
+    - [`set_default_video_plugin`](formats/#sleap_io.set_default_video_plugin): Set video reading backend
+    - [`set_default_image_plugin`](formats/#sleap_io.set_default_image_plugin): Set image encoding backend
+    - [`get_default_video_plugin`](formats/#sleap_io.get_default_video_plugin): Get current video backend
+    - [`get_default_image_plugin`](formats/#sleap_io.get_default_image_plugin): Get current image backend
+
+## Rendering
+
+Create videos and images with pose overlays for visualization and publication.
+
+```python title="render_poses.py" linenums="1"
+import sleap_io as sio
+
+labels = sio.load_slp("predictions.slp")
+
+# Render full video
+labels.render("output.mp4")
+
+# Fast preview (0.25x resolution)
+labels.render("preview.mp4", preset="preview")
+
+# Single frame to image
+sio.render_image(labels.labeled_frames[0], "frame.png")
+```
+
+```bash title="CLI"
+sio render -i predictions.slp -o output.mp4
+sio render -i predictions.slp --preset preview
+sio render -i predictions.slp --lf 0  # Single frame
+```
+
+!!! note "See also"
+    See the **[Rendering Guide](rendering.md)** for complete documentation including color schemes, marker shapes, custom callbacks, and all CLI options.

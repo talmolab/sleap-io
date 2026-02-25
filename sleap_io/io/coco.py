@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 import numpy as np
 
@@ -23,7 +22,7 @@ from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
 
-def parse_coco_json(json_path: Union[str, Path]) -> Dict:
+def parse_coco_json(json_path: str | Path) -> dict:
     """Parse COCO annotation JSON file and validate structure.
 
     Args:
@@ -61,7 +60,7 @@ def parse_coco_json(json_path: Union[str, Path]) -> Dict:
     return data
 
 
-def create_skeleton_from_category(category: Dict) -> Skeleton:
+def create_skeleton_from_category(category: dict) -> Skeleton:
     """Create a Skeleton object from a COCO category definition.
 
     Args:
@@ -132,7 +131,7 @@ def resolve_image_path(image_filename: str, dataset_root: Path) -> Path:
 
 
 def decode_keypoints(
-    keypoints: List[float], num_keypoints: int, skeleton: Skeleton
+    keypoints: list[float], num_keypoints: int, skeleton: Skeleton
 ) -> np.ndarray:
     """Decode COCO keypoint format to numpy array for Instance creation.
 
@@ -184,8 +183,8 @@ def decode_keypoints(
 
 
 def read_labels(
-    json_path: Union[str, Path],
-    dataset_root: Optional[Union[str, Path]] = None,
+    json_path: str | Path,
+    dataset_root: str | Path | None = None,
     grayscale: bool = False,
 ) -> Labels:
     """Read COCO-style pose dataset and return a Labels object.
@@ -347,10 +346,10 @@ def read_labels(
 
 
 def read_labels_set(
-    dataset_path: Union[str, Path],
-    json_files: Optional[List[str]] = None,
+    dataset_path: str | Path,
+    json_files: list[str] | None = None,
     grayscale: bool = False,
-) -> Dict[str, Labels]:
+) -> dict[str, Labels]:
     """Read multiple COCO annotation files and return a dictionary of Labels.
 
     This function is designed to handle datasets with multiple splits (train/val/test)
@@ -391,7 +390,7 @@ def read_labels_set(
 
 def encode_keypoints(
     points_array: np.ndarray, visibility_encoding: str = "ternary"
-) -> List[float]:
+) -> list[float]:
     """Encode numpy array of points into COCO keypoint format.
 
     Args:
@@ -431,9 +430,9 @@ def encode_keypoints(
 
 def convert_labels(
     labels: Labels,
-    image_filenames: Optional[Union[str, List[str]]] = None,
+    image_filenames: str | list[str] | None = None,
     visibility_encoding: str = "ternary",
-) -> Dict:
+) -> dict:
     """Convert a Labels object into COCO-formatted annotations.
 
     Args:
@@ -601,8 +600,8 @@ def convert_labels(
 
 def write_labels(
     labels: Labels,
-    json_path: Union[str, Path],
-    image_filenames: Optional[Union[str, List[str]]] = None,
+    json_path: str | Path,
+    image_filenames: str | list[str] | None = None,
     visibility_encoding: str = "ternary",
 ) -> None:
     """Write Labels to COCO-style JSON annotation file.
