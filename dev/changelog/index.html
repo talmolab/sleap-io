@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -380,6 +380,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v064" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.4
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v063" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -692,17 +703,6 @@
     <span class="md-ellipsis">
       
         v0.0.14
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v0013" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.13
       
     </span>
   </a>
@@ -2822,6 +2822,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v064" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.4
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v063" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3140,17 +3151,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v0013" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.13
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3170,6 +3170,292 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v064"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.4">v0.6.4</a><a class="headerlink" href="#v064" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.6.4 Release Notes</h1>
+<h2>Summary</h2>
+<p>This release adds a <strong><code>sio export</code> command</strong> for analysis-ready data export, fixes an <strong>out-of-memory crash</strong> in video rendering, and adds support for <strong>newer DeepLabCut file formats</strong>.</p>
+<ul>
+<li><strong>Analysis Export</strong>: New <code>sio export</code> command for exporting pose data to CSV and HDF5 with frame padding, range selection, and multi-video batch export</li>
+<li><strong>Memory-Efficient Rendering</strong>: <code>sio render</code> now streams frames to disk instead of accumulating them in memory, preventing OOM crashes on long videos</li>
+<li><strong>DLC v2 Support</strong>: Automatically loads CSV files from newer DeepLabCut versions that use multi-column image paths</li>
+<li><strong>Pandas 3.0 Compatibility</strong>: Internal test fix for compatibility with Pandas 3.0's new <code>StringDtype</code></li>
+</ul>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.6.4 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;
+
+# Upgrade existing project dependency
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.6.4 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync</pre></div>
+<p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
+<hr>
+<h2>New Features</h2>
+<h3><code>sio export</code> Command for Analysis-Ready Data Export (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3900047458" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/347" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/347/hovercard" href="https://github.com/talmolab/sleap-io/pull/347">#347</a>)</h3>
+<p>A new dedicated CLI command for exporting pose tracking data to analysis-friendly formats. Unlike <code>sio convert</code> (which converts between pose tracking formats), <code>sio export</code> is optimized for downstream analysis workflows with options for frame padding, range selection, and batch export.</p>
+<h4>Basic Usage</h4>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export to CSV (default: frames-wide format with NaN padding for missing frames)
+sio export labels.slp -o tracks.csv
+
+# Export to HDF5 analysis format
+sio export labels.slp -o analysis.h5
+
+# Export a specific frame range
+sio export labels.slp -o tracks.csv --start 100 --end 500
+
+# Export all videos in a multi-video file
+sio export labels.slp -o tracks.csv -v all
+# Creates: tracks.video0.csv, tracks.video1.csv, ..."><pre><span class="pl-c"><span class="pl-c">#</span> Export to CSV (default: frames-wide format with NaN padding for missing frames)</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv
+
+<span class="pl-c"><span class="pl-c">#</span> Export to HDF5 analysis format</span>
+sio <span class="pl-k">export</span> labels.slp -o analysis.h5
+
+<span class="pl-c"><span class="pl-c">#</span> Export a specific frame range</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --start 100 --end 500
+
+<span class="pl-c"><span class="pl-c">#</span> Export all videos in a multi-video file</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv -v all
+<span class="pl-c"><span class="pl-c">#</span> Creates: tracks.video0.csv, tracks.video1.csv, ...</span></pre></div>
+<h4>CSV Format Options</h4>
+<p>Five CSV layout formats are available via <code>--csv-format</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frames</code> (default)</td>
+<td>One row per frame, columns for all coordinates</td>
+</tr>
+<tr>
+<td><code>instances</code></td>
+<td>One row per instance per frame</td>
+</tr>
+<tr>
+<td><code>points</code></td>
+<td>One row per keypoint per instance per frame</td>
+</tr>
+<tr>
+<td><code>sleap</code></td>
+<td>SLEAP-native column naming</td>
+</tr>
+<tr>
+<td><code>dlc</code></td>
+<td>DeepLabCut-compatible multi-header format</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export in DLC-compatible format
+sio export labels.slp -o tracks.csv --csv-format dlc --scorer MyModel
+
+# Export point-level data with scores
+sio export labels.slp -o tracks.csv --csv-format points --include-scores"><pre><span class="pl-c"><span class="pl-c">#</span> Export in DLC-compatible format</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --csv-format dlc --scorer MyModel
+
+<span class="pl-c"><span class="pl-c">#</span> Export point-level data with scores</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --csv-format points --include-scores</pre></div>
+<h4>Frame Padding</h4>
+<p>By default, <code>sio export</code> pads missing frames with NaN values for continuous time-series output. This ensures every frame in the range has a row, which is important for analysis tools that expect uniform sampling.</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Disable padding (only export frames with instances)
+sio export labels.slp -o tracks.csv --no-empty-frames"><pre><span class="pl-c"><span class="pl-c">#</span> Disable padding (only export frames with instances)</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --no-empty-frames</pre></div>
+<h4>Memory-Efficient Chunked Writing</h4>
+<p>For large datasets, use chunked CSV writing to limit memory usage:</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio export labels.slp -o tracks.csv --chunk-size 5000"><pre>sio <span class="pl-k">export</span> labels.slp -o tracks.csv --chunk-size 5000</pre></div>
+<h4>Python API</h4>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Save with frame padding and range selection
+sio.save_csv(
+    &quot;tracks.csv&quot;,
+    labels,
+    include_empty=True,     # Pad missing frames with NaN
+    start_frame=100,
+    end_frame=500,
+    chunk_size=5000,        # Memory-efficient chunked writing
+)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Save with frame padding and range selection</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_csv</span>(
+    <span class="pl-s">"tracks.csv"</span>,
+    <span class="pl-s1">labels</span>,
+    <span class="pl-s1">include_empty</span><span class="pl-c1">=</span><span class="pl-c1">True</span>,     <span class="pl-c"># Pad missing frames with NaN</span>
+    <span class="pl-s1">start_frame</span><span class="pl-c1">=</span><span class="pl-c1">100</span>,
+    <span class="pl-s1">end_frame</span><span class="pl-c1">=</span><span class="pl-c1">500</span>,
+    <span class="pl-s1">chunk_size</span><span class="pl-c1">=</span><span class="pl-c1">5000</span>,        <span class="pl-c"># Memory-efficient chunked writing</span>
+)</pre></div>
+<h4>Analysis HDF5 via <code>sio convert</code></h4>
+<p>HDF5 analysis export is now also available through <code>sio convert</code>:</p>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio convert labels.slp -o analysis.h5
+sio convert labels.slp -o analysis.h5 --h5-dim-order standard"><pre>sio convert labels.slp -o analysis.h5
+sio convert labels.slp -o analysis.h5 --h5-dim-order standard</pre></div>
+<hr>
+<h2>Bug Fixes</h2>
+<h3>Out-of-Memory Crash in Video Rendering (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3902495678" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/348" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/348/hovercard" href="https://github.com/talmolab/sleap-io/pull/348">#348</a>)</h3>
+<p><strong>Fixed:</strong> <code>render_video()</code> and <code>sio render</code> would crash with an out-of-memory error on long or high-resolution videos.</p>
+<p><strong>Root Cause:</strong> All rendered frames were accumulated in a Python list before being written to disk. For a 1080p 10-minute video at 30fps (~18,000 frames at ~6 MB each), this required ~36 GB of memory.</p>
+<p><strong>Fix:</strong> Frames are now streamed directly to the <code>VideoWriter</code> as they are rendered. Peak memory is now constant (~5 MB) regardless of video length -- a <strong>91% reduction</strong> in memory usage.</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>50 frames at 640x480</td>
+<td>60.7 MB</td>
+<td>5.3 MB</td>
+</tr>
+<tr>
+<td>1080p, 10 min @ 30fps</td>
+<td>~36 GB (OOM)</td>
+<td>~12 MB</td>
+</tr>
+</tbody>
+</table>
+<p>No changes to the API or CLI -- <code>sio render</code> and <code>render_video()</code> work exactly as before, just without crashing.</p>
+<hr>
+<h3>Newer DeepLabCut File Format Support (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3887536293" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/343" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/343/hovercard" href="https://github.com/talmolab/sleap-io/pull/343">#343</a>)</h3>
+<p><strong>Fixed:</strong> Loading CSV files produced by newer versions of DeepLabCut returned 0 labeled frames.</p>
+<p><strong>Root Cause:</strong> Newer DLC versions (<a href="https://github.com/DeepLabCut/DeepLabCut/pull/1584" data-hovercard-type="pull_request" data-hovercard-url="/DeepLabCut/DeepLabCut/pull/1584/hovercard">DeepLabCut PR #1584</a>) changed how image paths are stored in CSV files. Instead of a single column with the full path (<code>labeled-data/video/img000.png</code>), the path is split across three columns as a pandas <code>MultiIndex</code>.</p>
+<p><strong>Fix:</strong> The DLC loader now auto-detects the newer format and handles it transparently. All three DLC variants (single-animal, multi-animal, multi-animal with unique tracking) are supported in both old and new formats.</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Works automatically with both old and new DLC files
+labels = sio.load_file(&quot;dlc_project/CollectedData.csv&quot;)"><pre><span class="pl-c"># Works automatically with both old and new DLC files</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"dlc_project/CollectedData.csv"</span>)</pre></div>
+<hr>
+<h3>Pandas 3.0 Test Compatibility (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3890782029" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/344" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/344/hovercard" href="https://github.com/talmolab/sleap-io/pull/344">#344</a>)</h3>
+<p><strong>Fixed:</strong> The <code>test_polars_pandas_equivalence</code> test failed on Pandas 3.0 due to the new <code>StringDtype</code> not being compatible with <code>np.issubdtype()</code>. The comparison logic was simplified to use <code>pd.testing.assert_frame_equal</code>. This is an internal test-only fix with no impact on user-facing behavior.</p>
+<hr>
+<h2>API Changes</h2>
+<h3>New Symbols</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Name</th>
+<th>Location</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Function</td>
+<td><code>export()</code></td>
+<td><code>sleap_io.io.cli</code></td>
+<td>CLI command for analysis-ready data export</td>
+</tr>
+</tbody>
+</table>
+<h3>New Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>New Parameters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>save_csv()</code></td>
+<td><code>include_empty</code>, <code>start_frame</code>, <code>end_frame</code>, <code>chunk_size</code>, <code>video_id</code></td>
+</tr>
+<tr>
+<td><code>to_dataframe()</code></td>
+<td><code>all_frames</code>, <code>start_frame</code>, <code>end_frame</code></td>
+</tr>
+</tbody>
+</table>
+<h3>Modified Behavior</h3>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sio convert</code></td>
+<td>Now supports <code>analysis_h5</code> output format (<code>.h5</code>/<code>.hdf5</code> extensions)</td>
+</tr>
+<tr>
+<td><code>sio convert</code></td>
+<td>New <code>--h5-dim-order</code> and <code>--min-occupancy</code> options for HDF5 output</td>
+</tr>
+<tr>
+<td><code>save_csv(include_empty=...)</code></td>
+<td>Previously accepted but ignored; now properly wired through to pad missing frames</td>
+</tr>
+</tbody>
+</table>
+<h3>CLI Changes</h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sio export</code></td>
+<td><strong>New command</strong> for analysis-ready CSV and HDF5 export</td>
+</tr>
+<tr>
+<td><code>sio convert</code></td>
+<td>Added <code>analysis_h5</code> output support with <code>--h5-dim-order</code> and <code>--min-occupancy</code> options</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Coordination Notes</h2>
+<h3>For CSV Import/Export</h3>
+<ul>
+<li>sleap-io now loads CSV files from both older and newer DLC versions automatically</li>
+<li>Export to DLC-compatible format: <code>sio export labels.slp -o tracks.csv --csv-format dlc</code></li>
+</ul>
+<h3>For Analysis Pipelines</h3>
+<ul>
+<li>The new <code>sio export</code> command is designed for feeding pose data into downstream analysis (e.g., behavior classification, kinematic analysis)</li>
+<li>Frame padding (<code>--empty-frames</code>) ensures continuous time series suitable for tools expecting uniform sampling</li>
+<li>Chunked writing (<code>--chunk-size</code>) enables export of very large datasets without memory issues</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3887536293" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/343" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/343/hovercard" href="https://github.com/talmolab/sleap-io/pull/343">#343</a>: fix(io): Add support for loading newer DLC files (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/lochhh/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/lochhh">@lochhh</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3890782029" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/344" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/344/hovercard" href="https://github.com/talmolab/sleap-io/pull/344">#344</a>: fix(tests): Simplify equivalence check between Polars and Pandas DataFrames (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/lochhh/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/lochhh">@lochhh</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3900047458" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/347" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/347/hovercard" href="https://github.com/talmolab/sleap-io/pull/347">#347</a>: feat(cli): Add <code>sio export</code> command for analysis-ready data export (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3902495678" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/348" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/348/hovercard" href="https://github.com/talmolab/sleap-io/pull/348">#348</a>: fix(rendering): Stream frames to VideoWriter to prevent OOM (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.6.3...v0.6.4"><tt>v0.6.3...v0.6.4</tt></a></p>
 <h2 id="v063"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.3">v0.6.3</a><a class="headerlink" href="#v063" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.6.3 Release Notes</h1>
 <h2>Summary</h2>
@@ -7476,12 +7762,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li>Fix importing in Python 3.7 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2228922150" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/75" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/75/hovercard" href="https://github.com/talmolab/sleap-io/pull/75">#75</a></li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.13...v0.0.14"><tt>v0.0.13...v0.0.14</tt></a></p>
-<h2 id="v0013"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.13">v0.0.13</a><a class="headerlink" href="#v0013" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Add sdist build by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2156994545" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/74" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/74/hovercard" href="https://github.com/talmolab/sleap-io/pull/74">#74</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.12...v0.0.13"><tt>v0.0.12...v0.0.13</tt></a></p>
 
 
 
