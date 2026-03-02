@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import attrs
+from attrs import field
 
 from sleap_io.model.video import Video
 
@@ -20,5 +21,5 @@ class SuggestionFrame:
     """
 
     video: Video
-    frame_idx: int
+    frame_idx: int = field(converter=int)
     metadata: dict[str, any] = attrs.field(factory=dict)
