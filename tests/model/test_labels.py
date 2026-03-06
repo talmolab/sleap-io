@@ -23,7 +23,6 @@ from sleap_io import (
 )
 from sleap_io.model.labels import Labels
 from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI, AnnotationType
 from sleap_io.model.matching import (
     InstanceMatcher,
     InstanceMatchMethod,
@@ -35,6 +34,7 @@ from sleap_io.model.matching import (
     VideoMatcher,
     VideoMatchMethod,
 )
+from sleap_io.model.roi import ROI, AnnotationType
 
 
 def test_labels():
@@ -5378,6 +5378,43 @@ def test_labels_get_masks():
     assert len(labels.get_masks(video=video)) == 2
 
 
+def test_labels_get_rois_by_track_and_instance():
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    track1 = Track(name="t1")
+    track2 = Track(name="t2")
+    inst = Instance(np.array([[0, 0]]), skeleton=skeleton)
+
+    roi1 = ROI.from_bbox(0, 0, 10, 10, video=video, track=track1)
+    roi2 = ROI.from_bbox(5, 5, 10, 10, video=video, track=track2, instance=inst)
+    roi3 = ROI.from_bbox(1, 1, 5, 5, video=video)
+
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track1, track2],
+        rois=[roi1, roi2, roi3],
+    )
+    assert len(labels.get_rois(track=track1)) == 1
+    assert labels.get_rois(track=track1)[0] is roi1
+    assert len(labels.get_rois(track=track2)) == 1
+    assert len(labels.get_rois(instance=inst)) == 1
+    assert labels.get_rois(instance=inst)[0] is roi2
+
+
+def test_labels_get_masks_by_track():
+    video = Video(filename="test.mp4")
+    track = Track(name="t1")
+    mask1 = SegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), video=video, track=track
+    )
+    mask2 = SegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), video=video)
+
+    labels = Labels(videos=[video], tracks=[track], masks=[mask1, mask2])
+    assert len(labels.get_masks(track=track)) == 1
+    assert labels.get_masks(track=track)[0] is mask1
+
+
 def test_labels_replace_videos_updates_rois_and_masks():
     old_video = Video(filename="old.mp4")
     new_video = Video(filename="new.mp4")
@@ -5390,3 +5427,70 @@ def test_labels_replace_videos_updates_rois_and_masks():
     assert roi.video is new_video
     assert mask.video is new_video
     assert labels.videos[0] is new_video
+
+
+def test_labels_materialize_rois_and_masks(tmp_path):
+    """materialize() deep copies ROIs and masks, relinking video/track refs."""
+    video = Video(filename="test.mp4")
+    track = Track(name="track0")
+    skeleton = Skeleton(["A"])
+    roi_with_refs = ROI.from_bbox(0, 0, 10, 10, video=video)
+    roi_with_refs.track = track
+    roi_no_refs = ROI.from_bbox(5, 5, 10, 10)  # No video or track
+    mask_with_refs = SegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), video=video
+    )
+    mask_with_refs.track = track
+    mask_no_refs = SegmentationMask.from_numpy(np.ones((3, 3), dtype=bool))
+
+    labels = Labels(
+        videos=[video],
+        tracks=[track],
+        skeletons=[skeleton],
+        rois=[roi_with_refs, roi_no_refs],
+        masks=[mask_with_refs, mask_no_refs],
+    )
+    path = str(tmp_path / "test.slp")
+    sleap_io.save_slp(labels, path)
+
+    lazy = sleap_io.load_slp(path, lazy=True)
+    materialized = lazy.materialize()
+
+    # ROIs and masks are deep copies (different objects)
+    assert len(materialized.rois) == 2
+    assert materialized.rois[0] is not lazy.rois[0]
+    assert len(materialized.masks) == 2
+    assert materialized.masks[0] is not lazy.masks[0]
+
+    # Video/track references point to the NEW copies
+    assert materialized.rois[0].video is materialized.videos[0]
+    assert materialized.rois[0].video is not lazy.videos[0]
+    assert materialized.rois[0].track is materialized.tracks[0]
+    assert materialized.rois[0].track is not lazy.tracks[0]
+    assert materialized.masks[0].video is materialized.videos[0]
+    assert materialized.masks[0].track is materialized.tracks[0]
+
+    # ROI/mask without refs stay None
+    assert materialized.rois[1].video is None
+    assert materialized.rois[1].track is None
+    assert materialized.masks[1].video is None
+    assert materialized.masks[1].track is None
+
+
+def test_labels_get_masks_by_annotation_type():
+    """get_masks filters by annotation_type."""
+    video = Video(filename="test.mp4")
+    mask1 = SegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        annotation_type=AnnotationType.SEGMENTATION,
+    )
+    mask2 = SegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool),
+        video=video,
+        annotation_type=AnnotationType.ARENA,
+    )
+    labels = Labels(videos=[video], masks=[mask1, mask2])
+    result = labels.get_masks(annotation_type=AnnotationType.SEGMENTATION)
+    assert len(result) == 1
+    assert result[0] is mask1

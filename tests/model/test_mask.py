@@ -125,6 +125,22 @@ def test_segmentation_mask_to_polygon_empty():
     assert roi.geometry.is_empty
 
 
+def test_segmentation_mask_to_polygon_nonconvex():
+    """to_polygon should handle non-convex (C/L/U) shapes correctly."""
+    # C-shaped mask (concavity on the right)
+    data = np.zeros((10, 10), dtype=bool)
+    data[0:3, 0:8] = True  # Top bar
+    data[3:7, 0:3] = True  # Left column
+    data[7:10, 0:8] = True  # Bottom bar
+    actual_area = data.sum()
+
+    mask = SegmentationMask.from_numpy(data)
+    roi = mask.to_polygon()
+
+    # The polygon area should be close to the actual mask area (not inflated)
+    assert roi.geometry.area == pytest.approx(actual_area, abs=2)
+
+
 def test_segmentation_mask_annotation_type_default():
     mask = SegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
     assert mask.annotation_type == AnnotationType.SEGMENTATION

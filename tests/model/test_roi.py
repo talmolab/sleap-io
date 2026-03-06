@@ -1,6 +1,5 @@
 """Tests for ROI data model."""
 
-import numpy as np
 import pytest
 from shapely.geometry import Point, Polygon, box
 
@@ -127,6 +126,31 @@ def test_rasterize_geometry_empty():
     mask = _rasterize_geometry(point, 10, 10)
     assert mask.shape == (10, 10)
     assert not mask.any()  # Points can't be rasterized
+
+
+def test_roi_is_bbox_rotated_rectangle():
+    """A rotated (non-axis-aligned) rectangle should not be considered a bbox."""
+    # Diamond shape: 4 edges, all diagonal (both dx and dy are non-zero)
+    coords = [(5, 0), (10, 5), (5, 10), (0, 5)]
+    roi = ROI.from_polygon(coords)
+    # It has 5 coords (closed ring) but edges are diagonal
+    assert not roi.is_bbox
+
+
+def test_rasterize_geometry_polygon_with_hole():
+    """Rasterizing a polygon with a hole should leave the interior unfilled."""
+    outer = [(1, 1), (9, 1), (9, 9), (1, 9)]
+    inner = [(3, 3), (7, 3), (7, 7), (3, 7)]
+    poly = Polygon(outer, [inner])
+    mask = _rasterize_geometry(poly, 10, 10)
+
+    # Outer region should be filled
+    assert mask[2, 5]
+    # Inner hole should be empty
+    assert not mask[5, 5]
+    # Total filled area should be less than the outer polygon alone
+    outer_only = _rasterize_geometry(Polygon(outer), 10, 10)
+    assert mask.sum() < outer_only.sum()
 
 
 def test_rasterize_geometry_polygon():

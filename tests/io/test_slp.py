@@ -4171,3 +4171,85 @@ def test_slp_lazy_roi_roundtrip(tmp_path):
     assert len(reloaded.rois) == 1
     assert len(reloaded.masks) == 1
     np.testing.assert_array_equal(reloaded.masks[0].data, mask_data)
+
+
+def test_read_rois_empty_dataset(tmp_path):
+    """read_rois returns [] when /rois dataset has 0 rows."""
+    path = str(tmp_path / "empty_rois.h5")
+    roi_dtype = np.dtype(
+        [
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("wkb_start", "u8"),
+            ("wkb_end", "u8"),
+        ]
+    )
+    with h5py.File(path, "w") as f:
+        f.create_dataset("rois", data=np.array([], dtype=roi_dtype))
+    assert read_rois(path, [], []) == []
+
+
+def test_read_rois_missing_wkb(tmp_path):
+    """read_rois returns [] when /rois exists but /roi_wkb is missing."""
+    path = str(tmp_path / "no_wkb.h5")
+    roi_dtype = np.dtype(
+        [
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("wkb_start", "u8"),
+            ("wkb_end", "u8"),
+        ]
+    )
+    row = np.array([(0, 0, 0, -1, 0.0, 0, 10)], dtype=roi_dtype)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("rois", data=row)
+    assert read_rois(path, [], []) == []
+
+
+def test_read_masks_empty_dataset(tmp_path):
+    """read_masks returns [] when /masks dataset has 0 rows."""
+    path = str(tmp_path / "empty_masks.h5")
+    mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+        ]
+    )
+    with h5py.File(path, "w") as f:
+        f.create_dataset("masks", data=np.array([], dtype=mask_dtype))
+    assert read_masks(path, [], []) == []
+
+
+def test_read_masks_missing_rle(tmp_path):
+    """read_masks returns [] when /masks exists but /mask_rle is missing."""
+    path = str(tmp_path / "no_rle.h5")
+    mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+        ]
+    )
+    row = np.array([(10, 10, 0, 0, 0, -1, 0.0, 0, 5)], dtype=mask_dtype)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("masks", data=row)
+    assert read_masks(path, [], []) == []
