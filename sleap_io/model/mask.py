@@ -66,14 +66,10 @@ def _decode_rle(rle_counts: np.ndarray, height: int, width: int) -> np.ndarray:
     if len(rle_counts) == 0:
         return np.zeros((height, width), dtype=bool)
 
-    flat = np.zeros(total, dtype=bool)
-    pos = 0
-    for i, count in enumerate(rle_counts):
-        count = int(count)
-        if i % 2 == 1:  # Odd indices are 1-runs
-            end = min(pos + count, total)
-            flat[pos:end] = True
-        pos += count
+    # Build alternating False/True values matching each run, then expand
+    values = np.zeros(len(rle_counts), dtype=bool)
+    values[1::2] = True  # Odd indices are 1-runs
+    flat = np.repeat(values, rle_counts.astype(np.intp))[:total]
 
     return flat.reshape(height, width)
 
@@ -179,58 +175,38 @@ class SegmentationMask:
         )
 
     def to_polygon(self) -> "ROI":
-        """Convert the mask boundary to a polygon ROI.
+        """Convert the mask to a polygon ROI via row-rectangle union.
 
-        Extracts the outer contour of the mask and returns it as an ROI with
-        polygon geometry. Uses a simple boundary-tracing approach.
+        Builds pixel-aligned rectangles for each horizontal run of foreground
+        pixels, then merges them with Shapely's ``unary_union`` to produce an
+        exact polygon boundary. Handles non-convex shapes and holes correctly.
 
         Returns:
-            An `ROI` with polygon geometry derived from the mask boundary.
+            An `ROI` with polygon geometry derived from the mask. Returns an
+            ROI with an empty polygon if the mask has no foreground pixels.
         """
+        from shapely.geometry import Polygon, box
+        from shapely.ops import unary_union
+
         from sleap_io.model.roi import ROI
 
         mask = self.data
-        # Find contour points by looking at boundary pixels
-        # Pad the mask to handle edge cases
-        padded = np.pad(mask, 1, mode="constant", constant_values=False)
+        rectangles = []
+        for y in range(self.height):
+            row = mask[y].astype(np.uint8)
+            diff = np.diff(np.concatenate([[0], row, [0]]))
+            starts = np.where(diff == 1)[0]
+            ends = np.where(diff == -1)[0]
+            for s, e in zip(starts, ends):
+                rectangles.append(box(s, y, e, y + 1))
 
-        # Find boundary pixels (foreground pixels adjacent to background)
-        eroded = (
-            padded[1:-1, 1:-1]
-            & padded[:-2, 1:-1]
-            & padded[2:, 1:-1]
-            & padded[1:-1, :-2]
-            & padded[1:-1, 2:]
-        )
-        boundary = mask & ~eroded
+        if not rectangles:
+            geometry = Polygon()
+        else:
+            geometry = unary_union(rectangles)
 
-        # Get boundary pixel coordinates
-        ys, xs = np.where(boundary)
-        if len(xs) == 0:
-            # Empty mask - return a degenerate polygon
-            from shapely.geometry import Polygon
-
-            return ROI(
-                geometry=Polygon(),
-                annotation_type=self.annotation_type,
-                name=self.name,
-                category=self.category,
-                score=self.score,
-                source=self.source,
-                video=self.video,
-                frame_idx=self.frame_idx,
-                track=self.track,
-                instance=self.instance,
-            )
-
-        # Order boundary points by angle from centroid for a reasonable polygon
-        cx, cy = xs.mean(), ys.mean()
-        angles = np.arctan2(ys - cy, xs - cx)
-        order = np.argsort(angles)
-        coords = list(zip(xs[order].tolist(), ys[order].tolist()))
-
-        return ROI.from_polygon(
-            coords,
+        return ROI(
+            geometry=geometry,
             annotation_type=self.annotation_type,
             name=self.name,
             category=self.category,

@@ -1190,14 +1190,18 @@ class Labels:
         frame_idx: int | None = None,
         annotation_type: "int | None" = None,
         category: str | None = None,
+        track: "Track | None" = None,
+        instance: "Instance | None" = None,
     ) -> list["ROI"]:
-        """Query ROIs by video, frame, type, or category.
+        """Query ROIs by video, frame, type, category, track, or instance.
 
         Args:
             video: If specified, only return ROIs for this video.
             frame_idx: If specified, only return ROIs for this frame index.
             annotation_type: If specified, only return ROIs with this annotation type.
             category: If specified, only return ROIs with this category.
+            track: If specified, only return ROIs for this track.
+            instance: If specified, only return ROIs for this instance.
 
         Returns:
             A list of matching ROIs.
@@ -1211,6 +1215,10 @@ class Labels:
             results = [r for r in results if r.annotation_type == annotation_type]
         if category is not None:
             results = [r for r in results if r.category == category]
+        if track is not None:
+            results = [r for r in results if r.track is track]
+        if instance is not None:
+            results = [r for r in results if r.instance is instance]
         return results
 
     def get_masks(
@@ -1219,14 +1227,18 @@ class Labels:
         frame_idx: int | None = None,
         annotation_type: "int | None" = None,
         category: str | None = None,
+        track: "Track | None" = None,
+        instance: "Instance | None" = None,
     ) -> list["SegmentationMask"]:
-        """Query segmentation masks by video, frame, type, or category.
+        """Query segmentation masks by video, frame, type, category, track, or instance.
 
         Args:
             video: If specified, only return masks for this video.
             frame_idx: If specified, only return masks for this frame index.
             annotation_type: If specified, only return masks with this annotation type.
             category: If specified, only return masks with this category.
+            track: If specified, only return masks for this track.
+            instance: If specified, only return masks for this instance.
 
         Returns:
             A list of matching segmentation masks.
@@ -1240,6 +1252,10 @@ class Labels:
             results = [m for m in results if m.annotation_type == annotation_type]
         if category is not None:
             results = [m for m in results if m.category == category]
+        if track is not None:
+            results = [m for m in results if m.track is track]
+        if instance is not None:
+            results = [m for m in results if m.instance is instance]
         return results
 
     def rename_nodes(

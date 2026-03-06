@@ -246,9 +246,32 @@ def _rasterize_geometry(geometry: object, height: int, width: int) -> np.ndarray
     if not isinstance(geometry, Polygon):
         return mask
 
-    # Get exterior coordinates
-    coords = np.array(geometry.exterior.coords)
-    # Use a simple scanline fill
+    # Fill exterior ring
+    _scanline_fill(np.array(geometry.exterior.coords), mask, height, width, fill=True)
+
+    # Subtract interior rings (holes)
+    for interior in geometry.interiors:
+        _scanline_fill(np.array(interior.coords), mask, height, width, fill=False)
+
+    return mask
+
+
+def _scanline_fill(
+    coords: np.ndarray,
+    mask: np.ndarray,
+    height: int,
+    width: int,
+    fill: bool = True,
+) -> None:
+    """Fill or unfill a polygon ring on a mask using scanline algorithm.
+
+    Args:
+        coords: Polygon ring coordinates as an (N, 2) array (closed ring).
+        mask: The mask array to modify in-place.
+        height: Height of the mask.
+        width: Width of the mask.
+        fill: If True, set pixels to True. If False, set pixels to False.
+    """
     min_y = max(0, int(np.floor(coords[:, 1].min())))
     max_y = min(height - 1, int(np.floor(coords[:, 1].max())))
 
@@ -271,6 +294,4 @@ def _rasterize_geometry(geometry: object, height: int, width: int) -> np.ndarray
         for j in range(0, len(intersections) - 1, 2):
             x_start = max(0, int(np.floor(intersections[j])))
             x_end = min(width, int(np.ceil(intersections[j + 1])))
-            mask[y, x_start:x_end] = True
-
-    return mask
+            mask[y, x_start:x_end] = fill
