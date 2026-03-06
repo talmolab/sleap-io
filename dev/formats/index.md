@@ -18,7 +18,7 @@ sleap-io provides a unified interface for reading and writing pose tracking data
 
 ### SLEAP Native Format (.slp)
 
-The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations.
+The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations. SLP is the primary format with full round-trip support for regions of interest (ROIs) and segmentation masks (format 1.5+).
 
 !!! tip "Detailed Format Specification"
     For comprehensive documentation of the SLP file format including HDF5 layout, data structures, and version history, see the **[SLP File Format Reference](slp.md)**.
@@ -544,23 +544,24 @@ assert labels_original.skeleton == labels_reloaded.skeleton
 
 Different formats have varying capabilities:
 
-| Format | Read | Write | Videos | Skeletons | Tracks | Confidence | User/Predicted |
-|--------|------|-------|--------|-----------|--------|------------|----------------|
-| SLEAP (.slp) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| NWB (.nwb) | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ |
-| JABS (.h5) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| Analysis HDF5 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
-| Label Studio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| CSV (.csv) | ✅ | ✅ | ❌ | ✅** | ✅ | ✅ | ❌ |
-| DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
-| AlphaTracker | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
-| LEAP (.mat) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅*** | ❌ | ✅ |
-| Ultralytics | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| Format | Read | Write | Videos | Skeletons | Tracks | Confidence | User/Predicted | ROIs/Masks |
+|--------|------|-------|--------|-----------|--------|------------|----------------|------------|
+| SLEAP (.slp) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| NWB (.nwb) | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ | ❌ |
+| JABS (.h5) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Analysis HDF5 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Label Studio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
+| CSV (.csv) | ✅ | ✅ | ❌ | ✅** | ✅ | ✅ | ❌ | ❌ |
+| DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| AlphaTracker | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| LEAP (.mat) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅*** | ❌ | ✅ | ✅**** |
+| Ultralytics | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅**** |
 
 *NWB can embed videos with `annotations_export` format
 **CSV skeleton edges/symmetries preserved via optional metadata JSON sidecar
 ***COCO tracks are stored via `attributes.object_id` (CVAT-compatible)
+****COCO and Ultralytics support bounding boxes and segmentation masks via ROI/mask conversion
 
 ## See Also
 
