@@ -35,8 +35,6 @@ from sleap_io import (
     save_slp,
     set_default_image_plugin,
 )
-from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI, AnnotationType
 from sleap_io.io.slp import (
     ExportCancelled,
     camera_group_to_dict,
@@ -56,9 +54,11 @@ from sleap_io.io.slp import (
     read_instances,
     read_labels,
     read_labels_set,
+    read_masks,
     read_metadata,
     read_points,
     read_pred_points,
+    read_rois,
     read_sessions,
     read_skeletons,
     read_suggestions,
@@ -73,13 +73,11 @@ from sleap_io.io.slp import (
     write_suggestions,
     write_tracks,
     write_videos,
-    read_rois,
-    write_rois,
-    read_masks,
-    write_masks,
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
+from sleap_io.model.mask import SegmentationMask
+from sleap_io.model.roi import ROI, AnnotationType
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):

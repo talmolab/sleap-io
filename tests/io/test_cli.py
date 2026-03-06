@@ -4291,6 +4291,7 @@ def test_filenames_save_failure(tmp_path, slp_typical):
 
 def test_render_crop_pixel(centered_pair, tmp_path):
     """Test render with pixel crop coordinates."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     runner = CliRunner()
     output_path = tmp_path / "cropped.png"
 
@@ -4315,6 +4316,7 @@ def test_render_crop_pixel(centered_pair, tmp_path):
 
 def test_render_crop_normalized(centered_pair, tmp_path):
     """Test render with normalized crop coordinates."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     runner = CliRunner()
     output_path = tmp_path / "cropped.png"
 
@@ -4339,6 +4341,7 @@ def test_render_crop_normalized(centered_pair, tmp_path):
 
 def test_render_crop_video(centered_pair, tmp_path):
     """Test render video with crop."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     runner = CliRunner()
     output_path = tmp_path / "cropped.mp4"
 
@@ -4479,6 +4482,7 @@ def test_render_conflicting_lf_and_frame(centered_pair, tmp_path):
 
 def test_render_default_output_path_lf(centered_pair, tmp_path):
     """Test render generates default output path for --lf mode."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     import shutil
     from pathlib import Path
 
@@ -4509,6 +4513,7 @@ def test_render_default_output_path_lf(centered_pair, tmp_path):
 
 def test_render_default_output_path_frame(centered_pair, tmp_path):
     """Test render generates default output path for --frame mode."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     import shutil
     from pathlib import Path
 
@@ -4540,6 +4545,7 @@ def test_render_default_output_path_frame(centered_pair, tmp_path):
 
 def test_render_with_preset(centered_pair, tmp_path):
     """Test render with preset option."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     runner = CliRunner()
     output_path = tmp_path / "preview.png"
 
@@ -4804,6 +4810,7 @@ def test_render_missing_input():
 
 def test_render_positional_input(centered_pair, tmp_path):
     """Test render accepts positional input argument."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     runner = CliRunner()
     output = tmp_path / "output.png"
     result = runner.invoke(
@@ -4823,6 +4830,7 @@ def test_render_positional_input(centered_pair, tmp_path):
 
 def test_render_with_background(centered_pair, tmp_path):
     """Test render with --background flag."""
+    pytest.importorskip("skia", reason="skia-python not installed")
     runner = CliRunner()
     output = tmp_path / "output.png"
     result = runner.invoke(
