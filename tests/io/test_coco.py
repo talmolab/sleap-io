@@ -284,8 +284,7 @@ class TestCOCOErrorHandling:
             coco.parse_coco_json(invalid_json)
 
     def test_non_pose_dataset(self, tmp_path):
-        """Test handling of detection-only COCO dataset."""
-        # Create detection-only COCO file
+        """Test that detection-only COCO datasets parse without error."""
         detection_json = tmp_path / "detection.json"
         detection_data = {
             "images": [],
@@ -293,13 +292,11 @@ class TestCOCOErrorHandling:
             "categories": [{"id": 1, "name": "person"}],  # No keypoints field
         }
 
-        import json
-
         with open(detection_json, "w") as f:
             json.dump(detection_data, f)
 
-        with pytest.raises(ValueError, match="No keypoint definitions found"):
-            coco.parse_coco_json(detection_json)
+        data = coco.parse_coco_json(detection_json)
+        assert len(data["categories"]) == 1
 
     def test_missing_images(self, tmp_path, coco_flat_images):
         """Test handling of missing image files."""
@@ -1574,3 +1571,274 @@ class TestCOCOExport:
 
         # Verify binary visibility encoding was used (1 instead of 2)
         assert data["annotations"][0]["keypoints"][2] == 1  # Binary visible
+
+
+class TestCOCOROIMaskIO:
+    """Test ROI and segmentation mask COCO I/O."""
+
+    def test_coco_roi_bbox_roundtrip(self, tmp_path):
+        """Test roundtrip of bounding box ROIs through COCO format."""
+        from sleap_io.model.roi import ROI
+
+        video = sio.Video.from_filename(["img1.png"])
+        roi1 = ROI.from_bbox(
+            10.0, 20.0, 50.0, 30.0, category="dog", video=video, frame_idx=0
+        )
+        roi2 = ROI.from_bbox(
+            100.0,
+            200.0,
+            80.0,
+            60.0,
+            category="cat",
+            video=video,
+            frame_idx=0,
+            score=0.95,
+        )
+
+        labels = sio.Labels(rois=[roi1, roi2])
+
+        json_path = tmp_path / "bbox_test.json"
+        coco.write_labels(labels, json_path)
+
+        # Verify JSON structure
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        assert len(data["annotations"]) == 2
+        ann1 = data["annotations"][0]
+        assert ann1["bbox"] == [10.0, 20.0, 50.0, 30.0]
+        assert ann1["iscrowd"] == 0
+
+        ann2 = data["annotations"][1]
+        assert ann2["score"] == 0.95
+
+        # Verify categories were created
+        cat_names = {c["name"] for c in data["categories"]}
+        assert "dog" in cat_names
+        assert "cat" in cat_names
+
+    def test_coco_roi_polygon_roundtrip(self, tmp_path):
+        """Test roundtrip of polygon ROIs through COCO format."""
+        from sleap_io.model.roi import ROI
+
+        coords = [(10.0, 20.0), (50.0, 20.0), (50.0, 60.0), (10.0, 60.0)]
+        video = sio.Video.from_filename(["img1.png"])
+        roi = ROI.from_polygon(coords, category="region", video=video, frame_idx=0)
+
+        labels = sio.Labels(rois=[roi])
+
+        json_path = tmp_path / "polygon_test.json"
+        coco.write_labels(labels, json_path)
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        assert len(data["annotations"]) == 1
+        ann = data["annotations"][0]
+        assert "segmentation" in ann
+        assert isinstance(ann["segmentation"], list)
+        assert isinstance(ann["segmentation"][0], list)
+        # Polygon should contain x,y pairs flattened
+        seg = ann["segmentation"][0]
+        assert len(seg) == 8  # 4 points * 2 coords
+
+    def test_coco_mask_rle_roundtrip(self, tmp_path):
+        """Test roundtrip of segmentation masks through COCO RLE format."""
+        from sleap_io.model.mask import SegmentationMask
+
+        # Create a simple mask
+        mask_arr = np.zeros((10, 10), dtype=bool)
+        mask_arr[2:5, 3:7] = True
+
+        video = sio.Video.from_filename(["img1.png"])
+        seg_mask = SegmentationMask.from_numpy(
+            mask_arr, category="cell", video=video, frame_idx=0
+        )
+
+        labels = sio.Labels(masks=[seg_mask])
+
+        json_path = tmp_path / "mask_test.json"
+        coco.write_labels(labels, json_path)
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        assert len(data["annotations"]) == 1
+        ann = data["annotations"][0]
+        assert ann["iscrowd"] == 1
+        assert "segmentation" in ann
+        assert "counts" in ann["segmentation"]
+        assert "size" in ann["segmentation"]
+        assert ann["segmentation"]["size"] == [10, 10]
+
+        # Verify RLE roundtrip: decode back and compare
+        decoded = coco._decode_coco_rle(
+            ann["segmentation"]["counts"], ann["segmentation"]["size"]
+        )
+        np.testing.assert_array_equal(decoded, mask_arr)
+
+    def test_coco_detection_only_read(self, tmp_path):
+        """Test reading a detection-only COCO JSON (no keypoints)."""
+        # Create image files so they can be resolved
+        img_path = tmp_path / "image_001.png"
+        img_path.touch()
+
+        detection_data = {
+            "images": [
+                {"id": 1, "file_name": "image_001.png", "height": 100, "width": 200},
+            ],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "bbox": [10, 20, 30, 40],
+                    "area": 1200,
+                    "iscrowd": 0,
+                },
+                {
+                    "id": 2,
+                    "image_id": 1,
+                    "category_id": 2,
+                    "segmentation": [[5.0, 5.0, 50.0, 5.0, 50.0, 50.0, 5.0, 50.0]],
+                    "bbox": [5, 5, 45, 45],
+                    "area": 2025,
+                    "iscrowd": 0,
+                },
+                {
+                    "id": 3,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "segmentation": {
+                        "counts": [0, 5, 5, 5, 5],
+                        "size": [5, 5],
+                    },
+                    "bbox": [0, 0, 5, 5],
+                    "area": 10,
+                    "iscrowd": 1,
+                },
+            ],
+            "categories": [
+                {"id": 1, "name": "animal"},
+                {"id": 2, "name": "plant"},
+            ],
+        }
+
+        json_path = tmp_path / "detection.json"
+        with open(json_path, "w") as f:
+            json.dump(detection_data, f)
+
+        labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+        # Should have created ROIs and masks, not instances
+        assert len(labels.labeled_frames) == 1
+        assert len(labels.labeled_frames[0].instances) == 0
+
+        # 1 bbox ROI (annotation 1) + 1 polygon ROI (annotation 2) = 2 ROIs
+        from sleap_io.model.roi import AnnotationType
+
+        assert len(labels.rois) == 2
+        bbox_rois = [
+            r for r in labels.rois if r.annotation_type == AnnotationType.BOUNDING_BOX
+        ]
+        poly_rois = [
+            r for r in labels.rois if r.annotation_type == AnnotationType.SEGMENTATION
+        ]
+        assert len(bbox_rois) == 1
+        assert bbox_rois[0].category == "animal"
+        assert len(poly_rois) == 1
+        assert poly_rois[0].category == "plant"
+
+        # RLE annotation -> mask
+        assert len(labels.masks) == 1
+        assert labels.masks[0].category == "animal"
+        assert labels.masks[0].height == 5
+        assert labels.masks[0].width == 5
+
+    def test_coco_category_score_preservation(self, tmp_path):
+        """Test that category names and scores roundtrip correctly."""
+        from sleap_io.model.roi import ROI
+
+        video = sio.Video.from_filename(["img1.png"])
+        roi = ROI.from_bbox(
+            10.0,
+            20.0,
+            30.0,
+            40.0,
+            category="special_class",
+            score=0.87,
+            video=video,
+            frame_idx=0,
+        )
+
+        labels = sio.Labels(rois=[roi])
+
+        json_path = tmp_path / "score_test.json"
+        coco.write_labels(labels, json_path)
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        # Verify category name
+        assert any(c["name"] == "special_class" for c in data["categories"])
+
+        # Verify score
+        ann = data["annotations"][0]
+        assert ann["score"] == 0.87
+
+        # Verify category_id references correct category
+        cat_id = ann["category_id"]
+        cat = next(c for c in data["categories"] if c["id"] == cat_id)
+        assert cat["name"] == "special_class"
+
+    def test_coco_rle_column_major_order(self):
+        """Test that COCO RLE encode/decode correctly handles column-major order."""
+        # Create a non-symmetric mask to verify column-major handling
+        mask = np.zeros((4, 6), dtype=bool)
+        mask[0, 0:3] = True  # Top-left row
+        mask[1, 0] = True
+
+        rle = coco._encode_coco_rle(mask)
+        assert rle["size"] == [4, 6]
+
+        decoded = coco._decode_coco_rle(rle["counts"], rle["size"])
+        np.testing.assert_array_equal(decoded, mask)
+
+    def test_coco_detection_with_polygon_read(self, tmp_path):
+        """Test reading polygon segmentation creates ROI with correct coords."""
+        img_path = tmp_path / "img.png"
+        img_path.touch()
+
+        data = {
+            "images": [
+                {"id": 1, "file_name": "img.png", "height": 100, "width": 100},
+            ],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "segmentation": [[10.0, 10.0, 50.0, 10.0, 50.0, 50.0, 10.0, 50.0]],
+                    "bbox": [10, 10, 40, 40],
+                    "area": 1600,
+                    "iscrowd": 0,
+                },
+            ],
+            "categories": [{"id": 1, "name": "obj"}],
+        }
+
+        json_path = tmp_path / "poly.json"
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+
+        labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+        assert len(labels.rois) == 1
+        roi = labels.rois[0]
+        assert roi.category == "obj"
+        # Check bounds approximately
+        minx, miny, maxx, maxy = roi.bounds
+        assert minx == pytest.approx(10.0)
+        assert miny == pytest.approx(10.0)
+        assert maxx == pytest.approx(50.0)
+        assert maxy == pytest.approx(50.0)
