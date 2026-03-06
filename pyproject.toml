@@ -35,7 +35,7 @@ dependencies = [
     "rich_click",
     "shapely>=2.0",
     "lazy-loader>=0.4",
-    "skia-python>=87.0",
+    "skia-python>=87.0; python_version<'3.13'",
     "colorcet>=3.0"]
 dynamic = ["version", "readme"]
 
