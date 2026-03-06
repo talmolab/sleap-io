@@ -6,6 +6,7 @@ Format version history:
     - 1.2: Added tracking_score field to instances
     - 1.3: Added explicit handling for tracking_score
     - 1.4: Added channel_order attribute to embedded video datasets to track RGB vs BGR
+    - 1.5: Added ROI and segmentation mask datasets (/rois, /roi_wkb, /masks, /mask_rle)
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ from sleap_io.model.camera import (
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+from sleap_io.model.mask import SegmentationMask
+from sleap_io.model.roi import ROI
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
@@ -1353,9 +1356,12 @@ def write_metadata(labels_path: str, labels: Labels):
             # Path -> str
             md["provenance"][k] = md["provenance"][k].as_posix()
 
+    # Bump format_id to 1.5 if ROIs or masks are present
+    format_id = 1.5 if (labels.rois or labels.masks) else 1.4
+
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
-        grp.attrs["format_id"] = 1.4
+        grp.attrs["format_id"] = format_id
         grp.attrs["json"] = np.bytes_(json.dumps(md, separators=(",", ":")))
 
 
@@ -2314,6 +2320,10 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     # Create LazyFrameList
     lazy_frames = LazyFrameList(lazy_store)
 
+    # Read ROIs and masks eagerly (typically small count)
+    rois = read_rois(labels_path, videos, tracks)
+    masks = read_masks(labels_path, videos, tracks)
+
     # Create Labels with lazy state
     labels = Labels(
         labeled_frames=lazy_frames,
@@ -2323,11 +2333,316 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
+        rois=rois,
+        masks=masks,
         lazy_store=lazy_store,
     )
     labels.provenance["filename"] = labels_path
 
     return labels
+
+
+def read_rois(labels_path: str, videos: list[Video], tracks: list[Track]) -> list[ROI]:
+    """Read ROI annotations from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: List of Video objects for relinking.
+        tracks: List of Track objects for relinking.
+
+    Returns:
+        A list of ROI objects. Returns an empty list if no ROIs are stored.
+    """
+    import shapely
+
+    try:
+        roi_data = read_hdf5_dataset(labels_path, "rois")
+    except KeyError:
+        return []
+
+    if len(roi_data) == 0:
+        return []
+
+    # Read packed WKB geometry bytes
+    try:
+        roi_wkb_flat = read_hdf5_dataset(labels_path, "roi_wkb")
+    except KeyError:
+        return []
+
+    # Read string metadata from attributes
+    with h5py.File(labels_path, "r") as f:
+        roi_grp = f["rois"]
+        categories = json.loads(roi_grp.attrs.get("categories", "[]"))
+        names = json.loads(roi_grp.attrs.get("names", "[]"))
+        sources = json.loads(roi_grp.attrs.get("sources", "[]"))
+
+    rois = []
+    for i, row in enumerate(roi_data):
+        wkb_start = int(row["wkb_start"])
+        wkb_end = int(row["wkb_end"])
+        wkb_bytes = bytes(roi_wkb_flat[wkb_start:wkb_end])
+        geometry = shapely.from_wkb(wkb_bytes)
+
+        video_idx = int(row["video"])
+        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
+
+        frame_idx_val = int(row["frame_idx"])
+        frame_idx = None if frame_idx_val == -1 else frame_idx_val
+
+        track_idx = int(row["track"])
+        track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
+
+        score_val = float(row["score"])
+        score = None if np.isnan(score_val) else score_val
+
+        rois.append(
+            ROI(
+                geometry=geometry,
+                annotation_type=int(row["annotation_type"]),
+                name=names[i] if i < len(names) else "",
+                category=categories[i] if i < len(categories) else "",
+                score=score,
+                source=sources[i] if i < len(sources) else "",
+                video=video,
+                frame_idx=frame_idx,
+                track=track,
+            )
+        )
+
+    return rois
+
+
+def write_rois(
+    labels_path: str, rois: list[ROI], videos: list[Video], tracks: list[Track]
+) -> None:
+    """Write ROI annotations to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        rois: A list of ROI objects to write.
+        videos: List of Video objects for index mapping.
+        tracks: List of Track objects for index mapping.
+    """
+    if not rois:
+        return
+
+    import shapely
+
+    roi_dtype = np.dtype(
+        [
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("wkb_start", "u8"),
+            ("wkb_end", "u8"),
+        ]
+    )
+
+    roi_rows = []
+    wkb_chunks = []
+    wkb_offset = 0
+    categories = []
+    names = []
+    sources = []
+
+    for roi in rois:
+        wkb = shapely.to_wkb(roi.geometry)
+        wkb_start = wkb_offset
+        wkb_end = wkb_offset + len(wkb)
+        wkb_chunks.append(np.frombuffer(wkb, dtype=np.uint8))
+        wkb_offset = wkb_end
+
+        video_idx = videos.index(roi.video) if roi.video in videos else -1
+        frame_idx = roi.frame_idx if roi.frame_idx is not None else -1
+        track_idx = tracks.index(roi.track) if roi.track in tracks else -1
+        score = roi.score if roi.score is not None else float("nan")
+
+        roi_rows.append(
+            (
+                int(roi.annotation_type),
+                video_idx,
+                frame_idx,
+                track_idx,
+                score,
+                wkb_start,
+                wkb_end,
+            )
+        )
+
+        categories.append(roi.category)
+        names.append(roi.name)
+        sources.append(roi.source)
+
+    roi_array = np.array(roi_rows, dtype=roi_dtype)
+    wkb_flat = (
+        np.concatenate(wkb_chunks) if wkb_chunks else np.array([], dtype=np.uint8)
+    )
+
+    with h5py.File(labels_path, "a") as f:
+        ds = f.create_dataset("rois", data=roi_array, dtype=roi_dtype)
+        ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
+        ds.attrs["names"] = json.dumps(names, separators=(",", ":"))
+        ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
+        f.create_dataset("roi_wkb", data=wkb_flat, dtype=np.uint8)
+
+
+def read_masks(
+    labels_path: str, videos: list[Video], tracks: list[Track]
+) -> list[SegmentationMask]:
+    """Read segmentation masks from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: List of Video objects for relinking.
+        tracks: List of Track objects for relinking.
+
+    Returns:
+        A list of SegmentationMask objects. Returns empty list if none stored.
+    """
+    try:
+        mask_data = read_hdf5_dataset(labels_path, "masks")
+    except KeyError:
+        return []
+
+    if len(mask_data) == 0:
+        return []
+
+    # Read packed RLE bytes
+    try:
+        mask_rle_flat = read_hdf5_dataset(labels_path, "mask_rle")
+    except KeyError:
+        return []
+
+    # Read string metadata from attributes
+    with h5py.File(labels_path, "r") as f:
+        mask_grp = f["masks"]
+        categories = json.loads(mask_grp.attrs.get("categories", "[]"))
+        names = json.loads(mask_grp.attrs.get("names", "[]"))
+        sources = json.loads(mask_grp.attrs.get("sources", "[]"))
+
+    masks = []
+    for i, row in enumerate(mask_data):
+        rle_start = int(row["rle_start"])
+        rle_end = int(row["rle_end"])
+        rle_raw = mask_rle_flat[rle_start:rle_end]
+
+        # Convert packed uint8 bytes back to uint32 array
+        rle_counts = np.frombuffer(rle_raw.tobytes(), dtype=np.uint32)
+
+        video_idx = int(row["video"])
+        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
+
+        frame_idx_val = int(row["frame_idx"])
+        frame_idx = None if frame_idx_val == -1 else frame_idx_val
+
+        track_idx = int(row["track"])
+        track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
+
+        score_val = float(row["score"])
+        score = None if np.isnan(score_val) else score_val
+
+        masks.append(
+            SegmentationMask(
+                rle_counts=rle_counts,
+                height=int(row["height"]),
+                width=int(row["width"]),
+                annotation_type=int(row["annotation_type"]),
+                name=names[i] if i < len(names) else "",
+                category=categories[i] if i < len(categories) else "",
+                score=score,
+                source=sources[i] if i < len(sources) else "",
+                video=video,
+                frame_idx=frame_idx,
+                track=track,
+            )
+        )
+
+    return masks
+
+
+def write_masks(
+    labels_path: str,
+    masks: list[SegmentationMask],
+    videos: list[Video],
+    tracks: list[Track],
+) -> None:
+    """Write segmentation masks to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        masks: A list of SegmentationMask objects to write.
+        videos: List of Video objects for index mapping.
+        tracks: List of Track objects for index mapping.
+    """
+    if not masks:
+        return
+
+    mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+        ]
+    )
+
+    mask_rows = []
+    rle_chunks = []
+    rle_offset = 0
+    categories = []
+    names = []
+    sources = []
+
+    for mask in masks:
+        # Pack uint32 RLE counts as raw bytes (uint8)
+        rle_bytes = mask.rle_counts.astype(np.uint32).tobytes()
+        rle_uint8 = np.frombuffer(rle_bytes, dtype=np.uint8)
+        rle_start = rle_offset
+        rle_end = rle_offset + len(rle_uint8)
+        rle_chunks.append(rle_uint8)
+        rle_offset = rle_end
+
+        video_idx = videos.index(mask.video) if mask.video in videos else -1
+        frame_idx = mask.frame_idx if mask.frame_idx is not None else -1
+        track_idx = tracks.index(mask.track) if mask.track in tracks else -1
+        score = mask.score if mask.score is not None else float("nan")
+
+        mask_rows.append(
+            (
+                mask.height,
+                mask.width,
+                int(mask.annotation_type),
+                video_idx,
+                frame_idx,
+                track_idx,
+                score,
+                rle_start,
+                rle_end,
+            )
+        )
+
+        categories.append(mask.category)
+        names.append(mask.name)
+        sources.append(mask.source)
+
+    mask_array = np.array(mask_rows, dtype=mask_dtype)
+    rle_flat = (
+        np.concatenate(rle_chunks) if rle_chunks else np.array([], dtype=np.uint8)
+    )
+
+    with h5py.File(labels_path, "a") as f:
+        ds = f.create_dataset("masks", data=mask_array, dtype=mask_dtype)
+        ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
+        ds.attrs["names"] = json.dumps(names, separators=(",", ":"))
+        ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
+        f.create_dataset("mask_rle", data=rle_flat, dtype=np.uint8)
 
 
 def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
@@ -2418,6 +2733,8 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         )
 
     sessions = read_sessions(labels_path, videos, labeled_frames)
+    rois = read_rois(labels_path, videos, tracks)
+    masks = read_masks(labels_path, videos, tracks)
 
     labels = Labels(
         labeled_frames=labeled_frames,
@@ -2427,6 +2744,8 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
+        rois=rois,
+        masks=masks,
     )
     labels.provenance["filename"] = labels_path
 
@@ -2578,6 +2897,10 @@ def _write_labels_lazy(
             dtype=lazy_store.frames_data.dtype,
         )
 
+    # Write ROIs and masks (eagerly loaded even in lazy mode)
+    write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
+    write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
+
 
 def write_labels(
     labels_path: str,
@@ -2715,3 +3038,5 @@ def write_labels(
     write_metadata(labels_path, labels)
     write_lfs(labels_path, labels)
     write_negative_frames(labels_path, labels)
+    write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
+    write_masks(labels_path, labels.masks, labels.videos, labels.tracks)

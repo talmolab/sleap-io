@@ -33,6 +33,7 @@ dependencies = [
     "tqdm",
     "pyyaml",
     "rich_click",
+    "shapely>=2.0",
     "lazy-loader>=0.4",
     "skia-python>=87.0",
     "colorcet>=3.0"]
