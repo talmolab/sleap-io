@@ -23,6 +23,7 @@ from sleap_io.io.main import load_file, load_ultralytics, save_file, save_ultral
 from sleap_io.io.ultralytics import (
     create_skeleton_from_config,
     denormalize_coordinates,
+    detect_line_format,
     normalize_coordinates,
     parse_data_yaml,
     parse_label_file,
@@ -30,7 +31,9 @@ from sleap_io.io.ultralytics import (
     read_labels_set,
     write_label_file,
     write_labels,
+    write_roi_label_file,
 )
+from sleap_io.model.roi import AnnotationType
 
 
 def test_parse_data_yaml(ultralytics_data_yaml):
@@ -58,9 +61,10 @@ def test_create_skeleton_from_config(ultralytics_data_yaml):
 def test_parse_label_file(ultralytics_dataset, ultralytics_skeleton):
     """Test parsing of individual label files."""
     label_file = Path(ultralytics_dataset) / "train" / "labels" / "image_001.txt"
-    instances = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
 
     assert len(instances) == 1
+    assert len(rois) == 0
     instance = instances[0]
     assert len(instance.points) == 5
     assert instance.skeleton == ultralytics_skeleton
@@ -76,9 +80,10 @@ def test_parse_label_file(ultralytics_dataset, ultralytics_skeleton):
 def test_parse_label_file_multi_instance(ultralytics_dataset, ultralytics_skeleton):
     """Test parsing of label file with multiple instances."""
     label_file = Path(ultralytics_dataset) / "train" / "labels" / "image_002.txt"
-    instances = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
 
     assert len(instances) == 2
+    assert len(rois) == 0
     for instance in instances:
         assert len(instance.points) == 5
         assert instance.skeleton == ultralytics_skeleton
@@ -416,8 +421,9 @@ def test_empty_label_file(tmp_path, ultralytics_skeleton):
     label_file = tmp_path / "empty.txt"
     label_file.write_text("")
 
-    instances = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
     assert len(instances) == 0
+    assert len(rois) == 0
 
 
 def test_malformed_label_file(tmp_path, ultralytics_skeleton):
@@ -426,8 +432,9 @@ def test_malformed_label_file(tmp_path, ultralytics_skeleton):
     label_file.write_text("invalid line\n0 0.5\n")  # incomplete data
 
     # Should not crash, but warn and skip invalid lines
-    instances = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
     assert len(instances) == 0  # Both lines are invalid
+    assert len(rois) == 0
 
 
 def test_keypoint_count_mismatch_warning(tmp_path):
@@ -440,7 +447,7 @@ def test_keypoint_count_mismatch_warning(tmp_path):
     label_file.write_text("0 0.5 0.5 0.2 0.4 0.1 0.1 2 0.2 0.2 2\n")  # Only 2 keypoints
 
     with pytest.warns(UserWarning, match="Keypoint count mismatch"):
-        instances = parse_label_file(label_file, skeleton, (100, 100))
+        instances, rois = parse_label_file(label_file, skeleton, (100, 100))
 
     assert len(instances) == 0  # Instance rejected due to mismatch
 
@@ -847,7 +854,7 @@ def test_parse_label_file_edge_cases(tmp_path, ultralytics_skeleton):
     label_file.write_text("0 0.5 0.5 0.2 0.2 0.1 0.1 2 0.2 0.2 2 0.3 0.3 1\n")
 
     with pytest.warns(UserWarning, match="Keypoint count mismatch"):
-        instances = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+        instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
     assert len(instances) == 0  # Should skip the malformed instance
 
     # Test parsing error with invalid data
@@ -855,7 +862,7 @@ def test_parse_label_file_edge_cases(tmp_path, ultralytics_skeleton):
     label_file.write_text("not_a_number 0.5 0.5 0.2 0.2\n")
 
     with pytest.warns(UserWarning, match="Error parsing line"):
-        instances = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+        instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
     assert len(instances) == 0
 
 
@@ -888,12 +895,17 @@ def test_parse_label_file_with_invalid_keypoint_count(tmp_path):
     """Test parse_label_file with keypoints % 3 != 0."""
     skeleton = Skeleton([Node("a"), Node("b")])
 
-    # Create label file with incomplete keypoint data (8 values instead of 6 or 9)
+    # Create label file with incomplete keypoint data: 10 values after bbox (not % 3)
+    # Total parts = 15, remainder from 5 = 10, 10 % 3 != 0, (15-1)%2 == 0 -> seg
+    # Use 13 total values: remainder = 8, 8%3!=0, (13-1)%2==0 -> seg format
+    # Actually need something that triggers pose: 5 + 3k. Use 5+3=8 total (3 kpts)
+    # but skeleton has 2 nodes -> mismatch.
     label_file = tmp_path / "invalid_keypoints.txt"
-    label_file.write_text("0 0.5 0.5 0.2 0.2 0.1 0.1 2 0.2\n")  # 8 values after bbox
+    # 8 total values: 5 bbox + 3 kp data = 1 keypoint, but skeleton expects 2
+    label_file.write_text("0 0.5 0.5 0.2 0.2 0.1 0.1 2\n")
 
-    with pytest.warns(UserWarning, match="Invalid keypoint data"):
-        instances = parse_label_file(label_file, skeleton, (480, 640))
+    with pytest.warns(UserWarning, match="Keypoint count mismatch"):
+        instances, rois = parse_label_file(label_file, skeleton, (480, 640))
     assert len(instances) == 0
 
 
@@ -1246,3 +1258,200 @@ def test_read_labels_set_roundtrip(tmp_path, slp_minimal):
     # Total frames should match original (allowing for rounding in splits)
     total_frames = sum(len(split_labels) for split_labels in labels_set.values())
     assert abs(total_frames - len(labels)) <= 1
+
+
+# Detection and Segmentation Format Tests
+
+
+def test_ultralytics_format_autodetect():
+    """Verify the auto-detection picks the right format."""
+    # 5 values = detection
+    assert detect_line_format(["0", "0.5", "0.5", "0.2", "0.3"]) == "detection"
+    # 6 values = detection with confidence
+    assert detect_line_format(["0", "0.5", "0.5", "0.2", "0.3", "0.9"]) == (
+        "detection_conf"
+    )
+    # 8 values (5 + 3*1) = pose
+    assert detect_line_format(["0"] * 8) == "pose"
+    # 11 values (5 + 3*2) = pose
+    assert detect_line_format(["0"] * 11) == "pose"
+    # 9 values: (9-1)%2==0 and 9>5 -> segmentation (4 polygon points)
+    assert detect_line_format(["0"] * 9) == "segmentation"
+    # 13 values: (13-5)=8, 8%3!=0, (13-1)%2==0 -> segmentation
+    assert detect_line_format(["0"] * 13) == "segmentation"
+
+
+def _create_detection_dataset(base_path, with_confidence=False):
+    """Helper to create a detection-format Ultralytics dataset."""
+    base_path.mkdir(parents=True, exist_ok=True)
+
+    # data.yaml
+    data_config = {
+        "path": ".",
+        "task": "detect",
+        "names": {0: "cat", 1: "dog"},
+        "train": "train/images",
+    }
+    with open(base_path / "data.yaml", "w") as f:
+        yaml.dump(data_config, f)
+
+    # Image and labels
+    images_dir = base_path / "train" / "images"
+    labels_dir = base_path / "train" / "labels"
+    images_dir.mkdir(parents=True)
+    labels_dir.mkdir(parents=True)
+
+    img = np.zeros((100, 200, 3), dtype=np.uint8)
+    iio.imwrite(images_dir / "frame_000.png", img)
+
+    # Detection label: class_id x_center y_center width height [confidence]
+    if with_confidence:
+        label_content = "0 0.5 0.5 0.4 0.6 0.95\n1 0.25 0.25 0.2 0.3 0.85\n"
+    else:
+        label_content = "0 0.5 0.5 0.4 0.6\n1 0.25 0.25 0.2 0.3\n"
+    (labels_dir / "frame_000.txt").write_text(label_content)
+
+    return img.shape[:2]
+
+
+def test_ultralytics_detection_read_write_roundtrip(tmp_path):
+    """Create detection-format labels, read, verify ROIs, write back."""
+    dataset_path = tmp_path / "det_dataset"
+    _create_detection_dataset(dataset_path)
+
+    # Read
+    labels = read_labels(str(dataset_path), split="train")
+
+    assert len(labels.labeled_frames) == 1
+    assert len(labels.rois) == 2
+
+    # Check first ROI (cat)
+    roi0 = labels.rois[0]
+    assert roi0.category == "cat"
+    assert roi0.annotation_type == AnnotationType.BOUNDING_BOX
+    assert roi0.score is None
+    assert roi0.is_bbox
+
+    # Check second ROI (dog)
+    roi1 = labels.rois[1]
+    assert roi1.category == "dog"
+
+    # Verify both ROIs have valid bounding boxes with nonzero area
+    for roi in labels.rois:
+        assert roi.area > 0
+
+    # Write back
+    out_path = tmp_path / "det_out"
+    write_labels(
+        labels,
+        str(out_path),
+        split_ratios={"train": 1.0},
+        task="detect",
+        verbose=False,
+    )
+
+    # Verify data.yaml
+    out_config = parse_data_yaml(out_path / "data.yaml")
+    assert out_config["task"] == "detect"
+    assert "kpt_shape" not in out_config
+
+    # Read back and verify
+    labels2 = read_labels(str(out_path), split="train")
+    assert len(labels2.rois) == 2
+
+
+def test_ultralytics_detection_with_confidence(tmp_path):
+    """Detection format with 6 values per line (includes confidence score)."""
+    dataset_path = tmp_path / "det_conf_dataset"
+    _create_detection_dataset(dataset_path, with_confidence=True)
+
+    labels = read_labels(str(dataset_path), split="train")
+
+    assert len(labels.rois) == 2
+    assert labels.rois[0].score == pytest.approx(0.95)
+    assert labels.rois[0].category == "cat"
+    assert labels.rois[1].score == pytest.approx(0.85)
+    assert labels.rois[1].category == "dog"
+
+
+def test_ultralytics_segmentation_read_write_roundtrip(tmp_path):
+    """Test segmentation format parsing and writing at label file level."""
+    # Test parsing segmentation format directly
+    label_file = tmp_path / "seg.txt"
+    # 9 values: class_id + 4 polygon points (not divisible by 3 after bbox)
+    label_file.write_text("0 0.1 0.1 0.9 0.2 0.8 0.9 0.2 0.8\n")
+
+    skeleton = Skeleton()
+    instances, rois = parse_label_file(
+        label_file, skeleton, (100, 200), class_names={0: "animal"}
+    )
+
+    assert len(instances) == 0
+    assert len(rois) == 1
+    roi = rois[0]
+    assert roi.annotation_type == AnnotationType.SEGMENTATION
+    assert roi.category == "animal"
+    assert roi.area > 0
+
+    # Verify polygon vertices
+    coords = list(roi.geometry.exterior.coords)
+    assert len(coords) == 5  # 4 vertices + closing point
+
+    # Verify first vertex denormalized correctly
+    assert abs(coords[0][0] - 0.1 * 200) < 1e-4
+    assert abs(coords[0][1] - 0.1 * 100) < 1e-4
+
+    # Write back and verify roundtrip
+    name_to_id = {"animal": 0}
+    label_out = tmp_path / "seg_out.txt"
+    write_roi_label_file(label_out, rois, (100, 200), name_to_id)
+
+    # Re-parse and compare
+    instances2, rois2 = parse_label_file(
+        label_out, skeleton, (100, 200), class_names={0: "animal"}
+    )
+    assert len(rois2) == 1
+    roi2 = rois2[0]
+    assert roi2.annotation_type == AnnotationType.SEGMENTATION
+
+    # Areas should match closely
+    assert abs(roi.area - roi2.area) / roi.area < 0.01
+
+
+def test_ultralytics_coordinate_normalization_detection(tmp_path):
+    """Verify coordinates normalize/denormalize correctly for detection."""
+    # Create a simple detection label
+    label_file = tmp_path / "det.txt"
+    # x_center=0.5, y_center=0.5, w=0.4, h=0.6 on 200x100 image
+    label_file.write_text("0 0.5 0.5 0.4 0.6\n")
+
+    skeleton = Skeleton()
+    instances, rois = parse_label_file(
+        label_file, skeleton, (100, 200), class_names={0: "obj"}
+    )
+
+    assert len(instances) == 0
+    assert len(rois) == 1
+
+    roi = rois[0]
+    minx, miny, maxx, maxy = roi.bounds
+
+    # Expected pixel coords:
+    # w_px = 0.4 * 200 = 80, h_px = 0.6 * 100 = 60
+    # x = 0.5*200 - 80/2 = 60, y = 0.5*100 - 60/2 = 20
+    assert abs(minx - 60.0) < 1e-4
+    assert abs(miny - 20.0) < 1e-4
+    assert abs(maxx - 140.0) < 1e-4
+    assert abs(maxy - 80.0) < 1e-4
+
+    # Write back and verify normalization
+    label_out = tmp_path / "det_out.txt"
+    write_roi_label_file(label_out, [roi], (100, 200), {"obj": 0})
+
+    content = label_out.read_text().strip()
+    parts = content.split()
+    assert parts[0] == "0"
+    assert float(parts[1]) == pytest.approx(0.5, abs=1e-4)
+    assert float(parts[2]) == pytest.approx(0.5, abs=1e-4)
+    assert float(parts[3]) == pytest.approx(0.4, abs=1e-4)
+    assert float(parts[4]) == pytest.approx(0.6, abs=1e-4)
