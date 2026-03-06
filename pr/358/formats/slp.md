@@ -11,6 +11,8 @@ SLP files can contain:
 - **Tracks** for identity tracking across frames ([`Track`][sleap_io.Track])
 - **Suggestions** for frames to label ([`SuggestionFrame`][sleap_io.SuggestionFrame])
 - **Recording sessions** for multi-camera setups ([`RecordingSession`][sleap_io.RecordingSession])
+- **Regions of interest** (ROIs) with vector geometry ([`ROI`][sleap_io.ROI])
+- **Segmentation masks** with run-length encoding ([`SegmentationMask`][sleap_io.SegmentationMask])
 
 ## HDF5 Layout
 
@@ -32,6 +34,18 @@ file.slp
 ├── /points                      # Dataset: User-labeled points (structured array)
 ├── /pred_points                 # Dataset: Predicted points (structured array)
 ├── /negative_frames             # Dataset: Negative frame markers (optional)
+│
+├── /rois                        # Dataset: ROI metadata (structured array, optional)
+│   ├── @categories              # Attribute: JSON array of category strings
+│   ├── @names                   # Attribute: JSON array of name strings
+│   └── @sources                 # Attribute: JSON array of source strings
+├── /roi_wkb                     # Dataset: Packed WKB geometry bytes (uint8 array)
+│
+├── /masks                       # Dataset: Mask metadata (structured array, optional)
+│   ├── @categories              # Attribute: JSON array of category strings
+│   ├── @names                   # Attribute: JSON array of name strings
+│   └── @sources                 # Attribute: JSON array of source strings
+├── /mask_rle                    # Dataset: Packed RLE bytes (uint8 array)
 │
 └── /video{N}/                   # Group: Per-video embedded data (one per video)
     ├── /video                   # Dataset: Embedded image data
@@ -684,6 +698,102 @@ labels = labels.materialize()
 labels.append(new_frame)  # Now works
 ```
 
+## Regions of Interest (ROIs)
+
+[`ROI`][sleap_io.ROI]s store vector geometry annotations such as bounding boxes, polygons, and other shapes. ROI support was introduced in format 1.5.
+
+### ROI Datasets
+
+ROI data is stored across two datasets:
+
+- `/rois`: Structured array containing ROI metadata and byte offsets into the geometry data
+- `/roi_wkb`: Packed `uint8` array of [WKB (Well-Known Binary)](https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry#Well-known_binary) geometry bytes
+
+Each ROI's geometry is stored as a WKB blob in `/roi_wkb`, with `/rois` providing the byte range via `wkb_start` and `wkb_end` offsets.
+
+### ROI Dtype
+
+```python
+roi_dtype = np.dtype([
+    ("annotation_type", "u1"),  # AnnotationType enum value
+    ("video", "i4"),            # Video index (-1 if none)
+    ("frame_idx", "i8"),        # Frame index (-1 for static ROIs)
+    ("track", "i4"),            # Track index (-1 if none)
+    ("score", "f4"),            # Prediction score (NaN if no score)
+    ("wkb_start", "u8"),       # Start byte offset into /roi_wkb
+    ("wkb_end", "u8"),         # End byte offset into /roi_wkb
+])
+```
+
+### Annotation Types
+
+| Value | Name | Description |
+|-------|------|-------------|
+| `0` | `DEFAULT` | Generic annotation |
+| `1` | `BOUNDING_BOX` | Bounding box |
+| `2` | `SEGMENTATION` | Segmentation region |
+| `3` | `ARENA` | Arena boundary |
+| `4` | `ANCHOR` | Anchor point |
+
+### String Metadata
+
+String metadata fields (`categories`, `names`, `sources`) are stored as JSON-encoded HDF5 attributes on the `/rois` dataset:
+
+```python
+# Example attribute values
+rois_dataset.attrs["categories"]  # '["arena", "nest"]'
+rois_dataset.attrs["names"]       # '["arena_boundary", "nest_region"]'
+rois_dataset.attrs["sources"]     # '["manual", "model_v2"]'
+```
+
+Each attribute is a JSON array with one entry per ROI, corresponding by index.
+
+### Static vs Temporal ROIs
+
+- **Static ROIs**: `frame_idx = -1`. Apply globally (e.g., arena boundaries).
+- **Temporal ROIs**: `frame_idx >= 0`. Associated with a specific frame in a video.
+
+### Optional Dataset
+
+The `/rois` and `/roi_wkb` datasets are only written when the [`Labels`][sleap_io.Labels] object contains ROIs. On read, missing datasets default to empty lists.
+
+## Segmentation Masks
+
+[`SegmentationMask`][sleap_io.SegmentationMask]s store raster binary masks using run-length encoding (RLE). Mask support was introduced in format 1.5.
+
+### Mask Datasets
+
+Mask data is stored across two datasets:
+
+- `/masks`: Structured array containing mask metadata and byte offsets into the RLE data
+- `/mask_rle`: Packed `uint8` array of RLE-encoded mask bytes
+
+The RLE encoding stores `uint32` run-length counts packed as little-endian `uint8` bytes. Each mask's RLE data is located in `/mask_rle` at the byte range specified by `rle_start` and `rle_end`.
+
+### Mask Dtype
+
+```python
+mask_dtype = np.dtype([
+    ("height", "u4"),           # Mask height in pixels
+    ("width", "u4"),            # Mask width in pixels
+    ("annotation_type", "u1"),  # AnnotationType enum value
+    ("video", "i4"),            # Video index (-1 if none)
+    ("frame_idx", "i8"),        # Frame index (-1 for static masks)
+    ("track", "i4"),            # Track index (-1 if none)
+    ("score", "f4"),            # Prediction score (NaN if no score)
+    ("rle_start", "u8"),       # Start byte offset into /mask_rle
+    ("rle_end", "u8"),         # End byte offset into /mask_rle
+])
+```
+
+### String Metadata
+
+String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the `/masks` dataset store `categories`, `names`, and `sources` arrays.
+
+### Optional Dataset
+
+The `/masks` and `/mask_rle` datasets are only written when the [`Labels`][sleap_io.Labels] object contains masks. On read, missing datasets default to empty lists.
+
 ## Version History
 
 The SLP format has evolved through several versions, tracked by the `format_id` attribute in `/metadata`.
@@ -711,13 +821,23 @@ Initial release format.
 
 Minor handling improvements for tracking_score (no schema change from 1.2).
 
-### Format 1.4 (Current)
+### Format 1.4
 
 **Added channel_order attribute** to embedded video datasets.
 
 - Tracks RGB vs BGR channel ordering for embedded images
 - Ensures correct color reproduction across different encoding backends
 - Reading: Defaults to RGB if attribute missing
+
+### Format 1.5 (Current)
+
+**Added ROI and segmentation mask support.**
+
+- New datasets: `/rois`, `/roi_wkb` for vector geometry (WKB-encoded)
+- New datasets: `/masks`, `/mask_rle` for binary masks (RLE-encoded)
+- String metadata stored as JSON HDF5 attributes (`categories`, `names`, `sources`)
+- Backward compatible: datasets only written when non-empty, missing datasets default to empty lists on read
+- Requires `shapely>=2.0` for geometry operations
 
 ## API
 
