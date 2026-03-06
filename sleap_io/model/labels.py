@@ -449,6 +449,8 @@ class Labels:
                 suggestions=[deepcopy(s) for s in self.suggestions],
                 sessions=[deepcopy(s) for s in self.sessions],
                 provenance=dict(self.provenance),
+                rois=[deepcopy(r) for r in self.rois],
+                masks=[deepcopy(m) for m in self.masks],
                 lazy_store=new_store,
             )
         else:

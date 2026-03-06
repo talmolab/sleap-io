@@ -423,7 +423,7 @@ def read_labels(
 
                     # Create bbox ROI if no segmentation was processed
                     bbox = annotation.get("bbox")
-                    if bbox is not None and segmentation is None:
+                    if bbox is not None and not segmentation:
                         x, y, w, h = bbox
                         roi = ROI.from_bbox(x, y, w, h, **roi_kwargs)
                         rois.append(roi)

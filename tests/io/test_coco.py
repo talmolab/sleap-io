@@ -1804,6 +1804,45 @@ class TestCOCOROIMaskIO:
         decoded = coco._decode_coco_rle(rle["counts"], rle["size"])
         np.testing.assert_array_equal(decoded, mask)
 
+    def test_coco_detection_empty_segmentation_fallback_to_bbox(self, tmp_path):
+        """Test that annotations with segmentation=[] fall back to bbox ROI."""
+        img_path = tmp_path / "img.png"
+        img_path.touch()
+
+        data = {
+            "images": [
+                {"id": 1, "file_name": "img.png", "height": 100, "width": 200},
+            ],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "segmentation": [],
+                    "bbox": [10, 20, 30, 40],
+                    "area": 1200,
+                    "iscrowd": 0,
+                },
+            ],
+            "categories": [{"id": 1, "name": "animal"}],
+        }
+
+        json_path = tmp_path / "empty_seg.json"
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+
+        labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+        # Empty segmentation list should fall back to bbox
+        assert len(labels.rois) == 1
+        roi = labels.rois[0]
+        assert roi.category == "animal"
+        minx, miny, maxx, maxy = roi.bounds
+        assert minx == pytest.approx(10.0)
+        assert miny == pytest.approx(20.0)
+        assert maxx == pytest.approx(40.0)
+        assert maxy == pytest.approx(60.0)
+
     def test_coco_detection_with_polygon_read(self, tmp_path):
         """Test reading polygon segmentation creates ROI with correct coords."""
         img_path = tmp_path / "img.png"
