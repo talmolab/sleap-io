@@ -54,9 +54,11 @@ from sleap_io.io.slp import (
     read_instances,
     read_labels,
     read_labels_set,
+    read_masks,
     read_metadata,
     read_points,
     read_pred_points,
+    read_rois,
     read_sessions,
     read_skeletons,
     read_suggestions,
@@ -74,6 +76,8 @@ from sleap_io.io.slp import (
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
+from sleap_io.model.mask import SegmentationMask
+from sleap_io.model.roi import ROI, AnnotationType
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -4032,3 +4036,218 @@ def test_write_videos_copy_group_not_in_source(tmp_path, slp_minimal_pkg):
 
     loaded = read_videos(str(output))
     assert len(loaded) == 1
+
+
+def test_slp_roi_roundtrip(tmp_path):
+    """Test SLP round-trip with ROIs."""
+    video = Video(filename="test.mp4")
+    track = Track(name="animal1")
+    roi1 = ROI.from_bbox(10, 20, 30, 40, video=video, name="bbox1", category="cat")
+    roi2 = ROI.from_polygon(
+        [(0, 0), (100, 0), (100, 100), (0, 100)],
+        video=video,
+        frame_idx=5,
+        score=0.9,
+        track=track,
+        annotation_type=AnnotationType.ARENA,
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video], skeletons=[skeleton], tracks=[track], rois=[roi1, roi2]
+    )
+
+    path = str(tmp_path / "test_rois.slp")
+    save_slp(labels, path)
+
+    # Verify format_id is 1.5
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id == 1.5
+
+    # Read back
+    loaded = load_slp(path)
+    assert len(loaded.rois) == 2
+
+    r1 = loaded.rois[0]
+    assert r1.name == "bbox1"
+    assert r1.category == "cat"
+    assert r1.annotation_type == AnnotationType.BOUNDING_BOX
+    assert r1.video is loaded.videos[0]
+    assert r1.frame_idx is None
+    assert r1.score is None
+    assert r1.bounds == pytest.approx((10.0, 20.0, 40.0, 60.0))
+
+    r2 = loaded.rois[1]
+    assert r2.annotation_type == AnnotationType.ARENA
+    assert r2.frame_idx == 5
+    assert r2.score == pytest.approx(0.9, abs=1e-5)
+    assert r2.track is loaded.tracks[0]
+
+
+def test_slp_mask_roundtrip(tmp_path):
+    """Test SLP round-trip with segmentation masks."""
+    video = Video(filename="test.mp4")
+    mask_data = np.zeros((20, 30), dtype=bool)
+    mask_data[5:15, 10:25] = True
+
+    mask = SegmentationMask.from_numpy(
+        mask_data,
+        video=video,
+        frame_idx=3,
+        name="seg1",
+        category="foreground",
+        score=0.85,
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(videos=[video], skeletons=[skeleton], masks=[mask])
+
+    path = str(tmp_path / "test_masks.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert len(loaded.masks) == 1
+
+    m = loaded.masks[0]
+    assert m.height == 20
+    assert m.width == 30
+    assert m.name == "seg1"
+    assert m.category == "foreground"
+    assert m.score == pytest.approx(0.85, abs=1e-5)
+    assert m.frame_idx == 3
+    assert m.video is loaded.videos[0]
+
+    # Check mask data roundtrips correctly
+    np.testing.assert_array_equal(m.data, mask_data)
+
+
+def test_slp_backward_compat_no_rois(slp_typical):
+    """Reading old SLP files without ROIs/masks gives empty lists."""
+    labels = read_labels(slp_typical)
+    assert labels.rois == []
+    assert labels.masks == []
+
+
+def test_slp_no_rois_format_id(tmp_path):
+    """Files without ROIs/masks should keep format_id 1.4."""
+    skeleton = Skeleton(nodes=["A"])
+    video = Video(filename="test.mp4")
+    labels = Labels(videos=[video], skeletons=[skeleton])
+
+    path = str(tmp_path / "test_no_rois.slp")
+    save_slp(labels, path)
+
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id == 1.4
+
+
+def test_slp_lazy_roi_roundtrip(tmp_path):
+    """Test lazy loading round-trip preserves ROIs and masks."""
+    video = Video(filename="test.mp4")
+    roi = ROI.from_bbox(10, 20, 30, 40, video=video, name="bbox")
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 3:7] = True
+    mask = SegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(videos=[video], skeletons=[skeleton], rois=[roi], masks=[mask])
+
+    path = str(tmp_path / "test_lazy_roi.slp")
+    save_slp(labels, path)
+
+    # Load lazily
+    lazy_labels = load_slp(path, lazy=True)
+    assert len(lazy_labels.rois) == 1
+    assert len(lazy_labels.masks) == 1
+    assert lazy_labels.rois[0].name == "bbox"
+
+    # Save lazily and reload
+    path2 = str(tmp_path / "test_lazy_roi_resaved.slp")
+    save_slp(lazy_labels, path2)
+
+    reloaded = load_slp(path2)
+    assert len(reloaded.rois) == 1
+    assert len(reloaded.masks) == 1
+    np.testing.assert_array_equal(reloaded.masks[0].data, mask_data)
+
+
+def test_read_rois_empty_dataset(tmp_path):
+    """read_rois returns [] when /rois dataset has 0 rows."""
+    path = str(tmp_path / "empty_rois.h5")
+    roi_dtype = np.dtype(
+        [
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("wkb_start", "u8"),
+            ("wkb_end", "u8"),
+        ]
+    )
+    with h5py.File(path, "w") as f:
+        f.create_dataset("rois", data=np.array([], dtype=roi_dtype))
+    assert read_rois(path, [], []) == []
+
+
+def test_read_rois_missing_wkb(tmp_path):
+    """read_rois returns [] when /rois exists but /roi_wkb is missing."""
+    path = str(tmp_path / "no_wkb.h5")
+    roi_dtype = np.dtype(
+        [
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("wkb_start", "u8"),
+            ("wkb_end", "u8"),
+        ]
+    )
+    row = np.array([(0, 0, 0, -1, 0.0, 0, 10)], dtype=roi_dtype)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("rois", data=row)
+    assert read_rois(path, [], []) == []
+
+
+def test_read_masks_empty_dataset(tmp_path):
+    """read_masks returns [] when /masks dataset has 0 rows."""
+    path = str(tmp_path / "empty_masks.h5")
+    mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+        ]
+    )
+    with h5py.File(path, "w") as f:
+        f.create_dataset("masks", data=np.array([], dtype=mask_dtype))
+    assert read_masks(path, [], []) == []
+
+
+def test_read_masks_missing_rle(tmp_path):
+    """read_masks returns [] when /masks exists but /mask_rle is missing."""
+    path = str(tmp_path / "no_rle.h5")
+    mask_dtype = np.dtype(
+        [
+            ("height", "u4"),
+            ("width", "u4"),
+            ("annotation_type", "u1"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("score", "f4"),
+            ("rle_start", "u8"),
+            ("rle_end", "u8"),
+        ]
+    )
+    row = np.array([(10, 10, 0, 0, 0, -1, 0.0, 0, 5)], dtype=mask_dtype)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("masks", data=row)
+    assert read_masks(path, [], []) == []

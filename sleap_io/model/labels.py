@@ -31,6 +31,7 @@ from sleap_io.model.video import Video
 if TYPE_CHECKING:
     from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.labels_set import LabelsSet
+    from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import (
         InstanceMatcher,
         MatchResult,
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
         TrackMatcher,
         VideoMatcher,
     )
+    from sleap_io.model.roi import ROI
 
 
 @define
@@ -57,6 +59,10 @@ class Labels:
         sessions: A list of `RecordingSession`s that are associated with this dataset.
         provenance: Dictionary of arbitrary metadata providing additional information
             about where the dataset came from.
+        rois: A list of `ROI` vector geometry annotations (bounding boxes, polygons,
+            etc.) associated with this dataset.
+        masks: A list of `SegmentationMask` raster annotations associated with this
+            dataset.
 
     Notes:
         `Video`s in contain `LabeledFrame`s, and `Skeleton`s and `Track`s in contained
@@ -70,6 +76,8 @@ class Labels:
     suggestions: list[SuggestionFrame] = field(factory=list)
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
+    rois: "list[ROI]" = field(factory=list)
+    masks: "list[SegmentationMask]" = field(factory=list)
 
     # Internal lazy state (private, not part of public API)
     _lazy_store: "LazyDataStore | None" = field(
@@ -250,6 +258,25 @@ class Labels:
             new_s.video = video_map.get(id(s.video), new_s.video)
             new_suggestions.append(new_s)
 
+        # Deep copy ROIs and masks, relinking videos and tracks
+        new_rois = []
+        for roi in self.rois:
+            new_roi = deepcopy(roi)
+            if roi.video is not None:
+                new_roi.video = video_map.get(id(roi.video), new_roi.video)
+            if roi.track is not None:
+                new_roi.track = track_map.get(id(roi.track), new_roi.track)
+            new_rois.append(new_roi)
+
+        new_masks = []
+        for mask in self.masks:
+            new_mask = deepcopy(mask)
+            if mask.video is not None:
+                new_mask.video = video_map.get(id(mask.video), new_mask.video)
+            if mask.track is not None:
+                new_mask.track = track_map.get(id(mask.track), new_mask.track)
+            new_masks.append(new_mask)
+
         return Labels(
             labeled_frames=labeled_frames,
             videos=new_videos,
@@ -257,6 +284,8 @@ class Labels:
             tracks=new_tracks,
             suggestions=new_suggestions,
             provenance=dict(self.provenance),
+            rois=new_rois,
+            masks=new_masks,
             # _lazy_store is None (not lazy)
         )
 
@@ -1137,6 +1166,98 @@ class Labels:
         """Return an iterator over all instances within all labeled frames."""
         return (instance for lf in self.labeled_frames for instance in lf.instances)
 
+    @property
+    def static_rois(self) -> list["ROI"]:
+        """Return ROIs that are static (not tied to a specific frame).
+
+        Returns:
+            A list of ROIs where `frame_idx` is `None`.
+        """
+        return [roi for roi in self.rois if roi.is_static]
+
+    @property
+    def temporal_rois(self) -> list["ROI"]:
+        """Return ROIs that are tied to specific frames.
+
+        Returns:
+            A list of ROIs where `frame_idx` is not `None`.
+        """
+        return [roi for roi in self.rois if not roi.is_static]
+
+    def get_rois(
+        self,
+        video: "Video | None" = None,
+        frame_idx: int | None = None,
+        annotation_type: "int | None" = None,
+        category: str | None = None,
+        track: "Track | None" = None,
+        instance: "Instance | None" = None,
+    ) -> list["ROI"]:
+        """Query ROIs by video, frame, type, category, track, or instance.
+
+        Args:
+            video: If specified, only return ROIs for this video.
+            frame_idx: If specified, only return ROIs for this frame index.
+            annotation_type: If specified, only return ROIs with this annotation type.
+            category: If specified, only return ROIs with this category.
+            track: If specified, only return ROIs for this track.
+            instance: If specified, only return ROIs for this instance.
+
+        Returns:
+            A list of matching ROIs.
+        """
+        results = self.rois
+        if video is not None:
+            results = [r for r in results if r.video is video]
+        if frame_idx is not None:
+            results = [r for r in results if r.frame_idx == frame_idx]
+        if annotation_type is not None:
+            results = [r for r in results if r.annotation_type == annotation_type]
+        if category is not None:
+            results = [r for r in results if r.category == category]
+        if track is not None:
+            results = [r for r in results if r.track is track]
+        if instance is not None:
+            results = [r for r in results if r.instance is instance]
+        return results
+
+    def get_masks(
+        self,
+        video: "Video | None" = None,
+        frame_idx: int | None = None,
+        annotation_type: "int | None" = None,
+        category: str | None = None,
+        track: "Track | None" = None,
+        instance: "Instance | None" = None,
+    ) -> list["SegmentationMask"]:
+        """Query segmentation masks by video, frame, type, category, track, or instance.
+
+        Args:
+            video: If specified, only return masks for this video.
+            frame_idx: If specified, only return masks for this frame index.
+            annotation_type: If specified, only return masks with this annotation type.
+            category: If specified, only return masks with this category.
+            track: If specified, only return masks for this track.
+            instance: If specified, only return masks for this instance.
+
+        Returns:
+            A list of matching segmentation masks.
+        """
+        results = self.masks
+        if video is not None:
+            results = [m for m in results if m.video is video]
+        if frame_idx is not None:
+            results = [m for m in results if m.frame_idx == frame_idx]
+        if annotation_type is not None:
+            results = [m for m in results if m.annotation_type == annotation_type]
+        if category is not None:
+            results = [m for m in results if m.category == category]
+        if track is not None:
+            results = [m for m in results if m.track is track]
+        if instance is not None:
+            results = [m for m in results if m.instance is instance]
+        return results
+
     def rename_nodes(
         self,
         name_map: dict[NodeOrIndex, str] | list[str],
@@ -1384,6 +1505,16 @@ class Labels:
         for sf in self.suggestions:
             if sf.video in video_map:
                 sf.video = video_map[sf.video]
+
+        # Update ROIs with the new videos.
+        for roi in self.rois:
+            if roi.video in video_map:
+                roi.video = video_map[roi.video]
+
+        # Update masks with the new videos.
+        for mask in self.masks:
+            if mask.video in video_map:
+                mask.video = video_map[mask.video]
 
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]
