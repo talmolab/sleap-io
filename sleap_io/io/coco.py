@@ -1,9 +1,10 @@
-"""Handles direct I/O operations for working with COCO-style pose datasets.
+"""Handles direct I/O operations for working with COCO-style datasets.
 
-COCO-style pose format specification:
+COCO-style format specification:
 - JSON annotation files containing images, annotations, and categories
 - Image directory structure can vary (flat, categorized, nested, multi-source)
 - Keypoint annotations with coordinates and visibility flags
+- Bounding box and segmentation annotations (polygon and RLE)
 - Support for multiple animal categories with different skeletons
 - Visibility encoding: binary (0/1) or ternary (0/1/2)
 """
@@ -18,6 +19,8 @@ import numpy as np
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+from sleap_io.model.mask import SegmentationMask
+from sleap_io.model.roi import ROI, AnnotationType
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -48,14 +51,6 @@ def parse_coco_json(json_path: str | Path) -> dict:
     for field in required_fields:
         if field not in data:
             raise ValueError(f"Missing required COCO field: {field}")
-
-    # Validate that we have pose data (keypoints in categories)
-    has_keypoints = any("keypoints" in cat for cat in data["categories"])
-    if not has_keypoints:
-        raise ValueError(
-            "No keypoint definitions found in categories. "
-            "This appears to be a detection-only COCO dataset."
-        )
 
     return data
 
@@ -182,12 +177,74 @@ def decode_keypoints(
     return np.array(points, dtype=np.float32)
 
 
+def _decode_coco_rle(counts: list[int], size: list[int]) -> np.ndarray:
+    """Decode COCO RLE segmentation to a binary mask.
+
+    COCO RLE uses column-major (Fortran) order. This function decodes the RLE
+    counts and returns a row-major numpy array.
+
+    Args:
+        counts: RLE counts (alternating runs of 0s and 1s, starting with 0s).
+        size: Mask dimensions as [height, width].
+
+    Returns:
+        A 2D boolean numpy array of shape (height, width).
+    """
+    height, width = size
+    total = height * width
+    flat = np.zeros(total, dtype=bool)
+    pos = 0
+    for i, count in enumerate(counts):
+        if i % 2 == 1:  # Odd indices are 1-runs
+            end = min(pos + count, total)
+            flat[pos:end] = True
+        pos += count
+    # COCO RLE is column-major, reshape accordingly
+    return flat.reshape((width, height)).T
+
+
+def _encode_coco_rle(mask: np.ndarray) -> dict:
+    """Encode a binary mask as COCO RLE format.
+
+    COCO RLE uses column-major (Fortran) order.
+
+    Args:
+        mask: A 2D boolean or uint8 numpy array of shape (height, width).
+
+    Returns:
+        COCO RLE dict with "counts" (list of ints) and "size" [height, width].
+    """
+    height, width = mask.shape
+    # Transpose to column-major order then flatten
+    flat = mask.T.ravel().astype(np.uint8)
+
+    if len(flat) == 0:
+        return {"counts": [], "size": [height, width]}
+
+    # Find positions where value changes
+    diff = np.diff(flat)
+    change_indices = np.where(diff != 0)[0] + 1
+
+    # Build run lengths
+    positions = np.concatenate([[0], change_indices, [len(flat)]])
+    run_lengths = np.diff(positions).tolist()
+
+    # Ensure we start with a 0-run
+    if flat[0] == 1:
+        run_lengths = [0] + run_lengths
+
+    return {"counts": run_lengths, "size": [height, width]}
+
+
 def read_labels(
     json_path: str | Path,
     dataset_root: str | Path | None = None,
     grayscale: bool = False,
 ) -> Labels:
-    """Read COCO-style pose dataset and return a Labels object.
+    """Read COCO-style dataset and return a Labels object.
+
+    Supports both pose estimation datasets (with keypoints) and detection-only
+    datasets (with bounding boxes and/or segmentation masks).
 
     Args:
         json_path: Path to the COCO annotation JSON file.
@@ -209,10 +266,12 @@ def read_labels(
     # Parse COCO annotation file
     coco_data = parse_coco_json(json_path)
 
-    # Create skeletons from categories
+    # Create skeletons from categories and category name mapping
     skeletons = {}
+    category_names = {}
     for category in coco_data["categories"]:
-        if "keypoints" in category:
+        category_names[category["id"]] = category.get("name", "")
+        if "keypoints" in category and len(category["keypoints"]) > 0:
             skeleton = create_skeleton_from_category(category)
             skeletons[category["id"]] = skeleton
 
@@ -269,6 +328,8 @@ def read_labels(
 
     # Process images and annotations
     labeled_frames = []
+    rois = []
+    masks = []
     image_id_to_frame_idx = {}
 
     # Build frame index mapping for each image
@@ -297,52 +358,84 @@ def read_labels(
         if image_id in image_annotations:
             for annotation in image_annotations[image_id]:
                 category_id = annotation["category_id"]
+                cat_name = category_names.get(category_id, "")
+                score = annotation.get("score")
+                has_kpts = "keypoints" in annotation and annotation["keypoints"]
 
-                if category_id not in skeletons:
-                    continue  # Skip non-pose annotations
+                if has_kpts and category_id in skeletons:
+                    # Pose annotation with keypoints
+                    skeleton = skeletons[category_id]
 
-                skeleton = skeletons[category_id]
+                    # Extract track ID
+                    track = None
+                    track_id = (
+                        annotation.get("attributes", {}).get("object_id")
+                        or annotation.get("track_id")
+                        or annotation.get("instance_id")
+                    )
 
-                # Extract track ID from various possible sources
-                track = None
-                track_id = (
-                    annotation.get("attributes", {}).get("object_id")
-                    or annotation.get("track_id")
-                    or annotation.get("instance_id")
-                )
+                    if track_id is not None:
+                        if track_id not in track_dict:
+                            track_dict[track_id] = Track(name=f"track_{track_id}")
+                        track = track_dict[track_id]
 
-                if track_id is not None:
-                    # Create or reuse Track object
-                    if track_id not in track_dict:
-                        track_dict[track_id] = Track(name=f"track_{track_id}")
-                    track = track_dict[track_id]
+                    keypoints_data = annotation["keypoints"]
+                    expected_keypoints = len(skeleton.nodes)
 
-                # Decode keypoints
-                keypoints = annotation.get("keypoints", [])
-                # Always use the skeleton length, not num_keypoints which may count
-                # only visible points
-                expected_keypoints = len(skeleton.nodes)
-
-                if keypoints:
                     points_array = decode_keypoints(
-                        keypoints, expected_keypoints, skeleton
+                        keypoints_data, expected_keypoints, skeleton
                     )
                     instance = Instance.from_numpy(
-                        points_data=points_array, skeleton=skeleton, track=track
+                        points_data=points_array,
+                        skeleton=skeleton,
+                        track=track,
                     )
                     instances.append(instance)
+                else:
+                    # Detection-only annotation: create ROIs/masks
+                    roi_kwargs = dict(
+                        category=cat_name,
+                        score=score,
+                        video=video,
+                        frame_idx=frame_idx,
+                    )
+
+                    # Handle segmentation field
+                    segmentation = annotation.get("segmentation")
+                    if segmentation is not None:
+                        if isinstance(segmentation, dict):
+                            # RLE format
+                            mask = _decode_coco_rle(
+                                segmentation["counts"],
+                                segmentation["size"],
+                            )
+                            seg_mask = SegmentationMask.from_numpy(mask, **roi_kwargs)
+                            masks.append(seg_mask)
+                        elif isinstance(segmentation, list) and len(segmentation) > 0:
+                            # Polygon format
+                            for poly_flat in segmentation:
+                                coords = [
+                                    (poly_flat[i], poly_flat[i + 1])
+                                    for i in range(0, len(poly_flat), 2)
+                                ]
+                                roi = ROI.from_polygon(coords, **roi_kwargs)
+                                rois.append(roi)
+
+                    # Create bbox ROI if no segmentation was processed
+                    bbox = annotation.get("bbox")
+                    if bbox is not None and segmentation is None:
+                        x, y, w, h = bbox
+                        roi = ROI.from_bbox(x, y, w, h, **roi_kwargs)
+                        rois.append(roi)
 
         # Create labeled frame
-        if (
-            instances or image_id in image_annotations
-        ):  # Include frames even without instances
+        if instances or image_id in image_annotations:
             labeled_frame = LabeledFrame(
                 video=video, frame_idx=frame_idx, instances=instances
             )
             labeled_frames.append(labeled_frame)
 
-    # Create Labels object (skeletons will be auto-added from instances)
-    return Labels(labeled_frames=labeled_frames)
+    return Labels(labeled_frames=labeled_frames, rois=rois, masks=masks)
 
 
 def read_labels_set(
@@ -456,14 +549,16 @@ def convert_labels(
 
     # Build skeleton/category mapping
     skeleton_to_category = {}
+    category_name_to_id = {}
     category_id_counter = 1
     for skeleton in labels.skeletons:
         if skeleton not in skeleton_to_category:
+            cat_name = (
+                skeleton.name if skeleton.name else f"skeleton_{category_id_counter}"
+            )
             category = {
                 "id": category_id_counter,
-                "name": skeleton.name
-                if skeleton.name
-                else f"skeleton_{category_id_counter}",
+                "name": cat_name,
                 "keypoints": [node.name for node in skeleton.nodes],
                 "skeleton": [
                     [i + 1, j + 1]
@@ -478,6 +573,7 @@ def convert_labels(
             }
             coco_data["categories"].append(category)
             skeleton_to_category[skeleton] = category_id_counter
+            category_name_to_id[cat_name] = category_id_counter
             category_id_counter += 1
 
     # Build track mapping
@@ -501,6 +597,9 @@ def convert_labels(
     # Process labeled frames
     image_id_counter = 1
     annotation_id_counter = 1
+
+    # Build mapping from (video, frame_idx) to image_id for ROI/mask export
+    video_frame_to_image_id = {}
 
     for frame_idx, labeled_frame in enumerate(labels.labeled_frames):
         # Determine image filename
@@ -538,6 +637,10 @@ def convert_labels(
         }
         coco_data["images"].append(image_info)
 
+        # Track video/frame to image_id mapping
+        vf_key = (id(labeled_frame.video), labeled_frame.frame_idx)
+        video_frame_to_image_id[vf_key] = image_id_counter
+
         # Process instances
         for instance in labeled_frame.instances:
             # Get category ID
@@ -553,7 +656,6 @@ def convert_labels(
             )
 
             # Compute bounding box from visible keypoints
-            # mmpose requires bbox field for all annotations
             visible_points = []
             for i in range(0, len(keypoints), 3):
                 if keypoints[i + 2] > 0:  # visible
@@ -595,7 +697,149 @@ def convert_labels(
 
         image_id_counter += 1
 
+    # Export ROIs as COCO annotations
+    for roi in labels.rois:
+        # Get or create category
+        cat_name = roi.category if roi.category else "object"
+        if cat_name not in category_name_to_id:
+            category = {
+                "id": category_id_counter,
+                "name": cat_name,
+            }
+            coco_data["categories"].append(category)
+            category_name_to_id[cat_name] = category_id_counter
+            category_id_counter += 1
+        category_id = category_name_to_id[cat_name]
+
+        # Find image_id for this ROI
+        image_id = _get_or_create_image_id(
+            roi.video,
+            roi.frame_idx,
+            video_frame_to_image_id,
+            coco_data,
+            image_id_counter,
+        )
+        if image_id >= image_id_counter:
+            image_id_counter = image_id + 1
+
+        annotation = {
+            "id": annotation_id_counter,
+            "image_id": image_id,
+            "category_id": category_id,
+            "iscrowd": 0,
+        }
+
+        if roi.annotation_type == AnnotationType.BOUNDING_BOX:
+            minx, miny, maxx, maxy = roi.bounds
+            w, h = maxx - minx, maxy - miny
+            annotation["bbox"] = [minx, miny, w, h]
+            annotation["area"] = w * h
+        else:
+            # Polygon ROI
+            coords = list(roi.geometry.exterior.coords)
+            flat = []
+            for x, y in coords[:-1]:  # Exclude closing vertex
+                flat.extend([float(x), float(y)])
+            annotation["segmentation"] = [flat]
+            minx, miny, maxx, maxy = roi.bounds
+            annotation["bbox"] = [
+                minx,
+                miny,
+                maxx - minx,
+                maxy - miny,
+            ]
+            annotation["area"] = float(roi.area)
+
+        if roi.score is not None:
+            annotation["score"] = roi.score
+
+        coco_data["annotations"].append(annotation)
+        annotation_id_counter += 1
+
+    # Export masks as COCO RLE annotations
+    for seg_mask in labels.masks:
+        cat_name = seg_mask.category if seg_mask.category else "object"
+        if cat_name not in category_name_to_id:
+            category = {
+                "id": category_id_counter,
+                "name": cat_name,
+            }
+            coco_data["categories"].append(category)
+            category_name_to_id[cat_name] = category_id_counter
+            category_id_counter += 1
+        category_id = category_name_to_id[cat_name]
+
+        image_id = _get_or_create_image_id(
+            seg_mask.video,
+            seg_mask.frame_idx,
+            video_frame_to_image_id,
+            coco_data,
+            image_id_counter,
+        )
+        if image_id >= image_id_counter:
+            image_id_counter = image_id + 1
+
+        mask_data = seg_mask.data
+        rle = _encode_coco_rle(mask_data)
+
+        bbox_xywh = seg_mask.bbox
+        annotation = {
+            "id": annotation_id_counter,
+            "image_id": image_id,
+            "category_id": category_id,
+            "segmentation": rle,
+            "bbox": list(bbox_xywh),
+            "area": float(seg_mask.area),
+            "iscrowd": 1,
+        }
+
+        if seg_mask.score is not None:
+            annotation["score"] = seg_mask.score
+
+        coco_data["annotations"].append(annotation)
+        annotation_id_counter += 1
+
     return coco_data
+
+
+def _get_or_create_image_id(
+    video: Video | None,
+    frame_idx: int | None,
+    video_frame_to_image_id: dict,
+    coco_data: dict,
+    next_image_id: int,
+) -> int:
+    """Get the image ID for a video/frame pair, creating one if needed.
+
+    Args:
+        video: Video object.
+        frame_idx: Frame index.
+        video_frame_to_image_id: Mapping of (video_id, frame_idx) to image IDs.
+        coco_data: COCO data dict to add image entries to.
+        next_image_id: Next available image ID.
+
+    Returns:
+        The image ID for this video/frame pair.
+    """
+    if video is not None and frame_idx is not None:
+        vf_key = (id(video), frame_idx)
+        if vf_key in video_frame_to_image_id:
+            return video_frame_to_image_id[vf_key]
+
+    # Create a new image entry
+    image_info = {
+        "id": next_image_id,
+        "file_name": f"frame_{frame_idx if frame_idx is not None else 0:06d}.png",
+        "width": 0,
+        "height": 0,
+    }
+    coco_data["images"].append(image_info)
+
+    if video is not None and frame_idx is not None:
+        vf_key = (id(video), frame_idx)
+        video_frame_to_image_id[vf_key] = next_image_id
+
+    return next_image_id
 
 
 def write_labels(
