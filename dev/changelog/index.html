@@ -380,6 +380,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v065" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.5
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v064" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -692,17 +703,6 @@
     <span class="md-ellipsis">
       
         v0.1.0
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v0014" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.14
       
     </span>
   </a>
@@ -2878,6 +2878,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#v065" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.5
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#v064" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3196,17 +3207,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#v0014" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.0.14
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3226,6 +3226,355 @@
 
 <div class="md-source-file"><a href="../changelog.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="v065"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.5">v0.6.5</a><a class="headerlink" href="#v065" title="Permanent link">&para;</a></h2>
+<h1>sleap-io v0.6.5 Release Notes</h1>
+<h2>Summary</h2>
+<p>This release adds <strong>ROI and segmentation mask support</strong> as first-class annotation types, with full I/O across SLP, COCO, and Ultralytics formats, and fixes a <strong>numpy 2.x compatibility</strong> issue with suggestion frames.</p>
+<ul>
+<li><strong>ROI &amp; Segmentation Masks</strong> <em>(experimental)</em>: New <code>ROI</code> (vector/Shapely geometry) and <code>SegmentationMask</code> (raster/RLE) data model classes with SLP read/write support</li>
+<li><strong>COCO Detection &amp; Segmentation I/O</strong>: Read and write bounding box, polygon, and RLE mask annotations in COCO format</li>
+<li><strong>Ultralytics Detection &amp; Segmentation I/O</strong>: Auto-detect and read/write YOLO detection and segmentation label formats</li>
+<li><strong>NumPy 2.x Fix</strong>: Prevent <code>TypeError</code> when saving <code>.slp</code> files with numpy integer suggestion frame indices</li>
+<li><strong>Edge Case Fixes</strong>: Preserve ROIs/masks in lazy label copies; fix COCO bbox fallback for empty segmentation lists</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> ROI and segmentation mask support is experimental and subject to change in future releases.</p>
+</blockquote>
+<h2>Installation / Upgrade</h2>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+uvx sleap-io@0.6.5 show labels.slp
+
+# Install as CLI tool (new install)
+uv tool install &quot;sleap-io[all]&quot;
+
+# Upgrade existing CLI tool installation
+uv tool upgrade sleap-io
+
+# Add to project (new dependency)
+uv add &quot;sleap-io[all]&quot;
+
+# Upgrade existing project dependency
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
+uvx sleap-io@0.6.5 show labels.slp
+
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
+uv tool upgrade sleap-io
+
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync</pre></div>
+<p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
+<hr>
+<h2>New Features</h2>
+<h3>ROI and Segmentation Mask Data Model (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4031451253" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/351" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/351/hovercard" href="https://github.com/talmolab/sleap-io/pull/351">#351</a>) <em>(experimental)</em></h3>
+<p>New first-class annotation types for regions of interest and segmentation masks with full SLP file I/O.</p>
+<p><strong><code>ROI</code></strong> represents vector geometry (bounding boxes, polygons, arbitrary shapes) backed by Shapely:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+
+# Create ROIs
+roi = sio.ROI.from_bbox(10, 20, 30, 40, video=video, category=&quot;mouse&quot;)
+polygon = sio.ROI.from_polygon(coords, annotation_type=sio.AnnotationType.ARENA)
+
+# Query ROIs
+labels.get_rois(video=video, frame_idx=0)
+labels.static_rois   # ROIs without frame index (apply to all frames)
+labels.temporal_rois  # ROIs with specific frame indices
+
+# Convert to mask
+mask = roi.to_mask(height=480, width=640)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
+
+<span class="pl-c"># Create ROIs</span>
+<span class="pl-s1">roi</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">ROI</span>.<span class="pl-c1">from_bbox</span>(<span class="pl-c1">10</span>, <span class="pl-c1">20</span>, <span class="pl-c1">30</span>, <span class="pl-c1">40</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"mouse"</span>)
+<span class="pl-s1">polygon</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">ROI</span>.<span class="pl-c1">from_polygon</span>(<span class="pl-s1">coords</span>, <span class="pl-s1">annotation_type</span><span class="pl-c1">=</span><span class="pl-s1">sio</span>.<span class="pl-c1">AnnotationType</span>.<span class="pl-c1">ARENA</span>)
+
+<span class="pl-c"># Query ROIs</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_rois</span>(<span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">0</span>)
+<span class="pl-s1">labels</span>.<span class="pl-c1">static_rois</span>   <span class="pl-c"># ROIs without frame index (apply to all frames)</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">temporal_rois</span>  <span class="pl-c"># ROIs with specific frame indices</span>
+
+<span class="pl-c"># Convert to mask</span>
+<span class="pl-s1">mask</span> <span class="pl-c1">=</span> <span class="pl-s1">roi</span>.<span class="pl-c1">to_mask</span>(<span class="pl-s1">height</span><span class="pl-c1">=</span><span class="pl-c1">480</span>, <span class="pl-s1">width</span><span class="pl-c1">=</span><span class="pl-c1">640</span>)</pre></div>
+<p><strong><code>SegmentationMask</code></strong> represents raster masks with RLE compression:</p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Create masks from numpy arrays
+mask = sio.SegmentationMask.from_numpy(binary_array, video=video, frame_idx=5)
+
+# Query masks
+labels.get_masks(category=&quot;foreground&quot;)
+
+# Convert between representations
+roi = mask.to_polygon()"><pre><span class="pl-c"># Create masks from numpy arrays</span>
+<span class="pl-s1">mask</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">SegmentationMask</span>.<span class="pl-c1">from_numpy</span>(<span class="pl-s1">binary_array</span>, <span class="pl-s1">video</span><span class="pl-c1">=</span><span class="pl-s1">video</span>, <span class="pl-s1">frame_idx</span><span class="pl-c1">=</span><span class="pl-c1">5</span>)
+
+<span class="pl-c"># Query masks</span>
+<span class="pl-s1">labels</span>.<span class="pl-c1">get_masks</span>(<span class="pl-s1">category</span><span class="pl-c1">=</span><span class="pl-s">"foreground"</span>)
+
+<span class="pl-c"># Convert between representations</span>
+<span class="pl-s1">roi</span> <span class="pl-c1">=</span> <span class="pl-s1">mask</span>.<span class="pl-c1">to_polygon</span>()</pre></div>
+<h4>SLP Storage Format</h4>
+<p>ROIs and masks are stored in new optional HDF5 datasets, bumping the format to 1.5:</p>
+<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="file.slp
+├── /rois          # ROI metadata (annotation_type, video, frame_idx, track, score)
+├── /roi_wkb       # WKB-encoded geometry bytes
+├── /masks         # Mask metadata (height, width, annotation_type, video, frame_idx, track, score)
+└── /mask_rle      # RLE-encoded mask bytes"><pre class="notranslate"><code>file.slp
+├── /rois          # ROI metadata (annotation_type, video, frame_idx, track, score)
+├── /roi_wkb       # WKB-encoded geometry bytes
+├── /masks         # Mask metadata (height, width, annotation_type, video, frame_idx, track, score)
+└── /mask_rle      # RLE-encoded mask bytes
+</code></pre></div>
+<p><strong>Backward Compatibility:</strong> Old sleap-io versions can still open files with ROIs/masks (the new datasets are simply ignored). New sleap-io can open old files (no ROIs/masks loaded).</p>
+<hr>
+<h3>COCO Detection &amp; Segmentation I/O (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4035919717" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/357" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/357/hovercard" href="https://github.com/talmolab/sleap-io/pull/357">#357</a>) <em>(experimental)</em></h3>
+<p>Read and write bounding box, polygon, and RLE mask annotations in COCO format.</p>
+<p><strong>Reading:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Detection-only COCO datasets (no keypoints required)
+labels = sio.load_coco(&quot;instances.json&quot;)
+print(labels.rois)   # Bounding boxes and polygons
+print(labels.masks)  # RLE segmentation masks"><pre><span class="pl-c"># Detection-only COCO datasets (no keypoints required)</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_coco</span>(<span class="pl-s">"instances.json"</span>)
+<span class="pl-en">print</span>(<span class="pl-s1">labels</span>.<span class="pl-c1">rois</span>)   <span class="pl-c"># Bounding boxes and polygons</span>
+<span class="pl-en">print</span>(<span class="pl-s1">labels</span>.<span class="pl-c1">masks</span>)  <span class="pl-c"># RLE segmentation masks</span></pre></div>
+<p><strong>Writing:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export ROIs as COCO bbox/polygon annotations
+# Export masks as COCO RLE annotations (iscrowd=1)
+sio.save_coco(labels, &quot;output.json&quot;)"><pre><span class="pl-c"># Export ROIs as COCO bbox/polygon annotations</span>
+<span class="pl-c"># Export masks as COCO RLE annotations (iscrowd=1)</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_coco</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"output.json"</span>)</pre></div>
+<ul>
+<li>Detection-only annotations (no keypoints) are read as <code>ROI</code> objects</li>
+<li>RLE segmentation annotations are read as <code>SegmentationMask</code> objects</li>
+<li>COCO column-major RLE encoding is handled correctly for roundtrips</li>
+<li>Category and score fields are preserved</li>
+</ul>
+<hr>
+<h3>Ultralytics Detection &amp; Segmentation I/O (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4035921219" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/358" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/358/hovercard" href="https://github.com/talmolab/sleap-io/pull/358">#358</a>) <em>(experimental)</em></h3>
+<p>Extends Ultralytics YOLO I/O to support detection and segmentation formats alongside the existing pose format.</p>
+<p><strong>Reading (auto-detected):</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Format is auto-detected from label file content
+labels = sio.load_ultralytics(&quot;project/&quot;)
+print(labels.rois)  # Bounding boxes or polygons from detection/segmentation labels"><pre><span class="pl-c"># Format is auto-detected from label file content</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_ultralytics</span>(<span class="pl-s">"project/"</span>)
+<span class="pl-en">print</span>(<span class="pl-s1">labels</span>.<span class="pl-c1">rois</span>)  <span class="pl-c"># Bounding boxes or polygons from detection/segmentation labels</span></pre></div>
+<p><strong>Writing:</strong></p>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export as detection format
+sio.save_ultralytics(labels, &quot;output/&quot;, task=&quot;detect&quot;)
+
+# Export as segmentation format
+sio.save_ultralytics(labels, &quot;output/&quot;, task=&quot;segment&quot;)
+
+# Export as pose format (default, unchanged)
+sio.save_ultralytics(labels, &quot;output/&quot;, task=&quot;pose&quot;)"><pre><span class="pl-c"># Export as detection format</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_ultralytics</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"output/"</span>, <span class="pl-s1">task</span><span class="pl-c1">=</span><span class="pl-s">"detect"</span>)
+
+<span class="pl-c"># Export as segmentation format</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_ultralytics</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"output/"</span>, <span class="pl-s1">task</span><span class="pl-c1">=</span><span class="pl-s">"segment"</span>)
+
+<span class="pl-c"># Export as pose format (default, unchanged)</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_ultralytics</span>(<span class="pl-s1">labels</span>, <span class="pl-s">"output/"</span>, <span class="pl-s1">task</span><span class="pl-c1">=</span><span class="pl-s">"pose"</span>)</pre></div>
+<p>Format auto-detection based on values per line:</p>
+<table>
+<thead>
+<tr>
+<th>Values</th>
+<th>Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5</td>
+<td>Detection (class + bbox)</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Detection with confidence</td>
+</tr>
+<tr>
+<td>5 + 3k</td>
+<td>Pose (class + bbox + keypoints)</td>
+</tr>
+<tr>
+<td>Other even count ≥ 8</td>
+<td>Segmentation (class + polygon)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Bug Fixes</h2>
+<h3>NumPy 2.x Compatibility for Suggestion Frames (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3992345307" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/350" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/350/hovercard" href="https://github.com/talmolab/sleap-io/pull/350">#350</a>)</h3>
+<p><strong>Fixed:</strong> Saving <code>.slp</code> files with suggestion frames generated from numpy operations raised <code>TypeError: Object of type int64 is not JSON serializable</code>.</p>
+<p><strong>Root Cause:</strong> In numpy 2.0, <code>np.int64</code> is <a href="https://numpy.org/doc/stable/release/2.0.0-migration-guide.html" rel="nofollow">no longer a subclass of Python <code>int</code></a>. <code>SuggestionFrame.frame_idx</code> accepted numpy integers without coercion, which then failed during JSON serialization.</p>
+<p><strong>Fix:</strong> Added <code>converter=int</code> to <code>SuggestionFrame.frame_idx</code>, consistent with the existing pattern on <code>LabeledFrame.frame_idx</code> and <code>FrameGroup.frame_idx</code>. The conversion is lossless and has no effect on users already passing Python ints.</p>
+<hr>
+<h3>Lazy Copy Loses ROIs and Masks (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4036080399" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/361" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/361/hovercard" href="https://github.com/talmolab/sleap-io/pull/361">#361</a>)</h3>
+<p><strong>Fixed:</strong> <code>Labels.copy()</code> on lazy-loaded labels silently dropped all ROI and segmentation mask annotations.</p>
+<p><strong>Root Cause:</strong> The lazy copy path constructed a new <code>Labels</code> object but omitted the <code>rois</code> and <code>masks</code> parameters, defaulting them to empty lists.</p>
+<p><strong>Fix:</strong> The lazy copy now deep-copies <code>rois</code> and <code>masks</code> alongside the other fields.</p>
+<hr>
+<h3>COCO Empty Segmentation List Fallback (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4036080399" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/361" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/361/hovercard" href="https://github.com/talmolab/sleap-io/pull/361">#361</a>)</h3>
+<p><strong>Fixed:</strong> COCO annotations with <code>"segmentation": []</code> (empty list) and a valid <code>"bbox"</code> failed to create a bbox ROI.</p>
+<p><strong>Root Cause:</strong> The condition checked <code>segmentation is None</code> but an empty list <code>[]</code> is not <code>None</code>, so the bbox fallback was skipped.</p>
+<p><strong>Fix:</strong> Changed to <code>not segmentation</code> which correctly handles both <code>None</code> and <code>[]</code>.</p>
+<hr>
+<h2>API Changes</h2>
+<h3>New Symbols</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Name</th>
+<th>Location</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Class</td>
+<td><code>ROI</code></td>
+<td><code>sleap_io.model.roi</code></td>
+<td>Vector geometry annotation (bbox, polygon, arbitrary shape)</td>
+</tr>
+<tr>
+<td>Class</td>
+<td><code>SegmentationMask</code></td>
+<td><code>sleap_io.model.mask</code></td>
+<td>Raster mask annotation with RLE compression</td>
+</tr>
+<tr>
+<td>Enum</td>
+<td><code>AnnotationType</code></td>
+<td><code>sleap_io.model.roi</code></td>
+<td>Annotation type classifier (DEFAULT, BOUNDING_BOX, SEGMENTATION, ARENA, ANCHOR)</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>detect_line_format()</code></td>
+<td><code>sleap_io.io.ultralytics</code></td>
+<td>Auto-detect YOLO label file format</td>
+</tr>
+<tr>
+<td>Function</td>
+<td><code>write_roi_label_file()</code></td>
+<td><code>sleap_io.io.ultralytics</code></td>
+<td>Write detection/segmentation ROIs to YOLO format</td>
+</tr>
+</tbody>
+</table>
+<h3>New Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>New Parameters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Labels()</code></td>
+<td><code>rois: list[ROI]</code>, <code>masks: list[SegmentationMask]</code> (default empty)</td>
+</tr>
+<tr>
+<td><code>write_labels()</code> (ultralytics)</td>
+<td><code>task: str = "pose"</code> — control output format</td>
+</tr>
+</tbody>
+</table>
+<h3>New Properties/Methods on <code>Labels</code></h3>
+<table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Labels.rois</code></td>
+<td>List of all ROI annotations</td>
+</tr>
+<tr>
+<td><code>Labels.masks</code></td>
+<td>List of all segmentation mask annotations</td>
+</tr>
+<tr>
+<td><code>Labels.static_rois</code></td>
+<td>ROIs without frame index (apply to all frames)</td>
+</tr>
+<tr>
+<td><code>Labels.temporal_rois</code></td>
+<td>ROIs with specific frame indices</td>
+</tr>
+<tr>
+<td><code>Labels.get_rois()</code></td>
+<td>Query ROIs by video, frame, category</td>
+</tr>
+<tr>
+<td><code>Labels.get_masks()</code></td>
+<td>Query masks by video, frame, category</td>
+</tr>
+</tbody>
+</table>
+<h3>Modified Behavior</h3>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>parse_label_file()</code> (ultralytics)</td>
+<td>Now returns <code>tuple[list[Instance], list[ROI]]</code> (internal API)</td>
+</tr>
+<tr>
+<td><code>parse_coco_json()</code></td>
+<td>Accepts detection-only COCO datasets (no keypoints required)</td>
+</tr>
+<tr>
+<td>SLP format_id</td>
+<td>Bumped to 1.5 when ROIs or masks are present</td>
+</tr>
+</tbody>
+</table>
+<h3>New Dependency</h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shapely</code></td>
+<td><code>&gt;=2.0</code></td>
+<td>Geometry operations for ROI (WKB serialization, polygon operations)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Documentation</h2>
+<ul>
+<li><strong>SLP Format Spec</strong> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4035918128" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/356" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/356/hovercard" href="https://github.com/talmolab/sleap-io/pull/356">#356</a>): New sections documenting ROI and segmentation mask HDF5 datasets, format version 1.5, WKB geometry storage, and RLE mask encoding</li>
+<li><strong>Format Capabilities Table</strong> (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4035918128" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/356" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/356/hovercard" href="https://github.com/talmolab/sleap-io/pull/356">#356</a>): Updated with ROIs/Masks column showing support across SLP, COCO, and Ultralytics formats</li>
+</ul>
+<hr>
+<h2>Changelog</h2>
+<ul>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3992345307" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/350" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/350/hovercard" href="https://github.com/talmolab/sleap-io/pull/350">#350</a>: fix: Add <code>converter=int</code> to <code>SuggestionFrame.frame_idx</code> for numpy 2.x compatibility (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/alicup29/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/alicup29">@alicup29</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4031451253" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/351" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/351/hovercard" href="https://github.com/talmolab/sleap-io/pull/351">#351</a>: feat: Add ROI and SegmentationMask data model with SLP I/O (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4035918128" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/356" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/356/hovercard" href="https://github.com/talmolab/sleap-io/pull/356">#356</a>: docs: Document ROI and segmentation mask support in SLP format (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4035919717" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/357" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/357/hovercard" href="https://github.com/talmolab/sleap-io/pull/357">#357</a>: feat(coco): Add ROI and segmentation mask I/O for COCO format (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4035921219" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/358" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/358/hovercard" href="https://github.com/talmolab/sleap-io/pull/358">#358</a>: feat(ultralytics): Add detection and segmentation format I/O (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+<li><a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="4036080399" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/361" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/361/hovercard" href="https://github.com/talmolab/sleap-io/pull/361">#361</a>: fix: Preserve ROIs/masks in lazy copy and fix COCO empty segmentation fallback (<a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a>)</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.6.4...v0.6.5"><tt>v0.6.4...v0.6.5</tt></a></p>
 <h2 id="v064"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.6.4">v0.6.4</a><a class="headerlink" href="#v064" title="Permanent link">&para;</a></h2>
 <h1>sleap-io v0.6.4 Release Notes</h1>
 <h2>Summary</h2>
@@ -7812,12 +8161,6 @@ sio.save_video(bad_video, &quot;seekable.mp4&quot;)"><pre><span class="pl-s1">ba
 <li><code>python &gt;= 3.8</code> due to <code>h5py &gt;= 3.8.0</code> (we still support <code>python==3.7</code> via pip but this is not longer in CI)</li>
 </ul>
 <p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.14...v0.1.0"><tt>v0.0.14...v0.1.0</tt></a></p>
-<h2 id="v0014"><a href="https://github.com/talmolab/sleap-io/releases/tag/v0.0.14">v0.0.14</a><a class="headerlink" href="#v0014" title="Permanent link">&para;</a></h2>
-<h2>What's Changed</h2>
-<ul>
-<li>Fix importing in Python 3.7 by <a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/talmo/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/talmo">@talmo</a> in <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="2228922150" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/75" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/75/hovercard" href="https://github.com/talmolab/sleap-io/pull/75">#75</a></li>
-</ul>
-<p><strong>Full Changelog</strong>: <a class="commit-link" href="https://github.com/talmolab/sleap-io/compare/v0.0.13...v0.0.14"><tt>v0.0.13...v0.0.14</tt></a></p>
 
 
 
