@@ -5477,6 +5477,39 @@ def test_labels_materialize_rois_and_masks(tmp_path):
     assert materialized.masks[1].track is None
 
 
+def test_labels_copy_preserves_rois_and_masks(slp_minimal, tmp_path):
+    """Test that lazy copy preserves ROIs and masks."""
+    labels = load_slp(slp_minimal)
+    video = labels.videos[0]
+
+    roi = ROI.from_bbox(10, 20, 30, 40, video=video, frame_idx=0, category="test")
+    mask = SegmentationMask.from_numpy(
+        np.ones((5, 5), dtype=bool), video=video, frame_idx=0, category="fg"
+    )
+    labels.rois.append(roi)
+    labels.masks.append(mask)
+
+    # Save and reload lazily
+    out_path = tmp_path / "with_rois.slp"
+    labels.save(str(out_path))
+    lazy_labels = load_slp(str(out_path), lazy=True)
+
+    assert len(lazy_labels.rois) == 1
+    assert len(lazy_labels.masks) == 1
+
+    # Copy the lazy labels
+    labels_copy = lazy_labels.copy()
+
+    assert len(labels_copy.rois) == 1
+    assert labels_copy.rois[0].category == "test"
+    assert len(labels_copy.masks) == 1
+    assert labels_copy.masks[0].category == "fg"
+
+    # Verify independence
+    labels_copy.rois.clear()
+    assert len(lazy_labels.rois) == 1
+
+
 def test_labels_get_masks_by_annotation_type():
     """get_masks filters by annotation_type."""
     video = Video(filename="test.mp4")
