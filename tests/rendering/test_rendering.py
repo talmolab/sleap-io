@@ -2161,3 +2161,63 @@ class TestTopLevelAPI:
 
         assert RenderContext is not None
         assert InstanceContext is not None
+
+
+# ============================================================================
+# Overlay Drawing Tests
+# ============================================================================
+
+
+def test_draw_rois_outline():
+    """draw_rois should draw ROI outlines on an image."""
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI.from_bbox(10, 10, 30, 30)
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=1)
+
+    # The outline should have green pixels on the boundary
+    assert result is img  # Modified in place
+    assert result[10, 10].tolist() == [0, 255, 0]  # Top-left corner
+    assert result[50, 50].tolist() == [0, 0, 0]  # Outside
+
+
+def test_draw_rois_with_fill():
+    """draw_rois with fill_alpha should fill the interior."""
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI.from_bbox(10, 10, 30, 30)
+    result = draw_rois(img, [roi], color=(255, 0, 0), fill_alpha=1.0)
+
+    # Interior should be filled
+    assert result[25, 25, 0] == 255  # Red channel filled
+
+
+def test_draw_masks():
+    """draw_masks should draw colored overlays for masks."""
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.rendering.overlays import draw_masks
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 100
+    mask_data = np.zeros((50, 50), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+
+    result = draw_masks(img, [mask], color=(255, 0, 0), alpha=0.5)
+    assert result is img  # Modified in place
+    # Masked region should be blended
+    assert result[20, 20, 0] > 100  # Red channel increased
+    # Non-masked region should be unchanged
+    assert result[5, 5].tolist() == [100, 100, 100]
+
+
+def test_draw_rois_empty():
+    """draw_rois with empty list should be no-op."""
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((50, 50, 3), dtype=np.uint8)
+    result = draw_rois(img, [])
+    assert not result.any()

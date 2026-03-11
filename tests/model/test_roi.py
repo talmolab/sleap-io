@@ -215,3 +215,50 @@ def test_rasterize_linestring_raises():
     line = LineString([(0, 0), (10, 10)])
     with pytest.raises(TypeError, match="Unsupported geometry type"):
         _rasterize_geometry(line, 10, 10)
+
+
+def test_roi_from_multi_polygon():
+    """Create ROI from multiple polygon coordinate sequences."""
+    polygons = [
+        [(0, 0), (10, 0), (10, 10), (0, 10)],
+        [(20, 20), (30, 20), (30, 30), (20, 30)],
+    ]
+    roi = ROI.from_multi_polygon(polygons)
+    assert roi.annotation_type == AnnotationType.SEGMENTATION
+    assert isinstance(roi.geometry, MultiPolygon)
+    assert len(list(roi.geometry.geoms)) == 2
+    assert roi.area == pytest.approx(200.0)
+
+
+def test_roi_from_multi_polygon_with_kwargs():
+    """from_multi_polygon should pass through kwargs."""
+    polygons = [[(0, 0), (5, 0), (5, 5), (0, 5)]]
+    roi = ROI.from_multi_polygon(polygons, name="multi", category="test")
+    assert roi.name == "multi"
+    assert roi.category == "test"
+
+
+def test_roi_explode_multi_polygon():
+    """Exploding a MultiPolygon ROI should produce individual ROIs."""
+    polygons = [
+        [(0, 0), (10, 0), (10, 10), (0, 10)],
+        [(20, 20), (30, 20), (30, 30), (20, 30)],
+    ]
+    roi = ROI.from_multi_polygon(polygons, name="test", category="cat", score=0.9)
+    parts = roi.explode()
+    assert len(parts) == 2
+    for part in parts:
+        assert isinstance(part.geometry, Polygon)
+        assert part.name == "test"
+        assert part.category == "cat"
+        assert part.score == 0.9
+    assert parts[0].area == pytest.approx(100.0)
+    assert parts[1].area == pytest.approx(100.0)
+
+
+def test_roi_explode_single_polygon():
+    """Exploding a single Polygon ROI should return [self]."""
+    roi = ROI.from_bbox(0, 0, 10, 10)
+    parts = roi.explode()
+    assert len(parts) == 1
+    assert parts[0] is roi

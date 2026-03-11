@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 import pytest
 import simplejson as json
+from shapely.geometry import box
 
 from sleap_io import (
     Camera,
@@ -4251,3 +4252,33 @@ def test_read_masks_missing_rle(tmp_path):
     with h5py.File(path, "w") as f:
         f.create_dataset("masks", data=row)
     assert read_masks(path, [], []) == []
+
+
+def test_roi_instance_serialization(tmp_path):
+    """ROI.instance should be preserved across SLP save/load."""
+    skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
+    video = Video.from_filename("test.mp4")
+    instance = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        skeleton=skeleton,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+
+    roi = ROI(
+        geometry=box(0, 0, 50, 50),
+        video=video,
+        frame_idx=0,
+        instance=instance,
+    )
+
+    labels = Labels(labeled_frames=[lf], rois=[roi])
+
+    save_path = str(tmp_path / "test.slp")
+    labels.save(save_path)
+
+    loaded = load_slp(save_path)
+    assert len(loaded.rois) == 1
+    loaded_roi = loaded.rois[0]
+    assert loaded_roi.instance is not None
+    # The loaded instance should be the same object as the one in the frame
+    assert loaded_roi.instance is loaded.labeled_frames[0].instances[0]
