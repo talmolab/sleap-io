@@ -244,7 +244,10 @@ def read_labels(
     """Read COCO-style dataset and return a Labels object.
 
     Supports both pose estimation datasets (with keypoints) and detection-only
-    datasets (with bounding boxes and/or segmentation masks).
+    datasets (with bounding boxes and/or segmentation masks). Annotations that
+    contain both keypoints and segmentation/bbox data will have both preserved:
+    keypoints are stored as `Instance` objects while segmentation and bounding box
+    data are stored as `ROI` or `SegmentationMask` objects.
 
     Args:
         json_path: Path to the COCO annotation JSON file.
@@ -391,6 +394,42 @@ def read_labels(
                         track=track,
                     )
                     instances.append(instance)
+
+                    # Also extract segmentation/bbox if present alongside
+                    # keypoints
+                    roi_kwargs = dict(
+                        category=cat_name,
+                        score=score,
+                        video=video,
+                        frame_idx=frame_idx,
+                    )
+
+                    segmentation = annotation.get("segmentation")
+                    if segmentation is not None:
+                        if isinstance(segmentation, dict):
+                            # RLE format
+                            mask = _decode_coco_rle(
+                                segmentation["counts"],
+                                segmentation["size"],
+                            )
+                            seg_mask = SegmentationMask.from_numpy(mask, **roi_kwargs)
+                            masks.append(seg_mask)
+                        elif isinstance(segmentation, list) and len(segmentation) > 0:
+                            # Polygon format
+                            for poly_flat in segmentation:
+                                coords = [
+                                    (poly_flat[i], poly_flat[i + 1])
+                                    for i in range(0, len(poly_flat), 2)
+                                ]
+                                roi = ROI.from_polygon(coords, **roi_kwargs)
+                                rois.append(roi)
+
+                    # Create bbox ROI if present and no segmentation was found
+                    bbox = annotation.get("bbox")
+                    if bbox is not None and not segmentation:
+                        x, y, w, h = bbox
+                        roi = ROI.from_bbox(x, y, w, h, **roi_kwargs)
+                        rois.append(roi)
                 else:
                     # Detection-only annotation: create ROIs/masks
                     roi_kwargs = dict(
