@@ -1358,7 +1358,9 @@ def write_metadata(labels_path: str, labels: Labels):
             md["provenance"][k] = md["provenance"][k].as_posix()
 
     # Bump format_id based on features used
-    has_instance_rois = any(roi.instance is not None for roi in labels.rois)
+    has_instance_rois = any(
+        roi.instance is not None or roi._instance_idx >= 0 for roi in labels.rois
+    )
     if has_instance_rois:
         format_id = 1.6
     elif labels.rois or labels.masks:
@@ -2417,20 +2419,21 @@ def read_rois(
             else None
         )
 
-        rois.append(
-            ROI(
-                geometry=geometry,
-                annotation_type=int(row["annotation_type"]),
-                name=names[i] if i < len(names) else "",
-                category=categories[i] if i < len(categories) else "",
-                score=score,
-                source=sources[i] if i < len(sources) else "",
-                video=video,
-                frame_idx=frame_idx,
-                track=track,
-                instance=instance,
-            )
+        roi = ROI(
+            geometry=geometry,
+            annotation_type=int(row["annotation_type"]),
+            name=names[i] if i < len(names) else "",
+            category=categories[i] if i < len(categories) else "",
+            score=score,
+            source=sources[i] if i < len(sources) else "",
+            video=video,
+            frame_idx=frame_idx,
+            track=track,
+            instance=instance,
         )
+        # Store raw index for deferred resolution (lazy loading)
+        roi._instance_idx = instance_idx
+        rois.append(roi)
 
     return rois
 
@@ -2489,12 +2492,12 @@ def write_rois(
         track_idx = tracks.index(roi.track) if roi.track in tracks else -1
         score = roi.score if roi.score is not None else float("nan")
 
-        instance_idx = -1
+        instance_idx = roi._instance_idx  # Use stored index as default
         if instances is not None and roi.instance is not None:
             try:
                 instance_idx = instances.index(roi.instance)
             except ValueError:
-                instance_idx = -1
+                pass  # Keep stored _instance_idx
 
         roi_rows.append(
             (

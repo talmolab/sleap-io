@@ -276,7 +276,12 @@ class Labels:
             new_s.video = video_map.get(id(s.video), new_s.video)
             new_suggestions.append(new_s)
 
-        # Deep copy ROIs and masks, relinking videos and tracks
+        # Build flat instance list for resolving deferred ROI-instance links
+        all_instances = []
+        for lf in labeled_frames:
+            all_instances.extend(lf.instances)
+
+        # Deep copy ROIs and masks, relinking videos, tracks, and instances
         new_rois = []
         for roi in self.rois:
             new_roi = deepcopy(roi)
@@ -284,6 +289,10 @@ class Labels:
                 new_roi.video = video_map.get(id(roi.video), new_roi.video)
             if roi.track is not None:
                 new_roi.track = track_map.get(id(roi.track), new_roi.track)
+            # Resolve deferred instance link from _instance_idx
+            if new_roi.instance is None and 0 <= new_roi._instance_idx < len(all_instances):
+                new_roi.instance = all_instances[new_roi._instance_idx]
+                new_roi._instance_idx = -1
             new_rois.append(new_roi)
 
         new_masks = []

@@ -4282,3 +4282,60 @@ def test_roi_instance_serialization(tmp_path):
     assert loaded_roi.instance is not None
     # The loaded instance should be the same object as the one in the frame
     assert loaded_roi.instance is loaded.labeled_frames[0].instances[0]
+
+
+def test_roi_instance_lazy_roundtrip(tmp_path):
+    """ROI instance_idx should survive a lazy load -> save round-trip."""
+    skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
+    video = Video.from_filename("test.mp4")
+    instance = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        skeleton=skeleton,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    roi = ROI(geometry=box(0, 0, 50, 50), video=video, frame_idx=0, instance=instance)
+    labels = Labels(labeled_frames=[lf], rois=[roi])
+
+    # Save with instance association
+    path1 = str(tmp_path / "original.slp")
+    labels.save(path1)
+
+    # Lazy load -> save (should preserve instance_idx via _instance_idx)
+    lazy = load_slp(path1, lazy=True)
+    assert lazy.rois[0].instance is None  # Not resolved in lazy mode
+    assert lazy.rois[0]._instance_idx == 0  # But index is stored
+
+    path2 = str(tmp_path / "roundtrip.slp")
+    lazy.save(path2)
+
+    # Verify the round-tripped file still has the association
+    reloaded = load_slp(path2)
+    assert len(reloaded.rois) == 1
+    assert reloaded.rois[0].instance is not None
+    assert reloaded.rois[0].instance is reloaded.labeled_frames[0].instances[0]
+
+
+def test_roi_instance_lazy_materialize(tmp_path):
+    """ROI instance should be resolved when lazy Labels is materialized."""
+    skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
+    video = Video.from_filename("test.mp4")
+    instance = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        skeleton=skeleton,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    roi = ROI(geometry=box(0, 0, 50, 50), video=video, frame_idx=0, instance=instance)
+    labels = Labels(labeled_frames=[lf], rois=[roi])
+
+    path = str(tmp_path / "test.slp")
+    labels.save(path)
+
+    # Lazy load -> materialize should resolve instance link
+    lazy = load_slp(path, lazy=True)
+    assert lazy.rois[0].instance is None
+    assert lazy.rois[0]._instance_idx == 0
+
+    materialized = lazy.materialize()
+    assert materialized.rois[0].instance is not None
+    assert materialized.rois[0].instance is materialized.labeled_frames[0].instances[0]
+    assert materialized.rois[0]._instance_idx == -1  # Cleared after resolution
