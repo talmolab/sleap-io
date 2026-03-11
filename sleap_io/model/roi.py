@@ -16,6 +16,9 @@ import attrs
 import numpy as np
 
 if TYPE_CHECKING:
+    from shapely.geometry import Polygon
+    from shapely.geometry.base import BaseGeometry
+
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.video import Video
@@ -65,7 +68,19 @@ class ROI:
         are the same object in memory).
     """
 
-    geometry: object = attrs.field()
+    geometry: "BaseGeometry" = attrs.field()
+
+    @geometry.validator
+    def _validate_geometry(self, attribute, value):
+        """Validate that geometry is a Shapely BaseGeometry instance."""
+        from shapely.geometry.base import BaseGeometry
+
+        if not isinstance(value, BaseGeometry):
+            raise TypeError(
+                f"geometry must be a Shapely BaseGeometry instance, "
+                f"got {type(value).__name__}"
+            )
+
     annotation_type: AnnotationType = attrs.field(
         default=AnnotationType.DEFAULT, converter=AnnotationType
     )
@@ -229,31 +244,65 @@ class ROI:
         )
 
 
-def _rasterize_geometry(geometry: object, height: int, width: int) -> np.ndarray:
+def _rasterize_geometry(
+    geometry: "BaseGeometry", height: int, width: int
+) -> np.ndarray:
     """Rasterize a Shapely geometry to a binary numpy array.
 
+    Supported geometry types:
+        - ``Polygon``: Rasterized using scanline fill with hole support.
+        - ``MultiPolygon``: Each component polygon is rasterized individually.
+
+    Unsupported geometry types (e.g., ``Point``, ``LineString``) will raise a
+    ``TypeError``.
+
     Args:
-        geometry: A Shapely geometry object.
+        geometry: A Shapely geometry object (``Polygon`` or ``MultiPolygon``).
         height: Height of the output array.
         width: Width of the output array.
 
     Returns:
         A boolean numpy array of shape (height, width).
+
+    Raises:
+        TypeError: If the geometry type is not ``Polygon`` or ``MultiPolygon``.
     """
-    from shapely.geometry import Polygon
+    from shapely.geometry import MultiPolygon, Polygon
 
     mask = np.zeros((height, width), dtype=bool)
-    if not isinstance(geometry, Polygon):
-        return mask
 
-    # Fill exterior ring
-    _scanline_fill(np.array(geometry.exterior.coords), mask, height, width, fill=True)
-
-    # Subtract interior rings (holes)
-    for interior in geometry.interiors:
-        _scanline_fill(np.array(interior.coords), mask, height, width, fill=False)
+    if isinstance(geometry, Polygon):
+        _rasterize_polygon(geometry, mask, height, width)
+    elif isinstance(geometry, MultiPolygon):
+        for polygon in geometry.geoms:
+            _rasterize_polygon(polygon, mask, height, width)
+    else:
+        raise TypeError(
+            f"Unsupported geometry type for rasterization: "
+            f"{type(geometry).__name__}. "
+            f"Supported types are Polygon and MultiPolygon."
+        )
 
     return mask
+
+
+def _rasterize_polygon(
+    polygon: "Polygon", mask: np.ndarray, height: int, width: int
+) -> None:
+    """Rasterize a single Polygon onto an existing mask.
+
+    Args:
+        polygon: A Shapely ``Polygon`` geometry.
+        mask: The mask array to modify in-place.
+        height: Height of the mask.
+        width: Width of the mask.
+    """
+    # Fill exterior ring
+    _scanline_fill(np.array(polygon.exterior.coords), mask, height, width, fill=True)
+
+    # Subtract interior rings (holes)
+    for interior in polygon.interiors:
+        _scanline_fill(np.array(interior.coords), mask, height, width, fill=False)
 
 
 def _scanline_fill(

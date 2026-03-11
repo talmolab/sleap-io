@@ -1,7 +1,7 @@
 """Tests for ROI data model."""
 
 import pytest
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 
 from sleap_io.model.roi import ROI, AnnotationType, _rasterize_geometry
 from sleap_io.model.video import Video
@@ -121,11 +121,11 @@ def test_roi_with_video():
     assert roi.frame_idx == 5
 
 
-def test_rasterize_geometry_empty():
+def test_rasterize_geometry_unsupported_type():
+    """Unsupported geometry types should raise TypeError."""
     point = Point(5, 5)
-    mask = _rasterize_geometry(point, 10, 10)
-    assert mask.shape == (10, 10)
-    assert not mask.any()  # Points can't be rasterized
+    with pytest.raises(TypeError, match="Unsupported geometry type"):
+        _rasterize_geometry(point, 10, 10)
 
 
 def test_roi_is_bbox_rotated_rectangle():
@@ -162,3 +162,56 @@ def test_rasterize_geometry_polygon():
     assert mask[5, 5]
     # Corners should not be filled
     assert not mask[0, 0]
+
+
+def test_roi_geometry_validation():
+    """Creating ROI with invalid geometry should raise TypeError."""
+    with pytest.raises(TypeError, match="geometry must be a Shapely BaseGeometry"):
+        ROI(geometry="not a geometry")
+    with pytest.raises(TypeError, match="geometry must be a Shapely BaseGeometry"):
+        ROI(geometry=42)
+    with pytest.raises(TypeError, match="geometry must be a Shapely BaseGeometry"):
+        ROI(geometry=None)
+
+
+def test_roi_geometry_validation_accepts_valid():
+    """Creating ROI with valid Shapely geometry types should succeed."""
+    roi_point = ROI(geometry=Point(5, 5))
+    assert roi_point.geometry is not None
+
+    roi_line = ROI(geometry=LineString([(0, 0), (10, 10)]))
+    assert roi_line.geometry is not None
+
+    roi_poly = ROI(geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]))
+    assert roi_poly.geometry is not None
+
+
+def test_rasterize_multipolygon():
+    """MultiPolygon with disjoint polygons should rasterize both regions."""
+    poly1 = box(1, 1, 4, 4)
+    poly2 = box(6, 6, 9, 9)
+    multi = MultiPolygon([poly1, poly2])
+
+    mask = _rasterize_geometry(multi, 10, 10)
+    assert mask.shape == (10, 10)
+
+    # Both regions should be filled
+    assert mask[2, 2]  # Inside poly1
+    assert mask[7, 7]  # Inside poly2
+
+    # Area between the two polygons should be empty
+    assert not mask[5, 5]
+    # Corner should be empty
+    assert not mask[0, 0]
+
+    # Total filled area should be roughly the sum of both polygon areas
+    single1 = _rasterize_geometry(poly1, 10, 10)
+    single2 = _rasterize_geometry(poly2, 10, 10)
+    assert mask.sum() == single1.sum() + single2.sum()
+
+
+def test_rasterize_linestring_raises():
+    """LineString should raise TypeError when rasterizing."""
+    line = LineString([(0, 0), (10, 10)])
+    with pytest.raises(TypeError, match="Unsupported geometry type"):
+        _rasterize_geometry(line, 10, 10)

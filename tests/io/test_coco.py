@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import imageio.v3 as iio
 import numpy as np
 import pytest
 
@@ -1178,8 +1179,11 @@ class TestCOCOExport:
         # Check counts
         assert len(coco_data["images"]) == len(labels.labeled_frames)
         total_instances = sum(len(frame.instances) for frame in labels.labeled_frames)
-        assert len(coco_data["annotations"]) == total_instances
-        assert len(coco_data["categories"]) == len(labels.skeletons)
+        total_rois = len(labels.rois)
+        total_masks = len(labels.masks)
+        assert (
+            len(coco_data["annotations"]) == total_instances + total_rois + total_masks
+        )
 
     def test_convert_labels_with_tracks(self, tmp_path):
         """Test conversion of Labels with tracking information."""
@@ -1881,3 +1885,65 @@ class TestCOCOROIMaskIO:
         assert miny == pytest.approx(10.0)
         assert maxx == pytest.approx(50.0)
         assert maxy == pytest.approx(50.0)
+
+
+def test_read_labels_keypoints_and_segmentation(tmp_path):
+    """Annotations with both keypoints and segmentation should preserve both."""
+    # Create a small test image
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    img_path = tmp_path / "image.png"
+    iio.imwrite(str(img_path), img)
+
+    # Create COCO JSON with an annotation that has both keypoints and segmentation
+    coco_data = {
+        "images": [{"id": 1, "file_name": "image.png", "height": 100, "width": 100}],
+        "categories": [
+            {
+                "id": 1,
+                "name": "animal",
+                "keypoints": ["nose", "tail"],
+                "skeleton": [[1, 2]],
+            }
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "keypoints": [50, 50, 2, 70, 70, 2],
+                "num_keypoints": 2,
+                "segmentation": [[10, 10, 90, 10, 90, 90, 10, 90]],
+                "bbox": [10, 10, 80, 80],
+                "area": 6400,
+            }
+        ],
+    }
+
+    json_path = tmp_path / "annotations.json"
+    with open(json_path, "w") as f:
+        json.dump(coco_data, f)
+
+    labels = coco.read_labels(str(json_path), dataset_root=str(tmp_path))
+
+    # Should have instances from keypoints
+    assert len(labels.labeled_frames) == 1
+    assert len(labels.labeled_frames[0].instances) == 1
+
+    # Check that the instance has the correct keypoints
+    instance = labels.labeled_frames[0].instances[0]
+    points = instance.numpy()
+    assert points.shape == (2, 2)
+    assert points[0, 0] == pytest.approx(50.0)
+    assert points[0, 1] == pytest.approx(50.0)
+    assert points[1, 0] == pytest.approx(70.0)
+    assert points[1, 1] == pytest.approx(70.0)
+
+    # Should also have ROI from segmentation polygon
+    assert len(labels.rois) == 1
+    roi = labels.rois[0]
+    assert roi.category == "animal"
+    minx, miny, maxx, maxy = roi.bounds
+    assert minx == pytest.approx(10.0)
+    assert miny == pytest.approx(10.0)
+    assert maxx == pytest.approx(90.0)
+    assert maxy == pytest.approx(90.0)

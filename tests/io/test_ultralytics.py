@@ -21,6 +21,8 @@ from sleap_io import (
 )
 from sleap_io.io.main import load_file, load_ultralytics, save_file, save_ultralytics
 from sleap_io.io.ultralytics import (
+    _build_class_names_from_rois,
+    _write_roi_labels,
     create_skeleton_from_config,
     denormalize_coordinates,
     detect_line_format,
@@ -33,7 +35,7 @@ from sleap_io.io.ultralytics import (
     write_labels,
     write_roi_label_file,
 )
-from sleap_io.model.roi import AnnotationType
+from sleap_io.model.roi import ROI, AnnotationType
 
 
 def test_parse_data_yaml(ultralytics_data_yaml):
@@ -1455,3 +1457,41 @@ def test_ultralytics_coordinate_normalization_detection(tmp_path):
     assert float(parts[2]) == pytest.approx(0.5, abs=1e-4)
     assert float(parts[3]) == pytest.approx(0.4, abs=1e-4)
     assert float(parts[4]) == pytest.approx(0.6, abs=1e-4)
+
+
+def test_write_roi_labels_splitting(tmp_path):
+    """ROIs should be split across train/val/test according to split_ratios."""
+    # Create 10 synthetic single-image "videos" with ROIs
+    rois = []
+    for i in range(10):
+        img = np.zeros((50, 50, 3), dtype=np.uint8)
+        img_path = tmp_path / f"img_{i}.png"
+        iio.imwrite(str(img_path), img)
+        video = Video.from_filename(str(img_path))
+        roi = ROI.from_bbox(5, 5, 20, 20, category="obj", video=video, frame_idx=0)
+        rois.append(roi)
+
+    labels = Labels(rois=rois)
+    class_names = _build_class_names_from_rois(rois)
+
+    dataset_path = tmp_path / "dataset"
+    _write_roi_labels(
+        labels,
+        dataset_path,
+        split_ratios={"train": 0.8, "val": 0.2},
+        class_names=class_names,
+        image_format="png",
+        image_quality=None,
+        verbose=False,
+    )
+
+    # Check that both splits have content
+    train_images = list((dataset_path / "train" / "images").glob("*.png"))
+    val_images = list((dataset_path / "val" / "images").glob("*.png"))
+    train_labels = list((dataset_path / "train" / "labels").glob("*.txt"))
+    val_labels = list((dataset_path / "val" / "labels").glob("*.txt"))
+
+    assert len(train_images) == 8
+    assert len(val_images) == 2
+    assert len(train_labels) == 8
+    assert len(val_labels) == 2
