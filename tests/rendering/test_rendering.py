@@ -2279,3 +2279,76 @@ def test_draw_rois_geometry_collection():
     assert result[70, 60].tolist() == [255, 0, 0]
     # A pixel away from both geometries should be untouched
     assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_multi_polygon():
+    """draw_rois should draw all polygons in a MultiPolygon."""
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    roi = ROI.from_multi_polygon(
+        [
+            [(10, 10), (20, 10), (20, 20), (10, 20)],
+            [(50, 50), (60, 50), (60, 60), (50, 60)],
+        ]
+    )
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=1)
+
+    assert result[10, 10].tolist() == [0, 255, 0]
+    assert result[50, 50].tolist() == [0, 255, 0]
+    assert result[35, 35].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_multi_point():
+    """draw_rois should draw markers for all points in a MultiPoint."""
+    from shapely.geometry import MultiPoint
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    geom = MultiPoint([(20, 20), (60, 60)])
+    roi = ROI(geometry=geom)
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=2)
+
+    assert result[20, 20].tolist() == [0, 255, 0]
+    assert result[60, 60].tolist() == [0, 255, 0]
+    assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_multi_linestring():
+    """draw_rois should draw all lines in a MultiLineString."""
+    from shapely.geometry import MultiLineString
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    geom = MultiLineString([[(10, 10), (10, 30)], [(50, 50), (50, 70)]])
+    roi = ROI(geometry=geom)
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(0, 0, 255), line_width=1)
+
+    assert result[20, 10].tolist() == [0, 0, 255]
+    assert result[60, 50].tolist() == [0, 0, 255]
+    assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_polygon_with_hole():
+    """draw_rois with fill should respect polygon holes."""
+    from shapely.geometry import Polygon
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    exterior = [(10, 10), (60, 10), (60, 60), (10, 60)]
+    hole = [(25, 25), (45, 25), (45, 45), (25, 45)]
+    geom = Polygon(exterior, [hole])
+    roi = ROI(geometry=geom)
+    img = np.zeros((80, 80, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(255, 0, 0), fill_alpha=1.0)
+
+    # Exterior filled region should be colored
+    assert result[15, 15, 0] == 255
+    # Hole interior should NOT be filled (even-odd rule)
+    assert result[35, 35, 0] == 0

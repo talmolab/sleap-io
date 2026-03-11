@@ -104,9 +104,6 @@ def draw_masks(
     """
     for mask in masks:
         mask_data = mask.data
-        if mask_data is None:
-            continue
-
         h, w = mask_data.shape
         img_h, img_w = image.shape[:2]
 
