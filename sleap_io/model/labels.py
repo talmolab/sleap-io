@@ -290,8 +290,9 @@ class Labels:
             if roi.track is not None:
                 new_roi.track = track_map.get(id(roi.track), new_roi.track)
             # Resolve deferred instance link from _instance_idx
-            if new_roi.instance is None and 0 <= new_roi._instance_idx < len(all_instances):
-                new_roi.instance = all_instances[new_roi._instance_idx]
+            idx = new_roi._instance_idx
+            if new_roi.instance is None and 0 <= idx < len(all_instances):
+                new_roi.instance = all_instances[idx]
                 new_roi._instance_idx = -1
             new_rois.append(new_roi)
 
