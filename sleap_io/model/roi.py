@@ -243,6 +243,33 @@ class ROI:
         c = self.geometry.centroid
         return (c.x, c.y)
 
+    @property
+    def __geo_interface__(self) -> dict:
+        """GeoJSON-compatible Feature representation.
+
+        Returns a GeoJSON Feature dict following the Python `__geo_interface__`
+        protocol. The Feature contains the ROI's geometry and metadata properties.
+
+        Returns:
+            A dictionary with ``"type"``, ``"geometry"``, and ``"properties"`` keys.
+        """
+        from shapely.geometry import mapping
+
+        return {
+            "type": "Feature",
+            "geometry": mapping(self.geometry),
+            "properties": {
+                "name": self.name,
+                "annotation_type": int(self.annotation_type),
+                "annotation_type_name": self.annotation_type.name,
+                "roi_type": self.annotation_type.name,
+                "category": self.category,
+                "score": self.score,
+                "source": self.source,
+                "frame_idx": self.frame_idx,
+            },
+        }
+
     def to_mask(self, height: int, width: int) -> "SegmentationMask":
         """Rasterize this ROI into a binary segmentation mask.
 

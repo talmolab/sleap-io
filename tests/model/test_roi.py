@@ -262,3 +262,51 @@ def test_roi_explode_single_polygon():
     parts = roi.explode()
     assert len(parts) == 1
     assert parts[0] is roi
+
+
+def test_roi_geo_interface():
+    """__geo_interface__ returns a valid GeoJSON Feature dict."""
+    roi = ROI.from_bbox(0, 0, 10, 10)
+    gi = roi.__geo_interface__
+    assert gi["type"] == "Feature"
+    assert gi["geometry"]["type"] == "Polygon"
+    assert "coordinates" in gi["geometry"]
+    assert "properties" in gi
+
+
+def test_roi_geo_interface_metadata():
+    """__geo_interface__ properties contain correct metadata values."""
+    roi = ROI.from_bbox(
+        0,
+        0,
+        10,
+        10,
+        name="test_roi",
+        category="arena",
+        score=0.95,
+        source="manual",
+        frame_idx=42,
+        annotation_type=AnnotationType.ARENA,
+    )
+    props = roi.__geo_interface__["properties"]
+    assert props["name"] == "test_roi"
+    assert props["category"] == "arena"
+    assert props["score"] == 0.95
+    assert props["source"] == "manual"
+    assert props["frame_idx"] == 42
+    assert props["annotation_type"] == 3
+    assert props["annotation_type_name"] == "ARENA"
+    assert props["roi_type"] == "ARENA"
+
+
+def test_roi_geo_interface_defaults():
+    """__geo_interface__ with default ROI has expected default property values."""
+    roi = ROI(geometry=box(0, 0, 5, 5))
+    props = roi.__geo_interface__["properties"]
+    assert props["name"] == ""
+    assert props["category"] == ""
+    assert props["score"] is None
+    assert props["source"] == ""
+    assert props["frame_idx"] is None
+    assert props["annotation_type"] == 0
+    assert props["annotation_type_name"] == "DEFAULT"
