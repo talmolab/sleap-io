@@ -401,6 +401,40 @@ def save_ultralytics(
     ultralytics.write_labels(labels, dataset_path, split_ratios=split_ratios, **kwargs)
 
 
+def load_geojson(filename: str) -> list:
+    """Load ROIs from a GeoJSON file.
+
+    Args:
+        filename: Path to a ``.geojson`` file containing ROI features.
+
+    Returns:
+        A list of `ROI` objects.
+
+    See Also:
+        `ROI`: Region of interest data structure.
+        `save_geojson`: Write ROIs to GeoJSON.
+    """
+    from sleap_io.io import geojson
+
+    return geojson.read_rois(filename)
+
+
+def save_geojson(rois: list, filename: str) -> None:
+    """Save ROIs to a GeoJSON file.
+
+    Args:
+        rois: A list of `ROI` objects to save.
+        filename: Path to the output ``.geojson`` file.
+
+    See Also:
+        `ROI`: Region of interest data structure.
+        `load_geojson`: Read ROIs from GeoJSON.
+    """
+    from sleap_io.io import geojson
+
+    geojson.write_rois(rois, filename)
+
+
 def _detect_alphatracker_format(json_path: str) -> bool:
     """Detect if a JSON file is in AlphaTracker format.
 
@@ -772,9 +806,9 @@ def load_file(
     Args:
         filename: Path to a file.
         format: Optional format to load as. If not provided, will be inferred from the
-            file extension. Available formats are: "slp", "nwb", "alphatracker",
-            "labelstudio", "coco", "jabs", "analysis_h5", "dlc", "ultralytics", "leap",
-            and "video".
+            file extension. Available formats are: "slp", "nwb", "geojson",
+            "alphatracker", "labelstudio", "coco", "jabs", "analysis_h5", "dlc",
+            "ultralytics", "leap", and "video".
         **kwargs: Additional arguments passed to the format-specific loading function:
             - For "slp" format: No additional arguments.
             - For "nwb" format: No additional arguments.
@@ -825,6 +859,8 @@ def load_file(
                 format = "analysis_h5"
             else:
                 format = "jabs"
+        elif filename.lower().endswith(".geojson"):
+            format = "geojson"
         elif filename.endswith("data.yaml") or (
             Path(filename).is_dir() and (Path(filename) / "data.yaml").exists()
         ):
@@ -868,6 +904,8 @@ def load_file(
         return load_csv(filename, **kwargs)
     elif format == "ultralytics":
         return load_ultralytics(filename, **kwargs)
+    elif format == "geojson":
+        return Labels(rois=load_geojson(filename))
     elif format == "video":
         return load_video(filename, **kwargs)
 
@@ -887,7 +925,7 @@ def save_file(
         filename: Path to save labels to.
         format: Optional format to save as. If not provided, will be inferred from the
             file extension. Available formats are: "slp", "nwb", "labelstudio", "coco",
-            "jabs", "analysis_h5", and "ultralytics".
+            "jabs", "analysis_h5", "ultralytics", and "geojson".
         verbose: If `True` (the default), display a progress bar when embedding frames
             (only applies to the SLP format).
         progress_callback: Optional callback function called during frame embedding
@@ -938,6 +976,8 @@ def save_file(
             else:
                 # Default to analysis_h5 for .h5 extension without specific jabs kwargs
                 format = "analysis_h5"
+        elif filename.lower().endswith(".geojson"):
+            format = "geojson"
         elif "pose_version" in kwargs:
             format = "jabs"
         elif "split_ratios" in kwargs or Path(filename).is_dir():
@@ -983,6 +1023,8 @@ def save_file(
         save_analysis_h5(labels, filename, **analysis_kwargs)
     elif format == "ultralytics":
         save_ultralytics(labels, filename, **kwargs)
+    elif format == "geojson":
+        save_geojson(labels.rois, filename)
     elif format == "csv" or filename.lower().endswith(".csv"):
         csv_format = kwargs.pop("csv_format", "sleap")
         # Filter kwargs to only those accepted by save_csv
