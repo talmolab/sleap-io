@@ -22,6 +22,7 @@ from sleap_io.rendering.colors import (
     resolve_color,
 )
 from sleap_io.rendering.core import render_image, render_video
+from sleap_io.rendering.overlays import draw_masks, draw_rois
 
 __all__ = [
     "render_video",
@@ -32,4 +33,6 @@ __all__ = [
     "NAMED_COLORS",
     "RenderContext",
     "InstanceContext",
+    "draw_rois",
+    "draw_masks",
 ]

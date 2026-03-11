@@ -59,6 +59,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "rendering.core": ["render_video", "render_image"],
         "rendering.colors": ["get_palette"],
         "rendering.callbacks": ["RenderContext", "InstanceContext"],
+        "rendering.overlays": ["draw_rois", "draw_masks"],
         # Model classes from sleap_io.model.*
         "model.camera": [
             "Camera",

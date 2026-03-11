@@ -2161,3 +2161,194 @@ class TestTopLevelAPI:
 
         assert RenderContext is not None
         assert InstanceContext is not None
+
+
+# ============================================================================
+# Overlay Drawing Tests
+# ============================================================================
+
+
+def test_draw_rois_outline():
+    """draw_rois should draw ROI outlines on an image."""
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI.from_bbox(10, 10, 30, 30)
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=1)
+
+    # The outline should have green pixels on the boundary
+    assert result is img  # Modified in place
+    assert result[10, 10].tolist() == [0, 255, 0]  # Top-left corner
+    assert result[50, 50].tolist() == [0, 0, 0]  # Outside
+
+
+def test_draw_rois_with_fill():
+    """draw_rois with fill_alpha should fill the interior."""
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI.from_bbox(10, 10, 30, 30)
+    result = draw_rois(img, [roi], color=(255, 0, 0), fill_alpha=1.0)
+
+    # Interior should be filled
+    assert result[25, 25, 0] == 255  # Red channel filled
+
+
+def test_draw_masks():
+    """draw_masks should draw colored overlays for masks."""
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.rendering.overlays import draw_masks
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 100
+    mask_data = np.zeros((50, 50), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+
+    result = draw_masks(img, [mask], color=(255, 0, 0), alpha=0.5)
+    assert result is img  # Modified in place
+    # Masked region should be blended
+    assert result[20, 20, 0] > 100  # Red channel increased
+    # Non-masked region should be unchanged
+    assert result[5, 5].tolist() == [100, 100, 100]
+
+
+def test_draw_rois_empty():
+    """draw_rois with empty list should be no-op."""
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((50, 50, 3), dtype=np.uint8)
+    result = draw_rois(img, [])
+    assert not result.any()
+
+
+def test_draw_rois_point():
+    """draw_rois should draw a marker for Point geometry ROIs."""
+    from shapely.geometry import Point
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI(geometry=Point(50, 50))
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=4)
+
+    # The center pixel should be colored
+    assert result is img
+    assert result[50, 50].tolist() == [0, 255, 0]
+    # A pixel far away should be untouched
+    assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_linestring():
+    """draw_rois should draw lines for LineString geometry ROIs."""
+    from shapely.geometry import LineString
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI(geometry=LineString([(10, 10), (10, 50)]))
+    result = draw_rois(img, [roi], color=(0, 0, 255), line_width=1)
+
+    # Pixels along the vertical line should be colored
+    assert result is img
+    assert result[10, 10].tolist() == [0, 0, 255]
+    assert result[30, 10].tolist() == [0, 0, 255]
+    assert result[50, 10].tolist() == [0, 0, 255]
+    # A pixel away from the line should be untouched
+    assert result[30, 50].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_geometry_collection():
+    """draw_rois should recurse into GeometryCollection components."""
+    from shapely.geometry import GeometryCollection, LineString, Point
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    geom = GeometryCollection([Point(20, 20), LineString([(60, 60), (60, 80)])])
+    roi = ROI(geometry=geom)
+    result = draw_rois(img, [roi], color=(255, 0, 0), line_width=2)
+
+    # Point marker should be drawn
+    assert result[20, 20].tolist() == [255, 0, 0]
+    # Line pixels should be drawn
+    assert result[70, 60].tolist() == [255, 0, 0]
+    # A pixel away from both geometries should be untouched
+    assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_multi_polygon():
+    """draw_rois should draw all polygons in a MultiPolygon."""
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    roi = ROI.from_multi_polygon(
+        [
+            [(10, 10), (20, 10), (20, 20), (10, 20)],
+            [(50, 50), (60, 50), (60, 60), (50, 60)],
+        ]
+    )
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=1)
+
+    assert result[10, 10].tolist() == [0, 255, 0]
+    assert result[50, 50].tolist() == [0, 255, 0]
+    assert result[35, 35].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_multi_point():
+    """draw_rois should draw markers for all points in a MultiPoint."""
+    from shapely.geometry import MultiPoint
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    geom = MultiPoint([(20, 20), (60, 60)])
+    roi = ROI(geometry=geom)
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=2)
+
+    assert result[20, 20].tolist() == [0, 255, 0]
+    assert result[60, 60].tolist() == [0, 255, 0]
+    assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_multi_linestring():
+    """draw_rois should draw all lines in a MultiLineString."""
+    from shapely.geometry import MultiLineString
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    geom = MultiLineString([[(10, 10), (10, 30)], [(50, 50), (50, 70)]])
+    roi = ROI(geometry=geom)
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(0, 0, 255), line_width=1)
+
+    assert result[20, 10].tolist() == [0, 0, 255]
+    assert result[60, 50].tolist() == [0, 0, 255]
+    assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_polygon_with_hole():
+    """draw_rois with fill should respect polygon holes."""
+    from shapely.geometry import Polygon
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    exterior = [(10, 10), (60, 10), (60, 60), (10, 60)]
+    hole = [(25, 25), (45, 25), (45, 45), (25, 45)]
+    geom = Polygon(exterior, [hole])
+    roi = ROI(geometry=geom)
+    img = np.zeros((80, 80, 3), dtype=np.uint8)
+    result = draw_rois(img, [roi], color=(255, 0, 0), fill_alpha=1.0)
+
+    # Exterior filled region should be colored
+    assert result[15, 15, 0] == 255
+    # Hole interior should NOT be filled (even-odd rule)
+    assert result[35, 35, 0] == 0

@@ -61,7 +61,8 @@ class ROI:
         frame_idx: Optional frame index. If `None`, the ROI is static (applies to
             all frames of the video).
         track: Optional `Track` this ROI is associated with.
-        instance: Optional `Instance` this ROI is associated with.
+        instance: Optional `Instance` this ROI is associated with. Persisted in
+            SLP format (v1.6+) via instance index.
 
     Notes:
         ROIs use identity-based equality (two ROI objects are only equal if they
@@ -92,6 +93,11 @@ class ROI:
     frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
+
+    # Private: deferred instance index for lazy loading. When ROIs are read
+    # from a file without materialized instances (e.g., lazy mode), this stores
+    # the raw instance_idx so it can be resolved later or written back as-is.
+    _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
 
     @classmethod
     def from_bbox(
@@ -169,6 +175,28 @@ class ROI:
         kwargs.setdefault("annotation_type", AnnotationType.SEGMENTATION)
         return cls(geometry=geom, **kwargs)
 
+    @classmethod
+    def from_multi_polygon(
+        cls,
+        polygons: list[list[tuple[float, float]] | np.ndarray],
+        **kwargs,
+    ) -> "ROI":
+        """Create an ROI from multiple polygon coordinate sequences.
+
+        Args:
+            polygons: A list of polygon coordinate sequences. Each sequence is a
+                list of (x, y) pairs defining a polygon exterior ring.
+            **kwargs: Additional keyword arguments passed to the ROI constructor.
+
+        Returns:
+            An ROI with a MultiPolygon geometry.
+        """
+        from shapely.geometry import MultiPolygon, Polygon
+
+        geom = MultiPolygon([Polygon(coords) for coords in polygons])
+        kwargs.setdefault("annotation_type", AnnotationType.SEGMENTATION)
+        return cls(geometry=geom, **kwargs)
+
     @property
     def is_predicted(self) -> bool:
         """Whether this ROI is a prediction (has a confidence score)."""
@@ -242,6 +270,41 @@ class ROI:
             track=self.track,
             instance=self.instance,
         )
+
+    def explode(self) -> list["ROI"]:
+        """Split a multi-geometry ROI into individual ROIs.
+
+        For ``MultiPolygon`` or ``GeometryCollection`` geometries, creates a
+        separate ROI for each component geometry, preserving all metadata
+        (annotation_type, name, category, score, source, video, frame_idx,
+        track, instance).
+
+        For single geometries (e.g., ``Polygon``, ``Point``), returns a list
+        containing only this ROI.
+
+        Returns:
+            A list of ROIs, one per component geometry. For single geometries,
+            returns ``[self]``.
+        """
+        from shapely.geometry import GeometryCollection, MultiPolygon
+
+        if isinstance(self.geometry, (MultiPolygon, GeometryCollection)):
+            return [
+                ROI(
+                    geometry=geom,
+                    annotation_type=self.annotation_type,
+                    name=self.name,
+                    category=self.category,
+                    score=self.score,
+                    source=self.source,
+                    video=self.video,
+                    frame_idx=self.frame_idx,
+                    track=self.track,
+                    instance=self.instance,
+                )
+                for geom in self.geometry.geoms
+            ]
+        return [self]
 
 
 def _rasterize_geometry(

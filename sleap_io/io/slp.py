@@ -7,6 +7,7 @@ Format version history:
     - 1.3: Added explicit handling for tracking_score
     - 1.4: Added channel_order attribute to embedded video datasets to track RGB vs BGR
     - 1.5: Added ROI and segmentation mask datasets (/rois, /roi_wkb, /masks, /mask_rle)
+    - 1.6: Added instance_idx to ROI dtype for instance-level associations
 """
 
 from __future__ import annotations
@@ -1356,8 +1357,16 @@ def write_metadata(labels_path: str, labels: Labels):
             # Path -> str
             md["provenance"][k] = md["provenance"][k].as_posix()
 
-    # Bump format_id to 1.5 if ROIs or masks are present
-    format_id = 1.5 if (labels.rois or labels.masks) else 1.4
+    # Bump format_id based on features used
+    has_instance_rois = any(
+        roi.instance is not None or roi._instance_idx >= 0 for roi in labels.rois
+    )
+    if has_instance_rois:
+        format_id = 1.6
+    elif labels.rois or labels.masks:
+        format_id = 1.5
+    else:
+        format_id = 1.4
 
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
@@ -2342,13 +2351,21 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     return labels
 
 
-def read_rois(labels_path: str, videos: list[Video], tracks: list[Track]) -> list[ROI]:
+def read_rois(
+    labels_path: str,
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
+) -> list[ROI]:
     """Read ROI annotations from a SLEAP labels file.
 
     Args:
         labels_path: A string path to the SLEAP labels file.
         videos: List of Video objects for relinking.
         tracks: List of Track objects for relinking.
+        instances: Optional list of Instance/PredictedInstance objects for
+            relinking ROI instance associations. If ``None``, instance
+            associations will not be restored.
 
     Returns:
         A list of ROI objects. Returns an empty list if no ROIs are stored.
@@ -2395,25 +2412,38 @@ def read_rois(labels_path: str, videos: list[Video], tracks: list[Track]) -> lis
         score_val = float(row["score"])
         score = None if np.isnan(score_val) else score_val
 
-        rois.append(
-            ROI(
-                geometry=geometry,
-                annotation_type=int(row["annotation_type"]),
-                name=names[i] if i < len(names) else "",
-                category=categories[i] if i < len(categories) else "",
-                score=score,
-                source=sources[i] if i < len(sources) else "",
-                video=video,
-                frame_idx=frame_idx,
-                track=track,
-            )
+        instance_idx = int(row["instance"]) if "instance" in row.dtype.names else -1
+        instance = (
+            instances[instance_idx]
+            if instances is not None and 0 <= instance_idx < len(instances)
+            else None
         )
+
+        roi = ROI(
+            geometry=geometry,
+            annotation_type=int(row["annotation_type"]),
+            name=names[i] if i < len(names) else "",
+            category=categories[i] if i < len(categories) else "",
+            score=score,
+            source=sources[i] if i < len(sources) else "",
+            video=video,
+            frame_idx=frame_idx,
+            track=track,
+            instance=instance,
+        )
+        # Store raw index for deferred resolution (lazy loading)
+        roi._instance_idx = instance_idx
+        rois.append(roi)
 
     return rois
 
 
 def write_rois(
-    labels_path: str, rois: list[ROI], videos: list[Video], tracks: list[Track]
+    labels_path: str,
+    rois: list[ROI],
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
 ) -> None:
     """Write ROI annotations to a SLEAP labels file.
 
@@ -2422,6 +2452,8 @@ def write_rois(
         rois: A list of ROI objects to write.
         videos: List of Video objects for index mapping.
         tracks: List of Track objects for index mapping.
+        instances: Optional list of Instance/PredictedInstance objects for index
+            mapping. If provided, ROI instance associations will be persisted.
     """
     if not rois:
         return
@@ -2437,6 +2469,7 @@ def write_rois(
             ("score", "f4"),
             ("wkb_start", "u8"),
             ("wkb_end", "u8"),
+            ("instance", "i4"),
         ]
     )
 
@@ -2459,6 +2492,13 @@ def write_rois(
         track_idx = tracks.index(roi.track) if roi.track in tracks else -1
         score = roi.score if roi.score is not None else float("nan")
 
+        instance_idx = roi._instance_idx  # Use stored index as default
+        if instances is not None and roi.instance is not None:
+            try:
+                instance_idx = instances.index(roi.instance)
+            except ValueError:
+                pass  # Keep stored _instance_idx
+
         roi_rows.append(
             (
                 int(roi.annotation_type),
@@ -2468,6 +2508,7 @@ def write_rois(
                 score,
                 wkb_start,
                 wkb_end,
+                instance_idx,
             )
         )
 
@@ -2733,7 +2774,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         )
 
     sessions = read_sessions(labels_path, videos, labeled_frames)
-    rois = read_rois(labels_path, videos, tracks)
+    rois = read_rois(labels_path, videos, tracks, instances)
     masks = read_masks(labels_path, videos, tracks)
 
     labels = Labels(
@@ -3038,5 +3079,10 @@ def write_labels(
     write_metadata(labels_path, labels)
     write_lfs(labels_path, labels)
     write_negative_frames(labels_path, labels)
-    write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
+
+    # Collect all instances across all frames for ROI instance mapping
+    all_instances: list[Instance | PredictedInstance] = []
+    for lf in labels.labeled_frames:
+        all_instances.extend(lf.instances)
+    write_rois(labels_path, labels.rois, labels.videos, labels.tracks, all_instances)
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
