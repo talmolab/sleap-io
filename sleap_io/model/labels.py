@@ -83,6 +83,12 @@ class Labels:
     _lazy_store: "LazyDataStore | None" = field(
         default=None, repr=False, eq=False, alias="lazy_store"
     )
+    _roi_index: "dict[tuple, list[ROI]] | None" = field(
+        default=None, repr=False, eq=False, init=False
+    )
+    _mask_index: "dict[tuple, list[SegmentationMask]] | None" = field(
+        default=None, repr=False, eq=False, init=False
+    )
 
     @property
     def is_lazy(self) -> bool:
@@ -1186,6 +1192,51 @@ class Labels:
         """
         return [roi for roi in self.rois if not roi.is_static]
 
+    def _build_roi_index(self) -> "dict[tuple, list[ROI]]":
+        """Build index mapping (video_id, frame_idx) to ROIs.
+
+        Returns:
+            Dictionary mapping (id(video), frame_idx) tuples to lists of ROIs.
+        """
+        index: dict[tuple, list["ROI"]] = {}
+        for roi in self.rois:
+            key = (id(roi.video), roi.frame_idx)
+            if key not in index:
+                index[key] = []
+            index[key].append(roi)
+        return index
+
+    def _build_mask_index(self) -> "dict[tuple, list[SegmentationMask]]":
+        """Build index mapping (video_id, frame_idx) to masks.
+
+        Returns:
+            Dictionary mapping (id(video), frame_idx) tuples to lists of
+            segmentation masks.
+        """
+        index: dict[tuple, list["SegmentationMask"]] = {}
+        for mask in self.masks:
+            key = (id(mask.video), mask.frame_idx)
+            if key not in index:
+                index[key] = []
+            index[key].append(mask)
+        return index
+
+    def invalidate_roi_index(self) -> None:
+        """Invalidate the cached ROI lookup index.
+
+        Call this after modifying the `rois` list directly (e.g., appending,
+        removing, or replacing ROIs).
+        """
+        self._roi_index = None
+
+    def invalidate_mask_index(self) -> None:
+        """Invalidate the cached mask lookup index.
+
+        Call this after modifying the `masks` list directly (e.g., appending,
+        removing, or replacing masks).
+        """
+        self._mask_index = None
+
     def get_rois(
         self,
         video: "Video | None" = None,
@@ -1197,10 +1248,15 @@ class Labels:
     ) -> list["ROI"]:
         """Query ROIs by video, frame, type, category, track, or instance.
 
+        Uses an internal index for fast (video, frame_idx) lookups. The index
+        is built lazily on first query and cached. Additional filters are
+        applied via linear scan on the pre-filtered results.
+
         Args:
             video: If specified, only return ROIs for this video.
             frame_idx: If specified, only return ROIs for this frame index.
-            annotation_type: If specified, only return ROIs with this annotation type.
+            annotation_type: If specified, only return ROIs with this annotation
+                type.
             category: If specified, only return ROIs with this category.
             track: If specified, only return ROIs for this track.
             instance: If specified, only return ROIs for this instance.
@@ -1208,11 +1264,30 @@ class Labels:
         Returns:
             A list of matching ROIs.
         """
-        results = self.rois
-        if video is not None:
-            results = [r for r in results if r.video is video]
-        if frame_idx is not None:
-            results = [r for r in results if r.frame_idx == frame_idx]
+        # Use index for video/frame_idx filtering
+        if video is not None or frame_idx is not None:
+            if self._roi_index is None:
+                self._roi_index = self._build_roi_index()
+
+            if video is not None and frame_idx is not None:
+                results = list(self._roi_index.get((id(video), frame_idx), []))
+            elif video is not None:
+                # Filter by video only -- need to check all frame_idx keys
+                vid_id = id(video)
+                results = []
+                for key, rois in self._roi_index.items():
+                    if key[0] == vid_id:
+                        results.extend(rois)
+            else:
+                # Filter by frame_idx only -- need to check all video keys
+                results = []
+                for key, rois in self._roi_index.items():
+                    if key[1] == frame_idx:
+                        results.extend(rois)
+        else:
+            results = list(self.rois)
+
+        # Apply remaining filters
         if annotation_type is not None:
             results = [r for r in results if r.annotation_type == annotation_type]
         if category is not None:
@@ -1232,12 +1307,17 @@ class Labels:
         track: "Track | None" = None,
         instance: "Instance | None" = None,
     ) -> list["SegmentationMask"]:
-        """Query segmentation masks by video, frame, type, category, track, or instance.
+        """Query segmentation masks by video, frame, type, or category.
+
+        Uses an internal index for fast (video, frame_idx) lookups. The index
+        is built lazily on first query and cached. Additional filters are
+        applied via linear scan on the pre-filtered results.
 
         Args:
             video: If specified, only return masks for this video.
             frame_idx: If specified, only return masks for this frame index.
-            annotation_type: If specified, only return masks with this annotation type.
+            annotation_type: If specified, only return masks with this
+                annotation type.
             category: If specified, only return masks with this category.
             track: If specified, only return masks for this track.
             instance: If specified, only return masks for this instance.
@@ -1245,11 +1325,30 @@ class Labels:
         Returns:
             A list of matching segmentation masks.
         """
-        results = self.masks
-        if video is not None:
-            results = [m for m in results if m.video is video]
-        if frame_idx is not None:
-            results = [m for m in results if m.frame_idx == frame_idx]
+        # Use index for video/frame_idx filtering
+        if video is not None or frame_idx is not None:
+            if self._mask_index is None:
+                self._mask_index = self._build_mask_index()
+
+            if video is not None and frame_idx is not None:
+                results = list(self._mask_index.get((id(video), frame_idx), []))
+            elif video is not None:
+                # Filter by video only -- need to check all frame_idx keys
+                vid_id = id(video)
+                results = []
+                for key, masks_list in self._mask_index.items():
+                    if key[0] == vid_id:
+                        results.extend(masks_list)
+            else:
+                # Filter by frame_idx only -- need to check all video keys
+                results = []
+                for key, masks_list in self._mask_index.items():
+                    if key[1] == frame_idx:
+                        results.extend(masks_list)
+        else:
+            results = list(self.masks)
+
+        # Apply remaining filters
         if annotation_type is not None:
             results = [m for m in results if m.annotation_type == annotation_type]
         if category is not None:
@@ -1512,11 +1611,13 @@ class Labels:
         for roi in self.rois:
             if roi.video in video_map:
                 roi.video = video_map[roi.video]
+        self.invalidate_roi_index()
 
         # Update masks with the new videos.
         for mask in self.masks:
             if mask.video in video_map:
                 mask.video = video_map[mask.video]
+        self.invalidate_mask_index()
 
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]
