@@ -550,53 +550,78 @@ def _write_roi_labels(
                 rois_by_video[key] = []
             rois_by_video[key].append(roi)
 
-    # Use first split for all data (ROIs don't support splitting yet)
-    split_name = list(split_ratios.keys())[0]
-    images_dir = dataset_path / split_name / "images"
-    labels_dir = dataset_path / split_name / "labels"
-    images_dir.mkdir(parents=True, exist_ok=True)
-    labels_dir.mkdir(parents=True, exist_ok=True)
-
     video_keys = sorted(rois_by_video.keys())
-    iterator = (
-        tqdm(video_keys, desc=f"Writing {split_name}", disable=not verbose)
-        if verbose
-        else video_keys
-    )
 
-    for lf_idx, video_path in enumerate(iterator):
-        rois = rois_by_video[video_path]
-        video = rois[0].video
+    # Calculate split boundaries
+    n_videos = len(video_keys)
+    split_names = list(split_ratios.keys())
+    split_boundaries = []
+    cumulative = 0
+    for name in split_names:
+        cumulative += split_ratios[name]
+        split_boundaries.append(int(round(cumulative * n_videos)))
 
-        # Read image to get shape and save it
-        try:
-            frame_img = video[0]
-            if frame_img is None:
-                continue
+    # Write each split
+    start_idx = 0
+    for split_idx, split_name in enumerate(split_names):
+        end_idx = split_boundaries[split_idx]
+        split_video_keys = video_keys[start_idx:end_idx]
+        start_idx = end_idx
 
-            if frame_img.ndim == 3 and frame_img.shape[-1] == 1:
-                frame_img = np.squeeze(frame_img, axis=-1)
-
-            image_filename = f"{lf_idx:07d}.{image_format}"
-            image_path = images_dir / image_filename
-
-            save_kwargs = {}
-            if image_format.lower() in ["jpg", "jpeg"] and image_quality is not None:
-                save_kwargs["quality"] = image_quality
-            elif image_format.lower() == "png" and image_quality is not None:
-                save_kwargs["compress_level"] = min(9, max(0, image_quality))
-
-            iio.imwrite(image_path, frame_img, **save_kwargs)
-
-            height_px, width_px = frame_img.shape[:2]
-        except Exception as e:
-            warnings.warn(f"Error processing {video_path}: {e}, skipping.")
+        if not split_video_keys:
             continue
 
-        # Write label file
-        label_filename = f"{lf_idx:07d}.txt"
-        label_path = labels_dir / label_filename
-        write_roi_label_file(label_path, rois, (height_px, width_px), name_to_id)
+        images_dir = dataset_path / split_name / "images"
+        labels_dir = dataset_path / split_name / "labels"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        labels_dir.mkdir(parents=True, exist_ok=True)
+
+        iterator = (
+            tqdm(
+                split_video_keys,
+                desc=f"Writing {split_name}",
+                disable=not verbose,
+            )
+            if verbose
+            else split_video_keys
+        )
+
+        for lf_idx, video_path in enumerate(iterator):
+            rois = rois_by_video[video_path]
+            video = rois[0].video
+
+            # Read image to get shape and save it
+            try:
+                frame_img = video[0]
+                if frame_img is None:
+                    continue
+
+                if frame_img.ndim == 3 and frame_img.shape[-1] == 1:
+                    frame_img = np.squeeze(frame_img, axis=-1)
+
+                image_filename = f"{lf_idx:07d}.{image_format}"
+                image_path = images_dir / image_filename
+
+                save_kwargs = {}
+                if (
+                    image_format.lower() in ["jpg", "jpeg"]
+                    and image_quality is not None
+                ):
+                    save_kwargs["quality"] = image_quality
+                elif image_format.lower() == "png" and image_quality is not None:
+                    save_kwargs["compress_level"] = min(9, max(0, image_quality))
+
+                iio.imwrite(image_path, frame_img, **save_kwargs)
+
+                height_px, width_px = frame_img.shape[:2]
+            except Exception as e:
+                warnings.warn(f"Error processing {video_path}: {e}, skipping.")
+                continue
+
+            # Write label file
+            label_filename = f"{lf_idx:07d}.txt"
+            label_path = labels_dir / label_filename
+            write_roi_label_file(label_path, rois, (height_px, width_px), name_to_id)
 
 
 def parse_data_yaml(yaml_path: Path) -> dict:
