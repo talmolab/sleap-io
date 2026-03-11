@@ -478,6 +478,7 @@ def _get_occupancy_and_points(
     video: Video | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
+    extend_to_video_length: bool = False,
 ) -> tuple[
     np.ndarray,
     np.ndarray,
@@ -494,10 +495,15 @@ def _get_occupancy_and_points(
     Args:
         labels: The Labels from which to get data.
         video: Video to export. If None, uses first video.
-        all_frames: If True, include all frames from 0 to last frame.
+        all_frames: If True, include all frames from 0 to last labeled frame.
             If False, only include frames from first to last labeled frame.
         min_occupancy: Minimum occupancy ratio (0-1) to keep a track.
             0 = keep all non-empty tracks (default SLEAP behavior).
+        extend_to_video_length: If True, extend output arrays to match the full
+            video length (using ``len(video)``). Frames beyond the last labeled
+            frame will be filled with NaN. This ensures the output array length
+            matches the video frame count for easier alignment with other data.
+            Default False (stop at last labeled frame).
 
     Returns:
         Tuple of (all in canonical shape):
@@ -531,7 +537,18 @@ def _get_occupancy_and_points(
 
     frame_idxs = sorted(lf.frame_idx for lf in lfs)
     first_frame = 0 if all_frames else frame_idxs[0]
-    last_frame = frame_idxs[-1]
+
+    # Determine last frame: either last labeled frame or full video length
+    if extend_to_video_length:
+        video_length = len(video)
+        if video_length > 0:
+            last_frame = video_length - 1
+        else:
+            # Fallback if video length unknown
+            last_frame = frame_idxs[-1]
+    else:
+        last_frame = frame_idxs[-1]
+
     n_frames = last_frame - first_frame + 1
 
     # Get track and node info
@@ -625,6 +642,7 @@ def write_labels(
     labels_path: str | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
+    extend_to_video_length: bool = False,
     preset: str | None = None,
     frame_dim: int | None = None,
     track_dim: int | None = None,
@@ -645,6 +663,10 @@ def write_labels(
         min_occupancy: Minimum track occupancy ratio (0-1) to keep.
             0 = keep all non-empty tracks (SLEAP default).
             0.5 = keep tracks with >50% occupancy.
+        extend_to_video_length: If True, extend output arrays to match the full
+            video length. Frames beyond the last labeled frame will be filled
+            with NaN. This is useful for aligning analysis output with other
+            time-series data that spans the full video duration. Default False.
         preset: Axis ordering preset. Options:
 
             - ``"matlab"`` (default): SLEAP-compatible ordering for MATLAB.
@@ -713,7 +735,9 @@ def write_labels(
         tracking_scores,
         track_names,
         first_frame,
-    ) = _get_occupancy_and_points(labels, video, all_frames, min_occupancy)
+    ) = _get_occupancy_and_points(
+        labels, video, all_frames, min_occupancy, extend_to_video_length
+    )
 
     # Define canonical order
     canonical_order_4d = {"frame": 0, "track": 1, "node": 2, "xy": 3}
