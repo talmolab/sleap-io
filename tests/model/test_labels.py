@@ -5595,3 +5595,50 @@ def test_get_masks_indexed_lookup():
 
     result = labels.get_masks(video=video)
     assert len(result) == 2
+
+
+def test_rois_reassignment_invalidates_index():
+    """Reassigning labels.rois should invalidate _roi_index."""
+    from shapely.geometry import box
+
+    video = Video.from_filename("v.mp4")
+    roi1 = ROI(geometry=box(0, 0, 10, 10), video=video, frame_idx=0)
+    labels = Labels(rois=[roi1])
+
+    # Build the index by querying
+    labels.get_rois(video=video)
+    assert labels._roi_index is not None
+
+    # Reassign rois — index should be invalidated automatically
+    roi2 = ROI(geometry=box(5, 5, 15, 15), video=video, frame_idx=1)
+    labels.rois = [roi2]
+    assert labels._roi_index is None
+
+    # Verify the new list is used on next query
+    result = labels.get_rois(video=video, frame_idx=1)
+    assert len(result) == 1
+    assert result[0] is roi2
+
+
+def test_masks_reassignment_invalidates_index():
+    """Reassigning labels.masks should invalidate _mask_index."""
+    video = Video.from_filename("v.mp4")
+    mask_data = np.zeros((10, 10), dtype=bool)
+    mask_data[2:8, 2:8] = True
+
+    mask1 = SegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
+    labels = Labels(masks=[mask1])
+
+    # Build the index by querying
+    labels.get_masks(video=video)
+    assert labels._mask_index is not None
+
+    # Reassign masks — index should be invalidated automatically
+    mask2 = SegmentationMask.from_numpy(mask_data, video=video, frame_idx=1)
+    labels.masks = [mask2]
+    assert labels._mask_index is None
+
+    # Verify the new list is used on next query
+    result = labels.get_masks(video=video, frame_idx=1)
+    assert len(result) == 1
+    assert result[0] is mask2

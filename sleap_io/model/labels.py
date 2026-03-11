@@ -76,8 +76,20 @@ class Labels:
     suggestions: list[SuggestionFrame] = field(factory=list)
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)
-    rois: "list[ROI]" = field(factory=list)
-    masks: "list[SegmentationMask]" = field(factory=list)
+
+    def _rois_on_setattr(self, attr, new_rois):
+        """Invalidate ROI index cache when `rois` is reassigned."""
+        self._roi_index = None
+        return new_rois
+
+    rois: "list[ROI]" = field(factory=list, on_setattr=_rois_on_setattr)
+
+    def _masks_on_setattr(self, attr, new_masks):
+        """Invalidate mask index cache when `masks` is reassigned."""
+        self._mask_index = None
+        return new_masks
+
+    masks: "list[SegmentationMask]" = field(factory=list, on_setattr=_masks_on_setattr)
 
     # Internal lazy state (private, not part of public API)
     _lazy_store: "LazyDataStore | None" = field(

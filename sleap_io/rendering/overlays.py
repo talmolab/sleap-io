@@ -1,7 +1,7 @@
 """Overlay drawing functions for ROIs and segmentation masks.
 
 These functions draw annotations directly onto numpy image arrays using
-lightweight line-drawing algorithms, without requiring skia-python.
+skia-python for geometry rendering and numpy for mask blending.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    import skia
+
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.roi import ROI
 
@@ -24,9 +26,9 @@ def draw_rois(
 ) -> np.ndarray:
     """Draw ROI geometries on an image.
 
-    Draws the boundary of each ROI's geometry as lines on the image. Supports
-    ``Polygon`` and ``MultiPolygon`` geometries. For bounding box ROIs, draws a
-    rectangle.
+    Draws the boundary of each ROI's geometry using skia-python. Supports
+    ``Polygon``, ``MultiPolygon``, ``Point``, ``MultiPoint``, ``LineString``,
+    ``MultiLineString``, and ``GeometryCollection`` geometries.
 
     Args:
         image: Image array of shape (H, W, 3) uint8. Modified in-place and
@@ -40,15 +42,44 @@ def draw_rois(
     Returns:
         The modified image array.
     """
-    from shapely.geometry import MultiPolygon, Polygon
+    if not rois:
+        return image
+
+    import skia
+
+    # Pad to RGBA for skia surface
+    frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
+    surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
+    canvas = surface.getCanvas()
+
+    # Stroke paint for outlines
+    stroke_paint = skia.Paint(
+        Color=skia.Color(*color),
+        AntiAlias=False,
+        Style=skia.Paint.kStroke_Style,
+        StrokeWidth=float(line_width),
+        StrokeCap=skia.Paint.kSquare_Cap,
+    )
+
+    # Fill paint (only created if needed)
+    fill_paint = None
+    if fill_alpha > 0:
+        fill_paint = skia.Paint(
+            Color=skia.Color4f(
+                color[0] / 255.0,
+                color[1] / 255.0,
+                color[2] / 255.0,
+                fill_alpha,
+            ).toColor(),
+            AntiAlias=False,
+            Style=skia.Paint.kFill_Style,
+        )
 
     for roi in rois:
-        geom = roi.geometry
-        if isinstance(geom, Polygon):
-            _draw_polygon(image, geom, color, line_width, fill_alpha)
-        elif isinstance(geom, MultiPolygon):
-            for polygon in geom.geoms:
-                _draw_polygon(image, polygon, color, line_width, fill_alpha)
+        _draw_geometry(canvas, roi.geometry, stroke_paint, fill_paint)
+
+    # Copy RGB channels back to the input image
+    image[:] = frame_rgba[:, :, :3]
 
     return image
 
@@ -95,81 +126,131 @@ def draw_masks(
     return image
 
 
-def _draw_polygon(
-    image: np.ndarray,
-    polygon,
-    color: tuple[int, int, int],
-    line_width: int,
-    fill_alpha: float,
-) -> None:
-    """Draw a single polygon on an image.
+def _draw_geometry(canvas, geometry, stroke_paint, fill_paint) -> None:
+    """Draw a Shapely geometry on a skia canvas.
+
+    Dispatches to the appropriate drawing method based on geometry type.
+    Supports ``Polygon``, ``MultiPolygon``, ``Point``, ``MultiPoint``,
+    ``LineString``, ``MultiLineString``, and ``GeometryCollection``.
 
     Args:
-        image: Image array to draw on (modified in-place).
-        polygon: A Shapely Polygon geometry.
-        color: RGB color tuple.
-        line_width: Line width in pixels.
-        fill_alpha: Fill opacity (0.0 for outline only).
+        canvas: A skia.Canvas to draw on.
+        geometry: A Shapely geometry object.
+        stroke_paint: A skia.Paint for outlines/strokes.
+        fill_paint: A skia.Paint for fills, or None for outline only.
     """
-    coords = np.array(polygon.exterior.coords)
+    import skia
+    from shapely.geometry import (
+        GeometryCollection,
+        LineString,
+        MultiLineString,
+        MultiPoint,
+        MultiPolygon,
+        Point,
+        Polygon,
+    )
 
-    # Fill interior if requested
-    if fill_alpha > 0:
-        from sleap_io.model.roi import _rasterize_geometry
+    if isinstance(geometry, Polygon):
+        path = _polygon_to_path(geometry)
+        if fill_paint is not None:
+            canvas.drawPath(path, fill_paint)
+        canvas.drawPath(path, stroke_paint)
 
-        h, w = image.shape[:2]
-        mask = _rasterize_geometry(polygon, h, w)
-        overlay = np.array(color, dtype=np.float32)
-        image[mask] = (image[mask] * (1 - fill_alpha) + overlay * fill_alpha).astype(
-            np.uint8
+    elif isinstance(geometry, MultiPolygon):
+        for polygon in geometry.geoms:
+            path = _polygon_to_path(polygon)
+            if fill_paint is not None:
+                canvas.drawPath(path, fill_paint)
+            canvas.drawPath(path, stroke_paint)
+
+    elif isinstance(geometry, Point):
+        radius = max(float(stroke_paint.getStrokeWidth()), 2.0)
+        fill = skia.Paint(
+            Color=stroke_paint.getColor(),
+            AntiAlias=False,
+            Style=skia.Paint.kFill_Style,
         )
+        canvas.drawCircle(float(geometry.x), float(geometry.y), radius, fill)
 
-    # Draw outline
-    _draw_polyline(image, coords, color, line_width)
+    elif isinstance(geometry, MultiPoint):
+        radius = max(float(stroke_paint.getStrokeWidth()), 2.0)
+        fill = skia.Paint(
+            Color=stroke_paint.getColor(),
+            AntiAlias=False,
+            Style=skia.Paint.kFill_Style,
+        )
+        for point in geometry.geoms:
+            canvas.drawCircle(float(point.x), float(point.y), radius, fill)
+
+    elif isinstance(geometry, LineString):
+        path = _linestring_to_path(geometry)
+        canvas.drawPath(path, stroke_paint)
+
+    elif isinstance(geometry, MultiLineString):
+        for line in geometry.geoms:
+            path = _linestring_to_path(line)
+            canvas.drawPath(path, stroke_paint)
+
+    elif isinstance(geometry, GeometryCollection):
+        for sub_geom in geometry.geoms:
+            _draw_geometry(canvas, sub_geom, stroke_paint, fill_paint)
 
 
-def _draw_polyline(
-    image: np.ndarray,
-    coords: np.ndarray,
-    color: tuple[int, int, int],
-    line_width: int,
-) -> None:
-    """Draw a polyline (sequence of connected line segments) on an image.
+def _polygon_to_path(polygon) -> "skia.Path":
+    """Convert a Shapely Polygon to a skia.Path.
 
-    Uses Bresenham-style line drawing with configurable width.
+    The exterior ring is drawn as a closed sub-path. Any interior rings
+    (holes) are added as additional sub-paths with opposite winding to
+    create cutouts when using the even-odd fill rule.
 
     Args:
-        image: Image array to draw on (modified in-place).
-        coords: (N, 2) array of (x, y) coordinates.
-        color: RGB color tuple.
-        line_width: Line width in pixels.
+        polygon: A Shapely Polygon geometry.
+
+    Returns:
+        A skia.Path representing the polygon.
     """
-    h, w = image.shape[:2]
-    half_w = line_width // 2
+    import skia
 
-    for i in range(len(coords) - 1):
-        x0, y0 = int(round(coords[i][0])), int(round(coords[i][1]))
-        x1, y1 = int(round(coords[i + 1][0])), int(round(coords[i + 1][1]))
+    path = skia.Path()
 
-        # Bresenham's line algorithm
-        dx = abs(x1 - x0)
-        dy = abs(y1 - y0)
-        sx = 1 if x0 < x1 else -1
-        sy = 1 if y0 < y1 else -1
-        err = dx - dy
+    # Exterior ring
+    coords = list(polygon.exterior.coords)
+    if coords:
+        path.moveTo(float(coords[0][0]), float(coords[0][1]))
+        for x, y in coords[1:]:
+            path.lineTo(float(x), float(y))
+        path.close()
 
-        while True:
-            # Draw pixel with width
-            for wy in range(max(0, y0 - half_w), min(h, y0 + half_w + 1)):
-                for wx in range(max(0, x0 - half_w), min(w, x0 + half_w + 1)):
-                    image[wy, wx] = color
+    # Interior rings (holes)
+    for interior in polygon.interiors:
+        hole_coords = list(interior.coords)
+        if hole_coords:
+            path.moveTo(float(hole_coords[0][0]), float(hole_coords[0][1]))
+            for x, y in hole_coords[1:]:
+                path.lineTo(float(x), float(y))
+            path.close()
 
-            if x0 == x1 and y0 == y1:
-                break
-            e2 = 2 * err
-            if e2 > -dy:
-                err -= dy
-                x0 += sx
-            if e2 < dx:
-                err += dx
-                y0 += sy
+    # Use even-odd fill rule so holes are correctly subtracted
+    path.setFillType(skia.PathFillType.kEvenOdd)
+
+    return path
+
+
+def _linestring_to_path(linestring) -> "skia.Path":
+    """Convert a Shapely LineString to a skia.Path.
+
+    Args:
+        linestring: A Shapely LineString geometry.
+
+    Returns:
+        A skia.Path representing the line string (not closed).
+    """
+    import skia
+
+    path = skia.Path()
+    coords = list(linestring.coords)
+    if coords:
+        path.moveTo(float(coords[0][0]), float(coords[0][1]))
+        for x, y in coords[1:]:
+            path.lineTo(float(x), float(y))
+    return path

@@ -2221,3 +2221,61 @@ def test_draw_rois_empty():
     img = np.zeros((50, 50, 3), dtype=np.uint8)
     result = draw_rois(img, [])
     assert not result.any()
+
+
+def test_draw_rois_point():
+    """draw_rois should draw a marker for Point geometry ROIs."""
+    from shapely.geometry import Point
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI(geometry=Point(50, 50))
+    result = draw_rois(img, [roi], color=(0, 255, 0), line_width=4)
+
+    # The center pixel should be colored
+    assert result is img
+    assert result[50, 50].tolist() == [0, 255, 0]
+    # A pixel far away should be untouched
+    assert result[0, 0].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_linestring():
+    """draw_rois should draw lines for LineString geometry ROIs."""
+    from shapely.geometry import LineString
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI(geometry=LineString([(10, 10), (10, 50)]))
+    result = draw_rois(img, [roi], color=(0, 0, 255), line_width=1)
+
+    # Pixels along the vertical line should be colored
+    assert result is img
+    assert result[10, 10].tolist() == [0, 0, 255]
+    assert result[30, 10].tolist() == [0, 0, 255]
+    assert result[50, 10].tolist() == [0, 0, 255]
+    # A pixel away from the line should be untouched
+    assert result[30, 50].tolist() == [0, 0, 0]
+
+
+def test_draw_rois_geometry_collection():
+    """draw_rois should recurse into GeometryCollection components."""
+    from shapely.geometry import GeometryCollection, LineString, Point
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    geom = GeometryCollection([Point(20, 20), LineString([(60, 60), (60, 80)])])
+    roi = ROI(geometry=geom)
+    result = draw_rois(img, [roi], color=(255, 0, 0), line_width=2)
+
+    # Point marker should be drawn
+    assert result[20, 20].tolist() == [255, 0, 0]
+    # Line pixels should be drawn
+    assert result[70, 60].tolist() == [255, 0, 0]
+    # A pixel away from both geometries should be untouched
+    assert result[0, 0].tolist() == [0, 0, 0]
