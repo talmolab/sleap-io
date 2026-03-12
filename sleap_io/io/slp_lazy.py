@@ -396,16 +396,15 @@ class LazyDataStore:
         last_frame = int(frame_indices.max())
 
         # Use video length when available so output spans the full video.
-        if video is not None:
-            video_length = len(video)
+        video_obj = (
+            video
+            if video is not None
+            else (self.videos[video_id] if video_id < len(self.videos) else None)
+        )
+        if video_obj is not None:
+            video_length = len(video_obj)
             if video_length > 0:
                 last_frame = max(last_frame, video_length - 1)
-        else:
-            video_obj = self.videos[video_id] if video_id < len(self.videos) else None
-            if video_obj is not None:
-                video_length = len(video_obj)
-                if video_length > 0:
-                    last_frame = max(last_frame, video_length - 1)
 
         n_frames = last_frame - first_frame + 1
 

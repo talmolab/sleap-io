@@ -866,3 +866,27 @@ def test_to_numpy_lazy_with_confidence(slp_typical):
     # Should have 3 coordinates (x, y, score)
     assert arr_lazy.shape[-1] == 3
     assert arr_eager.shape == arr_lazy.shape
+
+
+def test_to_numpy_spans_full_video(slp_real_data):
+    """Test that eager to_numpy output spans the full video length."""
+    labels = load_slp(slp_real_data, lazy=False)
+    video = labels.videos[0]
+    video_length = len(video)
+    last_labeled = max(lf.frame_idx for lf in labels.find(video))
+    assert video_length > last_labeled + 1, "Fixture must have a gap"
+
+    arr = to_numpy(labels)
+    assert arr.shape[0] == video_length
+    # Frames beyond last labeled frame should be NaN
+    assert np.all(np.isnan(arr[last_labeled + 1 :]))
+
+
+def test_to_numpy_lazy_spans_full_video(slp_real_data):
+    """Test that lazy to_numpy output spans the full video length."""
+    labels = load_slp(slp_real_data, lazy=True)
+    video = labels.videos[0]
+    video_length = len(video)
+
+    arr = to_numpy(labels)
+    assert arr.shape[0] == video_length
