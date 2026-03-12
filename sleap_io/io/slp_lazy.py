@@ -59,6 +59,9 @@ class LazyDataStore:
     # Metadata
     format_id: float
     _source_path: str | None = attrs.field(default=None, alias="source_path")
+    _negative_frames: set[tuple[int, int]] = attrs.field(
+        factory=set, alias="negative_frames"
+    )
 
     def __attrs_post_init__(self) -> None:
         """Validate index bounds on construction."""
@@ -135,6 +138,7 @@ class LazyDataStore:
             tracks=self.tracks,  # Share references (canonical objects)
             format_id=self.format_id,
             source_path=self._source_path,
+            negative_frames=self._negative_frames.copy(),
         )
 
     def materialize_frame(self, idx: int) -> "LabeledFrame":
@@ -159,10 +163,13 @@ class LazyDataStore:
             inst = self._materialize_instance(inst_idx)
             instances.append(inst)
 
+        is_negative = (video_id, frame_idx) in self._negative_frames
+
         return LabeledFrame(
             video=self.videos[video_id],
             frame_idx=frame_idx,
             instances=instances,
+            is_negative=is_negative,
         )
 
     def _materialize_instance(self, idx: int) -> "Instance | PredictedInstance":
@@ -293,34 +300,49 @@ class LazyDataStore:
     def get_user_frame_indices(self) -> list[int]:
         """Find indices of frames containing user (non-predicted) instances.
 
+        This also includes frames marked as negative (is_negative=True), since
+        those are considered user-labeled even though they have no instances.
+
         Returns:
             List of frame indices (into frames_data) that have at least one user
-            instance.
+            instance or are marked as negative.
         """
         from sleap_io.io.slp import InstanceType
 
+        result_indices: set[int] = set()
+
         # Find all user instances
         user_mask = self.instances_data["instance_type"] == InstanceType.USER
-        if not np.any(user_mask):
-            return []
+        if np.any(user_mask):
+            # Get frame boundaries for binary search
+            frame_ends = self.frames_data["instance_id_end"]
 
-        # Get frame boundaries for binary search
-        frame_ends = self.frames_data["instance_id_end"]
+            # Use binary search to find frame for each user instance - O(n log m)
+            user_instance_indices = np.where(user_mask)[0]
 
-        # Use binary search to find frame for each user instance - O(n log m)
-        user_instance_indices = np.where(user_mask)[0]
+            # searchsorted finds insertion point; instance i is in frame fi where
+            # frame_ends[fi-1] <= i < frame_ends[fi] (with frame_ends[-1] = 0)
+            frame_indices = np.searchsorted(
+                frame_ends, user_instance_indices, side="right"
+            )
 
-        # searchsorted finds insertion point; instance i is in frame fi where
-        # frame_ends[fi-1] <= i < frame_ends[fi] (with frame_ends[-1] = 0)
-        frame_indices = np.searchsorted(frame_ends, user_instance_indices, side="right")
+            # Get unique frame indices (already sorted by searchsorted)
+            unique_frames = np.unique(frame_indices)
 
-        # Get unique frame indices (already sorted by searchsorted)
-        unique_frames = np.unique(frame_indices)
+            # Filter out any out-of-bounds indices
+            valid_mask = unique_frames < len(self.frames_data)
+            result_indices.update(unique_frames[valid_mask].tolist())
 
-        # Filter out any out-of-bounds indices (shouldn't happen with valid data)
-        valid_mask = unique_frames < len(self.frames_data)
+        # Also include negative frames
+        if self._negative_frames:
+            for idx in range(len(self.frames_data)):
+                frame_row = self.frames_data[idx]
+                video_id = int(frame_row[1])
+                frame_idx = int(frame_row[2])
+                if (video_id, frame_idx) in self._negative_frames:
+                    result_indices.add(idx)
 
-        return unique_frames[valid_mask].tolist()
+        return sorted(result_indices)
 
     def to_numpy(
         self,

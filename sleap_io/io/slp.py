@@ -2307,6 +2307,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     suggestions = read_suggestions(labels_path, videos)
     metadata = read_metadata(labels_path)
     provenance = metadata.get("provenance", dict())
+    negative_frames = read_negative_frames(labels_path)
 
     # Read sessions (small, no need for lazy loading)
     # Note: sessions require labeled_frames for full linking, but for lazy loading
@@ -2324,6 +2325,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
         tracks=tracks,
         format_id=format_id,
         source_path=str(labels_path),
+        negative_frames=negative_frames,
     )
 
     # Create LazyFrameList
@@ -2937,6 +2939,13 @@ def _write_labels_lazy(
             data=lazy_store.frames_data,
             dtype=lazy_store.frames_data.dtype,
         )
+
+    # Write negative frames directly from lazy store data
+    if lazy_store._negative_frames:
+        neg_dtype = np.dtype([("video_id", "u4"), ("frame_idx", "u8")])
+        neg_data = np.array(sorted(lazy_store._negative_frames), dtype=neg_dtype)
+        with h5py.File(labels_path, "a") as f:
+            f.create_dataset("negative_frames", data=neg_data)
 
     # Write ROIs and masks (eagerly loaded even in lazy mode)
     write_rois(labels_path, labels.rois, labels.videos, labels.tracks)

@@ -491,6 +491,178 @@ def test_read_negative_frames_missing_dataset(tmp_path):
     assert result == set()
 
 
+def test_negative_frames_lazy_roundtrip(tmp_path):
+    """Test that negative frames survive lazy save/load cycle."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    # Save eagerly first
+    path = tmp_path / "test.slp"
+    write_labels(str(path), labels)
+
+    # Load lazily
+    lazy_labels = load_slp(str(path), lazy=True)
+
+    # Check that negative frame info is available in lazy store
+    assert lazy_labels.is_lazy
+    assert len(lazy_labels._lazy_store._negative_frames) == 1
+
+    # Materialize individual frames and check is_negative
+    assert lazy_labels.labeled_frames[0].is_negative is False
+    assert lazy_labels.labeled_frames[1].is_negative is True
+    assert lazy_labels.labeled_frames[2].is_negative is False
+
+    # Check Labels.negative_frames property
+    assert len(lazy_labels.negative_frames) == 1
+    assert lazy_labels.negative_frames[0].frame_idx == 1
+
+
+def test_negative_frames_lazy_user_labeled_frames(tmp_path):
+    """Test that user_labeled_frames includes negative frames in lazy mode."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_pred = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[PredictedInstance([[4, 5], [6, 7]], skeleton=skel)],
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_pred],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    path = tmp_path / "test.slp"
+    write_labels(str(path), labels)
+
+    lazy_labels = load_slp(str(path), lazy=True)
+
+    # user_labeled_frames should include regular + negative but not pred-only
+    user_frames = lazy_labels.user_labeled_frames
+    assert len(user_frames) == 2
+    frame_indices = {lf.frame_idx for lf in user_frames}
+    assert 0 in frame_indices
+    assert 1 in frame_indices
+    assert 2 not in frame_indices
+
+
+def test_negative_frames_lazy_write(tmp_path):
+    """Test that lazy write path preserves negative frames."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    # Save eagerly first
+    path1 = tmp_path / "eager.slp"
+    write_labels(str(path1), labels)
+
+    # Load lazily and re-save (uses _write_labels_lazy fast path)
+    lazy_labels = load_slp(str(path1), lazy=True)
+    path2 = tmp_path / "lazy_resave.slp"
+    write_labels(str(path2), lazy_labels)
+
+    # Verify negative frames dataset exists in resaved file
+    with h5py.File(path2, "r") as f:
+        assert "negative_frames" in f
+        data = f["negative_frames"][:]
+        assert len(data) == 1
+
+    # Load the resaved file eagerly and verify
+    reloaded = read_labels(str(path2))
+    assert len(reloaded.negative_frames) == 1
+    assert reloaded.labeled_frames[1].is_negative is True
+
+
+def test_negative_frames_materialize(tmp_path):
+    """Test that materialize() preserves is_negative on frames."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[],
+        is_negative=True,
+    )
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_negative, lf_regular],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    path = tmp_path / "test.slp"
+    write_labels(str(path), labels)
+
+    # Load lazily then materialize
+    lazy_labels = load_slp(str(path), lazy=True)
+    eager_labels = lazy_labels.materialize()
+
+    assert not eager_labels.is_lazy
+    assert eager_labels.labeled_frames[0].is_negative is True
+    assert eager_labels.labeled_frames[1].is_negative is False
+    assert len(eager_labels.negative_frames) == 1
+
+
 def test_write_sessions(slp_multiview, tmp_path):
     labels = read_labels(slp_multiview)
     sessions = labels.sessions
