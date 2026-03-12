@@ -531,6 +531,11 @@ def test_negative_frames_lazy_roundtrip(tmp_path):
     assert lazy_labels.is_lazy
     assert len(lazy_labels._lazy_store._negative_frames) == 1
 
+    # Check that copy() preserves negative frames
+    copied_store = lazy_labels._lazy_store.copy()
+    assert copied_store._negative_frames == lazy_labels._lazy_store._negative_frames
+    assert copied_store._negative_frames is not lazy_labels._lazy_store._negative_frames
+
     # Materialize individual frames and check is_negative
     assert lazy_labels.labeled_frames[0].is_negative is False
     assert lazy_labels.labeled_frames[1].is_negative is True
