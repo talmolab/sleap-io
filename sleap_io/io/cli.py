@@ -1554,12 +1554,6 @@ def _infer_output_format(path: Path) -> str | None:
     default=0.0,
     help="Filter tracks with occupancy below this ratio (0-1). analysis_h5 only.",
 )
-@click.option(
-    "--extend-to-video-length/--no-extend-to-video-length",
-    "extend_to_video_length",
-    default=False,
-    help="Extend HDF5 output to full video length. analysis_h5 only. Default: no.",
-)
 def convert(
     input_arg: Path | None,
     input_opt: Path | None,
@@ -1572,7 +1566,6 @@ def convert(
     save_metadata: bool,
     h5_dim_order: str,
     min_occupancy: float,
-    extend_to_video_length: bool,
 ):
     """Convert between pose data formats.
 
@@ -1685,7 +1678,6 @@ def convert(
                 str(output_path),
                 preset=h5_dim_order,
                 min_occupancy=min_occupancy,
-                extend_to_video_length=extend_to_video_length,
             )
         else:
             io_main.save_file(labels, str(output_path), **save_kwargs)
@@ -1783,13 +1775,6 @@ def convert(
     help="Save extended metadata in HDF5 for round-trip support. Default: yes.",
 )
 @click.option(
-    "--extend-to-video-length/--no-extend-to-video-length",
-    "extend_to_video_length",
-    default=False,
-    help="Extend HDF5 output to match full video length, filling trailing frames "
-    "with NaN. Useful for aligning with other time-series data. Default: no.",
-)
-@click.option(
     "-v",
     "--video",
     "video_spec",
@@ -1843,7 +1828,6 @@ def export(
     h5_dim_order: str,
     min_occupancy: float,
     h5_save_metadata: bool,
-    extend_to_video_length: bool,
     video_spec: str | None,
     include_empty: bool,
     start_frame: int | None,
@@ -1942,7 +1926,6 @@ def export(
                     video=video,
                     all_frames=include_empty,
                     min_occupancy=min_occupancy,
-                    extend_to_video_length=extend_to_video_length,
                     preset=h5_dim_order,
                     save_metadata=h5_save_metadata,
                 )

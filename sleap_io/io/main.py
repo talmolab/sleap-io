@@ -250,7 +250,6 @@ def save_analysis_h5(
     labels_path: str | None = None,
     all_frames: bool = True,
     min_occupancy: float = 0.0,
-    extend_to_video_length: bool = False,
     preset: str | None = None,
     frame_dim: int | None = None,
     track_dim: int | None = None,
@@ -271,10 +270,6 @@ def save_analysis_h5(
         min_occupancy: Minimum track occupancy ratio (0-1) to keep.
             0 = keep all non-empty tracks (SLEAP default).
             0.5 = keep tracks with >50% occupancy.
-        extend_to_video_length: If True, extend output arrays to match the full
-            video length. Frames beyond the last labeled frame will be filled
-            with NaN. This is useful for aligning analysis output with other
-            time-series data that spans the full video duration. Default False.
         preset: Axis ordering preset. Options:
             - "matlab" (default): SLEAP-compatible ordering for MATLAB.
               tracks shape: (n_tracks, 2, n_nodes, n_frames)
@@ -300,7 +295,6 @@ def save_analysis_h5(
         labels_path=labels_path,
         all_frames=all_frames,
         min_occupancy=min_occupancy,
-        extend_to_video_length=extend_to_video_length,
         preset=preset,
         frame_dim=frame_dim,
         track_dim=track_dim,

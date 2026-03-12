@@ -472,59 +472,24 @@ class TestWriteLabels:
                 xy_dim=3,
             )
 
-    def test_write_extend_to_video_length(self, simple_skeleton, tmp_path):
-        """Test extending output to full video length.
+    def test_write_spans_full_video(self, slp_real_data, tmp_path):
+        """Test that output spans the full video length, not just labeled frames."""
+        labels = sio.load_slp(slp_real_data)
+        video = labels.videos[0]
+        video_length = len(video)
+        last_labeled = max(lf.frame_idx for lf in labels.find(video))
+        assert video_length > last_labeled + 1, "Fixture must have a gap"
 
-        When extend_to_video_length=True, the output should have as many frames
-        as the video, not just up to the last labeled frame.
-        """
-        # Create a video with known length (100 frames)
-        video_path = tmp_path / "video.mp4"
-        video = Video(str(video_path))
-        video.backend_metadata["shape"] = (100, 480, 640, 3)  # 100 frames
+        h5_path = tmp_path / "output.analysis.h5"
+        analysis_h5.write_labels(labels, h5_path)
 
-        track = sio.Track("animal1")
+        with h5py.File(h5_path, "r") as f:
+            # matlab preset: (track, xy, node, frame)
+            assert f["tracks"].shape[-1] == video_length
 
-        # Create labels with frames only at 0, 5, 10 (last labeled at frame 10)
-        frames = []
-        for frame_idx in [0, 5, 10]:
-            inst = PredictedInstance.from_numpy(
-                np.array([[100.0, 200.0], [150.0, 250.0]]),
-                simple_skeleton,
-                np.array([0.9, 0.85]),
-                0.95,
-                track=track,
-            )
-            lf = LabeledFrame(video=video, frame_idx=frame_idx, instances=[inst])
-            frames.append(lf)
-
-        labels = Labels(labeled_frames=frames, tracks=[track])
-
-        # Test without extend_to_video_length (default)
-        h5_path_default = tmp_path / "default.analysis.h5"
-        analysis_h5.write_labels(labels, h5_path_default, extend_to_video_length=False)
-
-        with h5py.File(h5_path_default, "r") as f:
-            # Should stop at last labeled frame (10), so 11 frames (0-10)
-            assert f["tracks"].shape[-1] == 11  # frame dim is last in matlab preset
-
-        # Test with extend_to_video_length=True
-        h5_path_extended = tmp_path / "extended.analysis.h5"
-        analysis_h5.write_labels(labels, h5_path_extended, extend_to_video_length=True)
-
-        with h5py.File(h5_path_extended, "r") as f:
-            # Should extend to video length (100 frames)
-            assert f["tracks"].shape[-1] == 100  # frame dim is last in matlab preset
-
-            # Verify that frames 11-99 are NaN (no data)
             tracks_data = f["tracks"][:]
-            # matlab shape: (track, xy, node, frame)
-            assert np.all(np.isnan(tracks_data[:, :, :, 11:]))
-
-            # Verify that labeled frames have data (not all NaN)
-            assert not np.all(np.isnan(tracks_data[:, :, :, 0]))
-            assert not np.all(np.isnan(tracks_data[:, :, :, 5]))
-            assert not np.all(np.isnan(tracks_data[:, :, :, 10]))
+            # Frames beyond last labeled frame should be NaN
+            assert np.all(np.isnan(tracks_data[:, :, :, last_labeled + 1 :]))
 
 
 # =============================================================================

@@ -1986,26 +1986,6 @@ def test_convert_to_analysis_h5_with_options(tmp_path, slp_typical):
     assert output_path.exists()
 
 
-def test_convert_to_analysis_h5_with_extend_to_video_length(tmp_path, slp_typical):
-    """Test conversion to Analysis HDF5 with extend_to_video_length option."""
-    runner = CliRunner()
-    output_path = tmp_path / "analysis.h5"
-
-    result = runner.invoke(
-        cli,
-        [
-            "convert",
-            "-i",
-            slp_typical,
-            "-o",
-            str(output_path),
-            "--extend-to-video-length",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert output_path.exists()
-
-
 def test_convert_to_csv(tmp_path, slp_typical):
     """Test conversion to CSV format."""
     runner = CliRunner()
@@ -2438,19 +2418,6 @@ def test_export_h5_with_metadata_option(tmp_path, slp_typical):
     )
     assert result2.exit_code == 0, result2.output
     assert output_without.exists()
-
-
-def test_export_h5_with_extend_to_video_length(tmp_path, slp_typical):
-    """Test HDF5 export with --extend-to-video-length option."""
-    runner = CliRunner()
-    output_path = tmp_path / "extended.h5"
-
-    result = runner.invoke(
-        cli,
-        ["export", slp_typical, "-o", str(output_path), "--extend-to-video-length"],
-    )
-    assert result.exit_code == 0, result.output
-    assert output_path.exists()
 
 
 # ======================= Split command tests =======================
