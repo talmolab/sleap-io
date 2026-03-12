@@ -692,3 +692,161 @@ def test_to_dict_lazy_skip_empty_frames(slp_typical):
     dict_eager = to_dict(labels_eager, skip_empty_frames=True)
 
     assert len(dict_lazy["labeled_frames"]) == len(dict_eager["labeled_frames"])
+
+
+def test_to_dict_skip_empty_frames_preserves_negatives():
+    """Test that skip_empty_frames keeps negative frames."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    d = to_dict(labels, skip_empty_frames=True)
+
+    # Should keep regular + negative, drop empty
+    assert len(d["labeled_frames"]) == 2
+    frame_indices = [f["frame_idx"] for f in d["labeled_frames"]]
+    assert 0 in frame_indices
+    assert 1 in frame_indices
+    assert 2 not in frame_indices
+
+
+def test_to_dict_lazy_skip_empty_frames_preserves_negatives(tmp_path):
+    """Test that lazy skip_empty_frames keeps negative frames."""
+    from sleap_io.io.slp import write_labels
+
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+    lf_empty = LabeledFrame(
+        video=video,
+        frame_idx=2,
+        instances=[],
+        is_negative=False,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative, lf_empty],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    # Save and reload lazily
+    path = tmp_path / "test.slp"
+    write_labels(str(path), labels)
+    lazy_labels = load_slp(str(path), lazy=True)
+
+    d = to_dict(lazy_labels, skip_empty_frames=True)
+
+    assert len(d["labeled_frames"]) == 2
+    frame_indices = [f["frame_idx"] for f in d["labeled_frames"]]
+    assert 0 in frame_indices
+    assert 1 in frame_indices
+    assert 2 not in frame_indices
+
+
+def test_dict_roundtrip_preserves_is_negative():
+    """Test that is_negative survives to_dict/from_dict round-trip."""
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[],
+        is_negative=True,
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_regular, lf_negative],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    d = to_dict(labels)
+
+    # Check is_negative is in the dict only when True
+    assert "is_negative" not in d["labeled_frames"][0]
+    assert d["labeled_frames"][1]["is_negative"] is True
+
+    # Round-trip
+    restored = from_dict(d)
+    assert restored.labeled_frames[0].is_negative is False
+    assert restored.labeled_frames[1].is_negative is True
+
+
+def test_dict_lazy_roundtrip_preserves_is_negative(tmp_path):
+    """Test that is_negative survives lazy to_dict/from_dict round-trip."""
+    from sleap_io.io.slp import write_labels
+
+    skel = Skeleton(["A", "B"])
+    video = Video(filename="test.mp4")
+
+    lf_negative = LabeledFrame(
+        video=video,
+        frame_idx=0,
+        instances=[],
+        is_negative=True,
+    )
+    lf_regular = LabeledFrame(
+        video=video,
+        frame_idx=1,
+        instances=[Instance([[0, 1], [2, 3]], skeleton=skel)],
+    )
+
+    labels = Labels(
+        labeled_frames=[lf_negative, lf_regular],
+        videos=[video],
+        skeletons=[skel],
+    )
+
+    # Save and reload lazily
+    path = tmp_path / "test.slp"
+    write_labels(str(path), labels)
+    lazy_labels = load_slp(str(path), lazy=True)
+
+    d = to_dict(lazy_labels)
+    assert d["labeled_frames"][0]["is_negative"] is True
+    assert "is_negative" not in d["labeled_frames"][1]
+
+    restored = from_dict(d)
+    assert restored.labeled_frames[0].is_negative is True
+    assert restored.labeled_frames[1].is_negative is False

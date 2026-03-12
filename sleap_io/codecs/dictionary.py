@@ -146,9 +146,11 @@ def to_dict(
         else:
             labeled_frames = labels.labeled_frames
 
-        # Skip empty frames if requested
+        # Skip empty frames if requested (preserve negative frames)
         if skip_empty_frames:
-            labeled_frames = [lf for lf in labeled_frames if len(lf.instances) > 0]
+            labeled_frames = [
+                lf for lf in labeled_frames if len(lf.instances) > 0 or lf.is_negative
+            ]
 
         labeled_frames_list = []
         for lf in labeled_frames:
@@ -206,6 +208,8 @@ def to_dict(
                 "video_idx": labels.videos.index(lf.video),
                 "instances": instances_list,
             }
+            if lf.is_negative:
+                frame_dict["is_negative"] = True
             labeled_frames_list.append(frame_dict)
 
     # Build suggestions list (if filtering by video, also filter suggestions)
@@ -284,8 +288,9 @@ def _build_labeled_frames_lazy(
         # Get instances for this frame
         inst_indices = frame_instances.get(frame_id, [])
 
-        # Skip empty frames if requested
-        if skip_empty_frames and len(inst_indices) == 0:
+        # Skip empty frames if requested (preserve negative frames)
+        is_negative = (video_id, frame_idx) in store._negative_frames
+        if skip_empty_frames and len(inst_indices) == 0 and not is_negative:
             continue
 
         # Build instances list
@@ -349,6 +354,8 @@ def _build_labeled_frames_lazy(
             "video_idx": video_id,
             "instances": instances_list,
         }
+        if is_negative:
+            frame_dict["is_negative"] = True
         labeled_frames_list.append(frame_dict)
 
     return labeled_frames_list
@@ -489,6 +496,7 @@ def from_dict(data: dict[str, Any]) -> Labels:
             video=video,
             frame_idx=frame_idx,
             instances=instances,
+            is_negative=lf_dict.get("is_negative", False),
         )
         labeled_frames.append(labeled_frame)
 
