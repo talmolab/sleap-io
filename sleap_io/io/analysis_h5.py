@@ -494,8 +494,9 @@ def _get_occupancy_and_points(
     Args:
         labels: The Labels from which to get data.
         video: Video to export. If None, uses first video.
-        all_frames: If True, include all frames from 0 to last frame.
-            If False, only include frames from first to last labeled frame.
+        all_frames: If True, include all frames from 0 to end of video.
+            If False, only include frames from first labeled frame to end of
+            video.
         min_occupancy: Minimum occupancy ratio (0-1) to keep a track.
             0 = keep all non-empty tracks (default SLEAP behavior).
 
@@ -531,7 +532,13 @@ def _get_occupancy_and_points(
 
     frame_idxs = sorted(lf.frame_idx for lf in lfs)
     first_frame = 0 if all_frames else frame_idxs[0]
+
+    # Use video length when available so output spans the full video duration.
     last_frame = frame_idxs[-1]
+    video_length = len(video)
+    if video_length > 0:
+        last_frame = max(last_frame, video_length - 1)
+
     n_frames = last_frame - first_frame + 1
 
     # Get track and node info

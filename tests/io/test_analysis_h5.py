@@ -472,6 +472,40 @@ class TestWriteLabels:
                 xy_dim=3,
             )
 
+    def test_write_spans_full_video(self, slp_real_data, tmp_path):
+        """Test that output spans the full video length, not just labeled frames."""
+        labels = sio.load_slp(slp_real_data)
+        video = labels.videos[0]
+        video_length = len(video)
+        last_labeled = max(lf.frame_idx for lf in labels.find(video))
+        assert video_length > last_labeled + 1, "Fixture must have a gap"
+
+        h5_path = tmp_path / "output.analysis.h5"
+        analysis_h5.write_labels(labels, h5_path)
+
+        with h5py.File(h5_path, "r") as f:
+            # matlab preset: (track, xy, node, frame)
+            assert f["tracks"].shape[-1] == video_length
+
+            tracks_data = f["tracks"][:]
+            # Frames beyond last labeled frame should be NaN
+            assert np.all(np.isnan(tracks_data[:, :, :, last_labeled + 1 :]))
+
+    def test_write_spans_full_video_all_frames_false(self, slp_real_data, tmp_path):
+        """Test all_frames=False still extends to end of video."""
+        labels = sio.load_slp(slp_real_data)
+        video = labels.videos[0]
+        video_length = len(video)
+        first_labeled = min(lf.frame_idx for lf in labels.find(video))
+
+        h5_path = tmp_path / "output.analysis.h5"
+        analysis_h5.write_labels(labels, h5_path, all_frames=False)
+
+        with h5py.File(h5_path, "r") as f:
+            # Frame dim should span from first_labeled to end of video
+            expected_frames = video_length - first_labeled
+            assert f["tracks"].shape[-1] == expected_frames
+
 
 # =============================================================================
 # Read Tests

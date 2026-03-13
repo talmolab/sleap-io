@@ -105,6 +105,11 @@ def to_numpy(
         first_frame = min(first_frame, lf.frame_idx)
         last_frame = max(last_frame, lf.frame_idx)
 
+    # Use video length when available so output spans the full video duration.
+    video_length = len(video) if video is not None else 0
+    if video_length > 0:
+        last_frame = max(last_frame, video_length - 1)
+
     # Figure out the number of tracks based on number of instances in each frame.
     n_instances = 0
     for lf in lfs:
