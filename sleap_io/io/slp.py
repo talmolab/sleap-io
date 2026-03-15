@@ -2870,6 +2870,13 @@ def _write_labels_lazy(
     LabeledFrame or Instance objects, providing significant performance
     improvement for save operations on lazy-loaded labels.
 
+    Note:
+        ROI-to-instance associations are preserved via the stored
+        ``_instance_idx`` from the original file. Because instances are not
+        materialized in lazy mode, any modifications to ``roi.instance``
+        will not be reflected in the saved file. To persist modified
+        instance associations, call ``labels.materialize()`` before saving.
+
     Args:
         labels_path: A string path to the SLEAP labels file to save.
         labels: A lazy `Labels` object to save (must have is_lazy=True).
