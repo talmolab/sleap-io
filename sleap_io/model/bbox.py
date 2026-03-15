@@ -87,12 +87,20 @@ class BoundingBox:
 
         Returns:
             A new bounding box instance.
+
+        Raises:
+            ValueError: If ``x2 < x1`` or ``y2 < y1``.
         """
-        w = abs(x2 - x1)
-        h = abs(y2 - y1)
+        if x2 < x1 or y2 < y1:
+            raise ValueError(
+                f"Expected x2 >= x1 and y2 >= y1, got "
+                f"x1={x1}, y1={y1}, x2={x2}, y2={y2}."
+            )
+        w = x2 - x1
+        h = y2 - y1
         return cls(
-            x_center=(x1 + x2) / 2,
-            y_center=(y1 + y2) / 2,
+            x_center=x1 + w / 2,
+            y_center=y1 + h / 2,
             width=w,
             height=h,
             **kwargs,

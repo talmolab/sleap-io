@@ -40,13 +40,12 @@ def test_bbox_from_xyxy():
     assert bbox.height == 80
 
 
-def test_bbox_from_xyxy_swapped():
-    """from_xyxy handles swapped coordinates (x2 < x1 or y2 < y1)."""
-    bbox = BoundingBox.from_xyxy(110, 100, 10, 20)
-    assert bbox.x_center == 60
-    assert bbox.y_center == 60
-    assert bbox.width == 100
-    assert bbox.height == 80
+def test_bbox_from_xyxy_swapped_raises():
+    """from_xyxy raises ValueError for swapped coordinates."""
+    with pytest.raises(ValueError, match="x2 >= x1"):
+        BoundingBox.from_xyxy(110, 100, 10, 20)
+    with pytest.raises(ValueError, match="y2 >= y1"):
+        BoundingBox.from_xyxy(10, 100, 110, 20)
 
 
 def test_bbox_from_xyxy_with_kwargs():
