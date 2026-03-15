@@ -9,9 +9,10 @@ import warnings
 import h5py
 import numpy as np
 
-from sleap_io.model.instance import Instance, Track
+from sleap_io.model.instance import PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
+from sleap_io.model.roi import ROI, AnnotationType
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 from sleap_io.model.video import Video
 
@@ -67,8 +68,6 @@ def read_labels(
 
     TODO: Attributes are ignored, including px_to_cm field.
     TODO: Segmentation data ignored in v6, but will read in pose.
-    TODO: Lixit static objects currently stored as n_lixit,2 (eg 1 object).
-          Should be converted to multiple objects
 
     Args:
         labels_path: Path to the JABS pose file.
@@ -144,28 +143,18 @@ def read_labels(
                     )
                     if new_instance:
                         instances.append(new_instance)
-            # Static objects
-            if (
-                frame_idx == 0
-                and pose_version >= 5
-                and "static_objects" in pose_file.keys()
-            ):
-                present_objects = pose_file["static_objects"].keys()
-                for cur_object in present_objects:
-                    object_keypoints = pose_file["static_objects/" + cur_object][:]
-                    object_skeleton = make_simple_skeleton(
-                        cur_object, object_keypoints.shape[0]
-                    )
-                    new_instance = prediction_to_instance(
-                        object_keypoints,
-                        np.ones(object_keypoints.shape[:-1]),
-                        object_skeleton,
-                    )
-                    if new_instance:
-                        instances.append(new_instance)
             frame_label = LabeledFrame(video, frame_idx, instances)
             frames.append(frame_label)
-    labels = Labels(frames)
+
+        # Static objects as ROIs
+        rois = []
+        if pose_version >= 5 and "static_objects" in pose_file.keys():
+            for obj_name in pose_file["static_objects"].keys():
+                coords = pose_file["static_objects/" + obj_name][:]
+                roi = _static_object_to_roi(obj_name, coords, video)
+                rois.append(roi)
+
+    labels = Labels(frames, rois=rois)
     labels.provenance["filename"] = labels_path
     return labels
 
@@ -190,17 +179,19 @@ def prediction_to_instance(
     confidence: np.ndarray[np.float32],
     skeleton: Skeleton,
     track: Track = None,
-) -> Instance:
-    """Create an `Instance` from prediction data.
+) -> PredictedInstance | None:
+    """Create a `PredictedInstance` from prediction data.
 
     Args:
-        data: keypoint locations
-        confidence: confidence for keypoints
-        skeleton: `Skeleton` to use for `Instance`
-        track: `Track` to assign to `Instance`
+        data: Keypoint locations as an array of shape `(n_nodes, 2)`.
+        confidence: Confidence scores for each keypoint as an array of shape
+            `(n_nodes,)`.
+        skeleton: `Skeleton` to use for the instance.
+        track: `Track` to assign to the instance.
 
     Returns:
-        Parsed `Instance`.
+        A `PredictedInstance` with per-point confidence scores, or `None` if no
+        keypoints have positive confidence.
     """
     assert len(skeleton.nodes) == data.shape[0], (
         f"Skeleton ({len(skeleton.nodes)}) does not match "
@@ -208,19 +199,77 @@ def prediction_to_instance(
     )
 
     points = {}
+    scores = []
     for i, cur_node in enumerate(skeleton.nodes):
         # confidence of 0 indicates no keypoint predicted for instance
         if confidence[i] > 0:
             points[cur_node] = (
                 data[i, 0],
                 data[i, 1],
+                float(confidence[i]),
                 True,
             )
+            scores.append(float(confidence[i]))
 
     if not points:
         return None
     else:
-        return Instance(points, skeleton=skeleton, track=track)
+        mean_score = float(np.mean(scores))
+        return PredictedInstance(
+            points, skeleton=skeleton, track=track, score=mean_score
+        )
+
+
+def _static_object_to_roi(name: str, coords: np.ndarray, video: Video) -> ROI:
+    """Convert JABS static object keypoints to an ROI.
+
+    Args:
+        name: Name of the static object (e.g., "corners", "lixit").
+        coords: Keypoint coordinates as an array of shape `(n_points, 2)`.
+        video: Video this static object belongs to.
+
+    Returns:
+        An `ROI` representing the static object.
+    """
+    from shapely.geometry import MultiPoint, Point
+
+    if coords.shape[0] == 1:
+        geometry = Point(float(coords[0, 0]), float(coords[0, 1]))
+    else:
+        geometry = MultiPoint([(float(x), float(y)) for x, y in coords])
+
+    annotation_type = (
+        AnnotationType.ARENA if name == "corners" else AnnotationType.ANCHOR
+    )
+    return ROI(
+        geometry=geometry,
+        annotation_type=annotation_type,
+        name=name,
+        category="static_object",
+        source="jabs",
+        video=video,
+        frame_idx=None,
+    )
+
+
+def _roi_to_static_object_coords(roi: ROI) -> np.ndarray | None:
+    """Convert an ROI back to JABS static object coordinates.
+
+    Args:
+        roi: An `ROI` representing a JABS static object.
+
+    Returns:
+        Coordinates as an array of shape `(n_points, 2)`, or `None` if the
+        geometry type is not supported.
+    """
+    from shapely.geometry import MultiPoint, Point
+
+    geom = roi.geometry
+    if isinstance(geom, Point):
+        return np.array([[geom.x, geom.y]])
+    elif isinstance(geom, MultiPoint):
+        return np.array([[p.x, p.y] for p in geom.geoms])
+    return None
 
 
 def get_max_ids_in_video(labels: list[Labels], key: str = "Mouse") -> int:
@@ -303,7 +352,13 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
             # JABS stores y,x for poses
             pose = np.flip(pose.astype(np.uint16), axis=-1)
             keypoint_mat[label.frame_idx, instance_idx, :, :] = pose
-            confidence_mat[label.frame_idx, instance_idx, ~missing_points] = 1.0
+            if isinstance(instance, PredictedInstance):
+                point_scores = instance.points["score"]
+                confidence_mat[label.frame_idx, instance_idx, ~missing_points] = (
+                    point_scores[~missing_points]
+                )
+            else:
+                confidence_mat[label.frame_idx, instance_idx, ~missing_points] = 1.0
             if instance.track:
                 identity_mat[label.frame_idx, instance_idx] = track_2_idx[
                     instance.track
@@ -318,6 +373,13 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
                 last_unassigned_id += 1
             assigned_instances += 1
         instance_vector[label.frame_idx] = assigned_instances
+
+    # Extract static objects from ROIs
+    for roi in all_labels.rois:
+        if roi.category == "static_object" and roi.source == "jabs":
+            coords = _roi_to_static_object_coords(roi)
+            if coords is not None:
+                static_objects[roi.name] = coords
 
     # Return the data as a dict
     return {

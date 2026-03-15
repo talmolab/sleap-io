@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import pytest
 
-from sleap_io import Instance, Labels, Skeleton
+from sleap_io import Labels, PredictedInstance, Skeleton
 from sleap_io.io.jabs import (
     JABS_DEFAULT_SKELETON,
     convert_labels,
@@ -14,6 +14,7 @@ from sleap_io.io.jabs import (
     read_labels,
     tracklets_to_v3,
 )
+from sleap_io.model.roi import AnnotationType
 
 
 def test_label_conversions(jabs_real_data_v5):
@@ -79,12 +80,27 @@ def test_get_max_ids_in_video(jabs_real_data_v5):
 
 
 def test_prediction_to_instance(jabs_real_data_v5):
+    """Test that prediction_to_instance creates PredictedInstance with scores."""
     with h5py.File(jabs_real_data_v5, "r") as f:
         pose = f["poseest/points"][0, 0, :, :]
         confidence = f["poseest/confidence"][0, 0, :]
 
-    label = prediction_to_instance(pose, confidence, JABS_DEFAULT_SKELETON)
-    assert type(label) is Instance
+    inst = prediction_to_instance(pose, confidence, JABS_DEFAULT_SKELETON)
+    assert type(inst) is PredictedInstance
+    assert inst.score > 0
+
+    # Check per-point scores match confidence values
+    visible = confidence > 0
+    point_scores = inst.points["score"][visible]
+    np.testing.assert_array_almost_equal(point_scores, confidence[visible])
+
+
+def test_prediction_to_instance_no_confidence():
+    """Test that zero confidence returns None."""
+    pose = np.zeros((12, 2), dtype=np.uint16)
+    confidence = np.zeros(12, dtype=np.float32)
+    result = prediction_to_instance(pose, confidence, JABS_DEFAULT_SKELETON)
+    assert result is None
 
 
 def test_make_simple_skeleton():
@@ -92,3 +108,69 @@ def test_make_simple_skeleton():
     assert len(skeleton.nodes) == 2
     assert len(skeleton.edges) == 1
     assert skeleton.name == "test"
+
+
+def test_read_labels_predicted_instances(jabs_real_data_v5):
+    """Test that JABS reader creates PredictedInstance objects."""
+    labels = read_labels(jabs_real_data_v5)
+
+    for lf in labels.labeled_frames:
+        for inst in lf.instances:
+            assert type(inst) is PredictedInstance
+            assert inst.score > 0
+
+
+def test_read_labels_static_objects_as_rois(jabs_real_data_v5):
+    """Test that JABS v5 static objects are loaded as ROIs."""
+    labels = read_labels(jabs_real_data_v5)
+
+    # Only the Mouse skeleton should be present (no synthetic skeletons)
+    assert len(labels.skeletons) == 1
+    assert labels.skeletons[0].name == "Mouse"
+
+    # The v5 test fixture has one static object: corners
+    assert len(labels.rois) == 1
+    roi = labels.rois[0]
+    assert roi.name == "corners"
+    assert roi.annotation_type == AnnotationType.ARENA
+    assert roi.category == "static_object"
+    assert roi.source == "jabs"
+    assert roi.frame_idx is None  # Static ROI
+    assert roi.video == labels.videos[0]
+
+
+def test_jabs_roundtrip_preserves_static_objects(jabs_real_data_v5):
+    """Test that static objects survive the JABS read/convert round-trip."""
+    # Read original coordinates
+    with h5py.File(jabs_real_data_v5, "r") as f:
+        original_corners = f["static_objects/corners"][:]
+
+    # Read through sleap-io and convert back
+    labels = read_labels(jabs_real_data_v5)
+    converted = convert_labels(labels, labels.videos[0])
+
+    assert "corners" in converted["static_objects"]
+    roundtrip_corners = converted["static_objects"]["corners"]
+    np.testing.assert_array_equal(roundtrip_corners, original_corners)
+
+
+def test_jabs_roundtrip_preserves_confidence(jabs_real_data_v5):
+    """Test that per-point confidence scores are preserved through round-trip."""
+    labels = read_labels(jabs_real_data_v5)
+
+    # Verify instances have per-point scores from the original data
+    lf = labels.labeled_frames[0]
+    inst = lf.instances[0]
+    assert type(inst) is PredictedInstance
+
+    # Scores should reflect original confidence (not all 1.0)
+    scores = inst.points["score"]
+    visible = inst.points["visible"]
+    assert np.all(scores[visible] > 0)
+
+    # Convert back and verify confidence is preserved (not hardcoded to 1.0)
+    converted = convert_labels(labels, labels.videos[0])
+    conf = converted["confidence"]
+    assert conf.shape[0] >= len(labels.labeled_frames)
+    # Points with 0 confidence in the original should still be 0
+    assert np.any(conf == 0)

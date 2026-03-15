@@ -260,10 +260,13 @@ def create_skeleton_container(
     # Create new skeletons for ones that don't exist yet
     for sleap_skeleton in labels.skeletons:
         if sleap_skeleton.name not in skeleton_map:
+            edges_array = np.array(sleap_skeleton.edge_inds, dtype="uint8")
+            if edges_array.size == 0:
+                edges_array = edges_array.reshape(0, 2)
             nwb_skeleton = Skeleton(
                 name=sleap_skeleton.name,
                 nodes=sleap_skeleton.node_names,
-                edges=np.array(sleap_skeleton.edge_inds, dtype="uint8"),
+                edges=edges_array,
             )
             nwb_skeletons.append(nwb_skeleton)
             skeleton_map[sleap_skeleton.name] = nwb_skeleton

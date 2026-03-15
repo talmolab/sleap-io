@@ -3,8 +3,10 @@
 import h5py
 import pytest
 
-from sleap_io import Labels, load_slp
+from sleap_io import Labels, PredictedInstance, Skeleton, load_slp
+from sleap_io.io.jabs import read_labels as read_jabs
 from sleap_io.io.nwb import NwbFormat, load_nwb, save_nwb
+from sleap_io.model.skeleton import Node
 
 
 def test_nwb_format_enum():
@@ -188,3 +190,60 @@ def test_save_nwb_append_mode(slp_typical, tmp_path):
             pass  # This is expected for duplicate data
         else:
             raise  # Re-raise unexpected errors
+
+
+def test_save_nwb_edgeless_skeleton(tmp_path):
+    """Test that NWB predictions handles skeletons with no edges."""
+    from sleap_io.model.labeled_frame import LabeledFrame
+    from sleap_io.model.video import Video
+
+    # Create a skeleton with 1 node and 0 edges
+    node = Node("single_point")
+    skeleton = Skeleton([node], edges=[], name="point_skeleton")
+
+    # Create a PredictedInstance
+    points = {node: (100.0, 200.0, 0.9, True)}
+    inst = PredictedInstance(points, skeleton=skeleton, score=0.9)
+    video = Video.from_filename("test.mp4")
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[inst])
+    labels = Labels([lf])
+
+    # This should not crash (was raising ValueError before the fix)
+    nwb_path = tmp_path / "edgeless.nwb"
+    save_nwb(labels, nwb_path, nwb_format="predictions")
+    assert nwb_path.exists()
+
+
+def test_save_nwb_jabs_predictions_format(jabs_real_data_v5, tmp_path):
+    """Test saving JABS data as NWB predictions format."""
+    labels = read_jabs(jabs_real_data_v5)
+
+    # Explicitly save as predictions — should not crash
+    nwb_path = tmp_path / "jabs_pred.nwb"
+    save_nwb(labels, nwb_path, nwb_format="predictions")
+    assert nwb_path.exists()
+
+    # Verify the file can be loaded back
+    loaded = load_nwb(nwb_path)
+    assert isinstance(loaded, Labels)
+    assert len(loaded.labeled_frames) > 0
+
+
+def test_save_nwb_jabs_auto_detection(jabs_real_data_v5, tmp_path):
+    """Test that JABS data auto-detects as predictions format."""
+    labels = read_jabs(jabs_real_data_v5)
+
+    # All instances should be PredictedInstance
+    for lf in labels.labeled_frames:
+        for inst in lf.instances:
+            assert type(inst) is PredictedInstance
+
+    # Auto-detection should pick predictions (not annotations)
+    nwb_path = tmp_path / "jabs_auto.nwb"
+    save_nwb(labels, nwb_path)  # nwb_format="auto" is default
+    assert nwb_path.exists()
+
+    # Verify it saved as predictions by loading back
+    loaded = load_nwb(nwb_path)
+    assert isinstance(loaded, Labels)
+    assert len(loaded.labeled_frames) > 0
