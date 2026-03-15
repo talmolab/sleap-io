@@ -7,6 +7,8 @@ import pytest
 from sleap_io import Labels, PredictedInstance, Skeleton
 from sleap_io.io.jabs import (
     JABS_DEFAULT_SKELETON,
+    _roi_to_static_object_coords,
+    _static_object_to_roi,
     convert_labels,
     get_max_ids_in_video,
     make_simple_skeleton,
@@ -174,3 +176,35 @@ def test_jabs_roundtrip_preserves_confidence(jabs_real_data_v5):
     assert conf.shape[0] >= len(labels.labeled_frames)
     # Points with 0 confidence in the original should still be 0
     assert np.any(conf == 0)
+
+
+def test_static_object_to_roi_single_point():
+    """Test ROI creation for single-point static objects (e.g., lixit)."""
+    from shapely.geometry import Point
+
+    from sleap_io.model.video import Video
+
+    video = Video.from_filename("test.mp4")
+    coords = np.array([[100.0, 200.0]])
+    roi = _static_object_to_roi("lixit", coords, video)
+
+    assert roi.name == "lixit"
+    assert roi.annotation_type == AnnotationType.ANCHOR
+    assert isinstance(roi.geometry, Point)
+    assert roi.geometry.x == 100.0
+    assert roi.geometry.y == 200.0
+
+    # Round-trip back to coordinates
+    result = _roi_to_static_object_coords(roi)
+    np.testing.assert_array_equal(result, coords)
+
+
+def test_roi_to_static_object_coords_unsupported_geometry():
+    """Test that unsupported geometry types return None."""
+    from shapely.geometry import LineString
+
+    from sleap_io.model.roi import ROI
+
+    roi = ROI(geometry=LineString([(0, 0), (1, 1)]), name="line")
+    result = _roi_to_static_object_coords(roi)
+    assert result is None
