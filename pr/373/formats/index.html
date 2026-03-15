@@ -3978,7 +3978,7 @@ strings corresponding to command line arguments for FFMPEG and libx264. Use
 
 </div><h2 id="format-specific-functions">Format-Specific Functions<a class="headerlink" href="#format-specific-functions" title="Permanent link">&para;</a></h2>
 <h3 id="sleap-native-format-slp">SLEAP Native Format (.slp)<a class="headerlink" href="#sleap-native-format-slp" title="Permanent link">&para;</a></h3>
-<p>The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations. SLP is the primary format with full round-trip support for regions of interest (ROIs) and segmentation masks (format 1.5+).</p>
+<p>The native SLEAP format stores complete pose tracking projects including videos, skeletons, and annotations. SLP is the primary format with full round-trip support for bounding boxes (format 1.7+), regions of interest (ROIs), and segmentation masks (format 1.5+).</p>
 <div class="admonition tip">
 <p class="admonition-title">Detailed Format Specification</p>
 <p>For comprehensive documentation of the SLP file format including HDF5 layout, data structures, and version history, see the <strong><a href="slp/">SLP File Format Reference</a></strong>.</p>
@@ -7977,12 +7977,14 @@ while YAML files use a simplified human-readable format.</p>
 <th>Tracks</th>
 <th>Confidence</th>
 <th>User/Predicted</th>
+<th>BBoxes</th>
 <th>ROIs/Masks</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>SLEAP (.slp)</td>
+<td>✅</td>
 <td>✅</td>
 <td>✅</td>
 <td>✅</td>
@@ -8002,6 +8004,7 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 <td>✅</td>
 <td>❌</td>
+<td>❌</td>
 </tr>
 <tr>
 <td>JABS (.h5)</td>
@@ -8011,6 +8014,7 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 <td>✅</td>
 <td>✅</td>
+<td>❌</td>
 <td>❌</td>
 <td>❌</td>
 </tr>
@@ -8024,6 +8028,7 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 <td>❌</td>
 <td>❌</td>
+<td>❌</td>
 </tr>
 <tr>
 <td>Label Studio</td>
@@ -8035,6 +8040,7 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 <td>✅</td>
 <td>❌</td>
+<td>❌</td>
 </tr>
 <tr>
 <td>CSV (.csv)</td>
@@ -8044,6 +8050,7 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅**</td>
 <td>✅</td>
 <td>✅</td>
+<td>❌</td>
 <td>❌</td>
 <td>❌</td>
 </tr>
@@ -8057,6 +8064,7 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 <td>❌</td>
 <td>❌</td>
+<td>❌</td>
 </tr>
 <tr>
 <td>AlphaTracker</td>
@@ -8068,10 +8076,12 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅</td>
 <td>❌</td>
 <td>❌</td>
+<td>❌</td>
 </tr>
 <tr>
 <td>LEAP (.mat)</td>
 <td>✅</td>
+<td>❌</td>
 <td>❌</td>
 <td>❌</td>
 <td>❌</td>
@@ -8089,7 +8099,8 @@ while YAML files use a simplified human-readable format.</p>
 <td>✅***</td>
 <td>❌</td>
 <td>✅</td>
-<td>✅****</td>
+<td>✅</td>
+<td>✅</td>
 </tr>
 <tr>
 <td>Ultralytics</td>
@@ -8100,12 +8111,14 @@ while YAML files use a simplified human-readable format.</p>
 <td>❌</td>
 <td>✅</td>
 <td>❌</td>
+<td>✅</td>
 <td>✅****</td>
 </tr>
 <tr>
 <td>GeoJSON (.geojson)</td>
 <td>✅</td>
 <td>✅</td>
+<td>❌</td>
 <td>❌</td>
 <td>❌</td>
 <td>❌</td>
@@ -8118,7 +8131,7 @@ while YAML files use a simplified human-readable format.</p>
 <p>*NWB can embed videos with <code>annotations_export</code> format
 **CSV skeleton edges/symmetries preserved via optional metadata JSON sidecar
 ***COCO tracks are stored via <code>attributes.object_id</code> (CVAT-compatible)
-****COCO and Ultralytics support bounding boxes and segmentation masks via ROI/mask conversion</p>
+****Ultralytics segmentation polygons stored as ROIs</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../model/">Data Model</a>: Understanding the core data structures</li>
