@@ -698,9 +698,54 @@ labels = labels.materialize()
 labels.append(new_frame)  # Now works
 ```
 
+## Bounding Boxes
+
+[`BoundingBox`][sleap_io.BoundingBox] annotations store axis-aligned or oriented bounding boxes for object detection and tracking workflows. Bounding box support was introduced in format 1.7.
+
+### BoundingBox Dataset
+
+Bounding box data is stored in a single structured array dataset:
+
+- `/bboxes`: Structured array containing bounding box geometry, metadata, and class information
+
+### BoundingBox Dtype
+
+```python
+bbox_dtype = np.dtype([
+    ("x_center", "f8"),     # Center x-coordinate in pixels
+    ("y_center", "f8"),     # Center y-coordinate in pixels
+    ("width", "f8"),        # Box width in pixels
+    ("height", "f8"),       # Box height in pixels
+    ("angle", "f8"),        # Rotation angle in radians (0 = axis-aligned)
+    ("video", "i4"),        # Video index (-1 if none)
+    ("frame_idx", "i8"),    # Frame index (-1 if none)
+    ("track", "i4"),        # Track index (-1 if none)
+    ("instance", "i4"),     # Instance index (-1 if none)
+    ("is_predicted", "u1"), # 0 = UserBoundingBox, 1 = PredictedBoundingBox
+    ("score", "f4"),        # Confidence score (NaN for user bboxes)
+])
+```
+
+### User vs Predicted
+
+- `is_predicted = 0`: [`UserBoundingBox`][sleap_io.UserBoundingBox] — human-annotated
+- `is_predicted = 1`: [`PredictedBoundingBox`][sleap_io.PredictedBoundingBox] — model-predicted, `score` contains the confidence value
+
+### String Metadata
+
+String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the `/bboxes` dataset store `categories`, `names`, and `sources` arrays.
+
+### Optional Dataset
+
+The `/bboxes` dataset is only written when the [`Labels`][sleap_io.Labels] object contains bounding boxes. On read, a missing dataset defaults to an empty list.
+
+### Migration from Format 1.5/1.6
+
+When reading older files without a `/bboxes` dataset, any ROIs with axis-aligned rectangular geometry (`is_bbox = True`) are automatically migrated to [`UserBoundingBox`][sleap_io.UserBoundingBox] objects in `Labels.bboxes`. The migrated ROIs are removed from `Labels.rois`.
+
 ## Regions of Interest (ROIs)
 
-[`ROI`][sleap_io.ROI]s store vector geometry annotations such as bounding boxes, polygons, and other shapes. ROI support was introduced in format 1.5.
+[`ROI`][sleap_io.ROI]s store vector geometry annotations such as polygons and other shapes. ROI support was introduced in format 1.5.
 
 ### ROI Datasets
 
@@ -715,25 +760,23 @@ Each ROI's geometry is stored as a WKB blob in `/roi_wkb`, with `/rois` providin
 
 ```python
 roi_dtype = np.dtype([
-    ("annotation_type", "u1"),  # AnnotationType enum value
+    ("annotation_type", "u1"),  # Legacy field, always written as 0
     ("video", "i4"),            # Video index (-1 if none)
     ("frame_idx", "i8"),        # Frame index (-1 for static ROIs)
     ("track", "i4"),            # Track index (-1 if none)
-    ("score", "f4"),            # Prediction score (NaN if no score)
+    ("score", "f4"),            # Legacy field, always written as NaN
     ("wkb_start", "u8"),       # Start byte offset into /roi_wkb
     ("wkb_end", "u8"),         # End byte offset into /roi_wkb
+    ("instance", "i4"),        # Instance index (-1 if none) (Format 1.6+)
 ])
 ```
 
-### Annotation Types
-
-| Value | Name | Description |
-|-------|------|-------------|
-| `0` | `DEFAULT` | Generic annotation |
-| `1` | `BOUNDING_BOX` | Bounding box |
-| `2` | `SEGMENTATION` | Segmentation region |
-| `3` | `ARENA` | Arena boundary |
-| `4` | `ANCHOR` | Anchor point |
+!!! note "Legacy fields"
+    The `annotation_type` and `score` columns are retained in the on-disk dtype
+    for backward compatibility with older readers but are no longer used. Writers
+    always set `annotation_type = 0` and `score = NaN`. Use the `category` string
+    attribute for semantic classification and [`BoundingBox`][sleap_io.BoundingBox]
+    for detection annotations with scores.
 
 ### String Metadata
 
@@ -776,15 +819,20 @@ The RLE encoding stores `uint32` run-length counts packed as little-endian `uint
 mask_dtype = np.dtype([
     ("height", "u4"),           # Mask height in pixels
     ("width", "u4"),            # Mask width in pixels
-    ("annotation_type", "u1"),  # AnnotationType enum value
+    ("annotation_type", "u1"),  # Legacy field, always written as 2
     ("video", "i4"),            # Video index (-1 if none)
     ("frame_idx", "i8"),        # Frame index (-1 for static masks)
     ("track", "i4"),            # Track index (-1 if none)
-    ("score", "f4"),            # Prediction score (NaN if no score)
+    ("score", "f4"),            # Legacy field, always written as NaN
     ("rle_start", "u8"),       # Start byte offset into /mask_rle
     ("rle_end", "u8"),         # End byte offset into /mask_rle
 ])
 ```
+
+!!! note "Legacy fields"
+    As with ROIs, `annotation_type` and `score` are retained for backward
+    compatibility but ignored on read. Writers always set
+    `annotation_type = 2` (SEGMENTATION) and `score = NaN`.
 
 ### String Metadata
 
@@ -829,7 +877,7 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - Ensures correct color reproduction across different encoding backends
 - Reading: Defaults to RGB if attribute missing
 
-### Format 1.5 (Current)
+### Format 1.5
 
 **Added ROI and segmentation mask support.**
 
@@ -838,6 +886,23 @@ Minor handling improvements for tracking_score (no schema change from 1.2).
 - String metadata stored as JSON HDF5 attributes (`categories`, `names`, `sources`)
 - Backward compatible: datasets only written when non-empty, missing datasets default to empty lists on read
 - Requires `shapely>=2.0` for geometry operations
+
+### Format 1.6
+
+**Added ROI-instance association.**
+
+- Added `instance` field (`i4`) to the `/rois` dtype for linking ROIs to specific instances
+- ROI instance associations are persisted via instance index
+
+### Format 1.7 (Current)
+
+**Added bounding box support.**
+
+- New dataset: `/bboxes` for first-class bounding box annotations
+- Supports axis-aligned and oriented (rotated) bounding boxes
+- User/predicted distinction via `is_predicted` flag and `score` field
+- Migration on read: rectangular ROIs from older files are automatically converted to [`BoundingBox`][sleap_io.BoundingBox] objects
+- `annotation_type` and `score` fields on `/rois` and `/masks` are now legacy (always written as constants)
 
 ## API
 
