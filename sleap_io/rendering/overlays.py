@@ -130,6 +130,7 @@ def draw_bboxes(
     color: tuple[int, int, int] = (0, 255, 0),
     line_width: int = 2,
     fill_alpha: float = 0.0,
+    font: str | None = None,
 ) -> np.ndarray:
     """Draw bounding boxes on an image.
 
@@ -146,6 +147,8 @@ def draw_bboxes(
         line_width: Width of the outline in pixels.
         fill_alpha: If > 0, fill the bounding box interior with this opacity
             (0.0 to 1.0).
+        font: Font family name for score text (e.g., ``"Arial"``). If
+            ``None``, uses the system default typeface.
 
     Returns:
         The modified image array.
@@ -206,9 +209,12 @@ def draw_bboxes(
         if isinstance(bbox, PredictedBoundingBox):
             text_x = float(corners[0][0])
             text_y = float(corners[0][1]) - 5
-            font = skia.Font(skia.Typeface("Arial"), 12)
+            typeface = skia.Typeface(font if font else "sans-serif")
+            skia_font = skia.Font(typeface, 12)
             text_paint = skia.Paint(Color=skia.Color(*color), AntiAlias=True)
-            canvas.drawString(f"{bbox.score:.2f}", text_x, text_y, font, text_paint)
+            canvas.drawString(
+                f"{bbox.score:.2f}", text_x, text_y, skia_font, text_paint
+            )
 
     # Copy RGB channels back to the input image
     image[:] = frame_rgba[:, :, :3]
