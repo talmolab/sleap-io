@@ -272,7 +272,7 @@ The NWB format requires certain metadata fields. sleap-io provides sensible defa
 
 ### JABS Format (.h5)
 
-[JABS](https://github.com/KumarLabJax/JABS-behavior-classifier) (Janelia Automatic Behavior System) format for behavior classification.
+[JABS](https://github.com/KumarLabJax/JABS-behavior-classifier) (JAX Animal Behavior System) format for behavior classification.
 
 ::: sleap_io.io.main.load_jabs
 
