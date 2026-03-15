@@ -25,10 +25,11 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
+from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -101,6 +102,7 @@ def read_labels(
     # Process all image/label pairs
     labeled_frames = []
     all_rois: list[ROI] = []
+    all_bboxes: list[BoundingBox] = []
     tracks = {}  # Track synthetic tracks by instance order
 
     for image_file in sorted(images_dir.glob("*")):
@@ -124,7 +126,7 @@ def read_labels(
 
                 # Create a default skeleton for parse_label_file if none exists
                 parse_skeleton = skeleton if skeleton is not None else Skeleton()
-                instances, rois = parse_label_file(
+                instances, rois, bboxes = parse_label_file(
                     label_file,
                     parse_skeleton,
                     img_shape,
@@ -133,6 +135,7 @@ def read_labels(
                     frame_idx=0,
                 )
                 all_rois.extend(rois)
+                all_bboxes.extend(bboxes)
 
                 # Assign tracks to instances based on order
                 for i, instance in enumerate(instances):
@@ -152,6 +155,7 @@ def read_labels(
         skeletons=skeletons,
         tracks=list(tracks.values()),
         rois=all_rois,
+        bboxes=all_bboxes,
         provenance={"source": str(dataset_path), "split": split},
     )
 
@@ -350,8 +354,10 @@ def write_labels(
     else:
         skeleton = None
 
-    # Build class names from ROI categories for non-pose tasks
-    if task in ("detect", "segment"):
+    # Build class names from ROI/bbox categories for non-pose tasks
+    if task == "detect":
+        class_names = _build_class_names_from_bboxes(labels.bboxes)
+    elif task == "segment":
         class_names = _build_class_names_from_rois(labels.rois)
     else:
         class_names = {0: "animal"}
@@ -365,8 +371,20 @@ def write_labels(
         class_names=class_names,
     )
 
-    # For non-pose tasks, we write ROIs directly without splitting
-    if task in ("detect", "segment"):
+    # For detection, write bboxes; for segmentation, write ROIs
+    if task == "detect":
+        _write_bbox_labels(
+            labels,
+            dataset_path,
+            split_ratios,
+            class_names,
+            image_format,
+            image_quality,
+            verbose,
+        )
+        return
+
+    if task == "segment":
         _write_roi_labels(
             labels,
             dataset_path,
@@ -516,6 +534,129 @@ def _build_class_names_from_rois(rois: list[ROI]) -> dict[int, str]:
     if not categories:
         return {0: "object"}
     return {i: name for i, name in enumerate(categories)}
+
+
+def _build_class_names_from_bboxes(bboxes: list[BoundingBox]) -> dict[int, str]:
+    """Build a class ID to name mapping from BoundingBox categories.
+
+    Args:
+        bboxes: List of bounding boxes to extract categories from.
+
+    Returns:
+        A dictionary mapping integer class IDs to category name strings.
+    """
+    categories = sorted({bbox.category for bbox in bboxes if bbox.category})
+    if not categories:
+        return {0: "object"}
+    return {i: name for i, name in enumerate(categories)}
+
+
+def _write_bbox_labels(
+    labels: Labels,
+    dataset_path: Path,
+    split_ratios: dict[str, float],
+    class_names: dict[int, str],
+    image_format: str,
+    image_quality: int | None,
+    verbose: bool,
+) -> None:
+    """Write BoundingBox-based detection labels to Ultralytics format.
+
+    Args:
+        labels: Labels object with bboxes.
+        dataset_path: Output dataset path.
+        split_ratios: Split ratio mapping.
+        class_names: Class ID to name mapping.
+        image_format: Image format string.
+        image_quality: Image quality parameter.
+        verbose: Whether to show progress.
+    """
+    # Reverse class_names to get name -> id mapping
+    name_to_id = {v: k for k, v in class_names.items()}
+
+    # Group bboxes by video
+    bboxes_by_video: dict[str, list[BoundingBox]] = {}
+    for bbox in labels.bboxes:
+        if bbox.video is not None:
+            key = str(bbox.video.filename)
+            if key not in bboxes_by_video:
+                bboxes_by_video[key] = []
+            bboxes_by_video[key].append(bbox)
+
+    video_keys = sorted(bboxes_by_video.keys())
+
+    # Calculate split boundaries
+    n_videos = len(video_keys)
+    split_names = list(split_ratios.keys())
+    split_boundaries = []
+    cumulative = 0
+    for name in split_names:
+        cumulative += split_ratios[name]
+        split_boundaries.append(int(round(cumulative * n_videos)))
+
+    # Write each split
+    start_idx = 0
+    for split_idx, split_name in enumerate(split_names):
+        end_idx = split_boundaries[split_idx]
+        split_video_keys = video_keys[start_idx:end_idx]
+        start_idx = end_idx
+
+        if not split_video_keys:
+            continue
+
+        images_dir = dataset_path / split_name / "images"
+        labels_dir = dataset_path / split_name / "labels"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        labels_dir.mkdir(parents=True, exist_ok=True)
+
+        iterator = (
+            tqdm(
+                split_video_keys,
+                desc=f"Writing {split_name}",
+                disable=not verbose,
+            )
+            if verbose
+            else split_video_keys
+        )
+
+        for lf_idx, video_path in enumerate(iterator):
+            bbox_list = bboxes_by_video[video_path]
+            video = bbox_list[0].video
+
+            # Read image to get shape and save it
+            try:
+                frame_img = video[0]
+                if frame_img is None:
+                    continue
+
+                if frame_img.ndim == 3 and frame_img.shape[-1] == 1:
+                    frame_img = np.squeeze(frame_img, axis=-1)
+
+                image_filename = f"{lf_idx:07d}.{image_format}"
+                image_path = images_dir / image_filename
+
+                save_kwargs = {}
+                if (
+                    image_format.lower() in ["jpg", "jpeg"]
+                    and image_quality is not None
+                ):
+                    save_kwargs["quality"] = image_quality
+                elif image_format.lower() == "png" and image_quality is not None:
+                    save_kwargs["compress_level"] = min(9, max(0, image_quality))
+
+                iio.imwrite(image_path, frame_img, **save_kwargs)
+
+                height_px, width_px = frame_img.shape[:2]
+            except Exception as e:
+                warnings.warn(f"Error processing {video_path}: {e}, skipping.")
+                continue
+
+            # Write label file
+            label_filename = f"{lf_idx:07d}.txt"
+            label_path = labels_dir / label_filename
+            write_bbox_label_file(
+                label_path, bbox_list, (height_px, width_px), name_to_id
+            )
 
 
 def _write_roi_labels(
@@ -684,13 +825,14 @@ def parse_label_file(
     class_names: dict[int, str] | None = None,
     video: Video | None = None,
     frame_idx: int = 0,
-) -> tuple[list[Instance], list[ROI]]:
-    """Parse a single Ultralytics label file and return instances and ROIs.
+) -> tuple[list[Instance], list[ROI], list[BoundingBox]]:
+    """Parse a single Ultralytics label file and return instances, ROIs, and bboxes.
 
     The format is auto-detected per line based on the number of values:
 
     - **5 values**: Detection (``class_id x_center y_center width height``)
-    - **6 values**: Detection with confidence
+      -> ``UserBoundingBox``
+    - **6 values**: Detection with confidence -> ``PredictedBoundingBox``
     - **5 + 3k values**: Pose (existing keypoint format)
     - **Even count > 5 with (n-1) even**: Segmentation polygon
 
@@ -699,14 +841,20 @@ def parse_label_file(
         skeleton: Skeleton to use for pose instances.
         image_shape: Image dimensions ``(height, width)`` for denormalization.
         class_names: Optional mapping from class ID to category name.
-        video: Optional ``Video`` to associate with ROIs.
-        frame_idx: Frame index for ROIs. Defaults to 0.
+        video: Optional ``Video`` to associate with ROIs and bounding boxes.
+        frame_idx: Frame index for ROIs and bounding boxes. Defaults to 0.
 
     Returns:
-        A tuple of ``(instances, rois)`` parsed from the file.
+        A tuple of ``(instances, rois, bboxes)`` parsed from the file.
+
+    .. versionchanged:: 0.x
+        Returns a 3-tuple ``(instances, rois, bboxes)`` instead of the previous
+        2-tuple ``(instances, rois)``. Detection format lines now produce
+        ``BoundingBox`` objects in the third element instead of ``ROI`` objects.
     """
     instances: list[Instance] = []
     rois: list[ROI] = []
+    bboxes: list[BoundingBox] = []
 
     with open(label_path, "r") as f:
         for line_num, line in enumerate(f):
@@ -730,27 +878,39 @@ def parse_label_file(
                 height_px, width_px = image_shape
 
                 if fmt in ("detection", "detection_conf"):
-                    x_center, y_center, w_norm, h_norm = map(float, parts[1:5])
-                    score = float(parts[5]) if fmt == "detection_conf" else None
+                    x_center_norm, y_center_norm, w_norm, h_norm = map(
+                        float, parts[1:5]
+                    )
 
                     # Denormalize to pixel coordinates
+                    x_center_px = x_center_norm * width_px
+                    y_center_px = y_center_norm * height_px
                     w_px = w_norm * width_px
                     h_px = h_norm * height_px
-                    x_px = x_center * width_px - w_px / 2
-                    y_px = y_center * height_px - h_px / 2
 
-                    roi = ROI.from_bbox(
-                        x_px,
-                        y_px,
-                        w_px,
-                        h_px,
-                        annotation_type=AnnotationType.BOUNDING_BOX,
-                        category=category,
-                        score=score,
-                        video=video,
-                        frame_idx=frame_idx,
-                    )
-                    rois.append(roi)
+                    if fmt == "detection_conf":
+                        score = float(parts[5])
+                        bbox = PredictedBoundingBox(
+                            x_center=x_center_px,
+                            y_center=y_center_px,
+                            width=w_px,
+                            height=h_px,
+                            category=category,
+                            video=video,
+                            frame_idx=frame_idx,
+                            score=score,
+                        )
+                    else:
+                        bbox = UserBoundingBox(
+                            x_center=x_center_px,
+                            y_center=y_center_px,
+                            width=w_px,
+                            height=h_px,
+                            category=category,
+                            video=video,
+                            frame_idx=frame_idx,
+                        )
+                    bboxes.append(bbox)
 
                 elif fmt == "segmentation":
                     # class_id x1 y1 x2 y2 ... xn yn
@@ -763,7 +923,6 @@ def parse_label_file(
 
                     roi = ROI.from_polygon(
                         coords,
-                        annotation_type=AnnotationType.SEGMENTATION,
                         category=category,
                         video=video,
                         frame_idx=frame_idx,
@@ -814,7 +973,7 @@ def parse_label_file(
                 warnings.warn(f"Error parsing line {line_num} in {label_path}: {e}")
                 continue
 
-    return instances, rois
+    return instances, rois, bboxes
 
 
 def write_label_file(
@@ -914,7 +1073,7 @@ def write_roi_label_file(
         for roi in exploded_rois:
             class_id = name_to_id.get(roi.category, 0)
 
-            if roi.annotation_type == AnnotationType.SEGMENTATION and not roi.is_bbox:
+            if not roi.is_bbox:
                 # Write segmentation polygon
                 if (
                     hasattr(roi.geometry, "interiors")
@@ -949,10 +1108,45 @@ def write_roi_label_file(
                     f"{w:.6f}",
                     f"{h:.6f}",
                 ]
-                if roi.score is not None:
-                    line_parts.append(f"{roi.score:.6f}")
-
                 f.write(" ".join(line_parts) + "\n")
+
+
+def write_bbox_label_file(
+    label_path: Path,
+    bboxes: list[BoundingBox],
+    image_shape: tuple[int, int],
+    name_to_id: dict[str, int],
+) -> None:
+    """Write a single Ultralytics label file for detection bounding boxes.
+
+    Args:
+        label_path: Path to write the label file.
+        bboxes: List of ``BoundingBox`` objects for this image.
+        image_shape: Image dimensions ``(height, width)``.
+        name_to_id: Mapping from category name to class ID.
+    """
+    height_px, width_px = image_shape
+
+    with open(label_path, "w") as f:
+        for bbox in bboxes:
+            class_id = name_to_id.get(bbox.category, 0)
+
+            # Normalize center coordinates and dimensions
+            x_center_norm = bbox.x_center / width_px
+            y_center_norm = bbox.y_center / height_px
+            w_norm = bbox.width / width_px
+            h_norm = bbox.height / height_px
+
+            line_parts = [
+                str(class_id),
+                f"{x_center_norm:.6f}",
+                f"{y_center_norm:.6f}",
+                f"{w_norm:.6f}",
+                f"{h_norm:.6f}",
+            ]
+            if isinstance(bbox, PredictedBoundingBox):
+                line_parts.append(f"{bbox.score:.6f}")
+            f.write(" ".join(line_parts) + "\n")
 
 
 def create_data_yaml(

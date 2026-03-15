@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 from sleap_io.model.mask import SegmentationMask, _decode_rle, _encode_rle
-from sleap_io.model.roi import AnnotationType
 
 
 def test_encode_rle_all_zeros():
@@ -68,7 +67,6 @@ def test_segmentation_mask_from_numpy():
     assert mask.height == 10
     assert mask.width == 15
     assert mask.name == "test"
-    assert mask.annotation_type == AnnotationType.SEGMENTATION
 
 
 def test_segmentation_mask_data():
@@ -139,13 +137,3 @@ def test_segmentation_mask_to_polygon_nonconvex():
 
     # The polygon area should be close to the actual mask area (not inflated)
     assert roi.geometry.area == pytest.approx(actual_area, abs=2)
-
-
-def test_segmentation_mask_annotation_type_default():
-    mask = SegmentationMask.from_numpy(np.zeros((5, 5), dtype=bool))
-    assert mask.annotation_type == AnnotationType.SEGMENTATION
-
-
-def test_segmentation_mask_with_score():
-    mask = SegmentationMask.from_numpy(np.ones((5, 5), dtype=bool), score=0.95)
-    assert mask.score == 0.95

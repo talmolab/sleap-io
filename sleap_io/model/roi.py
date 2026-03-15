@@ -1,10 +1,10 @@
 """Data structures for region of interest (ROI) annotations.
 
-ROIs represent vector geometry annotations such as bounding boxes, polygons, and
-arbitrary shapes. They use Shapely geometries internally for spatial operations.
+ROIs represent vector geometry annotations such as polygons and arbitrary shapes.
+They use Shapely geometries internally for spatial operations.
 
-The `AnnotationType` enum is shared by both `ROI` and `SegmentationMask` to indicate
-the semantic meaning of an annotation.
+The `AnnotationType` enum is kept for backward compatibility with old file formats
+but is no longer used as a field on `ROI` or `SegmentationMask`.
 """
 
 from __future__ import annotations
@@ -51,11 +51,8 @@ class ROI:
 
     Attributes:
         geometry: A Shapely geometry object (e.g., `Polygon`, `box`, `Point`).
-        annotation_type: Semantic type of the annotation.
         name: Optional human-readable name for this ROI.
         category: Optional category label (e.g., class name for detection).
-        score: Optional confidence score (0-1). If set, the ROI is considered
-            a prediction.
         source: Optional string indicating the source of this annotation.
         video: Optional `Video` this ROI is associated with.
         frame_idx: Optional frame index. If `None`, the ROI is static (applies to
@@ -82,12 +79,8 @@ class ROI:
                 f"got {type(value).__name__}"
             )
 
-    annotation_type: AnnotationType = attrs.field(
-        default=AnnotationType.DEFAULT, converter=AnnotationType
-    )
     name: str = attrs.field(default="")
     category: str = attrs.field(default="")
-    score: float | None = attrs.field(default=None)
     source: str = attrs.field(default="")
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
@@ -119,11 +112,14 @@ class ROI:
 
         Returns:
             An ROI with a rectangular polygon geometry.
+
+        Note:
+            For detection bounding boxes, prefer ``BoundingBox.from_xywh()`` or
+            ``BoundingBox.from_xyxy()`` which provide richer metadata support.
         """
         from shapely.geometry import box
 
         geom = box(x, y, x + width, y + height)
-        kwargs.setdefault("annotation_type", AnnotationType.BOUNDING_BOX)
         return cls(geometry=geom, **kwargs)
 
     @classmethod
@@ -146,11 +142,14 @@ class ROI:
 
         Returns:
             An ROI with a rectangular polygon geometry.
+
+        Note:
+            For detection bounding boxes, prefer ``BoundingBox.from_xywh()`` or
+            ``BoundingBox.from_xyxy()`` which provide richer metadata support.
         """
         from shapely.geometry import box
 
         geom = box(x1, y1, x2, y2)
-        kwargs.setdefault("annotation_type", AnnotationType.BOUNDING_BOX)
         return cls(geometry=geom, **kwargs)
 
     @classmethod
@@ -172,7 +171,6 @@ class ROI:
         from shapely.geometry import Polygon
 
         geom = Polygon(coords)
-        kwargs.setdefault("annotation_type", AnnotationType.SEGMENTATION)
         return cls(geometry=geom, **kwargs)
 
     @classmethod
@@ -194,13 +192,7 @@ class ROI:
         from shapely.geometry import MultiPolygon, Polygon
 
         geom = MultiPolygon([Polygon(coords) for coords in polygons])
-        kwargs.setdefault("annotation_type", AnnotationType.SEGMENTATION)
         return cls(geometry=geom, **kwargs)
-
-    @property
-    def is_predicted(self) -> bool:
-        """Whether this ROI is a prediction (has a confidence score)."""
-        return self.score is not None
 
     @property
     def is_static(self) -> bool:
@@ -260,11 +252,7 @@ class ROI:
             "geometry": mapping(self.geometry),
             "properties": {
                 "name": self.name,
-                "annotation_type": int(self.annotation_type),
-                "annotation_type_name": self.annotation_type.name,
-                "roi_type": self.annotation_type.name,
                 "category": self.category,
-                "score": self.score,
                 "source": self.source,
                 "frame_idx": self.frame_idx,
             },
@@ -287,10 +275,8 @@ class ROI:
 
         return SegmentationMask.from_numpy(
             mask,
-            annotation_type=self.annotation_type,
             name=self.name,
             category=self.category,
-            score=self.score,
             source=self.source,
             video=self.video,
             frame_idx=self.frame_idx,
@@ -303,8 +289,7 @@ class ROI:
 
         For ``MultiPolygon`` or ``GeometryCollection`` geometries, creates a
         separate ROI for each component geometry, preserving all metadata
-        (annotation_type, name, category, score, source, video, frame_idx,
-        track, instance).
+        (name, category, source, video, frame_idx, track, instance).
 
         For single geometries (e.g., ``Polygon``, ``Point``), returns a list
         containing only this ROI.
@@ -319,10 +304,8 @@ class ROI:
             return [
                 ROI(
                     geometry=geom,
-                    annotation_type=self.annotation_type,
                     name=self.name,
                     category=self.category,
-                    score=self.score,
                     source=self.source,
                     video=self.video,
                     frame_idx=self.frame_idx,

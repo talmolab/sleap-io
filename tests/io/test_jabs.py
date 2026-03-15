@@ -16,7 +16,6 @@ from sleap_io.io.jabs import (
     read_labels,
     tracklets_to_v3,
 )
-from sleap_io.model.roi import AnnotationType
 
 
 def test_label_conversions(jabs_real_data_v5):
@@ -134,8 +133,7 @@ def test_read_labels_static_objects_as_rois(jabs_real_data_v5):
     assert len(labels.rois) == 1
     roi = labels.rois[0]
     assert roi.name == "corners"
-    assert roi.annotation_type == AnnotationType.ARENA
-    assert roi.category == "static_object"
+    assert roi.category == "arena"
     assert roi.source == "jabs"
     assert roi.frame_idx is None  # Static ROI
     assert roi.video == labels.videos[0]
@@ -189,7 +187,7 @@ def test_static_object_to_roi_single_point():
     roi = _static_object_to_roi("lixit", coords, video)
 
     assert roi.name == "lixit"
-    assert roi.annotation_type == AnnotationType.ANCHOR
+    assert roi.category == "anchor"
     assert isinstance(roi.geometry, Point)
     assert roi.geometry.x == 100.0
     assert roi.geometry.y == 200.0

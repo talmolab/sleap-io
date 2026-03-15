@@ -8,6 +8,7 @@ Format version history:
     - 1.4: Added channel_order attribute to embedded video datasets to track RGB vs BGR
     - 1.5: Added ROI and segmentation mask datasets (/rois, /roi_wkb, /masks, /mask_rle)
     - 1.6: Added instance_idx to ROI dtype for instance-level associations
+    - 1.7: Added bounding box dataset (/bboxes)
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from sleap_io.io.video_reading import (
     TiffVideo,
     VideoBackend,
 )
+from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.camera import (
     Camera,
     CameraGroup,
@@ -1361,7 +1363,9 @@ def write_metadata(labels_path: str, labels: Labels):
     has_instance_rois = any(
         roi.instance is not None or roi._instance_idx >= 0 for roi in labels.rois
     )
-    if has_instance_rois:
+    if labels.bboxes:
+        format_id = 1.7
+    elif has_instance_rois:
         format_id = 1.6
     elif labels.rois or labels.masks:
         format_id = 1.5
@@ -2331,9 +2335,10 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     # Create LazyFrameList
     lazy_frames = LazyFrameList(lazy_store)
 
-    # Read ROIs and masks eagerly (typically small count)
+    # Read ROIs, masks, and bboxes eagerly (typically small count)
     rois = read_rois(labels_path, videos, tracks)
     masks = read_masks(labels_path, videos, tracks)
+    bboxes = read_bboxes(labels_path, videos, tracks)
 
     # Create Labels with lazy state
     labels = Labels(
@@ -2346,6 +2351,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
         provenance=provenance,
         rois=rois,
         masks=masks,
+        bboxes=bboxes,
         lazy_store=lazy_store,
     )
     labels.provenance["filename"] = labels_path
@@ -2411,9 +2417,6 @@ def read_rois(
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
 
-        score_val = float(row["score"])
-        score = None if np.isnan(score_val) else score_val
-
         instance_idx = int(row["instance"]) if "instance" in row.dtype.names else -1
         instance = (
             instances[instance_idx]
@@ -2423,10 +2426,8 @@ def read_rois(
 
         roi = ROI(
             geometry=geometry,
-            annotation_type=int(row["annotation_type"]),
             name=names[i] if i < len(names) else "",
             category=categories[i] if i < len(categories) else "",
-            score=score,
             source=sources[i] if i < len(sources) else "",
             video=video,
             frame_idx=frame_idx,
@@ -2492,7 +2493,6 @@ def write_rois(
         video_idx = videos.index(roi.video) if roi.video in videos else -1
         frame_idx = roi.frame_idx if roi.frame_idx is not None else -1
         track_idx = tracks.index(roi.track) if roi.track in tracks else -1
-        score = roi.score if roi.score is not None else float("nan")
 
         instance_idx = roi._instance_idx  # Use stored index as default
         if instances is not None and roi.instance is not None:
@@ -2503,11 +2503,11 @@ def write_rois(
 
         roi_rows.append(
             (
-                int(roi.annotation_type),
+                0,  # annotation_type: write 0 (DEFAULT) for backward compat
                 video_idx,
                 frame_idx,
                 track_idx,
-                score,
+                float("nan"),  # score: write NaN for backward compat
                 wkb_start,
                 wkb_end,
                 instance_idx,
@@ -2529,6 +2529,173 @@ def write_rois(
         ds.attrs["names"] = json.dumps(names, separators=(",", ":"))
         ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
         f.create_dataset("roi_wkb", data=wkb_flat, dtype=np.uint8)
+
+
+def read_bboxes(
+    labels_path: str,
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
+) -> list[BoundingBox]:
+    """Read bounding box annotations from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: List of Video objects for relinking.
+        tracks: List of Track objects for relinking.
+        instances: Optional list of Instance/PredictedInstance objects for
+            relinking bounding box instance associations. If ``None``, instance
+            associations will not be restored.
+
+    Returns:
+        A list of BoundingBox objects. Returns an empty list if no bboxes are
+        stored.
+    """
+    try:
+        bbox_data = read_hdf5_dataset(labels_path, "bboxes")
+    except KeyError:
+        return []
+
+    if len(bbox_data) == 0:
+        return []
+
+    # Read string metadata from attributes
+    with h5py.File(labels_path, "r") as f:
+        bbox_grp = f["bboxes"]
+        categories = json.loads(bbox_grp.attrs.get("categories", "[]"))
+        names = json.loads(bbox_grp.attrs.get("names", "[]"))
+        sources = json.loads(bbox_grp.attrs.get("sources", "[]"))
+
+    bboxes: list[BoundingBox] = []
+    for i, row in enumerate(bbox_data):
+        video_idx = int(row["video"])
+        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
+
+        frame_idx_val = int(row["frame_idx"])
+        frame_idx = None if frame_idx_val == -1 else frame_idx_val
+
+        track_idx = int(row["track"])
+        track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
+
+        instance_idx = int(row["instance"])
+        instance = (
+            instances[instance_idx]
+            if instances is not None and 0 <= instance_idx < len(instances)
+            else None
+        )
+
+        kwargs = dict(
+            x_center=float(row["x_center"]),
+            y_center=float(row["y_center"]),
+            width=float(row["width"]),
+            height=float(row["height"]),
+            angle=float(row["angle"]),
+            video=video,
+            frame_idx=frame_idx,
+            track=track,
+            instance=instance,
+            category=categories[i] if i < len(categories) else "",
+            name=names[i] if i < len(names) else "",
+            source=sources[i] if i < len(sources) else "",
+        )
+
+        is_predicted = bool(row["is_predicted"])
+        if is_predicted:
+            bbox = PredictedBoundingBox(score=float(row["score"]), **kwargs)
+        else:
+            bbox = UserBoundingBox(**kwargs)
+
+        # Store raw index for deferred resolution (lazy loading)
+        bbox._instance_idx = instance_idx
+        bboxes.append(bbox)
+
+    return bboxes
+
+
+def write_bboxes(
+    labels_path: str,
+    bboxes: list[BoundingBox],
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
+) -> None:
+    """Write bounding box annotations to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        bboxes: A list of BoundingBox objects to write.
+        videos: List of Video objects for index mapping.
+        tracks: List of Track objects for index mapping.
+        instances: Optional list of Instance/PredictedInstance objects for index
+            mapping. If provided, bounding box instance associations will be
+            persisted.
+    """
+    if not bboxes:
+        return
+
+    bbox_dtype = np.dtype(
+        [
+            ("x_center", "f8"),
+            ("y_center", "f8"),
+            ("width", "f8"),
+            ("height", "f8"),
+            ("angle", "f8"),
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("track", "i4"),
+            ("instance", "i4"),
+            ("is_predicted", "u1"),
+            ("score", "f4"),
+        ]
+    )
+
+    bbox_rows = []
+    categories = []
+    names = []
+    sources = []
+
+    for bbox in bboxes:
+        video_idx = videos.index(bbox.video) if bbox.video in videos else -1
+        frame_idx = bbox.frame_idx if bbox.frame_idx is not None else -1
+        track_idx = tracks.index(bbox.track) if bbox.track in tracks else -1
+
+        instance_idx = bbox._instance_idx  # Use stored index as default
+        if instances is not None and bbox.instance is not None:
+            try:
+                instance_idx = instances.index(bbox.instance)
+            except ValueError:
+                pass  # Keep stored _instance_idx
+
+        is_predicted = isinstance(bbox, PredictedBoundingBox)
+        score = bbox.score if is_predicted else float("nan")
+
+        bbox_rows.append(
+            (
+                bbox.x_center,
+                bbox.y_center,
+                bbox.width,
+                bbox.height,
+                bbox.angle,
+                video_idx,
+                frame_idx,
+                track_idx,
+                instance_idx,
+                int(is_predicted),
+                score,
+            )
+        )
+
+        categories.append(bbox.category)
+        names.append(bbox.name)
+        sources.append(bbox.source)
+
+    bbox_array = np.array(bbox_rows, dtype=bbox_dtype)
+
+    with h5py.File(labels_path, "a") as f:
+        ds = f.create_dataset("bboxes", data=bbox_array, dtype=bbox_dtype)
+        ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
+        ds.attrs["names"] = json.dumps(names, separators=(",", ":"))
+        ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
 
 
 def read_masks(
@@ -2583,18 +2750,13 @@ def read_masks(
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
 
-        score_val = float(row["score"])
-        score = None if np.isnan(score_val) else score_val
-
         masks.append(
             SegmentationMask(
                 rle_counts=rle_counts,
                 height=int(row["height"]),
                 width=int(row["width"]),
-                annotation_type=int(row["annotation_type"]),
                 name=names[i] if i < len(names) else "",
                 category=categories[i] if i < len(categories) else "",
-                score=score,
                 source=sources[i] if i < len(sources) else "",
                 video=video,
                 frame_idx=frame_idx,
@@ -2655,17 +2817,16 @@ def write_masks(
         video_idx = videos.index(mask.video) if mask.video in videos else -1
         frame_idx = mask.frame_idx if mask.frame_idx is not None else -1
         track_idx = tracks.index(mask.track) if mask.track in tracks else -1
-        score = mask.score if mask.score is not None else float("nan")
 
         mask_rows.append(
             (
                 mask.height,
                 mask.width,
-                int(mask.annotation_type),
+                2,  # annotation_type: write SEGMENTATION (2) for backward compat
                 video_idx,
                 frame_idx,
                 track_idx,
-                score,
+                float("nan"),  # score: write NaN for backward compat
                 rle_start,
                 rle_end,
             )
@@ -2778,6 +2939,35 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     sessions = read_sessions(labels_path, videos, labeled_frames)
     rois = read_rois(labels_path, videos, tracks, instances)
     masks = read_masks(labels_path, videos, tracks)
+    bboxes = read_bboxes(labels_path, videos, tracks, instances)
+
+    # Migrate old-style bbox ROIs to BoundingBox objects
+    if not bboxes:
+        migrated_bboxes: list[BoundingBox] = []
+        remaining_rois: list[ROI] = []
+        for roi in rois:
+            if roi.is_bbox:
+                minx, miny, maxx, maxy = roi.geometry.bounds
+                migrated_bboxes.append(
+                    UserBoundingBox.from_xyxy(
+                        minx,
+                        miny,
+                        maxx,
+                        maxy,
+                        video=roi.video,
+                        frame_idx=roi.frame_idx,
+                        track=roi.track,
+                        instance=roi.instance,
+                        category=roi.category,
+                        name=roi.name,
+                        source=roi.source,
+                    )
+                )
+            else:
+                remaining_rois.append(roi)
+        if migrated_bboxes:
+            bboxes = migrated_bboxes
+            rois = remaining_rois
 
     labels = Labels(
         labeled_frames=labeled_frames,
@@ -2789,6 +2979,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         provenance=provenance,
         rois=rois,
         masks=masks,
+        bboxes=bboxes,
     )
     labels.provenance["filename"] = labels_path
 
@@ -2954,9 +3145,10 @@ def _write_labels_lazy(
         with h5py.File(labels_path, "a") as f:
             f.create_dataset("negative_frames", data=neg_data)
 
-    # Write ROIs and masks (eagerly loaded even in lazy mode)
+    # Write ROIs, masks, and bboxes (eagerly loaded even in lazy mode)
     write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
+    write_bboxes(labels_path, labels.bboxes, labels.videos, labels.tracks)
 
 
 def write_labels(
@@ -3096,9 +3288,12 @@ def write_labels(
     write_lfs(labels_path, labels)
     write_negative_frames(labels_path, labels)
 
-    # Collect all instances across all frames for ROI instance mapping
+    # Collect all instances across all frames for ROI/bbox instance mapping
     all_instances: list[Instance | PredictedInstance] = []
     for lf in labels.labeled_frames:
         all_instances.extend(lf.instances)
     write_rois(labels_path, labels.rois, labels.videos, labels.tracks, all_instances)
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
+    write_bboxes(
+        labels_path, labels.bboxes, labels.videos, labels.tracks, all_instances
+    )

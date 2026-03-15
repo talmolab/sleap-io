@@ -31,11 +31,13 @@ from sleap_io.io.ultralytics import (
     parse_label_file,
     read_labels,
     read_labels_set,
+    write_bbox_label_file,
     write_label_file,
     write_labels,
     write_roi_label_file,
 )
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.roi import ROI
 
 
 def test_parse_data_yaml(ultralytics_data_yaml):
@@ -63,7 +65,9 @@ def test_create_skeleton_from_config(ultralytics_data_yaml):
 def test_parse_label_file(ultralytics_dataset, ultralytics_skeleton):
     """Test parsing of individual label files."""
     label_file = Path(ultralytics_dataset) / "train" / "labels" / "image_001.txt"
-    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois, bboxes = parse_label_file(
+        label_file, ultralytics_skeleton, (480, 640)
+    )
 
     assert len(instances) == 1
     assert len(rois) == 0
@@ -82,7 +86,9 @@ def test_parse_label_file(ultralytics_dataset, ultralytics_skeleton):
 def test_parse_label_file_multi_instance(ultralytics_dataset, ultralytics_skeleton):
     """Test parsing of label file with multiple instances."""
     label_file = Path(ultralytics_dataset) / "train" / "labels" / "image_002.txt"
-    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois, bboxes = parse_label_file(
+        label_file, ultralytics_skeleton, (480, 640)
+    )
 
     assert len(instances) == 2
     assert len(rois) == 0
@@ -423,7 +429,9 @@ def test_empty_label_file(tmp_path, ultralytics_skeleton):
     label_file = tmp_path / "empty.txt"
     label_file.write_text("")
 
-    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois, bboxes = parse_label_file(
+        label_file, ultralytics_skeleton, (480, 640)
+    )
     assert len(instances) == 0
     assert len(rois) == 0
 
@@ -434,7 +442,9 @@ def test_malformed_label_file(tmp_path, ultralytics_skeleton):
     label_file.write_text("invalid line\n0 0.5\n")  # incomplete data
 
     # Should not crash, but warn and skip invalid lines
-    instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+    instances, rois, bboxes = parse_label_file(
+        label_file, ultralytics_skeleton, (480, 640)
+    )
     assert len(instances) == 0  # Both lines are invalid
     assert len(rois) == 0
 
@@ -449,7 +459,7 @@ def test_keypoint_count_mismatch_warning(tmp_path):
     label_file.write_text("0 0.5 0.5 0.2 0.4 0.1 0.1 2 0.2 0.2 2\n")  # Only 2 keypoints
 
     with pytest.warns(UserWarning, match="Keypoint count mismatch"):
-        instances, rois = parse_label_file(label_file, skeleton, (100, 100))
+        instances, rois, bboxes = parse_label_file(label_file, skeleton, (100, 100))
 
     assert len(instances) == 0  # Instance rejected due to mismatch
 
@@ -856,7 +866,9 @@ def test_parse_label_file_edge_cases(tmp_path, ultralytics_skeleton):
     label_file.write_text("0 0.5 0.5 0.2 0.2 0.1 0.1 2 0.2 0.2 2 0.3 0.3 1\n")
 
     with pytest.warns(UserWarning, match="Keypoint count mismatch"):
-        instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+        instances, rois, bboxes = parse_label_file(
+            label_file, ultralytics_skeleton, (480, 640)
+        )
     assert len(instances) == 0  # Should skip the malformed instance
 
     # Test parsing error with invalid data
@@ -864,7 +876,9 @@ def test_parse_label_file_edge_cases(tmp_path, ultralytics_skeleton):
     label_file.write_text("not_a_number 0.5 0.5 0.2 0.2\n")
 
     with pytest.warns(UserWarning, match="Error parsing line"):
-        instances, rois = parse_label_file(label_file, ultralytics_skeleton, (480, 640))
+        instances, rois, bboxes = parse_label_file(
+            label_file, ultralytics_skeleton, (480, 640)
+        )
     assert len(instances) == 0
 
 
@@ -907,7 +921,7 @@ def test_parse_label_file_with_invalid_keypoint_count(tmp_path):
     label_file.write_text("0 0.5 0.5 0.2 0.2 0.1 0.1 2\n")
 
     with pytest.warns(UserWarning, match="Keypoint count mismatch"):
-        instances, rois = parse_label_file(label_file, skeleton, (480, 640))
+        instances, rois, bboxes = parse_label_file(label_file, skeleton, (480, 640))
     assert len(instances) == 0
 
 
@@ -1317,7 +1331,7 @@ def _create_detection_dataset(base_path, with_confidence=False):
 
 
 def test_ultralytics_detection_read_write_roundtrip(tmp_path):
-    """Create detection-format labels, read, verify ROIs, write back."""
+    """Create detection-format labels, read, verify bboxes, write back."""
     dataset_path = tmp_path / "det_dataset"
     _create_detection_dataset(dataset_path)
 
@@ -1325,22 +1339,21 @@ def test_ultralytics_detection_read_write_roundtrip(tmp_path):
     labels = read_labels(str(dataset_path), split="train")
 
     assert len(labels.labeled_frames) == 1
-    assert len(labels.rois) == 2
+    assert len(labels.bboxes) == 2
+    assert len(labels.rois) == 0  # Detection goes to bboxes, not rois
 
-    # Check first ROI (cat)
-    roi0 = labels.rois[0]
-    assert roi0.category == "cat"
-    assert roi0.annotation_type == AnnotationType.BOUNDING_BOX
-    assert roi0.score is None
-    assert roi0.is_bbox
+    # Check first bbox (cat)
+    bbox0 = labels.bboxes[0]
+    assert bbox0.category == "cat"
+    assert isinstance(bbox0, UserBoundingBox)
 
-    # Check second ROI (dog)
-    roi1 = labels.rois[1]
-    assert roi1.category == "dog"
+    # Check second bbox (dog)
+    bbox1 = labels.bboxes[1]
+    assert bbox1.category == "dog"
 
-    # Verify both ROIs have valid bounding boxes with nonzero area
-    for roi in labels.rois:
-        assert roi.area > 0
+    # Verify both bboxes have valid areas
+    for bbox in labels.bboxes:
+        assert bbox.area > 0
 
     # Write back
     out_path = tmp_path / "det_out"
@@ -1359,7 +1372,7 @@ def test_ultralytics_detection_read_write_roundtrip(tmp_path):
 
     # Read back and verify
     labels2 = read_labels(str(out_path), split="train")
-    assert len(labels2.rois) == 2
+    assert len(labels2.bboxes) == 2
 
 
 def test_ultralytics_detection_with_confidence(tmp_path):
@@ -1369,11 +1382,19 @@ def test_ultralytics_detection_with_confidence(tmp_path):
 
     labels = read_labels(str(dataset_path), split="train")
 
-    assert len(labels.rois) == 2
-    assert labels.rois[0].score == pytest.approx(0.95)
-    assert labels.rois[0].category == "cat"
-    assert labels.rois[1].score == pytest.approx(0.85)
-    assert labels.rois[1].category == "dog"
+    assert len(labels.bboxes) == 2
+    assert len(labels.rois) == 0
+
+    # Check types and categories
+    bbox0 = labels.bboxes[0]
+    assert isinstance(bbox0, PredictedBoundingBox)
+    assert bbox0.category == "cat"
+    assert bbox0.score == pytest.approx(0.95)
+
+    bbox1 = labels.bboxes[1]
+    assert isinstance(bbox1, PredictedBoundingBox)
+    assert bbox1.category == "dog"
+    assert bbox1.score == pytest.approx(0.85)
 
 
 def test_ultralytics_segmentation_read_write_roundtrip(tmp_path):
@@ -1384,14 +1405,15 @@ def test_ultralytics_segmentation_read_write_roundtrip(tmp_path):
     label_file.write_text("0 0.1 0.1 0.9 0.2 0.8 0.9 0.2 0.8\n")
 
     skeleton = Skeleton()
-    instances, rois = parse_label_file(
+    instances, rois, bboxes = parse_label_file(
         label_file, skeleton, (100, 200), class_names={0: "animal"}
     )
 
     assert len(instances) == 0
     assert len(rois) == 1
+    assert len(bboxes) == 0
     roi = rois[0]
-    assert roi.annotation_type == AnnotationType.SEGMENTATION
+    assert not roi.is_bbox
     assert roi.category == "animal"
     assert roi.area > 0
 
@@ -1409,12 +1431,13 @@ def test_ultralytics_segmentation_read_write_roundtrip(tmp_path):
     write_roi_label_file(label_out, rois, (100, 200), name_to_id)
 
     # Re-parse and compare
-    instances2, rois2 = parse_label_file(
+    instances2, rois2, bboxes2 = parse_label_file(
         label_out, skeleton, (100, 200), class_names={0: "animal"}
     )
     assert len(rois2) == 1
+    assert len(bboxes2) == 0
     roi2 = rois2[0]
-    assert roi2.annotation_type == AnnotationType.SEGMENTATION
+    assert not roi2.is_bbox
 
     # Areas should match closely
     assert abs(roi.area - roi2.area) / roi.area < 0.01
@@ -1428,27 +1451,26 @@ def test_ultralytics_coordinate_normalization_detection(tmp_path):
     label_file.write_text("0 0.5 0.5 0.4 0.6\n")
 
     skeleton = Skeleton()
-    instances, rois = parse_label_file(
+    instances, rois, bboxes = parse_label_file(
         label_file, skeleton, (100, 200), class_names={0: "obj"}
     )
 
     assert len(instances) == 0
-    assert len(rois) == 1
+    assert len(rois) == 0
+    assert len(bboxes) == 1
 
-    roi = rois[0]
-    minx, miny, maxx, maxy = roi.bounds
-
+    bbox = bboxes[0]
     # Expected pixel coords:
+    # x_center = 0.5 * 200 = 100, y_center = 0.5 * 100 = 50
     # w_px = 0.4 * 200 = 80, h_px = 0.6 * 100 = 60
-    # x = 0.5*200 - 80/2 = 60, y = 0.5*100 - 60/2 = 20
-    assert abs(minx - 60.0) < 1e-4
-    assert abs(miny - 20.0) < 1e-4
-    assert abs(maxx - 140.0) < 1e-4
-    assert abs(maxy - 80.0) < 1e-4
+    assert abs(bbox.x_center - 100.0) < 1e-4
+    assert abs(bbox.y_center - 50.0) < 1e-4
+    assert abs(bbox.width - 80.0) < 1e-4
+    assert abs(bbox.height - 60.0) < 1e-4
 
     # Write back and verify normalization
     label_out = tmp_path / "det_out.txt"
-    write_roi_label_file(label_out, [roi], (100, 200), {"obj": 0})
+    write_bbox_label_file(label_out, bboxes, (100, 200), {"obj": 0})
 
     content = label_out.read_text().strip()
     parts = content.split()
@@ -1457,6 +1479,72 @@ def test_ultralytics_coordinate_normalization_detection(tmp_path):
     assert float(parts[2]) == pytest.approx(0.5, abs=1e-4)
     assert float(parts[3]) == pytest.approx(0.4, abs=1e-4)
     assert float(parts[4]) == pytest.approx(0.6, abs=1e-4)
+
+
+def test_write_bbox_label_file(tmp_path):
+    """Test writing and reading back bounding boxes via write_bbox_label_file."""
+    bboxes = [
+        UserBoundingBox(
+            x_center=100.0,
+            y_center=50.0,
+            width=80.0,
+            height=60.0,
+            category="cat",
+        ),
+        PredictedBoundingBox(
+            x_center=50.0,
+            y_center=25.0,
+            width=40.0,
+            height=30.0,
+            category="dog",
+            score=0.9,
+        ),
+    ]
+    name_to_id = {"cat": 0, "dog": 1}
+    label_path = tmp_path / "bbox_labels.txt"
+    write_bbox_label_file(label_path, bboxes, (100, 200), name_to_id)
+
+    content = label_path.read_text().strip().split("\n")
+    assert len(content) == 2
+
+    # First line: UserBoundingBox -> 5 values (no score)
+    parts0 = content[0].split()
+    assert len(parts0) == 5
+    assert parts0[0] == "0"
+    assert float(parts0[1]) == pytest.approx(0.5, abs=1e-4)  # 100/200
+    assert float(parts0[2]) == pytest.approx(0.5, abs=1e-4)  # 50/100
+    assert float(parts0[3]) == pytest.approx(0.4, abs=1e-4)  # 80/200
+    assert float(parts0[4]) == pytest.approx(0.6, abs=1e-4)  # 60/100
+
+    # Second line: PredictedBoundingBox -> 6 values (with score)
+    parts1 = content[1].split()
+    assert len(parts1) == 6
+    assert parts1[0] == "1"
+    assert float(parts1[1]) == pytest.approx(0.25, abs=1e-4)  # 50/200
+    assert float(parts1[2]) == pytest.approx(0.25, abs=1e-4)  # 25/100
+    assert float(parts1[3]) == pytest.approx(0.2, abs=1e-4)  # 40/200
+    assert float(parts1[4]) == pytest.approx(0.3, abs=1e-4)  # 30/100
+    assert float(parts1[5]) == pytest.approx(0.9, abs=1e-4)  # score
+
+    # Read back and verify roundtrip
+    skeleton = Skeleton()
+    instances, rois, bboxes_read = parse_label_file(
+        label_path, skeleton, (100, 200), class_names={0: "cat", 1: "dog"}
+    )
+    assert len(instances) == 0
+    assert len(rois) == 0
+    assert len(bboxes_read) == 2
+
+    assert isinstance(bboxes_read[0], UserBoundingBox)
+    assert bboxes_read[0].category == "cat"
+    assert abs(bboxes_read[0].x_center - 100.0) < 1e-3
+    assert abs(bboxes_read[0].y_center - 50.0) < 1e-3
+
+    assert isinstance(bboxes_read[1], PredictedBoundingBox)
+    assert bboxes_read[1].category == "dog"
+    assert bboxes_read[1].score == pytest.approx(0.9, abs=1e-4)
+    assert abs(bboxes_read[1].x_center - 50.0) < 1e-3
+    assert abs(bboxes_read[1].y_center - 25.0) < 1e-3
 
 
 def test_write_roi_labels_splitting(tmp_path):
@@ -1507,7 +1595,6 @@ def test_write_roi_label_file_multipolygon(tmp_path):
 
     roi = ROI(
         geometry=multi,
-        annotation_type=AnnotationType.SEGMENTATION,
         category="obj",
     )
     label_path = tmp_path / "multi.txt"
@@ -1528,7 +1615,6 @@ def test_write_roi_label_file_hole_warning(tmp_path):
 
     roi = ROI(
         geometry=poly_with_hole,
-        annotation_type=AnnotationType.SEGMENTATION,
         category="obj",
     )
     label_path = tmp_path / "hole.txt"
@@ -1538,3 +1624,55 @@ def test_write_roi_label_file_hole_warning(tmp_path):
     # File should still be written (exterior only)
     lines = label_path.read_text().strip().split("\n")
     assert len(lines) == 1
+
+
+def test_write_bbox_label_file_predicted_score(tmp_path):
+    """PredictedBoundingBox score should be written as 6th value."""
+    bboxes = [
+        PredictedBoundingBox(
+            x_center=100,
+            y_center=50,
+            width=80,
+            height=60,
+            category="cat",
+            score=0.85,
+        ),
+        UserBoundingBox(
+            x_center=50,
+            y_center=25,
+            width=40,
+            height=30,
+            category="dog",
+        ),
+    ]
+    name_to_id = {"cat": 0, "dog": 1}
+    label_path = tmp_path / "pred_bbox.txt"
+    write_bbox_label_file(label_path, bboxes, (100, 200), name_to_id)
+
+    content = label_path.read_text().strip().split("\n")
+    assert len(content) == 2
+
+    # First line: PredictedBoundingBox should have 6 values (including score)
+    parts0 = content[0].split()
+    assert len(parts0) == 6
+    assert float(parts0[5]) == pytest.approx(0.85, abs=1e-4)
+
+    # Second line: UserBoundingBox should have 5 values (no score)
+    parts1 = content[1].split()
+    assert len(parts1) == 5
+
+    # Roundtrip: read back and verify types and score
+    skeleton = Skeleton()
+    instances, rois, bboxes_read = parse_label_file(
+        label_path, skeleton, (100, 200), class_names={0: "cat", 1: "dog"}
+    )
+    assert len(instances) == 0
+    assert len(rois) == 0
+    assert len(bboxes_read) == 2
+
+    assert isinstance(bboxes_read[0], PredictedBoundingBox)
+    assert bboxes_read[0].score == pytest.approx(0.85, abs=1e-4)
+    assert bboxes_read[0].category == "cat"
+
+    assert isinstance(bboxes_read[1], UserBoundingBox)
+    assert bboxes_read[1].category == "dog"

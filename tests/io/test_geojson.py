@@ -8,7 +8,7 @@ from shapely.geometry import LineString, Point
 import sleap_io as sio
 from sleap_io.io.geojson import read_rois, write_rois
 from sleap_io.model.labels import Labels
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 
 
 def test_write_rois_basic(tmp_path):
@@ -51,7 +51,6 @@ def test_roundtrip_bbox(tmp_path):
     assert result.bounds == pytest.approx(roi.bounds)
     assert result.name == "my_box"
     assert result.category == "det"
-    assert result.annotation_type == AnnotationType.BOUNDING_BOX
 
 
 def test_roundtrip_polygon(tmp_path):
@@ -85,7 +84,7 @@ def test_roundtrip_multi_polygon(tmp_path):
 
 def test_roundtrip_point(tmp_path):
     """Point geometry roundtrips correctly."""
-    roi = ROI(geometry=Point(5, 10), annotation_type=AnnotationType.ANCHOR)
+    roi = ROI(geometry=Point(5, 10), category="anchor")
     path = tmp_path / "point.geojson"
     write_rois([roi], path)
     loaded = read_rois(path)
@@ -94,7 +93,7 @@ def test_roundtrip_point(tmp_path):
     assert loaded[0].geometry.geom_type == "Point"
     assert loaded[0].geometry.x == pytest.approx(5)
     assert loaded[0].geometry.y == pytest.approx(10)
-    assert loaded[0].annotation_type == AnnotationType.ANCHOR
+    assert loaded[0].category == "anchor"
 
 
 def test_roundtrip_linestring(tmp_path):
@@ -118,10 +117,7 @@ def test_roundtrip_all_metadata(tmp_path):
         10,
         name="full_meta",
         category="cat1",
-        score=0.85,
         source="model_v2",
-        frame_idx=7,
-        annotation_type=AnnotationType.SEGMENTATION,
     )
     path = tmp_path / "meta.geojson"
     write_rois([roi], path)
@@ -130,26 +126,7 @@ def test_roundtrip_all_metadata(tmp_path):
     result = loaded[0]
     assert result.name == "full_meta"
     assert result.category == "cat1"
-    assert result.score == pytest.approx(0.85)
     assert result.source == "model_v2"
-    assert result.frame_idx == 7
-    assert result.annotation_type == AnnotationType.SEGMENTATION
-
-
-def test_score_none_roundtrip(tmp_path):
-    """None score serializes as JSON null and roundtrips to None."""
-    roi = ROI.from_bbox(0, 0, 10, 10)
-    assert roi.score is None
-    path = tmp_path / "null_score.geojson"
-    write_rois([roi], path)
-
-    # Verify null in JSON
-    with open(path) as f:
-        data = json.load(f)
-    assert data["features"][0]["properties"]["score"] is None
-
-    loaded = read_rois(path)
-    assert loaded[0].score is None
 
 
 def test_empty_collection(tmp_path):
@@ -158,53 +135,6 @@ def test_empty_collection(tmp_path):
     write_rois([], path)
     loaded = read_rois(path)
     assert loaded == []
-
-
-def test_annotation_type_roundtrip(tmp_path):
-    """Each AnnotationType enum value preserved on roundtrip."""
-    for at in AnnotationType:
-        roi = ROI.from_bbox(0, 0, 5, 5, annotation_type=at)
-        path = tmp_path / f"at_{at.name}.geojson"
-        write_rois([roi], path)
-        loaded = read_rois(path)
-        assert loaded[0].annotation_type == at
-
-
-def test_movement_compatibility_output(tmp_path):
-    """Output contains roi_type property for movement compatibility."""
-    roi = ROI.from_bbox(0, 0, 10, 10, annotation_type=AnnotationType.ARENA)
-    path = tmp_path / "movement.geojson"
-    write_rois([roi], path)
-
-    with open(path) as f:
-        data = json.load(f)
-    props = data["features"][0]["properties"]
-    assert "roi_type" in props
-    assert props["roi_type"] == "ARENA"
-
-
-def test_movement_compatible_input(tmp_path):
-    """Input with only roi_type (no annotation_type) parses correctly."""
-    geojson = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
-                },
-                "properties": {"roi_type": "ARENA"},
-            }
-        ],
-    }
-    path = tmp_path / "movement_in.geojson"
-    with open(path, "w") as f:
-        json.dump(geojson, f)
-
-    loaded = read_rois(path)
-    assert len(loaded) == 1
-    assert loaded[0].annotation_type == AnnotationType.ARENA
 
 
 def test_unknown_properties_ignored(tmp_path):
@@ -253,10 +183,8 @@ def test_missing_properties_defaults(tmp_path):
     roi = loaded[0]
     assert roi.name == ""
     assert roi.category == ""
-    assert roi.score is None
     assert roi.source == ""
     assert roi.frame_idx is None
-    assert roi.annotation_type == AnnotationType.DEFAULT
 
 
 def test_single_feature_input(tmp_path):
@@ -307,3 +235,34 @@ def test_top_level_load_save(tmp_path):
     loaded = sio.load_geojson(path)
     assert len(loaded) == 1
     assert loaded[0].name == "top_level"
+
+
+def test_backward_compat_old_geojson_properties(tmp_path):
+    """Old GeoJSON files with annotation_type/score are read OK."""
+    geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+                },
+                "properties": {
+                    "name": "old_roi",
+                    "annotation_type": 3,
+                    "annotation_type_name": "ARENA",
+                    "roi_type": "ARENA",
+                    "score": 0.85,
+                },
+            }
+        ],
+    }
+    path = tmp_path / "old_format.geojson"
+    with open(path, "w") as f:
+        json.dump(geojson, f)
+
+    loaded = read_rois(path)
+    assert len(loaded) == 1
+    assert loaded[0].name == "old_roi"
+    # Old properties are ignored, not an error

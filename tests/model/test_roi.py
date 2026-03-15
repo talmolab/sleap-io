@@ -8,6 +8,7 @@ from sleap_io.model.video import Video
 
 
 def test_annotation_type_enum():
+    """AnnotationType enum is kept for backward compatibility."""
     assert AnnotationType.DEFAULT == 0
     assert AnnotationType.BOUNDING_BOX == 1
     assert AnnotationType.SEGMENTATION == 2
@@ -24,14 +25,12 @@ def test_roi_identity_equality():
 
 def test_roi_from_bbox():
     roi = ROI.from_bbox(10, 20, 30, 40)
-    assert roi.annotation_type == AnnotationType.BOUNDING_BOX
     assert roi.bounds == (10.0, 20.0, 40.0, 60.0)
     assert roi.area == pytest.approx(30.0 * 40.0)
 
 
 def test_roi_from_xyxy():
     roi = ROI.from_xyxy(10, 20, 40, 60)
-    assert roi.annotation_type == AnnotationType.BOUNDING_BOX
     assert roi.bounds == (10.0, 20.0, 40.0, 60.0)
     assert roi.area == pytest.approx(30.0 * 40.0)
 
@@ -39,7 +38,6 @@ def test_roi_from_xyxy():
 def test_roi_from_polygon():
     coords = [(0, 0), (10, 0), (10, 10), (0, 10)]
     roi = ROI.from_polygon(coords)
-    assert roi.annotation_type == AnnotationType.SEGMENTATION
     assert roi.area == pytest.approx(100.0)
 
 
@@ -48,14 +46,6 @@ def test_roi_from_polygon_with_kwargs():
     roi = ROI.from_polygon(coords, name="test", category="cat1")
     assert roi.name == "test"
     assert roi.category == "cat1"
-
-
-def test_roi_is_predicted():
-    roi1 = ROI(geometry=box(0, 0, 10, 10))
-    assert not roi1.is_predicted
-
-    roi2 = ROI(geometry=box(0, 0, 10, 10), score=0.9)
-    assert roi2.is_predicted
 
 
 def test_roi_is_static():
@@ -106,12 +96,6 @@ def test_roi_to_mask():
     data = mask.data
     assert data[5, 4]  # Inside the bbox
     assert not data[0, 0]  # Outside the bbox
-
-
-def test_roi_annotation_type_converter():
-    roi = ROI(geometry=box(0, 0, 10, 10), annotation_type=1)
-    assert roi.annotation_type == AnnotationType.BOUNDING_BOX
-    assert isinstance(roi.annotation_type, AnnotationType)
 
 
 def test_roi_with_video():
@@ -224,7 +208,6 @@ def test_roi_from_multi_polygon():
         [(20, 20), (30, 20), (30, 30), (20, 30)],
     ]
     roi = ROI.from_multi_polygon(polygons)
-    assert roi.annotation_type == AnnotationType.SEGMENTATION
     assert isinstance(roi.geometry, MultiPolygon)
     assert len(list(roi.geometry.geoms)) == 2
     assert roi.area == pytest.approx(200.0)
@@ -244,14 +227,13 @@ def test_roi_explode_multi_polygon():
         [(0, 0), (10, 0), (10, 10), (0, 10)],
         [(20, 20), (30, 20), (30, 30), (20, 30)],
     ]
-    roi = ROI.from_multi_polygon(polygons, name="test", category="cat", score=0.9)
+    roi = ROI.from_multi_polygon(polygons, name="test", category="cat")
     parts = roi.explode()
     assert len(parts) == 2
     for part in parts:
         assert isinstance(part.geometry, Polygon)
         assert part.name == "test"
         assert part.category == "cat"
-        assert part.score == 0.9
     assert parts[0].area == pytest.approx(100.0)
     assert parts[1].area == pytest.approx(100.0)
 
@@ -283,20 +265,13 @@ def test_roi_geo_interface_metadata():
         10,
         name="test_roi",
         category="arena",
-        score=0.95,
         source="manual",
-        frame_idx=42,
-        annotation_type=AnnotationType.ARENA,
     )
     props = roi.__geo_interface__["properties"]
     assert props["name"] == "test_roi"
     assert props["category"] == "arena"
-    assert props["score"] == 0.95
     assert props["source"] == "manual"
-    assert props["frame_idx"] == 42
-    assert props["annotation_type"] == 3
-    assert props["annotation_type_name"] == "ARENA"
-    assert props["roi_type"] == "ARENA"
+    assert props["frame_idx"] is None
 
 
 def test_roi_geo_interface_defaults():
@@ -305,8 +280,5 @@ def test_roi_geo_interface_defaults():
     props = roi.__geo_interface__["properties"]
     assert props["name"] == ""
     assert props["category"] == ""
-    assert props["score"] is None
     assert props["source"] == ""
     assert props["frame_idx"] is None
-    assert props["annotation_type"] == 0
-    assert props["annotation_type_name"] == "DEFAULT"

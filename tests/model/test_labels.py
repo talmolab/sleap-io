@@ -21,6 +21,7 @@ from sleap_io import (
     Video,
     load_slp,
 )
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.labels import Labels
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.matching import (
@@ -34,7 +35,7 @@ from sleap_io.model.matching import (
     VideoMatcher,
     VideoMatchMethod,
 )
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 
 
 def test_labels():
@@ -5351,7 +5352,7 @@ def test_labels_get_rois():
         [(0, 0), (10, 0), (10, 10)],
         video=video1,
         frame_idx=0,
-        annotation_type=AnnotationType.ARENA,
+        category="arena",
     )
 
     labels = Labels(videos=[video1, video2], rois=[roi1, roi2, roi3])
@@ -5360,7 +5361,7 @@ def test_labels_get_rois():
     assert len(labels.get_rois(video=video2)) == 1
     assert len(labels.get_rois(frame_idx=0)) == 2
     assert len(labels.get_rois(category="cat")) == 1
-    assert len(labels.get_rois(annotation_type=AnnotationType.ARENA)) == 1
+    assert len(labels.get_rois(category="arena")) == 1
 
 
 def test_labels_get_masks():
@@ -5510,23 +5511,57 @@ def test_labels_copy_preserves_rois_and_masks(slp_minimal, tmp_path):
     assert len(lazy_labels.rois) == 1
 
 
-def test_labels_get_masks_by_annotation_type():
-    """get_masks filters by annotation_type."""
+def test_labels_get_bboxes():
+    """get_bboxes filters by video, frame, category, and predicted."""
     video = Video(filename="test.mp4")
-    mask1 = SegmentationMask.from_numpy(
-        np.ones((5, 5), dtype=bool),
+    bbox1 = UserBoundingBox(
+        x_center=50,
+        y_center=50,
+        width=10,
+        height=10,
         video=video,
-        annotation_type=AnnotationType.SEGMENTATION,
+        frame_idx=0,
+        category="mouse",
     )
-    mask2 = SegmentationMask.from_numpy(
-        np.ones((5, 5), dtype=bool),
+    bbox2 = PredictedBoundingBox(
+        x_center=60,
+        y_center=60,
+        width=20,
+        height=20,
         video=video,
-        annotation_type=AnnotationType.ARENA,
+        frame_idx=0,
+        category="fly",
+        score=0.9,
     )
-    labels = Labels(videos=[video], masks=[mask1, mask2])
-    result = labels.get_masks(annotation_type=AnnotationType.SEGMENTATION)
-    assert len(result) == 1
-    assert result[0] is mask1
+    bbox3 = UserBoundingBox(
+        x_center=70,
+        y_center=70,
+        width=15,
+        height=15,
+        video=video,
+        frame_idx=1,
+        category="mouse",
+    )
+    labels = Labels(videos=[video], bboxes=[bbox1, bbox2, bbox3])
+
+    assert len(labels.get_bboxes(video=video)) == 3
+    assert len(labels.get_bboxes(frame_idx=0)) == 2
+    assert len(labels.get_bboxes(category="mouse")) == 2
+    assert len(labels.get_bboxes(predicted=True)) == 1
+    assert labels.get_bboxes(predicted=True)[0] is bbox2
+    assert len(labels.get_bboxes(predicted=False)) == 2
+
+
+def test_labels_replace_videos_updates_bboxes():
+    """replace_videos should update bbox video references."""
+    old_video = Video(filename="old.mp4")
+    new_video = Video(filename="new.mp4")
+    bbox = UserBoundingBox(
+        x_center=50, y_center=50, width=10, height=10, video=old_video, frame_idx=0
+    )
+    labels = Labels(videos=[old_video], bboxes=[bbox])
+    labels.replace_videos(old_videos=[old_video], new_videos=[new_video])
+    assert bbox.video is new_video
 
 
 def test_get_rois_query():

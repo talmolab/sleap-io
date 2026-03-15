@@ -9,6 +9,7 @@ import pytest
 
 import sleap_io as sio
 from sleap_io.io import coco
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.matching import (
     IMAGE_DEDUP_VIDEO_MATCHER,
     SHAPE_VIDEO_MATCHER,
@@ -1181,8 +1182,10 @@ class TestCOCOExport:
         total_instances = sum(len(frame.instances) for frame in labels.labeled_frames)
         total_rois = len(labels.rois)
         total_masks = len(labels.masks)
-        assert (
-            len(coco_data["annotations"]) == total_instances + total_rois + total_masks
+        # Only standalone bboxes (not linked to instances) are exported
+        total_standalone_bboxes = sum(1 for b in labels.bboxes if b.instance is None)
+        assert len(coco_data["annotations"]) == (
+            total_instances + total_rois + total_masks + total_standalone_bboxes
         )
 
     def test_convert_labels_with_tracks(self, tmp_path):
@@ -1596,7 +1599,6 @@ class TestCOCOROIMaskIO:
             category="cat",
             video=video,
             frame_idx=0,
-            score=0.95,
         )
 
         labels = sio.Labels(rois=[roi1, roi2])
@@ -1612,9 +1614,6 @@ class TestCOCOROIMaskIO:
         ann1 = data["annotations"][0]
         assert ann1["bbox"] == [10.0, 20.0, 50.0, 30.0]
         assert ann1["iscrowd"] == 0
-
-        ann2 = data["annotations"][1]
-        assert ann2["score"] == 0.95
 
         # Verify categories were created
         cat_names = {c["name"] for c in data["categories"]}
@@ -1704,9 +1703,9 @@ class TestCOCOROIMaskIO:
                     "id": 2,
                     "image_id": 1,
                     "category_id": 2,
-                    "segmentation": [[5.0, 5.0, 50.0, 5.0, 50.0, 50.0, 5.0, 50.0]],
+                    "segmentation": [[5.0, 5.0, 50.0, 5.0, 30.0, 50.0, 5.0, 50.0]],
                     "bbox": [5, 5, 45, 45],
-                    "area": 2025,
+                    "area": 1012.5,
                     "iscrowd": 0,
                 },
                 {
@@ -1734,24 +1733,23 @@ class TestCOCOROIMaskIO:
 
         labels = coco.read_labels(json_path, dataset_root=tmp_path)
 
-        # Should have created ROIs and masks, not instances
+        # Should have created ROIs, masks, and bboxes, not instances
         assert len(labels.labeled_frames) == 1
         assert len(labels.labeled_frames[0].instances) == 0
 
-        # 1 bbox ROI (annotation 1) + 1 polygon ROI (annotation 2) = 2 ROIs
-        from sleap_io.model.roi import AnnotationType
+        # Polygon annotation -> ROI (annotation 2 only)
+        assert len(labels.rois) == 1
+        assert labels.rois[0].category == "plant"
 
-        assert len(labels.rois) == 2
-        bbox_rois = [
-            r for r in labels.rois if r.annotation_type == AnnotationType.BOUNDING_BOX
-        ]
-        poly_rois = [
-            r for r in labels.rois if r.annotation_type == AnnotationType.SEGMENTATION
-        ]
-        assert len(bbox_rois) == 1
-        assert bbox_rois[0].category == "animal"
-        assert len(poly_rois) == 1
-        assert poly_rois[0].category == "plant"
+        # Bbox-only annotation -> BoundingBox (annotation 1)
+        assert len(labels.bboxes) == 1
+        assert labels.bboxes[0].category == "animal"
+        x, y, w, h = labels.bboxes[0].xywh
+        assert x == pytest.approx(10.0)
+        assert y == pytest.approx(20.0)
+        assert w == pytest.approx(30.0)
+        assert h == pytest.approx(40.0)
+        assert isinstance(labels.bboxes[0], UserBoundingBox)
 
         # RLE annotation -> mask
         assert len(labels.masks) == 1
@@ -1759,8 +1757,8 @@ class TestCOCOROIMaskIO:
         assert labels.masks[0].height == 5
         assert labels.masks[0].width == 5
 
-    def test_coco_category_score_preservation(self, tmp_path):
-        """Test that category names and scores roundtrip correctly."""
+    def test_coco_category_preservation(self, tmp_path):
+        """Test that category names roundtrip correctly."""
         from sleap_io.model.roi import ROI
 
         video = sio.Video.from_filename(["img1.png"])
@@ -1770,14 +1768,13 @@ class TestCOCOROIMaskIO:
             30.0,
             40.0,
             category="special_class",
-            score=0.87,
             video=video,
             frame_idx=0,
         )
 
         labels = sio.Labels(rois=[roi])
 
-        json_path = tmp_path / "score_test.json"
+        json_path = tmp_path / "cat_test.json"
         coco.write_labels(labels, json_path)
 
         with open(json_path, "r") as f:
@@ -1786,11 +1783,8 @@ class TestCOCOROIMaskIO:
         # Verify category name
         assert any(c["name"] == "special_class" for c in data["categories"])
 
-        # Verify score
-        ann = data["annotations"][0]
-        assert ann["score"] == 0.87
-
         # Verify category_id references correct category
+        ann = data["annotations"][0]
         cat_id = ann["category_id"]
         cat = next(c for c in data["categories"] if c["id"] == cat_id)
         assert cat["name"] == "special_class"
@@ -1837,15 +1831,17 @@ class TestCOCOROIMaskIO:
 
         labels = coco.read_labels(json_path, dataset_root=tmp_path)
 
-        # Empty segmentation list should fall back to bbox
-        assert len(labels.rois) == 1
-        roi = labels.rois[0]
-        assert roi.category == "animal"
-        minx, miny, maxx, maxy = roi.bounds
-        assert minx == pytest.approx(10.0)
-        assert miny == pytest.approx(20.0)
-        assert maxx == pytest.approx(40.0)
-        assert maxy == pytest.approx(60.0)
+        # Empty segmentation list should fall back to BoundingBox
+        assert len(labels.rois) == 0
+        assert len(labels.bboxes) == 1
+        bbox = labels.bboxes[0]
+        assert isinstance(bbox, UserBoundingBox)
+        assert bbox.category == "animal"
+        x, y, w, h = bbox.xywh
+        assert x == pytest.approx(10.0)
+        assert y == pytest.approx(20.0)
+        assert w == pytest.approx(30.0)
+        assert h == pytest.approx(40.0)
 
     def test_coco_detection_with_polygon_read(self, tmp_path):
         """Test reading polygon segmentation creates ROI with correct coords."""
@@ -1947,3 +1943,253 @@ def test_read_labels_keypoints_and_segmentation(tmp_path):
     assert miny == pytest.approx(10.0)
     assert maxx == pytest.approx(90.0)
     assert maxy == pytest.approx(90.0)
+
+    # Should also have a BoundingBox linked to the instance
+    assert len(labels.bboxes) == 1
+    bbox = labels.bboxes[0]
+    assert isinstance(bbox, UserBoundingBox)
+    assert bbox.instance is instance
+    assert bbox.category == "animal"
+    bx, by, bw, bh = bbox.xywh
+    assert bx == pytest.approx(10.0)
+    assert by == pytest.approx(10.0)
+    assert bw == pytest.approx(80.0)
+    assert bh == pytest.approx(80.0)
+
+
+def test_coco_detection_reads_as_bbox(tmp_path):
+    """Detection-only annotations with bbox create BoundingBox."""
+    img_path = tmp_path / "det.png"
+    img_path.touch()
+
+    data = {
+        "images": [
+            {"id": 1, "file_name": "det.png", "height": 200, "width": 300},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "bbox": [15, 25, 50, 60],
+                "area": 3000,
+                "iscrowd": 0,
+            },
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 1,
+                "bbox": [100, 110, 40, 30],
+                "area": 1200,
+                "iscrowd": 0,
+            },
+        ],
+        "categories": [{"id": 1, "name": "person"}],
+    }
+
+    json_path = tmp_path / "det.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+    assert len(labels.bboxes) == 2
+    assert len(labels.rois) == 0
+    assert len(labels.masks) == 0
+
+    for bbox in labels.bboxes:
+        assert isinstance(bbox, UserBoundingBox)
+        assert bbox.category == "person"
+        assert bbox.video is not None
+        assert bbox.frame_idx == 0
+
+    # Check first bbox coordinates
+    x, y, w, h = labels.bboxes[0].xywh
+    assert x == pytest.approx(15.0)
+    assert y == pytest.approx(25.0)
+    assert w == pytest.approx(50.0)
+    assert h == pytest.approx(60.0)
+
+    # Check second bbox coordinates
+    x, y, w, h = labels.bboxes[1].xywh
+    assert x == pytest.approx(100.0)
+    assert y == pytest.approx(110.0)
+    assert w == pytest.approx(40.0)
+    assert h == pytest.approx(30.0)
+
+
+def test_coco_predicted_bbox(tmp_path):
+    """Annotations with score field should create PredictedBoundingBox."""
+    img_path = tmp_path / "pred.png"
+    img_path.touch()
+
+    data = {
+        "images": [
+            {"id": 1, "file_name": "pred.png", "height": 100, "width": 100},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "bbox": [10, 20, 30, 40],
+                "area": 1200,
+                "iscrowd": 0,
+                "score": 0.95,
+            },
+            {
+                "id": 2,
+                "image_id": 1,
+                "category_id": 1,
+                "bbox": [50, 60, 20, 15],
+                "area": 300,
+                "iscrowd": 0,
+                "score": 0.42,
+            },
+        ],
+        "categories": [{"id": 1, "name": "cat"}],
+    }
+
+    json_path = tmp_path / "pred.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+    assert len(labels.bboxes) == 2
+    for bbox in labels.bboxes:
+        assert isinstance(bbox, PredictedBoundingBox)
+        assert bbox.is_predicted
+
+    assert labels.bboxes[0].score == pytest.approx(0.95)
+    assert labels.bboxes[1].score == pytest.approx(0.42)
+
+    x, y, w, h = labels.bboxes[0].xywh
+    assert x == pytest.approx(10.0)
+    assert y == pytest.approx(20.0)
+    assert w == pytest.approx(30.0)
+    assert h == pytest.approx(40.0)
+
+
+def test_coco_bbox_roundtrip(tmp_path):
+    """Write bboxes to COCO and read back as BoundingBox."""
+    video = sio.Video.from_filename(["img1.png"])
+    bbox1 = UserBoundingBox.from_xywh(
+        10, 20, 50, 30, category="dog", video=video, frame_idx=0
+    )
+    bbox2 = PredictedBoundingBox.from_xywh(
+        100, 200, 80, 60, category="cat", video=video, frame_idx=0, score=0.88
+    )
+
+    labels = sio.Labels(bboxes=[bbox1, bbox2])
+
+    json_path = tmp_path / "bbox_rt.json"
+    coco.write_labels(labels, json_path)
+
+    # Verify JSON structure
+    with open(json_path, "r") as f:
+        data = json.load(f)
+
+    assert len(data["annotations"]) == 2
+
+    ann1 = data["annotations"][0]
+    assert ann1["bbox"] == [10.0, 20.0, 50.0, 30.0]
+    assert ann1["area"] == pytest.approx(1500.0)
+    assert "score" not in ann1
+
+    ann2 = data["annotations"][1]
+    assert ann2["bbox"] == [100.0, 200.0, 80.0, 60.0]
+    assert ann2["area"] == pytest.approx(4800.0)
+    assert ann2["score"] == pytest.approx(0.88)
+
+    # Verify category names
+    cat_names = {c["name"] for c in data["categories"]}
+    assert "dog" in cat_names
+    assert "cat" in cat_names
+
+    # Now read back and verify round-trip
+    # Create image files matching auto-generated names
+    for img_info in data["images"]:
+        (tmp_path / img_info["file_name"]).touch()
+
+    labels_rt = coco.read_labels(json_path, dataset_root=tmp_path)
+
+    assert len(labels_rt.bboxes) == 2
+
+    # First bbox should be UserBoundingBox (no score in ann1)
+    assert isinstance(labels_rt.bboxes[0], UserBoundingBox)
+    assert not isinstance(labels_rt.bboxes[0], PredictedBoundingBox)
+    x, y, w, h = labels_rt.bboxes[0].xywh
+    assert x == pytest.approx(10.0)
+    assert y == pytest.approx(20.0)
+    assert w == pytest.approx(50.0)
+    assert h == pytest.approx(30.0)
+
+    # Second bbox should be PredictedBoundingBox with score
+    assert isinstance(labels_rt.bboxes[1], PredictedBoundingBox)
+    assert labels_rt.bboxes[1].score == pytest.approx(0.88)
+    x, y, w, h = labels_rt.bboxes[1].xywh
+    assert x == pytest.approx(100.0)
+    assert y == pytest.approx(200.0)
+    assert w == pytest.approx(80.0)
+    assert h == pytest.approx(60.0)
+
+
+def test_coco_mixed_bbox_and_instances(tmp_path):
+    """Keypoints + bbox annotation should create Instance + linked BoundingBox."""
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    img_path = tmp_path / "mixed.png"
+    iio.imwrite(str(img_path), img)
+
+    data = {
+        "images": [
+            {"id": 1, "file_name": "mixed.png", "height": 100, "width": 100},
+        ],
+        "categories": [
+            {
+                "id": 1,
+                "name": "animal",
+                "keypoints": ["head", "tail"],
+                "skeleton": [[1, 2]],
+            }
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "keypoints": [30, 30, 2, 70, 70, 2],
+                "num_keypoints": 2,
+                "bbox": [20, 20, 60, 60],
+                "area": 3600,
+            },
+        ],
+    }
+
+    json_path = tmp_path / "mixed.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    labels = coco.read_labels(json_path, dataset_root=tmp_path)
+
+    # Should have one instance
+    assert len(labels.labeled_frames) == 1
+    assert len(labels.labeled_frames[0].instances) == 1
+    instance = labels.labeled_frames[0].instances[0]
+
+    # Should have one BoundingBox linked to the instance
+    assert len(labels.bboxes) == 1
+    bbox = labels.bboxes[0]
+    assert isinstance(bbox, UserBoundingBox)
+    assert bbox.instance is instance
+    assert bbox.category == "animal"
+
+    x, y, w, h = bbox.xywh
+    assert x == pytest.approx(20.0)
+    assert y == pytest.approx(20.0)
+    assert w == pytest.approx(60.0)
+    assert h == pytest.approx(60.0)
+
+    # No ROIs or masks
+    assert len(labels.rois) == 0
+    assert len(labels.masks) == 0

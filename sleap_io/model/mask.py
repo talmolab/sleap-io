@@ -12,8 +12,6 @@ from typing import TYPE_CHECKING
 import attrs
 import numpy as np
 
-from sleap_io.model.roi import AnnotationType
-
 if TYPE_CHECKING:
     from sleap_io.model.instance import Instance, Track
     from sleap_io.model.roi import ROI
@@ -83,11 +81,8 @@ class SegmentationMask:
             of 0s and 1s, starting with 0s.
         height: Height of the mask in pixels.
         width: Width of the mask in pixels.
-        annotation_type: Semantic type of the annotation.
         name: Optional human-readable name for this mask.
         category: Optional category label (e.g., class name for detection).
-        score: Optional confidence score (0-1). If set, the mask is considered
-            a prediction.
         source: Optional string indicating the source of this annotation.
         video: Optional `Video` this mask is associated with.
         frame_idx: Optional frame index. If `None`, the mask is static.
@@ -102,12 +97,8 @@ class SegmentationMask:
     rle_counts: np.ndarray = attrs.field()
     height: int = attrs.field()
     width: int = attrs.field()
-    annotation_type: AnnotationType = attrs.field(
-        default=AnnotationType.SEGMENTATION, converter=AnnotationType
-    )
     name: str = attrs.field(default="")
     category: str = attrs.field(default="")
-    score: float | None = attrs.field(default=None)
     source: str = attrs.field(default="")
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
@@ -207,10 +198,8 @@ class SegmentationMask:
 
         return ROI(
             geometry=geometry,
-            annotation_type=self.annotation_type,
             name=self.name,
             category=self.category,
-            score=self.score,
             source=self.source,
             video=self.video,
             frame_idx=self.frame_idx,
