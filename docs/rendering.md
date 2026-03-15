@@ -611,6 +611,87 @@ img = sio.render_image(
 
 ---
 
+## Segmentation Overlays
+
+Overlay segmentation masks on images using `draw_label_image`, `draw_masks`, or `draw_rois`.
+
+### Label images (instance/panoptic segmentation)
+
+For integer label images where each pixel value is an object ID (0 = background), use `draw_label_image` for efficient rendering:
+
+```python
+import numpy as np
+import sleap_io as sio
+from sleap_io.rendering.overlays import draw_label_image
+
+# label_image: (H, W) int array, 0=background, 1..N=object IDs
+# image: (H, W, 3) uint8 RGB
+
+draw_label_image(image, label_image, alpha=0.4, palette="distinct")
+```
+
+Add outlines around each segment:
+
+```python
+draw_label_image(
+    image,
+    label_image,
+    alpha=0.4,
+    palette="distinct",
+    outline=True,
+    outline_width=2,
+)
+```
+
+Use a uniform outline color:
+
+```python
+draw_label_image(
+    image,
+    label_image,
+    alpha=0.3,
+    outline=True,
+    outline_color=(255, 255, 255),
+)
+```
+
+### Binary segmentation masks
+
+For `SegmentationMask` objects, use `draw_masks` with per-mask coloring:
+
+```python
+from sleap_io.rendering.overlays import draw_masks
+
+# Single color for all masks
+draw_masks(image, masks, color=(255, 0, 0), alpha=0.3)
+
+# Per-mask colors
+colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+draw_masks(image, masks, colors=colors, alpha=0.3)
+```
+
+### ROI geometries
+
+For `ROI` objects (polygons, points, lines), use `draw_rois`:
+
+```python
+from sleap_io.rendering.overlays import draw_rois
+
+draw_rois(image, rois, color=(0, 255, 0), line_width=2, fill_alpha=0.2)
+```
+
+### Bounding boxes
+
+For `BoundingBox` objects, use `draw_bboxes`:
+
+```python
+from sleap_io.rendering.overlays import draw_bboxes
+
+draw_bboxes(image, bboxes, color=(0, 255, 0), line_width=2, fill_alpha=0.1)
+```
+
+---
+
 ## Video Rendering
 
 ### Basic video rendering
@@ -701,6 +782,26 @@ sio render -i predictions.slp -o styled.mp4 \
       heading_level: 3
 
 ::: sleap_io.rendering.InstanceContext
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_label_image
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_masks
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_bboxes
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_rois
     options:
       show_root_heading: true
       heading_level: 3

@@ -2440,3 +2440,142 @@ def test_draw_bboxes_empty():
 
     assert result is img
     np.testing.assert_array_equal(result, original)
+
+
+def test_draw_masks_per_mask_colors():
+    """draw_masks with per-mask colors should apply different colors to each mask."""
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.rendering.overlays import draw_masks
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 100
+    mask1_data = np.zeros((50, 50), dtype=bool)
+    mask1_data[5:15, 5:15] = True
+    mask2_data = np.zeros((50, 50), dtype=bool)
+    mask2_data[30:40, 30:40] = True
+
+    mask1 = SegmentationMask.from_numpy(mask1_data)
+    mask2 = SegmentationMask.from_numpy(mask2_data)
+
+    result = draw_masks(
+        img,
+        [mask1, mask2],
+        colors=[(255, 0, 0), (0, 0, 255)],
+        alpha=0.5,
+    )
+    assert result is img
+    # Mask 1 region should have red bias
+    assert result[10, 10, 0] > result[10, 10, 2]
+    # Mask 2 region should have blue bias
+    assert result[35, 35, 2] > result[35, 35, 0]
+    # Non-masked region should be unchanged
+    assert result[0, 0].tolist() == [100, 100, 100]
+
+
+def test_draw_label_image_basic():
+    """draw_label_image should blend colored overlays for each label ID."""
+    from sleap_io.rendering.overlays import draw_label_image
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:20, 10:20] = 1
+    labels[30:40, 30:40] = 2
+
+    result = draw_label_image(img, labels, alpha=0.5, palette="distinct")
+    assert result is img
+    # Labeled regions should differ from the original gray
+    assert not np.array_equal(result[15, 15], [128, 128, 128])
+    assert not np.array_equal(result[35, 35], [128, 128, 128])
+    # The two labeled regions should have different colors
+    assert not np.array_equal(result[15, 15], result[35, 35])
+    # Background should remain unchanged
+    np.testing.assert_array_equal(result[0, 0], [128, 128, 128])
+
+
+def test_draw_label_image_empty():
+    """draw_label_image with all-zero labels should leave image unchanged."""
+    from sleap_io.rendering.overlays import draw_label_image
+
+    img = np.ones((30, 30, 3), dtype=np.uint8) * 200
+    labels = np.zeros((30, 30), dtype=np.int32)
+    original = img.copy()
+
+    result = draw_label_image(img, labels, alpha=0.5)
+    assert result is img
+    np.testing.assert_array_equal(result, original)
+
+
+def test_draw_label_image_with_outline():
+    """draw_label_image with outline=True should draw boundaries."""
+    from sleap_io.rendering.overlays import draw_label_image
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:30, 10:30] = 1
+
+    result = draw_label_image(img, labels, alpha=0.3, outline=True, outline_width=1)
+    assert result is img
+    # Boundary pixel (edge of the labeled region) should differ from interior
+    interior = result[20, 20].copy()
+    edge = result[10, 10].copy()
+    # Both should differ from background
+    assert not np.array_equal(interior, [128, 128, 128])
+    assert not np.array_equal(edge, [128, 128, 128])
+
+
+def test_draw_label_image_with_outline_uniform_color():
+    """draw_label_image with uniform outline_color should use that color."""
+    from sleap_io.rendering.overlays import draw_label_image
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:30, 10:30] = 1
+
+    result = draw_label_image(
+        img,
+        labels,
+        alpha=0.3,
+        outline=True,
+        outline_width=1,
+        outline_color=(255, 255, 255),
+    )
+    # The boundary pixels should be white
+    # Top edge of the labeled region: row 10, cols 10-29 are label boundary
+    assert result[10, 15].tolist() == [255, 255, 255]
+
+
+def test_draw_label_image_with_thick_outline():
+    """draw_label_image with outline_width > 1 should dilate boundaries inward."""
+    from sleap_io.rendering.overlays import draw_label_image
+
+    img = np.ones((60, 60, 3), dtype=np.uint8) * 128
+    labels = np.zeros((60, 60), dtype=np.int32)
+    labels[15:45, 15:45] = 1
+
+    result = draw_label_image(
+        img,
+        labels,
+        alpha=0.3,
+        outline=True,
+        outline_width=3,
+        outline_color=(0, 255, 0),
+    )
+    # With width=3, the boundary at row 15 should dilate inward to row 16
+    assert result[16, 20].tolist() == [0, 255, 0]
+    # Interior should not be affected by outline
+    assert result[30, 30].tolist() != [0, 255, 0]
+
+
+def test_draw_label_image_size_mismatch():
+    """draw_label_image should clip when labels are larger than image."""
+    from sleap_io.rendering.overlays import draw_label_image
+
+    img = np.ones((30, 30, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[5:25, 5:25] = 1
+
+    # Should not raise, should clip to image bounds
+    result = draw_label_image(img, labels, alpha=0.5)
+    assert result is img
+    assert result.shape == (30, 30, 3)
+    # Labeled region within image bounds should be modified
+    assert not np.array_equal(result[10, 10], [128, 128, 128])
