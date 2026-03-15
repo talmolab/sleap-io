@@ -89,6 +89,7 @@ def draw_masks(
     image: np.ndarray,
     masks: list["SegmentationMask"],
     color: tuple[int, int, int] = (255, 0, 0),
+    colors: list[tuple[int, int, int]] | None = None,
     alpha: float = 0.3,
 ) -> np.ndarray:
     """Draw segmentation masks as colored overlays on an image.
@@ -97,13 +98,17 @@ def draw_masks(
         image: Image array of shape (H, W, 3) uint8. Modified in-place and
             returned.
         masks: List of SegmentationMask objects to draw.
-        color: RGB color tuple for the mask overlay.
+        color: RGB color tuple for the mask overlay. Used when ``colors`` is
+            ``None``.
+        colors: Per-mask RGB color tuples. If provided, must have the same
+            length as ``masks``. Overrides ``color``.
         alpha: Opacity of the mask overlay (0.0 to 1.0).
 
     Returns:
         The modified image array.
     """
-    for mask in masks:
+    for i, mask in enumerate(masks):
+        mask_color = colors[i] if colors is not None else color
         mask_data = mask.data
         h, w = mask_data.shape
         img_h, img_w = image.shape[:2]
@@ -116,12 +121,161 @@ def draw_masks(
         mask_region = mask_data[:draw_h, :draw_w]
 
         # Blend color into masked pixels
-        overlay = np.array(color, dtype=np.float32)
+        overlay = np.array(mask_color, dtype=np.float32)
         region[mask_region] = (
             region[mask_region] * (1 - alpha) + overlay * alpha
         ).astype(np.uint8)
 
     return image
+
+
+def draw_label_image(
+    image: np.ndarray,
+    labels: np.ndarray,
+    alpha: float = 0.3,
+    palette: str = "distinct",
+    outline: bool = False,
+    outline_width: int = 1,
+    outline_color: tuple[int, int, int] | None = None,
+) -> np.ndarray:
+    """Draw an integer label image as a colored overlay on an image.
+
+    This is an efficient rendering path for segmentation masks stored as
+    integer label images (e.g., from instance or panoptic segmentation) where
+    each pixel value represents a different object ID (0 = background).
+
+    Args:
+        image: Image array of shape ``(H, W, 3)`` uint8. Modified in-place and
+            returned.
+        labels: Integer label array of shape ``(H, W)`` where 0 is background
+            and positive values are object IDs.
+        alpha: Opacity of the mask overlay (0.0 to 1.0).
+        palette: Color palette name for assigning colors to label IDs. See
+            :func:`~sleap_io.rendering.colors.get_palette` for options.
+        outline: If ``True``, draw outlines around each labeled region using
+            skia-python.
+        outline_width: Width of the outline in pixels (only used if
+            ``outline=True``).
+        outline_color: RGB color for outlines. If ``None``, uses a darkened
+            version of each region's fill color.
+
+    Returns:
+        The modified image array.
+    """
+    from sleap_io.rendering.colors import get_palette
+
+    # Get unique non-background labels
+    unique_ids = np.unique(labels)
+    unique_ids = unique_ids[unique_ids > 0]
+
+    if len(unique_ids) == 0:
+        return image
+
+    # Build color lookup table (LUT): label_id -> RGB
+    max_id = int(unique_ids.max())
+    palette_colors = get_palette(palette, max_id + 1)
+
+    # Create a LUT array: shape (max_id + 1, 3)
+    lut = np.zeros((max_id + 1, 3), dtype=np.float32)
+    for label_id in unique_ids:
+        lut[label_id] = palette_colors[int(label_id) % len(palette_colors)]
+
+    # Clip labels to image size
+    img_h, img_w = image.shape[:2]
+    lab_h, lab_w = labels.shape[:2]
+    draw_h = min(lab_h, img_h)
+    draw_w = min(lab_w, img_w)
+
+    region = image[:draw_h, :draw_w]
+    label_region = labels[:draw_h, :draw_w]
+
+    # Vectorized blending: apply colored overlay where labels > 0
+    fg_mask = label_region > 0
+    if np.any(fg_mask):
+        # Clamp label values for LUT indexing
+        safe_labels = np.clip(label_region, 0, max_id)
+        overlay_colors = lut[safe_labels]  # (H, W, 3)
+
+        region_float = region.astype(np.float32)
+        region_float[fg_mask] = (
+            region_float[fg_mask] * (1 - alpha) + overlay_colors[fg_mask] * alpha
+        )
+        region[:] = region_float.astype(np.uint8)
+
+    # Draw outlines if requested
+    if outline:
+        _draw_label_outlines(
+            image, labels, draw_h, draw_w, outline_width, outline_color, lut
+        )
+
+    return image
+
+
+def _draw_label_outlines(
+    image: np.ndarray,
+    labels: np.ndarray,
+    draw_h: int,
+    draw_w: int,
+    outline_width: int,
+    outline_color: tuple[int, int, int] | None,
+    lut: np.ndarray,
+) -> None:
+    """Draw outlines around labeled regions using numpy edge detection.
+
+    Detects boundary pixels where a foreground label differs from its neighbor
+    and paints them directly. For ``outline_width > 1``, the edge mask is
+    dilated with a square structuring element.
+
+    Args:
+        image: Image array of shape ``(H, W, 3)`` uint8.
+        labels: Integer label array of shape ``(H, W)``.
+        draw_h: Height to draw within.
+        draw_w: Width to draw within.
+        outline_width: Outline stroke width in pixels.
+        outline_color: RGB color for outlines, or ``None`` to use a darkened
+            version of each region's fill color.
+        lut: Color lookup table mapping ``label_id`` to ``(R, G, B)`` as
+            float32.
+    """
+    label_region = labels[:draw_h, :draw_w]
+    region = image[:draw_h, :draw_w]
+
+    # Find boundary pixels using shifted comparisons
+    edges = np.zeros((draw_h, draw_w), dtype=bool)
+    edges[:, :-1] |= label_region[:, :-1] != label_region[:, 1:]
+    edges[:-1, :] |= label_region[:-1, :] != label_region[1:, :]
+    edges[:, 1:] |= label_region[:, :-1] != label_region[:, 1:]
+    edges[1:, :] |= label_region[:-1, :] != label_region[1:, :]
+
+    # Only keep edges on foreground
+    edges &= label_region > 0
+
+    # Dilate edges for thicker outlines
+    if outline_width > 1:
+        dilated = np.zeros_like(edges)
+        pad = outline_width // 2
+        for dy in range(-pad, pad + 1):
+            for dx in range(-pad, pad + 1):
+                shifted = np.zeros_like(edges)
+                sy = max(0, dy)
+                ey = draw_h + min(0, dy)
+                sx = max(0, dx)
+                ex = draw_w + min(0, dx)
+                oy = max(0, -dy)
+                ox = max(0, -dx)
+                shifted[sy:ey, sx:ex] = edges[oy : oy + (ey - sy), ox : ox + (ex - sx)]
+                dilated |= shifted
+        edges = dilated & (label_region > 0)
+
+    if outline_color is not None:
+        # Uniform outline color
+        region[edges] = np.array(outline_color, dtype=np.uint8)
+    else:
+        # Per-label darkened color
+        max_id = lut.shape[0] - 1
+        safe_labels = np.clip(label_region, 0, max_id)
+        dark_lut = (lut * 0.6).astype(np.uint8)
+        region[edges] = dark_lut[safe_labels[edges]]
 
 
 def draw_bboxes(
