@@ -905,12 +905,29 @@ def write_roi_label_file(
     """
     height_px, width_px = image_shape
 
+    # Explode multi-geometries so each polygon gets its own line
+    exploded_rois: list[ROI] = []
+    for roi in rois:
+        exploded_rois.extend(roi.explode())
+
     with open(label_path, "w") as f:
-        for roi in rois:
+        for roi in exploded_rois:
             class_id = name_to_id.get(roi.category, 0)
 
             if roi.annotation_type == AnnotationType.SEGMENTATION and not roi.is_bbox:
                 # Write segmentation polygon
+                if (
+                    hasattr(roi.geometry, "interiors")
+                    and len(list(roi.geometry.interiors)) > 0
+                ):
+                    warnings.warn(
+                        f"ROI polygon has "
+                        f"{len(list(roi.geometry.interiors))} interior "
+                        f"ring(s) (holes) that will be dropped. YOLO "
+                        f"segmentation format does not support polygon "
+                        f"holes.",
+                        stacklevel=2,
+                    )
                 coords = list(roi.geometry.exterior.coords)[:-1]  # Remove closing pt
                 line_parts = [str(class_id)]
                 for x, y in coords:

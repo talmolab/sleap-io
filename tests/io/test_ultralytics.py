@@ -1495,3 +1495,46 @@ def test_write_roi_labels_splitting(tmp_path):
     assert len(val_images) == 2
     assert len(train_labels) == 8
     assert len(val_labels) == 2
+
+
+def test_write_roi_label_file_multipolygon(tmp_path):
+    """MultiPolygon ROIs should be exploded into separate polygon lines."""
+    from shapely.geometry import MultiPolygon, Polygon
+
+    poly1 = Polygon([(0, 0), (50, 0), (50, 50), (0, 50)])
+    poly2 = Polygon([(60, 60), (100, 60), (100, 100), (60, 100)])
+    multi = MultiPolygon([poly1, poly2])
+
+    roi = ROI(
+        geometry=multi,
+        annotation_type=AnnotationType.SEGMENTATION,
+        category="obj",
+    )
+    label_path = tmp_path / "multi.txt"
+    write_roi_label_file(label_path, [roi], (200, 200), {"obj": 0})
+
+    lines = label_path.read_text().strip().split("\n")
+    assert len(lines) == 2  # One line per polygon
+
+
+def test_write_roi_label_file_hole_warning(tmp_path):
+    """Polygons with holes should emit a warning."""
+    from shapely.geometry import Polygon
+
+    # Non-rectangular exterior so is_bbox=False (takes segmentation path)
+    exterior = [(0, 0), (100, 0), (80, 100), (0, 100)]
+    hole = [(25, 25), (50, 25), (50, 50), (25, 50)]
+    poly_with_hole = Polygon(exterior, [hole])
+
+    roi = ROI(
+        geometry=poly_with_hole,
+        annotation_type=AnnotationType.SEGMENTATION,
+        category="obj",
+    )
+    label_path = tmp_path / "hole.txt"
+    with pytest.warns(UserWarning, match="holes"):
+        write_roi_label_file(label_path, [roi], (200, 200), {"obj": 0})
+
+    # File should still be written (exterior only)
+    lines = label_path.read_text().strip().split("\n")
+    assert len(lines) == 1
