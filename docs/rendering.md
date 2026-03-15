@@ -611,6 +611,118 @@ img = sio.render_image(
 
 ---
 
+## Segmentation Overlays
+
+Overlay segmentation masks on images via `render_image`/`render_video` or standalone functions.
+
+### Using render_image / render_video
+
+The `overlay` parameter on `render_image` and `render_video` accepts label images, `SegmentationMask`, `ROI`, or `BoundingBox` objects:
+
+```python
+import numpy as np
+import sleap_io as sio
+
+# Label image overlay (no poses)
+img = sio.render_image(image=frame, overlay=label_mask, overlay_alpha=0.4)
+
+# With outlines
+img = sio.render_image(
+    image=frame,
+    overlay=label_mask,
+    overlay_alpha=0.4,
+    overlay_outline=True,
+)
+
+# SegmentationMask, ROI, or BoundingBox objects
+img = sio.render_image(image=frame, overlay=masks, overlay_alpha=0.3)
+img = sio.render_image(image=frame, overlay=rois, overlay_alpha=0.3)
+img = sio.render_image(image=frame, overlay=bboxes, overlay_alpha=0.3)
+
+# Overlay on a labeled frame (poses render on top)
+img = sio.render_image(lf, overlay=label_mask, overlay_alpha=0.4)
+```
+
+For video rendering, `overlay` can be a 3-D array `(T, H, W)`, a callable, or a list of objects with `frame_idx`:
+
+```python
+# 3-D label image stack
+sio.render_video(labels, "output.mp4", overlay=label_stack)
+
+# Callable for lazy per-frame loading
+sio.render_video(labels, "output.mp4", overlay=lambda idx: load_mask(idx))
+
+# SegmentationMask objects (filtered per-frame by frame_idx)
+sio.render_video(labels, "output.mp4", overlay=masks)
+```
+
+### Standalone functions
+
+For direct control, use `sio.draw_label_image`, `sio.draw_masks`, `sio.draw_rois`, or `sio.draw_bboxes`:
+
+#### Label images (instance/panoptic segmentation)
+
+```python
+# label_image: (H, W) int array, 0=background, 1..N=object IDs
+sio.draw_label_image(image, label_image, alpha=0.4, palette="distinct")
+```
+
+Add outlines around each segment:
+
+```python
+sio.draw_label_image(
+    image,
+    label_image,
+    alpha=0.4,
+    palette="distinct",
+    outline=True,
+    outline_width=2,
+)
+```
+
+Use a uniform outline color:
+
+```python
+sio.draw_label_image(
+    image,
+    label_image,
+    alpha=0.3,
+    outline=True,
+    outline_color=(255, 255, 255),
+)
+```
+
+#### Binary segmentation masks
+
+For `SegmentationMask` objects, use `sio.draw_masks` with per-mask coloring:
+
+```python
+# Single color for all masks
+sio.draw_masks(image, masks, color=(255, 0, 0), alpha=0.3)
+
+# Per-mask colors
+colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+sio.draw_masks(image, masks, colors=colors, alpha=0.3)
+```
+
+#### ROI geometries
+
+For `ROI` objects (polygons, points, lines), use `sio.draw_rois`:
+
+```python
+sio.draw_rois(image, rois, color=(0, 255, 0), line_width=2, fill_alpha=0.2)
+```
+
+#### Bounding boxes
+
+For `BoundingBox` objects, use `sio.draw_bboxes`:
+
+```python
+sio.draw_bboxes(image, bboxes, color=(0, 255, 0), line_width=2, fill_alpha=0.1)
+```
+
+---
+
 ## Video Rendering
 
 ### Basic video rendering
@@ -701,6 +813,26 @@ sio render -i predictions.slp -o styled.mp4 \
       heading_level: 3
 
 ::: sleap_io.rendering.InstanceContext
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_label_image
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_masks
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_bboxes
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: sleap_io.rendering.draw_rois
     options:
       show_root_heading: true
       heading_level: 3

@@ -24,9 +24,12 @@ from sleap_io.rendering.colors import (
 from sleap_io.rendering.shapes import MarkerShape, get_marker_func
 
 if TYPE_CHECKING:
+    from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, PredictedInstance
     from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.model.roi import ROI
     from sleap_io.model.video import Video
 
 # Preset configurations
@@ -280,6 +283,86 @@ def _scale_frame(frame_rgba: np.ndarray, scale: float) -> np.ndarray:
     return np.array(pil_img)
 
 
+def _apply_overlay(
+    image: np.ndarray,
+    overlay: "np.ndarray | list[SegmentationMask] | list[ROI] | list[BoundingBox]",
+    alpha: float = 0.3,
+    palette: PaletteName | str = "distinct",
+    outline: bool = False,
+    outline_width: int = 1,
+    outline_color: tuple[int, int, int] | None = None,
+) -> np.ndarray:
+    """Apply an annotation overlay to an image, dispatching by type.
+
+    Supports integer label images, ``SegmentationMask``, ``ROI``, and
+    ``BoundingBox`` objects. Each item is rendered with a distinct color
+    drawn from the specified palette.
+
+    Args:
+        image: Image array ``(H, W, 3)`` uint8 (modified in-place).
+        overlay: Annotation data. One of:
+
+            - ``np.ndarray``: Integer label image ``(H, W)`` with 0 =
+              background and positive values as object IDs.
+            - ``list[SegmentationMask]``: Binary segmentation masks.
+            - ``list[ROI]``: Vector geometries (polygons, points, etc.).
+            - ``list[BoundingBox]``: Axis-aligned or rotated bounding boxes.
+        alpha: Fill opacity (0.0 to 1.0).
+        palette: Color palette name for per-item coloring.
+        outline: Draw outlines (only used for label images).
+        outline_width: Outline width in pixels.
+        outline_color: Uniform outline color, or ``None`` for auto-darkened.
+
+    Returns:
+        The modified image array.
+    """
+    from sleap_io.rendering.overlays import (
+        draw_bboxes,
+        draw_label_image,
+        draw_masks,
+        draw_rois,
+    )
+
+    if isinstance(overlay, np.ndarray):
+        draw_label_image(
+            image,
+            overlay,
+            alpha=alpha,
+            palette=palette,
+            outline=outline,
+            outline_width=outline_width,
+            outline_color=outline_color,
+        )
+    elif isinstance(overlay, list) and overlay:
+        from sleap_io.model.bbox import BoundingBox
+        from sleap_io.model.mask import SegmentationMask
+        from sleap_io.model.roi import ROI
+
+        first = overlay[0]
+        colors = get_palette(palette, len(overlay))
+
+        if isinstance(first, SegmentationMask):
+            draw_masks(image, overlay, colors=colors, alpha=alpha)
+        elif isinstance(first, ROI):
+            for i, roi in enumerate(overlay):
+                draw_rois(
+                    image,
+                    [roi],
+                    color=colors[i],
+                    fill_alpha=alpha,
+                )
+        elif isinstance(first, BoundingBox):
+            for i, bbox in enumerate(overlay):
+                draw_bboxes(
+                    image,
+                    [bbox],
+                    color=colors[i],
+                    fill_alpha=alpha,
+                )
+
+    return image
+
+
 def render_frame(
     frame: np.ndarray,
     instances_points: list[np.ndarray],
@@ -504,7 +587,7 @@ def render_frame(
 
 
 def render_image(
-    source: "Labels | LabeledFrame | list[Instance | PredictedInstance]",
+    source: "Labels | LabeledFrame | list[Instance | PredictedInstance] | None" = None,
     save_path: str | Path | None = None,
     *,
     # Frame specification (for Labels input)
@@ -513,6 +596,15 @@ def render_image(
     frame_idx: int | None = None,
     # Image override
     image: np.ndarray | None = None,
+    # Annotation overlay
+    overlay: (
+        "np.ndarray | list[SegmentationMask] | list[ROI] | list[BoundingBox] | None"
+    ) = None,
+    overlay_alpha: float = 0.3,
+    overlay_palette: PaletteName | str = "distinct",
+    overlay_outline: bool = False,
+    overlay_outline_width: int = 1,
+    overlay_outline_color: tuple[int, int, int] | None = None,
     # Cropping
     crop: CropSpec = None,
     # Appearance
@@ -532,16 +624,32 @@ def render_image(
     post_render_callback: Callable[[RenderContext], None] | None = None,
     per_instance_callback: Callable[[InstanceContext], None] | None = None,
 ) -> np.ndarray:
-    """Render single frame with pose overlays.
+    """Render single frame with pose and/or segmentation overlays.
 
     Args:
-        source: LabeledFrame, Labels (with frame specifier), or list of instances.
+        source: LabeledFrame, Labels (with frame specifier), list of instances,
+            or ``None``. When ``None``, ``image`` must be provided and only
+            segmentation overlays are rendered (no poses).
         save_path: Output image path (PNG/JPEG). If None, only returns array.
         lf_ind: LabeledFrame index within Labels.labeled_frames (when source is Labels).
         video: Video object or video index (used with frame_idx when source is Labels).
         frame_idx: Video frame index (0-based, used with video when source is Labels).
         image: Override image array (H, W) or (H, W, C) uint8. Fetched from
             LabeledFrame if not provided.
+        overlay: Annotation data to render on the image before poses. Accepts:
+
+            - ``np.ndarray``: Integer label image ``(H, W)`` where 0 is
+              background and positive values are object IDs.
+            - ``list[SegmentationMask]``: Binary segmentation masks.
+            - ``list[ROI]``: Vector geometries (polygons, points, etc.).
+            - ``list[BoundingBox]``: Bounding boxes.
+
+            Applied before pose rendering so poses draw on top.
+        overlay_alpha: Opacity for the segmentation overlay (0.0 to 1.0).
+        overlay_palette: Color palette for segmentation overlay.
+        overlay_outline: Whether to draw outlines around segmented regions.
+        overlay_outline_width: Outline width in pixels.
+        overlay_outline_color: RGB outline color, or ``None`` for auto-darkened.
         crop: Crop specification. Bounds are (x1, y1, x2, y2) where (x1, y1) is
             the top-left corner and (x2, y2) is the bottom-right (exclusive).
             Origin (0, 0) is at the image top-left. Can be:
@@ -604,6 +712,14 @@ def render_image(
 
         >>> sio.render_image(labels, lf_ind=0, save_path="frame.png")
         >>> sio.render_image(labels, video=0, frame_idx=42, save_path="frame.png")
+
+        Overlay a segmentation mask on a raw image (no poses):
+
+        >>> img = sio.render_image(image=frame, overlay=label_mask)
+
+        Overlay segmentation on a labeled frame (poses draw on top):
+
+        >>> img = sio.render_image(lf, overlay=label_mask, overlay_alpha=0.4)
     """
     import skia  # noqa: F401
 
@@ -742,10 +858,23 @@ def render_image(
                 "image parameter required when source is list of instances"
             )
 
+    elif source is None:
+        # No poses — overlay-only or image-only mode
+        if image is None:
+            raise ValueError("image parameter required when source is None")
+        instances = []
+        instances_points = []
+        edge_inds = []
+        node_names = []
+        fidx_for_callback = 0
+        track_indices = None
+        n_tracks = 0
+        has_tracks = False
+
     else:
         raise TypeError(
-            f"source must be Labels, LabeledFrame, or list of instances, "
-            f"got {type(source)}"
+            f"source must be Labels, LabeledFrame, list of instances, "
+            f"or None, got {type(source)}"
         )
 
     # Apply cropping if specified
@@ -761,6 +890,35 @@ def render_image(
         render_image_data, render_points, _ = _apply_crop(
             image, instances_points, crop_bounds
         )
+
+    # Apply annotation overlay before pose rendering
+    if overlay is not None:
+        _apply_overlay(
+            render_image_data,
+            overlay,
+            alpha=overlay_alpha,
+            palette=overlay_palette,
+            outline=overlay_outline,
+            outline_width=overlay_outline_width,
+            outline_color=overlay_outline_color,
+        )
+
+    # Short-circuit: overlay-only mode (no poses to render)
+    if source is None:
+        # Scale if needed
+        if scale != 1.0:
+            render_image_data = _scale_frame(
+                _prepare_frame_rgba(render_image_data), scale
+            )[:, :, :3]
+
+        if save_path is not None:
+            from PIL import Image
+
+            save_path_ = Path(save_path)
+            save_path_.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(render_image_data).save(save_path_)
+
+        return render_image_data
 
     # Build instance metadata for callbacks
     instance_metadata = []
@@ -826,6 +984,17 @@ def render_video(
     start: int | None = None,
     end: int | None = None,
     include_unlabeled: bool = False,
+    # Annotation overlay
+    overlay: (
+        "np.ndarray"
+        " | list[SegmentationMask] | list[ROI] | list[BoundingBox]"
+        " | Callable[[int], np.ndarray] | None"
+    ) = None,
+    overlay_alpha: float = 0.3,
+    overlay_palette: PaletteName | str = "distinct",
+    overlay_outline: bool = False,
+    overlay_outline_width: int = 1,
+    overlay_outline_color: tuple[int, int, int] | None = None,
     # Cropping
     crop: CropSpec = None,
     # Quality/scale
@@ -866,6 +1035,19 @@ def render_video(
         end: End frame index (exclusive).
         include_unlabeled: If True, render all frames in range even if they have
             no LabeledFrame (just shows video frame without poses). Default False.
+        overlay: Per-frame annotation overlay. Accepts:
+
+            - ``np.ndarray``: 3-D array ``(T, H, W)`` of integer label images
+              indexed by frame number, or 2-D ``(H, W)`` for a static overlay.
+            - ``list[SegmentationMask | ROI | BoundingBox]``: Objects are
+              filtered per frame by their ``frame_idx`` attribute.
+            - ``Callable[[int], np.ndarray]``: Called with the frame index,
+              returns an ``(H, W)`` label image for that frame.
+        overlay_alpha: Opacity for the annotation overlay (0.0 to 1.0).
+        overlay_palette: Color palette for overlay coloring.
+        overlay_outline: Draw outlines around segmented regions (label images).
+        overlay_outline_width: Outline width in pixels.
+        overlay_outline_color: RGB outline color, or ``None`` for auto-darkened.
         crop: Static crop applied uniformly to all frames. Bounds are
             (x1, y1, x2, y2) where (x1, y1) is the top-left corner and (x2, y2)
             is the bottom-right (exclusive). Supports:
@@ -1099,6 +1281,35 @@ def render_video(
             preset=x264_preset,
         )
 
+    # Pre-process overlay: determine type for per-frame dispatch
+    _overlay_is_3d = (
+        overlay is not None and isinstance(overlay, np.ndarray) and overlay.ndim == 3
+    )
+    _overlay_is_2d = (
+        overlay is not None and isinstance(overlay, np.ndarray) and overlay.ndim == 2
+    )
+    _overlay_is_callable = callable(overlay) if overlay is not None else False
+    _overlay_is_list = (
+        overlay is not None and isinstance(overlay, list) and len(overlay) > 0
+    )
+
+    def _get_frame_overlay(fidx: int):
+        """Resolve overlay data for a single frame."""
+        if overlay is None:
+            return None
+        if _overlay_is_3d:
+            if fidx < overlay.shape[0]:
+                return overlay[fidx]
+            return None
+        if _overlay_is_2d:
+            return overlay
+        if _overlay_is_callable:
+            return overlay(fidx)
+        if _overlay_is_list:
+            # Filter objects by frame_idx attribute
+            return [obj for obj in overlay if getattr(obj, "frame_idx", None) == fidx]
+        return None
+
     # Only accumulate frames if returning as list (no save_path)
     rendered_frames: list[np.ndarray] = []
     total_frames = len(render_indices)
@@ -1143,6 +1354,19 @@ def render_video(
                 render_image_data = image
                 if crop_bounds is not None:
                     render_image_data, _, _ = _apply_crop(image, [], crop_bounds)
+
+                # Apply overlay
+                frame_overlay = _get_frame_overlay(fidx)
+                if frame_overlay is not None:
+                    _apply_overlay(
+                        render_image_data,
+                        frame_overlay,
+                        alpha=overlay_alpha,
+                        palette=overlay_palette,
+                        outline=overlay_outline,
+                        outline_width=overlay_outline_width,
+                        outline_color=overlay_outline_color,
+                    )
 
                 # Render frame without poses
                 rendered = render_frame(
@@ -1225,6 +1449,19 @@ def render_video(
             if crop_bounds is not None:
                 render_image_data, render_points, _ = _apply_crop(
                     image, instances_points, crop_bounds
+                )
+
+            # Apply overlay
+            frame_overlay = _get_frame_overlay(fidx)
+            if frame_overlay is not None:
+                _apply_overlay(
+                    render_image_data,
+                    frame_overlay,
+                    alpha=overlay_alpha,
+                    palette=overlay_palette,
+                    outline=overlay_outline,
+                    outline_width=overlay_outline_width,
+                    outline_color=overlay_outline_color,
                 )
 
             # Render frame
