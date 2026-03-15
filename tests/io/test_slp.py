@@ -78,7 +78,7 @@ from sleap_io.io.slp import (
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 
 
 def test_read_labels(slp_typical, slp_simple_skel, slp_minimal):
@@ -4225,9 +4225,8 @@ def test_slp_roi_roundtrip(tmp_path):
         [(0, 0), (100, 0), (100, 100), (0, 100)],
         video=video,
         frame_idx=5,
-        score=0.9,
         track=track,
-        annotation_type=AnnotationType.ARENA,
+        category="arena",
     )
 
     skeleton = Skeleton(nodes=["A"])
@@ -4249,16 +4248,13 @@ def test_slp_roi_roundtrip(tmp_path):
     r1 = loaded.rois[0]
     assert r1.name == "bbox1"
     assert r1.category == "cat"
-    assert r1.annotation_type == AnnotationType.BOUNDING_BOX
     assert r1.video is loaded.videos[0]
     assert r1.frame_idx is None
-    assert r1.score is None
     assert r1.bounds == pytest.approx((10.0, 20.0, 40.0, 60.0))
 
     r2 = loaded.rois[1]
-    assert r2.annotation_type == AnnotationType.ARENA
+    assert r2.category == "arena"
     assert r2.frame_idx == 5
-    assert r2.score == pytest.approx(0.9, abs=1e-5)
     assert r2.track is loaded.tracks[0]
 
 
@@ -4274,7 +4270,6 @@ def test_slp_mask_roundtrip(tmp_path):
         frame_idx=3,
         name="seg1",
         category="foreground",
-        score=0.85,
     )
 
     skeleton = Skeleton(nodes=["A"])
@@ -4291,7 +4286,6 @@ def test_slp_mask_roundtrip(tmp_path):
     assert m.width == 30
     assert m.name == "seg1"
     assert m.category == "foreground"
-    assert m.score == pytest.approx(0.85, abs=1e-5)
     assert m.frame_idx == 3
     assert m.video is loaded.videos[0]
 

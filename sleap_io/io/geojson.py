@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 
 
 def write_rois(rois: list[ROI], filename: str | Path) -> None:
@@ -86,21 +86,10 @@ def _feature_to_roi(feature: dict) -> ROI:
     geometry = shape(feature["geometry"])
     props = feature.get("properties") or {}
 
-    # Resolve annotation type: prefer int value, fall back to name string
-    annotation_type = AnnotationType.DEFAULT
-    if "annotation_type" in props:
-        annotation_type = AnnotationType(props["annotation_type"])
-    elif "annotation_type_name" in props:
-        annotation_type = AnnotationType[props["annotation_type_name"]]
-    elif "roi_type" in props:
-        annotation_type = AnnotationType[props["roi_type"]]
-
     return ROI(
         geometry=geometry,
-        annotation_type=annotation_type,
         name=props.get("name", ""),
         category=props.get("category", ""),
-        score=props.get("score"),
         source=props.get("source", ""),
         frame_idx=props.get("frame_idx"),
     )

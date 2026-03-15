@@ -1596,7 +1596,6 @@ class TestCOCOROIMaskIO:
             category="cat",
             video=video,
             frame_idx=0,
-            score=0.95,
         )
 
         labels = sio.Labels(rois=[roi1, roi2])
@@ -1612,9 +1611,6 @@ class TestCOCOROIMaskIO:
         ann1 = data["annotations"][0]
         assert ann1["bbox"] == [10.0, 20.0, 50.0, 30.0]
         assert ann1["iscrowd"] == 0
-
-        ann2 = data["annotations"][1]
-        assert ann2["score"] == 0.95
 
         # Verify categories were created
         cat_names = {c["name"] for c in data["categories"]}
@@ -1704,9 +1700,9 @@ class TestCOCOROIMaskIO:
                     "id": 2,
                     "image_id": 1,
                     "category_id": 2,
-                    "segmentation": [[5.0, 5.0, 50.0, 5.0, 50.0, 50.0, 5.0, 50.0]],
+                    "segmentation": [[5.0, 5.0, 50.0, 5.0, 30.0, 50.0, 5.0, 50.0]],
                     "bbox": [5, 5, 45, 45],
-                    "area": 2025,
+                    "area": 1012.5,
                     "iscrowd": 0,
                 },
                 {
@@ -1739,15 +1735,9 @@ class TestCOCOROIMaskIO:
         assert len(labels.labeled_frames[0].instances) == 0
 
         # 1 bbox ROI (annotation 1) + 1 polygon ROI (annotation 2) = 2 ROIs
-        from sleap_io.model.roi import AnnotationType
-
         assert len(labels.rois) == 2
-        bbox_rois = [
-            r for r in labels.rois if r.annotation_type == AnnotationType.BOUNDING_BOX
-        ]
-        poly_rois = [
-            r for r in labels.rois if r.annotation_type == AnnotationType.SEGMENTATION
-        ]
+        bbox_rois = [r for r in labels.rois if r.is_bbox]
+        poly_rois = [r for r in labels.rois if not r.is_bbox]
         assert len(bbox_rois) == 1
         assert bbox_rois[0].category == "animal"
         assert len(poly_rois) == 1
@@ -1759,8 +1749,8 @@ class TestCOCOROIMaskIO:
         assert labels.masks[0].height == 5
         assert labels.masks[0].width == 5
 
-    def test_coco_category_score_preservation(self, tmp_path):
-        """Test that category names and scores roundtrip correctly."""
+    def test_coco_category_preservation(self, tmp_path):
+        """Test that category names roundtrip correctly."""
         from sleap_io.model.roi import ROI
 
         video = sio.Video.from_filename(["img1.png"])
@@ -1770,14 +1760,13 @@ class TestCOCOROIMaskIO:
             30.0,
             40.0,
             category="special_class",
-            score=0.87,
             video=video,
             frame_idx=0,
         )
 
         labels = sio.Labels(rois=[roi])
 
-        json_path = tmp_path / "score_test.json"
+        json_path = tmp_path / "cat_test.json"
         coco.write_labels(labels, json_path)
 
         with open(json_path, "r") as f:
@@ -1786,11 +1775,8 @@ class TestCOCOROIMaskIO:
         # Verify category name
         assert any(c["name"] == "special_class" for c in data["categories"])
 
-        # Verify score
-        ann = data["annotations"][0]
-        assert ann["score"] == 0.87
-
         # Verify category_id references correct category
+        ann = data["annotations"][0]
         cat_id = ann["category_id"]
         cat = next(c for c in data["categories"] if c["id"] == cat_id)
         assert cat["name"] == "special_class"

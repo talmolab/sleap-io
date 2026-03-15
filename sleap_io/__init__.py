@@ -76,6 +76,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "Track",
         ],
         "model.labeled_frame": ["LabeledFrame"],
+        "model.bbox": ["BoundingBox", "UserBoundingBox", "PredictedBoundingBox"],
         "model.labels": ["Labels"],
         "model.mask": ["SegmentationMask"],
         "model.labels_set": ["LabelsSet"],

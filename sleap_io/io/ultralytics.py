@@ -28,7 +28,7 @@ from tqdm import tqdm
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -731,7 +731,6 @@ def parse_label_file(
 
                 if fmt in ("detection", "detection_conf"):
                     x_center, y_center, w_norm, h_norm = map(float, parts[1:5])
-                    score = float(parts[5]) if fmt == "detection_conf" else None
 
                     # Denormalize to pixel coordinates
                     w_px = w_norm * width_px
@@ -744,9 +743,7 @@ def parse_label_file(
                         y_px,
                         w_px,
                         h_px,
-                        annotation_type=AnnotationType.BOUNDING_BOX,
                         category=category,
-                        score=score,
                         video=video,
                         frame_idx=frame_idx,
                     )
@@ -763,7 +760,6 @@ def parse_label_file(
 
                     roi = ROI.from_polygon(
                         coords,
-                        annotation_type=AnnotationType.SEGMENTATION,
                         category=category,
                         video=video,
                         frame_idx=frame_idx,
@@ -914,7 +910,7 @@ def write_roi_label_file(
         for roi in exploded_rois:
             class_id = name_to_id.get(roi.category, 0)
 
-            if roi.annotation_type == AnnotationType.SEGMENTATION and not roi.is_bbox:
+            if not roi.is_bbox:
                 # Write segmentation polygon
                 if (
                     hasattr(roi.geometry, "interiors")
@@ -949,9 +945,6 @@ def write_roi_label_file(
                     f"{w:.6f}",
                     f"{h:.6f}",
                 ]
-                if roi.score is not None:
-                    line_parts.append(f"{roi.score:.6f}")
-
                 f.write(" ".join(line_parts) + "\n")
 
 

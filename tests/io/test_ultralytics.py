@@ -35,7 +35,7 @@ from sleap_io.io.ultralytics import (
     write_labels,
     write_roi_label_file,
 )
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 
 
 def test_parse_data_yaml(ultralytics_data_yaml):
@@ -1330,8 +1330,6 @@ def test_ultralytics_detection_read_write_roundtrip(tmp_path):
     # Check first ROI (cat)
     roi0 = labels.rois[0]
     assert roi0.category == "cat"
-    assert roi0.annotation_type == AnnotationType.BOUNDING_BOX
-    assert roi0.score is None
     assert roi0.is_bbox
 
     # Check second ROI (dog)
@@ -1370,9 +1368,7 @@ def test_ultralytics_detection_with_confidence(tmp_path):
     labels = read_labels(str(dataset_path), split="train")
 
     assert len(labels.rois) == 2
-    assert labels.rois[0].score == pytest.approx(0.95)
     assert labels.rois[0].category == "cat"
-    assert labels.rois[1].score == pytest.approx(0.85)
     assert labels.rois[1].category == "dog"
 
 
@@ -1391,7 +1387,7 @@ def test_ultralytics_segmentation_read_write_roundtrip(tmp_path):
     assert len(instances) == 0
     assert len(rois) == 1
     roi = rois[0]
-    assert roi.annotation_type == AnnotationType.SEGMENTATION
+    assert not roi.is_bbox
     assert roi.category == "animal"
     assert roi.area > 0
 
@@ -1414,7 +1410,7 @@ def test_ultralytics_segmentation_read_write_roundtrip(tmp_path):
     )
     assert len(rois2) == 1
     roi2 = rois2[0]
-    assert roi2.annotation_type == AnnotationType.SEGMENTATION
+    assert not roi2.is_bbox
 
     # Areas should match closely
     assert abs(roi.area - roi2.area) / roi.area < 0.01
@@ -1507,7 +1503,6 @@ def test_write_roi_label_file_multipolygon(tmp_path):
 
     roi = ROI(
         geometry=multi,
-        annotation_type=AnnotationType.SEGMENTATION,
         category="obj",
     )
     label_path = tmp_path / "multi.txt"
@@ -1528,7 +1523,6 @@ def test_write_roi_label_file_hole_warning(tmp_path):
 
     roi = ROI(
         geometry=poly_with_hole,
-        annotation_type=AnnotationType.SEGMENTATION,
         category="obj",
     )
     label_path = tmp_path / "hole.txt"

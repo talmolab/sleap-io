@@ -12,7 +12,7 @@ import numpy as np
 from sleap_io.model.instance import PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton, Symmetry
 from sleap_io.model.video import Video
 
@@ -238,14 +238,11 @@ def _static_object_to_roi(name: str, coords: np.ndarray, video: Video) -> ROI:
     else:
         geometry = MultiPoint([(float(x), float(y)) for x, y in coords])
 
-    annotation_type = (
-        AnnotationType.ARENA if name == "corners" else AnnotationType.ANCHOR
-    )
+    category = "arena" if name == "corners" else "anchor"
     return ROI(
         geometry=geometry,
-        annotation_type=annotation_type,
         name=name,
-        category="static_object",
+        category=category,
         source="jabs",
         video=video,
         frame_idx=None,
@@ -376,7 +373,7 @@ def convert_labels(all_labels: Labels, video: Video) -> dict:
 
     # Extract static objects from ROIs
     for roi in all_labels.rois:
-        if roi.category == "static_object" and roi.source == "jabs":
+        if roi.category in ("arena", "anchor") and roi.source == "jabs":
             coords = _roi_to_static_object_coords(roi)
             if coords is not None:
                 static_objects[roi.name] = coords

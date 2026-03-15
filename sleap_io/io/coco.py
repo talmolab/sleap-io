@@ -20,7 +20,7 @@ from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI, AnnotationType
+from sleap_io.model.roi import ROI
 from sleap_io.model.skeleton import Edge, Node, Skeleton
 from sleap_io.model.video import Video
 
@@ -362,7 +362,6 @@ def read_labels(
             for annotation in image_annotations[image_id]:
                 category_id = annotation["category_id"]
                 cat_name = category_names.get(category_id, "")
-                score = annotation.get("score")
                 has_kpts = "keypoints" in annotation and annotation["keypoints"]
 
                 if has_kpts and category_id in skeletons:
@@ -399,7 +398,6 @@ def read_labels(
                     # keypoints
                     roi_kwargs = dict(
                         category=cat_name,
-                        score=score,
                         video=video,
                         frame_idx=frame_idx,
                     )
@@ -434,7 +432,6 @@ def read_labels(
                     # Detection-only annotation: create ROIs/masks
                     roi_kwargs = dict(
                         category=cat_name,
-                        score=score,
                         video=video,
                         frame_idx=frame_idx,
                     )
@@ -768,29 +765,20 @@ def convert_labels(
             "iscrowd": 0,
         }
 
-        if roi.annotation_type == AnnotationType.BOUNDING_BOX:
-            minx, miny, maxx, maxy = roi.bounds
-            w, h = maxx - minx, maxy - miny
-            annotation["bbox"] = [minx, miny, w, h]
-            annotation["area"] = w * h
-        else:
-            # Polygon ROI
-            coords = list(roi.geometry.exterior.coords)
-            flat = []
-            for x, y in coords[:-1]:  # Exclude closing vertex
-                flat.extend([float(x), float(y)])
-            annotation["segmentation"] = [flat]
-            minx, miny, maxx, maxy = roi.bounds
-            annotation["bbox"] = [
-                minx,
-                miny,
-                maxx - minx,
-                maxy - miny,
-            ]
-            annotation["area"] = float(roi.area)
-
-        if roi.score is not None:
-            annotation["score"] = roi.score
+        # Write ROI as polygon segmentation with bounding box
+        coords = list(roi.geometry.exterior.coords)
+        flat = []
+        for x, y in coords[:-1]:  # Exclude closing vertex
+            flat.extend([float(x), float(y)])
+        annotation["segmentation"] = [flat]
+        minx, miny, maxx, maxy = roi.bounds
+        annotation["bbox"] = [
+            minx,
+            miny,
+            maxx - minx,
+            maxy - miny,
+        ]
+        annotation["area"] = float(roi.area)
 
         coco_data["annotations"].append(annotation)
         annotation_id_counter += 1
@@ -831,9 +819,6 @@ def convert_labels(
             "area": float(seg_mask.area),
             "iscrowd": 1,
         }
-
-        if seg_mask.score is not None:
-            annotation["score"] = seg_mask.score
 
         coco_data["annotations"].append(annotation)
         annotation_id_counter += 1

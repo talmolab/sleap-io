@@ -2411,9 +2411,6 @@ def read_rois(
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
 
-        score_val = float(row["score"])
-        score = None if np.isnan(score_val) else score_val
-
         instance_idx = int(row["instance"]) if "instance" in row.dtype.names else -1
         instance = (
             instances[instance_idx]
@@ -2423,10 +2420,8 @@ def read_rois(
 
         roi = ROI(
             geometry=geometry,
-            annotation_type=int(row["annotation_type"]),
             name=names[i] if i < len(names) else "",
             category=categories[i] if i < len(categories) else "",
-            score=score,
             source=sources[i] if i < len(sources) else "",
             video=video,
             frame_idx=frame_idx,
@@ -2492,7 +2487,6 @@ def write_rois(
         video_idx = videos.index(roi.video) if roi.video in videos else -1
         frame_idx = roi.frame_idx if roi.frame_idx is not None else -1
         track_idx = tracks.index(roi.track) if roi.track in tracks else -1
-        score = roi.score if roi.score is not None else float("nan")
 
         instance_idx = roi._instance_idx  # Use stored index as default
         if instances is not None and roi.instance is not None:
@@ -2503,11 +2497,11 @@ def write_rois(
 
         roi_rows.append(
             (
-                int(roi.annotation_type),
+                0,  # annotation_type: write 0 (DEFAULT) for backward compat
                 video_idx,
                 frame_idx,
                 track_idx,
-                score,
+                float("nan"),  # score: write NaN for backward compat
                 wkb_start,
                 wkb_end,
                 instance_idx,
@@ -2583,18 +2577,13 @@ def read_masks(
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
 
-        score_val = float(row["score"])
-        score = None if np.isnan(score_val) else score_val
-
         masks.append(
             SegmentationMask(
                 rle_counts=rle_counts,
                 height=int(row["height"]),
                 width=int(row["width"]),
-                annotation_type=int(row["annotation_type"]),
                 name=names[i] if i < len(names) else "",
                 category=categories[i] if i < len(categories) else "",
-                score=score,
                 source=sources[i] if i < len(sources) else "",
                 video=video,
                 frame_idx=frame_idx,
@@ -2655,17 +2644,16 @@ def write_masks(
         video_idx = videos.index(mask.video) if mask.video in videos else -1
         frame_idx = mask.frame_idx if mask.frame_idx is not None else -1
         track_idx = tracks.index(mask.track) if mask.track in tracks else -1
-        score = mask.score if mask.score is not None else float("nan")
 
         mask_rows.append(
             (
                 mask.height,
                 mask.width,
-                int(mask.annotation_type),
+                2,  # annotation_type: write SEGMENTATION (2) for backward compat
                 video_idx,
                 frame_idx,
                 track_idx,
-                score,
+                float("nan"),  # score: write NaN for backward compat
                 rle_start,
                 rle_end,
             )

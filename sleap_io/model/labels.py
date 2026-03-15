@@ -30,6 +30,7 @@ from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
     from sleap_io.io.slp_lazy import LazyDataStore
+    from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import (
@@ -59,10 +60,11 @@ class Labels:
         sessions: A list of `RecordingSession`s that are associated with this dataset.
         provenance: Dictionary of arbitrary metadata providing additional information
             about where the dataset came from.
-        rois: A list of `ROI` vector geometry annotations (bounding boxes, polygons,
-            etc.) associated with this dataset.
+        rois: A list of `ROI` vector geometry annotations (polygons, etc.) associated
+            with this dataset.
         masks: A list of `SegmentationMask` raster annotations associated with this
             dataset.
+        bboxes: A list of `BoundingBox` annotations associated with this dataset.
 
     Notes:
         `Video`s in contain `LabeledFrame`s, and `Skeleton`s and `Track`s in contained
@@ -79,6 +81,7 @@ class Labels:
 
     rois: "list[ROI]" = field(factory=list)
     masks: "list[SegmentationMask]" = field(factory=list)
+    bboxes: "list[BoundingBox]" = field(factory=list)
 
     # Internal lazy state (private, not part of public API)
     _lazy_store: "LazyDataStore | None" = field(
@@ -288,6 +291,21 @@ class Labels:
                 new_mask.track = track_map.get(id(mask.track), new_mask.track)
             new_masks.append(new_mask)
 
+        # Deep copy bboxes, relinking videos, tracks, and instances
+        new_bboxes = []
+        for bbox in self.bboxes:
+            new_bbox = deepcopy(bbox)
+            if bbox.video is not None:
+                new_bbox.video = video_map.get(id(bbox.video), new_bbox.video)
+            if bbox.track is not None:
+                new_bbox.track = track_map.get(id(bbox.track), new_bbox.track)
+            # Resolve deferred instance link from _instance_idx
+            idx = new_bbox._instance_idx
+            if new_bbox.instance is None and 0 <= idx < len(all_instances):
+                new_bbox.instance = all_instances[idx]
+                new_bbox._instance_idx = -1
+            new_bboxes.append(new_bbox)
+
         return Labels(
             labeled_frames=labeled_frames,
             videos=new_videos,
@@ -297,6 +315,7 @@ class Labels:
             provenance=dict(self.provenance),
             rois=new_rois,
             masks=new_masks,
+            bboxes=new_bboxes,
             # _lazy_store is None (not lazy)
         )
 
@@ -462,6 +481,7 @@ class Labels:
                 provenance=dict(self.provenance),
                 rois=[deepcopy(r) for r in self.rois],
                 masks=[deepcopy(m) for m in self.masks],
+                bboxes=[deepcopy(b) for b in self.bboxes],
                 lazy_store=new_store,
             )
         else:
@@ -1201,12 +1221,11 @@ class Labels:
         self,
         video: "Video | None" = None,
         frame_idx: int | None = None,
-        annotation_type: "int | None" = None,
         category: str | None = None,
         track: "Track | None" = None,
         instance: "Instance | None" = None,
     ) -> list["ROI"]:
-        """Query ROIs by video, frame, type, category, track, or instance.
+        """Query ROIs by video, frame, category, track, or instance.
 
         Filters the `rois` list via linear scan.
 
@@ -1214,8 +1233,6 @@ class Labels:
             video: If specified, only return ROIs for this video (identity
                 comparison).
             frame_idx: If specified, only return ROIs for this frame index.
-            annotation_type: If specified, only return ROIs with this annotation
-                type.
             category: If specified, only return ROIs with this category.
             track: If specified, only return ROIs for this track (identity
                 comparison).
@@ -1230,8 +1247,6 @@ class Labels:
             results = [r for r in results if r.video is video]
         if frame_idx is not None:
             results = [r for r in results if r.frame_idx == frame_idx]
-        if annotation_type is not None:
-            results = [r for r in results if r.annotation_type == annotation_type]
         if category is not None:
             results = [r for r in results if r.category == category]
         if track is not None:
@@ -1244,12 +1259,11 @@ class Labels:
         self,
         video: "Video | None" = None,
         frame_idx: int | None = None,
-        annotation_type: "int | None" = None,
         category: str | None = None,
         track: "Track | None" = None,
         instance: "Instance | None" = None,
     ) -> list["SegmentationMask"]:
-        """Query segmentation masks by video, frame, type, or category.
+        """Query segmentation masks by video, frame, category, track, or instance.
 
         Filters the `masks` list via linear scan.
 
@@ -1257,8 +1271,6 @@ class Labels:
             video: If specified, only return masks for this video (identity
                 comparison).
             frame_idx: If specified, only return masks for this frame index.
-            annotation_type: If specified, only return masks with this
-                annotation type.
             category: If specified, only return masks with this category.
             track: If specified, only return masks for this track (identity
                 comparison).
@@ -1273,14 +1285,55 @@ class Labels:
             results = [r for r in results if r.video is video]
         if frame_idx is not None:
             results = [r for r in results if r.frame_idx == frame_idx]
-        if annotation_type is not None:
-            results = [r for r in results if r.annotation_type == annotation_type]
         if category is not None:
             results = [r for r in results if r.category == category]
         if track is not None:
             results = [r for r in results if r.track is track]
         if instance is not None:
             results = [r for r in results if r.instance is instance]
+        return results
+
+    def get_bboxes(
+        self,
+        video: "Video | None" = None,
+        frame_idx: int | None = None,
+        category: str | None = None,
+        track: "Track | None" = None,
+        instance: "Instance | None" = None,
+        predicted: bool | None = None,
+    ) -> list["BoundingBox"]:
+        """Query bounding boxes by video, frame, category, track, or instance.
+
+        Filters the `bboxes` list via linear scan.
+
+        Args:
+            video: If specified, only return bboxes for this video (identity
+                comparison).
+            frame_idx: If specified, only return bboxes for this frame index.
+            category: If specified, only return bboxes with this category.
+            track: If specified, only return bboxes for this track (identity
+                comparison).
+            instance: If specified, only return bboxes for this instance
+                (identity comparison).
+            predicted: If ``True``, only return predicted bboxes. If ``False``,
+                only return user bboxes. If ``None`` (default), return both.
+
+        Returns:
+            A list of matching bounding boxes.
+        """
+        results = list(self.bboxes)
+        if video is not None:
+            results = [b for b in results if b.video is video]
+        if frame_idx is not None:
+            results = [b for b in results if b.frame_idx == frame_idx]
+        if category is not None:
+            results = [b for b in results if b.category == category]
+        if track is not None:
+            results = [b for b in results if b.track is track]
+        if instance is not None:
+            results = [b for b in results if b.instance is instance]
+        if predicted is not None:
+            results = [b for b in results if b.is_predicted == predicted]
         return results
 
     def rename_nodes(
@@ -1540,6 +1593,11 @@ class Labels:
         for mask in self.masks:
             if mask.video in video_map:
                 mask.video = video_map[mask.video]
+
+        # Update bboxes with the new videos.
+        for bbox in self.bboxes:
+            if bbox.video in video_map:
+                bbox.video = video_map[bbox.video]
 
         # Update the list of videos.
         self.videos = [video_map.get(video, video) for video in self.videos]
