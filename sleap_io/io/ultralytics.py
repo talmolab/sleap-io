@@ -846,6 +846,11 @@ def parse_label_file(
 
     Returns:
         A tuple of ``(instances, rois, bboxes)`` parsed from the file.
+
+    .. versionchanged:: 0.x
+        Returns a 3-tuple ``(instances, rois, bboxes)`` instead of the previous
+        2-tuple ``(instances, rois)``. Detection format lines now produce
+        ``BoundingBox`` objects in the third element instead of ``ROI`` objects.
     """
     instances: list[Instance] = []
     rois: list[ROI] = []
@@ -1139,6 +1144,8 @@ def write_bbox_label_file(
                 f"{w_norm:.6f}",
                 f"{h_norm:.6f}",
             ]
+            if isinstance(bbox, PredictedBoundingBox):
+                line_parts.append(f"{bbox.score:.6f}")
             f.write(" ".join(line_parts) + "\n")
 
 

@@ -1507,21 +1507,24 @@ def test_write_bbox_label_file(tmp_path):
     content = label_path.read_text().strip().split("\n")
     assert len(content) == 2
 
-    # First line: cat bbox
+    # First line: UserBoundingBox -> 5 values (no score)
     parts0 = content[0].split()
+    assert len(parts0) == 5
     assert parts0[0] == "0"
     assert float(parts0[1]) == pytest.approx(0.5, abs=1e-4)  # 100/200
     assert float(parts0[2]) == pytest.approx(0.5, abs=1e-4)  # 50/100
     assert float(parts0[3]) == pytest.approx(0.4, abs=1e-4)  # 80/200
     assert float(parts0[4]) == pytest.approx(0.6, abs=1e-4)  # 60/100
 
-    # Second line: dog bbox
+    # Second line: PredictedBoundingBox -> 6 values (with score)
     parts1 = content[1].split()
+    assert len(parts1) == 6
     assert parts1[0] == "1"
     assert float(parts1[1]) == pytest.approx(0.25, abs=1e-4)  # 50/200
     assert float(parts1[2]) == pytest.approx(0.25, abs=1e-4)  # 25/100
     assert float(parts1[3]) == pytest.approx(0.2, abs=1e-4)  # 40/200
     assert float(parts1[4]) == pytest.approx(0.3, abs=1e-4)  # 30/100
+    assert float(parts1[5]) == pytest.approx(0.9, abs=1e-4)  # score
 
     # Read back and verify roundtrip
     skeleton = Skeleton()
@@ -1537,8 +1540,9 @@ def test_write_bbox_label_file(tmp_path):
     assert abs(bboxes_read[0].x_center - 100.0) < 1e-3
     assert abs(bboxes_read[0].y_center - 50.0) < 1e-3
 
-    assert isinstance(bboxes_read[1], UserBoundingBox)
+    assert isinstance(bboxes_read[1], PredictedBoundingBox)
     assert bboxes_read[1].category == "dog"
+    assert bboxes_read[1].score == pytest.approx(0.9, abs=1e-4)
     assert abs(bboxes_read[1].x_center - 50.0) < 1e-3
     assert abs(bboxes_read[1].y_center - 25.0) < 1e-3
 
@@ -1620,3 +1624,55 @@ def test_write_roi_label_file_hole_warning(tmp_path):
     # File should still be written (exterior only)
     lines = label_path.read_text().strip().split("\n")
     assert len(lines) == 1
+
+
+def test_write_bbox_label_file_predicted_score(tmp_path):
+    """PredictedBoundingBox score should be written as 6th value."""
+    bboxes = [
+        PredictedBoundingBox(
+            x_center=100,
+            y_center=50,
+            width=80,
+            height=60,
+            category="cat",
+            score=0.85,
+        ),
+        UserBoundingBox(
+            x_center=50,
+            y_center=25,
+            width=40,
+            height=30,
+            category="dog",
+        ),
+    ]
+    name_to_id = {"cat": 0, "dog": 1}
+    label_path = tmp_path / "pred_bbox.txt"
+    write_bbox_label_file(label_path, bboxes, (100, 200), name_to_id)
+
+    content = label_path.read_text().strip().split("\n")
+    assert len(content) == 2
+
+    # First line: PredictedBoundingBox should have 6 values (including score)
+    parts0 = content[0].split()
+    assert len(parts0) == 6
+    assert float(parts0[5]) == pytest.approx(0.85, abs=1e-4)
+
+    # Second line: UserBoundingBox should have 5 values (no score)
+    parts1 = content[1].split()
+    assert len(parts1) == 5
+
+    # Roundtrip: read back and verify types and score
+    skeleton = Skeleton()
+    instances, rois, bboxes_read = parse_label_file(
+        label_path, skeleton, (100, 200), class_names={0: "cat", 1: "dog"}
+    )
+    assert len(instances) == 0
+    assert len(rois) == 0
+    assert len(bboxes_read) == 2
+
+    assert isinstance(bboxes_read[0], PredictedBoundingBox)
+    assert bboxes_read[0].score == pytest.approx(0.85, abs=1e-4)
+    assert bboxes_read[0].category == "cat"
+
+    assert isinstance(bboxes_read[1], UserBoundingBox)
+    assert bboxes_read[1].category == "dog"

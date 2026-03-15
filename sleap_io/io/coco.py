@@ -472,6 +472,9 @@ def read_labels(
                     bbox = annotation.get("bbox")
                     if bbox is not None and not segmentation:
                         x, y, w, h = bbox
+                        # COCO score field is only present in prediction results,
+                        # so its presence distinguishes predicted from user
+                        # annotations.
                         score = annotation.get("score")
                         if score is not None:
                             bbox_obj = PredictedBoundingBox.from_xywh(
@@ -600,6 +603,11 @@ def convert_labels(
     Returns:
         COCO annotation dictionary with "images", "annotations", and "categories"
         fields.
+
+    Note:
+        Rotated bounding boxes are not supported by the COCO format. Exporting
+        ``BoundingBox`` objects that have a non-zero ``angle`` will raise
+        ``ValueError`` when ``BoundingBox.xywh`` is accessed.
     """
     coco_data = {
         "images": [],
@@ -848,7 +856,9 @@ def convert_labels(
         annotation_id_counter += 1
 
     # Export bounding boxes as COCO bbox annotations (skip instance-linked bboxes
-    # since those are already represented in the keypoint annotations above)
+    # since those are already represented in the keypoint annotations above).
+    # Note: Rotated bboxes are not supported by COCO format.
+    # BoundingBox.xywh raises ValueError for rotated boxes.
     for bbox_obj in labels.bboxes:
         if bbox_obj.instance is not None:
             continue

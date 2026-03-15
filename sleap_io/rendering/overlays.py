@@ -1,8 +1,7 @@
 """Overlay drawing functions for ROIs, segmentation masks, and bounding boxes.
 
 These functions draw annotations directly onto numpy image arrays using
-skia-python for geometry rendering, cv2 for bounding box rendering, and
-numpy for mask blending.
+skia-python for geometry rendering and numpy for mask blending.
 """
 
 from __future__ import annotations
@@ -129,23 +128,24 @@ def draw_bboxes(
     image: np.ndarray,
     bboxes: list["BoundingBox"],
     color: tuple[int, int, int] = (0, 255, 0),
-    thickness: int = 2,
+    line_width: int = 2,
     fill_alpha: float = 0.0,
 ) -> np.ndarray:
     """Draw bounding boxes on an image.
 
-    Draws axis-aligned bounding boxes as rectangles and rotated bounding boxes
-    as rotated rectangles using OpenCV. For ``PredictedBoundingBox`` instances,
-    the confidence score is drawn as text near the top-left corner.
+    Draws bounding boxes as closed paths using skia-python. Both axis-aligned
+    and rotated bounding boxes are handled uniformly via corner points. For
+    ``PredictedBoundingBox`` instances, the confidence score is drawn as text
+    near the top-left corner.
 
     Args:
-        image: Image array of shape (H, W, 3) uint8. Modified in-place unless
-            ``fill_alpha > 0``, in which case a blended copy is written back.
+        image: Image array of shape (H, W, 3) uint8. Modified in-place and
+            returned.
         bboxes: List of BoundingBox objects to draw.
-        color: BGR color tuple for the bounding box outlines.
-        thickness: Line thickness in pixels.
+        color: RGB color tuple for the bounding box outlines.
+        line_width: Width of the outline in pixels.
         fill_alpha: If > 0, fill the bounding box interior with this opacity
-            (0.0 to 1.0). The image is copied for alpha blending.
+            (0.0 to 1.0).
 
     Returns:
         The modified image array.
@@ -153,64 +153,65 @@ def draw_bboxes(
     if not bboxes:
         return image
 
-    import cv2
+    import skia
 
     from sleap_io.model.bbox import PredictedBoundingBox
 
+    # Pad to RGBA for skia surface
+    frame_rgba = np.dstack([image, np.full(image.shape[:2], 255, dtype=np.uint8)])
+    surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
+    canvas = surface.getCanvas()
+
+    # Stroke paint for outlines
+    stroke_paint = skia.Paint(
+        Color=skia.Color(*color),
+        AntiAlias=False,
+        Style=skia.Paint.kStroke_Style,
+        StrokeWidth=float(line_width),
+        StrokeCap=skia.Paint.kSquare_Cap,
+    )
+
+    # Fill paint (only created if needed)
+    fill_paint = None
+    if fill_alpha > 0:
+        fill_paint = skia.Paint(
+            Color=skia.Color4f(
+                color[0] / 255.0,
+                color[1] / 255.0,
+                color[2] / 255.0,
+                fill_alpha,
+            ).toColor(),
+            AntiAlias=False,
+            Style=skia.Paint.kFill_Style,
+        )
+
     for bbox in bboxes:
-        if bbox.is_rotated:
-            # Draw rotated bbox using polylines with corner points.
-            corners = bbox.corners.astype(np.int32)
+        corners = bbox.corners
 
-            if fill_alpha > 0:
-                overlay = image.copy()
-                cv2.fillPoly(overlay, [corners], color)
-                cv2.addWeighted(overlay, fill_alpha, image, 1 - fill_alpha, 0, image)
+        # Build a closed path from the 4 corners
+        path = skia.Path()
+        path.moveTo(float(corners[0][0]), float(corners[0][1]))
+        for i in range(1, len(corners)):
+            path.lineTo(float(corners[i][0]), float(corners[i][1]))
+        path.close()
 
-            cv2.polylines(
-                image, [corners], isClosed=True, color=color, thickness=thickness
-            )
+        # Draw fill if requested
+        if fill_paint is not None:
+            canvas.drawPath(path, fill_paint)
 
-            # Score text for predicted bboxes.
-            if isinstance(bbox, PredictedBoundingBox):
-                # Use the first corner (top-left before rotation) as anchor.
-                text_x, text_y = int(corners[0][0]), int(corners[0][1]) - 5
-                cv2.putText(
-                    image,
-                    f"{bbox.score:.2f}",
-                    (text_x, text_y),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    color,
-                    1,
-                    cv2.LINE_AA,
-                )
-        else:
-            # Draw axis-aligned bbox using cv2.rectangle.
-            x1, y1, x2, y2 = bbox.xyxy
-            pt1 = (int(x1), int(y1))
-            pt2 = (int(x2), int(y2))
+        # Draw stroke
+        canvas.drawPath(path, stroke_paint)
 
-            if fill_alpha > 0:
-                overlay = image.copy()
-                cv2.rectangle(overlay, pt1, pt2, color, cv2.FILLED)
-                cv2.addWeighted(overlay, fill_alpha, image, 1 - fill_alpha, 0, image)
+        # Score text for predicted bboxes
+        if isinstance(bbox, PredictedBoundingBox):
+            text_x = float(corners[0][0])
+            text_y = float(corners[0][1]) - 5
+            font = skia.Font(skia.Typeface("Arial"), 12)
+            text_paint = skia.Paint(Color=skia.Color(*color), AntiAlias=True)
+            canvas.drawString(f"{bbox.score:.2f}", text_x, text_y, font, text_paint)
 
-            cv2.rectangle(image, pt1, pt2, color, thickness)
-
-            # Score text for predicted bboxes.
-            if isinstance(bbox, PredictedBoundingBox):
-                text_x, text_y = pt1[0], pt1[1] - 5
-                cv2.putText(
-                    image,
-                    f"{bbox.score:.2f}",
-                    (text_x, text_y),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    color,
-                    1,
-                    cv2.LINE_AA,
-                )
+    # Copy RGB channels back to the input image
+    image[:] = frame_rgba[:, :, :3]
 
     return image
 

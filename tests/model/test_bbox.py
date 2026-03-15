@@ -40,6 +40,15 @@ def test_bbox_from_xyxy():
     assert bbox.height == 80
 
 
+def test_bbox_from_xyxy_swapped():
+    """from_xyxy handles swapped coordinates (x2 < x1 or y2 < y1)."""
+    bbox = BoundingBox.from_xyxy(110, 100, 10, 20)
+    assert bbox.x_center == 60
+    assert bbox.y_center == 60
+    assert bbox.width == 100
+    assert bbox.height == 80
+
+
 def test_bbox_from_xyxy_with_kwargs():
     video = Video(filename="test.mp4")
     bbox = BoundingBox.from_xyxy(
@@ -155,6 +164,15 @@ def test_bbox_is_rotated():
 
     bbox2 = BoundingBox(x_center=50, y_center=50, width=100, height=80, angle=0.5)
     assert bbox2.is_rotated
+
+
+def test_bbox_is_rotated_tolerance():
+    """Angles below tolerance threshold are treated as not rotated."""
+    bbox = BoundingBox(x_center=50, y_center=50, width=100, height=80, angle=1e-15)
+    assert not bbox.is_rotated
+    # xyxy and xywh should work without raising since this is effectively unrotated
+    _ = bbox.xyxy
+    _ = bbox.xywh
 
 
 def test_user_bbox():

@@ -112,6 +112,10 @@ class ROI:
 
         Returns:
             An ROI with a rectangular polygon geometry.
+
+        Note:
+            For detection bounding boxes, prefer ``BoundingBox.from_xywh()`` or
+            ``BoundingBox.from_xyxy()`` which provide richer metadata support.
         """
         from shapely.geometry import box
 
@@ -138,6 +142,10 @@ class ROI:
 
         Returns:
             An ROI with a rectangular polygon geometry.
+
+        Note:
+            For detection bounding boxes, prefer ``BoundingBox.from_xywh()`` or
+            ``BoundingBox.from_xyxy()`` which provide richer metadata support.
         """
         from shapely.geometry import box
 

@@ -2358,8 +2358,6 @@ def test_draw_rois_polygon_with_hole():
 # draw_bboxes Tests
 # ============================================================================
 
-cv2 = pytest.importorskip("cv2", reason="opencv-python not installed")
-
 
 def test_draw_bboxes_basic():
     """draw_bboxes should draw axis-aligned bbox outlines on an image."""
@@ -2368,7 +2366,7 @@ def test_draw_bboxes_basic():
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     bbox = BoundingBox.from_xyxy(10, 10, 50, 50)
-    result = draw_bboxes(img, [bbox], color=(0, 255, 0), thickness=1)
+    result = draw_bboxes(img, [bbox], color=(0, 255, 0), line_width=1)
 
     # The outline should have green pixels on the boundary
     assert result is img  # Modified in place
@@ -2390,7 +2388,7 @@ def test_draw_bboxes_rotated():
     bbox = BoundingBox(
         x_center=100, y_center=100, width=60, height=40, angle=math.pi / 4
     )
-    result = draw_bboxes(img, [bbox], color=(0, 0, 255), thickness=2)
+    result = draw_bboxes(img, [bbox], color=(0, 0, 255), line_width=2)
 
     # Some pixels around the center should be drawn (rotated outline)
     assert result is img  # Modified in place
@@ -2407,7 +2405,7 @@ def test_draw_bboxes_fill():
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     bbox = BoundingBox.from_xyxy(10, 10, 50, 50)
-    result = draw_bboxes(img, [bbox], color=(255, 0, 0), thickness=1, fill_alpha=1.0)
+    result = draw_bboxes(img, [bbox], color=(255, 0, 0), line_width=1, fill_alpha=1.0)
 
     # Interior should be filled with the color
     assert result[30, 30, 0] == 255  # Red channel filled
@@ -2422,7 +2420,7 @@ def test_draw_bboxes_predicted_score():
 
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     bbox = PredictedBoundingBox.from_xyxy(20, 20, 60, 60, score=0.95)
-    result = draw_bboxes(img, [bbox], color=(0, 255, 0), thickness=1)
+    result = draw_bboxes(img, [bbox], color=(0, 255, 0), line_width=1)
 
     # The image should have pixels for both the outline and score text
     assert result is img

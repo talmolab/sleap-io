@@ -1320,6 +1320,11 @@ class Labels:
 
         Returns:
             A list of matching bounding boxes.
+
+        Note:
+            The ``predicted`` filter is unique to bounding boxes, which use a class
+            hierarchy (``UserBoundingBox`` vs ``PredictedBoundingBox``) for
+            user/predicted distinction.
         """
         results = list(self.bboxes)
         if video is not None:

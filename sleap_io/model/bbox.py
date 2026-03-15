@@ -88,11 +88,11 @@ class BoundingBox:
         Returns:
             A new bounding box instance.
         """
-        w = x2 - x1
-        h = y2 - y1
+        w = abs(x2 - x1)
+        h = abs(y2 - y1)
         return cls(
-            x_center=x1 + w / 2,
-            y_center=y1 + h / 2,
+            x_center=(x1 + x2) / 2,
+            y_center=(y1 + y2) / 2,
             width=w,
             height=h,
             **kwargs,
@@ -135,7 +135,7 @@ class BoundingBox:
     @property
     def is_rotated(self) -> bool:
         """Whether this bounding box is rotated (non-axis-aligned)."""
-        return self.angle != 0.0
+        return abs(self.angle) > 1e-10
 
     @property
     def xyxy(self) -> tuple[float, float, float, float]:
