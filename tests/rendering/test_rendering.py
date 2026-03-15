@@ -2579,3 +2579,92 @@ def test_draw_label_image_size_mismatch():
     assert result.shape == (30, 30, 3)
     # Labeled region within image bounds should be modified
     assert not np.array_equal(result[10, 10], [128, 128, 128])
+
+
+# ============================================================================
+# render_image overlay integration tests
+# ============================================================================
+
+
+def test_render_image_overlay_label_image():
+    """render_image with overlay= numpy label image should apply overlay."""
+    from sleap_io.rendering.core import render_image
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:20, 10:20] = 1
+    labels[30:40, 30:40] = 2
+
+    result = render_image(image=img, overlay=labels, overlay_alpha=0.4)
+    # Background unchanged
+    assert result[0, 0].tolist() == [128, 128, 128]
+    # Labeled regions modified
+    assert not np.array_equal(result[15, 15], [128, 128, 128])
+    assert not np.array_equal(result[35, 35], [128, 128, 128])
+    # Two labels get different colors
+    assert not np.array_equal(result[15, 15], result[35, 35])
+
+
+def test_render_image_overlay_masks():
+    """render_image with overlay= list of SegmentationMask should work."""
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.rendering.core import render_image
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    mask_data = np.zeros((50, 50), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+
+    result = render_image(image=img, overlay=[mask], overlay_alpha=0.5)
+    # Masked region should be modified
+    assert not np.array_equal(result[20, 20], [128, 128, 128])
+    # Background unchanged
+    assert result[0, 0].tolist() == [128, 128, 128]
+
+
+def test_render_image_overlay_rois():
+    """render_image with overlay= list of ROI should work."""
+    from shapely.geometry import box
+
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.core import render_image
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI(geometry=box(20, 20, 60, 60))
+
+    result = render_image(image=img, overlay=[roi], overlay_alpha=0.3)
+    # ROI region should have color applied
+    assert result[40, 40].any()
+
+
+def test_render_image_overlay_bboxes():
+    """render_image with overlay= list of BoundingBox should work."""
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.rendering.core import render_image
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = BoundingBox(x_center=50, y_center=50, width=40, height=40)
+
+    result = render_image(image=img, overlay=[bbox], overlay_alpha=0.3)
+    # BBox region should have color applied
+    assert result[50, 50].any()
+
+
+def test_render_image_overlay_with_scale():
+    """render_image with overlay and scale should scale the output."""
+    from sleap_io.rendering.core import render_image
+
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    labels = np.zeros((100, 100), dtype=np.int32)
+    labels[20:80, 20:80] = 1
+
+    result = render_image(image=img, overlay=labels, overlay_alpha=0.4, scale=0.5)
+    assert result.shape == (50, 50, 3)
+
+
+def test_render_image_source_none_requires_image():
+    """render_image with source=None and no image should raise."""
+    from sleap_io.rendering.core import render_image
+
+    with pytest.raises(ValueError, match="image parameter required"):
+        render_image(source=None)
