@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.instance import Instance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -333,6 +334,7 @@ def read_labels(
     labeled_frames = []
     rois = []
     masks = []
+    bboxes = []
     image_id_to_frame_idx = {}
 
     # Build frame index mapping for each image
@@ -422,14 +424,23 @@ def read_labels(
                                 roi = ROI.from_polygon(coords, **roi_kwargs)
                                 rois.append(roi)
 
-                    # Create bbox ROI if present and no segmentation was found
+                    # Create BoundingBox linked to instance if bbox present
                     bbox = annotation.get("bbox")
-                    if bbox is not None and not segmentation:
+                    if bbox is not None:
                         x, y, w, h = bbox
-                        roi = ROI.from_bbox(x, y, w, h, **roi_kwargs)
-                        rois.append(roi)
+                        bbox_obj = UserBoundingBox.from_xywh(
+                            x,
+                            y,
+                            w,
+                            h,
+                            category=cat_name,
+                            video=video,
+                            frame_idx=frame_idx,
+                            instance=instance,
+                        )
+                        bboxes.append(bbox_obj)
                 else:
-                    # Detection-only annotation: create ROIs/masks
+                    # Detection-only annotation: create ROIs/masks/bboxes
                     roi_kwargs = dict(
                         category=cat_name,
                         video=video,
@@ -457,12 +468,25 @@ def read_labels(
                                 roi = ROI.from_polygon(coords, **roi_kwargs)
                                 rois.append(roi)
 
-                    # Create bbox ROI if no segmentation was processed
+                    # Create BoundingBox if no segmentation was processed
                     bbox = annotation.get("bbox")
                     if bbox is not None and not segmentation:
                         x, y, w, h = bbox
-                        roi = ROI.from_bbox(x, y, w, h, **roi_kwargs)
-                        rois.append(roi)
+                        score = annotation.get("score")
+                        if score is not None:
+                            bbox_obj = PredictedBoundingBox.from_xywh(
+                                x,
+                                y,
+                                w,
+                                h,
+                                score=score,
+                                **roi_kwargs,
+                            )
+                        else:
+                            bbox_obj = UserBoundingBox.from_xywh(
+                                x, y, w, h, **roi_kwargs
+                            )
+                        bboxes.append(bbox_obj)
 
         # Create labeled frame
         if instances or image_id in image_annotations:
@@ -471,7 +495,7 @@ def read_labels(
             )
             labeled_frames.append(labeled_frame)
 
-    return Labels(labeled_frames=labeled_frames, rois=rois, masks=masks)
+    return Labels(labeled_frames=labeled_frames, rois=rois, masks=masks, bboxes=bboxes)
 
 
 def read_labels_set(
@@ -819,6 +843,48 @@ def convert_labels(
             "area": float(seg_mask.area),
             "iscrowd": 1,
         }
+
+        coco_data["annotations"].append(annotation)
+        annotation_id_counter += 1
+
+    # Export bounding boxes as COCO bbox annotations (skip instance-linked bboxes
+    # since those are already represented in the keypoint annotations above)
+    for bbox_obj in labels.bboxes:
+        if bbox_obj.instance is not None:
+            continue
+        cat_name = bbox_obj.category if bbox_obj.category else "object"
+        if cat_name not in category_name_to_id:
+            category = {
+                "id": category_id_counter,
+                "name": cat_name,
+            }
+            coco_data["categories"].append(category)
+            category_name_to_id[cat_name] = category_id_counter
+            category_id_counter += 1
+        category_id = category_name_to_id[cat_name]
+
+        image_id = _get_or_create_image_id(
+            bbox_obj.video,
+            bbox_obj.frame_idx,
+            video_frame_to_image_id,
+            coco_data,
+            image_id_counter,
+        )
+        if image_id >= image_id_counter:
+            image_id_counter = image_id + 1
+
+        x, y, w, h = bbox_obj.xywh
+        annotation = {
+            "id": annotation_id_counter,
+            "image_id": image_id,
+            "category_id": category_id,
+            "bbox": [float(x), float(y), float(w), float(h)],
+            "area": float(bbox_obj.area),
+            "iscrowd": 0,
+        }
+
+        if isinstance(bbox_obj, PredictedBoundingBox):
+            annotation["score"] = float(bbox_obj.score)
 
         coco_data["annotations"].append(annotation)
         annotation_id_counter += 1

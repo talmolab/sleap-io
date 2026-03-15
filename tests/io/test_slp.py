@@ -11,7 +11,6 @@ import h5py
 import numpy as np
 import pytest
 import simplejson as json
-from shapely.geometry import box
 
 from sleap_io import (
     Camera,
@@ -52,6 +51,7 @@ from sleap_io.io.slp import (
     make_session,
     prepare_frames_to_embed,
     process_and_embed_frames,
+    read_bboxes,
     read_instances,
     read_labels,
     read_labels_set,
@@ -67,6 +67,7 @@ from sleap_io.io.slp import (
     read_videos,
     session_to_dict,
     video_to_dict,
+    write_bboxes,
     write_labels,
     write_lfs,
     write_metadata,
@@ -77,6 +78,7 @@ from sleap_io.io.slp import (
 )
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.roi import ROI
 
@@ -4222,7 +4224,7 @@ def test_slp_roi_roundtrip(tmp_path):
     track = Track(name="animal1")
     roi1 = ROI.from_bbox(10, 20, 30, 40, video=video, name="bbox1", category="cat")
     roi2 = ROI.from_polygon(
-        [(0, 0), (100, 0), (100, 100), (0, 100)],
+        [(0, 0), (100, 0), (50, 100)],
         video=video,
         frame_idx=5,
         track=track,
@@ -4241,18 +4243,22 @@ def test_slp_roi_roundtrip(tmp_path):
     format_id = read_hdf5_attrs(path, "metadata", "format_id")
     assert format_id == 1.5
 
-    # Read back
+    # Read back — bbox-shaped ROI is migrated to BoundingBox, triangle stays as ROI
     loaded = load_slp(path)
-    assert len(loaded.rois) == 2
 
-    r1 = loaded.rois[0]
-    assert r1.name == "bbox1"
-    assert r1.category == "cat"
-    assert r1.video is loaded.videos[0]
-    assert r1.frame_idx is None
-    assert r1.bounds == pytest.approx((10.0, 20.0, 40.0, 60.0))
+    # roi1 (from_bbox) is migrated to a UserBoundingBox
+    assert len(loaded.bboxes) == 1
+    b1 = loaded.bboxes[0]
+    assert isinstance(b1, UserBoundingBox)
+    assert b1.name == "bbox1"
+    assert b1.category == "cat"
+    assert b1.video is loaded.videos[0]
+    assert b1.frame_idx is None
+    assert b1.bounds == pytest.approx((10.0, 20.0, 40.0, 60.0))
 
-    r2 = loaded.rois[1]
+    # roi2 (triangle polygon) remains as ROI
+    assert len(loaded.rois) == 1
+    r2 = loaded.rois[0]
     assert r2.category == "arena"
     assert r2.frame_idx == 5
     assert r2.track is loaded.tracks[0]
@@ -4316,7 +4322,8 @@ def test_slp_no_rois_format_id(tmp_path):
 def test_slp_lazy_roi_roundtrip(tmp_path):
     """Test lazy loading round-trip preserves ROIs and masks."""
     video = Video(filename="test.mp4")
-    roi = ROI.from_bbox(10, 20, 30, 40, video=video, name="bbox")
+    # Use a non-rectangular polygon so it isn't migrated to BoundingBox
+    roi = ROI.from_polygon([(0, 0), (100, 0), (50, 100)], video=video, name="triangle")
     mask_data = np.zeros((10, 10), dtype=bool)
     mask_data[2:8, 3:7] = True
     mask = SegmentationMask.from_numpy(mask_data, video=video, frame_idx=0)
@@ -4331,7 +4338,7 @@ def test_slp_lazy_roi_roundtrip(tmp_path):
     lazy_labels = load_slp(path, lazy=True)
     assert len(lazy_labels.rois) == 1
     assert len(lazy_labels.masks) == 1
-    assert lazy_labels.rois[0].name == "bbox"
+    assert lazy_labels.rois[0].name == "triangle"
 
     # Save lazily and reload
     path2 = str(tmp_path / "test_lazy_roi_resaved.slp")
@@ -4427,6 +4434,8 @@ def test_read_masks_missing_rle(tmp_path):
 
 def test_roi_instance_serialization(tmp_path):
     """ROI.instance should be preserved across SLP save/load."""
+    from shapely.geometry import Polygon
+
     skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
     video = Video.from_filename("test.mp4")
     instance = Instance.from_numpy(
@@ -4436,7 +4445,7 @@ def test_roi_instance_serialization(tmp_path):
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
 
     roi = ROI(
-        geometry=box(0, 0, 50, 50),
+        geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
         video=video,
         frame_idx=0,
         instance=instance,
@@ -4457,6 +4466,8 @@ def test_roi_instance_serialization(tmp_path):
 
 def test_roi_instance_lazy_roundtrip(tmp_path):
     """ROI instance_idx should survive a lazy load -> save round-trip."""
+    from shapely.geometry import Polygon
+
     skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
     video = Video.from_filename("test.mp4")
     instance = Instance.from_numpy(
@@ -4464,7 +4475,12 @@ def test_roi_instance_lazy_roundtrip(tmp_path):
         skeleton=skeleton,
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
-    roi = ROI(geometry=box(0, 0, 50, 50), video=video, frame_idx=0, instance=instance)
+    roi = ROI(
+        geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
+        video=video,
+        frame_idx=0,
+        instance=instance,
+    )
     labels = Labels(labeled_frames=[lf], rois=[roi])
 
     # Save with instance association
@@ -4488,6 +4504,8 @@ def test_roi_instance_lazy_roundtrip(tmp_path):
 
 def test_roi_instance_lazy_materialize(tmp_path):
     """ROI instance should be resolved when lazy Labels is materialized."""
+    from shapely.geometry import Polygon
+
     skeleton = Skeleton(nodes=["a", "b"], edges=[("a", "b")], name="test")
     video = Video.from_filename("test.mp4")
     instance = Instance.from_numpy(
@@ -4495,7 +4513,12 @@ def test_roi_instance_lazy_materialize(tmp_path):
         skeleton=skeleton,
     )
     lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
-    roi = ROI(geometry=box(0, 0, 50, 50), video=video, frame_idx=0, instance=instance)
+    roi = ROI(
+        geometry=Polygon([(0, 0), (50, 0), (25, 50)]),
+        video=video,
+        frame_idx=0,
+        instance=instance,
+    )
     labels = Labels(labeled_frames=[lf], rois=[roi])
 
     path = str(tmp_path / "test.slp")
@@ -4510,3 +4533,294 @@ def test_roi_instance_lazy_materialize(tmp_path):
     assert materialized.rois[0].instance is not None
     assert materialized.rois[0].instance is materialized.labeled_frames[0].instances[0]
     assert materialized.rois[0]._instance_idx == -1  # Cleared after resolution
+
+
+def test_slp_bbox_roundtrip(tmp_path):
+    """Test SLP round-trip with UserBoundingBox objects."""
+    video = Video(filename="test.mp4")
+    track = Track(name="animal1")
+    bbox1 = UserBoundingBox(
+        x_center=50.0,
+        y_center=60.0,
+        width=100.0,
+        height=80.0,
+        video=video,
+        frame_idx=0,
+        name="bbox1",
+        category="mouse",
+        source="manual",
+    )
+    bbox2 = UserBoundingBox(
+        x_center=200.0,
+        y_center=150.0,
+        width=50.0,
+        height=30.0,
+        angle=0.5,
+        video=video,
+        frame_idx=3,
+        track=track,
+        name="bbox2",
+        category="fly",
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+        bboxes=[bbox1, bbox2],
+    )
+
+    path = str(tmp_path / "test_bboxes.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert len(loaded.bboxes) == 2
+
+    b1 = loaded.bboxes[0]
+    assert isinstance(b1, UserBoundingBox)
+    assert not isinstance(b1, PredictedBoundingBox)
+    assert b1.x_center == pytest.approx(50.0)
+    assert b1.y_center == pytest.approx(60.0)
+    assert b1.width == pytest.approx(100.0)
+    assert b1.height == pytest.approx(80.0)
+    assert b1.angle == pytest.approx(0.0)
+    assert b1.name == "bbox1"
+    assert b1.category == "mouse"
+    assert b1.source == "manual"
+    assert b1.video is loaded.videos[0]
+    assert b1.frame_idx == 0
+    assert b1.track is None
+
+    b2 = loaded.bboxes[1]
+    assert isinstance(b2, UserBoundingBox)
+    assert b2.x_center == pytest.approx(200.0)
+    assert b2.y_center == pytest.approx(150.0)
+    assert b2.width == pytest.approx(50.0)
+    assert b2.height == pytest.approx(30.0)
+    assert b2.angle == pytest.approx(0.5)
+    assert b2.name == "bbox2"
+    assert b2.category == "fly"
+    assert b2.frame_idx == 3
+    assert b2.track is loaded.tracks[0]
+
+    # Verify low-level read_bboxes works directly
+    raw_bboxes = read_bboxes(path, loaded.videos, loaded.tracks)
+    assert len(raw_bboxes) == 2
+    assert isinstance(raw_bboxes[0], UserBoundingBox)
+
+    # Verify low-level write_bboxes works directly
+    path2 = str(tmp_path / "test_bboxes2.slp")
+    save_slp(Labels(videos=[video], skeletons=[skeleton], tracks=[track]), path2)
+    write_bboxes(path2, [bbox1, bbox2], [video], [track])
+    raw_bboxes2 = read_bboxes(path2, [video], [track])
+    assert len(raw_bboxes2) == 2
+
+
+def test_slp_predicted_bbox_roundtrip(tmp_path):
+    """Test SLP round-trip with PredictedBoundingBox including score."""
+    video = Video(filename="test.mp4")
+    user_bbox = UserBoundingBox(
+        x_center=10.0,
+        y_center=20.0,
+        width=30.0,
+        height=40.0,
+        video=video,
+        frame_idx=0,
+        category="cat",
+    )
+    pred_bbox = PredictedBoundingBox(
+        x_center=100.0,
+        y_center=200.0,
+        width=50.0,
+        height=60.0,
+        video=video,
+        frame_idx=1,
+        category="dog",
+        score=0.95,
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        bboxes=[user_bbox, pred_bbox],
+    )
+
+    path = str(tmp_path / "test_pred_bboxes.slp")
+    save_slp(labels, path)
+
+    loaded = load_slp(path)
+    assert len(loaded.bboxes) == 2
+
+    b_user = loaded.bboxes[0]
+    assert isinstance(b_user, UserBoundingBox)
+    assert not isinstance(b_user, PredictedBoundingBox)
+    assert b_user.category == "cat"
+
+    b_pred = loaded.bboxes[1]
+    assert isinstance(b_pred, PredictedBoundingBox)
+    assert b_pred.x_center == pytest.approx(100.0)
+    assert b_pred.y_center == pytest.approx(200.0)
+    assert b_pred.width == pytest.approx(50.0)
+    assert b_pred.height == pytest.approx(60.0)
+    assert b_pred.category == "dog"
+    assert b_pred.score == pytest.approx(0.95, abs=1e-5)
+    assert b_pred.frame_idx == 1
+
+
+def test_slp_bbox_migration(tmp_path):
+    """Test that old-style bbox ROIs are migrated to BoundingBox on read."""
+    video = Video(filename="test.mp4")
+    track = Track(name="animal1")
+
+    # Create ROIs: one bbox-shaped, one non-bbox polygon
+    roi_bbox = ROI.from_bbox(
+        10,
+        20,
+        100,
+        80,
+        video=video,
+        frame_idx=0,
+        track=track,
+        name="bbox_roi",
+        category="mouse",
+    )
+    roi_polygon = ROI.from_polygon(
+        [(0, 0), (100, 0), (50, 100)],
+        video=video,
+        frame_idx=1,
+        name="triangle",
+        category="arena",
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[track],
+        rois=[roi_bbox, roi_polygon],
+    )
+
+    # Write without bboxes (old-style file)
+    path = str(tmp_path / "old_style.slp")
+    save_slp(labels, path)
+
+    # Read back — bbox ROIs should be migrated
+    loaded = load_slp(path)
+
+    # The bbox ROI should have been migrated to a UserBoundingBox
+    # ROI.from_bbox(10, 20, 100, 80) creates a box from (10,20) to (110,100)
+    assert len(loaded.bboxes) == 1
+    bbox = loaded.bboxes[0]
+    assert isinstance(bbox, UserBoundingBox)
+    assert bbox.x_center == pytest.approx(60.0)  # 10 + 100/2
+    assert bbox.y_center == pytest.approx(60.0)  # 20 + 80/2
+    assert bbox.width == pytest.approx(100.0)
+    assert bbox.height == pytest.approx(80.0)
+    assert bbox.name == "bbox_roi"
+    assert bbox.category == "mouse"
+    assert bbox.video is loaded.videos[0]
+    assert bbox.frame_idx == 0
+    assert bbox.track is loaded.tracks[0]
+
+    # The non-bbox ROI should remain as an ROI
+    assert len(loaded.rois) == 1
+    assert loaded.rois[0].name == "triangle"
+    assert loaded.rois[0].category == "arena"
+
+
+def test_slp_bbox_lazy_roundtrip(tmp_path):
+    """Test lazy load and save with bounding boxes."""
+    video = Video(filename="test.mp4")
+    bbox = UserBoundingBox(
+        x_center=50.0,
+        y_center=60.0,
+        width=100.0,
+        height=80.0,
+        video=video,
+        frame_idx=0,
+        name="lazy_bbox",
+        category="mouse",
+    )
+    pred_bbox = PredictedBoundingBox(
+        x_center=150.0,
+        y_center=160.0,
+        width=40.0,
+        height=50.0,
+        video=video,
+        frame_idx=1,
+        category="fly",
+        score=0.85,
+    )
+
+    skeleton = Skeleton(nodes=["A", "B"], edges=[("A", "B")], name="test")
+    instance = Instance.from_numpy(
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        skeleton=skeleton,
+    )
+    lf = LabeledFrame(video=video, frame_idx=0, instances=[instance])
+    labels = Labels(
+        labeled_frames=[lf],
+        videos=[video],
+        skeletons=[skeleton],
+        bboxes=[bbox, pred_bbox],
+    )
+
+    path1 = str(tmp_path / "step1.slp")
+    save_slp(labels, path1)
+
+    # Lazy load
+    lazy = load_slp(path1, lazy=True)
+    assert len(lazy.bboxes) == 2
+
+    # Save from lazy (fast path)
+    path2 = str(tmp_path / "step2.slp")
+    lazy.save(path2)
+
+    # Reload and verify
+    reloaded = load_slp(path2)
+    assert len(reloaded.bboxes) == 2
+
+    b1 = reloaded.bboxes[0]
+    assert isinstance(b1, UserBoundingBox)
+    assert b1.name == "lazy_bbox"
+    assert b1.x_center == pytest.approx(50.0)
+
+    b2 = reloaded.bboxes[1]
+    assert isinstance(b2, PredictedBoundingBox)
+    assert b2.category == "fly"
+    assert b2.score == pytest.approx(0.85, abs=1e-5)
+
+
+def test_slp_format_id_1_7(tmp_path):
+    """Test that files with bboxes get format_id 1.7."""
+    video = Video(filename="test.mp4")
+    bbox = UserBoundingBox(
+        x_center=50.0,
+        y_center=60.0,
+        width=100.0,
+        height=80.0,
+        video=video,
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        bboxes=[bbox],
+    )
+
+    path = str(tmp_path / "test_format.slp")
+    save_slp(labels, path)
+
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id == 1.7
+
+    # Verify that without bboxes, format_id is lower
+    labels_no_bbox = Labels(videos=[video], skeletons=[skeleton])
+    path_no_bbox = str(tmp_path / "test_no_bbox.slp")
+    save_slp(labels_no_bbox, path_no_bbox)
+
+    format_id_no_bbox = read_hdf5_attrs(path_no_bbox, "metadata", "format_id")
+    assert format_id_no_bbox == 1.4

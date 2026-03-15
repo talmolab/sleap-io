@@ -21,6 +21,7 @@ from sleap_io import (
     Video,
     load_slp,
 )
+from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.labels import Labels
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.matching import (
@@ -34,7 +35,6 @@ from sleap_io.model.matching import (
     VideoMatcher,
     VideoMatchMethod,
 )
-from sleap_io.model.bbox import BoundingBox, PredictedBoundingBox, UserBoundingBox
 from sleap_io.model.roi import ROI
 
 

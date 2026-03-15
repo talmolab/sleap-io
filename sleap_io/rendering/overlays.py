@@ -1,7 +1,8 @@
-"""Overlay drawing functions for ROIs and segmentation masks.
+"""Overlay drawing functions for ROIs, segmentation masks, and bounding boxes.
 
 These functions draw annotations directly onto numpy image arrays using
-skia-python for geometry rendering and numpy for mask blending.
+skia-python for geometry rendering, cv2 for bounding box rendering, and
+numpy for mask blending.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import numpy as np
 if TYPE_CHECKING:
     import skia
 
+    from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.roi import ROI
 
@@ -119,6 +121,96 @@ def draw_masks(
         region[mask_region] = (
             region[mask_region] * (1 - alpha) + overlay * alpha
         ).astype(np.uint8)
+
+    return image
+
+
+def draw_bboxes(
+    image: np.ndarray,
+    bboxes: list["BoundingBox"],
+    color: tuple[int, int, int] = (0, 255, 0),
+    thickness: int = 2,
+    fill_alpha: float = 0.0,
+) -> np.ndarray:
+    """Draw bounding boxes on an image.
+
+    Draws axis-aligned bounding boxes as rectangles and rotated bounding boxes
+    as rotated rectangles using OpenCV. For ``PredictedBoundingBox`` instances,
+    the confidence score is drawn as text near the top-left corner.
+
+    Args:
+        image: Image array of shape (H, W, 3) uint8. Modified in-place unless
+            ``fill_alpha > 0``, in which case a blended copy is written back.
+        bboxes: List of BoundingBox objects to draw.
+        color: BGR color tuple for the bounding box outlines.
+        thickness: Line thickness in pixels.
+        fill_alpha: If > 0, fill the bounding box interior with this opacity
+            (0.0 to 1.0). The image is copied for alpha blending.
+
+    Returns:
+        The modified image array.
+    """
+    if not bboxes:
+        return image
+
+    import cv2
+
+    from sleap_io.model.bbox import PredictedBoundingBox
+
+    for bbox in bboxes:
+        if bbox.is_rotated:
+            # Draw rotated bbox using polylines with corner points.
+            corners = bbox.corners.astype(np.int32)
+
+            if fill_alpha > 0:
+                overlay = image.copy()
+                cv2.fillPoly(overlay, [corners], color)
+                cv2.addWeighted(overlay, fill_alpha, image, 1 - fill_alpha, 0, image)
+
+            cv2.polylines(
+                image, [corners], isClosed=True, color=color, thickness=thickness
+            )
+
+            # Score text for predicted bboxes.
+            if isinstance(bbox, PredictedBoundingBox):
+                # Use the first corner (top-left before rotation) as anchor.
+                text_x, text_y = int(corners[0][0]), int(corners[0][1]) - 5
+                cv2.putText(
+                    image,
+                    f"{bbox.score:.2f}",
+                    (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    color,
+                    1,
+                    cv2.LINE_AA,
+                )
+        else:
+            # Draw axis-aligned bbox using cv2.rectangle.
+            x1, y1, x2, y2 = bbox.xyxy
+            pt1 = (int(x1), int(y1))
+            pt2 = (int(x2), int(y2))
+
+            if fill_alpha > 0:
+                overlay = image.copy()
+                cv2.rectangle(overlay, pt1, pt2, color, cv2.FILLED)
+                cv2.addWeighted(overlay, fill_alpha, image, 1 - fill_alpha, 0, image)
+
+            cv2.rectangle(image, pt1, pt2, color, thickness)
+
+            # Score text for predicted bboxes.
+            if isinstance(bbox, PredictedBoundingBox):
+                text_x, text_y = pt1[0], pt1[1] - 5
+                cv2.putText(
+                    image,
+                    f"{bbox.score:.2f}",
+                    (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    color,
+                    1,
+                    cv2.LINE_AA,
+                )
 
     return image
 

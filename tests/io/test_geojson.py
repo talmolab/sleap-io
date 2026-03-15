@@ -238,7 +238,7 @@ def test_top_level_load_save(tmp_path):
 
 
 def test_backward_compat_old_geojson_properties(tmp_path):
-    """Old GeoJSON files with annotation_type/score properties are read without error."""
+    """Old GeoJSON files with annotation_type/score are read OK."""
     geojson = {
         "type": "FeatureCollection",
         "features": [

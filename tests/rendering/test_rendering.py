@@ -2352,3 +2352,93 @@ def test_draw_rois_polygon_with_hole():
     assert result[15, 15, 0] == 255
     # Hole interior should NOT be filled (even-odd rule)
     assert result[35, 35, 0] == 0
+
+
+# ============================================================================
+# draw_bboxes Tests
+# ============================================================================
+
+cv2 = pytest.importorskip("cv2", reason="opencv-python not installed")
+
+
+def test_draw_bboxes_basic():
+    """draw_bboxes should draw axis-aligned bbox outlines on an image."""
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.rendering.overlays import draw_bboxes
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = BoundingBox.from_xyxy(10, 10, 50, 50)
+    result = draw_bboxes(img, [bbox], color=(0, 255, 0), thickness=1)
+
+    # The outline should have green pixels on the boundary
+    assert result is img  # Modified in place
+    assert result[10, 10].tolist() == [0, 255, 0]  # Top-left corner
+    assert result[50, 50].tolist() == [0, 255, 0]  # Bottom-right corner
+    assert result[80, 80].tolist() == [0, 0, 0]  # Outside the box
+    # Interior should be empty (no fill)
+    assert result[30, 30].tolist() == [0, 0, 0]
+
+
+def test_draw_bboxes_rotated():
+    """draw_bboxes should draw rotated bboxes using polylines."""
+    import math
+
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.rendering.overlays import draw_bboxes
+
+    img = np.zeros((200, 200, 3), dtype=np.uint8)
+    bbox = BoundingBox(
+        x_center=100, y_center=100, width=60, height=40, angle=math.pi / 4
+    )
+    result = draw_bboxes(img, [bbox], color=(0, 0, 255), thickness=2)
+
+    # Some pixels around the center should be drawn (rotated outline)
+    assert result is img  # Modified in place
+    # The image should have non-zero pixels somewhere (the rotated outline)
+    assert result.any()
+    # The center should still be empty (outline only)
+    assert result[100, 100].tolist() == [0, 0, 0]
+
+
+def test_draw_bboxes_fill():
+    """draw_bboxes with fill_alpha > 0 should fill the bbox interior."""
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.rendering.overlays import draw_bboxes
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = BoundingBox.from_xyxy(10, 10, 50, 50)
+    result = draw_bboxes(img, [bbox], color=(255, 0, 0), thickness=1, fill_alpha=1.0)
+
+    # Interior should be filled with the color
+    assert result[30, 30, 0] == 255  # Red channel filled
+    assert result[30, 30, 1] == 0
+    assert result[30, 30, 2] == 0
+
+
+def test_draw_bboxes_predicted_score():
+    """draw_bboxes should render score text for PredictedBoundingBox."""
+    from sleap_io.model.bbox import PredictedBoundingBox
+    from sleap_io.rendering.overlays import draw_bboxes
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = PredictedBoundingBox.from_xyxy(20, 20, 60, 60, score=0.95)
+    result = draw_bboxes(img, [bbox], color=(0, 255, 0), thickness=1)
+
+    # The image should have pixels for both the outline and score text
+    assert result is img
+    # Check that something was drawn above the box (score text region)
+    # Text is drawn at (x1, y1 - 5) = (20, 15), so check region around there
+    text_region = result[5:20, 15:60]
+    assert text_region.any(), "Score text should be rendered near the top-left corner"
+
+
+def test_draw_bboxes_empty():
+    """draw_bboxes with empty list should return the unchanged image."""
+    from sleap_io.rendering.overlays import draw_bboxes
+
+    img = np.zeros((50, 50, 3), dtype=np.uint8)
+    original = img.copy()
+    result = draw_bboxes(img, [])
+
+    assert result is img
+    np.testing.assert_array_equal(result, original)
