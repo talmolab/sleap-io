@@ -283,6 +283,20 @@ def _scale_frame(frame_rgba: np.ndarray, scale: float) -> np.ndarray:
     return np.array(pil_img)
 
 
+def _save_image(image: np.ndarray, save_path: str | Path) -> None:
+    """Save a rendered image to disk.
+
+    Args:
+        image: Image array to save (any shape accepted by PIL).
+        save_path: Output file path. Parent directories are created if needed.
+    """
+    from PIL import Image
+
+    save_path_ = Path(save_path)
+    save_path_.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(image).save(save_path_)
+
+
 def _apply_overlay(
     image: np.ndarray,
     overlay: "np.ndarray | list[SegmentationMask] | list[ROI] | list[BoundingBox]",
@@ -344,21 +358,9 @@ def _apply_overlay(
         if isinstance(first, SegmentationMask):
             draw_masks(image, overlay, colors=colors, alpha=alpha)
         elif isinstance(first, ROI):
-            for i, roi in enumerate(overlay):
-                draw_rois(
-                    image,
-                    [roi],
-                    color=colors[i],
-                    fill_alpha=alpha,
-                )
+            draw_rois(image, overlay, colors=colors, fill_alpha=alpha)
         elif isinstance(first, BoundingBox):
-            for i, bbox in enumerate(overlay):
-                draw_bboxes(
-                    image,
-                    [bbox],
-                    color=colors[i],
-                    fill_alpha=alpha,
-                )
+            draw_bboxes(image, overlay, colors=colors, fill_alpha=alpha)
 
     return image
 
@@ -912,11 +914,7 @@ def render_image(
             )[:, :, :3]
 
         if save_path is not None:
-            from PIL import Image
-
-            save_path_ = Path(save_path)
-            save_path_.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(render_image_data).save(save_path_)
+            _save_image(render_image_data, save_path)
 
         return render_image_data
 
@@ -964,11 +962,7 @@ def render_image(
 
     # Save if save_path provided
     if save_path is not None:
-        from PIL import Image
-
-        save_path_ = Path(save_path)
-        save_path_.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(rendered).save(save_path_)
+        _save_image(rendered, save_path)
 
     return rendered
 

@@ -2668,3 +2668,223 @@ def test_render_image_source_none_requires_image():
 
     with pytest.raises(ValueError, match="image parameter required"):
         render_image(source=None)
+
+
+# ============================================================================
+# draw_rois / draw_bboxes per-item colors tests
+# ============================================================================
+
+
+def test_draw_rois_per_roi_colors():
+    """draw_rois with per-ROI colors should apply different colors to each ROI."""
+    from sleap_io.model.roi import ROI
+    from sleap_io.rendering.overlays import draw_rois
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi1 = ROI.from_bbox(5, 5, 20, 20)
+    roi2 = ROI.from_bbox(60, 60, 20, 20)
+
+    result = draw_rois(
+        img,
+        [roi1, roi2],
+        colors=[(255, 0, 0), (0, 0, 255)],
+        fill_alpha=1.0,
+    )
+
+    assert result is img
+    # First ROI interior should be red
+    assert result[15, 15, 0] == 255
+    assert result[15, 15, 2] == 0
+    # Second ROI interior should be blue
+    assert result[70, 70, 0] == 0
+    assert result[70, 70, 2] == 255
+    # Outside both ROIs should be untouched
+    assert result[50, 50].tolist() == [0, 0, 0]
+
+
+def test_draw_bboxes_per_bbox_colors():
+    """draw_bboxes with per-bbox colors should apply different colors."""
+    from sleap_io.model.bbox import BoundingBox
+    from sleap_io.rendering.overlays import draw_bboxes
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox1 = BoundingBox.from_xyxy(5, 5, 25, 25)
+    bbox2 = BoundingBox.from_xyxy(60, 60, 80, 80)
+
+    result = draw_bboxes(
+        img,
+        [bbox1, bbox2],
+        colors=[(255, 0, 0), (0, 0, 255)],
+        fill_alpha=1.0,
+    )
+
+    assert result is img
+    # First bbox interior should be red
+    assert result[15, 15, 0] == 255
+    assert result[15, 15, 2] == 0
+    # Second bbox interior should be blue
+    assert result[70, 70, 0] == 0
+    assert result[70, 70, 2] == 255
+    # Outside both bboxes should be untouched
+    assert result[45, 45].tolist() == [0, 0, 0]
+
+
+# ============================================================================
+# render_video overlay tests
+# ============================================================================
+
+
+def _make_synthetic_labels(n_frames=3, h=64, w=64):
+    """Create a minimal synthetic Labels for overlay tests.
+
+    Returns Labels with n_frames of (h, w) frames rendered on a solid black
+    background (no real video needed).
+    """
+    import sleap_io as sio
+
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = sio.Video(filename="dummy.mp4")
+    pts = np.array([[w // 4, h // 4], [3 * w // 4, 3 * h // 4]], dtype=np.float32)
+
+    labeled_frames = []
+    for i in range(n_frames):
+        lf = sio.LabeledFrame(
+            video=video,
+            frame_idx=i,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labeled_frames.append(lf)
+
+    return sio.Labels(
+        labeled_frames=labeled_frames, videos=[video], skeletons=[skeleton]
+    )
+
+
+def test_render_video_overlay_3d_array():
+    """render_video with 3D (T,H,W) overlay should apply per-frame labels."""
+    from sleap_io.rendering import render_video
+
+    labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
+    overlay = np.zeros((3, 64, 64), dtype=np.int32)
+    overlay[0, 10:30, 10:30] = 1
+    overlay[1, 30:50, 30:50] = 2
+    # Frame 2 has no overlay (all zeros)
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 3
+    # Frame 0 should have colored overlay in region [10:30, 10:30]
+    assert not np.array_equal(frames[0][20, 20], frames[0][0, 0])
+    # Frame 2 should have no overlay (uniform background)
+    # (poses are still drawn, so just check it didn't crash)
+    assert frames[2].shape == frames[0].shape
+
+
+def test_render_video_overlay_2d_static():
+    """render_video with 2D (H,W) overlay should apply same overlay to all frames."""
+    from sleap_io.rendering import render_video
+
+    labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
+    overlay = np.zeros((64, 64), dtype=np.int32)
+    overlay[10:30, 10:30] = 1
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    # Both frames should have the overlay in the same region
+    for frame in frames:
+        assert not np.array_equal(frame[20, 20], frame[0, 0])
+
+
+def test_render_video_overlay_callable():
+    """render_video with callable overlay should call it per-frame."""
+    from sleap_io.rendering import render_video
+
+    labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
+
+    called_with = []
+
+    def overlay_fn(fidx):
+        called_with.append(fidx)
+        arr = np.zeros((64, 64), dtype=np.int32)
+        arr[10:30, 10:30] = fidx + 1
+        return arr
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay_fn,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    assert 0 in called_with
+    assert 1 in called_with
+
+
+def test_render_video_overlay_list_by_frame_idx():
+    """render_video with list overlay should filter objects by frame_idx."""
+    from sleap_io.model.mask import SegmentationMask
+    from sleap_io.rendering import render_video
+
+    labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
+
+    mask_data = np.zeros((64, 64), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+    mask.frame_idx = 0  # Only apply to frame 0
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay=[mask],
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    # Frame 0 should have overlay applied (masked region differs from bg)
+    assert not np.array_equal(frames[0][20, 20], frames[0][0, 0])
+
+
+def test_render_video_overlay_out_of_bounds():
+    """render_video with 3D overlay shorter than video should not crash."""
+    from sleap_io.rendering import render_video
+
+    labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
+    # Overlay only has 1 frame, but video has 3
+    overlay = np.zeros((1, 64, 64), dtype=np.int32)
+    overlay[0, 10:30, 10:30] = 1
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 3

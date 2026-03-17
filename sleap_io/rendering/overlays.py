@@ -22,6 +22,7 @@ def draw_rois(
     image: np.ndarray,
     rois: list["ROI"],
     color: tuple[int, int, int] = (0, 255, 0),
+    colors: list[tuple[int, int, int]] | None = None,
     line_width: int = 2,
     fill_alpha: float = 0.0,
 ) -> np.ndarray:
@@ -35,7 +36,10 @@ def draw_rois(
         image: Image array of shape (H, W, 3) uint8. Modified in-place and
             returned.
         rois: List of ROI objects to draw.
-        color: RGB color tuple for the ROI outlines.
+        color: RGB color tuple for the ROI outlines. Used when ``colors`` is
+            ``None``.
+        colors: Per-ROI RGB color tuples. If provided, must have the same
+            length as ``rois``. Overrides ``color``.
         line_width: Width of the outline in pixels.
         fill_alpha: If > 0, fill the ROI interior with this opacity (0.0 to
             1.0).
@@ -53,31 +57,53 @@ def draw_rois(
     surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
     canvas = surface.getCanvas()
 
-    # Stroke paint for outlines
-    stroke_paint = skia.Paint(
-        Color=skia.Color(*color),
-        AntiAlias=False,
-        Style=skia.Paint.kStroke_Style,
-        StrokeWidth=float(line_width),
-        StrokeCap=skia.Paint.kSquare_Cap,
-    )
-
-    # Fill paint (only created if needed)
-    fill_paint = None
-    if fill_alpha > 0:
-        fill_paint = skia.Paint(
-            Color=skia.Color4f(
-                color[0] / 255.0,
-                color[1] / 255.0,
-                color[2] / 255.0,
-                fill_alpha,
-            ).toColor(),
+    if colors is None:
+        # Single color for all ROIs
+        stroke_paint = skia.Paint(
+            Color=skia.Color(*color),
             AntiAlias=False,
-            Style=skia.Paint.kFill_Style,
+            Style=skia.Paint.kStroke_Style,
+            StrokeWidth=float(line_width),
+            StrokeCap=skia.Paint.kSquare_Cap,
         )
-
-    for roi in rois:
-        _draw_geometry(canvas, roi.geometry, stroke_paint, fill_paint)
+        fill_paint = None
+        if fill_alpha > 0:
+            fill_paint = skia.Paint(
+                Color=skia.Color4f(
+                    color[0] / 255.0,
+                    color[1] / 255.0,
+                    color[2] / 255.0,
+                    fill_alpha,
+                ).toColor(),
+                AntiAlias=False,
+                Style=skia.Paint.kFill_Style,
+            )
+        for roi in rois:
+            _draw_geometry(canvas, roi.geometry, stroke_paint, fill_paint)
+    else:
+        # Per-ROI colors
+        for i, roi in enumerate(rois):
+            c = colors[i]
+            stroke_paint = skia.Paint(
+                Color=skia.Color(*c),
+                AntiAlias=False,
+                Style=skia.Paint.kStroke_Style,
+                StrokeWidth=float(line_width),
+                StrokeCap=skia.Paint.kSquare_Cap,
+            )
+            fill_paint = None
+            if fill_alpha > 0:
+                fill_paint = skia.Paint(
+                    Color=skia.Color4f(
+                        c[0] / 255.0,
+                        c[1] / 255.0,
+                        c[2] / 255.0,
+                        fill_alpha,
+                    ).toColor(),
+                    AntiAlias=False,
+                    Style=skia.Paint.kFill_Style,
+                )
+            _draw_geometry(canvas, roi.geometry, stroke_paint, fill_paint)
 
     # Copy RGB channels back to the input image
     image[:] = frame_rgba[:, :, :3]
@@ -153,7 +179,7 @@ def draw_label_image(
         palette: Color palette name for assigning colors to label IDs. See
             :func:`~sleap_io.rendering.colors.get_palette` for options.
         outline: If ``True``, draw outlines around each labeled region using
-            skia-python.
+            numpy edge detection.
         outline_width: Width of the outline in pixels (only used if
             ``outline=True``).
         outline_color: RGB color for outlines. If ``None``, uses a darkened
@@ -282,6 +308,7 @@ def draw_bboxes(
     image: np.ndarray,
     bboxes: list["BoundingBox"],
     color: tuple[int, int, int] = (0, 255, 0),
+    colors: list[tuple[int, int, int]] | None = None,
     line_width: int = 2,
     fill_alpha: float = 0.0,
     font: str | None = None,
@@ -297,7 +324,10 @@ def draw_bboxes(
         image: Image array of shape (H, W, 3) uint8. Modified in-place and
             returned.
         bboxes: List of BoundingBox objects to draw.
-        color: RGB color tuple for the bounding box outlines.
+        color: RGB color tuple for the bounding box outlines. Used when
+            ``colors`` is ``None``.
+        colors: Per-bbox RGB color tuples. If provided, must have the same
+            length as ``bboxes``. Overrides ``color``.
         line_width: Width of the outline in pixels.
         fill_alpha: If > 0, fill the bounding box interior with this opacity
             (0.0 to 1.0).
@@ -319,37 +349,37 @@ def draw_bboxes(
     surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
     canvas = surface.getCanvas()
 
-    # Stroke paint for outlines
-    stroke_paint = skia.Paint(
-        Color=skia.Color(*color),
-        AntiAlias=False,
-        Style=skia.Paint.kStroke_Style,
-        StrokeWidth=float(line_width),
-        StrokeCap=skia.Paint.kSquare_Cap,
-    )
+    for i, bbox in enumerate(bboxes):
+        c = colors[i] if colors is not None else color
 
-    # Fill paint (only created if needed)
-    fill_paint = None
-    if fill_alpha > 0:
-        fill_paint = skia.Paint(
-            Color=skia.Color4f(
-                color[0] / 255.0,
-                color[1] / 255.0,
-                color[2] / 255.0,
-                fill_alpha,
-            ).toColor(),
+        stroke_paint = skia.Paint(
+            Color=skia.Color(*c),
             AntiAlias=False,
-            Style=skia.Paint.kFill_Style,
+            Style=skia.Paint.kStroke_Style,
+            StrokeWidth=float(line_width),
+            StrokeCap=skia.Paint.kSquare_Cap,
         )
 
-    for bbox in bboxes:
+        fill_paint = None
+        if fill_alpha > 0:
+            fill_paint = skia.Paint(
+                Color=skia.Color4f(
+                    c[0] / 255.0,
+                    c[1] / 255.0,
+                    c[2] / 255.0,
+                    fill_alpha,
+                ).toColor(),
+                AntiAlias=False,
+                Style=skia.Paint.kFill_Style,
+            )
+
         corners = bbox.corners
 
         # Build a closed path from the 4 corners
         path = skia.Path()
         path.moveTo(float(corners[0][0]), float(corners[0][1]))
-        for i in range(1, len(corners)):
-            path.lineTo(float(corners[i][0]), float(corners[i][1]))
+        for j in range(1, len(corners)):
+            path.lineTo(float(corners[j][0]), float(corners[j][1]))
         path.close()
 
         # Draw fill if requested
@@ -365,7 +395,7 @@ def draw_bboxes(
             text_y = float(corners[0][1]) - 5
             typeface = skia.Typeface(font if font else "sans-serif")
             skia_font = skia.Font(typeface, 12)
-            text_paint = skia.Paint(Color=skia.Color(*color), AntiAlias=True)
+            text_paint = skia.Paint(Color=skia.Color(*c), AntiAlias=True)
             canvas.drawString(
                 f"{bbox.score:.2f}", text_x, text_y, skia_font, text_paint
             )
