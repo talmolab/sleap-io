@@ -3670,7 +3670,7 @@ sio.save_ultralytics(labels, &quot;output/&quot;, task=&quot;pose&quot;)"><pre><
 <li><strong>Pandas 3.0 Compatibility</strong>: Internal test fix for compatibility with Pandas 3.0's new <code>StringDtype</code></li>
 </ul>
 <h2>Installation / Upgrade</h2>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# One-off CLI usage (no installation needed)
 uvx sleap-io@0.6.4 show labels.slp
 
 # Install as CLI tool (new install)
@@ -3683,28 +3683,27 @@ uv tool upgrade sleap-io
 uv add &quot;sleap-io[all]&quot;
 
 # Upgrade existing project dependency
-uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre lang="bash" class="notranslate"><code># One-off CLI usage (no installation needed)
+uv lock --upgrade-package sleap-io &amp;&amp; uv sync"><pre><span class="pl-c"><span class="pl-c">#</span> One-off CLI usage (no installation needed)</span>
 uvx sleap-io@0.6.4 show labels.slp
 
-# Install as CLI tool (new install)
-uv tool install "sleap-io[all]"
+<span class="pl-c"><span class="pl-c">#</span> Install as CLI tool (new install)</span>
+uv tool install <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
 
-# Upgrade existing CLI tool installation
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing CLI tool installation</span>
 uv tool upgrade sleap-io
 
-# Add to project (new dependency)
-uv add "sleap-io[all]"
+<span class="pl-c"><span class="pl-c">#</span> Add to project (new dependency)</span>
+uv add <span class="pl-s"><span class="pl-pds">"</span>sleap-io[all]<span class="pl-pds">"</span></span>
 
-# Upgrade existing project dependency
-uv lock --upgrade-package sleap-io &amp;&amp; uv sync
-</code></pre></div>
+<span class="pl-c"><span class="pl-c">#</span> Upgrade existing project dependency</span>
+uv lock --upgrade-package sleap-io <span class="pl-k">&amp;&amp;</span> uv sync</pre></div>
 <p>See <a href="https://io.sleap.ai/install/" rel="nofollow">installation docs</a> for more options.</p>
 <hr>
 <h2>New Features</h2>
 <h3><code>sio export</code> Command for Analysis-Ready Data Export (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3900047458" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/347" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/347/hovercard" href="https://github.com/talmolab/sleap-io/pull/347">#347</a>)</h3>
 <p>A new dedicated CLI command for exporting pose tracking data to analysis-friendly formats. Unlike <code>sio convert</code> (which converts between pose tracking formats), <code>sio export</code> is optimized for downstream analysis workflows with options for frame padding, range selection, and batch export.</p>
 <h4>Basic Usage</h4>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export to CSV (default: frames-wide format with NaN padding for missing frames)
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export to CSV (default: frames-wide format with NaN padding for missing frames)
 sio export labels.slp -o tracks.csv
 
 # Export to HDF5 analysis format
@@ -3715,19 +3714,18 @@ sio export labels.slp -o tracks.csv --start 100 --end 500
 
 # Export all videos in a multi-video file
 sio export labels.slp -o tracks.csv -v all
-# Creates: tracks.video0.csv, tracks.video1.csv, ..."><pre lang="bash" class="notranslate"><code># Export to CSV (default: frames-wide format with NaN padding for missing frames)
-sio export labels.slp -o tracks.csv
+# Creates: tracks.video0.csv, tracks.video1.csv, ..."><pre><span class="pl-c"><span class="pl-c">#</span> Export to CSV (default: frames-wide format with NaN padding for missing frames)</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv
 
-# Export to HDF5 analysis format
-sio export labels.slp -o analysis.h5
+<span class="pl-c"><span class="pl-c">#</span> Export to HDF5 analysis format</span>
+sio <span class="pl-k">export</span> labels.slp -o analysis.h5
 
-# Export a specific frame range
-sio export labels.slp -o tracks.csv --start 100 --end 500
+<span class="pl-c"><span class="pl-c">#</span> Export a specific frame range</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --start 100 --end 500
 
-# Export all videos in a multi-video file
-sio export labels.slp -o tracks.csv -v all
-# Creates: tracks.video0.csv, tracks.video1.csv, ...
-</code></pre></div>
+<span class="pl-c"><span class="pl-c">#</span> Export all videos in a multi-video file</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv -v all
+<span class="pl-c"><span class="pl-c">#</span> Creates: tracks.video0.csv, tracks.video1.csv, ...</span></pre></div>
 <h4>CSV Format Options</h4>
 <p>Five CSV layout formats are available via <code>--csv-format</code>:</p>
 <table>
@@ -3760,28 +3758,25 @@ sio export labels.slp -o tracks.csv -v all
 </tr>
 </tbody>
 </table>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export in DLC-compatible format
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Export in DLC-compatible format
 sio export labels.slp -o tracks.csv --csv-format dlc --scorer MyModel
 
 # Export point-level data with scores
-sio export labels.slp -o tracks.csv --csv-format points --include-scores"><pre lang="bash" class="notranslate"><code># Export in DLC-compatible format
-sio export labels.slp -o tracks.csv --csv-format dlc --scorer MyModel
+sio export labels.slp -o tracks.csv --csv-format points --include-scores"><pre><span class="pl-c"><span class="pl-c">#</span> Export in DLC-compatible format</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --csv-format dlc --scorer MyModel
 
-# Export point-level data with scores
-sio export labels.slp -o tracks.csv --csv-format points --include-scores
-</code></pre></div>
+<span class="pl-c"><span class="pl-c">#</span> Export point-level data with scores</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --csv-format points --include-scores</pre></div>
 <h4>Frame Padding</h4>
 <p>By default, <code>sio export</code> pads missing frames with NaN values for continuous time-series output. This ensures every frame in the range has a row, which is important for analysis tools that expect uniform sampling.</p>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Disable padding (only export frames with instances)
-sio export labels.slp -o tracks.csv --no-empty-frames"><pre lang="bash" class="notranslate"><code># Disable padding (only export frames with instances)
-sio export labels.slp -o tracks.csv --no-empty-frames
-</code></pre></div>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Disable padding (only export frames with instances)
+sio export labels.slp -o tracks.csv --no-empty-frames"><pre><span class="pl-c"><span class="pl-c">#</span> Disable padding (only export frames with instances)</span>
+sio <span class="pl-k">export</span> labels.slp -o tracks.csv --no-empty-frames</pre></div>
 <h4>Memory-Efficient Chunked Writing</h4>
 <p>For large datasets, use chunked CSV writing to limit memory usage:</p>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio export labels.slp -o tracks.csv --chunk-size 5000"><pre lang="bash" class="notranslate"><code>sio export labels.slp -o tracks.csv --chunk-size 5000
-</code></pre></div>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio export labels.slp -o tracks.csv --chunk-size 5000"><pre>sio <span class="pl-k">export</span> labels.slp -o tracks.csv --chunk-size 5000</pre></div>
 <h4>Python API</h4>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="import sleap_io as sio
 
 # Save with frame padding and range selection
 sio.save_csv(
@@ -3791,24 +3786,22 @@ sio.save_csv(
     start_frame=100,
     end_frame=500,
     chunk_size=5000,        # Memory-efficient chunked writing
-)"><pre lang="python" class="notranslate"><code>import sleap_io as sio
+)"><pre><span class="pl-k">import</span> <span class="pl-s1">sleap_io</span> <span class="pl-k">as</span> <span class="pl-s1">sio</span>
 
-# Save with frame padding and range selection
-sio.save_csv(
-    "tracks.csv",
-    labels,
-    include_empty=True,     # Pad missing frames with NaN
-    start_frame=100,
-    end_frame=500,
-    chunk_size=5000,        # Memory-efficient chunked writing
-)
-</code></pre></div>
+<span class="pl-c"># Save with frame padding and range selection</span>
+<span class="pl-s1">sio</span>.<span class="pl-c1">save_csv</span>(
+    <span class="pl-s">"tracks.csv"</span>,
+    <span class="pl-s1">labels</span>,
+    <span class="pl-s1">include_empty</span><span class="pl-c1">=</span><span class="pl-c1">True</span>,     <span class="pl-c"># Pad missing frames with NaN</span>
+    <span class="pl-s1">start_frame</span><span class="pl-c1">=</span><span class="pl-c1">100</span>,
+    <span class="pl-s1">end_frame</span><span class="pl-c1">=</span><span class="pl-c1">500</span>,
+    <span class="pl-s1">chunk_size</span><span class="pl-c1">=</span><span class="pl-c1">5000</span>,        <span class="pl-c"># Memory-efficient chunked writing</span>
+)</pre></div>
 <h4>Analysis HDF5 via <code>sio convert</code></h4>
 <p>HDF5 analysis export is now also available through <code>sio convert</code>:</p>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio convert labels.slp -o analysis.h5
-sio convert labels.slp -o analysis.h5 --h5-dim-order standard"><pre lang="bash" class="notranslate"><code>sio convert labels.slp -o analysis.h5
-sio convert labels.slp -o analysis.h5 --h5-dim-order standard
-</code></pre></div>
+<div class="highlight highlight-source-shell notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="sio convert labels.slp -o analysis.h5
+sio convert labels.slp -o analysis.h5 --h5-dim-order standard"><pre>sio convert labels.slp -o analysis.h5
+sio convert labels.slp -o analysis.h5 --h5-dim-order standard</pre></div>
 <hr>
 <h2>Bug Fixes</h2>
 <h3>Out-of-Memory Crash in Video Rendering (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3902495678" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/348" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/348/hovercard" href="https://github.com/talmolab/sleap-io/pull/348">#348</a>)</h3>
@@ -3842,10 +3835,9 @@ sio convert labels.slp -o analysis.h5 --h5-dim-order standard
 <p><strong>Fixed:</strong> Loading CSV files produced by newer versions of DeepLabCut returned 0 labeled frames.</p>
 <p><strong>Root Cause:</strong> Newer DLC versions (<a href="https://github.com/DeepLabCut/DeepLabCut/pull/1584" data-hovercard-type="pull_request" data-hovercard-url="/DeepLabCut/DeepLabCut/pull/1584/hovercard">DeepLabCut PR #1584</a>) changed how image paths are stored in CSV files. Instead of a single column with the full path (<code>labeled-data/video/img000.png</code>), the path is split across three columns as a pandas <code>MultiIndex</code>.</p>
 <p><strong>Fix:</strong> The DLC loader now auto-detects the newer format and handles it transparently. All three DLC variants (single-animal, multi-animal, multi-animal with unique tracking) are supported in both old and new formats.</p>
-<div class="snippet-clipboard-content notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Works automatically with both old and new DLC files
-labels = sio.load_file(&quot;dlc_project/CollectedData.csv&quot;)"><pre lang="python" class="notranslate"><code># Works automatically with both old and new DLC files
-labels = sio.load_file("dlc_project/CollectedData.csv")
-</code></pre></div>
+<div class="highlight highlight-source-python notranslate position-relative overflow-auto" data-snippet-clipboard-copy-content="# Works automatically with both old and new DLC files
+labels = sio.load_file(&quot;dlc_project/CollectedData.csv&quot;)"><pre><span class="pl-c"># Works automatically with both old and new DLC files</span>
+<span class="pl-s1">labels</span> <span class="pl-c1">=</span> <span class="pl-s1">sio</span>.<span class="pl-c1">load_file</span>(<span class="pl-s">"dlc_project/CollectedData.csv"</span>)</pre></div>
 <hr>
 <h3>Pandas 3.0 Test Compatibility (<a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="3890782029" data-permission-text="Title is private" data-url="https://github.com/talmolab/sleap-io/issues/344" data-hovercard-type="pull_request" data-hovercard-url="/talmolab/sleap-io/pull/344/hovercard" href="https://github.com/talmolab/sleap-io/pull/344">#344</a>)</h3>
 <p><strong>Fixed:</strong> The <code>test_polars_pandas_equivalence</code> test failed on Pandas 3.0 due to the new <code>StringDtype</code> not being compatible with <code>np.issubdtype()</code>. The comparison logic was simplified to use <code>pd.testing.assert_frame_equal</code>. This is an internal test-only fix with no impact on user-facing behavior.</p>
