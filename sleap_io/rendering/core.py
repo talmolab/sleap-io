@@ -361,6 +361,11 @@ def _apply_overlay(
             draw_rois(image, overlay, colors=colors, fill_alpha=alpha)
         elif isinstance(first, BoundingBox):
             draw_bboxes(image, overlay, colors=colors, fill_alpha=alpha)
+        else:
+            raise TypeError(
+                f"Unsupported overlay element type: {type(first).__name__}. "
+                "Expected SegmentationMask, ROI, or BoundingBox."
+            )
 
     return image
 
@@ -900,9 +905,15 @@ def render_image(
             render_image_data = np.stack([render_image_data] * 3, axis=-1)
         elif render_image_data.ndim == 3 and render_image_data.shape[2] == 1:
             render_image_data = np.repeat(render_image_data, 3, axis=2)
+        # Crop overlay to match cropped image region
+        render_overlay = overlay
+        if crop is not None and isinstance(overlay, np.ndarray):
+            x1, y1, x2, y2 = crop_bounds
+            oh, ow = overlay.shape[:2]
+            render_overlay = overlay[max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)]
         _apply_overlay(
             render_image_data,
-            overlay,
+            render_overlay,
             alpha=overlay_alpha,
             palette=overlay_palette,
             outline=overlay_outline,
@@ -1313,6 +1324,36 @@ def render_video(
             ]
         return None
 
+    def _apply_frame_overlay(image: np.ndarray, fidx: int) -> np.ndarray:
+        """Resolve and apply overlay for a single frame.
+
+        Returns the (possibly new) image array — the caller must use the
+        returned value since grayscale-to-RGB conversion creates a new array.
+        """
+        frame_overlay = _get_frame_overlay(fidx)
+        if frame_overlay is None:
+            return image
+        if image.ndim == 2:
+            image = np.stack([image] * 3, axis=-1)
+        # Crop overlay to match cropped image region
+        cropped_overlay = frame_overlay
+        if crop_bounds is not None and isinstance(frame_overlay, np.ndarray):
+            x1, y1, x2, y2 = crop_bounds
+            oh, ow = frame_overlay.shape[:2]
+            cropped_overlay = frame_overlay[
+                max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)
+            ]
+        _apply_overlay(
+            image,
+            cropped_overlay,
+            alpha=overlay_alpha,
+            palette=overlay_palette,
+            outline=overlay_outline,
+            outline_width=overlay_outline_width,
+            outline_color=overlay_outline_color,
+        )
+        return image
+
     # Only accumulate frames if returning as list (no save_path)
     rendered_frames: list[np.ndarray] = []
     total_frames = len(render_indices)
@@ -1359,19 +1400,7 @@ def render_video(
                     render_image_data, _, _ = _apply_crop(image, [], crop_bounds)
 
                 # Apply overlay
-                frame_overlay = _get_frame_overlay(fidx)
-                if frame_overlay is not None:
-                    if render_image_data.ndim == 2:
-                        render_image_data = np.stack([render_image_data] * 3, axis=-1)
-                    _apply_overlay(
-                        render_image_data,
-                        frame_overlay,
-                        alpha=overlay_alpha,
-                        palette=overlay_palette,
-                        outline=overlay_outline,
-                        outline_width=overlay_outline_width,
-                        outline_color=overlay_outline_color,
-                    )
+                render_image_data = _apply_frame_overlay(render_image_data, fidx)
 
                 # Render frame without poses
                 rendered = render_frame(
@@ -1457,19 +1486,7 @@ def render_video(
                 )
 
             # Apply overlay
-            frame_overlay = _get_frame_overlay(fidx)
-            if frame_overlay is not None:
-                if render_image_data.ndim == 2:
-                    render_image_data = np.stack([render_image_data] * 3, axis=-1)
-                _apply_overlay(
-                    render_image_data,
-                    frame_overlay,
-                    alpha=overlay_alpha,
-                    palette=overlay_palette,
-                    outline=overlay_outline,
-                    outline_width=overlay_outline_width,
-                    outline_color=overlay_outline_color,
-                )
+            render_image_data = _apply_frame_overlay(render_image_data, fidx)
 
             # Render frame
             rendered = render_frame(

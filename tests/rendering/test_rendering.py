@@ -2878,3 +2878,87 @@ def test_render_video_overlay_out_of_bounds():
     )
 
     assert len(frames) == 3
+
+
+# ============================================================================
+# _apply_overlay TypeError for unknown list element types
+# ============================================================================
+
+
+def test_apply_overlay_unknown_list_type():
+    """_apply_overlay should raise TypeError for unsupported list element types."""
+    from sleap_io.rendering.core import _apply_overlay
+
+    img = np.zeros((50, 50, 3), dtype=np.uint8)
+    with pytest.raises(TypeError, match="Unsupported overlay element type"):
+        _apply_overlay(img, ["not_a_mask"])
+
+
+# ============================================================================
+# crop + overlay alignment tests
+# ============================================================================
+
+
+def test_render_image_crop_with_overlay():
+    """render_image with crop + overlay should align overlay to cropped region."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    labels = np.zeros((100, 100), dtype=np.int32)
+    # Place label in bottom-right quadrant only
+    labels[60:80, 60:80] = 1
+
+    # Crop to bottom-right quadrant (50,50)-(100,100)
+    result = render_image(
+        image=img,
+        overlay=labels,
+        overlay_alpha=0.5,
+        crop=(50, 50, 100, 100),
+    )
+
+    assert result.shape == (50, 50, 3)
+    # The label region (60:80, 60:80) maps to (10:30, 10:30) in cropped coords
+    # Interior of labeled region should be colored
+    assert not np.array_equal(result[20, 20], [128, 128, 128])
+    # Top-left of cropped image (originally 50,50) has no label -> unchanged
+    assert result[0, 0].tolist() == [128, 128, 128]
+
+
+def test_render_image_crop_with_overlay_no_overlap():
+    """Overlay outside crop region should not affect the cropped image."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    labels = np.zeros((100, 100), dtype=np.int32)
+    # Place label in top-left only
+    labels[0:20, 0:20] = 1
+
+    # Crop to bottom-right (50,50)-(100,100) — no overlap with label
+    result = render_image(
+        image=img,
+        overlay=labels,
+        overlay_alpha=0.5,
+        crop=(50, 50, 100, 100),
+    )
+
+    # Entire cropped region should be unchanged
+    assert result.shape == (50, 50, 3)
+    np.testing.assert_array_equal(result, np.ones((50, 50, 3), dtype=np.uint8) * 128)
+
+
+def test_render_video_crop_with_overlay():
+    """render_video with crop + overlay should align overlay to cropped region."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=100, w=100)
+    overlay = np.zeros((100, 100), dtype=np.int32)
+    overlay[60:80, 60:80] = 1
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        crop=(50, 50, 100, 100),
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Cropped to 50x50, the label at (60:80,60:80) maps to (10:30,10:30)
+    assert frames[0].shape[:2] == (50, 50)
