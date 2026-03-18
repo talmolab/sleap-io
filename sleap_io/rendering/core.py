@@ -895,6 +895,11 @@ def render_image(
 
     # Apply annotation overlay before pose rendering
     if overlay is not None:
+        # Ensure image is RGB for color blending
+        if render_image_data.ndim == 2:
+            render_image_data = np.stack([render_image_data] * 3, axis=-1)
+        elif render_image_data.ndim == 3 and render_image_data.shape[2] == 1:
+            render_image_data = np.repeat(render_image_data, 3, axis=2)
         _apply_overlay(
             render_image_data,
             overlay,
@@ -1301,7 +1306,11 @@ def render_video(
             return overlay(fidx)
         if _overlay_is_list:
             # Filter objects by frame_idx attribute
-            return [obj for obj in overlay if getattr(obj, "frame_idx", None) == fidx]
+            return [
+                obj
+                for obj in overlay
+                if getattr(obj, "frame_idx", None) in (None, fidx)
+            ]
         return None
 
     # Only accumulate frames if returning as list (no save_path)
@@ -1352,6 +1361,8 @@ def render_video(
                 # Apply overlay
                 frame_overlay = _get_frame_overlay(fidx)
                 if frame_overlay is not None:
+                    if render_image_data.ndim == 2:
+                        render_image_data = np.stack([render_image_data] * 3, axis=-1)
                     _apply_overlay(
                         render_image_data,
                         frame_overlay,
@@ -1448,6 +1459,8 @@ def render_video(
             # Apply overlay
             frame_overlay = _get_frame_overlay(fidx)
             if frame_overlay is not None:
+                if render_image_data.ndim == 2:
+                    render_image_data = np.stack([render_image_data] * 3, axis=-1)
                 _apply_overlay(
                     render_image_data,
                     frame_overlay,

@@ -781,6 +781,22 @@ sio render -i predictions.slp --lf 0 -o frame.png
 # Custom styling
 sio render -i predictions.slp -o styled.mp4 \
     --color-by track --palette tableau10 --marker-shape diamond
+
+# Segmentation overlay from TIFF stack
+sio render -i predictions.slp --overlay masks.tif --overlay-alpha 0.4
+
+# Overlay from directory of per-frame TIFFs
+sio render -i predictions.slp --overlay masks/
+
+# Single frame with overlay and outlines
+sio render -i predictions.slp --lf 0 --overlay masks.tif \
+    --overlay-outline --overlay-outline-color white
+
+# Overlay-only mode (no labels file needed)
+sio render --images frames/ --overlay masks.tif -o output.mp4
+
+# Overlay-only with TIFF stack images
+sio render --images frames.tif --overlay masks/ --overlay-outline -o output.mp4
 ```
 
 ---
