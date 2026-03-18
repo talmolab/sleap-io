@@ -6,6 +6,20 @@ callbacks, and the core rendering functions.
 
 import numpy as np
 import pytest
+from shapely.geometry import box
+
+import sleap_io as sio
+from sleap_io.model.bbox import BoundingBox
+from sleap_io.model.mask import SegmentationMask
+from sleap_io.model.roi import ROI
+from sleap_io.rendering import render_video
+from sleap_io.rendering.core import render_image
+from sleap_io.rendering.overlays import (
+    draw_bboxes,
+    draw_label_image,
+    draw_masks,
+    draw_rois,
+)
 
 # Skip all tests if skia-python is not installed
 skia = pytest.importorskip("skia", reason="skia-python not installed")
@@ -2444,9 +2458,6 @@ def test_draw_bboxes_empty():
 
 def test_draw_masks_per_mask_colors():
     """draw_masks with per-mask colors should apply different colors to each mask."""
-    from sleap_io.model.mask import SegmentationMask
-    from sleap_io.rendering.overlays import draw_masks
-
     img = np.ones((50, 50, 3), dtype=np.uint8) * 100
     mask1_data = np.zeros((50, 50), dtype=bool)
     mask1_data[5:15, 5:15] = True
@@ -2473,8 +2484,6 @@ def test_draw_masks_per_mask_colors():
 
 def test_draw_label_image_basic():
     """draw_label_image should blend colored overlays for each label ID."""
-    from sleap_io.rendering.overlays import draw_label_image
-
     img = np.ones((50, 50, 3), dtype=np.uint8) * 128
     labels = np.zeros((50, 50), dtype=np.int32)
     labels[10:20, 10:20] = 1
@@ -2493,8 +2502,6 @@ def test_draw_label_image_basic():
 
 def test_draw_label_image_empty():
     """draw_label_image with all-zero labels should leave image unchanged."""
-    from sleap_io.rendering.overlays import draw_label_image
-
     img = np.ones((30, 30, 3), dtype=np.uint8) * 200
     labels = np.zeros((30, 30), dtype=np.int32)
     original = img.copy()
@@ -2506,8 +2513,6 @@ def test_draw_label_image_empty():
 
 def test_draw_label_image_with_outline():
     """draw_label_image with outline=True should draw boundaries."""
-    from sleap_io.rendering.overlays import draw_label_image
-
     img = np.ones((50, 50, 3), dtype=np.uint8) * 128
     labels = np.zeros((50, 50), dtype=np.int32)
     labels[10:30, 10:30] = 1
@@ -2524,8 +2529,6 @@ def test_draw_label_image_with_outline():
 
 def test_draw_label_image_with_outline_uniform_color():
     """draw_label_image with uniform outline_color should use that color."""
-    from sleap_io.rendering.overlays import draw_label_image
-
     img = np.ones((50, 50, 3), dtype=np.uint8) * 128
     labels = np.zeros((50, 50), dtype=np.int32)
     labels[10:30, 10:30] = 1
@@ -2545,8 +2548,6 @@ def test_draw_label_image_with_outline_uniform_color():
 
 def test_draw_label_image_with_thick_outline():
     """draw_label_image with outline_width > 1 should dilate boundaries inward."""
-    from sleap_io.rendering.overlays import draw_label_image
-
     img = np.ones((60, 60, 3), dtype=np.uint8) * 128
     labels = np.zeros((60, 60), dtype=np.int32)
     labels[15:45, 15:45] = 1
@@ -2567,8 +2568,6 @@ def test_draw_label_image_with_thick_outline():
 
 def test_draw_label_image_size_mismatch():
     """draw_label_image should clip when labels are larger than image."""
-    from sleap_io.rendering.overlays import draw_label_image
-
     img = np.ones((30, 30, 3), dtype=np.uint8) * 128
     labels = np.zeros((50, 50), dtype=np.int32)
     labels[5:25, 5:25] = 1
@@ -2588,8 +2587,6 @@ def test_draw_label_image_size_mismatch():
 
 def test_render_image_overlay_label_image():
     """render_image with overlay= numpy label image should apply overlay."""
-    from sleap_io.rendering.core import render_image
-
     img = np.ones((50, 50, 3), dtype=np.uint8) * 128
     labels = np.zeros((50, 50), dtype=np.int32)
     labels[10:20, 10:20] = 1
@@ -2607,9 +2604,6 @@ def test_render_image_overlay_label_image():
 
 def test_render_image_overlay_masks():
     """render_image with overlay= list of SegmentationMask should work."""
-    from sleap_io.model.mask import SegmentationMask
-    from sleap_io.rendering.core import render_image
-
     img = np.ones((50, 50, 3), dtype=np.uint8) * 128
     mask_data = np.zeros((50, 50), dtype=bool)
     mask_data[10:30, 10:30] = True
@@ -2624,11 +2618,6 @@ def test_render_image_overlay_masks():
 
 def test_render_image_overlay_rois():
     """render_image with overlay= list of ROI should work."""
-    from shapely.geometry import box
-
-    from sleap_io.model.roi import ROI
-    from sleap_io.rendering.core import render_image
-
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     roi = ROI(geometry=box(20, 20, 60, 60))
 
@@ -2639,9 +2628,6 @@ def test_render_image_overlay_rois():
 
 def test_render_image_overlay_bboxes():
     """render_image with overlay= list of BoundingBox should work."""
-    from sleap_io.model.bbox import BoundingBox
-    from sleap_io.rendering.core import render_image
-
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     bbox = BoundingBox(x_center=50, y_center=50, width=40, height=40)
 
@@ -2652,8 +2638,6 @@ def test_render_image_overlay_bboxes():
 
 def test_render_image_overlay_with_scale():
     """render_image with overlay and scale should scale the output."""
-    from sleap_io.rendering.core import render_image
-
     img = np.ones((100, 100, 3), dtype=np.uint8) * 128
     labels = np.zeros((100, 100), dtype=np.int32)
     labels[20:80, 20:80] = 1
@@ -2664,8 +2648,6 @@ def test_render_image_overlay_with_scale():
 
 def test_render_image_source_none_requires_image():
     """render_image with source=None and no image should raise."""
-    from sleap_io.rendering.core import render_image
-
     with pytest.raises(ValueError, match="image parameter required"):
         render_image(source=None)
 
@@ -2677,9 +2659,6 @@ def test_render_image_source_none_requires_image():
 
 def test_draw_rois_per_roi_colors():
     """draw_rois with per-ROI colors should apply different colors to each ROI."""
-    from sleap_io.model.roi import ROI
-    from sleap_io.rendering.overlays import draw_rois
-
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     roi1 = ROI.from_bbox(5, 5, 20, 20)
     roi2 = ROI.from_bbox(60, 60, 20, 20)
@@ -2704,9 +2683,6 @@ def test_draw_rois_per_roi_colors():
 
 def test_draw_bboxes_per_bbox_colors():
     """draw_bboxes with per-bbox colors should apply different colors."""
-    from sleap_io.model.bbox import BoundingBox
-    from sleap_io.rendering.overlays import draw_bboxes
-
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     bbox1 = BoundingBox.from_xyxy(5, 5, 25, 25)
     bbox2 = BoundingBox.from_xyxy(60, 60, 80, 80)
@@ -2740,8 +2716,6 @@ def _make_synthetic_labels(n_frames=3, h=64, w=64):
     Returns Labels with n_frames of (h, w) frames rendered on a solid black
     background (no real video needed).
     """
-    import sleap_io as sio
-
     skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
     video = sio.Video(filename="dummy.mp4")
     pts = np.array([[w // 4, h // 4], [3 * w // 4, 3 * h // 4]], dtype=np.float32)
@@ -2762,8 +2736,6 @@ def _make_synthetic_labels(n_frames=3, h=64, w=64):
 
 def test_render_video_overlay_3d_array():
     """render_video with 3D (T,H,W) overlay should apply per-frame labels."""
-    from sleap_io.rendering import render_video
-
     labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
     overlay = np.zeros((3, 64, 64), dtype=np.int32)
     overlay[0, 10:30, 10:30] = 1
@@ -2790,8 +2762,6 @@ def test_render_video_overlay_3d_array():
 
 def test_render_video_overlay_2d_static():
     """render_video with 2D (H,W) overlay should apply same overlay to all frames."""
-    from sleap_io.rendering import render_video
-
     labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
     overlay = np.zeros((64, 64), dtype=np.int32)
     overlay[10:30, 10:30] = 1
@@ -2814,8 +2784,6 @@ def test_render_video_overlay_2d_static():
 
 def test_render_video_overlay_callable():
     """render_video with callable overlay should call it per-frame."""
-    from sleap_io.rendering import render_video
-
     labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
 
     called_with = []
@@ -2843,9 +2811,6 @@ def test_render_video_overlay_callable():
 
 def test_render_video_overlay_list_by_frame_idx():
     """render_video with list overlay should filter objects by frame_idx."""
-    from sleap_io.model.mask import SegmentationMask
-    from sleap_io.rendering import render_video
-
     labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
 
     mask_data = np.zeros((64, 64), dtype=bool)
@@ -2868,10 +2833,35 @@ def test_render_video_overlay_list_by_frame_idx():
     assert not np.array_equal(frames[0][20, 20], frames[0][0, 0])
 
 
+def test_render_video_overlay_static_objects():
+    """render_video with frame_idx=None objects should render them on all frames."""
+    labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
+
+    mask_data = np.zeros((64, 64), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+    # frame_idx defaults to None -> should appear on every frame
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay=[mask],
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 3
+    # Static mask (frame_idx=None) should be rendered on ALL frames
+    for i, frame in enumerate(frames):
+        assert not np.array_equal(frame[20, 20], [128, 128, 128]), (
+            f"Frame {i}: static mask was not rendered"
+        )
+
+
 def test_render_video_overlay_out_of_bounds():
     """render_video with 3D overlay shorter than video should not crash."""
-    from sleap_io.rendering import render_video
-
     labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
     # Overlay only has 1 frame, but video has 3
     overlay = np.zeros((1, 64, 64), dtype=np.int32)
