@@ -349,56 +349,104 @@ def draw_bboxes(
     surface = skia.Surface(frame_rgba, colorType=skia.kRGBA_8888_ColorType)
     canvas = surface.getCanvas()
 
-    for i, bbox in enumerate(bboxes):
-        c = colors[i] if colors is not None else color
-
+    if colors is None:
+        # Single color for all bboxes
         stroke_paint = skia.Paint(
-            Color=skia.Color(*c),
+            Color=skia.Color(*color),
             AntiAlias=False,
             Style=skia.Paint.kStroke_Style,
             StrokeWidth=float(line_width),
             StrokeCap=skia.Paint.kSquare_Cap,
         )
-
         fill_paint = None
         if fill_alpha > 0:
             fill_paint = skia.Paint(
                 Color=skia.Color4f(
-                    c[0] / 255.0,
-                    c[1] / 255.0,
-                    c[2] / 255.0,
+                    color[0] / 255.0,
+                    color[1] / 255.0,
+                    color[2] / 255.0,
                     fill_alpha,
                 ).toColor(),
                 AntiAlias=False,
                 Style=skia.Paint.kFill_Style,
             )
+        for bbox in bboxes:
+            corners = bbox.corners
 
-        corners = bbox.corners
+            # Build a closed path from the 4 corners
+            path = skia.Path()
+            path.moveTo(float(corners[0][0]), float(corners[0][1]))
+            for j in range(1, len(corners)):
+                path.lineTo(float(corners[j][0]), float(corners[j][1]))
+            path.close()
 
-        # Build a closed path from the 4 corners
-        path = skia.Path()
-        path.moveTo(float(corners[0][0]), float(corners[0][1]))
-        for j in range(1, len(corners)):
-            path.lineTo(float(corners[j][0]), float(corners[j][1]))
-        path.close()
+            # Draw fill if requested
+            if fill_paint is not None:
+                canvas.drawPath(path, fill_paint)
 
-        # Draw fill if requested
-        if fill_paint is not None:
-            canvas.drawPath(path, fill_paint)
+            # Draw stroke
+            canvas.drawPath(path, stroke_paint)
 
-        # Draw stroke
-        canvas.drawPath(path, stroke_paint)
-
-        # Score text for predicted bboxes
-        if isinstance(bbox, PredictedBoundingBox):
-            text_x = float(corners[0][0])
-            text_y = float(corners[0][1]) - 5
-            typeface = skia.Typeface(font if font else "sans-serif")
-            skia_font = skia.Font(typeface, 12)
-            text_paint = skia.Paint(Color=skia.Color(*c), AntiAlias=True)
-            canvas.drawString(
-                f"{bbox.score:.2f}", text_x, text_y, skia_font, text_paint
+            # Score text for predicted bboxes
+            if isinstance(bbox, PredictedBoundingBox):
+                text_x = float(corners[0][0])
+                text_y = float(corners[0][1]) - 5
+                typeface = skia.Typeface(font if font else "sans-serif")
+                skia_font = skia.Font(typeface, 12)
+                text_paint = skia.Paint(Color=skia.Color(*color), AntiAlias=True)
+                canvas.drawString(
+                    f"{bbox.score:.2f}", text_x, text_y, skia_font, text_paint
+                )
+    else:
+        # Per-bbox colors
+        for i, bbox in enumerate(bboxes):
+            c = colors[i]
+            stroke_paint = skia.Paint(
+                Color=skia.Color(*c),
+                AntiAlias=False,
+                Style=skia.Paint.kStroke_Style,
+                StrokeWidth=float(line_width),
+                StrokeCap=skia.Paint.kSquare_Cap,
             )
+            fill_paint = None
+            if fill_alpha > 0:
+                fill_paint = skia.Paint(
+                    Color=skia.Color4f(
+                        c[0] / 255.0,
+                        c[1] / 255.0,
+                        c[2] / 255.0,
+                        fill_alpha,
+                    ).toColor(),
+                    AntiAlias=False,
+                    Style=skia.Paint.kFill_Style,
+                )
+
+            corners = bbox.corners
+
+            # Build a closed path from the 4 corners
+            path = skia.Path()
+            path.moveTo(float(corners[0][0]), float(corners[0][1]))
+            for j in range(1, len(corners)):
+                path.lineTo(float(corners[j][0]), float(corners[j][1]))
+            path.close()
+
+            # Draw fill if requested
+            if fill_paint is not None:
+                canvas.drawPath(path, fill_paint)
+
+            # Draw stroke
+            canvas.drawPath(path, stroke_paint)
+
+            # Score text for predicted bboxes
+            if isinstance(bbox, PredictedBoundingBox):
+                text_x = float(corners[0][0])
+                text_y = float(corners[0][1]) - 5
+                typeface = skia.Typeface(font if font else "sans-serif")
+                skia_font = skia.Font(typeface, 12)
+                text_paint = skia.Paint(Color=skia.Color(*c), AntiAlias=True)
+                canvas.drawString(
+                    f"{bbox.score:.2f}", text_x, text_y, skia_font, text_paint
+                )
 
     # Copy RGB channels back to the input image
     image[:] = frame_rgba[:, :, :3]
