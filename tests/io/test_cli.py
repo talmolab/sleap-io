@@ -5407,6 +5407,71 @@ def test_render_overlay_only_requires_overlay(tmp_path):
     assert "--overlay is required" in result.output
 
 
+def test_load_images_stack_true(tmp_path):
+    """_load_images with stack=True should treat 3D TIFF as (T, H, W) stack."""
+    import numpy as np
+    import tifffile
+
+    # Shape (100, 100, 3) — heuristic would treat as single RGB, but stack=True forces
+    data = np.ones((100, 100, 3), dtype=np.uint8) * 50
+    tiff_path = tmp_path / "ambiguous.tif"
+    tifffile.imwrite(str(tiff_path), data)
+
+    result = _load_images(tiff_path, stack=True)
+    assert len(result) == 100
+    assert result[0].shape == (100, 3)
+
+
+def test_load_images_stack_false(tmp_path):
+    """_load_images with stack=False should treat 3D TIFF as single image."""
+    import numpy as np
+    import tifffile
+
+    # Shape (5, 32, 32) — heuristic would treat as stack, but stack=False forces
+    data = np.ones((5, 32, 32), dtype=np.uint8) * 50
+    tiff_path = tmp_path / "ambiguous.tif"
+    tifffile.imwrite(str(tiff_path), data)
+
+    result = _load_images(tiff_path, stack=False)
+    assert len(result) == 1
+    assert result[0].shape == (5, 32, 32)
+
+
+def test_render_overlay_only_images_stack(tmp_path):
+    """Test --images-stack flag forces stack interpretation."""
+    import numpy as np
+    import tifffile
+
+    # Create a (3, 64, 64) stack — without --images-stack, shape[2]=64 != 3|4
+    # so it's already treated as stack. But test that the flag doesn't break.
+    img_data = np.ones((3, 64, 64), dtype=np.uint8) * 128
+    img_path = tmp_path / "stack.tif"
+    tifffile.imwrite(str(img_path), img_data)
+
+    mask = np.zeros((3, 64, 64), dtype=np.int32)
+    mask[0, 10:30, 10:30] = 1
+    mask_path = tmp_path / "masks.tif"
+    tifffile.imwrite(str(mask_path), mask)
+
+    runner = CliRunner()
+    output_path = tmp_path / "out.mp4"
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "--images",
+            str(img_path),
+            "--images-stack",
+            "--overlay",
+            str(mask_path),
+            "-o",
+            str(output_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert output_path.exists()
+
+
 # ============================================================================
 # fix command tests
 # ============================================================================

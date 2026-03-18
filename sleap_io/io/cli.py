@@ -284,12 +284,18 @@ def _parse_crop_string(
 
 def _load_images(
     images_path: Path,
+    stack: bool | None = None,
 ) -> list[np.ndarray]:
     """Load images from a TIFF stack or directory of TIFFs.
 
     Args:
         images_path: Path to a TIFF file (single or multi-page) or a
             directory containing TIFF images (one per frame).
+        stack: Controls interpretation of ambiguous 3-D TIFF arrays. If
+            ``None`` (default), arrays with last dimension 3 or 4 are treated
+            as single RGB/RGBA images; otherwise as frame stacks. Set to
+            ``True`` to force stack interpretation (e.g., a 3-frame grayscale
+            stack) or ``False`` to force single-image interpretation.
 
     Returns:
         List of image arrays, each ``(H, W)`` or ``(H, W, C)``.
@@ -318,10 +324,15 @@ def _load_images(
         if data.ndim == 2:
             return [data]
         elif data.ndim == 3:
-            # Could be (T, H, W) stack or (H, W, C) single image
-            if data.shape[2] in (3, 4):
+            if stack is True:
+                return [data[i] for i in range(data.shape[0])]
+            elif stack is False:
                 return [data]
-            return [data[i] for i in range(data.shape[0])]
+            else:
+                # Heuristic: (H, W, C) if last dim is 3 or 4, else (T, H, W)
+                if data.shape[2] in (3, 4):
+                    return [data]
+                return [data[i] for i in range(data.shape[0])]
         elif data.ndim == 4:
             # (T, H, W, C) stack
             return [data[i] for i in range(data.shape[0])]
@@ -348,7 +359,6 @@ def _load_overlay(
         click.ClickException: If the path is invalid, contains no TIFFs,
             or ``frame_idx`` is out of range.
     """
-    import numpy as np
     import tifffile
 
     if overlay_path.is_dir():
@@ -424,6 +434,7 @@ def _render_overlay_only(
     fps: float | None,
     crf: int,
     x264_preset: str,
+    images_stack: bool | None = None,
 ) -> None:
     """Render images with overlay in overlay-only mode (no labels file).
 
@@ -440,6 +451,8 @@ def _render_overlay_only(
         fps: Output FPS or None for 30.
         crf: Video quality factor.
         x264_preset: H.264 encoding preset.
+        images_stack: Controls 3-D TIFF interpretation for images. See
+            :func:`_load_images`.
     """
     from sleap_io.rendering.core import _apply_overlay, _scale_frame, render_image
 
@@ -447,7 +460,7 @@ def _render_overlay_only(
         raise click.ClickException("--overlay is required when using --images.")
 
     # Load images and overlay
-    images = _load_images(images_path)
+    images = _load_images(images_path, stack=images_stack)
     overlay_data = _load_overlay(overlay_path)
     overlay_outline_color = _parse_overlay_outline_color(overlay_outline_color_str)
 
@@ -3299,6 +3312,14 @@ def filenames(
     help="Outline color (e.g., 'white', '#ff0000', '255,0,0'). "
     "Default: darkened fill color.",
 )
+@click.option(
+    "--images-stack/--no-images-stack",
+    "images_stack",
+    default=None,
+    help="Force 3-D TIFF interpretation for --images: "
+    "--images-stack treats as frame stack, --no-images-stack treats as single image. "
+    "Default: auto-detect (last dim 3 or 4 → single image, otherwise → stack).",
+)
 # Info options
 @click.option(
     "--list-colors",
@@ -3344,6 +3365,7 @@ def render(
     overlay_outline: bool,
     overlay_outline_width: int,
     overlay_outline_color_str: str | None,
+    images_stack: bool | None,
     list_colors: bool,
     list_palettes: bool,
 ) -> None:
@@ -3461,6 +3483,7 @@ def render(
             fps=fps,
             crf=crf,
             x264_preset=x264_preset,
+            images_stack=images_stack,
         )
         return
 
