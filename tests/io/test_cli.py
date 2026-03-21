@@ -5404,7 +5404,7 @@ def test_render_overlay_only_requires_overlay(tmp_path):
         ],
     )
     assert result.exit_code != 0
-    assert "--overlay is required" in result.output
+    assert "--overlay is required" in _strip_ansi(result.output)
 
 
 def test_load_images_stack_true(tmp_path):
@@ -5470,6 +5470,146 @@ def test_render_overlay_only_images_stack(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert output_path.exists()
+
+
+def test_load_images_empty_directory(tmp_path):
+    """_load_images should raise ClickException for empty directory."""
+    import click
+
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    with pytest.raises(click.ClickException, match="No TIFF files found"):
+        _load_images(empty_dir)
+
+
+def test_load_images_corrupt_file(tmp_path):
+    """_load_images should raise ClickException for corrupt TIFF files."""
+    import click
+
+    bad_file = tmp_path / "corrupt.tif"
+    bad_file.write_text("not a tiff")
+
+    with pytest.raises(click.ClickException, match="Failed to load image file"):
+        _load_images(bad_file)
+
+
+def test_load_images_rgb_tiff(tmp_path):
+    """_load_images with 3D TIFF where last dim is 3 should treat as single RGB."""
+    import numpy as np
+    import tifffile
+
+    data = np.ones((64, 64, 3), dtype=np.uint8) * 100
+    tiff_path = tmp_path / "rgb.tif"
+    tifffile.imwrite(str(tiff_path), data)
+
+    result = _load_images(tiff_path)
+    assert len(result) == 1
+    assert result[0].shape == (64, 64, 3)
+
+
+def test_load_images_4d_tiff(tmp_path):
+    """_load_images with 4D TIFF should split along first axis."""
+    import numpy as np
+    import tifffile
+
+    data = np.ones((3, 32, 32, 3), dtype=np.uint8) * 50
+    tiff_path = tmp_path / "4d.tif"
+    tifffile.imwrite(str(tiff_path), data)
+
+    result = _load_images(tiff_path)
+    assert len(result) == 3
+    assert result[0].shape == (32, 32, 3)
+
+
+def test_load_overlay_empty_directory(tmp_path):
+    """_load_overlay should raise ClickException for empty directory."""
+    import click
+
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    with pytest.raises(click.ClickException, match="No TIFF files found"):
+        _load_overlay(empty_dir)
+
+
+def test_load_overlay_corrupt_file(tmp_path):
+    """_load_overlay should raise ClickException for corrupt TIFF files."""
+    import click
+
+    bad_file = tmp_path / "corrupt.tif"
+    bad_file.write_text("not a tiff")
+
+    with pytest.raises(click.ClickException, match="Failed to load overlay file"):
+        _load_overlay(bad_file)
+
+
+@skip_slow_video_on_windows
+def test_render_overlay_only_grayscale_video(tmp_path):
+    """Overlay-only video mode with grayscale images and 2D static overlay."""
+    import numpy as np
+    import tifffile
+
+    # Create grayscale image stack
+    stack = np.ones((3, 64, 64), dtype=np.uint8) * 128
+    img_path = tmp_path / "frames.tif"
+    tifffile.imwrite(str(img_path), stack)
+
+    # Create 2D static overlay (applied to all frames)
+    mask = np.zeros((64, 64), dtype=np.int32)
+    mask[10:30, 10:30] = 1
+    mask_path = tmp_path / "mask.tif"
+    tifffile.imwrite(str(mask_path), mask)
+
+    runner = CliRunner()
+    # Use default output path (tests line 497)
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "--images",
+            str(img_path),
+            "--overlay",
+            str(mask_path),
+            "--scale",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    # Default output should be .overlay.mp4
+    assert img_path.with_suffix(".overlay.mp4").exists()
+
+
+def test_render_overlay_only_grayscale_single(tmp_path):
+    """Overlay-only single image mode with grayscale and default output path."""
+    import numpy as np
+    import tifffile
+
+    # Create grayscale single image
+    img = np.ones((64, 64), dtype=np.uint8) * 128
+    img_path = tmp_path / "frame.tif"
+    tifffile.imwrite(str(img_path), img)
+
+    mask = np.zeros((64, 64), dtype=np.int32)
+    mask[10:30, 10:30] = 1
+    mask_path = tmp_path / "mask.tif"
+    tifffile.imwrite(str(mask_path), mask)
+
+    runner = CliRunner()
+    # Use default output path (tests line 475)
+    result = runner.invoke(
+        cli,
+        [
+            "render",
+            "--images",
+            str(img_path),
+            "--overlay",
+            str(mask_path),
+        ],
+    )
+    assert result.exit_code == 0, _strip_ansi(result.output)
+    # Default output should be .overlay.png
+    assert img_path.with_suffix(".overlay.png").exists()
 
 
 # ============================================================================

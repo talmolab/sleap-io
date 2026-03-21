@@ -2705,6 +2705,64 @@ def test_draw_bboxes_per_bbox_colors():
     assert result[45, 45].tolist() == [0, 0, 0]
 
 
+def test_draw_bboxes_per_bbox_colors_predicted_score():
+    """draw_bboxes per-bbox colors with PredictedBoundingBox renders score text."""
+    from sleap_io.model.bbox import PredictedBoundingBox
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = PredictedBoundingBox.from_xyxy(20, 20, 60, 60, score=0.85)
+
+    result = draw_bboxes(
+        img,
+        [bbox],
+        colors=[(0, 255, 0)],
+        fill_alpha=0.5,
+    )
+
+    assert result is img
+    # Score text should be rendered near top-left of bbox
+    text_region = result[5:20, 15:60]
+    assert text_region.any(), "Score text should be rendered"
+
+
+def test_render_image_grayscale_with_overlay():
+    """render_image with a grayscale image and overlay should convert to RGB."""
+    gray_img = np.ones((64, 64), dtype=np.uint8) * 128
+    overlay = np.zeros((64, 64), dtype=np.int32)
+    overlay[10:30, 10:30] = 1
+
+    result = render_image(
+        source=None,
+        image=gray_img,
+        overlay=overlay,
+        overlay_alpha=0.5,
+    )
+
+    # Output should be RGB
+    assert result.ndim == 3
+    assert result.shape[2] == 3
+
+
+def test_render_video_grayscale_with_2d_overlay():
+    """render_video with grayscale frames and 2D static overlay."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=64, w=64)
+    overlay = np.zeros((64, 64), dtype=np.int32)
+    overlay[10:30, 10:30] = 1
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    assert frames[0].ndim == 3
+
+
 # ============================================================================
 # render_video overlay tests
 # ============================================================================
