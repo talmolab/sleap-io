@@ -51,6 +51,10 @@
       
     
     
+      <link rel="stylesheet" href="../assets/_markdown_exec_pyodide.css">
+    
+      <link rel="stylesheet" href="../assets/_markdown_exec_ansi.css">
+    
       <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
       <link rel="stylesheet" href="../css/mkdocstrings.css">
@@ -739,9 +743,23 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../model/" class="md-nav__link">
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../model/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -755,7 +773,169 @@
   
   
 
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Model
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/labels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Labels
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/video/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Video
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/poses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Poses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -2846,9 +3026,9 @@
 <p class="admonition-title">See also</p>
 <ul>
 <li><a href="../model/">Model</a>: Complete data model documentation</li>
-<li><a href="../model/#sleap_io.Labels"><code>Labels</code></a>: Labels container class</li>
-<li><a href="../model/#sleap_io.Instance"><code>Instance</code></a>: Instance class for manual annotations</li>
-<li><a href="../model/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a>: Instance class for predictions</li>
+<li><a href="../model/labels/#sleap_io.Labels"><code>Labels</code></a>: Labels container class</li>
+<li><a href="../model/poses/#sleap_io.Instance"><code>Instance</code></a>: Instance class for manual annotations</li>
+<li><a href="../model/poses/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a>: Instance class for predictions</li>
 </ul>
 </div>
 <h3 id="convert-labels-to-raw-arrays">Convert labels to raw arrays<a class="headerlink" href="#convert-labels-to-raw-arrays" title="Permanent link">&para;</a></h3>
@@ -2877,7 +3057,7 @@
 </details>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
-<p><a href="../model/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a>: Full documentation of array conversion options</p>
+<p><a href="../model/labels/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a>: Full documentation of array conversion options</p>
 </div>
 <h2 id="format-conversion">Format conversion<a class="headerlink" href="#format-conversion" title="Permanent link">&para;</a></h2>
 <h3 id="load-and-save-in-different-formats">Load and save in different formats<a class="headerlink" href="#load-and-save-in-different-formats" title="Permanent link">&para;</a></h3>
@@ -2897,7 +3077,7 @@
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/#sleap_io.Labels.save"><code>Labels.save</code></a>: Save method with format options</li>
+<li><a href="../model/labels/#sleap_io.Labels.save"><code>Labels.save</code></a>: Save method with format options</li>
 <li><a href="formats/">Formats</a>: Complete list of supported formats</li>
 </ul>
 </div>
@@ -3077,7 +3257,7 @@
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/#sleap_io.LabelsSet"><code>LabelsSet</code></a>: LabelsSet class documentation</li>
+<li><a href="../model/labels/#sleap_io.LabelsSet"><code>LabelsSet</code></a>: LabelsSet class documentation</li>
 <li><a href="formats/#sleap_io.load_labels_set"><code>load_labels_set</code></a>: Loading function for label sets</li>
 </ul>
 </div>
@@ -3159,7 +3339,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
-<p><a href="../model/#sleap_io.Labels.replace_filenames"><code>Labels.replace_filenames</code></a>: Additional path manipulation options</p>
+<p><a href="../model/labels/#sleap_io.Labels.replace_filenames"><code>Labels.replace_filenames</code></a>: Additional path manipulation options</p>
 </div>
 <h3 id="copy-labels">Copy labels<a class="headerlink" href="#copy-labels" title="Permanent link">&para;</a></h3>
 <p>Create deep copies of labels with control over video backend behavior.</p>
@@ -3194,7 +3374,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
-<p><a href="../model/#sleap_io.Labels.copy"><code>Labels.copy</code></a>: Full documentation of copy options</p>
+<p><a href="../model/labels/#sleap_io.Labels.copy"><code>Labels.copy</code></a>: Full documentation of copy options</p>
 </div>
 <h3 id="replace-skeleton">Replace skeleton<a class="headerlink" href="#replace-skeleton" title="Permanent link">&para;</a></h3>
 <p>Change the skeleton structure while preserving existing annotations.</p>
@@ -3230,7 +3410,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
-<p><a href="../model/#sleap_io.Labels.replace_skeleton"><code>Labels.replace_skeleton</code></a>: Additional skeleton manipulation options</p>
+<p><a href="../model/labels/#sleap_io.Labels.replace_skeleton"><code>Labels.replace_skeleton</code></a>: Additional skeleton manipulation options</p>
 </div>
 <h3 id="update-from-numpy">Update from numpy<a class="headerlink" href="#update-from-numpy" title="Permanent link">&para;</a></h3>
 <p>Work with pose data as NumPy arrays for filtering or analysis.</p>
@@ -3263,8 +3443,8 @@
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a>: Array conversion options</li>
-<li><a href="../model/#sleap_io.Labels.update_from_numpy"><code>Labels.update_from_numpy</code></a>: Updating labels from arrays</li>
+<li><a href="../model/labels/#sleap_io.Labels.numpy"><code>Labels.numpy</code></a>: Array conversion options</li>
+<li><a href="../model/labels/#sleap_io.Labels.update_from_numpy"><code>Labels.update_from_numpy</code></a>: Updating labels from arrays</li>
 <li><a href="https://movement.neuroinformatics.dev/"><code>movement</code></a>: Advanced pose processing library</li>
 </ul>
 </div>
@@ -3290,7 +3470,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
-<p><a href="../model/#sleap_io.Labels.save"><code>Labels.save</code></a>: Complete save options including embedding</p>
+<p><a href="../model/labels/#sleap_io.Labels.save"><code>Labels.save</code></a>: Complete save options including embedding</p>
 </div>
 <h3 id="advanced-embedding-options">Advanced embedding options<a class="headerlink" href="#advanced-embedding-options" title="Permanent link">&para;</a></h3>
 <p><strong>Progress callback for GUI integration:</strong></p>
@@ -3349,7 +3529,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
-<p><a href="../model/#sleap_io.Labels.trim"><code>Labels.trim</code></a>: Full trim method documentation</p>
+<p><a href="../model/labels/#sleap_io.Labels.trim"><code>Labels.trim</code></a>: Full trim method documentation</p>
 </div>
 <h3 id="make-trainingvalidationtest-splits">Make training/validation/test splits<a class="headerlink" href="#make-trainingvalidationtest-splits" title="Permanent link">&para;</a></h3>
 <p>Split your dataset for machine learning workflows.</p>
@@ -3385,8 +3565,8 @@
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
-<li><a href="../model/#sleap_io.Labels.make_training_splits"><code>Labels.make_training_splits</code></a>: Full documentation of splitting options</li>
-<li><a href="../model/#sleap_io.LabelsSet"><code>LabelsSet</code></a>: LabelsSet class for working with split datasets</li>
+<li><a href="../model/labels/#sleap_io.Labels.make_training_splits"><code>Labels.make_training_splits</code></a>: Full documentation of splitting options</li>
+<li><a href="../model/labels/#sleap_io.LabelsSet"><code>LabelsSet</code></a>: LabelsSet class for working with split datasets</li>
 </ul>
 </div>
 <h2 id="video-operations">Video operations<a class="headerlink" href="#video-operations" title="Permanent link">&para;</a></h2>
@@ -3419,7 +3599,7 @@
 <p class="admonition-title">See also</p>
 <ul>
 <li><a href="formats/#sleap_io.load_video"><code>sio.load_video</code></a>: Video loading function</li>
-<li><a href="../model/#sleap_io.Video"><code>Video</code></a>: Video class documentation</li>
+<li><a href="../model/video/#sleap_io.Video"><code>Video</code></a>: Video class documentation</li>
 </ul>
 </div>
 <h3 id="re-encode-video">Re-encode video<a class="headerlink" href="#re-encode-video" title="Permanent link">&para;</a></h3>
@@ -3644,7 +3824,13 @@
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
+        <script src="../assets/_markdown_exec_pyodide.js"></script>
+      
         <script src="../js/toc-code-style.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
     
   </body>

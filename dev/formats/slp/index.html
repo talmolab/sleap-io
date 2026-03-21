@@ -51,6 +51,10 @@
       
     
     
+      <link rel="stylesheet" href="../../assets/_markdown_exec_pyodide.css">
+    
+      <link rel="stylesheet" href="../../assets/_markdown_exec_ansi.css">
+    
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
       <link rel="stylesheet" href="../../css/mkdocstrings.css">
@@ -626,9 +630,23 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../model/" class="md-nav__link">
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../model/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -642,7 +660,169 @@
   
   
 
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Model
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/labels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Labels
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/video/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Video
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/poses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Poses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model/regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3056,15 +3236,15 @@
 <p>The <code>.slp</code> file format is SLEAP's native format for storing pose tracking data. It is built on top of <a href="https://www.hdfgroup.org/solutions/hdf5/">HDF5</a>, a hierarchical data format designed for storing and organizing large amounts of scientific data.</p>
 <p>SLP files can contain:</p>
 <ul>
-<li><strong>Video metadata</strong> and references to source video files (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../model/#sleap_io.Video"><code>Video</code></a>)</li>
+<li><strong>Video metadata</strong> and references to source video files (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Video&lt;/code&gt;" href="../../model/video/#sleap_io.Video"><code>Video</code></a>)</li>
 <li><strong>Embedded images</strong> with configurable encoding (PNG, JPEG, or raw arrays)</li>
-<li><strong>Skeleton definitions</strong> with nodes, edges, and symmetries (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../model/#sleap_io.Skeleton"><code>Skeleton</code></a>)</li>
-<li><strong>Labeled frames</strong> with user annotations and model predictions (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../model/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a>)</li>
-<li><strong>Tracks</strong> for identity tracking across frames (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Track&lt;/code&gt;" href="../../model/#sleap_io.Track"><code>Track</code></a>)</li>
-<li><strong>Suggestions</strong> for frames to label (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.SuggestionFrame&lt;/code&gt;" href="../../model/#sleap_io.SuggestionFrame"><code>SuggestionFrame</code></a>)</li>
-<li><strong>Recording sessions</strong> for multi-camera setups (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.RecordingSession&lt;/code&gt;" href="../../model/#sleap_io.RecordingSession"><code>RecordingSession</code></a>)</li>
-<li><strong>Regions of interest</strong> (ROIs) with vector geometry (<a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.ROI"><code>ROI</code></a>)</li>
-<li><strong>Segmentation masks</strong> with run-length encoding (<a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.SegmentationMask"><code>SegmentationMask</code></a>)</li>
+<li><strong>Skeleton definitions</strong> with nodes, edges, and symmetries (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../model/poses/#sleap_io.Skeleton"><code>Skeleton</code></a>)</li>
+<li><strong>Labeled frames</strong> with user annotations and model predictions (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../model/labels/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a>)</li>
+<li><strong>Tracks</strong> for identity tracking across frames (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Track&lt;/code&gt;" href="../../model/poses/#sleap_io.Track"><code>Track</code></a>)</li>
+<li><strong>Suggestions</strong> for frames to label (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.SuggestionFrame&lt;/code&gt;" href="../../model/labels/#sleap_io.SuggestionFrame"><code>SuggestionFrame</code></a>)</li>
+<li><strong>Recording sessions</strong> for multi-camera setups (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.RecordingSession&lt;/code&gt;" href="../../model/3d/#sleap_io.RecordingSession"><code>RecordingSession</code></a>)</li>
+<li><strong>Regions of interest</strong> (ROIs) with vector geometry (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.ROI&lt;/code&gt;" href="../../model/regions/#sleap_io.ROI"><code>ROI</code></a>)</li>
+<li><strong>Segmentation masks</strong> with run-length encoding (<a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.SegmentationMask&lt;/code&gt;" href="../../model/regions/#sleap_io.SegmentationMask"><code>SegmentationMask</code></a>)</li>
 </ul>
 <h2 id="hdf5-layout">HDF5 Layout<a class="headerlink" href="#hdf5-layout" title="Permanent link">&para;</a></h2>
 <p>SLP files have the following hierarchical structure:</p>
@@ -3322,7 +3502,7 @@
 </ul>
 <p>This ensures correct color reproduction when reading embedded frames.</p>
 <h2 id="skeletons">Skeletons<a class="headerlink" href="#skeletons" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../model/#sleap_io.Skeleton"><code>Skeleton</code></a> definitions are stored in the <code>/metadata</code> group's <code>json</code> attribute. The metadata JSON contains both a global node list and skeleton definitions that reference <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Node&lt;/code&gt;" href="../../model/#sleap_io.Node"><code>Node</code></a>s by index.</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../model/poses/#sleap_io.Skeleton"><code>Skeleton</code></a> definitions are stored in the <code>/metadata</code> group's <code>json</code> attribute. The metadata JSON contains both a global node list and skeleton definitions that reference <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Node&lt;/code&gt;" href="../../model/poses/#sleap_io.Node"><code>Node</code></a>s by index.</p>
 <h3 id="json-format-slp-files">JSON Format (SLP Files)<a class="headerlink" href="#json-format-slp-files" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2.0.0&quot;</span><span class="p">,</span>
@@ -3345,7 +3525,7 @@
 <a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="p">}</span>
 </code></pre></div>
 <h3 id="edge-types">Edge Types<a class="headerlink" href="#edge-types" title="Permanent link">&para;</a></h3>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Edge&lt;/code&gt;" href="../../model/#sleap_io.Edge"><code>Edge</code></a>s are encoded with a type field using Python's pickle-style encoding:</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Edge&lt;/code&gt;" href="../../model/poses/#sleap_io.Edge"><code>Edge</code></a>s are encoded with a type field using Python's pickle-style encoding:</p>
 <table>
 <thead>
 <tr>
@@ -3369,7 +3549,7 @@
 </table>
 <p>The first occurrence of each type uses the full <code>py/reduce</code> encoding; subsequent occurrences use <code>py/id</code> references.</p>
 <h3 id="symmetries">Symmetries<a class="headerlink" href="#symmetries" title="Permanent link">&para;</a></h3>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Symmetry&lt;/code&gt;" href="../../model/#sleap_io.Symmetry"><code>Symmetry</code></a> relationships define bilateral pairings (e.g., left/right body parts). They are stored as edges with type <code>2</code>:</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Symmetry&lt;/code&gt;" href="../../model/poses/#sleap_io.Symmetry"><code>Symmetry</code></a> relationships define bilateral pairings (e.g., left/right body parts). They are stored as edges with type <code>2</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
@@ -3381,7 +3561,7 @@
 <p>Legacy SLEAP files may store symmetries bidirectionally. The decoder automatically deduplicates them.</p>
 </div>
 <h3 id="yaml-format">YAML Format<a class="headerlink" href="#yaml-format" title="Permanent link">&para;</a></h3>
-<p>In addition to the JSON format stored in SLP files, sleap-io supports a simplified YAML format for <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../model/#sleap_io.Skeleton"><code>Skeleton</code></a> definitions. This format is more human-readable and easier to edit manually.</p>
+<p>In addition to the JSON format stored in SLP files, sleap-io supports a simplified YAML format for <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Skeleton&lt;/code&gt;" href="../../model/poses/#sleap_io.Skeleton"><code>Skeleton</code></a> definitions. This format is more human-readable and easier to edit manually.</p>
 <div class="admonition info">
 <p class="admonition-title">Preferred Format</p>
 <p>The YAML format is the preferred format for skeleton definitions in sleap-nn and new tooling. The JSON format will be maintained for backwards compatibility with existing SLP files.</p>
@@ -3418,17 +3598,17 @@
 <tr>
 <td><code>nodes</code></td>
 <td><code>list[dict]</code></td>
-<td>List of <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Node&lt;/code&gt;" href="../../model/#sleap_io.Node"><code>Node</code></a> definitions with <code>name</code> key</td>
+<td>List of <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Node&lt;/code&gt;" href="../../model/poses/#sleap_io.Node"><code>Node</code></a> definitions with <code>name</code> key</td>
 </tr>
 <tr>
 <td><code>edges</code></td>
 <td><code>list[dict]</code></td>
-<td>List of <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Edge&lt;/code&gt;" href="../../model/#sleap_io.Edge"><code>Edge</code></a> definitions with <code>source</code> and <code>destination</code></td>
+<td>List of <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Edge&lt;/code&gt;" href="../../model/poses/#sleap_io.Edge"><code>Edge</code></a> definitions with <code>source</code> and <code>destination</code></td>
 </tr>
 <tr>
 <td><code>symmetries</code></td>
 <td><code>list[list]</code></td>
-<td>List of <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Symmetry&lt;/code&gt;" href="../../model/#sleap_io.Symmetry"><code>Symmetry</code></a> pairs, each as a list of two node references</td>
+<td>List of <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Symmetry&lt;/code&gt;" href="../../model/poses/#sleap_io.Symmetry"><code>Symmetry</code></a> pairs, each as a list of two node references</td>
 </tr>
 </tbody>
 </table>
@@ -3582,7 +3762,7 @@
 <p>The provenance dictionary can contain arbitrary key-value pairs for tracking custom metadata like model training runs, data sources, or processing history.</p>
 </div>
 <h2 id="tracks">Tracks<a class="headerlink" href="#tracks" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Track&lt;/code&gt;" href="../../model/#sleap_io.Track"><code>Track</code></a>s enable identity tracking of individual animals across frames. Track metadata is stored in the <code>/tracks_json</code> dataset as an array of JSON strings.</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Track&lt;/code&gt;" href="../../model/poses/#sleap_io.Track"><code>Track</code></a>s enable identity tracking of individual animals across frames. Track metadata is stored in the <code>/tracks_json</code> dataset as an array of JSON strings.</p>
 <h3 id="json-structure_1">JSON Structure<a class="headerlink" href="#json-structure_1" title="Permanent link">&para;</a></h3>
 <p>Each track is stored as a two-element JSON array:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;track_name&quot;</span><span class="p">]</span>
@@ -3614,7 +3794,7 @@
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;female&quot;</span><span class="p">]</span>
 </code></pre></div>
 <h3 id="instance-linking">Instance Linking<a class="headerlink" href="#instance-linking" title="Permanent link">&para;</a></h3>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/#sleap_io.Instance"><code>Instance</code></a>s reference tracks by index in the <code>/instances</code> dataset:</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/poses/#sleap_io.Instance"><code>Instance</code></a>s reference tracks by index in the <code>/instances</code> dataset:</p>
 <ul>
 <li><code>track = 0</code> → First track in <code>/tracks_json</code></li>
 <li><code>track = 1</code> → Second track in <code>/tracks_json</code></li>
@@ -3761,7 +3941,7 @@
 <h3 id="optional-dataset_1">Optional Dataset<a class="headerlink" href="#optional-dataset_1" title="Permanent link">&para;</a></h3>
 <p>The <code>/sessions_json</code> dataset is optional. Files without multi-camera sessions will not contain this dataset.</p>
 <h2 id="instances">Instances<a class="headerlink" href="#instances" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/#sleap_io.Instance"><code>Instance</code></a>s represent individual animals or objects in a frame. They are stored in the <code>/instances</code> dataset as a structured array.</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/poses/#sleap_io.Instance"><code>Instance</code></a>s represent individual animals or objects in a frame. They are stored in the <code>/instances</code> dataset as a structured array.</p>
 <h3 id="instance-dtype">Instance Dtype<a class="headerlink" href="#instance-dtype" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">instance_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="p">(</span><span class="s2">&quot;instance_id&quot;</span><span class="p">,</span> <span class="s2">&quot;i8&quot;</span><span class="p">),</span>        <span class="c1"># Unique instance identifier</span>
@@ -3790,19 +3970,19 @@
 <tr>
 <td><code>USER</code></td>
 <td><code>0</code></td>
-<td><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/#sleap_io.Instance"><code>Instance</code></a></td>
+<td><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/poses/#sleap_io.Instance"><code>Instance</code></a></td>
 <td>User-labeled annotation</td>
 </tr>
 <tr>
 <td><code>PREDICTED</code></td>
 <td><code>1</code></td>
-<td><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedInstance&lt;/code&gt;" href="../../model/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a></td>
+<td><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedInstance&lt;/code&gt;" href="../../model/poses/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a></td>
 <td>Model prediction</td>
 </tr>
 </tbody>
 </table>
 <h3 id="instance-linking_1">Instance Linking<a class="headerlink" href="#instance-linking_1" title="Permanent link">&para;</a></h3>
-<p>The <code>from_predicted</code> field links user <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/#sleap_io.Instance"><code>Instance</code></a>s to their source <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedInstance&lt;/code&gt;" href="../../model/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a>s, enabling tracking of corrections made to model outputs.</p>
+<p>The <code>from_predicted</code> field links user <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Instance&lt;/code&gt;" href="../../model/poses/#sleap_io.Instance"><code>Instance</code></a>s to their source <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedInstance&lt;/code&gt;" href="../../model/poses/#sleap_io.PredictedInstance"><code>PredictedInstance</code></a>s, enabling tracking of corrections made to model outputs.</p>
 <h2 id="points">Points<a class="headerlink" href="#points" title="Permanent link">&para;</a></h2>
 <p>Point coordinates are stored in separate datasets for user-labeled and predicted instances.</p>
 <h3 id="user-points-points">User Points (<code>/points</code>)<a class="headerlink" href="#user-points-points" title="Permanent link">&para;</a></h3>
@@ -3850,7 +4030,7 @@
 </table>
 <p>When reading format &lt; 1.1 files, the reader applies a -0.5 offset to convert coordinates.</p>
 <h2 id="labeled-frames">Labeled Frames<a class="headerlink" href="#labeled-frames" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../model/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a>s are stored in the <code>/frames</code> dataset, linking video frames to their instances.</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../model/labels/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a>s are stored in the <code>/frames</code> dataset, linking video frames to their instances.</p>
 <h3 id="frame-dtype">Frame Dtype<a class="headerlink" href="#frame-dtype" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">frame_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">([</span>
 <a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="p">(</span><span class="s2">&quot;frame_id&quot;</span><span class="p">,</span> <span class="s2">&quot;u8&quot;</span><span class="p">),</span>           <span class="c1"># Unique frame identifier</span>
@@ -3888,7 +4068,7 @@
 <a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="p">]</span>
 </code></pre></div>
 <h3 id="data-model-integration">Data Model Integration<a class="headerlink" href="#data-model-integration" title="Permanent link">&para;</a></h3>
-<p>When loading SLP files, the <code>is_negative</code> attribute is set on <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../model/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a> objects:</p>
+<p>When loading SLP files, the <code>is_negative</code> attribute is set on <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.LabeledFrame&lt;/code&gt;" href="../../model/labels/#sleap_io.LabeledFrame"><code>LabeledFrame</code></a> objects:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sleap_io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sio</span>
 <a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
 <a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">labels</span> <span class="o">=</span> <span class="n">sio</span><span class="o">.</span><span class="n">load_slp</span><span class="p">(</span><span class="s2">&quot;labels.slp&quot;</span><span class="p">)</span>
@@ -3905,11 +4085,11 @@
 <a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="n">user_frames</span> <span class="o">=</span> <span class="n">labels</span><span class="o">.</span><span class="n">user_labeled_frames</span>  <span class="c1"># Includes negative frames</span>
 </code></pre></div>
 <h3 id="clean-behavior">clean() Behavior<a class="headerlink" href="#clean-behavior" title="Permanent link">&para;</a></h3>
-<p>When calling <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;clean&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frames&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;empty_instances&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;skeletons&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tracks&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;videos&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../../model/#sleap_io.Labels.clean"><code>Labels.clean(frames=True)</code></a>, negative frames are preserved even though they have no instances. Only non-negative empty frames are removed.</p>
+<p>When calling <a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;clean&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;frames&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;empty_instances&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;skeletons&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tracks&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;True&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;videos&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;False&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels.clean"><code>Labels.clean(frames=True)</code></a>, negative frames are preserved even though they have no instances. Only non-negative empty frames are removed.</p>
 <h3 id="optional-dataset_2">Optional Dataset<a class="headerlink" href="#optional-dataset_2" title="Permanent link">&para;</a></h3>
 <p>The <code>/negative_frames</code> dataset is optional. Files without negative frames will not contain this dataset, and all frames will have <code>is_negative=False</code>.</p>
 <h2 id="lazy-loading">Lazy Loading<a class="headerlink" href="#lazy-loading" title="Permanent link">&para;</a></h2>
-<p>For large SLP files with hundreds of thousands of frames, sleap-io provides a lazy loading mode that defers <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/#sleap_io.Labels"><code>Labels</code></a> object creation until needed.</p>
+<p>For large SLP files with hundreds of thousands of frames, sleap-io provides a lazy loading mode that defers <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object creation until needed.</p>
 <h3 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>Labels (lazy mode)
 <a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>├── LazyDataStore
@@ -3990,7 +4170,7 @@
 <a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a><span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_frame</span><span class="p">)</span>  <span class="c1"># Now works</span>
 </code></pre></div>
 <h2 id="bounding-boxes">Bounding Boxes<a class="headerlink" href="#bounding-boxes" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.BoundingBox"><code>BoundingBox</code></a> annotations store axis-aligned or oriented bounding boxes for object detection and tracking workflows. Bounding box support was introduced in format 1.7.</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a> annotations store axis-aligned or oriented bounding boxes for object detection and tracking workflows. Bounding box support was introduced in format 1.7.</p>
 <h3 id="boundingbox-dataset">BoundingBox Dataset<a class="headerlink" href="#boundingbox-dataset" title="Permanent link">&para;</a></h3>
 <p>Bounding box data is stored in a single structured array dataset:</p>
 <ul>
@@ -4013,17 +4193,17 @@
 </code></pre></div>
 <h3 id="user-vs-predicted">User vs Predicted<a class="headerlink" href="#user-vs-predicted" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>is_predicted = 0</code>: <a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> — human-annotated</li>
-<li><code>is_predicted = 1</code>: <a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.PredictedBoundingBox"><code>PredictedBoundingBox</code></a> — model-predicted, <code>score</code> contains the confidence value</li>
+<li><code>is_predicted = 0</code>: <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.UserBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> — human-annotated</li>
+<li><code>is_predicted = 1</code>: <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.PredictedBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.PredictedBoundingBox"><code>PredictedBoundingBox</code></a> — model-predicted, <code>score</code> contains the confidence value</li>
 </ul>
 <h3 id="string-metadata">String Metadata<a class="headerlink" href="#string-metadata" title="Permanent link">&para;</a></h3>
 <p>String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the <code>/bboxes</code> dataset store <code>categories</code>, <code>names</code>, and <code>sources</code> arrays.</p>
 <h3 id="optional-dataset_3">Optional Dataset<a class="headerlink" href="#optional-dataset_3" title="Permanent link">&para;</a></h3>
-<p>The <code>/bboxes</code> dataset is only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/#sleap_io.Labels"><code>Labels</code></a> object contains bounding boxes. On read, a missing dataset defaults to an empty list.</p>
+<p>The <code>/bboxes</code> dataset is only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains bounding boxes. On read, a missing dataset defaults to an empty list.</p>
 <h3 id="migration-from-format-1516">Migration from Format 1.5/1.6<a class="headerlink" href="#migration-from-format-1516" title="Permanent link">&para;</a></h3>
-<p>When reading older files without a <code>/bboxes</code> dataset, any ROIs with axis-aligned rectangular geometry (<code>is_bbox = True</code>) are automatically migrated to <a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> objects in <code>Labels.bboxes</code>. The migrated ROIs are removed from <code>Labels.rois</code>.</p>
+<p>When reading older files without a <code>/bboxes</code> dataset, any ROIs with axis-aligned rectangular geometry (<code>is_bbox = True</code>) are automatically migrated to <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.UserBoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.UserBoundingBox"><code>UserBoundingBox</code></a> objects in <code>Labels.bboxes</code>. The migrated ROIs are removed from <code>Labels.rois</code>.</p>
 <h2 id="regions-of-interest-rois">Regions of Interest (ROIs)<a class="headerlink" href="#regions-of-interest-rois" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.ROI"><code>ROI</code></a>s store vector geometry annotations such as polygons and other shapes. ROI support was introduced in format 1.5.</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.ROI&lt;/code&gt;" href="../../model/regions/#sleap_io.ROI"><code>ROI</code></a>s store vector geometry annotations such as polygons and other shapes. ROI support was introduced in format 1.5.</p>
 <h3 id="roi-datasets">ROI Datasets<a class="headerlink" href="#roi-datasets" title="Permanent link">&para;</a></h3>
 <p>ROI data is stored across two datasets:</p>
 <ul>
@@ -4048,7 +4228,7 @@
 <p>The <code>annotation_type</code> and <code>score</code> columns are retained in the on-disk dtype
 for backward compatibility with older readers but are no longer used. Writers
 always set <code>annotation_type = 0</code> and <code>score = NaN</code>. Use the <code>category</code> string
-attribute for semantic classification and <a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.BoundingBox"><code>BoundingBox</code></a>
+attribute for semantic classification and <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a>
 for detection annotations with scores.</p>
 </div>
 <h3 id="string-metadata_1">String Metadata<a class="headerlink" href="#string-metadata_1" title="Permanent link">&para;</a></h3>
@@ -4065,9 +4245,9 @@ for detection annotations with scores.</p>
 <li><strong>Temporal ROIs</strong>: <code>frame_idx &gt;= 0</code>. Associated with a specific frame in a video.</li>
 </ul>
 <h3 id="optional-dataset_4">Optional Dataset<a class="headerlink" href="#optional-dataset_4" title="Permanent link">&para;</a></h3>
-<p>The <code>/rois</code> and <code>/roi_wkb</code> datasets are only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/#sleap_io.Labels"><code>Labels</code></a> object contains ROIs. On read, missing datasets default to empty lists.</p>
+<p>The <code>/rois</code> and <code>/roi_wkb</code> datasets are only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains ROIs. On read, missing datasets default to empty lists.</p>
 <h2 id="segmentation-masks">Segmentation Masks<a class="headerlink" href="#segmentation-masks" title="Permanent link">&para;</a></h2>
-<p><a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.SegmentationMask"><code>SegmentationMask</code></a>s store raster binary masks using run-length encoding (RLE). Mask support was introduced in format 1.5.</p>
+<p><a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.SegmentationMask&lt;/code&gt;" href="../../model/regions/#sleap_io.SegmentationMask"><code>SegmentationMask</code></a>s store raster binary masks using run-length encoding (RLE). Mask support was introduced in format 1.5.</p>
 <h3 id="mask-datasets">Mask Datasets<a class="headerlink" href="#mask-datasets" title="Permanent link">&para;</a></h3>
 <p>Mask data is stored across two datasets:</p>
 <ul>
@@ -4097,7 +4277,7 @@ compatibility but ignored on read. Writers always set
 <h3 id="string-metadata_2">String Metadata<a class="headerlink" href="#string-metadata_2" title="Permanent link">&para;</a></h3>
 <p>String metadata follows the same pattern as ROIs. JSON-encoded HDF5 attributes on the <code>/masks</code> dataset store <code>categories</code>, <code>names</code>, and <code>sources</code> arrays.</p>
 <h3 id="optional-dataset_5">Optional Dataset<a class="headerlink" href="#optional-dataset_5" title="Permanent link">&para;</a></h3>
-<p>The <code>/masks</code> and <code>/mask_rle</code> datasets are only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/#sleap_io.Labels"><code>Labels</code></a> object contains masks. On read, missing datasets default to empty lists.</p>
+<p>The <code>/masks</code> and <code>/mask_rle</code> datasets are only written when the <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.Labels&lt;/code&gt;" href="../../model/labels/#sleap_io.Labels"><code>Labels</code></a> object contains masks. On read, missing datasets default to empty lists.</p>
 <h2 id="version-history">Version History<a class="headerlink" href="#version-history" title="Permanent link">&para;</a></h2>
 <p>The SLP format has evolved through several versions, tracked by the <code>format_id</code> attribute in <code>/metadata</code>.</p>
 <h3 id="format-10">Format 1.0<a class="headerlink" href="#format-10" title="Permanent link">&para;</a></h3>
@@ -4145,7 +4325,7 @@ compatibility but ignored on read. Writers always set
 <li>New dataset: <code>/bboxes</code> for first-class bounding box annotations</li>
 <li>Supports axis-aligned and oriented (rotated) bounding boxes</li>
 <li>User/predicted distinction via <code>is_predicted</code> flag and <code>score</code> field</li>
-<li>Migration on read: rectangular ROIs from older files are automatically converted to <a class="autorefs autorefs-internal" href="../../reference/sleap_io/#sleap_io.BoundingBox"><code>BoundingBox</code></a> objects</li>
+<li>Migration on read: rectangular ROIs from older files are automatically converted to <a class="autorefs autorefs-internal" title="&lt;code&gt;sleap_io.BoundingBox&lt;/code&gt;" href="../../model/regions/#sleap_io.BoundingBox"><code>BoundingBox</code></a> objects</li>
 <li><code>annotation_type</code> and <code>score</code> fields on <code>/rois</code> and <code>/masks</code> are now legacy (always written as constants)</li>
 </ul>
 <h2 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h2>
@@ -7103,7 +7283,7 @@ labels.materialize() first.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__dict__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mappingproxy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;__module__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;sleap_io.io.slp_lazy&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__firstlineno__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;688&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__doc__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__init__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1fb1d00&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__len__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__len__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1fb2020&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__getitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__getitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade23402c0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__iter__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__iter__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9b380&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__repr__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9ba60&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_mutation_error&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;_mutation_error&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9bd80&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9c540&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;extend&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;extend&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9c860&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;insert&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;insert&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9ccc0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__setitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__setitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9d080&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__delitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__delitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7fade1f9d620&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__static_attributes__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,),&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;&lt;/code&gt;
+            <td><code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;vm&quot;&gt;__dict__&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mappingproxy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;__module__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;sleap_io.io.slp_lazy&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__firstlineno__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;688&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__doc__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;List-like proxy that materializes LabeledFrame objects on access.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;This provides backward compatibility for code that accesses&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.labeled_frames directly. Frames are created on-demand when&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;accessed via indexing or iteration.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;Mutations are blocked with helpful error messages suggesting to call&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;labels.materialize() first.&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__init__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__init__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04e71a0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__len__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__len__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e074c180&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__getitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__getitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e074e980&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__iter__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__iter__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04cc860&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__repr__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__repr__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04cce00&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;_mutation_error&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;_mutation_error&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04cd120&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;append&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04cd620&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;extend&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;extend&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04cd9e0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;insert&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;insert&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04ce020&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__setitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__setitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04ce3e0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__delitem__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LazyFrameList&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;fm&quot;&gt;__delitem__&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;at&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x7f43e04ceac0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__static_attributes__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&amp;#39;_store&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,),&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__dict__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;attribute&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;__weakref__&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;of&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&amp;#39;LazyFrameList&amp;#39;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;objects&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;})&lt;/span&gt;&lt;/code&gt;
 
   &lt;span class=&quot;doc doc-labels&quot;&gt;
       &lt;small class=&quot;doc doc-label doc-label-class-attribute&quot;&gt;&lt;code&gt;class-attribute&lt;/code&gt;&lt;/small&gt;
@@ -7205,7 +7385,7 @@ labels.materialize() first.</p>
 
 
 <h5 id="sleap_io.io.slp_lazy.LazyFrameList.__dict__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="vm">__dict__</span> <span class="o">=</span> <span class="n">mappingproxy</span><span class="p">({</span><span class="s1">&#39;__module__&#39;</span><span class="p">:</span> <span class="s1">&#39;sleap_io.io.slp_lazy&#39;</span><span class="p">,</span> <span class="s1">&#39;__firstlineno__&#39;</span><span class="p">:</span> <span class="mi">688</span><span class="p">,</span> <span class="s1">&#39;__doc__&#39;</span><span class="p">:</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;__init__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__init__</span> <span class="n">at</span> <span class="mh">0x7fade1fb1d00</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__len__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__len__</span> <span class="n">at</span> <span class="mh">0x7fade1fb2020</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__getitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__getitem__</span> <span class="n">at</span> <span class="mh">0x7fade23402c0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__iter__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__iter__</span> <span class="n">at</span> <span class="mh">0x7fade1f9b380</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__repr__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__repr__</span> <span class="n">at</span> <span class="mh">0x7fade1f9ba60</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;_mutation_error&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">_mutation_error</span> <span class="n">at</span> <span class="mh">0x7fade1f9bd80</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">append</span> <span class="n">at</span> <span class="mh">0x7fade1f9c540</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">extend</span> <span class="n">at</span> <span class="mh">0x7fade1f9c860</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;insert&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">insert</span> <span class="n">at</span> <span class="mh">0x7fade1f9ccc0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__setitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__setitem__</span> <span class="n">at</span> <span class="mh">0x7fade1f9d080</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__delitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__delitem__</span> <span class="n">at</span> <span class="mh">0x7fade1f9d620</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__static_attributes__&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,),</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__dict__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__weakref__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">})</span></code>
+            <code class="highlight language-python"><span class="vm">__dict__</span> <span class="o">=</span> <span class="n">mappingproxy</span><span class="p">({</span><span class="s1">&#39;__module__&#39;</span><span class="p">:</span> <span class="s1">&#39;sleap_io.io.slp_lazy&#39;</span><span class="p">,</span> <span class="s1">&#39;__firstlineno__&#39;</span><span class="p">:</span> <span class="mi">688</span><span class="p">,</span> <span class="s1">&#39;__doc__&#39;</span><span class="p">:</span> <span class="s1">&#39;List-like proxy that materializes LabeledFrame objects on access.</span><span class="se">\n\n</span><span class="s1">This provides backward compatibility for code that accesses</span><span class="se">\n</span><span class="s1">labels.labeled_frames directly. Frames are created on-demand when</span><span class="se">\n</span><span class="s1">accessed via indexing or iteration.</span><span class="se">\n\n</span><span class="s1">Mutations are blocked with helpful error messages suggesting to call</span><span class="se">\n</span><span class="s1">labels.materialize() first.</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;__init__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__init__</span> <span class="n">at</span> <span class="mh">0x7f43e04e71a0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__len__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__len__</span> <span class="n">at</span> <span class="mh">0x7f43e074c180</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__getitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__getitem__</span> <span class="n">at</span> <span class="mh">0x7f43e074e980</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__iter__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__iter__</span> <span class="n">at</span> <span class="mh">0x7f43e04cc860</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__repr__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__repr__</span> <span class="n">at</span> <span class="mh">0x7f43e04cce00</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;_mutation_error&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">_mutation_error</span> <span class="n">at</span> <span class="mh">0x7f43e04cd120</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;append&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">append</span> <span class="n">at</span> <span class="mh">0x7f43e04cd620</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;extend&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">extend</span> <span class="n">at</span> <span class="mh">0x7f43e04cd9e0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;insert&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="n">insert</span> <span class="n">at</span> <span class="mh">0x7f43e04ce020</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__setitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__setitem__</span> <span class="n">at</span> <span class="mh">0x7f43e04ce3e0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__delitem__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">function</span> <span class="n">LazyFrameList</span><span class="o">.</span><span class="fm">__delitem__</span> <span class="n">at</span> <span class="mh">0x7f43e04ceac0</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__static_attributes__&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;_store&#39;</span><span class="p">,),</span> <span class="s1">&#39;__dict__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__dict__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">,</span> <span class="s1">&#39;__weakref__&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">attribute</span> <span class="s1">&#39;__weakref__&#39;</span> <span class="n">of</span> <span class="s1">&#39;LazyFrameList&#39;</span> <span class="n">objects</span><span class="o">&gt;</span><span class="p">})</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -7874,7 +8054,13 @@ LabeledFrames for slicing.</p>
     
       <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
+        <script src="../../assets/_markdown_exec_pyodide.js"></script>
+      
         <script src="../../js/toc-code-style.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
     
   </body>

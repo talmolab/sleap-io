@@ -29,10 +29,6 @@
          <lastmod>2026-03-21</lastmod>
     </url>
     <url>
-         <loc>https://io.sleap.ai/dev/model/</loc>
-         <lastmod>2026-03-21</lastmod>
-    </url>
-    <url>
          <loc>https://io.sleap.ai/dev/rendering/</loc>
          <lastmod>2026-03-21</lastmod>
     </url>
@@ -54,6 +50,30 @@
     </url>
     <url>
          <loc>https://io.sleap.ai/dev/formats/slp/</loc>
+         <lastmod>2026-03-21</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/</loc>
+         <lastmod>2026-03-21</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/3d/</loc>
+         <lastmod>2026-03-21</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/labels/</loc>
+         <lastmod>2026-03-21</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/poses/</loc>
+         <lastmod>2026-03-21</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/regions/</loc>
+         <lastmod>2026-03-21</lastmod>
+    </url>
+    <url>
+         <loc>https://io.sleap.ai/dev/model/video/</loc>
          <lastmod>2026-03-21</lastmod>
     </url>
     <url>

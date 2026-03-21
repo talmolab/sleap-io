@@ -66,10 +66,10 @@ labels.save("labels.slp")
     ```
 
 !!! note "See also"
-    - [Model](model.md): Complete data model documentation
-    - [`Labels`](model.md#sleap_io.Labels): Labels container class
-    - [`Instance`](model.md#sleap_io.Instance): Instance class for manual annotations
-    - [`PredictedInstance`](model.md#sleap_io.PredictedInstance): Instance class for predictions
+    - [Model](model/index.md): Complete data model documentation
+    - [`Labels`](model/labels.md#sleap_io.Labels): Labels container class
+    - [`Instance`](model/poses.md#sleap_io.Instance): Instance class for manual annotations
+    - [`PredictedInstance`](model/poses.md#sleap_io.PredictedInstance): Instance class for predictions
 
 ### Convert labels to raw arrays
 
@@ -98,7 +98,7 @@ assert xy_score == 3  # x, y, and confidence score
     - With scores: `(100, 2, 3, 3)`
 
 !!! note "See also"
-    [`Labels.numpy`](model.md#sleap_io.Labels.numpy): Full documentation of array conversion options
+    [`Labels.numpy`](model/labels.md#sleap_io.Labels.numpy): Full documentation of array conversion options
 
 ## Format conversion
 
@@ -120,7 +120,7 @@ labels.save("predictions.nwb")
     sleap-io automatically detects the format from the file extension. Supported formats include `.slp`, `.nwb`, `.json` (COCO/Label Studio), `.labelstudio.json`, `.h5` (JABS), and `.mat` (LEAP). Use `format="coco"` to explicitly save as COCO format.
 
 !!! note "See also"
-    - [`Labels.save`](model.md#sleap_io.Labels.save): Save method with format options
+    - [`Labels.save`](model/labels.md#sleap_io.Labels.save): Save method with format options
     - [Formats](formats/): Complete list of supported formats
 
 ### Working with NWB files
@@ -305,7 +305,7 @@ labels_set.save("yolo_dataset/", format="ultralytics")
     The exported dataset will have the standard YOLO directory structure with train/val splits, images, and label files.
 
 !!! note "See also"
-    - [`LabelsSet`](model.md#sleap_io.LabelsSet): LabelsSet class documentation
+    - [`LabelsSet`](model/labels.md#sleap_io.LabelsSet): LabelsSet class documentation
     - [`load_labels_set`](formats/#sleap_io.load_labels_set): Loading function for label sets
 
 ### Export to COCO format
@@ -385,7 +385,7 @@ labels.save("labels.v002.slp")
     Use `open_videos=False` when loading to avoid errors from missing videos at the old paths.
 
 !!! note "See also"
-    [`Labels.replace_filenames`](model.md#sleap_io.Labels.replace_filenames): Additional path manipulation options
+    [`Labels.replace_filenames`](model/labels.md#sleap_io.Labels.replace_filenames): Additional path manipulation options
 
 ### Copy labels
 
@@ -423,7 +423,7 @@ labels_copy.suggestions = []
     ```
 
 !!! note "See also"
-    [`Labels.copy`](model.md#sleap_io.Labels.copy): Full documentation of copy options
+    [`Labels.copy`](model/labels.md#sleap_io.Labels.copy): Full documentation of copy options
 
 ### Replace skeleton
 
@@ -460,7 +460,7 @@ labels.save("labels_with_new_skeleton.slp")
     This is particularly useful when converting between different annotation tools or skeleton conventions.
 
 !!! note "See also"
-    [`Labels.replace_skeleton`](model.md#sleap_io.Labels.replace_skeleton): Additional skeleton manipulation options
+    [`Labels.replace_skeleton`](model/labels.md#sleap_io.Labels.replace_skeleton): Additional skeleton manipulation options
 
 ### Update from numpy
 
@@ -493,8 +493,8 @@ labels.save("predictions.filtered.slp")
     When updating from numpy, the array shape must match the original data structure exactly.
 
 !!! note "See also"
-    - [`Labels.numpy`](model.md#sleap_io.Labels.numpy): Array conversion options
-    - [`Labels.update_from_numpy`](model.md#sleap_io.Labels.update_from_numpy): Updating labels from arrays
+    - [`Labels.numpy`](model/labels.md#sleap_io.Labels.numpy): Array conversion options
+    - [`Labels.update_from_numpy`](model/labels.md#sleap_io.Labels.update_from_numpy): Updating labels from arrays
     - [`movement`](https://movement.neuroinformatics.dev/): Advanced pose processing library
 
 ## Exporting labels
@@ -521,7 +521,7 @@ labels.save("labels.v001.pkg.slp", embed="user+suggestions")
     - `"source"`: Embed source video if labels were loaded from embedded data
 
 !!! note "See also"
-    [`Labels.save`](model.md#sleap_io.Labels.save): Complete save options including embedding
+    [`Labels.save`](model/labels.md#sleap_io.Labels.save): Complete save options including embedding
 
 ### Advanced embedding options
 
@@ -591,7 +591,7 @@ clip = labels.trim("clip.slp", list(range(1_000, 2_000)), video=0)
     - Preserves all instance data and tracks
 
 !!! note "See also"
-    [`Labels.trim`](model.md#sleap_io.Labels.trim): Full trim method documentation
+    [`Labels.trim`](model/labels.md#sleap_io.Labels.trim): Full trim method documentation
 
 ### Make training/validation/test splits
 
@@ -628,8 +628,8 @@ test_labels = labels_set["test"]
     The `.pkg.slp` extension indicates a self-contained package with embedded images, making the splits portable and shareable.
 
 !!! note "See also"
-    - [`Labels.make_training_splits`](model.md#sleap_io.Labels.make_training_splits): Full documentation of splitting options
-    - [`LabelsSet`](model.md#sleap_io.LabelsSet): LabelsSet class for working with split datasets
+    - [`Labels.make_training_splits`](model/labels.md#sleap_io.Labels.make_training_splits): Full documentation of splitting options
+    - [`LabelsSet`](model/labels.md#sleap_io.LabelsSet): LabelsSet class for working with split datasets
 
 ## Video operations
 
@@ -668,7 +668,7 @@ last_frame = video[-1]
 
 !!! note "See also"
     - [`sio.load_video`](formats/#sleap_io.load_video): Video loading function
-    - [`Video`](model.md#sleap_io.Video): Video class documentation
+    - [`Video`](model/video.md#sleap_io.Video): Video class documentation
 
 ### Re-encode video
 
