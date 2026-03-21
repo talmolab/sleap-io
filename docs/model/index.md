@@ -6,11 +6,11 @@ sleap-io organizes pose tracking data into a hierarchy of containers and annotat
 
 The data model is split into five areas, each covered on its own page:
 
-**[Poses](poses.md)**: The skeleton template and pose instances. A `Skeleton` declares landmark types (`Node`), connections (`Edge`), and symmetries. `Instance` and `PredictedInstance` store per-animal coordinates and confidence scores. `Track` links the same animal across frames.
-
 **[Labels](labels.md)**: The dataset container. `Labels` holds labeled frames, videos, skeletons, and tracks. `LabeledFrame` groups annotations for a single video frame. `LabelsSet` manages multiple datasets (e.g., train/val/test splits).
 
 **[Video](video.md)**: Lazy array-like access to video data. `Video` wraps multiple backends (MP4, HDF5, image sequences) behind a unified interface.
+
+**[Poses](poses.md)**: The skeleton template and pose instances. A `Skeleton` declares landmark types (`Node`), connections (`Edge`), and symmetries. `Instance` and `PredictedInstance` store per-animal coordinates and confidence scores. `Track` links the same animal across frames.
 
 **[3D](3d.md)**: Multi-camera support. `Camera` stores calibration parameters, `RecordingSession` links cameras to videos, and `FrameGroup`/`InstanceGroup` pair 2D views for 3D reconstruction.
 
