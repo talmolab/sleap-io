@@ -1,6 +1,6 @@
-# Poses & skeletons
+# Poses
 
-This page covers how sleap-io represents pose data -- from defining a body plan
+This page covers how sleap-io represents pose data:from defining a body plan
 with `Skeleton` to storing actual landmark positions with `Instance`. Together,
 these two classes form the core of the pose tracking data model: the skeleton
 says *what* to label, and instances record *where* each landmark is.
@@ -11,10 +11,10 @@ says *what* to label, and instances record *where* each landmark is.
 
 The pose data model is built around four key types:
 
-- **`Skeleton`** -- the **template**: defines what landmarks exist, how they connect, and which are symmetric.
-- **`Instance`** -- the **data**: stores actual (x, y) coordinates for one animal in one frame.
-- **`PredictedInstance`** -- like `Instance` but includes per-point and instance-level confidence scores from a model.
-- **`Track`** -- the **identity**: links the same animal across frames.
+- **`Skeleton`**:the **template**: defines what landmarks exist, how they connect, and which are symmetric.
+- **`Instance`**:the **data**: stores actual (x, y) coordinates for one animal in one frame.
+- **`PredictedInstance`**:like `Instance` but includes per-point and instance-level confidence scores from a model.
+- **`Track`**:the **identity**: links the same animal across frames.
 
 A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, and optionally a `Track` to indicate which animal it belongs to.
 
@@ -23,7 +23,7 @@ A `Skeleton` is shared across all instances in a dataset. Each `Instance` refere
 ## Skeleton
 
 A `Skeleton` is a **template** that defines what landmarks (body parts) exist
-and how they connect. Think of it as a form to fill in -- the skeleton says
+and how they connect. Think of it as a form to fill in:the skeleton says
 "head, thorax, abdomen" while instances fill in the actual (x, y) coordinates.
 
 Skeletons are composed of three building blocks:
@@ -53,7 +53,7 @@ Skeleton(nodes=["head", "thorax", "abdomen"], edges=[(0, 1), (1, 2)])
 
 ```
 
-Nodes and edges can be specified as strings or indices -- they are converted to
+Nodes and edges can be specified as strings or indices:they are converted to
 `Node` and `Edge` objects automatically.
 
 ### Accessing nodes
@@ -117,7 +117,7 @@ the `Skeleton` constructor and convenience methods handle them for you.
 
 ## Instance
 
-An `Instance` is one animal's pose in one frame -- the "filled-in form." It
+An `Instance` is one animal's pose in one frame:the "filled-in form." It
 stores (x, y) coordinates for each landmark defined by a `Skeleton`.
 
 ### From a numpy array
@@ -203,7 +203,7 @@ True
 
 ## Predicted instances
 
-`PredictedInstance` extends `Instance` with confidence scores -- both a
+`PredictedInstance` extends `Instance` with confidence scores:both a
 per-point score for each landmark and an overall instance-level score.
 
 When creating from a numpy array, the third column is interpreted as the
@@ -257,14 +257,14 @@ as belonging to the same individual.
 
 !!! note
     `Track` objects are compared by **identity** (not by name). Two different
-    `Track("mouse")` objects are considered distinct -- this allows multiple
+    `Track("mouse")` objects are considered distinct:this allows multiple
     tracks with the same display name if needed.
 
 ---
 
 ## Points array
 
-Under the hood, an instance stores its landmark data in a `PointsArray` -- a
+Under the hood, an instance stores its landmark data in a `PointsArray`:a
 structured numpy array with named fields for coordinates, visibility, and
 metadata.
 

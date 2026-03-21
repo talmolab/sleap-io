@@ -1,4 +1,4 @@
-# Regions & segmentation
+# Regions
 
 Beyond keypoint poses, sleap-io supports spatial annotation types: bounding
 boxes, regions of interest (vector polygons), and segmentation masks (raster).
@@ -8,12 +8,12 @@ stored on the `Labels` object via `labels.bboxes`, `labels.rois`, and
 
 sleap-io provides three spatial annotation types with different trade-offs:
 
-- **`BoundingBox`** -- axis-aligned or rotated rectangles, stored as center +
+- **`BoundingBox`**:axis-aligned or rotated rectangles, stored as center +
   dimensions. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
   distinguishing human annotations from model outputs.
-- **`ROI`** -- arbitrary vector geometry via Shapely (polygons, multi-polygons,
+- **`ROI`**:arbitrary vector geometry via Shapely (polygons, multi-polygons,
   etc.). Can be static (whole video) or per-frame.
-- **`SegmentationMask`** -- per-pixel binary masks stored as run-length encoding
+- **`SegmentationMask`**:per-pixel binary masks stored as run-length encoding
   for compactness.
 
 All three can be associated with a video, frame, track, and instance. They are
@@ -147,7 +147,7 @@ Every bounding box can carry optional metadata:
 
 An `ROI` represents a vector geometry annotation using
 [Shapely](https://shapely.readthedocs.io/) geometries. ROIs are suitable for
-defining arenas, exclusion zones, or arbitrary spatial regions -- anything that
+defining arenas, exclusion zones, or arbitrary spatial regions:anything that
 is naturally described by a polygon or set of polygons rather than a simple
 rectangle.
 
@@ -455,8 +455,8 @@ classDiagram
 
 !!! note "See also"
 
-    - **[Labels & Frames](labels.md)** -- Accessing bounding boxes, ROIs, and masks from a `Labels` dataset via `labels.bboxes`, `labels.rois`, and `labels.masks`, including filtered queries with `get_bboxes()`, `get_rois()`, and `get_masks()`.
-    - **[Rendering](../rendering.md)** -- Visualizing segmentation overlays and bounding boxes on video frames.
+    - **[Labels & Frames](labels.md)**: Accessing bounding boxes, ROIs, and masks from a `Labels` dataset via `labels.bboxes`, `labels.rois`, and `labels.masks`, including filtered queries with `get_bboxes()`, `get_rois()`, and `get_masks()`.
+    - **[Rendering](../rendering.md)**: Visualizing segmentation overlays and bounding boxes on video frames.
 
 ---
 

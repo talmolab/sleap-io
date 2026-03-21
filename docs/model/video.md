@@ -3,7 +3,7 @@
 The [`Video`][sleap_io.Video] class provides a lazy, array-like interface to video data. It wraps various backends (MP4, AVI, HDF5, image sequences) behind a unified API, enabling frame access with NumPy-style indexing regardless of the underlying storage format.
 
 - **Unified interface**: `Video` wraps different backends (MP4/AVI via ffmpeg, HDF5, image sequences) behind a single numpy-like indexing API, with the backend auto-detected from the file extension.
-- **Lazy access**: Frames are only read from disk when you index into the video -- creating a `Video` object does not load any pixel data.
+- **Lazy access**: Frames are only read from disk when you index into the video:creating a `Video` object does not load any pixel data.
 - **Label integration**: Each [`LabeledFrame`][sleap_io.LabeledFrame] references a `Video` and a frame index, linking pose annotations back to the underlying footage.
 
 ## Creating videos
