@@ -195,49 +195,44 @@ new_video = video.save("output.mp4", fps=60)         # Override output FPS
 
 ``` mermaid
 classDiagram
-    class Video {
+    class Video:::video {
         +str filename
         +VideoBackend backend
-        +dict backend_metadata
-        +Video source_video
         +shape
         +fps
-        +grayscale
-        +is_open
         +exists()
         +open()
         +close()
-        +save()
     }
 
-    class Labels {
-        +List~Video~ videos
-        +List~LabeledFrame~ labeled_frames
+    class Labels:::labels {
+        +videos
     }
 
-    class LabeledFrame {
+    class LabeledFrame:::labels {
         +Video video
         +int frame_idx
     }
 
-    class VideoBackend {
-        <<abstract>>
+    class VideoBackend:::backend {
         +shape
         +get_frame()
-        +get_frames()
     }
 
-    class MediaVideo
-    class HDF5Video
-    class ImageVideo
+    class MediaVideo:::backend
+    class HDF5Video:::backend
+    class ImageVideo:::backend
 
-    Labels "1" *-- "0..*" Video : contains
-    LabeledFrame "0..*" --> "1" Video : references
-    Video "1" --> "0..1" VideoBackend : backend
-    Video "0..1" --> "0..1" Video : source_video
+    Labels "1" *-- "0..*" Video
+    LabeledFrame --> Video : references
+    Video --> VideoBackend : backend
     VideoBackend <|-- MediaVideo
     VideoBackend <|-- HDF5Video
     VideoBackend <|-- ImageVideo
+
+    classDef video fill:#ef6c00,stroke:#e65100,color:#fff
+    classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
+    classDef backend fill:#546e7a,stroke:#37474f,color:#fff
 ```
 
 !!! note "See also"
