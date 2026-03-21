@@ -6,6 +6,20 @@ These can be associated with videos, frames, tracks, and instances, and are
 stored on the `Labels` object via `labels.bboxes`, `labels.rois`, and
 `labels.masks`.
 
+sleap-io provides three spatial annotation types with different trade-offs:
+
+- **`BoundingBox`** -- axis-aligned or rotated rectangles, stored as center +
+  dimensions. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
+  distinguishing human annotations from model outputs.
+- **`ROI`** -- arbitrary vector geometry via Shapely (polygons, multi-polygons,
+  etc.). Can be static (whole video) or per-frame.
+- **`SegmentationMask`** -- per-pixel binary masks stored as run-length encoding
+  for compactness.
+
+All three can be associated with a video, frame, track, and instance. They are
+stored on `Labels` via `labels.bboxes`, `labels.rois`, and `labels.masks`, and
+can be converted between each other (bbox -> ROI -> mask).
+
 ---
 
 ## Bounding boxes
@@ -16,7 +30,7 @@ primary annotation type for object detection workflows.
 
 ### From center and dimensions
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> video = sio.Video("test.mp4", open_backend=False)
@@ -41,7 +55,7 @@ array([[ 75., 160.],
 The `from_xyxy` factory method creates a bounding box from `(x1, y1, x2, y2)`
 corner coordinates:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> bbox2 = sio.BoundingBox.from_xyxy(75, 160, 125, 240, video=video, frame_idx=0)
@@ -55,7 +69,7 @@ corner coordinates:
 There is also `from_xywh` for `(x, y, width, height)` format where `(x, y)` is
 the top-left corner:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> bbox3 = sio.BoundingBox.from_xywh(75, 160, 50, 80, video=video, frame_idx=0)
@@ -71,7 +85,7 @@ the top-left corner:
 `UserBoundingBox` and `PredictedBoundingBox` distinguish human annotations from
 model predictions. `PredictedBoundingBox` adds a `score` field for confidence:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> user_bbox = sio.UserBoundingBox(
@@ -97,7 +111,7 @@ Set `angle` (in radians) to create an oriented bounding box. Rotated boxes
 support `corners` and `bounds` but not `xyxy` or `xywh`, since those are only
 meaningful for axis-aligned rectangles:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> rotated = sio.BoundingBox(
@@ -145,7 +159,7 @@ applies only to that specific frame.
 
 ### From corner coordinates
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> roi = sio.ROI.from_xyxy(10, 20, 100, 200, video=video)
@@ -160,7 +174,7 @@ True
 
 ### From polygon coordinates
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> roi_poly = sio.ROI.from_polygon(
@@ -176,7 +190,7 @@ True
 
 ### From a bounding box (xywh)
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> roi_bbox = sio.ROI.from_bbox(10, 20, 90, 180, video=video)
@@ -191,7 +205,7 @@ True
 
 Any `BoundingBox` can be converted to an `ROI` with `.to_roi()`:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> bbox = sio.BoundingBox(
@@ -208,7 +222,7 @@ Any `BoundingBox` can be converted to an `ROI` with `.to_roi()`:
 
 For disjoint regions, use `from_multi_polygon`:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> roi_multi = sio.ROI.from_multi_polygon(
@@ -225,7 +239,7 @@ For disjoint regions, use `from_multi_polygon`:
 
 Multi-geometry ROIs can be split into individual ROIs with `.explode()`:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> roi_multi = sio.ROI.from_multi_polygon(
@@ -248,7 +262,7 @@ Multi-geometry ROIs can be split into individual ROIs with `.explode()`:
 ROIs implement the `__geo_interface__` protocol, making them compatible with
 GeoJSON-aware tools:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> roi = sio.ROI.from_xyxy(0, 0, 10, 10)
 >>> roi.__geo_interface__["type"]
@@ -267,7 +281,7 @@ fast conversion to and from numpy arrays.
 
 ### From a numpy array
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
@@ -289,7 +303,7 @@ fast conversion to and from numpy arrays.
 
 The `.data` property decodes the RLE back to a full boolean array:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> mask_data = np.zeros((100, 100), dtype=bool)
@@ -310,7 +324,7 @@ dtype('bool')
 The `.bbox` property returns the tightest axis-aligned bounding box containing
 all foreground pixels as `(x, y, width, height)`:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> mask_data = np.zeros((100, 100), dtype=bool)
@@ -338,7 +352,7 @@ geometrically meaningful:
 All conversions preserve metadata (video, frame_idx, track, instance, name,
 category, source) when applicable.
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> # BoundingBox -> ROI -> SegmentationMask -> polygon ROI

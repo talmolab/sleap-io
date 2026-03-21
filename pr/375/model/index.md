@@ -1,26 +1,31 @@
 # Data model
 
-Pose tracking data captures the spatial positions of anatomical landmarks -- such as joints, body parts, or other points of interest -- on animals or objects as they move through video frames. At its simplest, a single pose is a set of 2D coordinates (one per landmark), but real-world datasets quickly become richer: multiple animals appear in the same frame, each with its own identity; skeletons define which landmarks exist and how they connect; and predictions carry confidence scores from machine learning models.
+sleap-io organizes pose tracking data into a hierarchy of containers and annotations. The core flow is: a **`Skeleton`** defines the body plan (what landmarks exist), an **`Instance`** records one animal's pose (where each landmark is), a **`LabeledFrame`** groups instances at a single video frame, and **`Labels`** ties everything together into a dataset that can be saved, loaded, and manipulated.
 
-sleap-io organizes all of this into a clean hierarchy. A **`Skeleton`** defines the *body plan*: the landmark types (`Node`s), the connections between them (`Edge`s), and any left/right symmetries. An **`Instance`** captures one animal's pose in a single frame by mapping each node to a 2D coordinate. A **`LabeledFrame`** groups every instance that appears at a particular frame index of a particular video. Finally, **`Labels`** is the top-level dataset container that ties together labeled frames, videos, skeletons, and tracks into one coherent object that can be saved, loaded, and manipulated.
+## Overview
 
-Beyond keypoints, sleap-io supports several complementary annotation types. **`BoundingBox`** stores axis-aligned or oriented rectangles for object detection workflows. **`ROI`** holds arbitrary vector geometry (polygons, points, and other Shapely shapes) for defining arenas, exclusion zones, or spatial regions of interest. **`SegmentationMask`** stores per-pixel raster annotations in a compact run-length encoded format. All three can be associated with specific videos, frames, tracks, and instances.
+The data model is split into five areas, each covered on its own page:
 
-For multi-camera experiments, the data model extends into three dimensions. A **`Camera`** stores intrinsic and extrinsic calibration parameters, a **`CameraGroup`** collects cameras that were used together, and a **`RecordingSession`** links each camera to its video. Within a session, **`FrameGroup`** and **`InstanceGroup`** pair up 2D views of the same frame and the same animal across cameras, enabling 3D triangulation and multi-view analysis.
+**[Poses](poses.md)** -- The skeleton template and pose instances. A `Skeleton` declares landmark types (`Node`), connections (`Edge`), and symmetries. `Instance` and `PredictedInstance` store per-animal coordinates and confidence scores. `Track` links the same animal across frames.
+
+**[Labels](labels.md)** -- The dataset container. `Labels` holds labeled frames, videos, skeletons, and tracks. `LabeledFrame` groups annotations for a single video frame. `LabelsSet` manages multiple datasets (e.g., train/val/test splits).
+
+**[Video](video.md)** -- Lazy array-like access to video data. `Video` wraps multiple backends (MP4, HDF5, image sequences) behind a unified interface.
+
+**[3D](3d.md)** -- Multi-camera support. `Camera` stores calibration parameters, `RecordingSession` links cameras to videos, and `FrameGroup`/`InstanceGroup` pair 2D views for 3D reconstruction.
+
+**[Regions](regions.md)** -- Spatial annotations beyond keypoints. `BoundingBox` for detection, `ROI` for vector polygons, and `SegmentationMask` for pixel-level labels.
 
 ## Class diagram
-
-The following diagram shows every class in the data model and the key relationships between them. Classes are color-coded by documentation page.
 
 ``` mermaid
 classDiagram
     direction TB
 
     class Skeleton {
-        +List~Node~ nodes
-        +List~Edge~ edges
-        +List~Symmetry~ symmetries
-        +str name
+        +nodes
+        +edges
+        +symmetries
     }
     class Node {
         +str name
@@ -42,28 +47,25 @@ classDiagram
     }
     class PredictedInstance {
         +float score
-        +float tracking_score
     }
 
     class Labels {
-        +List~LabeledFrame~ labeled_frames
-        +List~Video~ videos
-        +List~Skeleton~ skeletons
-        +List~Track~ tracks
-        +List~SuggestionFrame~ suggestions
-        +List~RecordingSession~ sessions
+        +labeled_frames
+        +videos
+        +skeletons
+        +tracks
     }
     class LabeledFrame {
         +Video video
         +int frame_idx
-        +List~Instance~ instances
+        +instances
     }
     class SuggestionFrame {
         +Video video
         +int frame_idx
     }
     class LabelsSet {
-        +Dict~str, Labels~ labels
+        +labels
     }
 
     class Video {
@@ -74,85 +76,69 @@ classDiagram
     class Camera {
         +ndarray matrix
         +ndarray dist
-        +ndarray rvec
-        +ndarray tvec
         +str name
     }
     class CameraGroup {
-        +List~Camera~ cameras
+        +cameras
     }
     class RecordingSession {
         +CameraGroup camera_group
-        +Dict~int, FrameGroup~ frame_groups
+        +frame_groups
     }
     class FrameGroup {
         +int frame_idx
-        +List~InstanceGroup~ instance_groups
+        +instance_groups
     }
     class InstanceGroup {
-        +Dict~Camera, Instance~ instance_by_camera
+        +instance_by_camera
         +ndarray points
     }
 
     class ROI {
-        +BaseGeometry geometry
+        +geometry
         +str name
-        +Video video
-        +int frame_idx
     }
     class SegmentationMask {
-        +ndarray rle_counts
+        +rle_counts
         +int height
         +int width
-        +Video video
     }
     class BoundingBox {
         +float x_center
         +float y_center
         +float width
         +float height
-        +float angle
     }
     class UserBoundingBox
     class PredictedBoundingBox {
         +float score
     }
 
-    %% Poses & Skeletons relationships
-    Skeleton "1" *-- "1..*" Node : contains
-    Skeleton "1" *-- "0..*" Edge : contains
-    Skeleton "1" *-- "0..*" Symmetry : contains
-    Edge "1" --> "2" Node : connects
-    Symmetry "1" --> "2" Node : pairs
-    Instance "0..*" --> "1" Skeleton : uses
-    Instance "0..*" --> "0..1" Track : belongs to
-    Instance <|-- PredictedInstance : inherits
+    Skeleton "1" *-- "1..*" Node
+    Skeleton "1" *-- "0..*" Edge
+    Skeleton "1" *-- "0..*" Symmetry
+    Instance --> Skeleton : uses
+    Instance --> Track
+    Instance <|-- PredictedInstance
 
-    %% Labels & Frames relationships
-    Labels "1" *-- "0..*" LabeledFrame : contains
-    Labels "1" *-- "0..*" Video : contains
-    Labels "1" *-- "0..*" Skeleton : contains
-    Labels "1" *-- "0..*" Track : contains
-    Labels "1" *-- "0..*" SuggestionFrame : contains
-    Labels "1" *-- "0..*" RecordingSession : contains
-    LabeledFrame "1" *-- "0..*" Instance : contains
-    LabeledFrame "0..*" --> "1" Video : references
-    SuggestionFrame "0..*" --> "1" Video : references
-    LabelsSet "1" *-- "1..*" Labels : contains
+    Labels "1" *-- "0..*" LabeledFrame
+    Labels --> Video
+    Labels --> Skeleton
+    Labels --> Track
+    LabeledFrame "1" *-- "0..*" Instance
+    LabeledFrame --> Video
+    LabelsSet "1" *-- "1..*" Labels
 
-    %% 3D & Multi-View relationships
-    CameraGroup "1" *-- "0..*" Camera : contains
-    RecordingSession "1" --> "1" CameraGroup : uses
-    RecordingSession "1" *-- "0..*" FrameGroup : contains
-    FrameGroup "1" *-- "0..*" InstanceGroup : contains
-    InstanceGroup "1" --> "0..*" Instance : links
-    InstanceGroup "1" --> "0..*" Camera : indexed by
+    CameraGroup "1" *-- "0..*" Camera
+    RecordingSession --> CameraGroup
+    RecordingSession "1" *-- "0..*" FrameGroup
+    FrameGroup "1" *-- "0..*" InstanceGroup
+    InstanceGroup --> Instance
+    InstanceGroup --> Camera
 
-    %% Regions & Segmentation relationships
-    BoundingBox <|-- UserBoundingBox : inherits
-    BoundingBox <|-- PredictedBoundingBox : inherits
+    BoundingBox <|-- UserBoundingBox
+    BoundingBox <|-- PredictedBoundingBox
 
-    %% Color coding by documentation page
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
     classDef video fill:#ef6c00,stroke:#e65100,color:#fff
@@ -166,47 +152,33 @@ classDiagram
     class ROI,SegmentationMask,BoundingBox,UserBoundingBox,PredictedBoundingBox regions
 ```
 
-**Legend:** [Poses & Skeletons]{style="color:#0097a7;font-weight:bold"} | [Labels & Frames]{style="color:#43a047;font-weight:bold"} | [Video]{style="color:#ef6c00;font-weight:bold"} | [3D & Multi-View]{style="color:#7b1fa2;font-weight:bold"} | [Regions & Segmentation]{style="color:#d32f2f;font-weight:bold"}
-
 ## Quick reference
 
 | Class | Page | Description |
 |-------|------|-------------|
-| [`Skeleton`](poses.md) | [Poses & Skeletons](poses.md) | Template defining landmark types and their connections |
-| [`Node`](poses.md) | [Poses & Skeletons](poses.md) | A single landmark type within a skeleton (e.g., "left eye") |
-| [`Edge`](poses.md) | [Poses & Skeletons](poses.md) | Directed connection between two nodes |
-| [`Symmetry`](poses.md) | [Poses & Skeletons](poses.md) | Left/right pairing between two nodes |
-| [`Track`](poses.md) | [Poses & Skeletons](poses.md) | Identity that links instances of the same animal across frames |
-| [`Instance`](poses.md) | [Poses & Skeletons](poses.md) | One animal's pose in a single frame (user-annotated) |
-| [`PredictedInstance`](poses.md) | [Poses & Skeletons](poses.md) | Model-predicted pose with a confidence score |
-| [`Labels`](labels.md) | [Labels & Frames](labels.md) | Top-level dataset container for all pose data |
-| [`LabeledFrame`](labels.md) | [Labels & Frames](labels.md) | All instances at a specific frame of a video |
-| [`SuggestionFrame`](labels.md) | [Labels & Frames](labels.md) | Frame suggested for labeling during active learning |
-| [`LabelsSet`](labels.md) | [Labels & Frames](labels.md) | Named collection of `Labels` (e.g., train/val/test splits) |
-| [`Video`](video.md) | [Video](video.md) | A video file with lazy backend loading |
-| [`Camera`](3d.md) | [3D & Multi-View](3d.md) | Calibrated camera with intrinsic and extrinsic parameters |
-| [`CameraGroup`](3d.md) | [3D & Multi-View](3d.md) | Set of cameras used together in a multi-view rig |
-| [`RecordingSession`](3d.md) | [3D & Multi-View](3d.md) | Multi-camera recording linking cameras to videos |
-| [`FrameGroup`](3d.md) | [3D & Multi-View](3d.md) | Matched labeled frames across views at one time point |
-| [`InstanceGroup`](3d.md) | [3D & Multi-View](3d.md) | Same animal matched across camera views, with optional 3D points |
-| [`ROI`](regions.md) | [Regions & Segmentation](regions.md) | Vector geometry annotation (polygon, point, etc.) |
-| [`SegmentationMask`](regions.md) | [Regions & Segmentation](regions.md) | Run-length encoded per-pixel mask annotation |
-| [`BoundingBox`](regions.md) | [Regions & Segmentation](regions.md) | Axis-aligned or oriented bounding box |
-| [`UserBoundingBox`](regions.md) | [Regions & Segmentation](regions.md) | Human-annotated bounding box |
-| [`PredictedBoundingBox`](regions.md) | [Regions & Segmentation](regions.md) | Model-predicted bounding box with confidence score |
-
-## Where to go next
-
-**[Poses & Skeletons](poses.md)** -- Start here if you are working with keypoint data. Covers skeleton construction, node/edge management, instances, tracks, and the relationship between user annotations and model predictions.
-
-**[Labels & Frames](labels.md)** -- Read this to understand how pose data is organized into datasets. Covers the `Labels` container, frame-level operations, searching and filtering, suggestions, and the `LabelsSet` split manager.
-
-**[Video](video.md)** -- Explains how sleap-io handles video I/O, including lazy backend loading, supported formats, and frame access patterns.
-
-**[3D & Multi-View](3d.md)** -- For multi-camera setups. Covers camera calibration, recording sessions, and how 2D poses are grouped across views for 3D reconstruction.
-
-**[Regions & Segmentation](regions.md)** -- Covers non-keypoint annotation types: bounding boxes for detection, ROIs for spatial regions, and segmentation masks for pixel-level labels.
+| [`Skeleton`](poses.md) | [Poses](poses.md) | Template defining landmark types and their connections |
+| [`Node`](poses.md) | [Poses](poses.md) | A single landmark type within a skeleton |
+| [`Edge`](poses.md) | [Poses](poses.md) | Directed connection between two nodes |
+| [`Symmetry`](poses.md) | [Poses](poses.md) | Left/right pairing between two nodes |
+| [`Instance`](poses.md) | [Poses](poses.md) | One animal's pose in a single frame |
+| [`PredictedInstance`](poses.md) | [Poses](poses.md) | Model-predicted pose with confidence scores |
+| [`Track`](poses.md) | [Poses](poses.md) | Identity linking instances of the same animal across frames |
+| [`Labels`](labels.md) | [Labels](labels.md) | Top-level dataset container |
+| [`LabeledFrame`](labels.md) | [Labels](labels.md) | All instances at a specific frame of a video |
+| [`SuggestionFrame`](labels.md) | [Labels](labels.md) | Frame suggested for labeling |
+| [`LabelsSet`](labels.md) | [Labels](labels.md) | Named collection of `Labels` (e.g., train/val/test) |
+| [`Video`](video.md) | [Video](video.md) | Video file with lazy backend loading |
+| [`Camera`](3d.md) | [3D](3d.md) | Calibrated camera with intrinsic/extrinsic parameters |
+| [`CameraGroup`](3d.md) | [3D](3d.md) | Set of cameras used together |
+| [`RecordingSession`](3d.md) | [3D](3d.md) | Multi-camera recording linking cameras to videos |
+| [`FrameGroup`](3d.md) | [3D](3d.md) | Matched labeled frames across views at one time point |
+| [`InstanceGroup`](3d.md) | [3D](3d.md) | Same animal matched across cameras, with optional 3D points |
+| [`ROI`](regions.md) | [Regions](regions.md) | Vector geometry annotation (polygon, etc.) |
+| [`SegmentationMask`](regions.md) | [Regions](regions.md) | Run-length encoded pixel mask |
+| [`BoundingBox`](regions.md) | [Regions](regions.md) | Axis-aligned or rotated bounding box |
+| [`UserBoundingBox`](regions.md) | [Regions](regions.md) | Human-annotated bounding box |
+| [`PredictedBoundingBox`](regions.md) | [Regions](regions.md) | Model-predicted bounding box with score |
 
 !!! tip "Hands-on examples"
 
-    For practical code recipes that put these classes to work -- loading data, modifying skeletons, exporting to different formats, and more -- see the **[Examples](../examples.md)** guide.
+    For practical code recipes -- loading data, modifying skeletons, exporting formats, and more -- see the **[Examples](../examples.md)** guide.

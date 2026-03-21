@@ -14,7 +14,7 @@
         <link rel="prev" href="../transforms/">
       
       
-        <link rel="next" href="poses/">
+        <link rel="next" href="labels/">
       
       
         
@@ -50,10 +50,6 @@
         <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
     
-    
-      <link rel="stylesheet" href="../assets/_markdown_exec_pyodide.css">
-    
-      <link rel="stylesheet" href="../assets/_markdown_exec_ansi.css">
     
       <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
@@ -689,34 +685,6 @@
   
   
     <li class="md-nav__item">
-      <a href="poses/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Poses & Skeletons
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="labels/" class="md-nav__link">
         
   
@@ -724,7 +692,7 @@
   <span class="md-ellipsis">
     
   
-    Labels & Frames
+    Labels
   
 
     
@@ -773,6 +741,34 @@
   
   
     <li class="md-nav__item">
+      <a href="poses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Poses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="3d/" class="md-nav__link">
         
   
@@ -780,7 +776,7 @@
   <span class="md-ellipsis">
     
   
-    3D & Multi-View
+    3D
   
 
     
@@ -808,7 +804,7 @@
   <span class="md-ellipsis">
     
   
-    Regions & Segmentation
+    Regions
   
 
     
@@ -2769,6 +2765,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#class-diagram" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2784,17 +2791,6 @@
     <span class="md-ellipsis">
       
         Quick reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-to-go-next" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where to go next
       
     </span>
   </a>
@@ -2823,20 +2819,22 @@
 
 <div class="md-source-file"><a href="index.md" title="View markdown source" class="md-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m4 18H6V4h7v5h5v11M13 9V3.5L18.5 9H13Z"/></svg></a></div>
 <h1 id="data-model">Data model<a class="headerlink" href="#data-model" title="Permanent link">&para;</a></h1>
-<p>Pose tracking data captures the spatial positions of anatomical landmarks -- such as joints, body parts, or other points of interest -- on animals or objects as they move through video frames. At its simplest, a single pose is a set of 2D coordinates (one per landmark), but real-world datasets quickly become richer: multiple animals appear in the same frame, each with its own identity; skeletons define which landmarks exist and how they connect; and predictions carry confidence scores from machine learning models.</p>
-<p>sleap-io organizes all of this into a clean hierarchy. A <strong><code>Skeleton</code></strong> defines the <em>body plan</em>: the landmark types (<code>Node</code>s), the connections between them (<code>Edge</code>s), and any left/right symmetries. An <strong><code>Instance</code></strong> captures one animal's pose in a single frame by mapping each node to a 2D coordinate. A <strong><code>LabeledFrame</code></strong> groups every instance that appears at a particular frame index of a particular video. Finally, <strong><code>Labels</code></strong> is the top-level dataset container that ties together labeled frames, videos, skeletons, and tracks into one coherent object that can be saved, loaded, and manipulated.</p>
-<p>Beyond keypoints, sleap-io supports several complementary annotation types. <strong><code>BoundingBox</code></strong> stores axis-aligned or oriented rectangles for object detection workflows. <strong><code>ROI</code></strong> holds arbitrary vector geometry (polygons, points, and other Shapely shapes) for defining arenas, exclusion zones, or spatial regions of interest. <strong><code>SegmentationMask</code></strong> stores per-pixel raster annotations in a compact run-length encoded format. All three can be associated with specific videos, frames, tracks, and instances.</p>
-<p>For multi-camera experiments, the data model extends into three dimensions. A <strong><code>Camera</code></strong> stores intrinsic and extrinsic calibration parameters, a <strong><code>CameraGroup</code></strong> collects cameras that were used together, and a <strong><code>RecordingSession</code></strong> links each camera to its video. Within a session, <strong><code>FrameGroup</code></strong> and <strong><code>InstanceGroup</code></strong> pair up 2D views of the same frame and the same animal across cameras, enabling 3D triangulation and multi-view analysis.</p>
+<p>sleap-io organizes pose tracking data into a hierarchy of containers and annotations. The core flow is: a <strong><code>Skeleton</code></strong> defines the body plan (what landmarks exist), an <strong><code>Instance</code></strong> records one animal's pose (where each landmark is), a <strong><code>LabeledFrame</code></strong> groups instances at a single video frame, and <strong><code>Labels</code></strong> ties everything together into a dataset that can be saved, loaded, and manipulated.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>The data model is split into five areas, each covered on its own page:</p>
+<p><strong><a href="poses/">Poses</a></strong> -- The skeleton template and pose instances. A <code>Skeleton</code> declares landmark types (<code>Node</code>), connections (<code>Edge</code>), and symmetries. <code>Instance</code> and <code>PredictedInstance</code> store per-animal coordinates and confidence scores. <code>Track</code> links the same animal across frames.</p>
+<p><strong><a href="labels/">Labels</a></strong> -- The dataset container. <code>Labels</code> holds labeled frames, videos, skeletons, and tracks. <code>LabeledFrame</code> groups annotations for a single video frame. <code>LabelsSet</code> manages multiple datasets (e.g., train/val/test splits).</p>
+<p><strong><a href="video/">Video</a></strong> -- Lazy array-like access to video data. <code>Video</code> wraps multiple backends (MP4, HDF5, image sequences) behind a unified interface.</p>
+<p><strong><a href="3d/">3D</a></strong> -- Multi-camera support. <code>Camera</code> stores calibration parameters, <code>RecordingSession</code> links cameras to videos, and <code>FrameGroup</code>/<code>InstanceGroup</code> pair 2D views for 3D reconstruction.</p>
+<p><strong><a href="regions/">Regions</a></strong> -- Spatial annotations beyond keypoints. <code>BoundingBox</code> for detection, <code>ROI</code> for vector polygons, and <code>SegmentationMask</code> for pixel-level labels.</p>
 <h2 id="class-diagram">Class diagram<a class="headerlink" href="#class-diagram" title="Permanent link">&para;</a></h2>
-<p>The following diagram shows every class in the data model and the key relationships between them. Classes are color-coded by documentation page.</p>
 <pre class="mermaid"><code>classDiagram
     direction TB
 
     class Skeleton {
-        +List~Node~ nodes
-        +List~Edge~ edges
-        +List~Symmetry~ symmetries
-        +str name
+        +nodes
+        +edges
+        +symmetries
     }
     class Node {
         +str name
@@ -2858,28 +2856,25 @@
     }
     class PredictedInstance {
         +float score
-        +float tracking_score
     }
 
     class Labels {
-        +List~LabeledFrame~ labeled_frames
-        +List~Video~ videos
-        +List~Skeleton~ skeletons
-        +List~Track~ tracks
-        +List~SuggestionFrame~ suggestions
-        +List~RecordingSession~ sessions
+        +labeled_frames
+        +videos
+        +skeletons
+        +tracks
     }
     class LabeledFrame {
         +Video video
         +int frame_idx
-        +List~Instance~ instances
+        +instances
     }
     class SuggestionFrame {
         +Video video
         +int frame_idx
     }
     class LabelsSet {
-        +Dict~str, Labels~ labels
+        +labels
     }
 
     class Video {
@@ -2890,85 +2885,69 @@
     class Camera {
         +ndarray matrix
         +ndarray dist
-        +ndarray rvec
-        +ndarray tvec
         +str name
     }
     class CameraGroup {
-        +List~Camera~ cameras
+        +cameras
     }
     class RecordingSession {
         +CameraGroup camera_group
-        +Dict~int, FrameGroup~ frame_groups
+        +frame_groups
     }
     class FrameGroup {
         +int frame_idx
-        +List~InstanceGroup~ instance_groups
+        +instance_groups
     }
     class InstanceGroup {
-        +Dict~Camera, Instance~ instance_by_camera
+        +instance_by_camera
         +ndarray points
     }
 
     class ROI {
-        +BaseGeometry geometry
+        +geometry
         +str name
-        +Video video
-        +int frame_idx
     }
     class SegmentationMask {
-        +ndarray rle_counts
+        +rle_counts
         +int height
         +int width
-        +Video video
     }
     class BoundingBox {
         +float x_center
         +float y_center
         +float width
         +float height
-        +float angle
     }
     class UserBoundingBox
     class PredictedBoundingBox {
         +float score
     }
 
-    %% Poses &amp; Skeletons relationships
-    Skeleton "1" *-- "1..*" Node : contains
-    Skeleton "1" *-- "0..*" Edge : contains
-    Skeleton "1" *-- "0..*" Symmetry : contains
-    Edge "1" --&gt; "2" Node : connects
-    Symmetry "1" --&gt; "2" Node : pairs
-    Instance "0..*" --&gt; "1" Skeleton : uses
-    Instance "0..*" --&gt; "0..1" Track : belongs to
-    Instance &lt;|-- PredictedInstance : inherits
+    Skeleton "1" *-- "1..*" Node
+    Skeleton "1" *-- "0..*" Edge
+    Skeleton "1" *-- "0..*" Symmetry
+    Instance --&gt; Skeleton : uses
+    Instance --&gt; Track
+    Instance &lt;|-- PredictedInstance
 
-    %% Labels &amp; Frames relationships
-    Labels "1" *-- "0..*" LabeledFrame : contains
-    Labels "1" *-- "0..*" Video : contains
-    Labels "1" *-- "0..*" Skeleton : contains
-    Labels "1" *-- "0..*" Track : contains
-    Labels "1" *-- "0..*" SuggestionFrame : contains
-    Labels "1" *-- "0..*" RecordingSession : contains
-    LabeledFrame "1" *-- "0..*" Instance : contains
-    LabeledFrame "0..*" --&gt; "1" Video : references
-    SuggestionFrame "0..*" --&gt; "1" Video : references
-    LabelsSet "1" *-- "1..*" Labels : contains
+    Labels "1" *-- "0..*" LabeledFrame
+    Labels --&gt; Video
+    Labels --&gt; Skeleton
+    Labels --&gt; Track
+    LabeledFrame "1" *-- "0..*" Instance
+    LabeledFrame --&gt; Video
+    LabelsSet "1" *-- "1..*" Labels
 
-    %% 3D &amp; Multi-View relationships
-    CameraGroup "1" *-- "0..*" Camera : contains
-    RecordingSession "1" --&gt; "1" CameraGroup : uses
-    RecordingSession "1" *-- "0..*" FrameGroup : contains
-    FrameGroup "1" *-- "0..*" InstanceGroup : contains
-    InstanceGroup "1" --&gt; "0..*" Instance : links
-    InstanceGroup "1" --&gt; "0..*" Camera : indexed by
+    CameraGroup "1" *-- "0..*" Camera
+    RecordingSession --&gt; CameraGroup
+    RecordingSession "1" *-- "0..*" FrameGroup
+    FrameGroup "1" *-- "0..*" InstanceGroup
+    InstanceGroup --&gt; Instance
+    InstanceGroup --&gt; Camera
 
-    %% Regions &amp; Segmentation relationships
-    BoundingBox &lt;|-- UserBoundingBox : inherits
-    BoundingBox &lt;|-- PredictedBoundingBox : inherits
+    BoundingBox &lt;|-- UserBoundingBox
+    BoundingBox &lt;|-- PredictedBoundingBox
 
-    %% Color coding by documentation page
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
     classDef video fill:#ef6c00,stroke:#e65100,color:#fff
@@ -2980,7 +2959,6 @@
     class Video video
     class Camera,CameraGroup,RecordingSession,FrameGroup,InstanceGroup threed
     class ROI,SegmentationMask,BoundingBox,UserBoundingBox,PredictedBoundingBox regions</code></pre>
-<p><strong>Legend:</strong> [Poses &amp; Skeletons]{style="color:#0097a7;font-weight:bold"} | [Labels &amp; Frames]{style="color:#43a047;font-weight:bold"} | [Video]{style="color:#ef6c00;font-weight:bold"} | [3D &amp; Multi-View]{style="color:#7b1fa2;font-weight:bold"} | [Regions &amp; Segmentation]{style="color:#d32f2f;font-weight:bold"}</p>
 <h2 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2993,125 +2971,119 @@
 <tbody>
 <tr>
 <td><a href="poses/"><code>Skeleton</code></a></td>
-<td><a href="poses/">Poses &amp; Skeletons</a></td>
+<td><a href="poses/">Poses</a></td>
 <td>Template defining landmark types and their connections</td>
 </tr>
 <tr>
 <td><a href="poses/"><code>Node</code></a></td>
-<td><a href="poses/">Poses &amp; Skeletons</a></td>
-<td>A single landmark type within a skeleton (e.g., "left eye")</td>
+<td><a href="poses/">Poses</a></td>
+<td>A single landmark type within a skeleton</td>
 </tr>
 <tr>
 <td><a href="poses/"><code>Edge</code></a></td>
-<td><a href="poses/">Poses &amp; Skeletons</a></td>
+<td><a href="poses/">Poses</a></td>
 <td>Directed connection between two nodes</td>
 </tr>
 <tr>
 <td><a href="poses/"><code>Symmetry</code></a></td>
-<td><a href="poses/">Poses &amp; Skeletons</a></td>
+<td><a href="poses/">Poses</a></td>
 <td>Left/right pairing between two nodes</td>
 </tr>
 <tr>
-<td><a href="poses/"><code>Track</code></a></td>
-<td><a href="poses/">Poses &amp; Skeletons</a></td>
-<td>Identity that links instances of the same animal across frames</td>
-</tr>
-<tr>
 <td><a href="poses/"><code>Instance</code></a></td>
-<td><a href="poses/">Poses &amp; Skeletons</a></td>
-<td>One animal's pose in a single frame (user-annotated)</td>
+<td><a href="poses/">Poses</a></td>
+<td>One animal's pose in a single frame</td>
 </tr>
 <tr>
 <td><a href="poses/"><code>PredictedInstance</code></a></td>
-<td><a href="poses/">Poses &amp; Skeletons</a></td>
-<td>Model-predicted pose with a confidence score</td>
+<td><a href="poses/">Poses</a></td>
+<td>Model-predicted pose with confidence scores</td>
+</tr>
+<tr>
+<td><a href="poses/"><code>Track</code></a></td>
+<td><a href="poses/">Poses</a></td>
+<td>Identity linking instances of the same animal across frames</td>
 </tr>
 <tr>
 <td><a href="labels/"><code>Labels</code></a></td>
-<td><a href="labels/">Labels &amp; Frames</a></td>
-<td>Top-level dataset container for all pose data</td>
+<td><a href="labels/">Labels</a></td>
+<td>Top-level dataset container</td>
 </tr>
 <tr>
 <td><a href="labels/"><code>LabeledFrame</code></a></td>
-<td><a href="labels/">Labels &amp; Frames</a></td>
+<td><a href="labels/">Labels</a></td>
 <td>All instances at a specific frame of a video</td>
 </tr>
 <tr>
 <td><a href="labels/"><code>SuggestionFrame</code></a></td>
-<td><a href="labels/">Labels &amp; Frames</a></td>
-<td>Frame suggested for labeling during active learning</td>
+<td><a href="labels/">Labels</a></td>
+<td>Frame suggested for labeling</td>
 </tr>
 <tr>
 <td><a href="labels/"><code>LabelsSet</code></a></td>
-<td><a href="labels/">Labels &amp; Frames</a></td>
-<td>Named collection of <code>Labels</code> (e.g., train/val/test splits)</td>
+<td><a href="labels/">Labels</a></td>
+<td>Named collection of <code>Labels</code> (e.g., train/val/test)</td>
 </tr>
 <tr>
 <td><a href="video/"><code>Video</code></a></td>
 <td><a href="video/">Video</a></td>
-<td>A video file with lazy backend loading</td>
+<td>Video file with lazy backend loading</td>
 </tr>
 <tr>
 <td><a href="3d/"><code>Camera</code></a></td>
-<td><a href="3d/">3D &amp; Multi-View</a></td>
-<td>Calibrated camera with intrinsic and extrinsic parameters</td>
+<td><a href="3d/">3D</a></td>
+<td>Calibrated camera with intrinsic/extrinsic parameters</td>
 </tr>
 <tr>
 <td><a href="3d/"><code>CameraGroup</code></a></td>
-<td><a href="3d/">3D &amp; Multi-View</a></td>
-<td>Set of cameras used together in a multi-view rig</td>
+<td><a href="3d/">3D</a></td>
+<td>Set of cameras used together</td>
 </tr>
 <tr>
 <td><a href="3d/"><code>RecordingSession</code></a></td>
-<td><a href="3d/">3D &amp; Multi-View</a></td>
+<td><a href="3d/">3D</a></td>
 <td>Multi-camera recording linking cameras to videos</td>
 </tr>
 <tr>
 <td><a href="3d/"><code>FrameGroup</code></a></td>
-<td><a href="3d/">3D &amp; Multi-View</a></td>
+<td><a href="3d/">3D</a></td>
 <td>Matched labeled frames across views at one time point</td>
 </tr>
 <tr>
 <td><a href="3d/"><code>InstanceGroup</code></a></td>
-<td><a href="3d/">3D &amp; Multi-View</a></td>
-<td>Same animal matched across camera views, with optional 3D points</td>
+<td><a href="3d/">3D</a></td>
+<td>Same animal matched across cameras, with optional 3D points</td>
 </tr>
 <tr>
 <td><a href="regions/"><code>ROI</code></a></td>
-<td><a href="regions/">Regions &amp; Segmentation</a></td>
-<td>Vector geometry annotation (polygon, point, etc.)</td>
+<td><a href="regions/">Regions</a></td>
+<td>Vector geometry annotation (polygon, etc.)</td>
 </tr>
 <tr>
 <td><a href="regions/"><code>SegmentationMask</code></a></td>
-<td><a href="regions/">Regions &amp; Segmentation</a></td>
-<td>Run-length encoded per-pixel mask annotation</td>
+<td><a href="regions/">Regions</a></td>
+<td>Run-length encoded pixel mask</td>
 </tr>
 <tr>
 <td><a href="regions/"><code>BoundingBox</code></a></td>
-<td><a href="regions/">Regions &amp; Segmentation</a></td>
-<td>Axis-aligned or oriented bounding box</td>
+<td><a href="regions/">Regions</a></td>
+<td>Axis-aligned or rotated bounding box</td>
 </tr>
 <tr>
 <td><a href="regions/"><code>UserBoundingBox</code></a></td>
-<td><a href="regions/">Regions &amp; Segmentation</a></td>
+<td><a href="regions/">Regions</a></td>
 <td>Human-annotated bounding box</td>
 </tr>
 <tr>
 <td><a href="regions/"><code>PredictedBoundingBox</code></a></td>
-<td><a href="regions/">Regions &amp; Segmentation</a></td>
-<td>Model-predicted bounding box with confidence score</td>
+<td><a href="regions/">Regions</a></td>
+<td>Model-predicted bounding box with score</td>
 </tr>
 </tbody>
 </table>
-<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
-<p><strong><a href="poses/">Poses &amp; Skeletons</a></strong> -- Start here if you are working with keypoint data. Covers skeleton construction, node/edge management, instances, tracks, and the relationship between user annotations and model predictions.</p>
-<p><strong><a href="labels/">Labels &amp; Frames</a></strong> -- Read this to understand how pose data is organized into datasets. Covers the <code>Labels</code> container, frame-level operations, searching and filtering, suggestions, and the <code>LabelsSet</code> split manager.</p>
-<p><strong><a href="video/">Video</a></strong> -- Explains how sleap-io handles video I/O, including lazy backend loading, supported formats, and frame access patterns.</p>
-<p><strong><a href="3d/">3D &amp; Multi-View</a></strong> -- For multi-camera setups. Covers camera calibration, recording sessions, and how 2D poses are grouped across views for 3D reconstruction.</p>
-<p><strong><a href="regions/">Regions &amp; Segmentation</a></strong> -- Covers non-keypoint annotation types: bounding boxes for detection, ROIs for spatial regions, and segmentation masks for pixel-level labels.</p>
 <div class="admonition tip">
 <p class="admonition-title">Hands-on examples</p>
-<p>For practical code recipes that put these classes to work -- loading data, modifying skeletons, exporting to different formats, and more -- see the <strong><a href="../examples/">Examples</a></strong> guide.</p>
+<p>For practical code recipes -- loading data, modifying skeletons, exporting formats, and more -- see the <strong><a href="../examples/">Examples</a></strong> guide.</p>
 </div>
 
 
@@ -3204,8 +3176,6 @@
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
-      
-        <script src="../assets/_markdown_exec_pyodide.js"></script>
       
         <script src="../js/toc-code-style.js"></script>
       

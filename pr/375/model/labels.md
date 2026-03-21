@@ -2,6 +2,17 @@
 
 `Labels` is the top-level container in sleap-io -- the entry point for all pose tracking data. It holds videos, skeletons, labeled frames, and tracks. A `LabeledFrame` groups all annotations for a single video frame, while `SuggestionFrame` marks frames suggested for labeling.
 
+## Container hierarchy
+
+The core data structures form a layered hierarchy:
+
+- **`Labels`** is the top-level container -- it owns everything in a project.
+- **`LabeledFrame`** groups all annotations for one frame of one video.
+- **`SuggestionFrame`** is a lightweight pointer to frames suggested for annotation (no instance data).
+- **`LabelsSet`** manages named collections of `Labels` (e.g., train/val/test splits).
+
+The hierarchy flows as **Labels -> LabeledFrame -> Instance**. `Labels` also holds shared objects (videos, skeletons, tracks) that are referenced by frames and instances, so each object is stored once and reused throughout the project.
+
 ---
 
 ## Labels
@@ -12,7 +23,7 @@ The `Labels` class is the primary data structure you will work with. It stores e
 
 Build a `Labels` object programmatically from skeleton definitions, videos, and instances:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -30,7 +41,7 @@ Build a `Labels` object programmatically from skeleton definitions, videos, and 
 
 You do not need to manually specify `videos` and `skeletons` -- they are automatically collected from the labeled frames:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -61,7 +72,7 @@ labels = sio.load_file("predictions.nwb")
 
 Check the contents of a labels dataset:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -82,7 +93,7 @@ Check the contents of a labels dataset:
 
 Retrieve labeled frames by index or by searching for a specific video and frame:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -107,7 +118,7 @@ lf = labels[video, 0]  # same as labels.find(video, 0)[0]
 
 Convert all tracked instances to a NumPy array for numerical analysis:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -180,7 +191,7 @@ labels.save("output.pkg.slp", embed=True)
 
 A `LabeledFrame` contains all annotations for a single frame of a video. Each frame holds a list of `Instance` and/or `PredictedInstance` objects.
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -200,7 +211,7 @@ A `LabeledFrame` contains all annotations for a single frame of a video. Each fr
 
 You can iterate over instances in a frame directly:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -216,7 +227,7 @@ You can iterate over instances in a frame directly:
 
 A frame can also be converted to a NumPy array:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -239,7 +250,7 @@ A frame can also be converted to a NumPy array:
 
 A `SuggestionFrame` is a lightweight pointer to a frame that has been suggested for annotation. Unlike `LabeledFrame`, it carries no instance data -- just a video reference and frame index.
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> sf = sio.SuggestionFrame(video=video, frame_idx=5)
@@ -259,7 +270,7 @@ labels.suggestions.append(sio.SuggestionFrame(video=video, frame_idx=10))
 
 A `LabelsSet` manages multiple `Labels` datasets as a named collection, useful for organizing train/validation/test splits.
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> import numpy as np
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
