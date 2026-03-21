@@ -7,6 +7,19 @@ says *what* to label, and instances record *where* each landmark is.
 
 ---
 
+## Overview
+
+The pose data model is built around four key types:
+
+- **`Skeleton`** -- the **template**: defines what landmarks exist, how they connect, and which are symmetric.
+- **`Instance`** -- the **data**: stores actual (x, y) coordinates for one animal in one frame.
+- **`PredictedInstance`** -- like `Instance` but includes per-point and instance-level confidence scores from a model.
+- **`Track`** -- the **identity**: links the same animal across frames.
+
+A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, and optionally a `Track` to indicate which animal it belongs to.
+
+---
+
 ## Skeleton
 
 A `Skeleton` is a **template** that defines what landmarks (body parts) exist
@@ -23,7 +36,7 @@ Skeletons are composed of three building blocks:
 
 ### Creating a skeleton
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(
 ...     nodes=["head", "thorax", "abdomen"],
@@ -48,7 +61,7 @@ Nodes and edges can be specified as strings or indices -- they are converted to
 Nodes can be retrieved by **name** or **integer index**, and you can look up a
 node's index in the skeleton:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(
 ...     nodes=["head", "thorax", "abdomen"],
@@ -71,7 +84,7 @@ Symmetries record which nodes are left/right mirrors of each other. This is used
 during data augmentation (horizontal flipping) to swap the correct landmark
 indices.
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> skel = sio.Skeleton(["A", "B_left", "B_right"])
 >>> skel.add_symmetry("B_left", "B_right")
@@ -112,7 +125,7 @@ stores (x, y) coordinates for each landmark defined by a `Skeleton`.
 The most common way to create an instance is from a `(n_nodes, 2)` array of
 coordinates:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -131,7 +144,7 @@ array([[10.2, 20.4],
 
 You can access individual landmarks by node name and inspect their fields:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -154,7 +167,7 @@ False
 
 If you prefer to specify coordinates by node name:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
 >>> inst = sio.Instance(
@@ -172,7 +185,7 @@ array([[10., 20.],
 
 Create an instance with no visible points (all coordinates are unset):
 
-```pycon exec="1" source="console"
+```pycon
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
 >>> empty_inst = sio.Instance.empty(skeleton=skeleton)
@@ -196,7 +209,7 @@ per-point score for each landmark and an overall instance-level score.
 When creating from a numpy array, the third column is interpreted as the
 per-point confidence score:
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -227,7 +240,7 @@ A `Track` represents the identity of a single animal or object across multiple
 frames. Assigning the same `Track` to instances in different frames links them
 as belonging to the same individual.
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
@@ -255,7 +268,7 @@ Under the hood, an instance stores its landmark data in a `PointsArray` -- a
 structured numpy array with named fields for coordinates, visibility, and
 metadata.
 
-```pycon exec="1" source="console"
+```pycon
 >>> import numpy as np
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
