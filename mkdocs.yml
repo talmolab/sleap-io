@@ -139,6 +139,8 @@ extra_css:
 
 extra_javascript:
   - js/toc-code-style.js
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 copyright: >
   Copyright &copy; 2022 - 2026 Talmo Lab
