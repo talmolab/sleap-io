@@ -21,7 +21,7 @@ You can also create a minimal `Video` object without opening a backend. This is 
 ```pycon
 >>> import sleap_io as sio
 >>> video = sio.Video("experiment.mp4", open_backend=False)
->>> video.filename
+>>> print(video.filename)
 ```
 
 For image sequences, pass a list of filenames:
@@ -98,7 +98,7 @@ The full list of supported extensions is available via `Video.EXTS`:
 
 ```pycon
 >>> import sleap_io as sio
->>> sio.Video.EXTS
+>>> print(sio.Video.EXTS)
 ```
 
 For media videos, you can choose which reading plugin to use:

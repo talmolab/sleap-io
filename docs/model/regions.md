@@ -38,15 +38,9 @@ primary annotation type for object detection workflows.
 ...     x_center=100, y_center=200, width=50, height=80,
 ...     video=video, frame_idx=0,
 ... )
->>> bbox.area
-4000.0
->>> bbox.xyxy
-(75.0, 160.0, 125.0, 240.0)
->>> bbox.corners
-array([[ 75., 160.],
-       [125., 160.],
-       [125., 240.],
-       [ 75., 240.]])
+>>> print(bbox.area)
+>>> print(bbox.xyxy)
+>>> print(bbox.corners)
 
 ```
 
@@ -59,10 +53,8 @@ corner coordinates:
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> bbox2 = sio.BoundingBox.from_xyxy(75, 160, 125, 240, video=video, frame_idx=0)
->>> bbox2.x_center
-100.0
->>> bbox2.width
-50.0
+>>> print(bbox2.x_center)
+>>> print(bbox2.width)
 
 ```
 
@@ -73,10 +65,8 @@ the top-left corner:
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> bbox3 = sio.BoundingBox.from_xywh(75, 160, 50, 80, video=video, frame_idx=0)
->>> bbox3.x_center
-100.0
->>> bbox3.y_center
-200.0
+>>> print(bbox3.x_center)
+>>> print(bbox3.y_center)
 
 ```
 
@@ -92,16 +82,13 @@ model predictions. `PredictedBoundingBox` adds a `score` field for confidence:
 ...     x_center=100, y_center=200, width=50, height=80,
 ...     video=video, frame_idx=0,
 ... )
->>> user_bbox.is_predicted
-False
+>>> print(user_bbox.is_predicted)
 >>> pred_bbox = sio.PredictedBoundingBox(
 ...     x_center=100, y_center=200, width=50, height=80,
 ...     video=video, frame_idx=0, score=0.95,
 ... )
->>> pred_bbox.score
-0.95
->>> pred_bbox.is_predicted
-True
+>>> print(pred_bbox.score)
+>>> print(pred_bbox.is_predicted)
 
 ```
 
@@ -118,12 +105,9 @@ meaningful for axis-aligned rectangles:
 ...     x_center=100, y_center=200, width=50, height=80,
 ...     angle=0.785, video=video, frame_idx=0,
 ... )
->>> rotated.is_rotated
-True
->>> rotated.corners.shape
-(4, 2)
->>> rotated.bounds  # axis-aligned extent of the rotated box
-(8..., 1..., 1..., 2...)
+>>> print(rotated.is_rotated)
+>>> print(rotated.corners.shape)
+>>> print(rotated.bounds)  # axis-aligned extent of the rotated box
 
 ```
 
@@ -163,12 +147,9 @@ applies only to that specific frame.
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> roi = sio.ROI.from_xyxy(10, 20, 100, 200, video=video)
->>> roi.area
-16200.0
->>> roi.bounds
-(10.0, 20.0, 100.0, 200.0)
->>> roi.is_static
-True
+>>> print(roi.area)
+>>> print(roi.bounds)
+>>> print(roi.is_static)
 
 ```
 
@@ -181,10 +162,8 @@ True
 ...     [(0, 0), (100, 0), (100, 100), (0, 100)],
 ...     video=video,
 ... )
->>> roi_poly.area
-10000.0
->>> roi_poly.centroid
-(50.0, 50.0)
+>>> print(roi_poly.area)
+>>> print(roi_poly.centroid)
 
 ```
 
@@ -194,10 +173,8 @@ True
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> roi_bbox = sio.ROI.from_bbox(10, 20, 90, 180, video=video)
->>> roi_bbox.area
-16200.0
->>> roi_bbox.is_bbox
-True
+>>> print(roi_bbox.area)
+>>> print(roi_bbox.is_bbox)
 
 ```
 
@@ -213,8 +190,7 @@ Any `BoundingBox` can be converted to an `ROI` with `.to_roi()`:
 ...     video=video, frame_idx=0,
 ... )
 >>> roi_from_bbox = bbox.to_roi()
->>> roi_from_bbox.area
-4000.0
+>>> print(roi_from_bbox.area)
 
 ```
 
@@ -232,8 +208,7 @@ For disjoint regions, use `from_multi_polygon`:
 ...     ],
 ...     video=video,
 ... )
->>> roi_multi.area
-200.0
+>>> print(roi_multi.area)
 
 ```
 
@@ -250,10 +225,8 @@ Multi-geometry ROIs can be split into individual ROIs with `.explode()`:
 ...     video=video,
 ... )
 >>> parts = roi_multi.explode()
->>> len(parts)
-2
->>> parts[0].area
-100.0
+>>> print(len(parts))
+>>> print(parts[0].area)
 
 ```
 
@@ -265,8 +238,7 @@ GeoJSON-aware tools:
 ```pycon
 >>> import sleap_io as sio
 >>> roi = sio.ROI.from_xyxy(0, 0, 10, 10)
->>> roi.__geo_interface__["type"]
-'Feature'
+>>> print(roi.__geo_interface__["type"])
 
 ```
 
@@ -290,12 +262,9 @@ fast conversion to and from numpy arrays.
 >>> mask = sio.SegmentationMask.from_numpy(
 ...     mask_data, video=video, frame_idx=0,
 ... )
->>> mask.area
-15000
->>> mask.height
-480
->>> mask.width
-640
+>>> print(mask.area)
+>>> print(mask.height)
+>>> print(mask.width)
 
 ```
 
@@ -310,12 +279,9 @@ The `.data` property decodes the RLE back to a full boolean array:
 >>> mask_data[20:40, 30:60] = True
 >>> mask = sio.SegmentationMask.from_numpy(mask_data)
 >>> decoded = mask.data
->>> decoded.shape
-(100, 100)
->>> decoded.dtype
-dtype('bool')
->>> decoded.sum()
-600
+>>> print(decoded.shape)
+>>> print(decoded.dtype)
+>>> print(decoded.sum())
 
 ```
 
@@ -330,8 +296,7 @@ all foreground pixels as `(x, y, width, height)`:
 >>> mask_data = np.zeros((100, 100), dtype=bool)
 >>> mask_data[20:40, 30:60] = True
 >>> mask = sio.SegmentationMask.from_numpy(mask_data)
->>> mask.bbox
-(30.0, 20.0, 30.0, 20.0)
+>>> print(mask.bbox)
 
 ```
 
@@ -361,14 +326,11 @@ category, source) when applicable.
 ...     video=video, frame_idx=0,
 ... )
 >>> roi = bbox.to_roi()
->>> roi.area
-600.0
+>>> print(roi.area)
 >>> mask = roi.to_mask(100, 100)
->>> mask.area
-600
+>>> print(mask.area)
 >>> polygon_roi = mask.to_polygon()
->>> polygon_roi.area
-600.0
+>>> print(polygon_roi.area)
 
 ```
 

@@ -36,7 +36,7 @@ Build a `Labels` object programmatically from skeleton definitions, videos, and 
 >>> labels = sio.Labels(
 ...     videos=[video], skeletons=[skeleton], labeled_frames=[lf]
 ... )
->>> labels
+>>> print(labels)
 ```
 
 You do not need to manually specify `videos` and `skeletons` — they are automatically collected from the labeled frames:
@@ -52,8 +52,8 @@ You do not need to manually specify `videos` and `skeletons` — they are automa
 ... )
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
 >>> labels = sio.Labels(labeled_frames=[lf])
->>> labels.videos
->>> labels.skeletons
+>>> print(labels.videos)
+>>> print(labels.skeletons)
 ```
 
 ### Loading from file
@@ -83,10 +83,10 @@ Check the contents of a labels dataset:
 ... )
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
 >>> labels = sio.Labels(labeled_frames=[lf])
->>> len(labels)
->>> labels.videos
->>> labels.skeletons
->>> labels.skeleton  # shortcut when there's exactly one
+>>> print(len(labels))
+>>> print(labels.videos)
+>>> print(labels.skeletons)
+>>> print(labels.skeleton)  # shortcut when there's exactly one
 ```
 
 ### Querying
@@ -104,8 +104,8 @@ Retrieve labeled frames by index or by searching for a specific video and frame:
 ... )
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
 >>> labels = sio.Labels(labeled_frames=[lf])
->>> labels[0]  # first labeled frame
->>> labels.find(video=video, frame_idx=0)
+>>> print(labels[0])  # first labeled frame
+>>> print(labels.find(video=video, frame_idx=0))
 ```
 
 You can also index with a `(video, frame_idx)` tuple:
@@ -132,7 +132,7 @@ Convert all tracked instances to a NumPy array for numerical analysis:
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
 >>> labels = sio.Labels(labeled_frames=[lf])
 >>> trx = labels.numpy()
->>> trx.shape  # (n_frames, n_tracks, n_nodes, 2)
+>>> print(trx.shape)  # (n_frames, n_tracks, n_nodes, 2)
 ```
 
 !!! note "See also"
@@ -201,12 +201,12 @@ A [`LabeledFrame`](#sleap_io.LabeledFrame) contains all annotations for a single
 ...     skeleton=skeleton,
 ... )
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
->>> lf.video
->>> lf.frame_idx
->>> lf.instances
->>> lf.user_instances
->>> lf.predicted_instances
->>> lf.has_user_instances
+>>> print(lf.video)
+>>> print(lf.frame_idx)
+>>> print(lf.instances)
+>>> print(lf.user_instances)
+>>> print(lf.predicted_instances)
+>>> print(lf.has_user_instances)
 ```
 
 You can iterate over instances in a frame directly:
@@ -221,8 +221,8 @@ You can iterate over instances in a frame directly:
 ...     skeleton=skeleton,
 ... )
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
->>> len(lf)  # number of instances
->>> lf[0]  # first instance
+>>> print(len(lf))  # number of instances
+>>> print(lf[0])  # first instance
 ```
 
 A frame can also be converted to a NumPy array:
@@ -237,7 +237,7 @@ A frame can also be converted to a NumPy array:
 ...     skeleton=skeleton,
 ... )
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
->>> lf.numpy().shape  # (n_instances, n_nodes, 2)
+>>> print(lf.numpy().shape)  # (n_instances, n_nodes, 2)
 ```
 
 !!! note "See also"
@@ -254,8 +254,8 @@ A [`SuggestionFrame`](#sleap_io.SuggestionFrame) is a lightweight pointer to a f
 >>> import sleap_io as sio
 >>> video = sio.Video("test.mp4", open_backend=False)
 >>> sf = sio.SuggestionFrame(video=video, frame_idx=5)
->>> sf.video
->>> sf.frame_idx
+>>> print(sf.video)
+>>> print(sf.frame_idx)
 ```
 
 Suggestions are stored on the `Labels` object:
@@ -282,8 +282,8 @@ A [`LabelsSet`](#sleap_io.LabelsSet) manages multiple [`Labels`](#sleap_io.Label
 >>> lf = sio.LabeledFrame(video=video, frame_idx=0, instances=[inst])
 >>> labels = sio.Labels(labeled_frames=[lf])
 >>> ls = sio.LabelsSet({"train": labels})
->>> ls.keys()
->>> ls["train"]
+>>> print(ls.keys())
+>>> print(ls["train"])
 ```
 
 `LabelsSet` supports tuple-style unpacking and dictionary-style access:

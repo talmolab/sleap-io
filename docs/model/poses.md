@@ -42,14 +42,10 @@ Skeletons are composed of three building blocks:
 ...     nodes=["head", "thorax", "abdomen"],
 ...     edges=[("head", "thorax"), ("thorax", "abdomen")],
 ... )
->>> skeleton
-Skeleton(nodes=["head", "thorax", "abdomen"], edges=[(0, 1), (1, 2)])
->>> len(skeleton)
-3
->>> skeleton.node_names
-['head', 'thorax', 'abdomen']
->>> skeleton.edge_inds
-[(0, 1), (1, 2)]
+>>> print(skeleton)
+>>> print(len(skeleton))
+>>> print(skeleton.node_names)
+>>> print(skeleton.edge_inds)
 
 ```
 
@@ -67,14 +63,10 @@ node's index in the skeleton:
 ...     nodes=["head", "thorax", "abdomen"],
 ...     edges=[("head", "thorax"), ("thorax", "abdomen")],
 ... )
->>> skeleton["head"]
-Node(name='head')
->>> skeleton[0]
-Node(name='head')
->>> skeleton.index("thorax")
-1
->>> "head" in skeleton
-True
+>>> print(skeleton["head"])
+>>> print(skeleton[0])
+>>> print(skeleton.index("thorax"))
+>>> print("head" in skeleton)
 
 ```
 
@@ -88,8 +80,7 @@ indices.
 >>> import sleap_io as sio
 >>> skel = sio.Skeleton(["A", "B_left", "B_right"])
 >>> skel.add_symmetry("B_left", "B_right")
->>> skel.symmetry_names
-[('B_left', 'B_right')]
+>>> print(skel.symmetry_names)
 
 ```
 
@@ -133,12 +124,8 @@ coordinates:
 ...     np.array([[10.2, 20.4], [5.8, 15.1], [0.3, 10.6]]),
 ...     skeleton=skeleton,
 ... )
->>> inst
-Instance(points=[[10.2, 20.4], [5.8, 15.1], [0.3, 10.6]], track=None)
->>> inst.numpy()
-array([[10.2, 20.4],
-       [ 5.8, 15.1],
-       [ 0.3, 10.6]])
+>>> print(inst)
+>>> print(inst.numpy())
 
 ```
 
@@ -152,14 +139,10 @@ You can access individual landmarks by node name and inspect their fields:
 ...     np.array([[10.2, 20.4], [5.8, 15.1], [0.3, 10.6]]),
 ...     skeleton=skeleton,
 ... )
->>> inst["head"]["xy"]
-array([10.2, 20.4])
->>> inst["head"]["visible"]
-True
->>> inst.n_visible
-3
->>> inst.is_empty
-False
+>>> print(inst["head"]["xy"])
+>>> print(inst["head"]["visible"])
+>>> print(inst.n_visible)
+>>> print(inst.is_empty)
 
 ```
 
@@ -174,10 +157,7 @@ If you prefer to specify coordinates by node name:
 ...     {"head": [10, 20], "thorax": [5, 15], "abdomen": [0, 10]},
 ...     skeleton=skeleton,
 ... )
->>> inst.numpy()
-array([[10., 20.],
-       [ 5., 15.],
-       [ 0., 10.]])
+>>> print(inst.numpy())
 
 ```
 
@@ -189,8 +169,7 @@ Create an instance with no visible points (all coordinates are unset):
 >>> import sleap_io as sio
 >>> skeleton = sio.Skeleton(["head", "thorax", "abdomen"])
 >>> empty_inst = sio.Instance.empty(skeleton=skeleton)
->>> empty_inst.is_empty
-True
+>>> print(empty_inst.is_empty)
 
 ```
 
@@ -218,12 +197,8 @@ per-point confidence score:
 ...     skeleton=skeleton,
 ...     score=0.85,
 ... )
->>> pred.score
-0.85
->>> pred.numpy(scores=True)
-array([[10.2, 20.4,  0.9],
-       [ 5.8, 15.1,  0.8],
-       [ 0.3, 10.6,  0.7]])
+>>> print(pred.score)
+>>> print(pred.numpy(scores=True))
 
 ```
 
@@ -250,8 +225,7 @@ as belonging to the same individual.
 ...     skeleton=skeleton,
 ...     track=track,
 ... )
->>> inst.track.name
-'animal_1'
+>>> print(inst.track.name)
 
 ```
 
@@ -276,14 +250,9 @@ metadata.
 ...     np.array([[10, 20], [5, 15], [0, 10]]),
 ...     skeleton=skeleton,
 ... )
->>> inst.points.dtype.names
-('xy', 'visible', 'complete', 'name')
->>> inst.points["xy"]
-array([[10., 20.],
-       [ 5., 15.],
-       [ 0., 10.]])
->>> inst.points["visible"]
-array([ True,  True,  True])
+>>> print(inst.points.dtype.names)
+>>> print(inst.points["xy"])
+>>> print(inst.points["visible"])
 
 ```
 

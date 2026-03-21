@@ -6,6 +6,7 @@ strict: false
 
 # Custom hooks
 hooks:
+  - hooks/markdown_exec_pycon.py  # Auto-execute pycon blocks with console output
   - hooks/copy_source_markdown.py  # Publish .md sources alongside HTML
 
 theme:
@@ -56,6 +57,7 @@ theme:
 plugins:
   - search
   # - privacy  # Caching dynamic badges
+  - markdown-exec
   - mkdocs-jupyter
   - mike
   - autorefs

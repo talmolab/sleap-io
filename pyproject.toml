@@ -61,6 +61,7 @@ dev = [
     "toml",
     "twine",
     "build",
+    "markdown-exec[ansi]",
     "mkdocs-material[imaging]",
     "mkdocs-jupyter",
     "mkdocstrings[python]>=0.18",
