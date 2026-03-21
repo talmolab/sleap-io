@@ -1,17 +1,17 @@
 # Labels
 
-`Labels` is the top-level container in sleap-io:the entry point for all pose tracking data. It holds videos, skeletons, labeled frames, and tracks. A `LabeledFrame` groups all annotations for a single video frame, while `SuggestionFrame` marks frames suggested for labeling.
+[`Labels`](#sleap_io.Labels) is the top-level container in sleap-io -- the entry point for all pose tracking data. It holds videos, skeletons, labeled frames, and tracks. A [`LabeledFrame`](#sleap_io.LabeledFrame) groups all annotations for a single video frame, while [`SuggestionFrame`](#sleap_io.SuggestionFrame) marks frames suggested for labeling.
 
 ## Container hierarchy
 
 The core data structures form a layered hierarchy:
 
-- **`Labels`** is the top-level container:it owns everything in a project.
-- **`LabeledFrame`** groups all annotations for one frame of one video.
-- **`SuggestionFrame`** is a lightweight pointer to frames suggested for annotation (no instance data).
-- **`LabelsSet`** manages named collections of `Labels` (e.g., train/val/test splits).
+- **[`Labels`](#sleap_io.Labels)** is the top-level container: it owns everything in a project.
+- **[`LabeledFrame`](#sleap_io.LabeledFrame)** groups all annotations for one frame of one video.
+- **[`SuggestionFrame`](#sleap_io.SuggestionFrame)** is a lightweight pointer to frames suggested for annotation (no instance data).
+- **[`LabelsSet`](#sleap_io.LabelsSet)** manages named collections of `Labels` (e.g., train/val/test splits).
 
-The hierarchy flows as **Labels -> LabeledFrame -> Instance**. `Labels` also holds shared objects (videos, skeletons, tracks) that are referenced by frames and instances, so each object is stored once and reused throughout the project.
+The hierarchy flows as **Labels -> LabeledFrame -> [`Instance`](poses.md)**. `Labels` also holds shared objects ([videos](video.md), [skeletons](poses.md), [tracks](poses.md)) that are referenced by frames and instances, so each object is stored once and reused throughout the project.
 
 ---
 
@@ -143,7 +143,7 @@ Convert all tracked instances to a NumPy array for numerical analysis:
 
 `Labels` provides methods for modifying the skeleton and instance data across the entire dataset.
 
-**Removing predictions** strips all `PredictedInstance` objects and cleans up empty frames:
+**Removing predictions** strips all [`PredictedInstance`](poses.md) objects and cleans up empty frames:
 
 ```python
 labels.remove_predictions()
@@ -189,7 +189,7 @@ labels.save("output.pkg.slp", embed=True)
 
 ## Labeled frames
 
-A `LabeledFrame` contains all annotations for a single frame of a video. Each frame holds a list of `Instance` and/or `PredictedInstance` objects.
+A [`LabeledFrame`](#sleap_io.LabeledFrame) contains all annotations for a single frame of a [`Video`](video.md). Each frame holds a list of [`Instance`](poses.md) and/or [`PredictedInstance`](poses.md) objects.
 
 ```pycon
 >>> import sleap_io as sio
@@ -248,7 +248,7 @@ A frame can also be converted to a NumPy array:
 
 ## Suggestion frames
 
-A `SuggestionFrame` is a lightweight pointer to a frame that has been suggested for annotation. Unlike `LabeledFrame`, it carries no instance data:just a video reference and frame index.
+A [`SuggestionFrame`](#sleap_io.SuggestionFrame) is a lightweight pointer to a frame that has been suggested for annotation. Unlike [`LabeledFrame`](#sleap_io.LabeledFrame), it carries no instance data -- just a video reference and frame index.
 
 ```pycon
 >>> import sleap_io as sio
@@ -268,7 +268,7 @@ labels.suggestions.append(sio.SuggestionFrame(video=video, frame_idx=10))
 
 ## Labels set
 
-A `LabelsSet` manages multiple `Labels` datasets as a named collection, useful for organizing train/validation/test splits.
+A [`LabelsSet`](#sleap_io.LabelsSet) manages multiple [`Labels`](#sleap_io.Labels) datasets as a named collection, useful for organizing train/validation/test splits.
 
 ```pycon
 >>> import sleap_io as sio

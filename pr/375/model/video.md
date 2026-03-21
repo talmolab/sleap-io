@@ -4,7 +4,7 @@ The [`Video`][sleap_io.Video] class provides a lazy, array-like interface to vid
 
 - **Unified interface**: `Video` wraps different backends (MP4/AVI via ffmpeg, HDF5, image sequences) behind a single numpy-like indexing API, with the backend auto-detected from the file extension.
 - **Lazy access**: Frames are only read from disk when you index into the video — creating a `Video` object does not load any pixel data.
-- **Label integration**: Each [`LabeledFrame`][sleap_io.LabeledFrame] references a `Video` and a frame index, linking pose annotations back to the underlying footage.
+- **Label integration**: Each [`LabeledFrame`](labels.md) references a `Video` and a frame index, linking pose annotations back to the underlying footage.
 
 ## Creating videos
 
@@ -121,7 +121,7 @@ Available plugins and their aliases:
 
 ## Embedded videos
 
-When labels are saved as `.pkg.slp` files with embedded frames, the video data is stored inside the HDF5 file. In this case, the `Video` will have an `HDF5Video` backend pointing to the embedded dataset, and the `source_video` attribute will reference the original video:
+When [`Labels`](labels.md) are saved as `.pkg.slp` files with embedded frames, the video data is stored inside the HDF5 file. In this case, the `Video` will have an `HDF5Video` backend pointing to the embedded dataset, and the `source_video` attribute will reference the original video:
 
 ```python
 labels = sio.load_slp("labels.pkg.slp")
