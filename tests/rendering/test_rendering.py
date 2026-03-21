@@ -6,6 +6,20 @@ callbacks, and the core rendering functions.
 
 import numpy as np
 import pytest
+from shapely.geometry import box
+
+import sleap_io as sio
+from sleap_io.model.bbox import BoundingBox
+from sleap_io.model.mask import SegmentationMask
+from sleap_io.model.roi import ROI
+from sleap_io.rendering import render_video
+from sleap_io.rendering.core import render_image
+from sleap_io.rendering.overlays import (
+    draw_bboxes,
+    draw_label_image,
+    draw_masks,
+    draw_rois,
+)
 
 # Skip all tests if skia-python is not installed
 skia = pytest.importorskip("skia", reason="skia-python not installed")
@@ -2440,3 +2454,569 @@ def test_draw_bboxes_empty():
 
     assert result is img
     np.testing.assert_array_equal(result, original)
+
+
+def test_draw_masks_per_mask_colors():
+    """draw_masks with per-mask colors should apply different colors to each mask."""
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 100
+    mask1_data = np.zeros((50, 50), dtype=bool)
+    mask1_data[5:15, 5:15] = True
+    mask2_data = np.zeros((50, 50), dtype=bool)
+    mask2_data[30:40, 30:40] = True
+
+    mask1 = SegmentationMask.from_numpy(mask1_data)
+    mask2 = SegmentationMask.from_numpy(mask2_data)
+
+    result = draw_masks(
+        img,
+        [mask1, mask2],
+        colors=[(255, 0, 0), (0, 0, 255)],
+        alpha=0.5,
+    )
+    assert result is img
+    # Mask 1 region should have red bias
+    assert result[10, 10, 0] > result[10, 10, 2]
+    # Mask 2 region should have blue bias
+    assert result[35, 35, 2] > result[35, 35, 0]
+    # Non-masked region should be unchanged
+    assert result[0, 0].tolist() == [100, 100, 100]
+
+
+def test_draw_label_image_basic():
+    """draw_label_image should blend colored overlays for each label ID."""
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:20, 10:20] = 1
+    labels[30:40, 30:40] = 2
+
+    result = draw_label_image(img, labels, alpha=0.5, palette="distinct")
+    assert result is img
+    # Labeled regions should differ from the original gray
+    assert not np.array_equal(result[15, 15], [128, 128, 128])
+    assert not np.array_equal(result[35, 35], [128, 128, 128])
+    # The two labeled regions should have different colors
+    assert not np.array_equal(result[15, 15], result[35, 35])
+    # Background should remain unchanged
+    np.testing.assert_array_equal(result[0, 0], [128, 128, 128])
+
+
+def test_draw_label_image_empty():
+    """draw_label_image with all-zero labels should leave image unchanged."""
+    img = np.ones((30, 30, 3), dtype=np.uint8) * 200
+    labels = np.zeros((30, 30), dtype=np.int32)
+    original = img.copy()
+
+    result = draw_label_image(img, labels, alpha=0.5)
+    assert result is img
+    np.testing.assert_array_equal(result, original)
+
+
+def test_draw_label_image_with_outline():
+    """draw_label_image with outline=True should draw boundaries."""
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:30, 10:30] = 1
+
+    result = draw_label_image(img, labels, alpha=0.3, outline=True, outline_width=1)
+    assert result is img
+    # Boundary pixel (edge of the labeled region) should differ from interior
+    interior = result[20, 20].copy()
+    edge = result[10, 10].copy()
+    # Both should differ from background
+    assert not np.array_equal(interior, [128, 128, 128])
+    assert not np.array_equal(edge, [128, 128, 128])
+
+
+def test_draw_label_image_with_outline_uniform_color():
+    """draw_label_image with uniform outline_color should use that color."""
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:30, 10:30] = 1
+
+    result = draw_label_image(
+        img,
+        labels,
+        alpha=0.3,
+        outline=True,
+        outline_width=1,
+        outline_color=(255, 255, 255),
+    )
+    # The boundary pixels should be white
+    # Top edge of the labeled region: row 10, cols 10-29 are label boundary
+    assert result[10, 15].tolist() == [255, 255, 255]
+
+
+def test_draw_label_image_with_thick_outline():
+    """draw_label_image with outline_width > 1 should dilate boundaries inward."""
+    img = np.ones((60, 60, 3), dtype=np.uint8) * 128
+    labels = np.zeros((60, 60), dtype=np.int32)
+    labels[15:45, 15:45] = 1
+
+    result = draw_label_image(
+        img,
+        labels,
+        alpha=0.3,
+        outline=True,
+        outline_width=3,
+        outline_color=(0, 255, 0),
+    )
+    # With width=3, the boundary at row 15 should dilate inward to row 16
+    assert result[16, 20].tolist() == [0, 255, 0]
+    # Interior should not be affected by outline
+    assert result[30, 30].tolist() != [0, 255, 0]
+
+
+def test_draw_label_image_size_mismatch():
+    """draw_label_image should clip when labels are larger than image."""
+    img = np.ones((30, 30, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[5:25, 5:25] = 1
+
+    # Should not raise, should clip to image bounds
+    result = draw_label_image(img, labels, alpha=0.5)
+    assert result is img
+    assert result.shape == (30, 30, 3)
+    # Labeled region within image bounds should be modified
+    assert not np.array_equal(result[10, 10], [128, 128, 128])
+
+
+# ============================================================================
+# render_image overlay integration tests
+# ============================================================================
+
+
+def test_render_image_overlay_label_image():
+    """render_image with overlay= numpy label image should apply overlay."""
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[10:20, 10:20] = 1
+    labels[30:40, 30:40] = 2
+
+    result = render_image(image=img, overlay=labels, overlay_alpha=0.4)
+    # Background unchanged
+    assert result[0, 0].tolist() == [128, 128, 128]
+    # Labeled regions modified
+    assert not np.array_equal(result[15, 15], [128, 128, 128])
+    assert not np.array_equal(result[35, 35], [128, 128, 128])
+    # Two labels get different colors
+    assert not np.array_equal(result[15, 15], result[35, 35])
+
+
+def test_render_image_overlay_masks():
+    """render_image with overlay= list of SegmentationMask should work."""
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    mask_data = np.zeros((50, 50), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+
+    result = render_image(image=img, overlay=[mask], overlay_alpha=0.5)
+    # Masked region should be modified
+    assert not np.array_equal(result[20, 20], [128, 128, 128])
+    # Background unchanged
+    assert result[0, 0].tolist() == [128, 128, 128]
+
+
+def test_render_image_overlay_rois():
+    """render_image with overlay= list of ROI should work."""
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi = ROI(geometry=box(20, 20, 60, 60))
+
+    result = render_image(image=img, overlay=[roi], overlay_alpha=0.3)
+    # ROI region should have color applied
+    assert result[40, 40].any()
+
+
+def test_render_image_overlay_bboxes():
+    """render_image with overlay= list of BoundingBox should work."""
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = BoundingBox(x_center=50, y_center=50, width=40, height=40)
+
+    result = render_image(image=img, overlay=[bbox], overlay_alpha=0.3)
+    # BBox region should have color applied
+    assert result[50, 50].any()
+
+
+def test_render_image_overlay_with_scale():
+    """render_image with overlay and scale should scale the output."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    labels = np.zeros((100, 100), dtype=np.int32)
+    labels[20:80, 20:80] = 1
+
+    result = render_image(image=img, overlay=labels, overlay_alpha=0.4, scale=0.5)
+    assert result.shape == (50, 50, 3)
+
+
+def test_render_image_source_none_requires_image():
+    """render_image with source=None and no image should raise."""
+    with pytest.raises(ValueError, match="image parameter required"):
+        render_image(source=None)
+
+
+# ============================================================================
+# draw_rois / draw_bboxes per-item colors tests
+# ============================================================================
+
+
+def test_draw_rois_per_roi_colors():
+    """draw_rois with per-ROI colors should apply different colors to each ROI."""
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    roi1 = ROI.from_bbox(5, 5, 20, 20)
+    roi2 = ROI.from_bbox(60, 60, 20, 20)
+
+    result = draw_rois(
+        img,
+        [roi1, roi2],
+        colors=[(255, 0, 0), (0, 0, 255)],
+        fill_alpha=1.0,
+    )
+
+    assert result is img
+    # First ROI interior should be red
+    assert result[15, 15, 0] == 255
+    assert result[15, 15, 2] == 0
+    # Second ROI interior should be blue
+    assert result[70, 70, 0] == 0
+    assert result[70, 70, 2] == 255
+    # Outside both ROIs should be untouched
+    assert result[50, 50].tolist() == [0, 0, 0]
+
+
+def test_draw_bboxes_per_bbox_colors():
+    """draw_bboxes with per-bbox colors should apply different colors."""
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox1 = BoundingBox.from_xyxy(5, 5, 25, 25)
+    bbox2 = BoundingBox.from_xyxy(60, 60, 80, 80)
+
+    result = draw_bboxes(
+        img,
+        [bbox1, bbox2],
+        colors=[(255, 0, 0), (0, 0, 255)],
+        fill_alpha=1.0,
+    )
+
+    assert result is img
+    # First bbox interior should be red
+    assert result[15, 15, 0] == 255
+    assert result[15, 15, 2] == 0
+    # Second bbox interior should be blue
+    assert result[70, 70, 0] == 0
+    assert result[70, 70, 2] == 255
+    # Outside both bboxes should be untouched
+    assert result[45, 45].tolist() == [0, 0, 0]
+
+
+def test_draw_bboxes_per_bbox_colors_predicted_score():
+    """draw_bboxes per-bbox colors with PredictedBoundingBox renders score text."""
+    from sleap_io.model.bbox import PredictedBoundingBox
+
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    bbox = PredictedBoundingBox.from_xyxy(20, 20, 60, 60, score=0.85)
+
+    result = draw_bboxes(
+        img,
+        [bbox],
+        colors=[(0, 255, 0)],
+        fill_alpha=0.5,
+    )
+
+    assert result is img
+    # Score text should be rendered near top-left of bbox
+    text_region = result[5:20, 15:60]
+    assert text_region.any(), "Score text should be rendered"
+
+
+def test_render_image_grayscale_with_overlay():
+    """render_image with a grayscale image and overlay should convert to RGB."""
+    gray_img = np.ones((64, 64), dtype=np.uint8) * 128
+    overlay = np.zeros((64, 64), dtype=np.int32)
+    overlay[10:30, 10:30] = 1
+
+    result = render_image(
+        source=None,
+        image=gray_img,
+        overlay=overlay,
+        overlay_alpha=0.5,
+    )
+
+    # Output should be RGB
+    assert result.ndim == 3
+    assert result.shape[2] == 3
+
+
+def test_render_video_grayscale_with_2d_overlay():
+    """render_video with grayscale frames and 2D static overlay."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=64, w=64)
+    overlay = np.zeros((64, 64), dtype=np.int32)
+    overlay[10:30, 10:30] = 1
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    assert frames[0].ndim == 3
+
+
+# ============================================================================
+# render_video overlay tests
+# ============================================================================
+
+
+def _make_synthetic_labels(n_frames=3, h=64, w=64):
+    """Create a minimal synthetic Labels for overlay tests.
+
+    Returns Labels with n_frames of (h, w) frames rendered on a solid black
+    background (no real video needed).
+    """
+    skeleton = sio.Skeleton(nodes=["a", "b"], edges=[("a", "b")])
+    video = sio.Video(filename="dummy.mp4")
+    pts = np.array([[w // 4, h // 4], [3 * w // 4, 3 * h // 4]], dtype=np.float32)
+
+    labeled_frames = []
+    for i in range(n_frames):
+        lf = sio.LabeledFrame(
+            video=video,
+            frame_idx=i,
+            instances=[sio.Instance.from_numpy(pts, skeleton=skeleton)],
+        )
+        labeled_frames.append(lf)
+
+    return sio.Labels(
+        labeled_frames=labeled_frames, videos=[video], skeletons=[skeleton]
+    )
+
+
+def test_render_video_overlay_3d_array():
+    """render_video with 3D (T,H,W) overlay should apply per-frame labels."""
+    labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
+    overlay = np.zeros((3, 64, 64), dtype=np.int32)
+    overlay[0, 10:30, 10:30] = 1
+    overlay[1, 30:50, 30:50] = 2
+    # Frame 2 has no overlay (all zeros)
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 3
+    # Frame 0 should have colored overlay in region [10:30, 10:30]
+    assert not np.array_equal(frames[0][20, 20], frames[0][0, 0])
+    # Frame 2 should have no overlay (uniform background)
+    # (poses are still drawn, so just check it didn't crash)
+    assert frames[2].shape == frames[0].shape
+
+
+def test_render_video_overlay_2d_static():
+    """render_video with 2D (H,W) overlay should apply same overlay to all frames."""
+    labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
+    overlay = np.zeros((64, 64), dtype=np.int32)
+    overlay[10:30, 10:30] = 1
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    # Both frames should have the overlay in the same region
+    for frame in frames:
+        assert not np.array_equal(frame[20, 20], frame[0, 0])
+
+
+def test_render_video_overlay_callable():
+    """render_video with callable overlay should call it per-frame."""
+    labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
+
+    called_with = []
+
+    def overlay_fn(fidx):
+        called_with.append(fidx)
+        arr = np.zeros((64, 64), dtype=np.int32)
+        arr[10:30, 10:30] = fidx + 1
+        return arr
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay_fn,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    assert 0 in called_with
+    assert 1 in called_with
+
+
+def test_render_video_overlay_list_by_frame_idx():
+    """render_video with list overlay should filter objects by frame_idx."""
+    labels = _make_synthetic_labels(n_frames=2, h=64, w=64)
+
+    mask_data = np.zeros((64, 64), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+    mask.frame_idx = 0  # Only apply to frame 0
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay=[mask],
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    # Frame 0 should have overlay applied (masked region differs from bg)
+    assert not np.array_equal(frames[0][20, 20], frames[0][0, 0])
+
+
+def test_render_video_overlay_static_objects():
+    """render_video with frame_idx=None objects should render them on all frames."""
+    labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
+
+    mask_data = np.zeros((64, 64), dtype=bool)
+    mask_data[10:30, 10:30] = True
+    mask = SegmentationMask.from_numpy(mask_data)
+    # frame_idx defaults to None -> should appear on every frame
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background=(128, 128, 128),
+        overlay=[mask],
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 3
+    # Static mask (frame_idx=None) should be rendered on ALL frames
+    for i, frame in enumerate(frames):
+        assert not np.array_equal(frame[20, 20], [128, 128, 128]), (
+            f"Frame {i}: static mask was not rendered"
+        )
+
+
+def test_render_video_overlay_out_of_bounds():
+    """render_video with 3D overlay shorter than video should not crash."""
+    labels = _make_synthetic_labels(n_frames=3, h=64, w=64)
+    # Overlay only has 1 frame, but video has 3
+    overlay = np.zeros((1, 64, 64), dtype=np.int32)
+    overlay[0, 10:30, 10:30] = 1
+
+    frames = render_video(
+        labels,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 3
+
+
+# ============================================================================
+# _apply_overlay TypeError for unknown list element types
+# ============================================================================
+
+
+def test_apply_overlay_unknown_list_type():
+    """_apply_overlay should raise TypeError for unsupported list element types."""
+    from sleap_io.rendering.core import _apply_overlay
+
+    img = np.zeros((50, 50, 3), dtype=np.uint8)
+    with pytest.raises(TypeError, match="Unsupported overlay element type"):
+        _apply_overlay(img, ["not_a_mask"])
+
+
+# ============================================================================
+# crop + overlay alignment tests
+# ============================================================================
+
+
+def test_render_image_crop_with_overlay():
+    """render_image with crop + overlay should align overlay to cropped region."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    labels = np.zeros((100, 100), dtype=np.int32)
+    # Place label in bottom-right quadrant only
+    labels[60:80, 60:80] = 1
+
+    # Crop to bottom-right quadrant (50,50)-(100,100)
+    result = render_image(
+        image=img,
+        overlay=labels,
+        overlay_alpha=0.5,
+        crop=(50, 50, 100, 100),
+    )
+
+    assert result.shape == (50, 50, 3)
+    # The label region (60:80, 60:80) maps to (10:30, 10:30) in cropped coords
+    # Interior of labeled region should be colored
+    assert not np.array_equal(result[20, 20], [128, 128, 128])
+    # Top-left of cropped image (originally 50,50) has no label -> unchanged
+    assert result[0, 0].tolist() == [128, 128, 128]
+
+
+def test_render_image_crop_with_overlay_no_overlap():
+    """Overlay outside crop region should not affect the cropped image."""
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    labels = np.zeros((100, 100), dtype=np.int32)
+    # Place label in top-left only
+    labels[0:20, 0:20] = 1
+
+    # Crop to bottom-right (50,50)-(100,100) — no overlap with label
+    result = render_image(
+        image=img,
+        overlay=labels,
+        overlay_alpha=0.5,
+        crop=(50, 50, 100, 100),
+    )
+
+    # Entire cropped region should be unchanged
+    assert result.shape == (50, 50, 3)
+    np.testing.assert_array_equal(result, np.ones((50, 50, 3), dtype=np.uint8) * 128)
+
+
+def test_render_video_crop_with_overlay():
+    """render_video with crop + overlay should align overlay to cropped region."""
+    labels_obj = _make_synthetic_labels(n_frames=1, h=100, w=100)
+    overlay = np.zeros((100, 100), dtype=np.int32)
+    overlay[60:80, 60:80] = 1
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=overlay,
+        overlay_alpha=0.5,
+        crop=(50, 50, 100, 100),
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 1
+    # Cropped to 50x50, the label at (60:80,60:80) maps to (10:30,10:30)
+    assert frames[0].shape[:2] == (50, 50)

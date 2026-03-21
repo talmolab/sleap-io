@@ -16,6 +16,7 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import rich_click as click
 from rich import box
 from rich.console import Console
@@ -279,6 +280,271 @@ def _parse_crop_string(
         )
 
     return values
+
+
+def _load_images(
+    images_path: Path,
+    stack: bool | None = None,
+) -> list[np.ndarray]:
+    """Load images from a TIFF stack or directory of TIFFs.
+
+    Args:
+        images_path: Path to a TIFF file (single or multi-page) or a
+            directory containing TIFF images (one per frame).
+        stack: Controls interpretation of ambiguous 3-D TIFF arrays. If
+            ``None`` (default), arrays with last dimension 3 or 4 are treated
+            as single RGB/RGBA images; otherwise as frame stacks. Set to
+            ``True`` to force stack interpretation (e.g., a 3-frame grayscale
+            stack) or ``False`` to force single-image interpretation.
+
+    Returns:
+        List of image arrays, each ``(H, W)`` or ``(H, W, C)``.
+
+    Raises:
+        click.ClickException: If the path is invalid or contains no TIFFs.
+    """
+    import tifffile
+
+    if images_path.is_dir():
+        tiff_files = sorted(
+            list(images_path.glob("*.tif")) + list(images_path.glob("*.tiff"))
+        )
+        if not tiff_files:
+            raise click.ClickException(
+                f"No TIFF files found in image directory: {images_path}"
+            )
+        return [tifffile.imread(str(f)) for f in tiff_files]
+    else:
+        try:
+            data = tifffile.imread(str(images_path))
+        except Exception as e:
+            raise click.ClickException(
+                f"Failed to load image file: {images_path}. Error: {e}"
+            )
+        if data.ndim == 2:
+            return [data]
+        elif data.ndim == 3:
+            if stack is True:
+                return [data[i] for i in range(data.shape[0])]
+            elif stack is False:
+                return [data]
+            else:
+                # Heuristic: (H, W, C) if last dim is 3 or 4, else (T, H, W)
+                if data.shape[2] in (3, 4):
+                    return [data]
+                return [data[i] for i in range(data.shape[0])]
+        elif data.ndim == 4:
+            # (T, H, W, C) stack
+            return [data[i] for i in range(data.shape[0])]
+        else:
+            raise click.ClickException(f"Unexpected image array shape: {data.shape}")
+
+
+def _load_overlay(
+    overlay_path: Path,
+    frame_idx: int | None = None,
+) -> np.ndarray:
+    """Load segmentation overlay from a TIFF file or directory.
+
+    Args:
+        overlay_path: Path to a TIFF file (2D or multi-page 3D) or a directory
+            containing TIFF label images (one per frame).
+        frame_idx: If not None, extract this frame from a 3D stack and return
+            a 2D array. Used for single-image rendering mode.
+
+    Returns:
+        Label image as int32 array with shape ``(H, W)`` or ``(T, H, W)``.
+
+    Raises:
+        click.ClickException: If the path is invalid, contains no TIFFs,
+            or ``frame_idx`` is out of range.
+    """
+    import tifffile
+
+    if overlay_path.is_dir():
+        tiff_files = sorted(
+            list(overlay_path.glob("*.tif")) + list(overlay_path.glob("*.tiff"))
+        )
+        if not tiff_files:
+            raise click.ClickException(
+                f"No TIFF files found in overlay directory: {overlay_path}"
+            )
+        frames = [tifffile.imread(str(f)) for f in tiff_files]
+        if len(frames) == 1:
+            data = frames[0]
+        else:
+            data = np.stack(frames, axis=0)
+    else:
+        try:
+            data = tifffile.imread(str(overlay_path))
+        except Exception as e:
+            raise click.ClickException(
+                f"Failed to load overlay file: {overlay_path}. Error: {e}"
+            )
+
+    if frame_idx is not None and data.ndim == 3:
+        if frame_idx < 0 or frame_idx >= data.shape[0]:
+            raise click.ClickException(
+                f"--overlay frame index {frame_idx} out of range. "
+                f"Overlay has {data.shape[0]} frames (0-{data.shape[0] - 1})."
+            )
+        data = data[frame_idx]
+
+    return data.astype(np.int32)
+
+
+def _parse_overlay_outline_color(
+    color_str: str | None,
+) -> tuple[int, int, int] | None:
+    """Parse overlay outline color string into an RGB tuple.
+
+    Args:
+        color_str: Color string (e.g., ``"255,0,0"``, ``"#ff0000"``,
+            ``"red"``), or None.
+
+    Returns:
+        RGB tuple or None if ``color_str`` is None.
+
+    Raises:
+        click.ClickException: If the color string cannot be parsed.
+    """
+    if color_str is None:
+        return None
+
+    from sleap_io.rendering.colors import resolve_color
+
+    try:
+        return resolve_color(color_str)
+    except Exception as e:
+        raise click.ClickException(
+            f"Invalid --overlay-outline-color: '{color_str}'. Error: {e}"
+        )
+
+
+def _render_overlay_only(
+    images_path: Path,
+    overlay_path: Path | None,
+    output_path: Path | None,
+    overlay_alpha: float,
+    overlay_palette: str,
+    overlay_outline: bool,
+    overlay_outline_width: int,
+    overlay_outline_color_str: str | None,
+    scale: float | None,
+    fps: float | None,
+    crf: int,
+    x264_preset: str,
+    images_stack: bool | None = None,
+) -> None:
+    """Render images with overlay in overlay-only mode (no labels file).
+
+    Args:
+        images_path: Path to images (TIFF stack or directory of TIFFs).
+        overlay_path: Path to overlay masks (TIFF stack or directory).
+        output_path: Output file path. Defaults based on images_path.
+        overlay_alpha: Overlay opacity.
+        overlay_palette: Color palette for overlay labels.
+        overlay_outline: Whether to draw outlines.
+        overlay_outline_width: Outline width in pixels.
+        overlay_outline_color_str: Outline color string or None.
+        scale: Scale factor or None for 1.0.
+        fps: Output FPS or None for 30.
+        crf: Video quality factor.
+        x264_preset: H.264 encoding preset.
+        images_stack: Controls 3-D TIFF interpretation for images. See
+            :func:`_load_images`.
+    """
+    from sleap_io.rendering.core import _apply_overlay, _scale_frame, render_image
+
+    if overlay_path is None:
+        raise click.ClickException("--overlay is required when using --images.")
+
+    # Load images and overlay
+    images = _load_images(images_path, stack=images_stack)
+    overlay_data = _load_overlay(overlay_path)
+    overlay_outline_color = _parse_overlay_outline_color(overlay_outline_color_str)
+
+    effective_scale = scale if scale is not None else 1.0
+    effective_fps = fps if fps is not None else 30.0
+    n_frames = len(images)
+
+    # Determine if multi-frame (video) or single-frame (image)
+    if n_frames == 1:
+        # Single image mode
+        if output_path is None:
+            output_path = images_path.with_suffix(".overlay.png")
+        img = images[0]
+        # Ensure RGB
+        if img.ndim == 2:
+            img = np.stack([img] * 3, axis=-1)
+        render_image(
+            source=None,
+            image=img,
+            overlay=overlay_data,
+            overlay_alpha=overlay_alpha,
+            overlay_palette=overlay_palette,
+            overlay_outline=overlay_outline,
+            overlay_outline_width=overlay_outline_width,
+            overlay_outline_color=overlay_outline_color,
+            scale=effective_scale,
+            save_path=output_path,
+        )
+        click.echo(f"Rendered: {images_path} -> {output_path}")
+        return
+
+    # Multi-frame: render video
+    if output_path is None:
+        output_path = images_path.with_suffix(".overlay.mp4")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    from sleap_io.io.video_writing import VideoWriter
+
+    writer = VideoWriter(
+        filename=output_path,
+        fps=effective_fps,
+        crf=crf,
+        preset=x264_preset,
+    )
+
+    # Resolve per-frame overlay
+    overlay_is_3d = isinstance(overlay_data, np.ndarray) and overlay_data.ndim == 3
+
+    try:
+        for i in range(n_frames):
+            img = images[i]
+            if img.ndim == 2:
+                img = np.stack([img] * 3, axis=-1)
+
+            # Get overlay for this frame
+            if overlay_is_3d and i < overlay_data.shape[0]:
+                frame_overlay = overlay_data[i]
+            elif not overlay_is_3d:
+                frame_overlay = overlay_data
+            else:
+                frame_overlay = None
+
+            if frame_overlay is not None:
+                _apply_overlay(
+                    img,
+                    frame_overlay,
+                    alpha=overlay_alpha,
+                    palette=overlay_palette,
+                    outline=overlay_outline,
+                    outline_width=overlay_outline_width,
+                    outline_color=overlay_outline_color,
+                )
+
+            if effective_scale != 1.0:
+                img = _scale_frame(img, effective_scale)
+
+            writer(img)
+
+            if (i + 1) % 100 == 0 or i == 0 or i == n_frames - 1:
+                click.echo(f"  Frame {i + 1}/{n_frames}")
+    finally:
+        writer.close()
+
+    click.echo(f"Rendered: {images_path} -> {output_path}")
 
 
 def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
@@ -2990,6 +3256,70 @@ def filenames(
     help="Background: 'video' (use source video), or color name/hex/RGB "
     "(e.g., 'black', '#ff0000', '128,128,128'). Use a color if video unavailable.",
 )
+# Overlay options
+@click.option(
+    "--images",
+    "images_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Image source for overlay-only mode (no labels needed): "
+    "TIFF stack or directory of TIFFs.",
+)
+@click.option(
+    "--overlay",
+    "overlay_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Segmentation overlay: TIFF file (2D label image or 3D stack) "
+    "or directory of TIFF label images.",
+)
+@click.option(
+    "--overlay-alpha",
+    "overlay_alpha",
+    type=float,
+    default=0.3,
+    show_default=True,
+    help="Overlay opacity (0.0-1.0).",
+)
+@click.option(
+    "--overlay-palette",
+    "overlay_palette",
+    type=str,
+    default="distinct",
+    show_default=True,
+    help="Color palette for overlay labels.",
+)
+@click.option(
+    "--overlay-outline/--no-overlay-outline",
+    "overlay_outline",
+    default=False,
+    show_default=True,
+    help="Draw outlines around segmented regions.",
+)
+@click.option(
+    "--overlay-outline-width",
+    "overlay_outline_width",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Outline width in pixels.",
+)
+@click.option(
+    "--overlay-outline-color",
+    "overlay_outline_color_str",
+    type=str,
+    default=None,
+    help="Outline color (e.g., 'white', '#ff0000', '255,0,0'). "
+    "Default: darkened fill color.",
+)
+@click.option(
+    "--images-stack/--no-images-stack",
+    "images_stack",
+    default=None,
+    help="Force 3-D TIFF interpretation for --images: "
+    "--images-stack treats as frame stack, --no-images-stack treats as single image. "
+    "Default: auto-detect (last dim 3 or 4 → single image, otherwise → stack).",
+)
 # Info options
 @click.option(
     "--list-colors",
@@ -3028,6 +3358,14 @@ def render(
     no_edges: bool,
     crop_str: str | None,
     background: str,
+    images_path: Path | None,
+    overlay_path: Path | None,
+    overlay_alpha: float,
+    overlay_palette: str,
+    overlay_outline: bool,
+    overlay_outline_width: int,
+    overlay_outline_color_str: str | None,
+    images_stack: bool | None,
     list_colors: bool,
     list_palettes: bool,
 ) -> None:
@@ -3075,6 +3413,22 @@ def render(
 
         $ sio render predictions.slp --background "#333333"  # Custom hex color
 
+        [bold]Segmentation overlay:[/]
+
+        $ sio render predictions.slp --overlay masks.tif     # TIFF stack overlay
+
+        $ sio render predictions.slp --overlay masks/        # Directory of TIFFs
+
+        $ sio render predictions.slp --lf 0 --overlay masks.tif --overlay-alpha 0.4
+
+        $ sio render predictions.slp --overlay masks.tif --overlay-outline
+
+        [bold]Overlay-only mode (no labels file needed):[/]
+
+        $ sio render --images frames/ --overlay masks.tif -o output.mp4
+
+        $ sio render --images frames.tif --overlay masks/ --overlay-outline
+
         [bold]Color info:[/]
 
         $ sio render --list-colors                           # Show available colors
@@ -3112,6 +3466,25 @@ def render(
         console.print("  fire, rainbow4, blues, and many more")
         console.print()
         console.print("[dim]Install colorcet: pip install colorcet[/]")
+        return
+
+    # Overlay-only mode: --images without a labels file
+    if images_path is not None:
+        _render_overlay_only(
+            images_path=images_path,
+            overlay_path=overlay_path,
+            output_path=output_path,
+            overlay_alpha=overlay_alpha,
+            overlay_palette=overlay_palette,
+            overlay_outline=overlay_outline,
+            overlay_outline_width=overlay_outline_width,
+            overlay_outline_color_str=overlay_outline_color_str,
+            scale=scale,
+            fps=fps,
+            crf=crf,
+            x264_preset=x264_preset,
+            images_stack=images_stack,
+        )
         return
 
     # Resolve input path from positional arg or -i option
@@ -3187,6 +3560,28 @@ def render(
     # Parse crop specification
     crop = _parse_crop_string(crop_str)
 
+    # Load overlay data
+    overlay_data = None
+    overlay_outline_color = _parse_overlay_outline_color(overlay_outline_color_str)
+    if overlay_path is not None:
+        if single_image_mode:
+            # Resolve the video frame index for single-image mode
+            overlay_fidx = frame_idx
+            if lf_ind is not None and 0 <= lf_ind < len(labels.labeled_frames):
+                overlay_fidx = labels.labeled_frames[lf_ind].frame_idx
+            overlay_data = _load_overlay(overlay_path, frame_idx=overlay_fidx)
+        else:
+            overlay_data = _load_overlay(overlay_path)
+
+    overlay_kwargs = dict(
+        overlay=overlay_data,
+        overlay_alpha=overlay_alpha,
+        overlay_palette=overlay_palette,
+        overlay_outline=overlay_outline,
+        overlay_outline_width=overlay_outline_width,
+        overlay_outline_color=overlay_outline_color,
+    )
+
     try:
         if single_image_mode:
             # Single image rendering
@@ -3215,6 +3610,7 @@ def render(
                     show_nodes=not no_nodes,
                     show_edges=not no_edges,
                     background=background,
+                    **overlay_kwargs,
                 )
             else:
                 # Render by video + frame_idx
@@ -3241,6 +3637,7 @@ def render(
                     show_nodes=not no_nodes,
                     show_edges=not no_edges,
                     background=background,
+                    **overlay_kwargs,
                 )
         else:
             # Video rendering
@@ -3268,6 +3665,7 @@ def render(
                 include_unlabeled=effective_all_frames,
                 show_progress=True,
                 background=background,
+                **overlay_kwargs,
             )
     except Exception as e:
         raise click.ClickException(f"Failed to render: {e}")
