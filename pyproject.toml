@@ -67,6 +67,7 @@ dev = [
     "mkdocs-gen-files",
     "mkdocs-literate-nav",
     "mkdocs-section-index",
+    "markdown-exec[ansi]",
     "mike",
     "py-spy>=0.4.1",
 ]

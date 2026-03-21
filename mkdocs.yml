@@ -59,6 +59,7 @@ plugins:
   - mkdocs-jupyter
   - mike
   - autorefs
+  - markdown-exec
   - gen-files:
       scripts:
         - scripts/gen_ref_pages.py
@@ -155,7 +156,13 @@ nav:
     - Rendering: rendering.md
     - Transforms: transforms.md
   - Reference:
-    - Model: model.md
+    - Model:
+      - model/index.md
+      - Poses & Skeletons: model/poses.md
+      - Labels & Frames: model/labels.md
+      - Video: model/video.md
+      - 3D & Multi-View: model/3d.md
+      - Regions & Segmentation: model/regions.md
     - Formats:
       - formats/index.md
       - SLP Format: formats/slp.md
