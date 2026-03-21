@@ -175,4 +175,4 @@ classDiagram
 
 !!! tip "Hands-on examples"
 
-    For practical code recipes:loading data, modifying skeletons, exporting formats, and more:see the **[Examples](../examples.md)** guide.
+    For practical code recipes — loading data, modifying skeletons, exporting formats, and more — see the **[Examples](../examples.md)** guide.
