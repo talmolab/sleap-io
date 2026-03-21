@@ -6,6 +6,7 @@ strict: false
 
 # Custom hooks
 hooks:
+  - hooks/markdown_exec_pycon.py  # Auto-execute pycon blocks with console output
   - hooks/copy_source_markdown.py  # Publish .md sources alongside HTML
 
 theme:
@@ -56,6 +57,7 @@ theme:
 plugins:
   - search
   # - privacy  # Caching dynamic badges
+  - markdown-exec
   - mkdocs-jupyter
   - mike
   - autorefs
@@ -139,6 +141,8 @@ extra_css:
 
 extra_javascript:
   - js/toc-code-style.js
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 copyright: >
   Copyright &copy; 2022 - 2026 Talmo Lab
@@ -155,7 +159,13 @@ nav:
     - Rendering: rendering.md
     - Transforms: transforms.md
   - Reference:
-    - Model: model.md
+    - Model:
+      - model/index.md
+      - Labels: model/labels.md
+      - Video: model/video.md
+      - Poses: model/poses.md
+      - 3D: model/3d.md
+      - Regions: model/regions.md
     - Formats:
       - formats/index.md
       - SLP Format: formats/slp.md

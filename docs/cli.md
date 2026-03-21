@@ -2659,4 +2659,4 @@ Optional:
 
 - [Formats](formats/): Detailed format specifications and Python API
 - [Examples](examples.md): Python code examples for common tasks
-- [Model](model.md): Data model documentation
+- [Model](model/index.md): Data model documentation
