@@ -11,10 +11,10 @@ says *what* to label, and instances record *where* each landmark is.
 
 The pose data model is built around four key types:
 
-- **`Skeleton`**:the **template**: defines what landmarks exist, how they connect, and which are symmetric.
-- **`Instance`**:the **data**: stores actual (x, y) coordinates for one animal in one frame.
-- **`PredictedInstance`**:like `Instance` but includes per-point and instance-level confidence scores from a model.
-- **`Track`**:the **identity**: links the same animal across frames.
+- **`Skeleton`** is the **template**: defines what landmarks exist, how they connect, and which are symmetric.
+- **`Instance`** is the **data**: stores actual (x, y) coordinates for one animal in one frame.
+- **`PredictedInstance`** is like `Instance` but includes per-point and instance-level confidence scores from a model.
+- **`Track`** is the **identity**: links the same animal across frames.
 
 A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, and optionally a `Track` to indicate which animal it belongs to.
 
@@ -264,7 +264,7 @@ as belonging to the same individual.
 
 ## Points array
 
-Under the hood, an instance stores its landmark data in a `PointsArray`:a
+Under the hood, an instance stores its landmark data in a `PointsArray`, a
 structured numpy array with named fields for coordinates, visibility, and
 metadata.
 

@@ -22,95 +22,95 @@ The data model is split into five areas, each covered on its own page:
 classDiagram
     direction TB
 
-    class Skeleton {
+    class Skeleton:::poses {
         +nodes
         +edges
         +symmetries
     }
-    class Node {
+    class Node:::poses {
         +str name
     }
-    class Edge {
+    class Edge:::poses {
         +Node source
         +Node destination
     }
-    class Symmetry {
+    class Symmetry:::poses {
         +Set~Node~ nodes
     }
-    class Track {
+    class Track:::poses {
         +str name
     }
-    class Instance {
+    class Instance:::poses {
         +PointsArray points
         +Skeleton skeleton
         +Track track
     }
-    class PredictedInstance {
+    class PredictedInstance:::poses {
         +float score
     }
 
-    class Labels {
+    class Labels:::labels {
         +labeled_frames
         +videos
         +skeletons
         +tracks
     }
-    class LabeledFrame {
+    class LabeledFrame:::labels {
         +Video video
         +int frame_idx
         +instances
     }
-    class SuggestionFrame {
+    class SuggestionFrame:::labels {
         +Video video
         +int frame_idx
     }
-    class LabelsSet {
+    class LabelsSet:::labels {
         +labels
     }
 
-    class Video {
+    class Video:::video {
         +str filename
         +VideoBackend backend
     }
 
-    class Camera {
+    class Camera:::threed {
         +ndarray matrix
         +ndarray dist
         +str name
     }
-    class CameraGroup {
+    class CameraGroup:::threed {
         +cameras
     }
-    class RecordingSession {
+    class RecordingSession:::threed {
         +CameraGroup camera_group
         +frame_groups
     }
-    class FrameGroup {
+    class FrameGroup:::threed {
         +int frame_idx
         +instance_groups
     }
-    class InstanceGroup {
+    class InstanceGroup:::threed {
         +instance_by_camera
         +ndarray points
     }
 
-    class ROI {
+    class ROI:::regions {
         +geometry
         +str name
     }
-    class SegmentationMask {
+    class SegmentationMask:::regions {
         +rle_counts
         +int height
         +int width
     }
-    class BoundingBox {
+    class BoundingBox:::regions {
         +float x_center
         +float y_center
         +float width
         +float height
     }
-    class UserBoundingBox
-    class PredictedBoundingBox {
+    class UserBoundingBox:::regions
+    class PredictedBoundingBox:::regions {
         +float score
     }
 
@@ -144,12 +144,6 @@ classDiagram
     classDef video fill:#ef6c00,stroke:#e65100,color:#fff
     classDef threed fill:#7b1fa2,stroke:#6a1b9a,color:#fff
     classDef regions fill:#d32f2f,stroke:#c62828,color:#fff
-
-    class Skeleton,Node,Edge,Symmetry,Track,Instance,PredictedInstance poses
-    class Labels,LabeledFrame,SuggestionFrame,LabelsSet labels
-    class Video video
-    class Camera,CameraGroup,RecordingSession,FrameGroup,InstanceGroup threed
-    class ROI,SegmentationMask,BoundingBox,UserBoundingBox,PredictedBoundingBox regions
 ```
 
 ## Quick reference

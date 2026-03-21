@@ -8,12 +8,12 @@ stored on the `Labels` object via `labels.bboxes`, `labels.rois`, and
 
 sleap-io provides three spatial annotation types with different trade-offs:
 
-- **`BoundingBox`**:axis-aligned or rotated rectangles, stored as center +
+- **`BoundingBox`** —axis-aligned or rotated rectangles, stored as center +
   dimensions. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
   distinguishing human annotations from model outputs.
-- **`ROI`**:arbitrary vector geometry via Shapely (polygons, multi-polygons,
+- **`ROI`** —arbitrary vector geometry via Shapely (polygons, multi-polygons,
   etc.). Can be static (whole video) or per-frame.
-- **`SegmentationMask`**:per-pixel binary masks stored as run-length encoding
+- **`SegmentationMask`** —per-pixel binary masks stored as run-length encoding
   for compactness.
 
 All three can be associated with a video, frame, track, and instance. They are

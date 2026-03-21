@@ -39,7 +39,7 @@ Build a `Labels` object programmatically from skeleton definitions, videos, and 
 >>> labels
 ```
 
-You do not need to manually specify `videos` and `skeletons`:they are automatically collected from the labeled frames:
+You do not need to manually specify `videos` and `skeletons` — they are automatically collected from the labeled frames:
 
 ```pycon
 >>> import sleap_io as sio
