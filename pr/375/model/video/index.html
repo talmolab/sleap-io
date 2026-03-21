@@ -3314,49 +3314,44 @@
 </table>
 <h2 id="class-diagram">Class diagram<a class="headerlink" href="#class-diagram" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>classDiagram
-    class Video {
+    class Video:::video {
         +str filename
         +VideoBackend backend
-        +dict backend_metadata
-        +Video source_video
         +shape
         +fps
-        +grayscale
-        +is_open
         +exists()
         +open()
         +close()
-        +save()
     }
 
-    class Labels {
-        +List~Video~ videos
-        +List~LabeledFrame~ labeled_frames
+    class Labels:::labels {
+        +videos
     }
 
-    class LabeledFrame {
+    class LabeledFrame:::labels {
         +Video video
         +int frame_idx
     }
 
-    class VideoBackend {
-        &lt;&lt;abstract&gt;&gt;
+    class VideoBackend:::backend {
         +shape
         +get_frame()
-        +get_frames()
     }
 
-    class MediaVideo
-    class HDF5Video
-    class ImageVideo
+    class MediaVideo:::backend
+    class HDF5Video:::backend
+    class ImageVideo:::backend
 
-    Labels "1" *-- "0..*" Video : contains
-    LabeledFrame "0..*" --&gt; "1" Video : references
-    Video "1" --&gt; "0..1" VideoBackend : backend
-    Video "0..1" --&gt; "0..1" Video : source_video
+    Labels "1" *-- "0..*" Video
+    LabeledFrame --&gt; Video : references
+    Video --&gt; VideoBackend : backend
     VideoBackend &lt;|-- MediaVideo
     VideoBackend &lt;|-- HDF5Video
-    VideoBackend &lt;|-- ImageVideo</code></pre>
+    VideoBackend &lt;|-- ImageVideo
+
+    classDef video fill:#ef6c00,stroke:#e65100,color:#fff
+    classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
+    classDef backend fill:#546e7a,stroke:#37474f,color:#fff</code></pre>
 <div class="admonition note">
 <p class="admonition-title">See also</p>
 <ul>
@@ -4624,7 +4619,7 @@ The class bool is a subclass of the class int, and cannot be subclassed.</p>
 
 
 <h3 id="sleap_io.Video.__attrs_props__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7ff27af85e40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">__attrs_props__</span> <span class="o">=</span> <span class="n">ClassProps</span><span class="p">(</span><span class="n">is_exception</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_slotted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">has_weakref_slot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_frozen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=&lt;</span><span class="n">KeywordOnly</span><span class="o">.</span><span class="n">NO</span><span class="p">:</span> <span class="s1">&#39;no&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">collected_fields_by_mro</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_init</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_ordering</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hashability</span><span class="o">=&lt;</span><span class="n">Hashability</span><span class="o">.</span><span class="n">LEAVE_ALONE</span><span class="p">:</span> <span class="s1">&#39;leave_alone&#39;</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">added_match_args</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">added_str</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">added_pickling</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_setattr_hook</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">pipe</span><span class="o">.&lt;</span><span class="nb">locals</span><span class="o">&gt;.</span><span class="n">wrapped_pipe</span> <span class="n">at</span> <span class="mh">0x7fb50d821e40</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">field_transformer</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>

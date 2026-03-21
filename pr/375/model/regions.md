@@ -378,79 +378,54 @@ category, source) when applicable.
 
 ``` mermaid
 classDiagram
-    class BoundingBox {
+    class BoundingBox:::regions {
         +float x_center
         +float y_center
         +float width
         +float height
         +float angle
-        +Video video
-        +int frame_idx
-        +Track track
-        +Instance instance
-        +str category
-        +area: float
-        +xyxy: tuple
-        +corners: ndarray
-        +to_roi() ROI
-        +to_mask() SegmentationMask
+        +to_roi()
+        +to_mask()
     }
 
-    class UserBoundingBox
-
-    class PredictedBoundingBox {
+    class UserBoundingBox:::regions
+    class PredictedBoundingBox:::regions {
         +float score
     }
 
-    class ROI {
-        +BaseGeometry geometry
+    class ROI:::regions {
+        +geometry
         +str name
-        +Video video
-        +int frame_idx
-        +Track track
-        +Instance instance
-        +area: float
-        +bounds: tuple
-        +centroid: tuple
-        +is_static: bool
-        +to_mask() SegmentationMask
-        +explode() list~ROI~
+        +is_static
+        +to_mask()
+        +explode()
     }
 
-    class SegmentationMask {
-        +ndarray rle_counts
+    class SegmentationMask:::regions {
+        +rle_counts
         +int height
         +int width
-        +Video video
-        +int frame_idx
-        +Track track
-        +Instance instance
-        +area: int
-        +data: ndarray
-        +bbox: tuple
-        +to_polygon() ROI
+        +to_polygon()
     }
 
-    class Labels {
-        +list~BoundingBox~ bboxes
-        +list~ROI~ rois
-        +list~SegmentationMask~ masks
+    class Labels:::labels {
+        +bboxes
+        +rois
+        +masks
     }
 
-    BoundingBox <|-- UserBoundingBox : inherits
-    BoundingBox <|-- PredictedBoundingBox : inherits
+    BoundingBox <|-- UserBoundingBox
+    BoundingBox <|-- PredictedBoundingBox
     BoundingBox --> ROI : to_roi()
     BoundingBox --> SegmentationMask : to_mask()
     ROI --> SegmentationMask : to_mask()
     SegmentationMask --> ROI : to_polygon()
-    Labels "1" *-- "0..*" BoundingBox : bboxes
-    Labels "1" *-- "0..*" ROI : rois
-    Labels "1" *-- "0..*" SegmentationMask : masks
+    Labels "1" *-- "0..*" BoundingBox
+    Labels "1" *-- "0..*" ROI
+    Labels "1" *-- "0..*" SegmentationMask
 
     classDef regions fill:#d32f2f,stroke:#c62828,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
-    class BoundingBox,UserBoundingBox,PredictedBoundingBox,ROI,SegmentationMask regions
-    class Labels labels
 ```
 
 !!! note "See also"
