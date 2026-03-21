@@ -3,21 +3,21 @@
 Beyond keypoint poses, sleap-io supports spatial annotation types: bounding
 boxes, regions of interest (vector polygons), and segmentation masks (raster).
 These can be associated with videos, frames, tracks, and instances, and are
-stored on the `Labels` object via `labels.bboxes`, `labels.rois`, and
+stored on the [`Labels`](labels.md) object via `labels.bboxes`, `labels.rois`, and
 `labels.masks`.
 
 sleap-io provides three spatial annotation types with different trade-offs:
 
-- **`BoundingBox`** —axis-aligned or rotated rectangles, stored as center +
+- **`BoundingBox`** — axis-aligned or rotated rectangles, stored as center +
   dimensions. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
   distinguishing human annotations from model outputs.
-- **`ROI`** —arbitrary vector geometry via Shapely (polygons, multi-polygons,
+- **`ROI`** — arbitrary vector geometry via Shapely (polygons, multi-polygons,
   etc.). Can be static (whole video) or per-frame.
-- **`SegmentationMask`** —per-pixel binary masks stored as run-length encoding
+- **`SegmentationMask`** — per-pixel binary masks stored as run-length encoding
   for compactness.
 
 All three can be associated with a video, frame, track, and instance. They are
-stored on `Labels` via `labels.bboxes`, `labels.rois`, and `labels.masks`, and
+stored on [`Labels`](labels.md) via `labels.bboxes`, `labels.rois`, and `labels.masks`, and
 can be converted between each other (bbox -> ROI -> mask).
 
 ---
@@ -133,10 +133,10 @@ Every bounding box can carry optional metadata:
 
 | Field       | Type               | Description                                  |
 | ----------- | ------------------ | -------------------------------------------- |
-| `video`     | `Video \| None`    | Associated video                             |
+| `video`     | [`Video`](video.md) `\| None`    | Associated video                             |
 | `frame_idx` | `int \| None`      | Frame index within the video                 |
-| `track`     | `Track \| None`    | Tracking identity across frames              |
-| `instance`  | `Instance \| None` | Linked pose instance                         |
+| `track`     | [`Track`](poses.md) `\| None`    | Tracking identity across frames              |
+| `instance`  | [`Instance`](poses.md) `\| None` | Linked pose instance                         |
 | `category`  | `str`              | Class label (e.g., `"mouse"`)                |
 | `name`      | `str`              | Human-readable name                          |
 | `source`    | `str`              | Annotation source identifier                 |
@@ -147,7 +147,7 @@ Every bounding box can carry optional metadata:
 
 An `ROI` represents a vector geometry annotation using
 [Shapely](https://shapely.readthedocs.io/) geometries. ROIs are suitable for
-defining arenas, exclusion zones, or arbitrary spatial regions:anything that
+defining arenas, exclusion zones, or arbitrary spatial regions: anything that
 is naturally described by a polygon or set of polygons rather than a simple
 rectangle.
 

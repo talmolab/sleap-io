@@ -1,6 +1,6 @@
 # Data model
 
-sleap-io organizes pose tracking data into a hierarchy of containers and annotations. The core flow is: a **`Skeleton`** defines the body plan (what landmarks exist), an **`Instance`** records one animal's pose (where each landmark is), a **`LabeledFrame`** groups instances at a single video frame, and **`Labels`** ties everything together into a dataset that can be saved, loaded, and manipulated.
+sleap-io organizes pose tracking data into a hierarchy of containers and annotations. The core flow is: a **[`Skeleton`](poses.md)** defines the body plan (what landmarks exist), an **[`Instance`](poses.md)** records one animal's pose (where each landmark is), a **[`LabeledFrame`](labels.md)** groups instances at a single video frame, and **[`Labels`](labels.md)** ties everything together into a dataset that can be saved, loaded, and manipulated.
 
 ## Overview
 

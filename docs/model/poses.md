@@ -1,7 +1,7 @@
 # Poses
 
-This page covers how sleap-io represents pose data:from defining a body plan
-with `Skeleton` to storing actual landmark positions with `Instance`. Together,
+This page covers how sleap-io represents pose data: from defining a body plan
+with [`Skeleton`][sleap_io.Skeleton] to storing actual landmark positions with [`Instance`][sleap_io.Instance]. Together,
 these two classes form the core of the pose tracking data model: the skeleton
 says *what* to label, and instances record *where* each landmark is.
 
@@ -11,10 +11,10 @@ says *what* to label, and instances record *where* each landmark is.
 
 The pose data model is built around four key types:
 
-- **`Skeleton`** is the **template**: defines what landmarks exist, how they connect, and which are symmetric.
-- **`Instance`** is the **data**: stores actual (x, y) coordinates for one animal in one frame.
-- **`PredictedInstance`** is like `Instance` but includes per-point and instance-level confidence scores from a model.
-- **`Track`** is the **identity**: links the same animal across frames.
+- **[`Skeleton`][sleap_io.Skeleton]** is the **template**: defines what landmarks exist, how they connect, and which are symmetric.
+- **[`Instance`][sleap_io.Instance]** is the **data**: stores actual (x, y) coordinates for one animal in one frame.
+- **[`PredictedInstance`][sleap_io.PredictedInstance]** is like `Instance` but includes per-point and instance-level confidence scores from a model.
+- **[`Track`][sleap_io.Track]** is the **identity**: links the same animal across frames.
 
 A `Skeleton` is shared across all instances in a dataset. Each `Instance` references a `Skeleton` to know which landmarks it contains, and optionally a `Track` to indicate which animal it belongs to.
 
@@ -23,16 +23,16 @@ A `Skeleton` is shared across all instances in a dataset. Each `Instance` refere
 ## Skeleton
 
 A `Skeleton` is a **template** that defines what landmarks (body parts) exist
-and how they connect. Think of it as a form to fill in:the skeleton says
+and how they connect. Think of it as a form to fill in: the skeleton says
 "head, thorax, abdomen" while instances fill in the actual (x, y) coordinates.
 
 Skeletons are composed of three building blocks:
 
-| Component    | Purpose                                         |
-| ------------ | ----------------------------------------------- |
-| `Node`       | A single landmark type (e.g. "head")            |
-| `Edge`       | A directed connection between two nodes          |
-| `Symmetry`   | A left/right pairing (e.g. "left eye" / "right eye") |
+| Component                            | Purpose                                         |
+| ------------------------------------ | ----------------------------------------------- |
+| [`Node`][sleap_io.Node]              | A single landmark type (e.g. "head")            |
+| [`Edge`][sleap_io.Edge]              | A directed connection between two nodes          |
+| [`Symmetry`][sleap_io.Symmetry]      | A left/right pairing (e.g. "left eye" / "right eye") |
 
 ### Creating a skeleton
 
@@ -53,8 +53,8 @@ Skeleton(nodes=["head", "thorax", "abdomen"], edges=[(0, 1), (1, 2)])
 
 ```
 
-Nodes and edges can be specified as strings or indices:they are converted to
-`Node` and `Edge` objects automatically.
+Nodes and edges can be specified as strings or indices: they are converted to
+[`Node`][sleap_io.Node] and [`Edge`][sleap_io.Edge] objects automatically.
 
 ### Accessing nodes
 
@@ -117,7 +117,7 @@ the `Skeleton` constructor and convenience methods handle them for you.
 
 ## Instance
 
-An `Instance` is one animal's pose in one frame:the "filled-in form." It
+An `Instance` is one animal's pose in one frame: the "filled-in form." It
 stores (x, y) coordinates for each landmark defined by a `Skeleton`.
 
 ### From a numpy array
@@ -203,7 +203,7 @@ True
 
 ## Predicted instances
 
-`PredictedInstance` extends `Instance` with confidence scores:both a
+`PredictedInstance` extends `Instance` with confidence scores: both a
 per-point score for each landmark and an overall instance-level score.
 
 When creating from a numpy array, the third column is interpreted as the
@@ -257,7 +257,7 @@ as belonging to the same individual.
 
 !!! note
     `Track` objects are compared by **identity** (not by name). Two different
-    `Track("mouse")` objects are considered distinct:this allows multiple
+    `Track("mouse")` objects are considered distinct: this allows multiple
     tracks with the same display name if needed.
 
 ---
