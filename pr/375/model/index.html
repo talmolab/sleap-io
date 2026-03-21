@@ -2822,13 +2822,13 @@
 <p>sleap-io organizes pose tracking data into a hierarchy of containers and annotations. The core flow is: a <strong><code>Skeleton</code></strong> defines the body plan (what landmarks exist), an <strong><code>Instance</code></strong> records one animal's pose (where each landmark is), a <strong><code>LabeledFrame</code></strong> groups instances at a single video frame, and <strong><code>Labels</code></strong> ties everything together into a dataset that can be saved, loaded, and manipulated.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>The data model is split into five areas, each covered on its own page:</p>
-<p><strong><a href="poses/">Poses</a></strong> -- The skeleton template and pose instances. A <code>Skeleton</code> declares landmark types (<code>Node</code>), connections (<code>Edge</code>), and symmetries. <code>Instance</code> and <code>PredictedInstance</code> store per-animal coordinates and confidence scores. <code>Track</code> links the same animal across frames.</p>
-<p><strong><a href="labels/">Labels</a></strong> -- The dataset container. <code>Labels</code> holds labeled frames, videos, skeletons, and tracks. <code>LabeledFrame</code> groups annotations for a single video frame. <code>LabelsSet</code> manages multiple datasets (e.g., train/val/test splits).</p>
-<p><strong><a href="video/">Video</a></strong> -- Lazy array-like access to video data. <code>Video</code> wraps multiple backends (MP4, HDF5, image sequences) behind a unified interface.</p>
-<p><strong><a href="3d/">3D</a></strong> -- Multi-camera support. <code>Camera</code> stores calibration parameters, <code>RecordingSession</code> links cameras to videos, and <code>FrameGroup</code>/<code>InstanceGroup</code> pair 2D views for 3D reconstruction.</p>
-<p><strong><a href="regions/">Regions</a></strong> -- Spatial annotations beyond keypoints. <code>BoundingBox</code> for detection, <code>ROI</code> for vector polygons, and <code>SegmentationMask</code> for pixel-level labels.</p>
+<p><strong><a href="poses/">Poses</a></strong>: The skeleton template and pose instances. A <code>Skeleton</code> declares landmark types (<code>Node</code>), connections (<code>Edge</code>), and symmetries. <code>Instance</code> and <code>PredictedInstance</code> store per-animal coordinates and confidence scores. <code>Track</code> links the same animal across frames.</p>
+<p><strong><a href="labels/">Labels</a></strong>: The dataset container. <code>Labels</code> holds labeled frames, videos, skeletons, and tracks. <code>LabeledFrame</code> groups annotations for a single video frame. <code>LabelsSet</code> manages multiple datasets (e.g., train/val/test splits).</p>
+<p><strong><a href="video/">Video</a></strong>: Lazy array-like access to video data. <code>Video</code> wraps multiple backends (MP4, HDF5, image sequences) behind a unified interface.</p>
+<p><strong><a href="3d/">3D</a></strong>: Multi-camera support. <code>Camera</code> stores calibration parameters, <code>RecordingSession</code> links cameras to videos, and <code>FrameGroup</code>/<code>InstanceGroup</code> pair 2D views for 3D reconstruction.</p>
+<p><strong><a href="regions/">Regions</a></strong>: Spatial annotations beyond keypoints. <code>BoundingBox</code> for detection, <code>ROI</code> for vector polygons, and <code>SegmentationMask</code> for pixel-level labels.</p>
 <h2 id="class-diagram">Class diagram<a class="headerlink" href="#class-diagram" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>classDiagram
+<div class="mermaid">classDiagram
     direction TB
 
     class Skeleton {
@@ -2958,7 +2958,7 @@
     class Labels,LabeledFrame,SuggestionFrame,LabelsSet labels
     class Video video
     class Camera,CameraGroup,RecordingSession,FrameGroup,InstanceGroup threed
-    class ROI,SegmentationMask,BoundingBox,UserBoundingBox,PredictedBoundingBox regions</code></pre>
+    class ROI,SegmentationMask,BoundingBox,UserBoundingBox,PredictedBoundingBox regions</div>
 <h2 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3083,7 +3083,7 @@
 </table>
 <div class="admonition tip">
 <p class="admonition-title">Hands-on examples</p>
-<p>For practical code recipes -- loading data, modifying skeletons, exporting formats, and more -- see the <strong><a href="../examples/">Examples</a></strong> guide.</p>
+<p>For practical code recipes:loading data, modifying skeletons, exporting formats, and more:see the <strong><a href="../examples/">Examples</a></strong> guide.</p>
 </div>
 
 

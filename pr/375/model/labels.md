@@ -1,12 +1,12 @@
-# Labels & frames
+# Labels
 
-`Labels` is the top-level container in sleap-io -- the entry point for all pose tracking data. It holds videos, skeletons, labeled frames, and tracks. A `LabeledFrame` groups all annotations for a single video frame, while `SuggestionFrame` marks frames suggested for labeling.
+`Labels` is the top-level container in sleap-io:the entry point for all pose tracking data. It holds videos, skeletons, labeled frames, and tracks. A `LabeledFrame` groups all annotations for a single video frame, while `SuggestionFrame` marks frames suggested for labeling.
 
 ## Container hierarchy
 
 The core data structures form a layered hierarchy:
 
-- **`Labels`** is the top-level container -- it owns everything in a project.
+- **`Labels`** is the top-level container:it owns everything in a project.
 - **`LabeledFrame`** groups all annotations for one frame of one video.
 - **`SuggestionFrame`** is a lightweight pointer to frames suggested for annotation (no instance data).
 - **`LabelsSet`** manages named collections of `Labels` (e.g., train/val/test splits).
@@ -39,7 +39,7 @@ Build a `Labels` object programmatically from skeleton definitions, videos, and 
 >>> labels
 ```
 
-You do not need to manually specify `videos` and `skeletons` -- they are automatically collected from the labeled frames:
+You do not need to manually specify `videos` and `skeletons`:they are automatically collected from the labeled frames:
 
 ```pycon
 >>> import sleap_io as sio
@@ -248,7 +248,7 @@ A frame can also be converted to a NumPy array:
 
 ## Suggestion frames
 
-A `SuggestionFrame` is a lightweight pointer to a frame that has been suggested for annotation. Unlike `LabeledFrame`, it carries no instance data -- just a video reference and frame index.
+A `SuggestionFrame` is a lightweight pointer to a frame that has been suggested for annotation. Unlike `LabeledFrame`, it carries no instance data:just a video reference and frame index.
 
 ```pycon
 >>> import sleap_io as sio
