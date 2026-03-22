@@ -1,12 +1,12 @@
 # Regions
 
 Beyond keypoint poses, sleap-io supports spatial annotation types: bounding
-boxes, regions of interest (vector polygons), and segmentation masks (raster).
-These can be associated with videos, frames, tracks, and instances, and are
-stored on the [`Labels`](labels.md) object via `labels.bboxes`, `labels.rois`, and
-`labels.masks`.
+boxes, regions of interest (vector polygons), segmentation masks (raster), and
+label images (dense instance segmentation). These can be associated with videos,
+frames, tracks, and instances, and are stored on the [`Labels`](labels.md) object
+via `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`.
 
-sleap-io provides three spatial annotation types with different trade-offs:
+sleap-io provides four spatial annotation types with different trade-offs:
 
 - **`BoundingBox`** — axis-aligned or rotated rectangles, stored as center +
   dimensions. Has `UserBoundingBox` and `PredictedBoundingBox` subtypes for
@@ -14,11 +14,16 @@ sleap-io provides three spatial annotation types with different trade-offs:
 - **`ROI`** — arbitrary vector geometry via Shapely (polygons, multi-polygons,
   etc.). Can be static (whole video) or per-frame.
 - **`SegmentationMask`** — per-pixel binary masks stored as run-length encoding
-  for compactness.
+  for compactness. One mask per object.
+- **`LabelImage`** — dense per-pixel integer label image storing **all** objects
+  for a frame in one array. Standard output of instance segmentation tools like
+  [Cellpose](https://www.cellpose.org/) and
+  [StarDist](https://github.com/stardist/stardist).
 
-All three can be associated with a video, frame, track, and instance. They are
-stored on [`Labels`](labels.md) via `labels.bboxes`, `labels.rois`, and `labels.masks`, and
-can be converted between each other (bbox -> ROI -> mask).
+All four can be associated with a video, frame, track, and instance. They are
+stored on [`Labels`](labels.md) via `labels.bboxes`, `labels.rois`, `labels.masks`,
+and `labels.label_images`, and can be converted between each other
+(bbox -> ROI -> mask, label image <-> masks).
 
 ---
 
@@ -302,9 +307,189 @@ all foreground pixels as `(x, y, width, height)`:
 
 ---
 
+## Label images
+
+A `LabelImage` stores dense per-pixel instance segmentation for a single video
+frame, where each pixel value encodes which object occupies that pixel. Unlike a
+`SegmentationMask` — which is a binary mask for a single object — a
+`LabelImage` stores **all** objects in one integer array. Background pixels are
+`0`, and each positive integer identifies a distinct object. The `objects` dict
+maps these IDs to metadata (track, category, name).
+
+### From a numpy array
+
+The `from_numpy` factory method is the easiest way to create a `LabelImage`.
+Pass an integer array where each unique positive value is an object:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((128, 128), dtype=np.int32)
+>>> data[10:40, 10:40] = 1   # object 1
+>>> data[60:90, 60:90] = 2   # object 2
+>>> li = sio.LabelImage.from_numpy(data)
+>>> print(li.n_objects)
+>>> print(li.label_ids)
+>>> print(li.tracks)
+
+```
+
+By default, `from_numpy` auto-creates one `Track` per unique label ID. You
+can supply explicit tracks and categories:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((128, 128), dtype=np.int32)
+>>> data[10:40, 10:40] = 1
+>>> data[60:90, 60:90] = 2
+>>> tracks = [sio.Track(name="cell_A"), sio.Track(name="cell_B")]
+>>> li = sio.LabelImage.from_numpy(
+...     data,
+...     tracks=tracks,
+...     categories=["neuron", "glia"],
+... )
+>>> print(li.tracks)
+>>> print(li.categories)
+
+```
+
+Lists are positional (`tracks[0]` maps to label 1, etc.). Dict mappings give
+explicit control:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((128, 128), dtype=np.int32)
+>>> data[10:40, 10:40] = 5
+>>> data[60:90, 60:90] = 10
+>>> li = sio.LabelImage.from_numpy(
+...     data,
+...     tracks={5: sio.Track(name="A"), 10: sio.Track(name="B")},
+...     categories={5: "neuron", 10: "glia"},
+... )
+>>> print(li.n_objects)
+
+```
+
+### From segmentation masks
+
+Compose a `LabelImage` from existing `SegmentationMask` objects. Each mask
+becomes one object with a unique label ID. Track, category, and name are
+inherited from each mask's metadata:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> mask1 = sio.SegmentationMask.from_numpy(
+...     np.ones((64, 64), dtype=bool), track=sio.Track(name="A"),
+... )
+>>> mask2 = sio.SegmentationMask.from_numpy(
+...     np.ones((64, 64), dtype=bool), track=sio.Track(name="B"),
+... )
+>>> li = sio.LabelImage.from_masks([mask1, mask2])
+>>> print(li.n_objects)
+>>> print(li.tracks)
+
+```
+
+### Direct construction
+
+For full control, construct directly with the `data` array and `objects` dict:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+>>> li = sio.LabelImage(
+...     data=data,
+...     objects={
+...         1: sio.LabelImage.Info(
+...             track=sio.Track(name="cell_1"), category="neuron",
+...         ),
+...         2: sio.LabelImage.Info(
+...             track=sio.Track(name="cell_2"), category="glia",
+...         ),
+...     },
+... )
+>>> print(li.n_objects)
+
+```
+
+### Object metadata
+
+Each non-zero label ID can have a `LabelImage.Info` entry in the `objects` dict:
+
+| Field       | Type                             | Description                                |
+| ----------- | -------------------------------- | ------------------------------------------ |
+| `track`     | [`Track`](poses.md) `\| None`   | Cross-frame identity                       |
+| `category`  | `str`                            | Semantic class label (e.g., `"neuron"`)    |
+| `name`      | `str`                            | Human-readable name (e.g., `"cell_042"`)   |
+| `instance`  | [`Instance`](poses.md) `\| None`| Linked pose instance                       |
+
+Label IDs not present in `objects` are treated as having default (empty)
+metadata.
+
+### Querying objects
+
+Index with a `Track` to get the binary mask for that object:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((64, 64), dtype=np.int32)
+>>> data[10:30, 10:30] = 1
+>>> track = sio.Track(name="cell_A")
+>>> li = sio.LabelImage.from_numpy(data, tracks={1: track})
+>>> mask = li[track]
+>>> print(mask.dtype)
+>>> print(mask.sum())
+
+```
+
+Test containment, iterate objects, or get a union mask by category:
+
+```pycon
+>>> print(track in li)
+>>> for track, category, mask in li.items():
+...     print(f"{track.name}: {category}, {mask.sum()} px")
+
+```
+
+| Property      | Type              | Description                                    |
+| ------------- | ----------------- | ---------------------------------------------- |
+| `n_objects`   | `int`             | Number of unique non-zero labels               |
+| `label_ids`   | `np.ndarray`      | Sorted array of non-zero label values          |
+| `tracks`      | `list[Track]`     | Tracks with non-None track in objects           |
+| `categories`  | `set[str]`        | Unique non-empty category strings               |
+| `height`      | `int`             | Image height in pixels                          |
+| `width`       | `int`             | Image width in pixels                           |
+
+### Decomposing to SegmentationMasks
+
+A `LabelImage` can be decomposed into per-object binary `SegmentationMask`
+objects and reconstructed from them:
+
+```pycon
+>>> import numpy as np
+>>> import sleap_io as sio
+>>> data = np.zeros((64, 64), dtype=np.int32)
+>>> data[10:30, 10:30] = 1
+>>> data[40:60, 40:60] = 2
+>>> li = sio.LabelImage.from_numpy(data)
+>>> masks = li.to_masks()
+>>> print(len(masks))
+>>> print(masks[0].area)
+>>> li2 = sio.LabelImage.from_masks(masks)
+>>> print(li2.n_objects)
+
+```
+
+---
+
 ## Conversions
 
-The three spatial annotation types can be converted between each other where
+The four spatial annotation types can be converted between each other where
 geometrically meaningful:
 
 | From                | To                    | Method                            |
@@ -313,6 +498,8 @@ geometrically meaningful:
 | `BoundingBox`       | `SegmentationMask`    | `bbox.to_mask(height, width)`     |
 | `ROI`               | `SegmentationMask`    | `roi.to_mask(height, width)`      |
 | `SegmentationMask`  | `ROI` (polygon)       | `mask.to_polygon()`               |
+| `LabelImage`        | `list[SegmentationMask]` | `li.to_masks()`                |
+| `list[SegmentationMask]` | `LabelImage`     | `LabelImage.from_masks(masks)`    |
 
 All conversions preserve metadata (video, frame_idx, track, instance, name,
 category, source) when applicable.
@@ -370,10 +557,19 @@ classDiagram
         +to_polygon()
     }
 
+    class LabelImage:::regions {
+        +ndarray data
+        +dict objects
+        +to_masks()
+        +from_masks()
+        +from_numpy()
+    }
+
     class Labels:::labels {
         +bboxes
         +rois
         +masks
+        +label_images
     }
 
     BoundingBox <|-- UserBoundingBox
@@ -382,9 +578,12 @@ classDiagram
     BoundingBox --> SegmentationMask : to_mask()
     ROI --> SegmentationMask : to_mask()
     SegmentationMask --> ROI : to_polygon()
+    LabelImage --> SegmentationMask : to_masks()
+    SegmentationMask --> LabelImage : from_masks()
     Labels "1" *-- "0..*" BoundingBox
     Labels "1" *-- "0..*" ROI
     Labels "1" *-- "0..*" SegmentationMask
+    Labels "1" *-- "0..*" LabelImage
 
     classDef regions fill:#d32f2f,stroke:#c62828,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
@@ -392,8 +591,9 @@ classDiagram
 
 !!! note "See also"
 
-    - **[Labels & Frames](labels.md)**: Accessing bounding boxes, ROIs, and masks from a `Labels` dataset via `labels.bboxes`, `labels.rois`, and `labels.masks`, including filtered queries with `get_bboxes()`, `get_rois()`, and `get_masks()`.
+    - **[Labels & Frames](labels.md)**: Accessing bounding boxes, ROIs, masks, and label images from a `Labels` dataset via `labels.bboxes`, `labels.rois`, `labels.masks`, and `labels.label_images`, including filtered queries with `get_bboxes()`, `get_rois()`, `get_masks()`, and `get_label_images()`.
     - **[Rendering](../rendering.md)**: Visualizing segmentation overlays and bounding boxes on video frames.
+    - **[TIFF Format](../formats/tiff.md)**: Reading and writing label images as TIFF files with sidecar metadata.
 
 ---
 
@@ -408,3 +608,5 @@ classDiagram
 ::: sleap_io.ROI
 
 ::: sleap_io.SegmentationMask
+
+::: sleap_io.LabelImage

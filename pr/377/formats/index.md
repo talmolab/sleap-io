@@ -460,6 +460,37 @@ Load predictions from [LEAP](https://github.com/talmo/leap), a SLEAP predecessor
 
 ::: sleap_io.io.main.save_coco
 
+### TIFF Label Images (.tif, .tiff)
+
+TIFF files store dense integer label images for instance segmentation, where each pixel value encodes which object occupies that location. This is the standard output of tools like [Cellpose](https://www.cellpose.org/) and [StarDist](https://github.com/stardist/stardist).
+
+sleap-io supports three TIFF layouts: single files, multi-page stacks, and directories of per-frame TIFFs. A JSON sidecar (`.meta.json`) is written alongside the TIFF to preserve track names and categories.
+
+!!! tip "Detailed Format Documentation"
+    For comprehensive documentation of TIFF label image I/O including file structures and sidecar metadata, see the **[TIFF Format Reference](tiff.md)**.
+
+::: sleap_io.io.main.load_label_images
+
+::: sleap_io.io.main.save_label_images
+
+### COCO Panoptic Segmentation
+
+[COCO panoptic](https://cocodataset.org/#panoptic-2018) format represents per-pixel segmentation using a JSON annotation file and per-frame PNG label images. Each pixel is encoded as `R + G * 256 + B * 256^2`. "Thing" segments (countable objects) get track identities; "stuff" segments (uncountable regions) do not.
+
+```python
+from sleap_io.io.coco import read_coco_panoptic, write_coco_panoptic
+
+# Read panoptic annotations
+labels = read_coco_panoptic("panoptic.json", images_dir="panoptic_pngs/")
+
+# Write panoptic annotations
+write_coco_panoptic("output.json", labels, images_dir="output_pngs/")
+```
+
+::: sleap_io.io.coco.read_coco_panoptic
+
+::: sleap_io.io.coco.write_coco_panoptic
+
 ### Ultralytics YOLO Format
 
 Support for [Ultralytics YOLO](https://docs.ultralytics.com/) pose format.
@@ -521,7 +552,7 @@ Load and save skeleton definitions separately:
 
 sleap-io automatically detects file formats based on:
 
-1. **File extension**: `.slp`, `.nwb`, `.h5`, `.json`, `.geojson`, `.mat`, `.csv`
+1. **File extension**: `.slp`, `.nwb`, `.h5`, `.json`, `.geojson`, `.mat`, `.csv`, `.tif`, `.tiff`
 2. **File content**: For ambiguous extensions like `.h5` (JABS vs DLC) or `.json` (Label Studio vs COCO)
 3. **Explicit format**: Pass `format` parameter to override auto-detection
 
@@ -577,25 +608,29 @@ assert labels_original.skeleton == labels_reloaded.skeleton
 
 Different formats have varying capabilities:
 
-| Format | Read | Write | Videos | Skeletons | Tracks | Confidence | User/Predicted | BBoxes | ROIs/Masks |
-|--------|------|-------|--------|-----------|--------|------------|----------------|--------|------------|
-| SLEAP (.slp) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| NWB (.nwb) | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| JABS (.h5) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Analysis HDF5 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Label Studio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
-| CSV (.csv) | ✅ | ✅ | ❌ | ✅** | ✅ | ✅ | ❌ | ❌ | ❌ |
-| DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| AlphaTracker | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| LEAP (.mat) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅*** | ❌ | ✅ | ✅ | ✅ |
-| Ultralytics | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅**** |
-| GeoJSON (.geojson) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Format | Read | Write | Videos | Skeletons | Tracks | Confidence | User/Predicted | BBoxes | ROIs/Masks | Label Images |
+|--------|------|-------|--------|-----------|--------|------------|----------------|--------|------------|--------------|
+| SLEAP (.slp) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| NWB (.nwb) | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| JABS (.h5) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Analysis HDF5 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Label Studio | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| CSV (.csv) | ✅ | ✅ | ❌ | ✅** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| DeepLabCut | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| AlphaTracker | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| LEAP (.mat) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| COCO (.json) | ✅ | ✅ | ❌ | ✅ | ✅*** | ❌ | ✅ | ✅ | ✅ | ❌ |
+| COCO Panoptic | ✅ | ✅ | ❌ | ❌ | ✅**** | ❌ | ❌ | ❌ | ❌ | ✅ |
+| TIFF (.tif) | ✅ | ✅ | ❌ | ❌ | ✅***** | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Ultralytics | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅****** | ❌ |
+| GeoJSON (.geojson) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 
 *NWB can embed videos with `annotations_export` format
 **CSV skeleton edges/symmetries preserved via optional metadata JSON sidecar
 ***COCO tracks are stored via `attributes.object_id` (CVAT-compatible)
-****Ultralytics segmentation polygons stored as ROIs
+****COCO panoptic tracks for "thing" segments only
+*****TIFF tracks via `.meta.json` sidecar
+******Ultralytics segmentation polygons stored as ROIs
 
 ## See Also
 
