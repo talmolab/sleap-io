@@ -2402,6 +2402,8 @@ class TestCOCOPanoptic:
         # Only the frame with existing PNG should be loaded
         assert len(labels.label_images) == 1
         assert labels.label_images[0].n_objects == 1
+        # frame_idx should be contiguous (0), not the annotation index (0 with gap)
+        assert labels.label_images[0].frame_idx == 0
 
     def test_write_coco_panoptic(self, tmp_path):
         """Test writing COCO panoptic from Labels with label_images."""
@@ -2452,6 +2454,13 @@ class TestCOCOPanoptic:
         assert len(ann["segments_info"]) == 2
         seg_ids = {s["id"] for s in ann["segments_info"]}
         assert seg_ids == {1, 2}
+
+        # Check bbox field is present and correct per COCO spec [x, y, w, h]
+        seg_by_id = {s["id"]: s for s in ann["segments_info"]}
+        # Object 1: data[2:5, 3:8] → bbox [3, 2, 5, 3]
+        assert seg_by_id[1]["bbox"] == [3, 2, 5, 3]
+        # Object 2: data[6:9, 1:4] → bbox [1, 6, 3, 3]
+        assert seg_by_id[2]["bbox"] == [1, 6, 3, 3]
 
         # Verify PNG was created in the default subdirectory
         images_dir = tmp_path / "output_panoptic"

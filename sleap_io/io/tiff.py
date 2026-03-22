@@ -67,39 +67,6 @@ def _write_sidecar(path: Path, label_images: list[LabelImage]) -> None:
         json.dump(sidecar, f, indent=2)
 
 
-def _build_objects_from_sidecar(
-    sidecar: dict,
-    label_ids: np.ndarray,
-) -> dict[int, "LabelImage.Info"]:
-    """Build objects dict from sidecar metadata for a single frame.
-
-    Args:
-        sidecar: Parsed sidecar dict with "objects" mapping.
-        label_ids: Array of non-zero label IDs present in this frame.
-
-    Returns:
-        Objects dict mapping label ID to LabelImage.Info.
-    """
-    from sleap_io.model.instance import Track
-    from sleap_io.model.label_image import LabelImage
-
-    objects: dict[int, LabelImage.Info] = {}
-    sidecar_objects = sidecar.get("objects", {})
-
-    for lid in label_ids:
-        lid_int = int(lid)
-        key = str(lid_int)
-        entry = sidecar_objects.get(key, {})
-        track_name = entry.get("track", str(lid_int))
-        category = entry.get("category", "")
-        objects[lid_int] = LabelImage.Info(
-            track=Track(name=track_name),
-            category=category,
-        )
-
-    return objects
-
-
 def _build_track_map(
     unique_ids: np.ndarray,
     tracks: dict[int, "Track"] | None,

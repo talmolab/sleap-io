@@ -1016,7 +1016,8 @@ def read_coco_panoptic(
     track_pool: dict[int, Track] = {}
 
     label_images = []
-    for ann_idx, ann in enumerate(data.get("annotations", [])):
+    frame_idx = 0
+    for ann in data.get("annotations", []):
         png_filename = ann["file_name"]
         segments_info = ann.get("segments_info", [])
 
@@ -1053,9 +1054,10 @@ def read_coco_panoptic(
         li = LabelImage(
             data=label_data,
             objects=objects,
-            frame_idx=ann_idx,
+            frame_idx=frame_idx,
         )
         label_images.append(li)
+        frame_idx += 1
 
     return Labels(label_images=label_images)
 
@@ -1150,12 +1152,27 @@ def write_coco_panoptic(
         for seg_id, info in li.objects.items():
             cat_name = info.category if info.category else "unknown"
             cat_id = category_name_to_id[cat_name]
-            area = int(np.sum(li.data == seg_id))
+            seg_mask = li.data == seg_id
+            area = int(np.sum(seg_mask))
+
+            # Compute bounding box [x, y, width, height] per COCO spec
+            ys, xs = np.where(seg_mask)
+            if len(xs) > 0:
+                bbox = [
+                    int(xs.min()),
+                    int(ys.min()),
+                    int(xs.max() - xs.min()) + 1,
+                    int(ys.max() - ys.min()) + 1,
+                ]
+            else:
+                bbox = [0, 0, 0, 0]
+
             segments_info.append(
                 {
                     "id": seg_id,
                     "category_id": cat_id,
                     "area": area,
+                    "bbox": bbox,
                     "iscrowd": 0,
                 }
             )
