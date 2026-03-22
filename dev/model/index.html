@@ -970,6 +970,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formats/tiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIFF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1798,6 +1826,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference/sleap_io/io/tiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tiff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../reference/sleap_io/io/ultralytics/" class="md-nav__link">
         
   
@@ -2038,6 +2094,34 @@
     
   
     instance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/sleap_io/model/label_image/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    label_image
   
 
     
@@ -2830,7 +2914,7 @@
 <p><strong><a href="video/">Video</a></strong>: Lazy array-like access to video data. <code>Video</code> wraps multiple backends (MP4, HDF5, image sequences) behind a unified interface.</p>
 <p><strong><a href="poses/">Poses</a></strong>: The skeleton template and pose instances. A <code>Skeleton</code> declares landmark types (<code>Node</code>), connections (<code>Edge</code>), and symmetries. <code>Instance</code> and <code>PredictedInstance</code> store per-animal coordinates and confidence scores. <code>Track</code> links the same animal across frames.</p>
 <p><strong><a href="3d/">3D</a></strong>: Multi-camera support. <code>Camera</code> stores calibration parameters, <code>RecordingSession</code> links cameras to videos, and <code>FrameGroup</code>/<code>InstanceGroup</code> pair 2D views for 3D reconstruction.</p>
-<p><strong><a href="regions/">Regions</a></strong>: Spatial annotations beyond keypoints. <code>BoundingBox</code> for detection, <code>ROI</code> for vector polygons, and <code>SegmentationMask</code> for pixel-level labels.</p>
+<p><strong><a href="regions/">Regions</a></strong>: Spatial annotations beyond keypoints. <code>BoundingBox</code> for detection, <code>ROI</code> for vector polygons, <code>SegmentationMask</code> for pixel-level binary masks, and <code>LabelImage</code> for dense instance segmentation.</p>
 <h2 id="class-diagram">Class diagram<a class="headerlink" href="#class-diagram" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>classDiagram
     direction TB
@@ -2927,6 +3011,13 @@
         +float score
     }
 
+    class LabelImage:::regions {
+        +ndarray data
+        +dict objects
+        +int n_objects
+        +to_masks()
+    }
+
     Skeleton "1" *-- "1..*" Node
     Skeleton "1" *-- "0..*" Edge
     Skeleton "1" *-- "0..*" Symmetry
@@ -2951,6 +3042,7 @@
 
     BoundingBox &lt;|-- UserBoundingBox
     BoundingBox &lt;|-- PredictedBoundingBox
+    LabelImage --&gt; SegmentationMask : to_masks()
 
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
@@ -3077,6 +3169,11 @@
 <td><a href="regions/">Regions</a></td>
 <td>Model-predicted bounding box with score</td>
 </tr>
+<tr>
+<td><a href="regions/"><code>LabelImage</code></a></td>
+<td><a href="regions/">Regions</a></td>
+<td>Dense integer label image for instance segmentation</td>
+</tr>
 </tbody>
 </table>
 <div class="admonition tip">
@@ -3179,7 +3276,7 @@
       
         <script src="../js/toc-code-style.js"></script>
       
-        <script src="../javascripts/mathjax.js"></script>
+        <script src="../js/mathjax.js"></script>
       
         <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
