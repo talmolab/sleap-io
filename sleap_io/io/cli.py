@@ -472,10 +472,17 @@ def _render_overlay_only(
         # Ensure RGB
         if img.ndim == 2:
             img = np.stack([img] * 3, axis=-1)
+        # Extract single-frame overlay
+        if isinstance(overlay_data, list) and len(overlay_data) == 1:
+            single_overlay = overlay_data[0]
+        elif isinstance(overlay_data, list):
+            single_overlay = overlay_data[0]
+        else:
+            single_overlay = overlay_data
         render_image(
             source=None,
             image=img,
-            overlay=overlay_data,
+            overlay=single_overlay,
             overlay_alpha=overlay_alpha,
             overlay_palette=overlay_palette,
             overlay_outline=overlay_outline,
@@ -503,6 +510,7 @@ def _render_overlay_only(
 
     # Resolve per-frame overlay
     overlay_is_3d = isinstance(overlay_data, np.ndarray) and overlay_data.ndim == 3
+    overlay_is_label_images = isinstance(overlay_data, list)
 
     try:
         for i in range(n_frames):
@@ -511,12 +519,13 @@ def _render_overlay_only(
                 img = np.stack([img] * 3, axis=-1)
 
             # Get overlay for this frame
-            if overlay_is_3d and i < overlay_data.shape[0]:
+            frame_overlay = None
+            if overlay_is_label_images and i < len(overlay_data):
                 frame_overlay = overlay_data[i]
-            elif not overlay_is_3d:
+            elif overlay_is_3d and i < overlay_data.shape[0]:
+                frame_overlay = overlay_data[i]
+            elif not overlay_is_3d and not overlay_is_label_images:
                 frame_overlay = overlay_data
-            else:
-                frame_overlay = None
 
             if frame_overlay is not None:
                 _apply_overlay(
