@@ -14,7 +14,10 @@ import sys
 from dataclasses import dataclass
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sleap_io.model.label_image import LabelImage
 
 import numpy as np
 import rich_click as click
@@ -343,23 +346,24 @@ def _load_images(
 def _load_overlay(
     overlay_path: Path,
     frame_idx: int | None = None,
-) -> np.ndarray:
+) -> "list[LabelImage] | LabelImage":
     """Load segmentation overlay from a TIFF file or directory.
 
     Args:
         overlay_path: Path to a TIFF file (2D or multi-page 3D) or a directory
             containing TIFF label images (one per frame).
         frame_idx: If not None, extract this frame from a 3D stack and return
-            a 2D array. Used for single-image rendering mode.
+            a single ``LabelImage``. Used for single-image rendering mode.
 
     Returns:
-        Label image as int32 array with shape ``(H, W)`` or ``(T, H, W)``.
+        A list of ``LabelImage`` objects (one per frame), or a single
+        ``LabelImage`` when ``frame_idx`` is specified.
 
     Raises:
         click.ClickException: If the path is invalid, contains no TIFFs,
             or ``frame_idx`` is out of range.
     """
-    import tifffile
+    from sleap_io.io.tiff import read_label_images as read_tiff_label_images
 
     if overlay_path.is_dir():
         tiff_files = sorted(
@@ -369,28 +373,32 @@ def _load_overlay(
             raise click.ClickException(
                 f"No TIFF files found in overlay directory: {overlay_path}"
             )
-        frames = [tifffile.imread(str(f)) for f in tiff_files]
-        if len(frames) == 1:
-            data = frames[0]
-        else:
-            data = np.stack(frames, axis=0)
-    else:
-        try:
-            data = tifffile.imread(str(overlay_path))
-        except Exception as e:
-            raise click.ClickException(
-                f"Failed to load overlay file: {overlay_path}. Error: {e}"
-            )
 
-    if frame_idx is not None and data.ndim == 3:
-        if frame_idx < 0 or frame_idx >= data.shape[0]:
+    try:
+        label_images = read_tiff_label_images(overlay_path)
+    except Exception as e:
+        if overlay_path.is_dir():
+            raise click.ClickException(
+                f"Failed to load overlay from directory: {overlay_path}. Error: {e}"
+            )
+        raise click.ClickException(
+            f"Failed to load overlay file: {overlay_path}. Error: {e}"
+        )
+
+    if not label_images:
+        raise click.ClickException(f"No label images loaded from: {overlay_path}")
+
+    if frame_idx is not None:
+        matches = [li for li in label_images if li.frame_idx == frame_idx]
+        if not matches:
+            n_frames = len(label_images)
             raise click.ClickException(
                 f"--overlay frame index {frame_idx} out of range. "
-                f"Overlay has {data.shape[0]} frames (0-{data.shape[0] - 1})."
+                f"Overlay has {n_frames} frames."
             )
-        data = data[frame_idx]
+        return matches[0]
 
-    return data.astype(np.int32)
+    return label_images
 
 
 def _parse_overlay_outline_color(
@@ -477,10 +485,15 @@ def _render_overlay_only(
         # Ensure RGB
         if img.ndim == 2:
             img = np.stack([img] * 3, axis=-1)
+        # Extract single-frame overlay
+        if isinstance(overlay_data, list):
+            single_overlay = overlay_data[0]
+        else:
+            single_overlay = overlay_data
         render_image(
             source=None,
             image=img,
-            overlay=overlay_data,
+            overlay=single_overlay,
             overlay_alpha=overlay_alpha,
             overlay_palette=overlay_palette,
             overlay_outline=overlay_outline,
@@ -508,6 +521,7 @@ def _render_overlay_only(
 
     # Resolve per-frame overlay
     overlay_is_3d = isinstance(overlay_data, np.ndarray) and overlay_data.ndim == 3
+    overlay_is_label_images = isinstance(overlay_data, list)
 
     try:
         for i in range(n_frames):
@@ -516,12 +530,13 @@ def _render_overlay_only(
                 img = np.stack([img] * 3, axis=-1)
 
             # Get overlay for this frame
-            if overlay_is_3d and i < overlay_data.shape[0]:
+            frame_overlay = None
+            if overlay_is_label_images and i < len(overlay_data):
                 frame_overlay = overlay_data[i]
-            elif not overlay_is_3d:
+            elif overlay_is_3d and i < overlay_data.shape[0]:
+                frame_overlay = overlay_data[i]
+            elif not overlay_is_3d and not overlay_is_label_images:
                 frame_overlay = overlay_data
-            else:
-                frame_overlay = None
 
             if frame_overlay is not None:
                 _apply_overlay(

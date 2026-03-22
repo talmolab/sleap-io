@@ -5061,7 +5061,7 @@ def test_render_rejects_both_inputs(centered_pair, tmp_path):
 
 
 def test_load_overlay_single_tiff(tmp_path):
-    """_load_overlay should load a 2D TIFF as (H,W) int32."""
+    """_load_overlay should load a 2D TIFF as a list with one LabelImage."""
     import numpy as np
     import tifffile
 
@@ -5071,50 +5071,60 @@ def test_load_overlay_single_tiff(tmp_path):
     tifffile.imwrite(str(tiff_path), mask)
 
     result = _load_overlay(tiff_path)
-    assert result.shape == (64, 64)
-    assert result.dtype == np.int32
-    assert result[20, 20] == 5
-    assert result[0, 0] == 0
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0].data.shape == (64, 64)
+    assert result[0].data.dtype == np.int32
+    assert result[0].data[20, 20] == 5
+    assert result[0].data[0, 0] == 0
 
 
 def test_load_overlay_tiff_stack(tmp_path):
-    """_load_overlay should load a multi-page TIFF as (T,H,W) int32."""
+    """_load_overlay should load a multi-page TIFF as list of LabelImages."""
     import numpy as np
     import tifffile
 
-    stack = np.zeros((3, 32, 32), dtype=np.uint16)
-    stack[0, 5:15, 5:15] = 1
-    stack[1, 10:20, 10:20] = 2
-    stack[2, 15:25, 15:25] = 3
     tiff_path = tmp_path / "stack.tif"
-    tifffile.imwrite(str(tiff_path), stack)
+    with tifffile.TiffWriter(str(tiff_path)) as tw:
+        for i in range(3):
+            frame = np.zeros((32, 32), dtype=np.uint16)
+            frame[5 * (i + 1) : 5 * (i + 1) + 10, 5 * (i + 1) : 5 * (i + 1) + 10] = (
+                i + 1
+            )
+            tw.write(frame)
 
     result = _load_overlay(tiff_path)
-    assert result.shape == (3, 32, 32)
-    assert result.dtype == np.int32
-    assert result[0, 10, 10] == 1
-    assert result[1, 15, 15] == 2
-    assert result[2, 20, 20] == 3
+    assert isinstance(result, list)
+    assert len(result) == 3
+    assert result[0].data[10, 10] == 1
+    assert result[1].data[15, 15] == 2
+    assert result[2].data[20, 20] == 3
 
 
 def test_load_overlay_tiff_stack_single_frame(tmp_path):
-    """_load_overlay with frame_idx should extract a single 2D frame."""
+    """_load_overlay with frame_idx should extract a single LabelImage."""
     import numpy as np
     import tifffile
 
-    stack = np.zeros((3, 32, 32), dtype=np.uint16)
-    stack[1, 10:20, 10:20] = 7
+    from sleap_io.model.label_image import LabelImage
+
     tiff_path = tmp_path / "stack.tif"
-    tifffile.imwrite(str(tiff_path), stack)
+    with tifffile.TiffWriter(str(tiff_path)) as tw:
+        for i in range(3):
+            frame = np.zeros((32, 32), dtype=np.uint16)
+            if i == 1:
+                frame[10:20, 10:20] = 7
+            tw.write(frame)
 
     result = _load_overlay(tiff_path, frame_idx=1)
-    assert result.shape == (32, 32)
-    assert result.dtype == np.int32
-    assert result[15, 15] == 7
+    assert isinstance(result, LabelImage)
+    assert result.data.shape == (32, 32)
+    assert result.data.dtype == np.int32
+    assert result.data[15, 15] == 7
 
 
 def test_load_overlay_directory(tmp_path):
-    """_load_overlay should load a directory of TIFFs as (T,H,W)."""
+    """_load_overlay should load a directory of TIFFs as list of LabelImages."""
     import numpy as np
     import tifffile
 
@@ -5126,10 +5136,10 @@ def test_load_overlay_directory(tmp_path):
         tifffile.imwrite(str(mask_dir / f"frame_{i:04d}.tif"), mask)
 
     result = _load_overlay(mask_dir)
-    assert result.shape == (3, 32, 32)
-    assert result.dtype == np.int32
-    assert result[0, 10, 10] == 1
-    assert result[2, 10, 10] == 3
+    assert isinstance(result, list)
+    assert len(result) == 3
+    assert result[0].data[10, 10] == 1
+    assert result[2].data[10, 10] == 3
 
 
 def test_load_overlay_frame_idx_out_of_range(tmp_path):
@@ -5138,9 +5148,10 @@ def test_load_overlay_frame_idx_out_of_range(tmp_path):
     import numpy as np
     import tifffile
 
-    stack = np.zeros((3, 32, 32), dtype=np.uint16)
     tiff_path = tmp_path / "stack.tif"
-    tifffile.imwrite(str(tiff_path), stack)
+    with tifffile.TiffWriter(str(tiff_path)) as tw:
+        for _ in range(3):
+            tw.write(np.zeros((32, 32), dtype=np.uint16))
 
     with pytest.raises(click.ClickException, match="out of range"):
         _load_overlay(tiff_path, frame_idx=5)
@@ -5323,13 +5334,14 @@ def test_render_overlay_only_video(tmp_path):
         img = np.ones((64, 64), dtype=np.uint8) * 128
         tifffile.imwrite(str(img_dir / f"frame_{i:04d}.tif"), img)
 
-    # Create overlay stack
-    masks = np.zeros((3, 64, 64), dtype=np.int32)
-    masks[0, 10:30, 10:30] = 1
-    masks[1, 20:40, 20:40] = 2
-    masks[2, 30:50, 30:50] = 3
+    # Create overlay stack (multi-page TIFF)
     mask_path = tmp_path / "masks.tif"
-    tifffile.imwrite(str(mask_path), masks)
+    with tifffile.TiffWriter(str(mask_path)) as tw:
+        for i in range(3):
+            frame = np.zeros((64, 64), dtype=np.int32)
+            r0 = 10 * (i + 1)
+            frame[r0 : r0 + 20, r0 : r0 + 20] = i + 1
+            tw.write(frame)
 
     runner = CliRunner()
     output_path = tmp_path / "overlay_video.mp4"
@@ -5448,10 +5460,12 @@ def test_render_overlay_only_images_stack(tmp_path):
     img_path = tmp_path / "stack.tif"
     tifffile.imwrite(str(img_path), img_data)
 
-    mask = np.zeros((3, 64, 64), dtype=np.int32)
-    mask[0, 10:30, 10:30] = 1
     mask_path = tmp_path / "masks.tif"
-    tifffile.imwrite(str(mask_path), mask)
+    with tifffile.TiffWriter(str(mask_path)) as tw:
+        for _ in range(3):
+            frame = np.zeros((64, 64), dtype=np.int32)
+            frame[10:30, 10:30] = 1
+            tw.write(frame)
 
     runner = CliRunner()
     output_path = tmp_path / "out.mp4"

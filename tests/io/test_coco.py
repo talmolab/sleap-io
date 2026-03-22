@@ -10,6 +10,8 @@ import pytest
 import sleap_io as sio
 from sleap_io.io import coco
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.instance import Track
+from sleap_io.model.labels import Labels
 from sleap_io.model.matching import (
     IMAGE_DEDUP_VIDEO_MATCHER,
     SHAPE_VIDEO_MATCHER,
@@ -2193,3 +2195,363 @@ def test_coco_mixed_bbox_and_instances(tmp_path):
     # No ROIs or masks
     assert len(labels.rois) == 0
     assert len(labels.masks) == 0
+
+
+class TestCOCOPanoptic:
+    """Test COCO panoptic segmentation I/O."""
+
+    def _create_panoptic_dataset(self, base_dir):
+        """Helper to create a minimal COCO panoptic dataset on disk.
+
+        Creates two frames with thing (person) and stuff (sky) segments.
+        Returns (json_path, images_dir, expected segment IDs).
+        """
+        from PIL import Image
+
+        images_dir = base_dir / "panoptic"
+        images_dir.mkdir()
+
+        # Categories: person (thing), sky (stuff)
+        categories = [
+            {"id": 1, "name": "person", "isthing": 1},
+            {"id": 2, "name": "sky", "isthing": 0},
+        ]
+
+        # Frame 1: person segment (id=1) and sky segment (id=2)
+        label1 = np.zeros((20, 30), dtype=np.int32)
+        label1[5:15, 5:10] = 1  # person
+        label1[0:5, :] = 2  # sky
+
+        # Frame 2: same person (id=1) reappears, different sky (id=3)
+        label2 = np.zeros((20, 30), dtype=np.int32)
+        label2[8:18, 10:20] = 1  # same person
+        label2[0:3, :] = 3  # sky (different segment id, same category)
+
+        # Encode as RGB PNGs
+        for fname, data in [("frame1.png", label1), ("frame2.png", label2)]:
+            rgb = np.zeros((data.shape[0], data.shape[1], 3), dtype=np.uint8)
+            rgb[:, :, 0] = (data % 256).astype(np.uint8)
+            rgb[:, :, 1] = ((data // 256) % 256).astype(np.uint8)
+            rgb[:, :, 2] = ((data // 65536) % 256).astype(np.uint8)
+            Image.fromarray(rgb).save(images_dir / fname)
+
+        # Build JSON
+        coco_data = {
+            "images": [
+                {"id": 1, "file_name": "img1.jpg", "width": 30, "height": 20},
+                {"id": 2, "file_name": "img2.jpg", "width": 30, "height": 20},
+            ],
+            "annotations": [
+                {
+                    "image_id": 1,
+                    "file_name": "frame1.png",
+                    "segments_info": [
+                        {"id": 1, "category_id": 1, "area": 50, "iscrowd": 0},
+                        {"id": 2, "category_id": 2, "area": 150, "iscrowd": 0},
+                    ],
+                },
+                {
+                    "image_id": 2,
+                    "file_name": "frame2.png",
+                    "segments_info": [
+                        {"id": 1, "category_id": 1, "area": 100, "iscrowd": 0},
+                        {"id": 3, "category_id": 2, "area": 90, "iscrowd": 0},
+                    ],
+                },
+            ],
+            "categories": categories,
+        }
+
+        json_path = base_dir / "panoptic.json"
+        with open(json_path, "w") as f:
+            json.dump(coco_data, f)
+
+        return json_path, images_dir
+
+    def test_read_coco_panoptic(self, tmp_path):
+        """Test reading a COCO panoptic dataset."""
+        json_path, images_dir = self._create_panoptic_dataset(tmp_path)
+
+        labels = coco.read_coco_panoptic(json_path, images_dir=images_dir)
+
+        # Should have 2 label images (one per frame)
+        assert len(labels.label_images) == 2
+
+        li1 = labels.label_images[0]
+        li2 = labels.label_images[1]
+
+        # Check frame indices (positional, not image_id)
+        assert li1.frame_idx == 0
+        assert li2.frame_idx == 1
+
+        # Check dimensions
+        assert li1.height == 20
+        assert li1.width == 30
+        assert li2.height == 20
+        assert li2.width == 30
+
+        # Frame 1: 2 objects (person id=1, sky id=2)
+        assert li1.n_objects == 2
+        assert 1 in li1.objects
+        assert 2 in li1.objects
+
+        # Check categories
+        assert li1.objects[1].category == "person"
+        assert li1.objects[2].category == "sky"
+
+        # Thing (person) should have a track, stuff (sky) should not
+        assert li1.objects[1].track is not None
+        assert li1.objects[2].track is None
+
+        # Frame 2: 2 objects (person id=1, sky id=3)
+        assert li2.n_objects == 2
+        assert 1 in li2.objects
+        assert 3 in li2.objects
+
+        assert li2.objects[1].category == "person"
+        assert li2.objects[3].category == "sky"
+        assert li2.objects[1].track is not None
+        assert li2.objects[3].track is None
+
+        # Same person (id=1) should share the same Track object across frames
+        assert li1.objects[1].track is li2.objects[1].track
+
+        # Verify pixel data is correct
+        assert np.sum(li1.data == 1) == 50  # person pixels in frame 1
+        assert np.sum(li1.data == 2) == 150  # sky pixels in frame 1
+
+    def test_read_coco_panoptic_infer_images_dir(self, tmp_path):
+        """Test that images_dir defaults to the JSON directory."""
+        from PIL import Image
+
+        # Create a simple single-frame dataset with PNGs in the same dir as JSON
+        label_data = np.zeros((10, 10), dtype=np.int32)
+        label_data[2:8, 2:8] = 1
+
+        rgb = np.zeros((10, 10, 3), dtype=np.uint8)
+        rgb[:, :, 0] = (label_data % 256).astype(np.uint8)
+        Image.fromarray(rgb).save(tmp_path / "seg.png")
+
+        coco_data = {
+            "images": [{"id": 1, "file_name": "img.jpg", "width": 10, "height": 10}],
+            "annotations": [
+                {
+                    "image_id": 1,
+                    "file_name": "seg.png",
+                    "segments_info": [
+                        {"id": 1, "category_id": 1, "area": 36, "iscrowd": 0},
+                    ],
+                },
+            ],
+            "categories": [{"id": 1, "name": "cell", "isthing": 1}],
+        }
+
+        json_path = tmp_path / "panoptic.json"
+        with open(json_path, "w") as f:
+            json.dump(coco_data, f)
+
+        # Should work without explicit images_dir
+        labels = coco.read_coco_panoptic(json_path)
+        assert len(labels.label_images) == 1
+        assert labels.label_images[0].n_objects == 1
+
+    def test_read_coco_panoptic_missing_png(self, tmp_path):
+        """Test that missing PNGs are silently skipped."""
+        from PIL import Image
+
+        # Create one valid frame
+        label_data = np.zeros((10, 10), dtype=np.int32)
+        label_data[2:8, 2:8] = 1
+
+        images_dir = tmp_path / "panoptic"
+        images_dir.mkdir()
+
+        rgb = np.zeros((10, 10, 3), dtype=np.uint8)
+        rgb[:, :, 0] = (label_data % 256).astype(np.uint8)
+        Image.fromarray(rgb).save(images_dir / "exists.png")
+
+        coco_data = {
+            "images": [
+                {"id": 1, "file_name": "img1.jpg", "width": 10, "height": 10},
+                {"id": 2, "file_name": "img2.jpg", "width": 10, "height": 10},
+            ],
+            "annotations": [
+                {
+                    "image_id": 1,
+                    "file_name": "exists.png",
+                    "segments_info": [
+                        {"id": 1, "category_id": 1, "area": 36, "iscrowd": 0},
+                    ],
+                },
+                {
+                    "image_id": 2,
+                    "file_name": "missing.png",
+                    "segments_info": [
+                        {"id": 2, "category_id": 1, "area": 10, "iscrowd": 0},
+                    ],
+                },
+            ],
+            "categories": [{"id": 1, "name": "cell", "isthing": 1}],
+        }
+
+        json_path = tmp_path / "panoptic.json"
+        with open(json_path, "w") as f:
+            json.dump(coco_data, f)
+
+        labels = coco.read_coco_panoptic(json_path, images_dir=images_dir)
+        # Only the frame with existing PNG should be loaded
+        assert len(labels.label_images) == 1
+        assert labels.label_images[0].n_objects == 1
+        # frame_idx should be contiguous (0), not the annotation index (0 with gap)
+        assert labels.label_images[0].frame_idx == 0
+
+    def test_write_coco_panoptic(self, tmp_path):
+        """Test writing COCO panoptic from Labels with label_images."""
+        from sleap_io.model.label_image import LabelImage
+
+        track_a = Track(name="1")
+        track_b = Track(name="2")
+
+        # Create a label image with 2 objects
+        data = np.zeros((10, 15), dtype=np.int32)
+        data[2:5, 3:8] = 1  # object 1
+        data[6:9, 1:4] = 2  # object 2
+
+        objects = {
+            1: LabelImage.Info(track=track_a, category="cell"),
+            2: LabelImage.Info(track=track_b, category="background"),
+        }
+        li = LabelImage(data=data, objects=objects)
+        labels = Labels(label_images=[li])
+
+        # Write
+        json_path = tmp_path / "output.json"
+        coco.write_coco_panoptic(json_path, labels)
+
+        # Verify JSON was created
+        assert json_path.exists()
+
+        with open(json_path, "r") as f:
+            written = json.load(f)
+
+        # Check structure
+        assert len(written["images"]) == 1
+        assert len(written["annotations"]) == 1
+        assert len(written["categories"]) == 2
+
+        # Check categories
+        cat_names = {c["name"] for c in written["categories"]}
+        assert "cell" in cat_names
+        assert "background" in cat_names
+
+        # Check isthing flags
+        cat_by_name = {c["name"]: c for c in written["categories"]}
+        assert cat_by_name["cell"]["isthing"] == 1  # has track
+        assert cat_by_name["background"]["isthing"] == 1  # also has track
+
+        # Check segments_info
+        ann = written["annotations"][0]
+        assert len(ann["segments_info"]) == 2
+        seg_ids = {s["id"] for s in ann["segments_info"]}
+        assert seg_ids == {1, 2}
+
+        # Check bbox field is present and correct per COCO spec [x, y, w, h]
+        seg_by_id = {s["id"]: s for s in ann["segments_info"]}
+        # Object 1: data[2:5, 3:8] → bbox [3, 2, 5, 3]
+        assert seg_by_id[1]["bbox"] == [3, 2, 5, 3]
+        # Object 2: data[6:9, 1:4] → bbox [1, 6, 3, 3]
+        assert seg_by_id[2]["bbox"] == [1, 6, 3, 3]
+
+        # Verify PNG was created in the default subdirectory
+        images_dir = tmp_path / "output_panoptic"
+        assert images_dir.exists()
+        png_files = list(images_dir.glob("*.png"))
+        assert len(png_files) == 1
+
+    def test_write_coco_panoptic_custom_images_dir(self, tmp_path):
+        """Test writing PNGs to a custom directory."""
+        from sleap_io.model.label_image import LabelImage
+
+        data = np.zeros((5, 5), dtype=np.int32)
+        data[1:4, 1:4] = 1
+        objects = {1: LabelImage.Info(category="obj")}
+        li = LabelImage(data=data, objects=objects)
+        labels = Labels(label_images=[li])
+
+        custom_dir = tmp_path / "my_pngs"
+        json_path = tmp_path / "out.json"
+        coco.write_coco_panoptic(json_path, labels, images_dir=custom_dir)
+
+        assert custom_dir.exists()
+        assert len(list(custom_dir.glob("*.png"))) == 1
+
+    def test_coco_panoptic_roundtrip(self, tmp_path):
+        """Test write then read back, verify data and metadata match."""
+        from sleap_io.model.label_image import LabelImage
+
+        track1 = Track(name="obj_1")
+        track2 = Track(name="obj_2")
+
+        # Frame 1: two things
+        data1 = np.zeros((20, 25), dtype=np.int32)
+        data1[2:8, 3:10] = 1
+        data1[10:18, 5:20] = 2
+        objects1 = {
+            1: LabelImage.Info(track=track1, category="animal"),
+            2: LabelImage.Info(track=track2, category="animal"),
+        }
+        li1 = LabelImage(data=data1, objects=objects1)
+
+        # Frame 2: one thing, one stuff
+        data2 = np.zeros((20, 25), dtype=np.int32)
+        data2[0:5, 0:25] = 3  # stuff (no track)
+        data2[10:15, 10:20] = 1  # same track as frame 1
+        objects2 = {
+            3: LabelImage.Info(track=None, category="background"),
+            1: LabelImage.Info(track=track1, category="animal"),
+        }
+        li2 = LabelImage(data=data2, objects=objects2)
+
+        labels = Labels(label_images=[li1, li2])
+
+        # Write
+        json_path = tmp_path / "roundtrip.json"
+        images_dir = tmp_path / "roundtrip_pngs"
+        coco.write_coco_panoptic(json_path, labels, images_dir=images_dir)
+
+        # Read back
+        labels_rt = coco.read_coco_panoptic(json_path, images_dir=images_dir)
+
+        # Same number of label images
+        assert len(labels_rt.label_images) == 2
+
+        rt1 = labels_rt.label_images[0]
+        rt2 = labels_rt.label_images[1]
+
+        # Pixel data should match exactly
+        np.testing.assert_array_equal(rt1.data, data1)
+        np.testing.assert_array_equal(rt2.data, data2)
+
+        # Same number of objects
+        assert len(rt1.objects) == 2
+        assert len(rt2.objects) == 2
+
+        # Categories should match
+        assert rt1.objects[1].category == "animal"
+        assert rt1.objects[2].category == "animal"
+        assert rt2.objects[3].category == "background"
+        assert rt2.objects[1].category == "animal"
+
+        # Thing tracks should be shared across frames
+        assert rt1.objects[1].track is rt2.objects[1].track
+
+        # Stuff should have no track
+        assert rt2.objects[3].track is None
+
+        # Frame indices preserved
+        assert rt1.frame_idx == 0
+        assert rt2.frame_idx == 1
+
+        # Dimensions preserved
+        assert rt1.height == 20
+        assert rt1.width == 25

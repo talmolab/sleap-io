@@ -31,6 +31,7 @@ from sleap_io.model.video import Video
 if TYPE_CHECKING:
     from sleap_io.io.slp_lazy import LazyDataStore
     from sleap_io.model.bbox import BoundingBox
+    from sleap_io.model.label_image import LabelImage
     from sleap_io.model.labels_set import LabelsSet
     from sleap_io.model.mask import SegmentationMask
     from sleap_io.model.matching import (
@@ -65,6 +66,8 @@ class Labels:
         masks: A list of `SegmentationMask` raster annotations associated with this
             dataset.
         bboxes: A list of `BoundingBox` annotations associated with this dataset.
+        label_images: A list of `LabelImage` per-pixel segmentation annotations
+            associated with this dataset.
 
     Notes:
         `Video`s in contain `LabeledFrame`s, and `Skeleton`s and `Track`s in contained
@@ -82,6 +85,7 @@ class Labels:
     rois: "list[ROI]" = field(factory=list)
     masks: "list[SegmentationMask]" = field(factory=list)
     bboxes: "list[BoundingBox]" = field(factory=list)
+    label_images: "list[LabelImage]" = field(factory=list)
 
     # Internal lazy state (private, not part of public API)
     _lazy_store: "LazyDataStore | None" = field(
@@ -1339,6 +1343,53 @@ class Labels:
             results = [b for b in results if b.instance is instance]
         if predicted is not None:
             results = [b for b in results if b.is_predicted == predicted]
+        return results
+
+    def get_label_images(
+        self,
+        video: "Video | None" = None,
+        frame_idx: int | None = None,
+        track: "Track | None" = None,
+        category: str | None = None,
+    ) -> list["LabelImage"]:
+        """Query label images by video, frame, track, or category.
+
+        Filters the ``label_images`` list via linear scan. When ``track`` is
+        specified, returns LabelImages whose ``objects`` dict contains an Info
+        with that track. When ``category`` is specified, returns LabelImages
+        containing an Info with that category. These filters check the
+        ``objects`` metadata without decoding pixel data.
+
+        Args:
+            video: If specified, only return label images for this video
+                (identity comparison).
+            frame_idx: If specified, only return label images for this frame
+                index.
+            track: If specified, only return label images containing this track
+                in their objects metadata (identity comparison).
+            category: If specified, only return label images containing an
+                object with this category.
+
+        Returns:
+            A list of matching label images.
+        """
+        results = list(self.label_images)
+        if video is not None:
+            results = [li for li in results if li.video is video]
+        if frame_idx is not None:
+            results = [li for li in results if li.frame_idx == frame_idx]
+        if track is not None:
+            results = [
+                li
+                for li in results
+                if any(info.track is track for info in li.objects.values())
+            ]
+        if category is not None:
+            results = [
+                li
+                for li in results
+                if any(info.category == category for info in li.objects.values())
+            ]
         return results
 
     def rename_nodes(

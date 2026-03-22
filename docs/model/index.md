@@ -14,7 +14,7 @@ The data model is split into five areas, each covered on its own page:
 
 **[3D](3d.md)**: Multi-camera support. `Camera` stores calibration parameters, `RecordingSession` links cameras to videos, and `FrameGroup`/`InstanceGroup` pair 2D views for 3D reconstruction.
 
-**[Regions](regions.md)**: Spatial annotations beyond keypoints. `BoundingBox` for detection, `ROI` for vector polygons, and `SegmentationMask` for pixel-level labels.
+**[Regions](regions.md)**: Spatial annotations beyond keypoints. `BoundingBox` for detection, `ROI` for vector polygons, `SegmentationMask` for pixel-level binary masks, and `LabelImage` for dense instance segmentation.
 
 ## Class diagram
 
@@ -114,6 +114,13 @@ classDiagram
         +float score
     }
 
+    class LabelImage:::regions {
+        +ndarray data
+        +dict objects
+        +int n_objects
+        +to_masks()
+    }
+
     Skeleton "1" *-- "1..*" Node
     Skeleton "1" *-- "0..*" Edge
     Skeleton "1" *-- "0..*" Symmetry
@@ -138,6 +145,7 @@ classDiagram
 
     BoundingBox <|-- UserBoundingBox
     BoundingBox <|-- PredictedBoundingBox
+    LabelImage --> SegmentationMask : to_masks()
 
     classDef poses fill:#0097a7,stroke:#00796b,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff
@@ -172,6 +180,7 @@ classDiagram
 | [`BoundingBox`](regions.md) | [Regions](regions.md) | Axis-aligned or rotated bounding box |
 | [`UserBoundingBox`](regions.md) | [Regions](regions.md) | Human-annotated bounding box |
 | [`PredictedBoundingBox`](regions.md) | [Regions](regions.md) | Model-predicted bounding box with score |
+| [`LabelImage`](regions.md) | [Regions](regions.md) | Dense integer label image for instance segmentation |
 
 !!! tip "Hands-on examples"
 

@@ -43,6 +43,8 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "save_slp",
             "save_ultralytics",
             "save_video",
+            "load_label_images",
+            "save_label_images",
         ],
         # Video reading functions from sleap_io.io.video_reading
         "io.video_reading": [
@@ -82,6 +84,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         "model.labeled_frame": ["LabeledFrame"],
         "model.bbox": ["BoundingBox", "UserBoundingBox", "PredictedBoundingBox"],
+        "model.label_image": ["LabelImage"],
         "model.labels": ["Labels"],
         "model.mask": ["SegmentationMask"],
         "model.labels_set": ["LabelsSet"],

@@ -141,7 +141,7 @@ extra_css:
 
 extra_javascript:
   - js/toc-code-style.js
-  - javascripts/mathjax.js
+  - js/mathjax.js
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 copyright: >
@@ -171,5 +171,6 @@ nav:
       - SLP Format: formats/slp.md
       - CSV Format: formats/csv.md
       - Analysis HDF5: formats/analysis_h5.md
+      - TIFF: formats/tiff.md
     - CLI: cli.md
     - Full API: reference/
