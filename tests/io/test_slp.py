@@ -79,6 +79,7 @@ from sleap_io.io.slp import (
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.label_image import LabelImage
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.roi import ROI
 
@@ -4824,3 +4825,138 @@ def test_slp_format_id_1_7(tmp_path):
 
     format_id_no_bbox = read_hdf5_attrs(path_no_bbox, "metadata", "format_id")
     assert format_id_no_bbox == 1.4
+
+
+def test_label_image_slp_roundtrip(tmp_path):
+    """Test writing and reading label images through SLP format."""
+    video = Video(filename="test.mp4")
+    t1 = Track(name="cell_1")
+    t2 = Track(name="cell_2")
+
+    # Create a small label image with two objects
+    data = np.zeros((8, 10), dtype=np.int32)
+    data[1:3, 2:5] = 1  # object 1
+    data[5:7, 6:9] = 2  # object 2
+
+    li = LabelImage(
+        data=data,
+        objects={
+            1: LabelImage.Info(track=t1, category="neuron", name="n1"),
+            2: LabelImage.Info(track=t2, category="glia", name="g1"),
+        },
+        video=video,
+        frame_idx=0,
+        source="cellpose",
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[t1, t2],
+        label_images=[li],
+    )
+
+    path = str(tmp_path / "test_li.slp")
+    save_slp(labels, path)
+
+    reloaded = load_slp(path)
+    assert len(reloaded.label_images) == 1
+
+    rli = reloaded.label_images[0]
+    np.testing.assert_array_equal(rli.data, data)
+    assert rli.height == 8
+    assert rli.width == 10
+    assert rli.frame_idx == 0
+    assert rli.source == "cellpose"
+
+    # Check objects metadata
+    assert len(rli.objects) == 2
+    assert rli.objects[1].category == "neuron"
+    assert rli.objects[1].name == "n1"
+    assert rli.objects[1].track.name == "cell_1"
+    assert rli.objects[2].category == "glia"
+    assert rli.objects[2].name == "g1"
+    assert rli.objects[2].track.name == "cell_2"
+
+
+def test_label_image_slp_empty(tmp_path):
+    """Test that empty label_images list writes no datasets and reads back."""
+    video = Video(filename="test.mp4")
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        label_images=[],
+    )
+
+    path = str(tmp_path / "test_empty_li.slp")
+    save_slp(labels, path)
+
+    # Verify no datasets were written
+    with h5py.File(path, "r") as f:
+        assert "label_images" not in f
+        assert "label_image_data" not in f
+        assert "label_image_objects" not in f
+
+    # Verify read returns empty list
+    reloaded = load_slp(path)
+    assert reloaded.label_images == []
+
+
+def test_label_image_slp_format_version(tmp_path):
+    """Test that presence of label_images bumps format_id to 1.8."""
+    video = Video(filename="test.mp4")
+    data = np.zeros((4, 4), dtype=np.int32)
+    data[0:2, 0:2] = 1
+
+    li = LabelImage(data=data, video=video, frame_idx=0)
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        label_images=[li],
+    )
+
+    path = str(tmp_path / "test_format_li.slp")
+    save_slp(labels, path)
+
+    format_id = read_hdf5_attrs(path, "metadata", "format_id")
+    assert format_id == 1.8
+
+
+def test_label_image_slp_lazy(tmp_path):
+    """Test label images load correctly with lazy=True."""
+    video = Video(filename="test.mp4")
+    t1 = Track(name="t1")
+
+    data = np.zeros((6, 6), dtype=np.int32)
+    data[1:4, 1:4] = 1
+
+    li = LabelImage(
+        data=data,
+        objects={1: LabelImage.Info(track=t1, category="cell")},
+        video=video,
+        frame_idx=0,
+    )
+
+    skeleton = Skeleton(nodes=["A"])
+    labels = Labels(
+        videos=[video],
+        skeletons=[skeleton],
+        tracks=[t1],
+        label_images=[li],
+    )
+
+    path = str(tmp_path / "test_lazy_li.slp")
+    save_slp(labels, path)
+
+    # Load lazily
+    lazy_labels = load_slp(path, open_videos=False)
+    assert len(lazy_labels.label_images) == 1
+
+    rli = lazy_labels.label_images[0]
+    assert rli.objects[1].category == "cell"
+    assert rli.objects[1].track.name == "t1"
+    np.testing.assert_array_equal(rli.data, data)

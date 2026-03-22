@@ -9,6 +9,7 @@ Format version history:
     - 1.5: Added ROI and segmentation mask datasets (/rois, /roi_wkb, /masks, /mask_rle)
     - 1.6: Added instance_idx to ROI dtype for instance-level associations
     - 1.7: Added bounding box dataset (/bboxes)
+    - 1.8: Added label image datasets (/label_images, /label_image_data)
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ from sleap_io.model.camera import (
     RecordingSession,
 )
 from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.label_image import LabelImage
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
 from sleap_io.model.mask import SegmentationMask
@@ -1363,7 +1365,9 @@ def write_metadata(labels_path: str, labels: Labels):
     has_instance_rois = any(
         roi.instance is not None or roi._instance_idx >= 0 for roi in labels.rois
     )
-    if labels.bboxes:
+    if labels.label_images:
+        format_id = 1.8
+    elif labels.bboxes:
         format_id = 1.7
     elif has_instance_rois:
         format_id = 1.6
@@ -2335,10 +2339,11 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
     # Create LazyFrameList
     lazy_frames = LazyFrameList(lazy_store)
 
-    # Read ROIs, masks, and bboxes eagerly (typically small count)
+    # Read ROIs, masks, bboxes, and label images eagerly (typically small count)
     rois = read_rois(labels_path, videos, tracks)
     masks = read_masks(labels_path, videos, tracks)
     bboxes = read_bboxes(labels_path, videos, tracks)
+    label_images = read_label_images(labels_path, videos, tracks)
 
     # Create Labels with lazy state
     labels = Labels(
@@ -2352,6 +2357,7 @@ def _read_labels_lazy(labels_path: str, open_videos: bool = True) -> Labels:
         rois=rois,
         masks=masks,
         bboxes=bboxes,
+        label_images=label_images,
         lazy_store=lazy_store,
     )
     labels.provenance["filename"] = labels_path
@@ -2849,6 +2855,252 @@ def write_masks(
         f.create_dataset("mask_rle", data=rle_flat, dtype=np.uint8)
 
 
+def read_label_images(
+    labels_path: str,
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
+) -> list[LabelImage]:
+    """Read label image annotations from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        videos: List of Video objects for relinking.
+        tracks: List of Track objects for relinking.
+        instances: Optional list of Instance/PredictedInstance objects for
+            relinking label image instance associations. If ``None``, instance
+            associations will not be restored.
+
+    Returns:
+        A list of LabelImage objects. Returns an empty list if none stored.
+    """
+    import zlib
+
+    try:
+        li_data = read_hdf5_dataset(labels_path, "label_images")
+    except KeyError:
+        return []
+
+    if len(li_data) == 0:
+        return []
+
+    # Read compressed pixel data
+    try:
+        li_pixel_flat = read_hdf5_dataset(labels_path, "label_image_data")
+    except KeyError:
+        return []
+
+    # Read objects table and its attrs
+    try:
+        obj_data = read_hdf5_dataset(labels_path, "label_image_objects")
+    except KeyError:
+        obj_dtype = [
+            ("label_id", "i4"),
+            ("track", "i4"),
+            ("instance", "i4"),
+        ]
+        obj_data = np.array([], dtype=obj_dtype)
+
+    with h5py.File(labels_path, "r") as f:
+        if "label_image_objects" in f:
+            obj_grp = f["label_image_objects"]
+            categories = json.loads(obj_grp.attrs.get("categories", "[]"))
+            names = json.loads(obj_grp.attrs.get("names", "[]"))
+        else:
+            categories = []
+            names = []
+
+        if "label_images" in f:
+            li_grp = f["label_images"]
+            sources = json.loads(li_grp.attrs.get("sources", "[]"))
+        else:
+            sources = []
+
+    label_images: list[LabelImage] = []
+    for i, row in enumerate(li_data):
+        video_idx = int(row["video"])
+        video = videos[video_idx] if 0 <= video_idx < len(videos) else None
+
+        frame_idx_val = int(row["frame_idx"])
+        frame_idx = None if frame_idx_val == -1 else frame_idx_val
+
+        height = int(row["height"])
+        width = int(row["width"])
+        n_objects = int(row["n_objects"])
+        objects_start = int(row["objects_start"])
+        data_start = int(row["data_start"])
+        data_end = int(row["data_end"])
+
+        # Decompress pixel data
+        compressed = li_pixel_flat[data_start:data_end].tobytes()
+        raw_bytes = zlib.decompress(compressed)
+        data = np.frombuffer(raw_bytes, dtype=np.int32).reshape(height, width).copy()
+
+        # Build objects dict from objects table
+        objects: dict[int, LabelImage.Info] = {}
+        for j in range(n_objects):
+            obj_idx = objects_start + j
+            if obj_idx < len(obj_data):
+                obj_row = obj_data[obj_idx]
+                label_id = int(obj_row["label_id"])
+
+                track_idx = int(obj_row["track"])
+                track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
+
+                instance_idx = int(obj_row["instance"])
+                instance = (
+                    instances[instance_idx]
+                    if instances is not None and 0 <= instance_idx < len(instances)
+                    else None
+                )
+
+                category = categories[obj_idx] if obj_idx < len(categories) else ""
+                name = names[obj_idx] if obj_idx < len(names) else ""
+
+                objects[label_id] = LabelImage.Info(
+                    track=track,
+                    category=category,
+                    name=name,
+                    instance=instance,
+                )
+
+        source = sources[i] if i < len(sources) else ""
+
+        label_images.append(
+            LabelImage(
+                data=data,
+                objects=objects,
+                video=video,
+                frame_idx=frame_idx,
+                source=source,
+            )
+        )
+
+    return label_images
+
+
+def write_label_images(
+    labels_path: str,
+    label_images: list[LabelImage],
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
+) -> None:
+    """Write label image annotations to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        label_images: A list of LabelImage objects to write.
+        videos: List of Video objects for index mapping.
+        tracks: List of Track objects for index mapping.
+        instances: Optional list of Instance/PredictedInstance objects for index
+            mapping. If provided, label image instance associations will be
+            persisted.
+    """
+    import zlib
+
+    if not label_images:
+        return
+
+    li_dtype = np.dtype(
+        [
+            ("video", "i4"),
+            ("frame_idx", "i8"),
+            ("height", "u4"),
+            ("width", "u4"),
+            ("n_objects", "u4"),
+            ("objects_start", "u4"),
+            ("data_start", "u8"),
+            ("data_end", "u8"),
+        ]
+    )
+
+    obj_dtype = np.dtype(
+        [
+            ("label_id", "i4"),
+            ("track", "i4"),
+            ("instance", "i4"),
+        ]
+    )
+
+    li_rows = []
+    obj_rows = []
+    data_chunks: list[bytes] = []
+    data_offset = 0
+    obj_offset = 0
+    sources = []
+    categories = []
+    obj_names = []
+
+    for li in label_images:
+        video_idx = videos.index(li.video) if li.video in videos else -1
+        frame_idx = li.frame_idx if li.frame_idx is not None else -1
+
+        # Compress pixel data
+        compressed = zlib.compress(li.data.astype(np.int32).tobytes())
+        data_start = data_offset
+        data_end = data_offset + len(compressed)
+        data_chunks.append(compressed)
+        data_offset = data_end
+
+        # Build object rows for this frame
+        n_objects = len(li.objects)
+        objects_start = obj_offset
+
+        for label_id in sorted(li.objects):
+            info = li.objects[label_id]
+
+            track_idx = tracks.index(info.track) if info.track in tracks else -1
+
+            instance_idx = -1
+            if instances is not None and info.instance is not None:
+                try:
+                    instance_idx = instances.index(info.instance)
+                except ValueError:
+                    pass
+
+            obj_rows.append((label_id, track_idx, instance_idx))
+            categories.append(info.category)
+            obj_names.append(info.name)
+
+        obj_offset += n_objects
+
+        li_rows.append(
+            (
+                video_idx,
+                frame_idx,
+                li.height,
+                li.width,
+                n_objects,
+                objects_start,
+                data_start,
+                data_end,
+            )
+        )
+
+        sources.append(li.source)
+
+    li_array = np.array(li_rows, dtype=li_dtype)
+    obj_array = (
+        np.array(obj_rows, dtype=obj_dtype)
+        if obj_rows
+        else np.array([], dtype=obj_dtype)
+    )
+    data_flat = np.frombuffer(b"".join(data_chunks), dtype=np.uint8)
+
+    with h5py.File(labels_path, "a") as f:
+        li_ds = f.create_dataset("label_images", data=li_array, dtype=li_dtype)
+        li_ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
+
+        obj_ds = f.create_dataset(
+            "label_image_objects", data=obj_array, dtype=obj_dtype
+        )
+        obj_ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
+        obj_ds.attrs["names"] = json.dumps(obj_names, separators=(",", ":"))
+
+        f.create_dataset("label_image_data", data=data_flat, dtype=np.uint8)
+
+
 def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     """Read a SLEAP labels file.
 
@@ -2940,6 +3192,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     rois = read_rois(labels_path, videos, tracks, instances)
     masks = read_masks(labels_path, videos, tracks)
     bboxes = read_bboxes(labels_path, videos, tracks, instances)
+    label_images = read_label_images(labels_path, videos, tracks, instances)
 
     # Migrate old-style bbox ROIs to BoundingBox objects
     if not bboxes:
@@ -2980,6 +3233,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         rois=rois,
         masks=masks,
         bboxes=bboxes,
+        label_images=label_images,
     )
     labels.provenance["filename"] = labels_path
 
@@ -3145,10 +3399,11 @@ def _write_labels_lazy(
         with h5py.File(labels_path, "a") as f:
             f.create_dataset("negative_frames", data=neg_data)
 
-    # Write ROIs, masks, and bboxes (eagerly loaded even in lazy mode)
+    # Write ROIs, masks, bboxes, and label images (eagerly loaded even in lazy mode)
     write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
     write_bboxes(labels_path, labels.bboxes, labels.videos, labels.tracks)
+    write_label_images(labels_path, labels.label_images, labels.videos, labels.tracks)
 
 
 def write_labels(
@@ -3296,4 +3551,11 @@ def write_labels(
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
     write_bboxes(
         labels_path, labels.bboxes, labels.videos, labels.tracks, all_instances
+    )
+    write_label_images(
+        labels_path,
+        labels.label_images,
+        labels.videos,
+        labels.tracks,
+        all_instances,
     )
