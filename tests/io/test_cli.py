@@ -5543,7 +5543,7 @@ def test_load_overlay_empty_directory(tmp_path):
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
 
-    with pytest.raises(click.ClickException):
+    with pytest.raises(click.ClickException, match="No TIFF files found"):
         _load_overlay(empty_dir)
 
 
@@ -5554,7 +5554,7 @@ def test_load_overlay_corrupt_file(tmp_path):
     bad_file = tmp_path / "corrupt.tif"
     bad_file.write_text("not a tiff")
 
-    with pytest.raises(click.ClickException, match="Failed to load overlay"):
+    with pytest.raises(click.ClickException, match="Failed to load overlay file"):
         _load_overlay(bad_file)
 
 

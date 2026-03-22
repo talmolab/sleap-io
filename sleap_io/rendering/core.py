@@ -299,8 +299,10 @@ def _save_image(image: np.ndarray, save_path: str | Path) -> None:
 
 
 def _is_label_image(obj: object) -> bool:
-    """Check if an object is a LabelImage (without importing the class)."""
-    return type(obj).__name__ == "LabelImage" and hasattr(obj, "data")
+    """Check if an object is a LabelImage."""
+    from sleap_io.model.label_image import LabelImage
+
+    return isinstance(obj, LabelImage)
 
 
 def _apply_overlay(

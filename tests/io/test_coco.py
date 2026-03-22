@@ -2280,6 +2280,10 @@ class TestCOCOPanoptic:
         li1 = labels.label_images[0]
         li2 = labels.label_images[1]
 
+        # Check frame indices (positional, not image_id)
+        assert li1.frame_idx == 0
+        assert li2.frame_idx == 1
+
         # Check dimensions
         assert li1.height == 20
         assert li1.width == 30
@@ -2348,6 +2352,54 @@ class TestCOCOPanoptic:
 
         # Should work without explicit images_dir
         labels = coco.read_coco_panoptic(json_path)
+        assert len(labels.label_images) == 1
+        assert labels.label_images[0].n_objects == 1
+
+    def test_read_coco_panoptic_missing_png(self, tmp_path):
+        """Test that missing PNGs are silently skipped."""
+        from PIL import Image
+
+        # Create one valid frame
+        label_data = np.zeros((10, 10), dtype=np.int32)
+        label_data[2:8, 2:8] = 1
+
+        images_dir = tmp_path / "panoptic"
+        images_dir.mkdir()
+
+        rgb = np.zeros((10, 10, 3), dtype=np.uint8)
+        rgb[:, :, 0] = (label_data % 256).astype(np.uint8)
+        Image.fromarray(rgb).save(images_dir / "exists.png")
+
+        coco_data = {
+            "images": [
+                {"id": 1, "file_name": "img1.jpg", "width": 10, "height": 10},
+                {"id": 2, "file_name": "img2.jpg", "width": 10, "height": 10},
+            ],
+            "annotations": [
+                {
+                    "image_id": 1,
+                    "file_name": "exists.png",
+                    "segments_info": [
+                        {"id": 1, "category_id": 1, "area": 36, "iscrowd": 0},
+                    ],
+                },
+                {
+                    "image_id": 2,
+                    "file_name": "missing.png",
+                    "segments_info": [
+                        {"id": 2, "category_id": 1, "area": 10, "iscrowd": 0},
+                    ],
+                },
+            ],
+            "categories": [{"id": 1, "name": "cell", "isthing": 1}],
+        }
+
+        json_path = tmp_path / "panoptic.json"
+        with open(json_path, "w") as f:
+            json.dump(coco_data, f)
+
+        labels = coco.read_coco_panoptic(json_path, images_dir=images_dir)
+        # Only the frame with existing PNG should be loaded
         assert len(labels.label_images) == 1
         assert labels.label_images[0].n_objects == 1
 
@@ -2486,6 +2538,10 @@ class TestCOCOPanoptic:
 
         # Stuff should have no track
         assert rt2.objects[3].track is None
+
+        # Frame indices preserved
+        assert rt1.frame_idx == 0
+        assert rt2.frame_idx == 1
 
         # Dimensions preserved
         assert rt1.height == 20

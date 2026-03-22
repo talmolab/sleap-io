@@ -100,46 +100,6 @@ def _build_objects_from_sidecar(
     return objects
 
 
-def _collect_unique_ids_from_tiff(path: Path) -> np.ndarray:
-    """Collect all unique non-zero label IDs across pages in a TIFF file.
-
-    Args:
-        path: Path to a TIFF file.
-
-    Returns:
-        Sorted array of unique non-zero label IDs.
-    """
-    import tifffile
-
-    all_ids: set[int] = set()
-    with tifffile.TiffFile(str(path)) as tif:
-        for page in tif.pages:
-            data = page.asarray()
-            ids = np.unique(data)
-            all_ids.update(int(i) for i in ids if i > 0)
-    return np.array(sorted(all_ids), dtype=np.int32)
-
-
-def _collect_unique_ids_from_dir(path: Path) -> np.ndarray:
-    """Collect all unique non-zero label IDs across TIFFs in a directory.
-
-    Args:
-        path: Path to a directory of TIFF files.
-
-    Returns:
-        Sorted array of unique non-zero label IDs.
-    """
-    import tifffile
-
-    all_ids: set[int] = set()
-    tiff_files = sorted(list(path.glob("*.tif")) + list(path.glob("*.tiff")))
-    for f in tiff_files:
-        data = tifffile.imread(str(f))
-        ids = np.unique(data)
-        all_ids.update(int(i) for i in ids if i > 0)
-    return np.array(sorted(all_ids), dtype=np.int32)
-
-
 def _build_track_map(
     unique_ids: np.ndarray,
     tracks: dict[int, "Track"] | None,
@@ -268,18 +228,25 @@ def read_label_images(
         if not tiff_files:
             return []
 
-        # Collect unique IDs across all files for consistent track creation
-        unique_ids = _collect_unique_ids_from_dir(path)
-        track_map = _build_track_map(unique_ids, tracks, sidecar)
-        cat_map = _build_category_map(unique_ids, categories, sidecar)
-
-        result = []
-        for frame_idx, tiff_path in enumerate(tiff_files):
+        # Read all files in a single pass, collecting data and unique IDs
+        frames_data: list[np.ndarray] = []
+        all_ids: set[int] = set()
+        for tiff_path in tiff_files:
             data = tifffile.imread(str(tiff_path)).astype(np.int32)
             if data.ndim != 2:
                 raise ValueError(
                     f"Expected 2D array from {tiff_path}, got shape {data.shape}"
                 )
+            frames_data.append(data)
+            ids = np.unique(data)
+            all_ids.update(int(i) for i in ids if i > 0)
+
+        unique_ids = np.array(sorted(all_ids), dtype=np.int32)
+        track_map = _build_track_map(unique_ids, tracks, sidecar)
+        cat_map = _build_category_map(unique_ids, categories, sidecar)
+
+        result = []
+        for frame_idx, data in enumerate(frames_data):
             objects = _build_objects_dict(data, track_map, cat_map)
             result.append(
                 LabelImage(
@@ -292,25 +259,33 @@ def read_label_images(
         return result
 
     # Single file (possibly multi-page)
-    unique_ids = _collect_unique_ids_from_tiff(path)
+    # Read all pages in a single pass, collecting data and unique IDs
+    frames_data: list[np.ndarray] = []
+    all_ids: set[int] = set()
+    with tifffile.TiffFile(str(path)) as tif:
+        for page in tif.pages:
+            data = page.asarray().astype(np.int32)
+            if data.ndim != 2:
+                raise ValueError(f"Expected 2D page in {path}, got shape {data.shape}")
+            frames_data.append(data)
+            ids = np.unique(data)
+            all_ids.update(int(i) for i in ids if i > 0)
+
+    unique_ids = np.array(sorted(all_ids), dtype=np.int32)
     track_map = _build_track_map(unique_ids, tracks, sidecar)
     cat_map = _build_category_map(unique_ids, categories, sidecar)
 
     result = []
-    with tifffile.TiffFile(str(path)) as tif:
-        for frame_idx, page in enumerate(tif.pages):
-            data = page.asarray().astype(np.int32)
-            if data.ndim != 2:
-                raise ValueError(f"Expected 2D page in {path}, got shape {data.shape}")
-            objects = _build_objects_dict(data, track_map, cat_map)
-            result.append(
-                LabelImage(
-                    data=data,
-                    objects=objects,
-                    video=video,
-                    frame_idx=frame_idx,
-                )
+    for frame_idx, data in enumerate(frames_data):
+        objects = _build_objects_dict(data, track_map, cat_map)
+        result.append(
+            LabelImage(
+                data=data,
+                objects=objects,
+                video=video,
+                frame_idx=frame_idx,
             )
+        )
 
     return result
 

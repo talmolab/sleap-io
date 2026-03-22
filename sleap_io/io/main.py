@@ -19,6 +19,7 @@ from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.video import Video
 
 if TYPE_CHECKING:
+    from sleap_io.model.label_image import LabelImage
     from sleap_io.model.labels_set import LabelsSet
 
 
@@ -1173,7 +1174,7 @@ def load_label_images(
     video: Video | None = None,
     tracks: dict | None = None,
     categories: dict[int, str] | None = None,
-) -> list:
+) -> list[LabelImage]:
     """Load label images from TIFF file(s) or directory.
 
     Args:
@@ -1196,7 +1197,7 @@ def load_label_images(
 
 def save_label_images(
     path: str | Path,
-    label_images: list,
+    label_images: list[LabelImage],
     stack: bool = True,
 ) -> None:
     """Save label images to TIFF.

@@ -1016,8 +1016,7 @@ def read_coco_panoptic(
     track_pool: dict[int, Track] = {}
 
     label_images = []
-    for ann in data.get("annotations", []):
-        image_id = ann["image_id"]
+    for ann_idx, ann in enumerate(data.get("annotations", [])):
         png_filename = ann["file_name"]
         segments_info = ann.get("segments_info", [])
 
@@ -1054,7 +1053,7 @@ def read_coco_panoptic(
         li = LabelImage(
             data=label_data,
             objects=objects,
-            frame_idx=image_id,
+            frame_idx=ann_idx,
         )
         label_images.append(li)
 

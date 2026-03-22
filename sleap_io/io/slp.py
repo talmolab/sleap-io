@@ -3403,6 +3403,7 @@ def _write_labels_lazy(
     write_rois(labels_path, labels.rois, labels.videos, labels.tracks)
     write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
     write_bboxes(labels_path, labels.bboxes, labels.videos, labels.tracks)
+    # Note: instance associations are not persisted in lazy mode (no all_instances).
     write_label_images(labels_path, labels.label_images, labels.videos, labels.tracks)
 
 

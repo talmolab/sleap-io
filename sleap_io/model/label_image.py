@@ -100,10 +100,9 @@ class LabelImage:
     def tracks(self) -> list["Track"]:
         """Tracks present in this frame (from objects with non-None track)."""
         return [
-            info.track
-            for label_id in sorted(self.objects)
-            for info in [self.objects[label_id]]
-            if info.track is not None
+            self.objects[lid].track
+            for lid in sorted(self.objects)
+            if self.objects[lid].track is not None
         ]
 
     @property

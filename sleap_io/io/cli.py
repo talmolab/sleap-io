@@ -365,11 +365,24 @@ def _load_overlay(
     """
     from sleap_io.io.tiff import read_label_images as read_tiff_label_images
 
+    if overlay_path.is_dir():
+        tiff_files = sorted(
+            list(overlay_path.glob("*.tif")) + list(overlay_path.glob("*.tiff"))
+        )
+        if not tiff_files:
+            raise click.ClickException(
+                f"No TIFF files found in overlay directory: {overlay_path}"
+            )
+
     try:
         label_images = read_tiff_label_images(overlay_path)
     except Exception as e:
+        if overlay_path.is_dir():
+            raise click.ClickException(
+                f"Failed to load overlay from directory: {overlay_path}. Error: {e}"
+            )
         raise click.ClickException(
-            f"Failed to load overlay: {overlay_path}. Error: {e}"
+            f"Failed to load overlay file: {overlay_path}. Error: {e}"
         )
 
     if not label_images:
@@ -473,9 +486,7 @@ def _render_overlay_only(
         if img.ndim == 2:
             img = np.stack([img] * 3, axis=-1)
         # Extract single-frame overlay
-        if isinstance(overlay_data, list) and len(overlay_data) == 1:
-            single_overlay = overlay_data[0]
-        elif isinstance(overlay_data, list):
+        if isinstance(overlay_data, list):
             single_overlay = overlay_data[0]
         else:
             single_overlay = overlay_data

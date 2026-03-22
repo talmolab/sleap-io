@@ -245,3 +245,18 @@ def test_write_directory_roundtrip(tmp_path):
     # Verify track names roundtrip
     assert result[0].objects[1].track.name == "alpha"
     assert result[0].objects[2].track.name == "beta"
+
+
+def test_empty_label_image_roundtrip(tmp_path):
+    """Write and read back a LabelImage with all-zero data (no objects)."""
+    data = np.zeros((4, 4), dtype=np.int32)
+    li = LabelImage(data=data, frame_idx=0)
+
+    tiff_path = tmp_path / "empty.tif"
+    write_label_images(tiff_path, [li])
+    result = read_label_images(tiff_path)
+
+    assert len(result) == 1
+    np.testing.assert_array_equal(result[0].data, data)
+    assert result[0].n_objects == 0
+    assert len(result[0].objects) == 0
