@@ -1168,6 +1168,51 @@ def load_labels_set(
         )
 
 
+def load_label_images(
+    path: str | Path,
+    video: Video | None = None,
+    tracks: dict | None = None,
+    categories: dict[int, str] | None = None,
+) -> list:
+    """Load label images from TIFF file(s) or directory.
+
+    Args:
+        path: Path to a TIFF file (single or multi-page stack) or a directory
+            of per-frame TIFFs.
+        video: Video to associate with all frames.
+        tracks: Global ``{label_id: Track}`` mapping. If ``None``, auto-creates
+            one Track per unique ID found across all frames.
+        categories: Global ``{label_id: category}`` mapping.
+
+    Returns:
+        List of ``LabelImage``, one per frame, sorted by frame index.
+    """
+    from sleap_io.io import tiff
+
+    return tiff.read_label_images(
+        path, video=video, tracks=tracks, categories=categories
+    )
+
+
+def save_label_images(
+    path: str | Path,
+    label_images: list,
+    stack: bool = True,
+) -> None:
+    """Save label images to TIFF.
+
+    Args:
+        path: Output path. If ``stack=True``, writes a single multi-page TIFF.
+            If ``stack=False``, writes per-frame files to this directory.
+        label_images: ``LabelImage`` objects to write.
+        stack: Write as multi-page TIFF stack (``True``) or per-frame files in
+            a directory (``False``).
+    """
+    from sleap_io.io import tiff
+
+    tiff.write_label_images(path, label_images, stack=stack)
+
+
 def save_skeleton(skeleton: Skeleton | list[Skeleton], filename: str | Path):
     """Save skeleton(s) to a JSON or YAML file.
 

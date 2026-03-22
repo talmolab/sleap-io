@@ -43,6 +43,8 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "save_slp",
             "save_ultralytics",
             "save_video",
+            "load_label_images",
+            "save_label_images",
         ],
         # Video reading functions from sleap_io.io.video_reading
         "io.video_reading": [
