@@ -975,3 +975,205 @@ def write_labels(
     json_path.parent.mkdir(parents=True, exist_ok=True)
     with open(json_path, "w") as f:
         json.dump(coco_data, f, indent=2)
+
+
+def read_coco_panoptic(
+    json_path: str | Path,
+    images_dir: str | Path | None = None,
+) -> Labels:
+    """Read COCO panoptic segmentation format.
+
+    Reads the panoptic annotation JSON and per-frame PNG label images.
+    Each segment_info entry becomes a LabelImage.Info with:
+    - category from the COCO categories table
+    - track from the segment id (isthing=True) or None (isthing=False)
+
+    Args:
+        json_path: Path to the panoptic annotation JSON.
+        images_dir: Directory containing the panoptic PNG files. If None,
+            inferred from the JSON path (same directory).
+
+    Returns:
+        Labels object with label_images populated.
+    """
+    from PIL import Image
+
+    from sleap_io.model.label_image import LabelImage
+
+    json_path = Path(json_path)
+    if images_dir is None:
+        images_dir = json_path.parent
+    else:
+        images_dir = Path(images_dir)
+
+    with open(json_path, "r") as f:
+        data = json.load(f)
+
+    # Build category lookup
+    categories = {cat["id"]: cat for cat in data.get("categories", [])}
+
+    # Track pool: shared across frames for thing segments
+    track_pool: dict[int, Track] = {}
+
+    label_images = []
+    for ann in data.get("annotations", []):
+        image_id = ann["image_id"]
+        png_filename = ann["file_name"]
+        segments_info = ann.get("segments_info", [])
+
+        # Read the panoptic PNG and decode to integer label image
+        png_path = images_dir / png_filename
+        if not png_path.exists():
+            continue
+
+        pil_img = Image.open(png_path).convert("RGB")
+        rgb = np.array(pil_img, dtype=np.int32)
+        # COCO panoptic encoding: pixel_value = R + G * 256 + B * 256^2
+        label_data = rgb[:, :, 0] + rgb[:, :, 1] * 256 + rgb[:, :, 2] * 65536
+
+        # Build objects dict from segments_info
+        objects: dict[int, LabelImage.Info] = {}
+        for seg in segments_info:
+            seg_id = seg["id"]
+            cat_id = seg["category_id"]
+            cat = categories.get(cat_id, {})
+            cat_name = cat.get("name", "")
+            is_thing = bool(cat.get("isthing", 0))
+
+            track = None
+            if is_thing:
+                if seg_id not in track_pool:
+                    track_pool[seg_id] = Track(name=str(seg_id))
+                track = track_pool[seg_id]
+
+            objects[seg_id] = LabelImage.Info(
+                track=track,
+                category=cat_name,
+            )
+
+        li = LabelImage(
+            data=label_data,
+            objects=objects,
+            frame_idx=image_id,
+        )
+        label_images.append(li)
+
+    return Labels(label_images=label_images)
+
+
+def write_coco_panoptic(
+    path: str | Path,
+    labels: Labels,
+    images_dir: str | Path | None = None,
+) -> None:
+    """Write COCO panoptic segmentation format.
+
+    Writes a panoptic JSON and per-frame PNG label images.
+
+    Args:
+        path: Path to save the panoptic annotation JSON.
+        labels: Labels object with label_images populated.
+        images_dir: Directory to write panoptic PNG files. If None,
+            creates a subdirectory next to the JSON named
+            ``<json_stem>_panoptic``.
+    """
+    from PIL import Image
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if images_dir is None:
+        images_dir = path.parent / f"{path.stem}_panoptic"
+    else:
+        images_dir = Path(images_dir)
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    # Collect all unique categories across all label images
+    category_name_to_id: dict[str, int] = {}
+    # Track which categories are "thing" (have tracks) vs "stuff" (no track)
+    category_is_thing: dict[str, bool] = {}
+    cat_id_counter = 1
+
+    for li in labels.label_images:
+        for info in li.objects.values():
+            cat_name = info.category if info.category else "unknown"
+            if cat_name not in category_name_to_id:
+                category_name_to_id[cat_name] = cat_id_counter
+                # A category is "thing" if any object with it has a track
+                category_is_thing[cat_name] = info.track is not None
+                cat_id_counter += 1
+            else:
+                # If any object with this category has a track, it's a thing
+                if info.track is not None:
+                    category_is_thing[cat_name] = True
+
+    # Build categories list
+    coco_categories = []
+    for cat_name, cat_id in category_name_to_id.items():
+        coco_categories.append(
+            {
+                "id": cat_id,
+                "name": cat_name,
+                "isthing": 1 if category_is_thing.get(cat_name, False) else 0,
+            }
+        )
+
+    # Build images and annotations
+    coco_images = []
+    coco_annotations = []
+
+    for idx, li in enumerate(labels.label_images):
+        image_id = idx + 1
+        png_filename = f"panoptic_{image_id:06d}.png"
+
+        # Image entry
+        coco_images.append(
+            {
+                "id": image_id,
+                "file_name": f"image_{image_id:06d}.jpg",
+                "width": li.width,
+                "height": li.height,
+            }
+        )
+
+        # Encode label data as RGB PNG
+        # R = id % 256, G = (id // 256) % 256, B = (id // 65536) % 256
+        rgb = np.zeros((li.height, li.width, 3), dtype=np.uint8)
+        rgb[:, :, 0] = (li.data % 256).astype(np.uint8)
+        rgb[:, :, 1] = ((li.data // 256) % 256).astype(np.uint8)
+        rgb[:, :, 2] = ((li.data // 65536) % 256).astype(np.uint8)
+
+        pil_img = Image.fromarray(rgb)
+        pil_img.save(images_dir / png_filename)
+
+        # Build segments_info
+        segments_info = []
+        for seg_id, info in li.objects.items():
+            cat_name = info.category if info.category else "unknown"
+            cat_id = category_name_to_id[cat_name]
+            area = int(np.sum(li.data == seg_id))
+            segments_info.append(
+                {
+                    "id": seg_id,
+                    "category_id": cat_id,
+                    "area": area,
+                    "iscrowd": 0,
+                }
+            )
+
+        coco_annotations.append(
+            {
+                "image_id": image_id,
+                "file_name": png_filename,
+                "segments_info": segments_info,
+            }
+        )
+
+    coco_data = {
+        "images": coco_images,
+        "annotations": coco_annotations,
+        "categories": coco_categories,
+    }
+
+    with open(path, "w") as f:
+        json.dump(coco_data, f, indent=2)
