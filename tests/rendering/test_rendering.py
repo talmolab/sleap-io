@@ -10,6 +10,7 @@ from shapely.geometry import box
 
 import sleap_io as sio
 from sleap_io.model.bbox import BoundingBox
+from sleap_io.model.label_image import LabelImage
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.roi import ROI
 from sleap_io.rendering import render_video
@@ -3020,3 +3021,75 @@ def test_render_video_crop_with_overlay():
     assert len(frames) == 1
     # Cropped to 50x50, the label at (60:80,60:80) maps to (10:30,10:30)
     assert frames[0].shape[:2] == (50, 50)
+
+
+def test_apply_overlay_label_image():
+    """_apply_overlay with a LabelImage input should modify labeled regions."""
+    from sleap_io.rendering.core import _apply_overlay
+
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 128
+    label_data = np.zeros((50, 50), dtype=np.int32)
+    label_data[10:30, 10:30] = 1
+
+    label_img = LabelImage(data=label_data, frame_idx=0)
+
+    result = _apply_overlay(img, label_img, alpha=0.5)
+
+    # The labeled region should have been modified by the overlay
+    assert result.shape == (50, 50, 3)
+    # Pixels in the labeled region should differ from 128
+    labeled_region = result[10:30, 10:30]
+    assert not np.all(labeled_region == 128)
+    # Pixels outside the labeled region should be unchanged
+    assert np.all(result[0:10, 0:10] == 128)
+
+
+def test_render_image_overlay_label_image_object():
+    """render_image with overlay=LabelImage object should work."""
+    img = np.ones((50, 50, 3), dtype=np.uint8) * 200
+    label_data = np.zeros((50, 50), dtype=np.int32)
+    label_data[5:25, 5:25] = 1
+    label_data[25:45, 25:45] = 2
+
+    label_img = LabelImage(data=label_data, frame_idx=0)
+
+    result = render_image(image=img, overlay=label_img, overlay_alpha=0.5)
+
+    assert result.shape == (50, 50, 3)
+    # Both labeled regions should be colored (different from 200)
+    assert not np.all(result[5:25, 5:25] == 200)
+    assert not np.all(result[25:45, 25:45] == 200)
+    # Background should be unchanged
+    assert np.all(result[0:5, 0:5] == 200)
+
+
+def test_render_video_overlay_label_images():
+    """render_video with overlay=list[LabelImage] should apply per-frame overlays."""
+    labels_obj = _make_synthetic_labels(n_frames=2, h=50, w=50)
+
+    li0 = LabelImage(
+        data=np.array(np.pad(np.ones((20, 20), dtype=np.int32), ((10, 20), (10, 20)))),
+        frame_idx=0,
+    )
+    li1 = LabelImage(
+        data=np.array(np.pad(np.full((15, 15), 2, dtype=np.int32), ((30, 5), (30, 5)))),
+        frame_idx=1,
+    )
+
+    frames = render_video(
+        labels_obj,
+        save_path=None,
+        background="black",
+        overlay=[li0, li1],
+        overlay_alpha=0.5,
+        fps=30,
+        show_progress=False,
+    )
+
+    assert len(frames) == 2
+    # Frame 0: region (10:30, 10:30) should be colored
+    assert not np.all(frames[0][10:30, 10:30] == 0)
+    # Frame 0: top-left corner should remain black
+    assert np.all(frames[0][0:5, 0:5, :] == 0)
+    # Frame 1: region (30:45, 30:45) should be colored
+    assert not np.all(frames[1][30:45, 30:45] == 0)

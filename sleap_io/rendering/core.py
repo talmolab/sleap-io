@@ -26,6 +26,7 @@ from sleap_io.rendering.shapes import MarkerShape, get_marker_func
 if TYPE_CHECKING:
     from sleap_io.model.bbox import BoundingBox
     from sleap_io.model.instance import Instance, PredictedInstance
+    from sleap_io.model.label_image import LabelImage
     from sleap_io.model.labeled_frame import LabeledFrame
     from sleap_io.model.labels import Labels
     from sleap_io.model.mask import SegmentationMask
@@ -297,9 +298,17 @@ def _save_image(image: np.ndarray, save_path: str | Path) -> None:
     Image.fromarray(image).save(save_path_)
 
 
+def _is_label_image(obj: object) -> bool:
+    """Check if an object is a LabelImage (without importing the class)."""
+    return type(obj).__name__ == "LabelImage" and hasattr(obj, "data")
+
+
 def _apply_overlay(
     image: np.ndarray,
-    overlay: "np.ndarray | list[SegmentationMask] | list[ROI] | list[BoundingBox]",
+    overlay: (
+        "np.ndarray | LabelImage"
+        " | list[SegmentationMask] | list[ROI] | list[BoundingBox]"
+    ),
     alpha: float = 0.3,
     palette: PaletteName | str = "distinct",
     outline: bool = False,
@@ -347,12 +356,30 @@ def _apply_overlay(
             outline_width=outline_width,
             outline_color=outline_color,
         )
+    elif _is_label_image(overlay):
+        draw_label_image(
+            image,
+            overlay.data,
+            alpha=alpha,
+            palette=palette,
+            outline=outline,
+            outline_width=outline_width,
+            outline_color=outline_color,
+        )
     elif isinstance(overlay, list) and overlay:
         from sleap_io.model.bbox import BoundingBox
         from sleap_io.model.mask import SegmentationMask
         from sleap_io.model.roi import ROI
 
         first = overlay[0]
+
+        if _is_label_image(first):
+            raise TypeError(
+                "Pass individual LabelImage objects to _apply_overlay, not a "
+                "list. Per-frame dispatch from a list[LabelImage] should "
+                "happen at the render_video level."
+            )
+
         colors = get_palette(palette, len(overlay))
 
         if isinstance(first, SegmentationMask):
@@ -605,7 +632,9 @@ def render_image(
     image: np.ndarray | None = None,
     # Annotation overlay
     overlay: (
-        "np.ndarray | list[SegmentationMask] | list[ROI] | list[BoundingBox] | None"
+        "np.ndarray | LabelImage"
+        " | list[SegmentationMask] | list[ROI] | list[BoundingBox]"
+        " | None"
     ) = None,
     overlay_alpha: float = 0.3,
     overlay_palette: PaletteName | str = "distinct",
@@ -997,7 +1026,7 @@ def render_video(
     # Annotation overlay
     overlay: (
         "np.ndarray"
-        " | list[SegmentationMask] | list[ROI] | list[BoundingBox]"
+        " | list[LabelImage] | list[SegmentationMask] | list[ROI] | list[BoundingBox]"
         " | Callable[[int], np.ndarray] | None"
     ) = None,
     overlay_alpha: float = 0.3,
@@ -1302,6 +1331,7 @@ def render_video(
     _overlay_is_list = (
         overlay is not None and isinstance(overlay, list) and len(overlay) > 0
     )
+    _overlay_is_label_image_list = _overlay_is_list and _is_label_image(overlay[0])
 
     def _get_frame_overlay(fidx: int):
         """Resolve overlay data for a single frame."""
@@ -1315,6 +1345,12 @@ def render_video(
             return overlay
         if _overlay_is_callable:
             return overlay(fidx)
+        if _overlay_is_label_image_list:
+            # Return the first LabelImage matching this frame index
+            for obj in overlay:
+                if getattr(obj, "frame_idx", None) in (None, fidx):
+                    return obj
+            return None
         if _overlay_is_list:
             # Filter objects by frame_idx attribute
             return [
@@ -1337,12 +1373,26 @@ def render_video(
             image = np.stack([image] * 3, axis=-1)
         # Crop overlay to match cropped image region
         cropped_overlay = frame_overlay
-        if crop_bounds is not None and isinstance(frame_overlay, np.ndarray):
-            x1, y1, x2, y2 = crop_bounds
-            oh, ow = frame_overlay.shape[:2]
-            cropped_overlay = frame_overlay[
-                max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)
-            ]
+        if crop_bounds is not None:
+            if isinstance(frame_overlay, np.ndarray):
+                x1, y1, x2, y2 = crop_bounds
+                oh, ow = frame_overlay.shape[:2]
+                cropped_overlay = frame_overlay[
+                    max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)
+                ]
+            elif _is_label_image(frame_overlay):
+                from sleap_io.model.label_image import LabelImage
+
+                x1, y1, x2, y2 = crop_bounds
+                oh, ow = frame_overlay.data.shape[:2]
+                cropped_data = frame_overlay.data[
+                    max(0, y1) : min(oh, y2), max(0, x1) : min(ow, x2)
+                ]
+                cropped_overlay = LabelImage(
+                    data=cropped_data,
+                    objects=frame_overlay.objects,
+                    frame_idx=frame_overlay.frame_idx,
+                )
         _apply_overlay(
             image,
             cropped_overlay,
