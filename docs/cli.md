@@ -88,6 +88,7 @@ sio show labels.slp --lf 0             # Labeled frame details
 
 # Inspect a video file directly
 sio show video.mp4                     # Video properties and metadata
+sio show recording.seq                 # Norpix .seq file info
 
 # Convert between formats
 sio convert labels.slp -o labels.nwb
@@ -152,6 +153,7 @@ sio reencode video.mp4 -o output.mp4 --quality high        # Higher quality
 sio reencode video.mp4 -o output.mp4 --keyframe-interval 0.5  # Max reliability
 sio reencode highspeed.mp4 -o preview.mp4 --fps 30 --quality low  # Downsample
 sio reencode video.mp4 -o output.mp4 --dry-run             # Show ffmpeg command
+sio reencode recording.seq -o recording.mp4                # Convert Norpix .seq to MP4
 sio reencode project.slp -o project.reencoded.slp          # Batch reencode all videos in SLP
 
 # Transform video and adjust landmark coordinates
