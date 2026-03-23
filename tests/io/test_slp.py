@@ -37,6 +37,7 @@ from sleap_io import (
 )
 from sleap_io.io.slp import (
     ExportCancelled,
+    _points_from_hdf5_data,
     camera_group_to_dict,
     camera_to_dict,
     can_use_fast_path,
@@ -57,6 +58,7 @@ from sleap_io.io.slp import (
     read_labels_set,
     read_masks,
     read_metadata,
+    read_negative_frames,
     read_points,
     read_pred_points,
     read_rois,
@@ -483,8 +485,6 @@ def test_negative_frames_no_dataset_when_empty(tmp_path):
 
 def test_read_negative_frames_missing_dataset(tmp_path):
     """Test read_negative_frames returns empty set when dataset doesn't exist."""
-    from sleap_io.io.slp import read_negative_frames
-
     # Create a minimal HDF5 file without negative_frames
     path = tmp_path / "test.h5"
     with h5py.File(path, "w") as f:
@@ -4960,3 +4960,232 @@ def test_label_image_slp_lazy(tmp_path):
     assert rli.objects[1].category == "cell"
     assert rli.objects[1].track.name == "t1"
     np.testing.assert_array_equal(rli.data, data)
+
+
+# -- h5wasm compatibility tests --
+
+
+def test_read_hdf5_dataset_flat_array(tmp_path):
+    """Test that read_hdf5_dataset converts flat arrays with field_names attr."""
+    path = str(tmp_path / "flat.h5")
+
+    # Simulate h5wasm output: flat 2D float64 array with field_names attribute
+    flat_data = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype="<f8")
+    with h5py.File(path, "w") as f:
+        ds = f.create_dataset("data", data=flat_data)
+        ds.attrs["field_names"] = json.dumps(["a", "b", "c"])
+
+    result = read_hdf5_dataset(path, "data")
+
+    # Should be a structured array with named fields
+    assert result.dtype.names == ("a", "b", "c")
+    assert len(result) == 2
+    np.testing.assert_array_equal(result["a"], [1.0, 4.0])
+    np.testing.assert_array_equal(result["b"], [2.0, 5.0])
+    np.testing.assert_array_equal(result["c"], [3.0, 6.0])
+
+
+def test_read_hdf5_dataset_flat_array_bytes_attr(tmp_path):
+    """Test flat array conversion when field_names attr is bytes."""
+    path = str(tmp_path / "flat_bytes.h5")
+
+    flat_data = np.array([[10.0, 20.0]], dtype="<f8")
+    with h5py.File(path, "w") as f:
+        ds = f.create_dataset("data", data=flat_data)
+        # Write as bytes (fixed-length H5T_STRING, as h5wasm may produce)
+        ds.attrs["field_names"] = np.bytes_(json.dumps(["x", "y"]))
+
+    result = read_hdf5_dataset(path, "data")
+    assert result.dtype.names == ("x", "y")
+    np.testing.assert_array_equal(result["x"], [10.0])
+    np.testing.assert_array_equal(result["y"], [20.0])
+
+
+def test_read_hdf5_dataset_compound_unchanged(tmp_path):
+    """Test that compound dtype datasets pass through unchanged."""
+    path = str(tmp_path / "compound.h5")
+
+    dtype = np.dtype([("x", "<f8"), ("y", "<f8")])
+    data = np.array([(1.0, 2.0), (3.0, 4.0)], dtype=dtype)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("data", data=data)
+
+    result = read_hdf5_dataset(path, "data")
+    assert result.dtype == dtype
+    np.testing.assert_array_equal(result["x"], [1.0, 3.0])
+
+
+def test_read_hdf5_dataset_1d_unchanged(tmp_path):
+    """Test that 1D flat arrays (e.g., WKB bytes) pass through unchanged."""
+    path = str(tmp_path / "flat1d.h5")
+
+    data = np.array([1, 2, 3, 4], dtype=np.uint8)
+    with h5py.File(path, "w") as f:
+        f.create_dataset("data", data=data)
+
+    result = read_hdf5_dataset(path, "data")
+    assert result.ndim == 1
+    assert result.dtype == np.uint8
+    np.testing.assert_array_equal(result, data)
+
+
+def test_read_h5wasm_points(tmp_path):
+    """Test _points_from_hdf5_data works with flat arrays converted to structured."""
+    path = str(tmp_path / "points.h5")
+
+    # Simulate h5wasm points: flat float64 array with field_names
+    pts = np.array([[100.0, 200.0, 1.0, 0.0], [150.0, 250.0, 0.0, 1.0]], dtype="<f8")
+    with h5py.File(path, "w") as f:
+        ds = f.create_dataset("points", data=pts)
+        ds.attrs["field_names"] = json.dumps(["x", "y", "visible", "complete"])
+
+    pts_data = read_hdf5_dataset(path, "points")
+    skeleton = Skeleton(nodes=["A", "B"])
+    points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=False)
+
+    assert points_array["xy"][0, 0] == 100.0
+    assert points_array["xy"][0, 1] == 200.0
+    assert points_array["xy"][1, 0] == 150.0
+    assert points_array["xy"][1, 1] == 250.0
+    assert points_array["visible"][0] == 1.0
+    assert points_array["visible"][1] == 0.0
+
+
+def test_read_h5wasm_pred_points(tmp_path):
+    """Test _points_from_hdf5_data works with predicted points from flat arrays."""
+    path = str(tmp_path / "pred_points.h5")
+
+    pts = np.array(
+        [[100.0, 200.0, 1.0, 0.0, 0.95], [150.0, 250.0, 1.0, 1.0, 0.80]],
+        dtype="<f8",
+    )
+    with h5py.File(path, "w") as f:
+        ds = f.create_dataset("pred_points", data=pts)
+        ds.attrs["field_names"] = json.dumps(["x", "y", "visible", "complete", "score"])
+
+    pts_data = read_hdf5_dataset(path, "pred_points")
+    skeleton = Skeleton(nodes=["A", "B"])
+    points_array = _points_from_hdf5_data(pts_data, skeleton, is_predicted=True)
+
+    assert points_array["score"][0] == 0.95
+    assert points_array["score"][1] == 0.80
+
+
+def test_read_h5wasm_negative_frames(tmp_path):
+    """Test read_negative_frames with h5wasm-style flat array."""
+    path = str(tmp_path / "neg_frames.h5")
+
+    # h5wasm writes negative_frames as flat int64 array
+    data = np.array([[0, 5], [0, 10], [1, 3]], dtype="<i8")
+    with h5py.File(path, "w") as f:
+        ds = f.create_dataset("negative_frames", data=data)
+        ds.attrs["field_names"] = json.dumps(["video_id", "frame_idx"])
+
+    result = read_negative_frames(str(path))
+    assert result == {(0, 5), (0, 10), (1, 3)}
+
+
+def test_read_metadata_bytes(tmp_path):
+    """Test read_metadata with bytes attribute (standard h5py)."""
+    path = str(tmp_path / "meta_bytes.h5")
+    metadata = {"version": "1.2", "skeletons": []}
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("metadata")
+        grp.attrs["json"] = json.dumps(metadata).encode()
+
+    result = read_metadata(str(path))
+    assert result == metadata
+
+
+def test_read_metadata_str(tmp_path):
+    """Test read_metadata with str attribute (h5py vlen string)."""
+    path = str(tmp_path / "meta_str.h5")
+    metadata = {"version": "1.2", "skeletons": []}
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("metadata")
+        # h5py writes Python str as vlen string by default
+        grp.attrs["json"] = json.dumps(metadata)
+
+    result = read_metadata(str(path))
+    assert result == metadata
+
+
+def test_read_metadata_ndarray(tmp_path):
+    """Test read_metadata with uint8 ndarray attribute."""
+    path = str(tmp_path / "meta_arr.h5")
+    metadata = {"version": "1.2", "skeletons": []}
+    json_bytes = json.dumps(metadata).encode()
+    with h5py.File(path, "w") as f:
+        grp = f.require_group("metadata")
+        grp.attrs.create("json", np.frombuffer(json_bytes, dtype=np.uint8))
+
+    result = read_metadata(str(path))
+    assert result == metadata
+
+
+def test_read_h5wasm_instances_float64_indices(tmp_path):
+    """Test that float64 index values from h5wasm are handled in read_instances."""
+    path = str(tmp_path / "instances.h5")
+
+    # Create a minimal SLP-like file with h5wasm-style flat arrays
+    skeleton = Skeleton(nodes=["A", "B"])
+
+    # Points: 2 points for 1 instance
+    pts = np.array([[10.0, 20.0, 1.0, 0.0], [30.0, 40.0, 1.0, 0.0]], dtype="<f8")
+
+    # Instance data: all float64 (as h5wasm would write)
+    # Fields: instance_id, instance_type, frame_id, skeleton, track,
+    #         from_predicted, score, point_id_start, point_id_end, tracking_score
+    inst = np.array([[0.0, 0.0, 0.0, 0.0, -1.0, -1.0, 0.0, 0.0, 2.0, 0.0]], dtype="<f8")
+
+    with h5py.File(path, "w") as f:
+        ds_pts = f.create_dataset("points", data=pts)
+        ds_pts.attrs["field_names"] = json.dumps(["x", "y", "visible", "complete"])
+
+        ds_inst = f.create_dataset("instances", data=inst)
+        ds_inst.attrs["field_names"] = json.dumps(
+            [
+                "instance_id",
+                "instance_type",
+                "frame_id",
+                "skeleton",
+                "track",
+                "from_predicted",
+                "score",
+                "point_id_start",
+                "point_id_end",
+                "tracking_score",
+            ]
+        )
+
+        # Empty pred_points (compound dtype, as if no predictions)
+        pred_dtype = np.dtype(
+            [
+                ("x", "<f8"),
+                ("y", "<f8"),
+                ("visible", "?"),
+                ("complete", "?"),
+                ("score", "<f8"),
+            ]
+        )
+        f.create_dataset("pred_points", data=np.array([], dtype=pred_dtype))
+
+    points = read_hdf5_dataset(path, "points")
+    pred_points = read_hdf5_dataset(path, "pred_points")
+
+    instances = read_instances(
+        path,
+        skeletons=[skeleton],
+        tracks=[],
+        points=points,
+        pred_points=pred_points,
+        format_id=1.2,
+    )
+
+    assert len(instances) == 1
+    inst0 = instances[0]
+    assert isinstance(inst0, Instance)
+    assert inst0.skeleton == skeleton
+    assert inst0.track is None
+    np.testing.assert_array_equal(inst0["A"]["xy"], [10.0, 20.0])
+    np.testing.assert_array_equal(inst0["B"]["xy"], [30.0, 40.0])

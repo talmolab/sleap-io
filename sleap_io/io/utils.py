@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -17,10 +18,28 @@ def read_hdf5_dataset(filename: str, dataset: str) -> np.ndarray:
         dataset: Path to a dataset.
 
     Returns:
-        The data as an array.
+        The data as an array. If the dataset is a flat 2D array with a
+        ``"field_names"`` JSON attribute (as written by h5wasm), it will be
+        converted to a structured array so that field-name access works
+        identically to compound-dtype datasets written by h5py.
     """
     with h5py.File(filename, "r") as f:
-        data = f[dataset][()]
+        ds = f[dataset]
+        data = ds[()]
+        # h5wasm writes flat 2D arrays with column names in a "field_names"
+        # JSON attribute instead of compound dtypes. Convert to a structured
+        # array so downstream code can use field-name access unchanged.
+        if data.ndim == 2 and data.dtype.names is None:
+            field_names_raw = ds.attrs.get("field_names", None)
+            if field_names_raw is not None:
+                if isinstance(field_names_raw, (bytes, np.bytes_)):
+                    field_names_raw = field_names_raw.decode()
+                field_names = json.loads(field_names_raw)
+                dtype = [(name, data.dtype) for name in field_names]
+                structured = np.empty(data.shape[0], dtype=dtype)
+                for i, name in enumerate(field_names):
+                    structured[name] = data[:, i]
+                return structured
     return data
 
 
