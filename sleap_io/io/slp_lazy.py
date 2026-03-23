@@ -213,6 +213,14 @@ class LazyDataStore:
                 tracking_score,
             ) = inst_row
 
+        # Cast index values to int for h5wasm compatibility (float64 columns).
+        instance_id = int(instance_id)
+        skeleton_id = int(skeleton_id)
+        track_id = int(track_id)
+        from_predicted = int(from_predicted)
+        point_id_start = int(point_id_start)
+        point_id_end = int(point_id_end)
+
         skeleton = self.skeletons[skeleton_id]
         track = self.tracks[track_id] if track_id >= 0 else None
 

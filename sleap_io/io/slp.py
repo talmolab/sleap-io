@@ -1280,7 +1280,12 @@ def read_metadata(labels_path: str) -> dict:
         A dict containing the metadata from a SLEAP labels file.
     """
     md = read_hdf5_attrs(labels_path, "metadata", "json")
-    return json.loads(md.decode())
+    if isinstance(md, bytes):
+        md = md.decode()
+    elif isinstance(md, np.ndarray):
+        md = md.tobytes().decode()
+    # If md is already a str (e.g., h5py vlen string), use as-is.
+    return json.loads(md)
 
 
 def read_skeletons(labels_path: str) -> list[Skeleton]:
@@ -1501,6 +1506,16 @@ def read_instances(
                 point_id_end,
                 tracking_score,
             ) = instance_data
+
+        # Cast index values to int for h5wasm compatibility. h5wasm may write
+        # all columns as float64, which can't be used as list indices or slice
+        # bounds. Safe for compound dtypes too: int(numpy.int64(x)) -> int.
+        instance_id = int(instance_id)
+        skeleton_id = int(skeleton_id)
+        track_id = int(track_id)
+        from_predicted = int(from_predicted)
+        point_id_start = int(point_id_start)
+        point_id_end = int(point_id_end)
 
         skeleton = skeletons[skeleton_id]
         track = tracks[track_id] if track_id >= 0 else None
