@@ -420,6 +420,15 @@ class VideoBackend:
             return ImageVideo(
                 [filename], grayscale=grayscale, **_get_valid_kwargs(ImageVideo, kwargs)
             )
+        elif filename.lower().endswith(".seq"):
+            from sleap_io.io.seq import SeqVideo
+
+            return SeqVideo(
+                filename,
+                grayscale=grayscale,
+                keep_open=keep_open,
+                **_get_valid_kwargs(SeqVideo, kwargs),
+            )
         elif filename.lower().endswith(tuple(ext.lower() for ext in MediaVideo.EXTS)):
             return MediaVideo(
                 filename,
