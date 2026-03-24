@@ -689,8 +689,8 @@ def load_video(filename: str, **kwargs) -> Video:
     Args:
         filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
             "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
-            "tiff", "bmp". If the filename is a list, a list of image filenames are
-            expected. If filename is a folder, it will be searched for images.
+            "tiff", "bmp", "seq". If the filename is a list, a list of image filenames
+            are expected. If filename is a folder, it will be searched for images.
         **kwargs: Additional arguments passed to `Video.from_filename`.
             Currently supports:
             - dataset: Name of dataset in HDF5 file.

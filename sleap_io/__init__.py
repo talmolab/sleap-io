@@ -47,6 +47,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "save_label_images",
         ],
         # Video reading functions from sleap_io.io.video_reading
+        "io.seq": ["SeqVideo"],
         "io.video_reading": [
             "VideoBackend",
             "get_default_image_plugin",

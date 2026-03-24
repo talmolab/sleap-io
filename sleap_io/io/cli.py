@@ -768,41 +768,57 @@ def _print_video_standalone(path: Path, video: Video) -> None:
     console.print(f"  [dim]Full[/]      {full_path}")
     console.print(f"  [dim]Size[/]      {_format_file_size(file_size)}")
 
-    # Show encoding info if ffmpeg is available
-    enc_info = _get_video_encoding_info(path)
-    if enc_info:
-        # Build encoding line: codec (profile), pixel format
-        enc_parts = []
-        if enc_info.codec:
-            codec_str = enc_info.codec
-            if enc_info.codec_profile:
-                codec_str += f" ({enc_info.codec_profile})"
-            enc_parts.append(codec_str)
-        if enc_info.pixel_format:
-            enc_parts.append(enc_info.pixel_format)
-        if enc_parts:
-            console.print(f"  [dim]Codec[/]     {', '.join(enc_parts)}")
+    # Show format-specific info
+    from sleap_io.io.seq import SeqVideo
 
-        # FPS - from ffmpeg or video backend
-        fps = enc_info.fps or (video.fps if video.fps else None)
-        if fps:
-            console.print(f"  [dim]FPS[/]       {fps:.2f}")
+    if isinstance(video.backend, SeqVideo):
+        # Seq-specific info
+        header = video.backend.header
+        console.print(f"  [dim]Codec[/]     {header.codec_name} ({header.codec})")
+        if video.fps:
+            console.print(f"  [dim]FPS[/]       {video.fps:.2f}")
+        if header.description:
+            console.print(f"  [dim]Desc[/]      {header.description}")
+        console.print(
+            f"  [dim]Depth[/]     {header.bit_depth_real}-bit"
+            f" ({header.num_channels} channel{'s' if header.num_channels > 1 else ''})"
+        )
+    else:
+        # Show encoding info if ffmpeg is available
+        enc_info = _get_video_encoding_info(path)
+        if enc_info:
+            # Build encoding line: codec (profile), pixel format
+            enc_parts = []
+            if enc_info.codec:
+                codec_str = enc_info.codec
+                if enc_info.codec_profile:
+                    codec_str += f" ({enc_info.codec_profile})"
+                enc_parts.append(codec_str)
+            if enc_info.pixel_format:
+                enc_parts.append(enc_info.pixel_format)
+            if enc_parts:
+                console.print(f"  [dim]Codec[/]     {', '.join(enc_parts)}")
 
-        # Bitrate
-        if enc_info.bitrate_kbps:
-            console.print(f"  [dim]Bitrate[/]   {enc_info.bitrate_kbps} kb/s")
+            # FPS - from ffmpeg or video backend
+            fps = enc_info.fps or (video.fps if video.fps else None)
+            if fps:
+                console.print(f"  [dim]FPS[/]       {fps:.2f}")
 
-        # GOP size (keyframe interval) - estimate if not already known
-        gop = enc_info.gop_size
-        if gop is None:
-            gop = _estimate_gop_size(path)
-        if gop:
-            # Show GOP with fps context for interpretability
-            if fps and fps > 0:
-                gop_secs = gop / fps
-                console.print(f"  [dim]GOP[/]       {gop} frames ({gop_secs:.1f}s)")
-            else:
-                console.print(f"  [dim]GOP[/]       {gop} frames")
+            # Bitrate
+            if enc_info.bitrate_kbps:
+                console.print(f"  [dim]Bitrate[/]   {enc_info.bitrate_kbps} kb/s")
+
+            # GOP size (keyframe interval) - estimate if not already known
+            gop = enc_info.gop_size
+            if gop is None:
+                gop = _estimate_gop_size(path)
+            if gop:
+                # Show GOP with fps context for interpretability
+                if fps and fps > 0:
+                    gop_secs = gop / fps
+                    console.print(f"  [dim]GOP[/]       {gop} frames ({gop_secs:.1f}s)")
+                else:
+                    console.print(f"  [dim]GOP[/]       {gop} frames")
 
     console.print()
 
@@ -5982,6 +5998,8 @@ def reencode(
 
         $ sio reencode video.mp4 -o output.mp4 --no-ffmpeg
 
+        $ sio reencode recording.seq -o recording.mp4
+
     [dim]SLP batch examples:[/]
 
         $ sio reencode project.slp -o project.reencoded.slp
@@ -6087,7 +6105,18 @@ def reencode(
         )
 
     # Decide path to use
-    use_ffmpeg_path = ffmpeg_available if use_ffmpeg is None else use_ffmpeg
+    # Force Python path for formats ffmpeg can't read (e.g., .seq)
+    ffmpeg_unsupported = input_path.suffix.lower() in {".seq"}
+    if ffmpeg_unsupported and use_ffmpeg is True:
+        raise click.ClickException(
+            f"ffmpeg cannot read {input_path.suffix} files directly. "
+            f"Remove --use-ffmpeg to use the Python path instead."
+        )
+    use_ffmpeg_path = (
+        False
+        if ffmpeg_unsupported
+        else (ffmpeg_available if use_ffmpeg is None else use_ffmpeg)
+    )
 
     if use_ffmpeg_path:
         # FFmpeg fast path

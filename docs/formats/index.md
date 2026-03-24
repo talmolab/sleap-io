@@ -14,6 +14,29 @@ sleap-io provides a unified interface for reading and writing pose tracking data
 
 ::: sleap_io.io.main.save_video
 
+### Norpix .seq Format
+
+The `.seq` format is used by StreamPix / Norpix for high-speed video recording, commonly used in behavioral neuroscience. sleap-io provides native read support for `.seq` files via the [`SeqVideo`][sleap_io.SeqVideo] backend.
+
+```python
+video = sio.load_video("recording.seq")
+frame = video[0]  # Read first frame
+```
+
+Supported codecs: uncompressed grayscale (`monoraw`), uncompressed BGR (`raw`), JPEG compressed (`monojpg`, `jpg`), and PNG compressed (`monopng`, `png`). Per-frame timestamps are accessible via the backend:
+
+```python
+backend = video.backend  # SeqVideo instance
+ts = backend.get_timestamp(0)    # Timestamp of first frame (seconds since epoch)
+ts_all = backend.get_timestamps()  # All timestamps as numpy array
+```
+
+To convert `.seq` to MP4:
+
+```bash
+sio reencode recording.seq -o recording.mp4
+```
+
 ## Format-Specific Functions
 
 ### SLEAP Native Format (.slp)

@@ -1,8 +1,8 @@
 # Video
 
-The [`Video`][sleap_io.Video] class provides a lazy, array-like interface to video data. It wraps various backends (MP4, AVI, HDF5, image sequences) behind a unified API, enabling frame access with NumPy-style indexing regardless of the underlying storage format.
+The [`Video`][sleap_io.Video] class provides a lazy, array-like interface to video data. It wraps various backends (MP4, AVI, HDF5, image sequences, Norpix .seq) behind a unified API, enabling frame access with NumPy-style indexing regardless of the underlying storage format.
 
-- **Unified interface**: `Video` wraps different backends (MP4/AVI via ffmpeg, HDF5, image sequences) behind a single numpy-like indexing API, with the backend auto-detected from the file extension.
+- **Unified interface**: `Video` wraps different backends (MP4/AVI via ffmpeg, HDF5, image sequences, Norpix .seq) behind a single numpy-like indexing API, with the backend auto-detected from the file extension.
 - **Lazy access**: Frames are only read from disk when you index into the video — creating a `Video` object does not load any pixel data.
 - **Label integration**: Each [`LabeledFrame`](labels.md) references a `Video` and a frame index, linking pose annotations back to the underlying footage.
 
@@ -93,6 +93,7 @@ The `Video` class delegates frame reading to a backend that matches the file typ
 | `MediaVideo` | MP4, AVI, MOV, MJ2, MKV | Standard video files via imageio/ffmpeg, OpenCV, or PyAV |
 | `HDF5Video` | H5, HDF5, SLP | Frames stored as datasets in HDF5 files |
 | `ImageVideo` | PNG, JPG, JPEG, TIF, TIFF, BMP | Ordered sequences of image files |
+| `SeqVideo` | SEQ | Norpix .seq high-speed video files (StreamPix) |
 
 The full list of supported extensions is available via `Video.EXTS`:
 
@@ -190,6 +191,7 @@ new_video = video.save("output.mp4", fps=60)         # Override output FPS
 | `.jpg`, `.jpeg` | `ImageVideo` | JPEG image sequence |
 | `.tif`, `.tiff` | `ImageVideo` | TIFF image sequence |
 | `.bmp` | `ImageVideo` | BMP image sequence |
+| `.seq` | `SeqVideo` | Norpix .seq high-speed video (StreamPix) |
 
 ## Class diagram
 
@@ -222,6 +224,7 @@ classDiagram
     class MediaVideo:::backend
     class HDF5Video:::backend
     class ImageVideo:::backend
+    class SeqVideo:::backend
 
     Labels "1" *-- "0..*" Video
     LabeledFrame --> Video : references
@@ -229,6 +232,7 @@ classDiagram
     VideoBackend <|-- MediaVideo
     VideoBackend <|-- HDF5Video
     VideoBackend <|-- ImageVideo
+    VideoBackend <|-- SeqVideo
 
     classDef video fill:#ef6c00,stroke:#e65100,color:#fff
     classDef labels fill:#43a047,stroke:#2e7d32,color:#fff

@@ -31,8 +31,8 @@ class Video:
     Attributes:
         filename: The filename(s) of the video. Supported extensions: "mp4", "avi",
             "mov", "mj2", "mkv", "h5", "hdf5", "slp", "png", "jpg", "jpeg", "tif",
-            "tiff", "bmp". If the filename is a list, a list of image filenames are
-            expected. If filename is a folder, it will be searched for images.
+            "tiff", "bmp", "seq". If the filename is a list, a list of image filenames
+            are expected. If filename is a folder, it will be searched for images.
         backend: An object that implements the basic methods for reading and
             manipulating frames of a specific video type.
         backend_metadata: A dictionary of metadata specific to the backend. This is
@@ -80,7 +80,7 @@ class Video:
     source_video: "Video | None" = None
     open_backend: bool = True
 
-    EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS
+    EXTS = MediaVideo.EXTS + HDF5Video.EXTS + ImageVideo.EXTS + ("seq",)
 
     @property
     def original_video(self) -> "Video | None":
