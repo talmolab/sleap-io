@@ -649,3 +649,38 @@ def test_seq_video_len(seq_video_path):
     backend = SeqVideo(str(seq_video_path))
     assert len(backend) == 5
     backend.close()
+
+
+def test_seq_video_version4_6byte_timestamps(tmp_path):
+    """Test reading a version 4 .seq file with 6-byte timestamps (no microseconds)."""
+    path = tmp_path / "test_v4.seq"
+    width, height = 64, 48
+    n_frames = 5
+
+    with open(path, "wb") as f:
+        _write_seq_header(f, width=width, height=height, num_frames=n_frames, version=4)
+
+        base_ts = 1700000000
+        for i in range(n_frames):
+            frame = np.full((height, width), fill_value=(i + 1) * 40, dtype=np.uint8)
+            f.write(frame.tobytes())
+            _write_timestamp(f, base_ts + i, ms=500, version=4)
+
+    backend = SeqVideo(str(path))
+    assert backend.num_frames == 5
+
+    # Verify frames read correctly
+    frame = backend._read_frame(0)
+    assert frame.shape == (48, 64, 1)
+    assert np.all(frame == 40)
+
+    # Verify timestamps (seconds + ms, no microseconds)
+    ts0 = backend.get_timestamp(0)
+    assert ts0 == pytest.approx(1700000000.5, abs=0.01)
+
+    ts_all = backend.get_timestamps()
+    assert ts_all.shape == (5,)
+    diffs = np.diff(ts_all)
+    assert np.allclose(diffs, 1.0, atol=0.01)
+
+    backend.close()

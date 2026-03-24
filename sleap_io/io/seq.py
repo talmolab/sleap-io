@@ -386,17 +386,20 @@ class SeqVideo(VideoBackend):
             raise FileNotFoundError(f"File not found: {path}")
 
         f = open(path, "rb")
-        self._header = SeqHeader.from_file(f)
+        try:
+            self._header = SeqHeader.from_file(f)
 
-        if self._header.codec_name in _BAYER_CODECS:
+            if self._header.codec_name in _BAYER_CODECS:
+                raise NotImplementedError(
+                    f"Bayer codec '{self._header.codec_name}' is not supported. "
+                    f"Convert the .seq file to a standard format first."
+                )
+
+            self._index = self._load_or_build_index(f)
+            self._recompute_fps(f)
+        except Exception:
             f.close()
-            raise NotImplementedError(
-                f"Bayer codec '{self._header.codec_name}' is not supported. "
-                f"Convert the .seq file to a standard format first."
-            )
-
-        self._index = self._load_or_build_index(f)
-        self._recompute_fps(f)
+            raise
 
         if self.keep_open:
             self._file_handle = f
@@ -474,6 +477,8 @@ class SeqVideo(VideoBackend):
             ts = np.array([self._read_timestamp(f, i) for i in range(n)])
             ds = np.diff(ts)
             median_ds = np.median(ds)
+            # 5ms tolerance — tuned for high-speed video (>100 fps); for slow
+            # framerates where jitter exceeds this, falls back to header FPS.
             ds = ds[np.abs(ds - median_ds) < 0.005]
 
             if len(ds) > 0:
@@ -546,7 +551,7 @@ class SeqVideo(VideoBackend):
         h, w = self._header.height, self._header.width
         nch = self._header.num_channels
 
-        if codec in ("monoraw", "raw", "brgb8"):
+        if codec in ("monoraw", "raw"):
             arr = np.frombuffer(data, dtype=np.uint8)
             if nch == 1:
                 return arr[: h * w].reshape(h, w, 1)
@@ -555,7 +560,7 @@ class SeqVideo(VideoBackend):
                 # BGR -> RGB
                 return arr[:, :, ::-1].copy()
 
-        elif codec in ("monojpg", "jpg", "jbrgb", "monopng", "png"):
+        elif codec in ("monojpg", "jpg", "monopng", "png"):
             try:
                 from PIL import Image
             except ImportError:
@@ -588,25 +593,6 @@ class SeqVideo(VideoBackend):
         if self.grayscale is True or nch == 1:
             return (h, w, 1)
         return (h, w, 3)
-
-    @property
-    def fps(self) -> float | None:
-        """Frames per second, computed from timestamps if available."""
-        return self._fps
-
-    @fps.setter
-    def fps(self, value: float | None) -> None:
-        """Set the FPS.
-
-        Args:
-            value: Frames per second. Must be positive if not None.
-
-        Raises:
-            ValueError: If value is not positive.
-        """
-        if value is not None and value <= 0:
-            raise ValueError(f"FPS must be positive, got {value}")
-        self._fps = value
 
     def _read_frame(self, frame_idx: int) -> np.ndarray:
         """Read a single frame from the .seq file.
