@@ -10,6 +10,7 @@ Format version history:
     - 1.6: Added instance_idx to ROI dtype for instance-level associations
     - 1.7: Added bounding box dataset (/bboxes)
     - 1.8: Added label image datasets (/label_images, /label_image_data)
+    - 1.9: Added identity dataset (/identities_json) and Instance3D support
 """
 
 from __future__ import annotations
@@ -47,7 +48,14 @@ from sleap_io.model.camera import (
     InstanceGroup,
     RecordingSession,
 )
-from sleap_io.model.instance import Instance, PredictedInstance, Track
+from sleap_io.model.identity import Identity
+from sleap_io.model.instance import (
+    Instance,
+    Instance3D,
+    PredictedInstance,
+    PredictedInstance3D,
+    Track,
+)
 from sleap_io.model.label_image import LabelImage
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
@@ -1142,6 +1150,54 @@ def write_tracks(labels_path: str, tracks: list[Track]):
         f.create_dataset("tracks_json", data=tracks_json, maxshape=(None,))
 
 
+def read_identities(labels_path: str) -> list[Identity]:
+    """Read Identity dataset from a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+
+    Returns:
+        A list of `Identity` objects.
+    """
+    try:
+        identities = read_hdf5_dataset(labels_path, "identities_json")
+    except KeyError:
+        return []
+    identity_objects = []
+    for identity_data in identities:
+        d = json.loads(identity_data)
+        identity_objects.append(
+            Identity(
+                name=d.get("name", ""),
+                color=d.get("color", None),
+                metadata={k: v for k, v in d.items() if k not in ("name", "color")},
+            )
+        )
+    return identity_objects
+
+
+def write_identities(labels_path: str, identities: list[Identity]):
+    """Write Identity metadata to a SLEAP labels file.
+
+    Args:
+        labels_path: A string path to the SLEAP labels file.
+        identities: A list of `Identity` objects.
+    """
+    if not identities:
+        return
+
+    identities_json = []
+    for identity in identities:
+        d = {"name": identity.name}
+        if identity.color is not None:
+            d["color"] = identity.color
+        d.update(identity.metadata)
+        identities_json.append(np.bytes_(json.dumps(d, separators=(",", ":"))))
+
+    with h5py.File(labels_path, "a") as f:
+        f.create_dataset("identities_json", data=identities_json, maxshape=(None,))
+
+
 def read_suggestions(labels_path: str, videos: list[Video]) -> list[SuggestionFrame]:
     """Read `SuggestionFrame` dataset in a SLEAP labels file.
 
@@ -1370,6 +1426,8 @@ def write_metadata(labels_path: str, labels: Labels):
     has_instance_rois = any(
         roi.instance is not None or roi._instance_idx >= 0 for roi in labels.rois
     )
+    has_identities = len(labels.identities) > 0
+
     if labels.label_images:
         format_id = 1.8
     elif labels.bboxes:
@@ -1380,6 +1438,10 @@ def write_metadata(labels_path: str, labels: Labels):
         format_id = 1.5
     else:
         format_id = 1.4
+
+    # Bump for identities (new in 1.9)
+    if has_identities:
+        format_id = max(format_id, 1.9)
 
     with h5py.File(labels_path, "a") as f:
         grp = f.require_group("metadata")
@@ -1745,6 +1807,7 @@ def make_instance_group(
     instance_group_dict: dict,
     labeled_frames: list[LabeledFrame],
     camera_group: CameraGroup,
+    identities: list[Identity] | None = None,
 ) -> InstanceGroup:
     """Creates an `InstanceGroup` object from a dictionary.
 
@@ -1761,6 +1824,8 @@ def make_instance_group(
         labeled_frames: List of `LabeledFrame` objects (expecting
             `Labels.labeled_frames`) used to retrieve `Instance` objects.
         camera_group: `CameraGroup` object used to retrieve `Camera` objects.
+        identities: Optional list of `Identity` objects for resolving identity
+            indices.
 
     Returns:
         `InstanceGroup` object.
@@ -1789,9 +1854,37 @@ def make_instance_group(
     score = None
     if "score" in instance_group_dict:
         score = instance_group_dict.pop("score")
-    points = None
-    if "points" in instance_group_dict:
-        points = instance_group_dict.pop("points")
+
+    # 3D points → Instance3D
+    instance_3d = None
+    points = instance_group_dict.pop("points", None)
+    if points is not None:
+        skeleton = None
+        for inst in instance_by_camera.values():
+            skeleton = inst.skeleton
+            break
+        if skeleton is not None:
+            inst3d_score = instance_group_dict.pop("instance_3d_score", None)
+            point_scores = instance_group_dict.pop("instance_3d_point_scores", None)
+            if point_scores is not None:
+                instance_3d = PredictedInstance3D(
+                    points=points,
+                    skeleton=skeleton,
+                    score=inst3d_score,
+                    point_scores=point_scores,
+                )
+            else:
+                instance_3d = Instance3D(
+                    points=points,
+                    skeleton=skeleton,
+                    score=inst3d_score,
+                )
+
+    # Identity
+    identity = None
+    identity_idx = instance_group_dict.pop("identity_idx", None)
+    if identity_idx is not None and identities is not None:
+        identity = identities[int(identity_idx)]
 
     # Metadata contains any information that the class does not deserialize.
     metadata = instance_group_dict  # Remaining keys are metadata.
@@ -1799,7 +1892,8 @@ def make_instance_group(
     return InstanceGroup(
         instance_by_camera=instance_by_camera,
         score=score,
-        points=points,
+        instance_3d=instance_3d,
+        identity=identity,
         metadata=metadata,
     )
 
@@ -1808,6 +1902,7 @@ def make_frame_group(
     frame_group_dict: dict,
     labeled_frames: list[LabeledFrame],
     camera_group: CameraGroup,
+    identities: list[Identity] | None = None,
 ) -> FrameGroup:
     """Create a `FrameGroup` object from a dictionary.
 
@@ -1823,6 +1918,8 @@ def make_frame_group(
         labeled_frames: List of `LabeledFrame` objects (expecting
             `Labels.labeled_frames`).
         camera_group: `CameraGroup` object used to retrieve `Camera` objects.
+        identities: Optional list of `Identity` objects for resolving identity
+            indices.
 
     Returns:
         `FrameGroup` object.
@@ -1841,6 +1938,7 @@ def make_frame_group(
             instance_group_dict=instance_group_dict,
             labeled_frames=labeled_frames,
             camera_group=camera_group,
+            identities=identities,
         )
         instance_groups.append(instance_group)
 
@@ -1943,7 +2041,10 @@ def make_camera_group(calibration_dict: dict) -> CameraGroup:
 
 
 def make_session(
-    session_dict: dict, videos: list[Video], labeled_frames: list[LabeledFrame]
+    session_dict: dict,
+    videos: list[Video],
+    labeled_frames: list[LabeledFrame],
+    identities: list[Identity] | None = None,
 ) -> RecordingSession:
     """Create a `RecordingSession` from a dictionary.
 
@@ -1958,6 +2059,8 @@ def make_session(
         videos: List containing `Video` objects (expected `Labels.videos`).
         labeled_frames: List containing `LabeledFrame` objects (expected
             `Labels.labeled_frames`).
+        identities: Optional list of `Identity` objects for resolving identity
+            indices.
 
     Returns:
         `RecordingSession` object.
@@ -1991,6 +2094,7 @@ def make_session(
                 frame_group_dict=frame_group_dict,
                 labeled_frames=labeled_frames,
                 camera_group=camera_group,
+                identities=identities,
             )
             frame_group_by_frame_idx[frame_group.frame_idx] = frame_group
         except ValueError as e:
@@ -2010,7 +2114,10 @@ def make_session(
 
 
 def read_sessions(
-    labels_path: str, videos: list[Video], labeled_frames: list[LabeledFrame]
+    labels_path: str,
+    videos: list[Video],
+    labeled_frames: list[LabeledFrame],
+    identities: list[Identity] | None = None,
 ) -> list[RecordingSession]:
     """Read `RecordingSession` dataset from a SLEAP labels file.
 
@@ -2021,6 +2128,8 @@ def read_sessions(
         labels_path: A string path to the SLEAP labels file.
         videos: A list of `Video` objects.
         labeled_frames: A list of `LabeledFrame` objects.
+        identities: Optional list of `Identity` objects for resolving identity
+            indices.
 
     Returns:
         A list of `RecordingSession` objects.
@@ -2032,7 +2141,9 @@ def read_sessions(
     sessions = [json.loads(x) for x in sessions]
     session_objects = []
     for session in sessions:
-        session_objects.append(make_session(session, videos, labeled_frames))
+        session_objects.append(
+            make_session(session, videos, labeled_frames, identities=identities)
+        )
     return session_objects
 
 
@@ -2040,6 +2151,7 @@ def instance_group_to_dict(
     instance_group: InstanceGroup,
     instance_to_lf_and_inst_idx: dict[Instance, tuple[int, int]],
     camera_group: CameraGroup,
+    identities: list[Identity] | None = None,
 ) -> dict:
     """Convert `instance_group` to a dictionary.
 
@@ -2050,6 +2162,8 @@ def instance_group_to_dict(
             (in containing `LabeledFrame.instances`).
         camera_group: `CameraGroup` object that determines the order of the `Camera`
             objects when converting to a dictionary.
+        identities: Optional list of `Identity` objects for serializing identity
+            indices.
 
     Returns:
         Dictionary of the `InstanceGroup` with keys:
@@ -2071,8 +2185,26 @@ def instance_group_to_dict(
     # Optionally add score, points, and metadata if they are non-default values
     if instance_group.score is not None:
         instance_group_dict["score"] = instance_group.score
-    if instance_group.points is not None:
-        instance_group_dict["points"] = instance_group.points.tolist()
+
+    # 3D points — serialize from Instance3D if present
+    if instance_group.instance_3d is not None:
+        inst3d = instance_group.instance_3d
+        instance_group_dict["points"] = inst3d.points.tolist()
+        if inst3d.score is not None:
+            instance_group_dict["instance_3d_score"] = inst3d.score
+        if isinstance(inst3d, PredictedInstance3D) and inst3d.point_scores is not None:
+            instance_group_dict["instance_3d_point_scores"] = (
+                inst3d.point_scores.tolist()
+            )
+
+    # Identity — serialize as index into Labels.identities
+    if instance_group.identity is not None and identities is not None:
+        try:
+            identity_idx = identities.index(instance_group.identity)
+            instance_group_dict["identity_idx"] = identity_idx
+        except ValueError:
+            pass
+
     instance_group_dict.update(instance_group.metadata)
 
     return instance_group_dict
@@ -2082,6 +2214,7 @@ def frame_group_to_dict(
     frame_group: FrameGroup,
     labeled_frame_to_idx: dict[LabeledFrame, int],
     camera_group: CameraGroup,
+    identities: list[Identity] | None = None,
 ) -> dict:
     """Convert `frame_group` to a dictionary.
 
@@ -2091,6 +2224,8 @@ def frame_group_to_dict(
             `Labels.labeled_frames`.
         camera_group: `CameraGroup` object that determines the order of the `Camera`
             objects when converting to a dictionary.
+        identities: Optional list of `Identity` objects for serializing identity
+            indices.
 
     Returns:
         Dictionary of the `FrameGroup` with keys:
@@ -2114,6 +2249,7 @@ def frame_group_to_dict(
                 instance_group,
                 instance_to_lf_and_inst_idx=instance_to_lf_and_inst_idx,
                 camera_group=camera_group,
+                identities=identities,
             )
             for instance_group in frame_group.instance_groups
         ],
@@ -2197,6 +2333,7 @@ def session_to_dict(
     session: RecordingSession,
     video_to_idx: dict[Video, int],
     labeled_frame_to_idx: dict[LabeledFrame, int],
+    identities: list[Identity] | None = None,
 ) -> dict:
     """Convert `RecordingSession` to a dictionary.
 
@@ -2205,6 +2342,8 @@ def session_to_dict(
         video_to_idx: Dictionary of `Video` to index in `Labels.videos`.
         labeled_frame_to_idx: Dictionary of `LabeledFrame` to index in
             `Labels.labeled_frames`.
+        identities: Optional list of `Identity` objects for serializing identity
+            indices.
 
     Returns:
         Dictionary of `RecordingSession` with the following keys:
@@ -2250,6 +2389,7 @@ def session_to_dict(
                     frame_group,
                     labeled_frame_to_idx=labeled_frame_to_idx,
                     camera_group=session.camera_group,
+                    identities=identities,
                 )
                 frame_group_dicts.append(frame_group_dict)
 
@@ -2268,6 +2408,7 @@ def write_sessions(
     sessions: list[RecordingSession],
     videos: list[Video],
     labeled_frames: list[LabeledFrame],
+    identities: list[Identity] | None = None,
 ):
     """Write `RecordingSession` metadata to a SLEAP labels file.
 
@@ -2282,6 +2423,8 @@ def write_sessions(
             (expecting `Labels.videos`).
         labeled_frames: A list of `LabeledFrame` objects referenced in the
             `RecordingSession`s (expecting `Labels.labeled_frames`).
+        identities: Optional list of `Identity` objects for serializing identity
+            indices.
     """
     sessions_json = []
     if len(sessions) > 0:
@@ -2292,6 +2435,7 @@ def write_sessions(
             session=session,
             video_to_idx=video_to_idx,
             labeled_frame_to_idx=labeled_frame_to_idx,
+            identities=identities,
         )
         sessions_json.append(np.bytes_(json.dumps(session_json, separators=(",", ":"))))
 
@@ -3203,7 +3347,8 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
             )
         )
 
-    sessions = read_sessions(labels_path, videos, labeled_frames)
+    identities = read_identities(labels_path)
+    sessions = read_sessions(labels_path, videos, labeled_frames, identities=identities)
     rois = read_rois(labels_path, videos, tracks, instances)
     masks = read_masks(labels_path, videos, tracks)
     bboxes = read_bboxes(labels_path, videos, tracks, instances)
@@ -3242,6 +3387,7 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
         videos=videos,
         skeletons=skeletons,
         tracks=tracks,
+        identities=identities,
         suggestions=suggestions,
         sessions=sessions,
         provenance=provenance,
@@ -3553,8 +3699,15 @@ def write_labels(
         verbose=verbose,
     )
     write_tracks(labels_path, labels.tracks)
+    write_identities(labels_path, labels.identities)
     write_suggestions(labels_path, labels.suggestions, labels.videos)
-    write_sessions(labels_path, labels.sessions, labels.videos, labels.labeled_frames)
+    write_sessions(
+        labels_path,
+        labels.sessions,
+        labels.videos,
+        labels.labeled_frames,
+        identities=labels.identities,
+    )
     write_metadata(labels_path, labels)
     write_lfs(labels_path, labels)
     write_negative_frames(labels_path, labels)
