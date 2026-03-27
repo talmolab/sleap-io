@@ -22,6 +22,7 @@ from attrs import define, field
 
 from sleap_io.io.utils import sanitize_filename
 from sleap_io.model.camera import RecordingSession
+from sleap_io.model.identity import Identity
 from sleap_io.model.instance import Instance, PredictedInstance, Track
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.skeleton import NodeOrIndex, Skeleton
@@ -57,6 +58,8 @@ class Labels:
         skeletons: A list of `Skeleton`s that are associated with this dataset. This
             should generally only contain a single skeleton.
         tracks: A list of `Track`s that are associated with this dataset.
+        identities: A list of `Identity`s for ground-truth animal identification,
+            persistent across sessions and videos.
         suggestions: A list of `SuggestionFrame`s that are associated with this dataset.
         sessions: A list of `RecordingSession`s that are associated with this dataset.
         provenance: Dictionary of arbitrary metadata providing additional information
@@ -78,6 +81,7 @@ class Labels:
     videos: list[Video] = field(factory=list)
     skeletons: list[Skeleton] = field(factory=list)
     tracks: list[Track] = field(factory=list)
+    identities: list[Identity] = field(factory=list)
     suggestions: list[SuggestionFrame] = field(factory=list)
     sessions: list[RecordingSession] = field(factory=list)
     provenance: dict[str, Any] = field(factory=dict)

@@ -7,7 +7,8 @@ import numpy as np
 from attrs import define, field
 from attrs.validators import instance_of
 
-from sleap_io.model.instance import Instance
+from sleap_io.model.identity import Identity
+from sleap_io.model.instance import Instance, Instance3D
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.video import Video
 
@@ -450,7 +451,10 @@ class InstanceGroup:
         score: Optional score for the `InstanceGroup`. Setting the score will also
             update the score for all `instances` already in the `InstanceGroup`. The
             score for `instances` will not be updated upon initialization.
-        points: Optional 3D points for the `InstanceGroup`.
+        instance_3d: Optional `Instance3D` with triangulated 3D keypoints.
+        points: Optional 3D points for the `InstanceGroup`. Delegates to
+            `instance_3d.points` if present.
+        identity: Optional `Identity` for this group (which animal).
         metadata: Dictionary of metadata.
     """
 
@@ -460,10 +464,8 @@ class InstanceGroup:
     _score: float | None = field(
         default=None, converter=attrs.converters.optional(float)
     )
-    _points: np.ndarray | None = field(
-        default=None,
-        converter=attrs.converters.optional(lambda x: np.array(x, dtype="float64")),
-    )
+    _instance_3d: "Instance3D | None" = field(default=None)
+    identity: "Identity | None" = field(default=None)
     metadata: dict = field(factory=dict, validator=instance_of(dict))
 
     @property
@@ -487,9 +489,32 @@ class InstanceGroup:
         return self._score
 
     @property
+    def instance_3d(self) -> "Instance3D | None":
+        """The 3D instance for this group."""
+        return self._instance_3d
+
+    @property
     def points(self) -> np.ndarray | None:
-        """Get 3D points for `InstanceGroup`."""
-        return self._points
+        """3D keypoint coordinates. Delegates to instance_3d.points."""
+        if self._instance_3d is not None:
+            return self._instance_3d.points
+        return None
+
+    @points.setter
+    def points(self, value: np.ndarray | None):
+        """Set 3D points. Creates/updates Instance3D as needed."""
+        if value is None:
+            self._instance_3d = None
+        elif self._instance_3d is not None:
+            self._instance_3d.points = np.array(value, dtype="float64")
+        else:
+            # Need a skeleton — get from first instance if available
+            skeleton = None
+            for inst in self._instance_by_camera.values():
+                skeleton = inst.skeleton
+                break
+            if skeleton is not None:
+                self._instance_3d = Instance3D(points=value, skeleton=skeleton)
 
     def get_instance(self, camera: Camera) -> Instance | None:
         """Get `Instance` associated with `camera`.
@@ -504,8 +529,13 @@ class InstanceGroup:
 
     def __repr__(self) -> str:
         """Return a readable representation of the instance group."""
-        cameras_str = ", ".join([c.name or "None" for c in self.cameras])
-        return f"InstanceGroup(cameras={len(self.cameras)}:[{cameras_str}])"
+        n_cams = len(self._instance_by_camera)
+        has_3d = self._instance_3d is not None
+        parts = [f"InstanceGroup(n_cameras={n_cams}, has_3d={has_3d}"]
+        if self.identity is not None:
+            parts.append(f', identity="{self.identity.name}"')
+        parts.append(")")
+        return "".join(parts)
 
 
 @define(eq=False)  # Set eq to false to make class hashable
