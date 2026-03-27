@@ -53,6 +53,7 @@ from sleap_io.io.slp import (
     prepare_frames_to_embed,
     process_and_embed_frames,
     read_bboxes,
+    read_identities,
     read_instances,
     read_labels,
     read_labels_set,
@@ -70,6 +71,7 @@ from sleap_io.io.slp import (
     session_to_dict,
     video_to_dict,
     write_bboxes,
+    write_identities,
     write_labels,
     write_lfs,
     write_metadata,
@@ -81,6 +83,8 @@ from sleap_io.io.slp import (
 from sleap_io.io.utils import read_hdf5_attrs, read_hdf5_dataset
 from sleap_io.io.video_reading import HDF5Video, ImageVideo, MediaVideo
 from sleap_io.model.bbox import PredictedBoundingBox, UserBoundingBox
+from sleap_io.model.identity import Identity
+from sleap_io.model.instance import Instance3D, PredictedInstance3D
 from sleap_io.model.label_image import LabelImage
 from sleap_io.model.mask import SegmentationMask
 from sleap_io.model.roi import ROI
@@ -840,7 +844,7 @@ def test_make_instance_group_and_instance_group_to_dict(
         camera_group=camera_group_345,
     )
     assert instance_group_dict["score"] == instance_group._score
-    assert np.array_equal(instance_group_dict["points"], instance_group._points)
+    assert np.array_equal(instance_group_dict["points"], instance_group.points.tolist())
 
     # Test from dict
 
@@ -850,7 +854,7 @@ def test_make_instance_group_and_instance_group_to_dict(
         camera_group=camera_group_345,
     )
     assert instance_group_0._score == instance_group._score
-    assert np.array_equal(instance_group_0._points, instance_group._points)
+    assert np.array_equal(instance_group_0.points, instance_group.points)
     assert instance_group_0.metadata == instance_group.metadata
     assert len(instance_group_0._instance_by_camera) == len(
         instance_group._instance_by_camera
@@ -5189,3 +5193,219 @@ def test_read_h5wasm_instances_float64_indices(tmp_path):
     assert inst0.track is None
     np.testing.assert_array_equal(inst0["A"]["xy"], [10.0, 20.0])
     np.testing.assert_array_equal(inst0["B"]["xy"], [30.0, 40.0])
+
+
+def test_identity_round_trip(tmp_path):
+    """Test Identity serialization round-trip."""
+    labels_path = str(tmp_path / "test.slp")
+
+    identities = [
+        Identity(name="mouse_A", color="#ff0000"),
+        Identity(name="mouse_B"),
+        Identity(name="mouse_C", color="#00ff00", metadata={"age": 12}),
+    ]
+
+    # Write and read back
+    with h5py.File(labels_path, "w"):
+        pass  # Create empty file
+
+    write_identities(labels_path, identities)
+    loaded = read_identities(labels_path)
+
+    assert len(loaded) == 3
+    assert loaded[0].name == "mouse_A"
+    assert loaded[0].color == "#ff0000"
+    assert loaded[1].name == "mouse_B"
+    assert loaded[1].color is None
+    assert loaded[2].name == "mouse_C"
+    assert loaded[2].color == "#00ff00"
+    assert loaded[2].metadata == {"age": 12}
+
+
+def test_identity_empty_round_trip(tmp_path):
+    """Test that empty identities list doesn't create dataset."""
+    labels_path = str(tmp_path / "test.slp")
+    with h5py.File(labels_path, "w"):
+        pass
+
+    write_identities(labels_path, [])
+    loaded = read_identities(labels_path)
+    assert loaded == []
+
+
+def test_labels_with_identities_round_trip(tmp_path):
+    """Test full Labels round-trip with identities."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    identities = [
+        Identity(name="mouse_A", color="#ff0000"),
+        Identity(name="mouse_B"),
+    ]
+    labels = Labels(
+        skeletons=[skeleton],
+        identities=identities,
+    )
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    assert len(loaded.identities) == 2
+    assert loaded.identities[0].name == "mouse_A"
+    assert loaded.identities[0].color == "#ff0000"
+    assert loaded.identities[1].name == "mouse_B"
+
+
+def test_format_version_1_9_with_identities(tmp_path):
+    """Test format version bumps to 1.9 when identities are present."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    labels = Labels(
+        skeletons=[skeleton],
+        identities=[Identity(name="mouse_A")],
+    )
+    write_labels(labels_path, labels)
+
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    assert format_id == 1.9
+
+
+def test_format_version_no_identities(tmp_path):
+    """Test format version stays below 1.9 when no identities."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    labels = Labels(skeletons=[skeleton])
+    write_labels(labels_path, labels)
+
+    format_id = read_hdf5_attrs(labels_path, "metadata", "format_id")
+    assert format_id < 1.9
+
+
+def test_instance_group_3d_round_trip(tmp_path, camera_group_345):
+    """Test Instance3D round-trip through session serialization."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    original_points = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    inst_3d = Instance3D(points=original_points.copy(), skeleton=skeleton)
+
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        instance_3d=inst_3d,
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    assert len(loaded.sessions) == 1
+    loaded_session = loaded.sessions[0]
+    loaded_fg = list(loaded_session.frame_groups.values())[0]
+    loaded_ig = loaded_fg.instance_groups[0]
+    np.testing.assert_array_almost_equal(loaded_ig.points, original_points)
+
+
+def test_predicted_instance_3d_round_trip(tmp_path, camera_group_345):
+    """Test PredictedInstance3D round-trip through session serialization."""
+    labels_path = str(tmp_path / "test.slp")
+
+    skeleton = Skeleton(["A", "B"])
+    cam1, cam2 = camera_group_345.cameras
+
+    inst1 = Instance({"A": [0, 1], "B": [2, 3]}, skeleton=skeleton)
+    inst2 = Instance({"A": [4, 5], "B": [6, 7]}, skeleton=skeleton)
+
+    identity = Identity(name="mouse_A")
+    pred_3d = PredictedInstance3D(
+        points=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+        skeleton=skeleton,
+        score=0.95,
+        point_scores=np.array([0.9, 0.8]),
+    )
+
+    ig = InstanceGroup(
+        instance_by_camera={cam1: inst1, cam2: inst2},
+        instance_3d=pred_3d,
+        identity=identity,
+    )
+
+    video1 = Video(filename="cam1.mp4")
+    video2 = Video(filename="cam2.mp4")
+    lf1 = LabeledFrame(video=video1, frame_idx=0, instances=[inst1])
+    lf2 = LabeledFrame(video=video2, frame_idx=0, instances=[inst2])
+
+    fg = FrameGroup(
+        frame_idx=0,
+        instance_groups=[ig],
+        labeled_frame_by_camera={cam1: lf1, cam2: lf2},
+    )
+
+    session = RecordingSession(
+        camera_group=camera_group_345,
+        video_by_camera={cam1: video1, cam2: video2},
+        camera_by_video={video1: cam1, video2: cam2},
+        frame_group_by_frame_idx={0: fg},
+    )
+
+    labels = Labels(
+        labeled_frames=[lf1, lf2],
+        videos=[video1, video2],
+        skeletons=[skeleton],
+        sessions=[session],
+        identities=[identity],
+    )
+
+    write_labels(labels_path, labels)
+    loaded = read_labels(labels_path)
+
+    # Check identities
+    assert len(loaded.identities) == 1
+    assert loaded.identities[0].name == "mouse_A"
+
+    # Check Instance3D round-trip
+    loaded_ig = list(loaded.sessions[0].frame_groups.values())[0].instance_groups[0]
+    np.testing.assert_array_almost_equal(
+        loaded_ig.points,
+        np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+    )
+
+    # Check it's a PredictedInstance3D
+    assert isinstance(loaded_ig.instance_3d, PredictedInstance3D)
+    assert loaded_ig.instance_3d.score == 0.95
+    np.testing.assert_array_almost_equal(
+        loaded_ig.instance_3d.point_scores,
+        np.array([0.9, 0.8]),
+    )
+
+    # Check identity was preserved
+    assert loaded_ig.identity is loaded.identities[0]

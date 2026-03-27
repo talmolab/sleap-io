@@ -7,6 +7,7 @@ import pytest
 
 import sleap_io
 from sleap_io.model.camera import rodrigues_transformation
+from sleap_io.model.instance import Instance3D
 
 
 @pytest.fixture
@@ -94,12 +95,13 @@ def instance_group_345(camera_group_345):
         for cam in camera_group.cameras
     }
     score = 0.5
-    points = np.random.rand(10, 3)
+    points = np.random.rand(2, 3)
+    instance_3d = Instance3D(points=points, skeleton=skeleton)
     metadata = {"whatever we want of native type": 72317}
     instance_group = sleap_io.InstanceGroup(
         instance_by_camera=instance_by_camera,
         score=score,
-        points=points,
+        instance_3d=instance_3d,
         metadata=metadata,
     )
 
