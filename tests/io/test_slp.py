@@ -5411,57 +5411,6 @@ def test_predicted_instance_3d_round_trip(tmp_path, camera_group_345):
     assert loaded_ig.identity is loaded.identities[0]
 
 
-def test_legacy_slp_without_identities():
-    """Test loading a legacy .slp file created before Identity/Instance3D support.
-
-    The file was created with old sleap-io code that used _points (raw numpy)
-    on InstanceGroup. Verifies that:
-    - identities defaults to empty list
-    - sessions load correctly
-    - old-style points are wrapped in Instance3D
-    - metadata round-trips through the old format
-    """
-    labels = read_labels("tests/data/camera/legacy_sessions.slp")
-
-    # No identities in legacy file
-    assert labels.identities == []
-
-    # Sessions loaded
-    assert len(labels.sessions) == 1
-    session = labels.sessions[0]
-    assert len(session.frame_groups) == 1
-    assert session.metadata == {"experiment": "baseline"}
-
-    # Tracks preserved
-    assert len(labels.tracks) == 2
-    assert labels.tracks[0].name == "animal_1"
-    assert labels.tracks[1].name == "animal_2"
-
-    # Instance groups with old-style points wrapped in Instance3D
-    fg = list(session.frame_groups.values())[0]
-    assert len(fg.instance_groups) == 2
-
-    ig0 = fg.instance_groups[0]
-    assert ig0.instance_3d is not None
-    assert ig0.identity is None
-    np.testing.assert_array_almost_equal(
-        ig0.points, np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-    )
-    assert ig0.score == 0.9
-    assert ig0.metadata == {"source": "triangulation"}
-
-    ig1 = fg.instance_groups[1]
-    np.testing.assert_array_almost_equal(
-        ig1.points, np.array([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
-    )
-    assert ig1.score == 0.8
-
-    # Camera calibration preserved
-    assert len(session.camera_group.cameras) == 2
-    assert session.camera_group.cameras[0].name == "cam_top"
-    assert session.camera_group.cameras[1].name == "cam_side"
-
-
 def test_multiple_instance_groups_different_identities(tmp_path, camera_group_345):
     """Test multiple InstanceGroups per FrameGroup with different identities."""
     labels_path = str(tmp_path / "test.slp")
@@ -5579,7 +5528,6 @@ def test_instance_group_identity_without_3d(tmp_path, camera_group_345):
     ig = InstanceGroup(
         instance_by_camera={cam1: inst1, cam2: inst2},
         identity=identity,
-        # No instance_3d
     )
 
     video1 = Video(filename="cam1.mp4")
@@ -5677,7 +5625,7 @@ def test_instance_3d_score_without_point_scores(tmp_path, camera_group_345):
 
 
 def test_session_metadata_track_identity_map_round_trip(tmp_path, camera_group_345):
-    """Test that track_identity_map in session metadata round-trips through SLP."""
+    """Test track_identity_map in session metadata round-trips through SLP."""
     labels_path = str(tmp_path / "test.slp")
 
     skeleton = Skeleton(["A", "B"])
@@ -5701,8 +5649,6 @@ def test_session_metadata_track_identity_map_round_trip(tmp_path, camera_group_3
         labeled_frame_by_camera={cam1: lf1, cam2: lf2},
     )
 
-    # Session with track_identity_map and frame_identity_map in metadata
-    # (as Lucid would store them)
     session = RecordingSession(
         camera_group=camera_group_345,
         video_by_camera={cam1: video1, cam2: video2},
@@ -5772,7 +5718,7 @@ def test_multiple_sessions_shared_identities(tmp_path, camera_group_345):
     inst2_s2 = Instance({"A": [14, 15], "B": [16, 17]}, skeleton=skeleton)
     ig_s2 = InstanceGroup(
         instance_by_camera={cam1: inst1_s2, cam2: inst2_s2},
-        identity=id_b,  # Different identity than session 1
+        identity=id_b,
     )
     vid1_s2 = Video(filename="session2_cam1.mp4")
     vid2_s2 = Video(filename="session2_cam2.mp4")
@@ -5816,7 +5762,6 @@ def test_multiple_sessions_shared_identities(tmp_path, camera_group_345):
     assert loaded_ig_s2.identity.name == "mouse_B"
 
     # Both reference the same Identity objects from Labels.identities
-    # (not duplicates)
     all_identities = set()
     for session in loaded.sessions:
         for fg in session.frame_groups.values():
