@@ -10,13 +10,16 @@ Format version history:
     - 1.6: Added instance_idx to ROI dtype for instance-level associations
     - 1.7: Added bounding box dataset (/bboxes)
     - 1.8: Added label image datasets (/label_images, /label_image_data)
-    - 1.9: Added identity dataset (/identities_json) and Instance3D support
+    - 1.9: Added identity dataset (/identities_json), Instance3D support,
+            predicted variants (is_predicted, score) for masks/ROIs/label images;
+            instance association for masks; string datasets for metadata
 """
 
 from __future__ import annotations
 
 import sys
 import warnings
+import zlib
 from enum import Enum, IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -57,11 +60,15 @@ from sleap_io.model.instance import (
     PredictedInstance3D,
     Track,
 )
-from sleap_io.model.label_image import LabelImage
+from sleap_io.model.label_image import LabelImage, PredictedLabelImage, UserLabelImage
 from sleap_io.model.labeled_frame import LabeledFrame
 from sleap_io.model.labels import Labels
-from sleap_io.model.mask import SegmentationMask
-from sleap_io.model.roi import ROI
+from sleap_io.model.mask import (
+    PredictedSegmentationMask,
+    SegmentationMask,
+    UserSegmentationMask,
+)
+from sleap_io.model.roi import ROI, PredictedROI, UserROI
 from sleap_io.model.skeleton import Skeleton
 from sleap_io.model.suggestions import SuggestionFrame
 from sleap_io.model.video import Video
@@ -1427,9 +1434,18 @@ def write_metadata(labels_path: str, labels: Labels):
     has_instance_rois = any(
         roi.instance is not None or roi._instance_idx >= 0 for roi in labels.rois
     )
+    has_predicted_annotations = (
+        any(isinstance(m, PredictedSegmentationMask) for m in labels.masks)
+        or any(isinstance(r, PredictedROI) for r in labels.rois)
+        or any(isinstance(li, PredictedLabelImage) for li in labels.label_images)
+    )
+    has_mask_instances = any(
+        mask.instance is not None or mask._instance_idx >= 0 for mask in labels.masks
+    )
     has_identities = len(labels.identities) > 0
-
-    if labels.label_images:
+    if has_predicted_annotations or has_mask_instances:
+        format_id = 1.9
+    elif labels.label_images:
         format_id = 1.8
     elif labels.bboxes:
         format_id = 1.7
@@ -2575,12 +2591,28 @@ def read_rois(
     except KeyError:
         return []
 
-    # Read string metadata from attributes
+    # Read string metadata from string datasets first, fall back to JSON attributes
     with h5py.File(labels_path, "r") as f:
         roi_grp = f["rois"]
-        categories = json.loads(roi_grp.attrs.get("categories", "[]"))
-        names = json.loads(roi_grp.attrs.get("names", "[]"))
-        sources = json.loads(roi_grp.attrs.get("sources", "[]"))
+        if "roi_categories" in f:
+            categories = [
+                s.decode() if isinstance(s, bytes) else s
+                for s in f["roi_categories"][:]
+            ]
+        else:
+            categories = json.loads(roi_grp.attrs.get("categories", "[]"))
+        if "roi_names" in f:
+            names = [
+                s.decode() if isinstance(s, bytes) else s for s in f["roi_names"][:]
+            ]
+        else:
+            names = json.loads(roi_grp.attrs.get("names", "[]"))
+        if "roi_sources" in f:
+            sources = [
+                s.decode() if isinstance(s, bytes) else s for s in f["roi_sources"][:]
+            ]
+        else:
+            sources = json.loads(roi_grp.attrs.get("sources", "[]"))
 
     rois = []
     for i, row in enumerate(roi_data):
@@ -2605,7 +2637,12 @@ def read_rois(
             else None
         )
 
-        roi = ROI(
+        # Read predicted flag (v1.9+)
+        is_predicted = (
+            bool(row["is_predicted"]) if "is_predicted" in row.dtype.names else False
+        )
+
+        kwargs = dict(
             geometry=geometry,
             name=names[i] if i < len(names) else "",
             category=categories[i] if i < len(categories) else "",
@@ -2615,6 +2652,19 @@ def read_rois(
             track=track,
             instance=instance,
         )
+
+        if is_predicted:
+            score_val = float(row["score"]) if "score" in row.dtype.names else 0.0
+            roi = PredictedROI(
+                score=score_val if not np.isnan(score_val) else 0.0, **kwargs
+            )
+        elif "is_predicted" in row.dtype.names:
+            # v1.9+ file with is_predicted=False -> UserROI
+            roi = UserROI(**kwargs)
+        else:
+            # Pre-v1.9 file -> base ROI class for backward compat
+            roi = ROI(**kwargs)
+
         # Store raw index for deferred resolution (lazy loading)
         roi._instance_idx = instance_idx
         rois.append(roi)
@@ -2650,6 +2700,7 @@ def write_rois(
             ("video", "i4"),
             ("frame_idx", "i8"),
             ("track", "i4"),
+            ("is_predicted", "u1"),
             ("score", "f4"),
             ("wkb_start", "u8"),
             ("wkb_end", "u8"),
@@ -2682,13 +2733,17 @@ def write_rois(
             except ValueError:
                 pass  # Keep stored _instance_idx
 
+        is_predicted = isinstance(roi, PredictedROI)
+        score = roi.score if is_predicted else float("nan")
+
         roi_rows.append(
             (
                 0,  # annotation_type: write 0 (DEFAULT) for backward compat
                 video_idx,
                 frame_idx,
                 track_idx,
-                float("nan"),  # score: write NaN for backward compat
+                int(is_predicted),
+                score,
                 wkb_start,
                 wkb_end,
                 instance_idx,
@@ -2705,11 +2760,17 @@ def write_rois(
     )
 
     with h5py.File(labels_path, "a") as f:
-        ds = f.create_dataset("rois", data=roi_array, dtype=roi_dtype)
-        ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
-        ds.attrs["names"] = json.dumps(names, separators=(",", ":"))
-        ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
-        f.create_dataset("roi_wkb", data=wkb_flat, dtype=np.uint8)
+        f.create_dataset("rois", data=roi_array, dtype=roi_dtype)
+        str_dt = h5py.special_dtype(vlen=str)
+        f.create_dataset("roi_categories", data=categories, dtype=str_dt)
+        f.create_dataset("roi_names", data=names, dtype=str_dt)
+        f.create_dataset("roi_sources", data=sources, dtype=str_dt)
+        f.create_dataset(
+            "roi_wkb",
+            data=wkb_flat,
+            dtype=np.uint8,
+            **({"chunks": True} if len(wkb_flat) > 0 else {}),
+        )
 
 
 def read_bboxes(
@@ -2740,12 +2801,28 @@ def read_bboxes(
     if len(bbox_data) == 0:
         return []
 
-    # Read string metadata from attributes
+    # Read string metadata from string datasets first, fall back to JSON attributes
     with h5py.File(labels_path, "r") as f:
         bbox_grp = f["bboxes"]
-        categories = json.loads(bbox_grp.attrs.get("categories", "[]"))
-        names = json.loads(bbox_grp.attrs.get("names", "[]"))
-        sources = json.loads(bbox_grp.attrs.get("sources", "[]"))
+        if "bbox_categories" in f:
+            categories = [
+                s.decode() if isinstance(s, bytes) else s
+                for s in f["bbox_categories"][:]
+            ]
+        else:
+            categories = json.loads(bbox_grp.attrs.get("categories", "[]"))
+        if "bbox_names" in f:
+            names = [
+                s.decode() if isinstance(s, bytes) else s for s in f["bbox_names"][:]
+            ]
+        else:
+            names = json.loads(bbox_grp.attrs.get("names", "[]"))
+        if "bbox_sources" in f:
+            sources = [
+                s.decode() if isinstance(s, bytes) else s for s in f["bbox_sources"][:]
+            ]
+        else:
+            sources = json.loads(bbox_grp.attrs.get("sources", "[]"))
 
     bboxes: list[BoundingBox] = []
     for i, row in enumerate(bbox_data):
@@ -2873,14 +2950,18 @@ def write_bboxes(
     bbox_array = np.array(bbox_rows, dtype=bbox_dtype)
 
     with h5py.File(labels_path, "a") as f:
-        ds = f.create_dataset("bboxes", data=bbox_array, dtype=bbox_dtype)
-        ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
-        ds.attrs["names"] = json.dumps(names, separators=(",", ":"))
-        ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
+        f.create_dataset("bboxes", data=bbox_array, dtype=bbox_dtype)
+        str_dt = h5py.special_dtype(vlen=str)
+        f.create_dataset("bbox_categories", data=categories, dtype=str_dt)
+        f.create_dataset("bbox_names", data=names, dtype=str_dt)
+        f.create_dataset("bbox_sources", data=sources, dtype=str_dt)
 
 
 def read_masks(
-    labels_path: str, videos: list[Video], tracks: list[Track]
+    labels_path: str,
+    videos: list[Video],
+    tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
 ) -> list[SegmentationMask]:
     """Read segmentation masks from a SLEAP labels file.
 
@@ -2888,6 +2969,9 @@ def read_masks(
         labels_path: A string path to the SLEAP labels file.
         videos: List of Video objects for relinking.
         tracks: List of Track objects for relinking.
+        instances: Optional list of Instance/PredictedInstance objects for
+            relinking mask instance associations. If ``None``, instance
+            associations will not be restored.
 
     Returns:
         A list of SegmentationMask objects. Returns empty list if none stored.
@@ -2906,12 +2990,39 @@ def read_masks(
     except KeyError:
         return []
 
-    # Read string metadata from attributes
+    # Read string metadata from string datasets first, fall back to JSON attributes
     with h5py.File(labels_path, "r") as f:
         mask_grp = f["masks"]
-        categories = json.loads(mask_grp.attrs.get("categories", "[]"))
-        names = json.loads(mask_grp.attrs.get("names", "[]"))
-        sources = json.loads(mask_grp.attrs.get("sources", "[]"))
+        if "mask_categories" in f:
+            categories = [
+                s.decode() if isinstance(s, bytes) else s
+                for s in f["mask_categories"][:]
+            ]
+        else:
+            categories = json.loads(mask_grp.attrs.get("categories", "[]"))
+        if "mask_names" in f:
+            names = [
+                s.decode() if isinstance(s, bytes) else s for s in f["mask_names"][:]
+            ]
+        else:
+            names = json.loads(mask_grp.attrs.get("names", "[]"))
+        if "mask_sources" in f:
+            sources = [
+                s.decode() if isinstance(s, bytes) else s for s in f["mask_sources"][:]
+            ]
+        else:
+            sources = json.loads(mask_grp.attrs.get("sources", "[]"))
+
+    # Read score maps if available
+    score_map_index = None
+    score_map_data = None
+    try:
+        with h5py.File(labels_path, "r") as f:
+            if "mask_score_map_index" in f:
+                score_map_index = f["mask_score_map_index"][:]
+                score_map_data = f["mask_score_maps"][:]
+    except KeyError:
+        pass
 
     masks = []
     for i, row in enumerate(mask_data):
@@ -2931,19 +3042,59 @@ def read_masks(
         track_idx = int(row["track"])
         track = tracks[track_idx] if 0 <= track_idx < len(tracks) else None
 
-        masks.append(
-            SegmentationMask(
-                rle_counts=rle_counts,
-                height=int(row["height"]),
-                width=int(row["width"]),
-                name=names[i] if i < len(names) else "",
-                category=categories[i] if i < len(categories) else "",
-                source=sources[i] if i < len(sources) else "",
-                video=video,
-                frame_idx=frame_idx,
-                track=track,
-            )
+        # Read instance index (v1.9+)
+        instance_idx = int(row["instance"]) if "instance" in row.dtype.names else -1
+        instance = (
+            instances[instance_idx]
+            if instances is not None and 0 <= instance_idx < len(instances)
+            else None
         )
+
+        # Read predicted flag (v1.9+)
+        is_predicted = (
+            bool(row["is_predicted"]) if "is_predicted" in row.dtype.names else False
+        )
+        score_val = float(row["score"]) if "score" in row.dtype.names else float("nan")
+
+        kwargs = dict(
+            rle_counts=rle_counts,
+            height=int(row["height"]),
+            width=int(row["width"]),
+            name=names[i] if i < len(names) else "",
+            category=categories[i] if i < len(categories) else "",
+            source=sources[i] if i < len(sources) else "",
+            video=video,
+            frame_idx=frame_idx,
+            track=track,
+            instance=instance,
+        )
+
+        if is_predicted:
+            # Check for score map
+            sm = None
+            if score_map_index is not None:
+                for sm_row in score_map_index:
+                    if int(sm_row["mask_idx"]) == i:
+                        sm_start = int(sm_row["data_start"])
+                        sm_end = int(sm_row["data_end"])
+                        sm_h = int(sm_row["height"])
+                        sm_w = int(sm_row["width"])
+                        sm_compressed = score_map_data[sm_start:sm_end]
+                        sm = np.frombuffer(
+                            zlib.decompress(sm_compressed.tobytes()),
+                            dtype=np.float32,
+                        ).reshape(sm_h, sm_w)
+                        break
+            mask = PredictedSegmentationMask(
+                score=score_val if not np.isnan(score_val) else 0.0,
+                score_map=sm,
+                **kwargs,
+            )
+        else:
+            mask = UserSegmentationMask(**kwargs)
+
+        mask._instance_idx = instance_idx
+        masks.append(mask)
 
     return masks
 
@@ -2953,6 +3104,7 @@ def write_masks(
     masks: list[SegmentationMask],
     videos: list[Video],
     tracks: list[Track],
+    instances: list[Instance | PredictedInstance] | None = None,
 ) -> None:
     """Write segmentation masks to a SLEAP labels file.
 
@@ -2961,6 +3113,8 @@ def write_masks(
         masks: A list of SegmentationMask objects to write.
         videos: List of Video objects for index mapping.
         tracks: List of Track objects for index mapping.
+        instances: Optional list of Instance/PredictedInstance objects for index
+            mapping. If provided, mask instance associations will be persisted.
     """
     if not masks:
         return
@@ -2973,6 +3127,8 @@ def write_masks(
             ("video", "i4"),
             ("frame_idx", "i8"),
             ("track", "i4"),
+            ("instance", "i4"),
+            ("is_predicted", "u1"),
             ("score", "f4"),
             ("rle_start", "u8"),
             ("rle_end", "u8"),
@@ -2999,6 +3155,16 @@ def write_masks(
         frame_idx = mask.frame_idx if mask.frame_idx is not None else -1
         track_idx = tracks.index(mask.track) if mask.track in tracks else -1
 
+        instance_idx = mask._instance_idx  # Use stored index as default
+        if instances is not None and mask.instance is not None:
+            try:
+                instance_idx = instances.index(mask.instance)
+            except ValueError:
+                pass  # Keep stored _instance_idx
+
+        is_predicted = isinstance(mask, PredictedSegmentationMask)
+        score = mask.score if is_predicted else float("nan")
+
         mask_rows.append(
             (
                 mask.height,
@@ -3007,7 +3173,9 @@ def write_masks(
                 video_idx,
                 frame_idx,
                 track_idx,
-                float("nan"),  # score: write NaN for backward compat
+                instance_idx,
+                int(is_predicted),
+                score,
                 rle_start,
                 rle_end,
             )
@@ -3023,11 +3191,53 @@ def write_masks(
     )
 
     with h5py.File(labels_path, "a") as f:
-        ds = f.create_dataset("masks", data=mask_array, dtype=mask_dtype)
-        ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
-        ds.attrs["names"] = json.dumps(names, separators=(",", ":"))
-        ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
-        f.create_dataset("mask_rle", data=rle_flat, dtype=np.uint8)
+        f.create_dataset("masks", data=mask_array, dtype=mask_dtype)
+        f.create_dataset(
+            "mask_rle",
+            data=rle_flat,
+            dtype=np.uint8,
+            **({"chunks": True} if len(rle_flat) > 0 else {}),
+        )
+        str_dt = h5py.special_dtype(vlen=str)
+        f.create_dataset("mask_categories", data=categories, dtype=str_dt)
+        f.create_dataset("mask_names", data=names, dtype=str_dt)
+        f.create_dataset("mask_sources", data=sources, dtype=str_dt)
+
+    # Store dense score maps if any exist
+    score_map_indices = []
+    score_map_chunks = []
+    score_map_offset = 0
+    for i, mask in enumerate(masks):
+        if isinstance(mask, PredictedSegmentationMask) and mask.score_map is not None:
+            compressed = zlib.compress(mask.score_map.astype(np.float32).tobytes())
+            sm_bytes = np.frombuffer(compressed, dtype=np.uint8)
+            sm_end = score_map_offset + len(sm_bytes)
+            score_map_indices.append(
+                (i, score_map_offset, sm_end, mask.height, mask.width)
+            )
+            score_map_chunks.append(sm_bytes)
+            score_map_offset += len(sm_bytes)
+
+    if score_map_indices:
+        sm_index_dtype = np.dtype(
+            [
+                ("mask_idx", "u4"),
+                ("data_start", "u8"),
+                ("data_end", "u8"),
+                ("height", "u4"),
+                ("width", "u4"),
+            ]
+        )
+        sm_index_array = np.array(score_map_indices, dtype=sm_index_dtype)
+        sm_flat = np.concatenate(score_map_chunks)
+        with h5py.File(labels_path, "a") as f:
+            f.create_dataset("mask_score_map_index", data=sm_index_array)
+            f.create_dataset(
+                "mask_score_maps",
+                data=sm_flat,
+                dtype=np.uint8,
+                **({"chunks": True} if len(sm_flat) > 0 else {}),
+            )
 
 
 def read_label_images(
@@ -3049,8 +3259,6 @@ def read_label_images(
     Returns:
         A list of LabelImage objects. Returns an empty list if none stored.
     """
-    import zlib
-
     try:
         li_data = read_hdf5_dataset(labels_path, "label_images")
     except KeyError:
@@ -3076,20 +3284,51 @@ def read_label_images(
         ]
         obj_data = np.array([], dtype=obj_dtype)
 
+    # Read string metadata from string datasets first, fall back to JSON attributes
     with h5py.File(labels_path, "r") as f:
-        if "label_image_objects" in f:
+        if "label_image_obj_categories" in f:
+            categories = [
+                s.decode() if isinstance(s, bytes) else s
+                for s in f["label_image_obj_categories"][:]
+            ]
+        elif "label_image_objects" in f:
             obj_grp = f["label_image_objects"]
             categories = json.loads(obj_grp.attrs.get("categories", "[]"))
-            names = json.loads(obj_grp.attrs.get("names", "[]"))
         else:
             categories = []
+
+        if "label_image_obj_names" in f:
+            names = [
+                s.decode() if isinstance(s, bytes) else s
+                for s in f["label_image_obj_names"][:]
+            ]
+        elif "label_image_objects" in f:
+            obj_grp = f["label_image_objects"]
+            names = json.loads(obj_grp.attrs.get("names", "[]"))
+        else:
             names = []
 
-        if "label_images" in f:
+        if "label_image_sources" in f:
+            sources = [
+                s.decode() if isinstance(s, bytes) else s
+                for s in f["label_image_sources"][:]
+            ]
+        elif "label_images" in f:
             li_grp = f["label_images"]
             sources = json.loads(li_grp.attrs.get("sources", "[]"))
         else:
             sources = []
+
+    # Read score maps if available
+    li_score_map_index = None
+    li_score_map_data = None
+    try:
+        with h5py.File(labels_path, "r") as f:
+            if "label_image_score_map_index" in f:
+                li_score_map_index = f["label_image_score_map_index"][:]
+                li_score_map_data = f["label_image_score_maps"][:]
+    except KeyError:
+        pass
 
     label_images: list[LabelImage] = []
     for i, row in enumerate(li_data):
@@ -3132,24 +3371,62 @@ def read_label_images(
                 category = categories[obj_idx] if obj_idx < len(categories) else ""
                 name = names[obj_idx] if obj_idx < len(names) else ""
 
+                # Read per-object score if present (v1.9+)
+                obj_score = None
+                if "score" in obj_row.dtype.names:
+                    sv = float(obj_row["score"])
+                    if not np.isnan(sv):
+                        obj_score = sv
+
                 objects[label_id] = LabelImage.Info(
                     track=track,
                     category=category,
                     name=name,
                     instance=instance,
+                    score=obj_score,
                 )
 
         source = sources[i] if i < len(sources) else ""
 
-        label_images.append(
-            LabelImage(
-                data=data,
-                objects=objects,
-                video=video,
-                frame_idx=frame_idx,
-                source=source,
-            )
+        # Read predicted flag (v1.9+)
+        is_predicted = (
+            bool(row["is_predicted"]) if "is_predicted" in row.dtype.names else False
         )
+        score_val = float(row["score"]) if "score" in row.dtype.names else 0.0
+
+        kwargs = dict(
+            data=data,
+            objects=objects,
+            video=video,
+            frame_idx=frame_idx,
+            source=source,
+        )
+
+        if is_predicted:
+            # Check for score map
+            sm = None
+            if li_score_map_index is not None:
+                for sm_row in li_score_map_index:
+                    if int(sm_row["li_idx"]) == i:
+                        sm_start = int(sm_row["data_start"])
+                        sm_end = int(sm_row["data_end"])
+                        sm_h = int(sm_row["height"])
+                        sm_w = int(sm_row["width"])
+                        sm_compressed = li_score_map_data[sm_start:sm_end]
+                        sm = np.frombuffer(
+                            zlib.decompress(sm_compressed.tobytes()),
+                            dtype=np.float32,
+                        ).reshape(sm_h, sm_w)
+                        break
+            label_images.append(
+                PredictedLabelImage(
+                    score=score_val if not np.isnan(score_val) else 0.0,
+                    score_map=sm,
+                    **kwargs,
+                )
+            )
+        else:
+            label_images.append(UserLabelImage(**kwargs))
 
     return label_images
 
@@ -3172,8 +3449,6 @@ def write_label_images(
             mapping. If provided, label image instance associations will be
             persisted.
     """
-    import zlib
-
     if not label_images:
         return
 
@@ -3187,6 +3462,8 @@ def write_label_images(
             ("objects_start", "u4"),
             ("data_start", "u8"),
             ("data_end", "u8"),
+            ("is_predicted", "u1"),
+            ("score", "f4"),
         ]
     )
 
@@ -3195,6 +3472,7 @@ def write_label_images(
             ("label_id", "i4"),
             ("track", "i4"),
             ("instance", "i4"),
+            ("score", "f4"),
         ]
     )
 
@@ -3234,11 +3512,15 @@ def write_label_images(
                 except ValueError:
                     pass
 
-            obj_rows.append((label_id, track_idx, instance_idx))
+            obj_score = info.score if info.score is not None else float("nan")
+            obj_rows.append((label_id, track_idx, instance_idx, obj_score))
             categories.append(info.category)
             obj_names.append(info.name)
 
         obj_offset += n_objects
+
+        is_predicted = isinstance(li, PredictedLabelImage)
+        score = li.score if is_predicted else float("nan")
 
         li_rows.append(
             (
@@ -3250,6 +3532,8 @@ def write_label_images(
                 objects_start,
                 data_start,
                 data_end,
+                int(is_predicted),
+                score,
             )
         )
 
@@ -3264,16 +3548,53 @@ def write_label_images(
     data_flat = np.frombuffer(b"".join(data_chunks), dtype=np.uint8)
 
     with h5py.File(labels_path, "a") as f:
-        li_ds = f.create_dataset("label_images", data=li_array, dtype=li_dtype)
-        li_ds.attrs["sources"] = json.dumps(sources, separators=(",", ":"))
-
-        obj_ds = f.create_dataset(
-            "label_image_objects", data=obj_array, dtype=obj_dtype
+        f.create_dataset("label_images", data=li_array, dtype=li_dtype)
+        f.create_dataset("label_image_objects", data=obj_array, dtype=obj_dtype)
+        f.create_dataset(
+            "label_image_data",
+            data=data_flat,
+            dtype=np.uint8,
+            **({"chunks": True} if len(data_flat) > 0 else {}),
         )
-        obj_ds.attrs["categories"] = json.dumps(categories, separators=(",", ":"))
-        obj_ds.attrs["names"] = json.dumps(obj_names, separators=(",", ":"))
+        str_dt = h5py.special_dtype(vlen=str)
+        f.create_dataset("label_image_sources", data=sources, dtype=str_dt)
+        f.create_dataset("label_image_obj_categories", data=categories, dtype=str_dt)
+        f.create_dataset("label_image_obj_names", data=obj_names, dtype=str_dt)
 
-        f.create_dataset("label_image_data", data=data_flat, dtype=np.uint8)
+    # Store score maps for PredictedLabelImage if any exist
+    li_sm_indices = []
+    li_sm_chunks = []
+    li_sm_offset = 0
+    for i, li in enumerate(label_images):
+        if isinstance(li, PredictedLabelImage) and li.score_map is not None:
+            compressed = zlib.compress(li.score_map.astype(np.float32).tobytes())
+            sm_bytes = np.frombuffer(compressed, dtype=np.uint8)
+            li_sm_indices.append(
+                (i, li_sm_offset, li_sm_offset + len(sm_bytes), li.height, li.width)
+            )
+            li_sm_chunks.append(sm_bytes)
+            li_sm_offset += len(sm_bytes)
+
+    if li_sm_indices:
+        sm_index_dtype = np.dtype(
+            [
+                ("li_idx", "u4"),
+                ("data_start", "u8"),
+                ("data_end", "u8"),
+                ("height", "u4"),
+                ("width", "u4"),
+            ]
+        )
+        sm_index_array = np.array(li_sm_indices, dtype=sm_index_dtype)
+        sm_flat = np.concatenate(li_sm_chunks)
+        with h5py.File(labels_path, "a") as f:
+            f.create_dataset("label_image_score_map_index", data=sm_index_array)
+            f.create_dataset(
+                "label_image_score_maps",
+                data=sm_flat,
+                dtype=np.uint8,
+                **({"chunks": True} if len(sm_flat) > 0 else {}),
+            )
 
 
 def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
@@ -3366,16 +3687,16 @@ def read_labels(labels_path: str, open_videos: bool = True) -> Labels:
     identities = read_identities(labels_path)
     sessions = read_sessions(labels_path, videos, labeled_frames, identities=identities)
     rois = read_rois(labels_path, videos, tracks, instances)
-    masks = read_masks(labels_path, videos, tracks)
+    masks = read_masks(labels_path, videos, tracks, instances)
     bboxes = read_bboxes(labels_path, videos, tracks, instances)
     label_images = read_label_images(labels_path, videos, tracks, instances)
 
-    # Migrate old-style bbox ROIs to BoundingBox objects
+    # Migrate old-style bbox ROIs to BoundingBox objects (skip predicted ROIs)
     if not bboxes:
         migrated_bboxes: list[BoundingBox] = []
         remaining_rois: list[ROI] = []
         for roi in rois:
-            if roi.is_bbox:
+            if roi.is_bbox and not roi.is_predicted:
                 minx, miny, maxx, maxy = roi.geometry.bounds
                 migrated_bboxes.append(
                     UserBoundingBox.from_xyxy(
@@ -3733,7 +4054,7 @@ def write_labels(
     for lf in labels.labeled_frames:
         all_instances.extend(lf.instances)
     write_rois(labels_path, labels.rois, labels.videos, labels.tracks, all_instances)
-    write_masks(labels_path, labels.masks, labels.videos, labels.tracks)
+    write_masks(labels_path, labels.masks, labels.videos, labels.tracks, all_instances)
     write_bboxes(
         labels_path, labels.bboxes, labels.videos, labels.tracks, all_instances
     )
