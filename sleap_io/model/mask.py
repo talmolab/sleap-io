@@ -104,6 +104,12 @@ class SegmentationMask:
     frame_idx: int | None = attrs.field(default=None)
     track: "Track | None" = attrs.field(default=None)
     instance: "Instance | None" = attrs.field(default=None)
+    _instance_idx: int = attrs.field(default=-1, repr=False, eq=False, init=False)
+
+    @property
+    def is_predicted(self) -> bool:
+        """Whether this mask is a model prediction."""
+        return isinstance(self, PredictedSegmentationMask)
 
     @classmethod
     def from_numpy(
@@ -206,3 +212,25 @@ class SegmentationMask:
             track=self.track,
             instance=self.instance,
         )
+
+
+@attrs.define(eq=False)
+class UserSegmentationMask(SegmentationMask):
+    """Human-annotated segmentation mask."""
+
+    pass
+
+
+@attrs.define(eq=False)
+class PredictedSegmentationMask(SegmentationMask):
+    """Model-predicted segmentation mask with confidence score.
+
+    Attributes:
+        score: Object-level confidence score (0-1).
+        score_map: Optional dense pixel-level confidence map of shape (H, W)
+            as float32. This can be large and is stored separately in the SLP
+            format. If ``None``, only the object-level score is available.
+    """
+
+    score: float = attrs.field(default=0.0)
+    score_map: np.ndarray | None = attrs.field(default=None)

@@ -59,12 +59,18 @@ class LabelImage:
         category: str = ""
         name: str = ""
         instance: "Instance | None" = None
+        score: float | None = None
 
     data: np.ndarray = attrs.field()
     objects: dict[int, Info] = Factory(dict)
     video: "Video | None" = attrs.field(default=None)
     frame_idx: int | None = attrs.field(default=None)
     source: str = attrs.field(default="")
+
+    @property
+    def is_predicted(self) -> bool:
+        """Whether this label image is a model prediction."""
+        return isinstance(self, PredictedLabelImage)
 
     def __attrs_post_init__(self):
         """Validate and normalize data array on construction."""
@@ -306,3 +312,25 @@ class LabelImage:
                 )
             )
         return result
+
+
+@attrs.define(eq=False)
+class UserLabelImage(LabelImage):
+    """Human-annotated label image."""
+
+    pass
+
+
+@attrs.define(eq=False)
+class PredictedLabelImage(LabelImage):
+    """Model-predicted label image with confidence score.
+
+    Attributes:
+        score: Image-level confidence score (0-1).
+        score_map: Optional dense pixel-level confidence map of shape (H, W)
+            as float32. This can be large and is stored separately in the SLP
+            format. If ``None``, only per-object scores in ``Info`` are available.
+    """
+
+    score: float = attrs.field(default=0.0)
+    score_map: np.ndarray | None = attrs.field(default=None)
