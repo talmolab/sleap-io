@@ -402,6 +402,7 @@ def read_labels(
                         category=cat_name,
                         video=video,
                         frame_idx=frame_idx,
+                        instance=instance,
                     )
 
                     segmentation = annotation.get("segmentation")
